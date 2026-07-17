@@ -111,6 +111,41 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 - Stop for owner action before PAT setup, Trusted Publisher setup, final public-package approval, or visibility changes.
 - Owner gates: create/store the scoped `RELEASE_PR_TOKEN`; configure PyPI and TestPyPI Trusted Publishers; upgrade GitHub or pass the public-visibility privacy checkpoint; then enable branch protection/rulesets, required checks/reviews, environment reviewers, private vulnerability reporting, secret-scanning push protection, and immutable releases.
 
+## Active Plan: Private TestPyPI preview
+
+Status: in progress
+Owner: Codex
+Last Updated: 2026-07-17
+
+### Goal
+
+Keep the source repository private while publishing a prerelease to TestPyPI for installation testing. Defer public GitHub visibility, public-only GitHub protections, and production PyPI publication to a separate explicitly approved release task.
+
+### Work Queue
+
+1. [x] Verify the current GitHub Free/private-repository limits and the current PyPI Trusted Publisher setup flow against official documentation.
+2. [x] Split private TestPyPI preview automation from the production release workflow.
+3. [x] Make unavailable GitHub Free/private integrations skip cleanly while preserving local dependency and secret checks.
+4. [x] Validate the workflow syntax, quality suite, build, and focused security properties.
+5. [ ] Open a pull request and wait for all applicable GitHub Actions checks.
+6. [ ] Hand off exact owner steps for the TestPyPI pending Trusted Publisher.
+
+### Locked Decisions
+
+- 2026-07-17: The GitHub repository remains private during TestPyPI validation.
+- 2026-07-17: TestPyPI publication is a public package disclosure, but it is not the production release and must not publish to PyPI or publish a GitHub Release.
+- 2026-07-17: Production publication remains fail-closed until the repository is public and the public-only GitHub hardening is configured.
+
+### Validation Evidence
+
+- `scripts/quality.sh check`: 259 tests and 26 subtests passed; branch coverage 72.67% against the 70% gate; Ruff and strict mypy passed.
+- All workflow YAML files parsed successfully and `git diff --check` passed.
+- A synthetic `0.1.0a1` wheel and sdist built successfully, passed Twine metadata checks, contained the exact requested version, and installed into a Python 3.13 smoke environment.
+- The wheel and sdist contain neither `TASK.md` nor `.codex`, `.git`, or `.idea` paths. The local task and Codex config remain ignored and untracked.
+- Gitleaks v8.30.1 scanned all Git history and the built `dist/` artifacts with no leaks found.
+- Zizmor 1.27.0 reported no findings in the private-preview, Security, and Dependency Review workflows. The pre-existing production release workflow has only low/informational hardening suggestions and remains fail-closed while private.
+- Focused review confirms that the preview publishes only from the current `main` SHA, accepts only canonical prerelease versions, refuses an existing TestPyPI version, stores no index credential, disables provenance disclosure from the private workflow, and smoke-installs from TestPyPI without dependency confusion fallback.
+
 ## Recently Completed
 
 - None yet.
