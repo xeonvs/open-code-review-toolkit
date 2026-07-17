@@ -127,7 +127,7 @@ Keep the source repository private while publishing a prerelease to TestPyPI for
 2. [x] Split private TestPyPI preview automation from the production release workflow.
 3. [x] Make unavailable GitHub Free/private integrations skip cleanly while preserving local dependency and secret checks.
 4. [x] Validate the workflow syntax, quality suite, build, and focused security properties.
-5. [ ] Open a pull request and wait for all applicable GitHub Actions checks.
+5. [x] Open pull request #2 and wait for all applicable GitHub Actions checks.
 6. [ ] Hand off exact owner steps for the TestPyPI pending Trusted Publisher.
 
 ### Locked Decisions
@@ -145,6 +145,7 @@ Keep the source repository private while publishing a prerelease to TestPyPI for
 - Gitleaks v8.30.1 scanned all Git history and the built `dist/` artifacts with no leaks found.
 - Zizmor 1.27.0 reported no findings in the private-preview, Security, and Dependency Review workflows. The pre-existing production release workflow has only low/informational hardening suggestions and remains fail-closed while private.
 - Focused review confirms that the preview publishes only from the current `main` SHA, accepts only canonical prerelease versions, refuses an existing TestPyPI version, stores no index credential, disables provenance disclosure from the private workflow, and smoke-installs from TestPyPI without dependency confusion fallback.
+- Pull request #2 passed the complete Python 3.10-3.13 Linux/macOS CI matrix, quality, pip-audit, and Gitleaks checks. CodeQL and Dependency Review skipped as designed for GitHub Free/private mode.
 
 ## Recently Completed
 
