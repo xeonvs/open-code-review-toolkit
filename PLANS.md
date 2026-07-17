@@ -102,7 +102,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 ### Resume Point
 
-- Initial import is ready to commit. After the commit, push `main` once to seed the private remote, then use pull requests only. Before release, satisfy the owner gates below.
+- Initial import commit `9fdc8fa282480c83ad1d8d3a33744dffbbbbf2f3` was pushed once to seed the private remote. Use pull requests only from this point. Before release, satisfy the owner gates below.
 
 ### Handoff Notes
 
