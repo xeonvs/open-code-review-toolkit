@@ -1,0 +1,148 @@
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-code-review-toolkit"
+dynamic = ["version"]
+description = "Community-maintained CI integration toolkit for Open Code Review"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { file = "LICENSE" }
+authors = [{ name = "Open Code Review Toolkit contributors" }]
+keywords = ["code-review", "gitlab", "ci", "open-code-review"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/xeonvs/open-code-review-toolkit"
+Repository = "https://github.com/xeonvs/open-code-review-toolkit"
+Issues = "https://github.com/xeonvs/open-code-review-toolkit/issues"
+Changelog = "https://github.com/xeonvs/open-code-review-toolkit/blob/main/CHANGELOG.md"
+
+[project.scripts]
+ocr-ci = "ocr_toolkit.cli:main"
+
+[dependency-groups]
+dev = [
+  "build>=1.2.2",
+  "coverage[toml]>=7.6",
+  "hatch-vcs>=0.4",
+  "mypy>=1.15",
+  "pip-audit>=2.7",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.11",
+  "towncrier>=24.8",
+  "twine>=6.1",
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ocr_toolkit/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocr_toolkit"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/examples",
+  "/docs",
+  "/changelog.d",
+  "/README.md",
+  "/CONTRIBUTING.md",
+  "/SECURITY.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
+  "/pyproject.toml",
+]
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.1.0a1.dev0"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E402", "E501", "E731", "B007", "B023", "B905", "SIM103", "SIM105", "SIM117", "RUF002", "RUF012", "UP022"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"src/ocr_toolkit/_version.py" = ["I001", "RUF022"]
+
+[tool.ruff.format]
+exclude = ["src/ocr_toolkit/_version.py"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/ocr_toolkit"]
+exclude = ["src/ocr_toolkit/_version.py"]
+warn_unreachable = false
+disable_error_code = ["arg-type", "assignment", "import-not-found", "index", "name-defined", "no-any-return", "no-redef", "union-attr", "unused-ignore", "var-annotated"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["ocr_toolkit"]
+omit = ["src/ocr_toolkit/_version.py"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+]
+
+[tool.towncrier]
+package = "ocr_toolkit"
+package_dir = "src"
+filename = "CHANGELOG.md"
+directory = "changelog.d"
+title_format = "## {version} - {project_date}"
+issue_format = "[#{issue}](https://github.com/xeonvs/open-code-review-toolkit/issues/{issue})"
+underlines = ["", "", ""]
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bug fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true

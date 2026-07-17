@@ -1,0 +1,54 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: PEP 440 version without a leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    environment: release-preparation
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PR_TOKEN }}
+      - uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb # v6.1.0
+        with:
+          version: "0.11.29"
+      - run: uv sync --frozen
+      - name: Validate version and synchronized main
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          test "${{ github.event.repository.private }}" = "false"
+          CANONICAL_VERSION=$(uv run python -c "from packaging.version import Version; print(Version('${VERSION}'))")
+          test "${CANONICAL_VERSION}" = "${VERSION}"
+          case "${VERSION}" in *+*) echo "local versions cannot be published" >&2; exit 1;; esac
+          test "$(git branch --show-current)" = main
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          test "$(git tag -l "v${VERSION}")" = ""
+          test -n "$(find changelog.d -type f -name '*.md' ! -name README.md -print -quit)"
+          uv run towncrier build --version "${VERSION}" --yes
+          printf '%s\n' "${VERSION}" > .release-version
+      - name: Create release pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          branch=release/v${VERSION}
+          git config user.name "release automation"
+          git config user.email "release-automation@users.noreply.github.com"
+          git switch -c "${branch}"
+          git add CHANGELOG.md changelog.d .release-version
+          git commit -m "Prepare release v${VERSION}"
+          git push origin "${branch}"
+          gh pr create --base main --head "${branch}" --label release --title "Release v${VERSION}" --body "Reviewed release preparation for v${VERSION}. Merge this PR without editing its title or version marker."

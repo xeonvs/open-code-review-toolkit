@@ -1,0 +1,33 @@
+{
+  "rules": [
+    {
+      "path": "{pyproject.toml,uv.lock,**/pyproject.toml,**/uv.lock}",
+      "rule": "Review dependency changes for credential exposure, runtime compatibility, lockfile consistency, and supply-chain risk.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{.gitlab-ci.yml,.gitlab/**/*.yml,.gitlab/**/*.yaml}",
+      "rule": "Review pipeline triggers, stage gating, token exposure, artifact leakage, failure behavior, and compatibility with the configured CI runtime.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{requirements.yml,requirements.yaml,**/requirements.yml,**/requirements.yaml}",
+      "rule": "Review Galaxy sources, version pinning, credentials, registry compatibility, and supply-chain risk.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "**/*.sql",
+      "rule": "Determine the SQL dialect from the change and context, then review schema and data safety, transactions, locks, privileges, indexes, migrations, rollback, and compatibility.",
+      "merge_system_rule": true
+    }
+  ],
+  "exclude": [
+    "vendor/**",
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    ".venv/**",
+    "__pycache__/**",
+    "tests/**"
+  ]
+}

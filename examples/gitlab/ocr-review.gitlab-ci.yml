@@ -1,0 +1,60 @@
+stages:
+  - lint
+  - ai_review
+
+default:
+  image: python:3.12-slim
+
+variables:
+  OCR_VERSION: "v1.7.11"
+  OCR_LLM_VALIDATE_MODEL: "false"
+  OCR_LLM_ALLOWED_MODELS: ""
+  OCR_RUN_HELPER_TESTS: "false"
+
+lint:
+  stage: lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - when: never
+  script:
+    - pip install uv
+    - uv sync --frozen
+    - uv run ruff check .
+    - uv run pytest
+
+open_code_review:
+  stage: ai_review
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - when: never
+  timeout: 30m
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git
+    - curl --fail --location --silent --show-error "https://github.com/alibaba/open-code-review/releases/download/${OCR_VERSION}/ocr-linux-x64" --output /usr/local/bin/ocr
+    - echo "Set OCR_SHA256 to the checksum published for the pinned OCR_VERSION before using this example"
+    - test -n "${OCR_SHA256:-}"
+    - echo "${OCR_SHA256}  /usr/local/bin/ocr" | sha256sum --check --strict
+    - chmod 0755 /usr/local/bin/ocr
+    - pip install open-code-review-toolkit
+    - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
+    - ocr-ci preflight
+    - ocr-ci configure
+    - ocr-ci mcp-config
+    - REVIEW_BACKGROUND_FILE=".review-context/dependencies.md"
+    - ocr-ci context --output "${REVIEW_BACKGROUND_FILE}"
+    - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
+    - ocr review --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --background-file "${REVIEW_BACKGROUND_FILE}" --rule examples/gitlab/rules.json --format json > /tmp/ocr-result.json 2> /tmp/ocr-stderr.log || export OCR_EXIT_CODE=$?
+    - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
+
+open_code_review_self_test:
+  stage: ai_review
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+    - when: never
+  script:
+    - pip install uv
+    - uv sync --frozen
+    - env -u OCR_LLM_TOKEN uv run pytest

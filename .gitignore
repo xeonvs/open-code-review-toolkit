@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+src/ocr_toolkit/_version.py
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+.review-context/
+.quality-logs/
+.idea/
+*.log
+.codex

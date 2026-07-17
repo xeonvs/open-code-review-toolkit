@@ -1,0 +1,115 @@
+# Execution Plans
+
+Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
+
+## Active Plan: Initial standalone toolkit extraction
+
+Status: completed
+Owner: Codex
+Last Updated: 2026-07-17
+
+### Goal
+
+Create the first production-quality standalone Open Code Review Toolkit repository: extract the existing CI helper behavior into the `ocr_toolkit` package, expose a unified `ocr-ci` CLI, publish only synthetic public material, add packaging and automation, validate the complete deliverable, and create a clean initial commit only after all gates pass.
+
+### Requested Scope
+
+- Preserve parity for rendering safety, redaction, runtime and MCP configuration, preflight, context generation, repository and manifest inspection, guidance extraction, categorization, reusable Ansible context, GitLab posting, payload normalization, markers, fingerprints, snapshots, rollback, and ownership boundaries.
+- Provide `ocr-ci preflight`, `configure`, `mcp-config`, `context`, and `post`.
+- Add a PEP 621/Hatchling/hatch-vcs package, uv lockfile, Ruff, strict mypy, pytest, coverage, build and security tooling.
+- Add English public documentation, synthetic GitLab examples, pinned GitHub Actions, Dependabot, changelog fragments, and gated OIDC release automation.
+- Validate privacy and source-repository immutability before the initial commit.
+- External account setup and public disclosure remain paused until explicit owner actions.
+
+### Constraints
+
+- The extraction source is read-only; never edit, stage, commit, switch branches, or inspect its untracked private test material.
+- Do not copy local paths, private identities, private infrastructure, or the one-time private audit criteria into tracked files.
+- Do not bundle or download the upstream binary in the Python package.
+- Runtime configuration remains environment-only in v0.1.
+- Posting accepts only `GITLAB_API_TOKEN`; remove all legacy fallback variables and messages.
+- Do not provide the old package namespace or `python -m` compatibility contract.
+- Runtime targets Python 3.10 through 3.13 on Linux and macOS.
+- Keep the task specification local-only through `.git/info/exclude`.
+- Multi-agent execution is disabled for this repository.
+
+### Inputs
+
+- Local extraction specification in ignored `TASK.md`.
+- Tracked runtime and test sources from the read-only source repository at commit `b770f6e66b504a675ba7f594b55f4b156b8a2a53`.
+- Tracked rules and design documentation listed by the extraction specification.
+- `engineering-workflow` v0.4.0 scaffold and validation guidance.
+
+### Completed Baseline State
+
+- [x] Target directory exists and is initialized as a Git repository on `main`.
+- [x] Multi-agent support is disabled by project-local Codex configuration.
+- [x] `TASK.md` is ignored via `.git/info/exclude` and absent from Git status.
+- [x] Source repository branch, commit, tracked candidate list, and pre-existing untracked paths were recorded without opening private untracked content.
+- [x] Source baseline in the specification records 252 passing tests and standard-library-only runtime code.
+- [x] Engineering-workflow audit classified the target as a minimal repository.
+
+### Current Work Queue
+
+1. [x] Bootstrap the canonical workflow documentation for this repository.
+2. [x] Extract tracked runtime/tests, rename imports to `ocr_toolkit`, and remove all legacy environment aliases.
+3. [x] Implement and test the unified `ocr-ci` parser and required subcommands.
+4. [x] Add packaging, quality tooling, changelog infrastructure, and a reproducible lockfile.
+5. [x] Rewrite public documentation and add synthetic GitLab fixtures/examples.
+6. [x] Add pinned CI, build, security, dependency review, Scorecard, Dependabot, release-preparation, provenance, and OIDC release workflows.
+7. [x] Run tests, coverage, Ruff, strict mypy, build/twine/install/CLI smoke checks, workflow checks, and generic secret scanning.
+8. [x] Run the one-time public-safety/privacy audit and verify the source repository is unchanged.
+9. [x] Update this plan to final truth and prepare the clean initial import commit after every available gate passed.
+
+### Locked Decisions
+
+- 2026-07-17: Distribution and repository name are `open-code-review-toolkit`; import namespace is `ocr_toolkit`; CLI is `ocr-ci`.
+- 2026-07-17: Provider-neutral core with GitLab as the first adapter; Ansible support remains a reusable context feature.
+- 2026-07-17: Apache-2.0, Hatchling, hatch-vcs, src layout, standard-library-only runtime, and SCM-derived versions.
+- 2026-07-17: Public API and schema are provisional before 1.0 but every 0.1.x user-visible change requires a changelog fragment.
+- 2026-07-17: External GitHub/PyPI setup and public visibility are not attempted until their explicit approval gates.
+
+### Verification
+
+- Adapted pytest suite and measured 70% coverage threshold.
+- `ruff check`, `ruff format --check`, and strict `mypy` over `src/ocr_toolkit`.
+- Build wheel and sdist, `twine check`, and isolated install smoke for both artifacts.
+- CLI smoke for all required subcommands.
+- Synthetic GitLab API posting tests.
+- Generic secret scan plus one-time external privacy/public-safety audit.
+- GitHub workflow/action pin audit and YAML parse.
+- `git diff --check`, ignored-task verification, clean source-repository status comparison, and final target status review.
+
+### Latest Validation Results
+
+- `git check-ignore -v TASK.md`: ignored by `.git/info/exclude`.
+- Engineering workflow audit: minimal repository; no prompt-injection warnings.
+- Source read-only inventory: expected tracked candidates present; only the known private untracked paths were reported and not inspected.
+- `engineering-workflow` scaffold and read-only validator applied; canonical workflow files are present.
+- 258 adapted tests pass; measured branch coverage is 72.51% against the 70% gate.
+- Private GitHub repository created; Actions default to read-only tokens, SHA pinning is enforced, allowed Actions are restricted, Dependabot alerts/security fixes are enabled, and TestPyPI/PyPI environments exist.
+- GitHub Free rejected branch protection, rulesets, secret-scanning push protection, and environment approval rules for this private repository. These remain owner gates: upgrade the plan or make the repository public only after the privacy/license checkpoint, then enable them before any release.
+- No repository credential values are available locally, so no secret value was invented or copied from another project. OIDC publication needs no PyPI token; only owner-created `RELEASE_PR_TOKEN` remains to be stored in the `release-preparation` environment.
+- Pre-commit security review is in progress using the diff-scoped Codex Security workflow in single-agent mode, followed by a final engineering review.
+- Focused security review found and fixed one fail-open posting path: missing/invalid GitLab configuration now exits nonzero and has a regression test. No unresolved high-confidence vulnerability remains in the reviewed trust boundaries.
+- Engineering review also corrected the public GitLab example to the actual OCR v1.7.11 `--format json` CLI contract and added a regression assertion.
+- Dependabot version updates are configured monthly in grouped Python-tooling and GitHub Actions PRs; vulnerability alerts and automated security fixes are enabled through GitHub.
+- Public-safety scans found no private paths, infrastructure markers, legacy integration names, high-confidence secret patterns, or local specification files in the staged tree.
+- Source repository verification still reports branch `ai-ocr` at `b770f6e66b504a675ba7f594b55f4b156b8a2a53` with only the two pre-existing untracked paths documented by the extraction input.
+- Final workflow policy check: all third-party Actions use full commit SHAs, `pull_request_target` is absent, workflow tokens default to read-only, and repository Actions SHA pinning is enforced.
+- Final GitHub Actions audit updated checkout, setup-uv, PyPI publishing, and Gitleaks to their current 2026 releases while retaining immutable full-SHA pins and readable version comments.
+- Final quality wrapper: 259 tests pass with branch coverage above the 70% gate; Ruff format/check and strict mypy pass. Build, Twine, Python 3.13 wheel/sdist install smokes, Towncrier draft, YAML parsing, and `pip-audit --skip-editable` pass.
+
+### Resume Point
+
+- Initial import is ready to commit. After the commit, push `main` once to seed the private remote, then use pull requests only. Before release, satisfy the owner gates below.
+
+### Handoff Notes
+
+- Do not create the initial commit while any validation, privacy audit, or source-integrity check is pending.
+- Stop for owner action before PAT setup, Trusted Publisher setup, final public-package approval, or visibility changes.
+- Owner gates: create/store the scoped `RELEASE_PR_TOKEN`; configure PyPI and TestPyPI Trusted Publishers; upgrade GitHub or pass the public-visibility privacy checkpoint; then enable branch protection/rulesets, required checks/reviews, environment reviewers, private vulnerability reporting, secret-scanning push protection, and immutable releases.
+
+## Recently Completed
+
+- None yet.

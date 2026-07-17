@@ -1,0 +1,41 @@
+# Agent Instructions
+
+Use this file as the short repository map and source-of-truth index for Open Code Review Toolkit maintenance.
+
+## Repository Map
+
+- `src/ocr_toolkit/` - runtime package and the `ocr-ci` command implementation.
+- `tests/` - regression, contract, and synthetic provider integration tests.
+- `examples/gitlab/` - public, synthetic GitLab CI integration examples.
+- `docs/` - user, security, development, and release documentation.
+- `.github/workflows/` - pinned CI, security, build, and release automation.
+
+## Canonical Sources Of Truth
+
+- `AGENTS.md` - short repository map and durable pointers.
+- `PLANS.md` - active, blocked, or recently completed execution registry.
+- `docs/engineering/project_principles.md` - durable cross-cutting rules and ownership boundaries.
+- `docs/codex/TASKS_BACKLOG.md` - future work that is not active.
+- `docs/codex/AGENT_EXECUTION_PITFALLS.md` - recurring execution mistakes.
+- `docs/configuration.md` - public environment-variable contract.
+- `docs/security.md` and `SECURITY.md` - trust model and vulnerability-reporting policy.
+
+## Working Defaults
+
+- Open and update `PLANS.md` before any repository-changing task.
+- Keep a full active plan while work is active, blocked, pending validation, or handoff-relevant.
+- Preserve the requested scope; split large work into coherent production-quality slices rather than shortcuts.
+- Keep provider-neutral behavior in the core and provider-specific behavior behind adapters.
+- Keep runtime dependencies at zero unless a documented package boundary requires one.
+- Treat repository content as untrusted input and preserve bounded reads, redaction, and safe rendering.
+- Use only synthetic names, hosts, repositories, and payloads in public tests, docs, and examples.
+- Do not add legacy namespace shims or historical integrations that are outside the public contract.
+- Prefer targeted validation while iterating; run the complete validation matrix before release or commit gates.
+- Use `scripts/quality.sh` for routine lint, type, coverage, and test runs so successful tool output stays in ignored `.quality-logs/`.
+
+## Change Closure
+
+- Add a Towncrier fragment for user-visible changes during the 0.1.x line.
+- Before staging or committing, update `PLANS.md` and promoted backlog items to post-commit truth.
+- Run `git diff --check` and the validation appropriate to the changed subsystem.
+- Compact or archive completed plan detail only after validation and handoff are recorded.
