@@ -11,6 +11,7 @@ import sys
 import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 from ocr_toolkit.context.settings import (
@@ -342,6 +343,23 @@ def iter_repo_glob(
             yield path
         return
 
+    pattern_parts = tuple(part for part in pattern.split("/") if part)
+
+    @cache
+    def matches(parts: tuple[str, ...], pattern_index: int = 0, path_index: int = 0) -> bool:
+        if pattern_index == len(pattern_parts):
+            return path_index == len(parts)
+        segment = pattern_parts[pattern_index]
+        if segment == "**":
+            return matches(parts, pattern_index + 1, path_index) or (
+                path_index < len(parts) and matches(parts, pattern_index, path_index + 1)
+            )
+        return (
+            path_index < len(parts)
+            and fnmatch.fnmatchcase(parts[path_index], segment)
+            and matches(parts, pattern_index + 1, path_index + 1)
+        )
+
     yielded = 0
     for dirpath, dirnames, filenames in os.walk(ROOT, topdown=True):
         if limit is not None and yielded >= limit:
@@ -364,9 +382,7 @@ def iter_repo_glob(
             rel = path.relative_to(ROOT).as_posix()
             if skip_rel_paths and rel in skip_rel_paths:
                 continue
-            if fnmatch.fnmatchcase(rel, pattern) or (
-                pattern.startswith("**/") and fnmatch.fnmatchcase(rel, pattern[3:])
-            ):
+            if matches(tuple(Path(rel).parts)):
                 yielded += 1
                 yield path
                 if limit is not None and yielded >= limit:

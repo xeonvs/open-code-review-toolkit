@@ -72,7 +72,8 @@ def load_ocr_result(path: Path) -> Any:
 
 LLM_BILLING_FAILURE_RE = re.compile(
     r"(?i)\b("
-    r"(?:http\s*)?status(?:\s*code)?\s*[:=]?\s*402|code\s*[:=]\s*402|payment required|insufficient[_ -]?funds|insufficient user balance|"
+    r"(?:http\s*)?status(?:[_\s]*code)?[\"']?\s*[:=]\s*[\"']?402|"
+    r"code[\"']?\s*[:=]\s*[\"']?402|payment required|insufficient[_ -]?funds|insufficient user balance|"
     r"insufficient balance|insufficient[_ -]?quota|quota[_ -]?exceeded|"
     r"out of credits|credit balance"
     r")\b"
@@ -84,24 +85,23 @@ def ocr_warning_text(warning: Any) -> str:
 
     if isinstance(warning, dict):
         parts: list[str] = []
-        for key in ("type", "message", "code", "status", "detail"):
+        for key in ("type", "message", "code", "status", "status_code", "detail"):
             text = clean_text(warning.get(key))
             if text:
-                parts.append(f"{key}: {text}" if key in {"code", "status"} else text)
+                parts.append(f"{key}: {text}" if key in {"code", "status", "status_code"} else text)
         for key in ("error", "details"):
             nested = warning.get(key)
             if isinstance(nested, dict):
-                for nested_key in ("message", "code", "status", "detail"):
-                    text = clean_text(nested.get(nested_key))
-                    if text:
-                        parts.append(
-                            f"{nested_key}: {text}" if nested_key in {"code", "status"} else text
-                        )
+                text = ocr_warning_text(nested)
+                if text:
+                    parts.append(text)
             else:
                 text = clean_text(nested)
                 if text:
                     parts.append(text)
         return "\n".join(parts)[:4000]
+    if isinstance(warning, list):
+        return "\n".join(text for value in warning[:40] if (text := ocr_warning_text(value)))[:4000]
     return clean_text(warning)
 
 

@@ -1,10 +1,10 @@
 # Release process
 
-Versions come from SCM tags through hatch-vcs. The first prerelease is `0.1.0a1`; release tags use `vX.Y.Z`. Public interfaces remain provisional before 1.0, but every user-visible 0.1.x change still needs a Towncrier fragment.
+Versions come from SCM tags through hatch-vcs. The first published preview is `0.1.0a1`; the next preview line starts at `0.1.0a2`, and release tags use `vX.Y.Z`. Public interfaces may evolve before 1.0, but every user-visible 0.1.x change still needs a Towncrier fragment.
 
 ## Private TestPyPI preview
 
-While the GitHub repository is private, use the manual **TestPyPI preview** workflow with a new PEP 440 prerelease version such as `0.1.0a1`. It builds from the synchronized `main` branch, publishes only to TestPyPI through OIDC, and smoke-installs the published package. It does not create a Git tag, publish a GitHub Release, or publish to production PyPI. TestPyPI is still public disclosure: review the exact `main` commit before dispatching it. TestPyPI has a separate account database from PyPI.
+While the GitHub repository is private, use the manual **TestPyPI preview** workflow with a new PEP 440 prerelease version such as `0.1.0a2`. It builds from the synchronized `main` branch, publishes only to TestPyPI through OIDC, and smoke-installs the published package. It does not create a Git tag, publish a GitHub Release, or publish to production PyPI. TestPyPI is still public disclosure: review the exact `main` commit before dispatching it. TestPyPI has a separate account database from PyPI.
 
 GitHub artifact attestations are omitted from this private preview because GitHub Free supports them only for public repositories. The PyPA publisher's PEP 740 attestations are also disabled so the public TestPyPI preview does not publish provenance claims about the private workflow. The production workflow retains both forms of provenance for use after the repository becomes public.
 

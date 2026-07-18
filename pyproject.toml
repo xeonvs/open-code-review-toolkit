@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "open-code-review-toolkit"
 dynamic = ["version"]
-description = "Community-maintained CI integration toolkit for Open Code Review"
+description = "Unofficial GitLab CI integration layer for Open Code Review"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 license = { file = "LICENSE" }
@@ -74,7 +74,7 @@ include = [
 ]
 
 [tool.hatch.version.raw-options]
-fallback_version = "0.1.0a1.dev0"
+fallback_version = "0.1.0a2.dev0"
 
 [tool.ruff]
 target-version = "py310"

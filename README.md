@@ -1,12 +1,13 @@
 # Open Code Review Toolkit
 
-Open Code Review Toolkit is a community-maintained, unofficial CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository context generation, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the upstream `ocr` binary.
+Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository context generation, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
-The first release targets Python 3.10-3.13 on Linux and macOS. The public API, CLI, environment contract, and generated schemas remain provisional before 1.0.
+> [!NOTE]
+> The project is under active development. It currently targets Python 3.10-3.13 on Linux and macOS; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
 
 ## Install
 
-Install the Python package from PyPI and install a supported upstream OCR binary separately:
+Install the Python package from PyPI and install a supported OCR binary separately:
 
 ```console
 python -m pip install open-code-review-toolkit
@@ -14,12 +15,12 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is upstream OCR `1.7.11`. CI should pin the release and verify its published checksum before execution.
+The current compatibility target is OCR `1.7.12`. CI should pin the release and verify its published checksum before execution.
 
 ## GitLab CI quick start
 
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
-2. Pin and checksum the upstream OCR binary.
+2. Pin and checksum the OCR binary.
 3. Install this package.
 4. Run the five helper stages around `ocr review`:
 

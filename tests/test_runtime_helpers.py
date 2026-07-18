@@ -23,6 +23,43 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def test_runtime_config_rejects_non_https_llm_url_before_storing_token(self) -> None:
+        with patched_env(
+            OCR_CLI_LANGUAGE="English",
+            OCR_LLM_URL="http://gateway.example/v1/chat/completions",
+            OCR_LLM_TOKEN="llm-secret",
+            OCR_LLM_MODEL="openai/gpt-test",
+            OCR_USE_ANTHROPIC="false",
+        ):
+            with self.assertRaisesRegex(
+                ocr_configure.OCRRuntimeConfigError, "OCR_LLM_URL must be an absolute HTTPS URL"
+            ):
+                ocr_configure.build_config_updates()
+
+    def test_runtime_config_rejects_llm_url_with_embedded_credentials(self) -> None:
+        with patched_env(
+            OCR_CLI_LANGUAGE="English",
+            OCR_LLM_URL="https://user:password@gateway.example/v1/chat/completions",
+            OCR_LLM_TOKEN="llm-secret",
+            OCR_LLM_MODEL="openai/gpt-test",
+            OCR_USE_ANTHROPIC="false",
+        ):
+            with self.assertRaisesRegex(
+                ocr_configure.OCRRuntimeConfigError, "without embedded credentials"
+            ):
+                ocr_configure.build_config_updates()
+
+    def test_runtime_config_rejects_llm_url_with_invalid_port(self) -> None:
+        with patched_env(
+            OCR_CLI_LANGUAGE="English",
+            OCR_LLM_URL="https://gateway.example:not-a-port/v1/responses",
+            OCR_LLM_TOKEN="llm-secret",
+            OCR_LLM_MODEL="openai/gpt-test",
+            OCR_USE_ANTHROPIC="false",
+        ):
+            with self.assertRaisesRegex(ocr_configure.OCRRuntimeConfigError, "absolute HTTPS URL"):
+                ocr_configure.build_config_updates()
+
     def test_runtime_config_updates_parse_headers_body_and_language(self) -> None:
         with patched_env(
             OCR_CLI_LANGUAGE="English",
@@ -433,7 +470,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.11\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.12\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
@@ -455,6 +492,17 @@ class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_requires_external_executable(self) -> None:
         with (
             patched_attr(preflight.shutil, "which", lambda _name: None),
+            self.assertRaises(preflight.PreflightError),
+        ):
+            preflight.validate_ocr_binary()
+
+    def test_validate_ocr_binary_rejects_version_prefix_collision(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.120\n", stderr=""
+        )
+        with (
+            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+            patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
             self.assertRaises(preflight.PreflightError),
         ):
             preflight.validate_ocr_binary()

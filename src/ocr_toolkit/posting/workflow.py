@@ -311,6 +311,7 @@ def remap_existing_code_location(
         )
         if line > 0:
             return path, line
+        return path, 0
 
     candidate_paths = changed_new_paths(refs, changed_path_cache)
     if len(candidate_paths) > MAX_CROSS_FILE_REMAP_PATHS:

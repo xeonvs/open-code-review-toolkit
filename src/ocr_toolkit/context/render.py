@@ -330,12 +330,25 @@ def build_context() -> str:
         (rel, parse_pyproject(context_repo.ROOT / rel)) for rel in pyproject_paths
     ]
     requirements: list[tuple[str, dict[str, Any]]] = []
+    root_requirement_paths = [
+        path
+        for path in (
+            "requirements.txt",
+            "requirements.in",
+            "constraints.txt",
+            "constraints.in",
+        )
+        if python_active and context_repo.path_exists(path)
+    ]
     changed_requirements = [
         path
         for path in categories.get("dependency_manifests", [])
         if PYTHON_MANIFEST_PATTERN.search(path) and path.lower().endswith((".in", ".txt"))
     ]
-    for req_path in changed_requirements[:30] if python_active else []:
+    all_requirement_paths = list(dict.fromkeys([*root_requirement_paths, *changed_requirements]))
+    requirement_paths = all_requirement_paths[:30]
+    omitted_requirement_paths = max(0, len(all_requirement_paths) - len(requirement_paths))
+    for req_path in requirement_paths if python_active else []:
         requirements.append((req_path, parse_requirements_txt(context_repo.ROOT / req_path)))
 
     go_mod = (
@@ -357,8 +370,8 @@ def build_context() -> str:
     package_json_paths = package_json_discovery.paths if package_json_discovery else []
 
     app_versions = (
-        ansible_requirement_versions
-        + extract_application_versions(changed, include_discovered=False)
+        extract_application_versions(changed, include_discovered=True)
+        + ansible_requirement_versions
         if versions_active
         else []
     )
@@ -555,7 +568,7 @@ def build_context() -> str:
             )
             emitted_python_context = True
     remaining_requirement_items = 100
-    omitted_requirement_groups = 0
+    omitted_requirement_groups = omitted_requirement_paths
     for req_path, requirement_data in requirements:
         parse_error = string_value(requirement_data.get("parse_error"))
         if parse_error:

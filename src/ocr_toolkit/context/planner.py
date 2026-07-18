@@ -62,7 +62,7 @@ def _truncate_section(section: ContextSection, max_bytes: int) -> str:
     if len(complete.encode("utf-8")) <= max_bytes:
         return complete
     if max_bytes < heading_bytes + marker_bytes:
-        return heading.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+        return ""
 
     body_bytes = body.encode("utf-8")
     content_budget = max(0, max_bytes - heading_bytes - marker_bytes)

@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
@@ -119,6 +120,26 @@ def build_config_updates() -> dict[str, Any]:
     cli_language = _required_env("OCR_CLI_LANGUAGE")
     llm_url = _required_env("OCR_LLM_URL")
     llm_token = _required_env("OCR_LLM_TOKEN")
+    try:
+        parsed_llm_url = urlsplit(llm_url)
+        parsed_llm_port = parsed_llm_url.port
+        parsed_llm_hostname = parsed_llm_url.hostname
+        parsed_llm_username = parsed_llm_url.username
+        parsed_llm_password = parsed_llm_url.password
+    except ValueError as exc:
+        raise OCRRuntimeConfigError(
+            "OCR_LLM_URL must be an absolute HTTPS URL without embedded credentials"
+        ) from exc
+    if (
+        parsed_llm_url.scheme.lower() != "https"
+        or not parsed_llm_hostname
+        or (parsed_llm_port is None and parsed_llm_url.netloc.endswith(":"))
+        or parsed_llm_username is not None
+        or parsed_llm_password is not None
+    ):
+        raise OCRRuntimeConfigError(
+            "OCR_LLM_URL must be an absolute HTTPS URL without embedded credentials"
+        )
     llm_model = _required_env("OCR_LLM_MODEL")
     llm_protocol = _llm_protocol()
     auth_header = _env("OCR_LLM_AUTH_HEADER", "Authorization") or "Authorization"

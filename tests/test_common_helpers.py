@@ -161,6 +161,21 @@ class SettingsTests(unittest.TestCase):
 
 
 class RedactionTests(unittest.TestCase):
+    def test_redacts_long_secret_shaped_environment_values(self) -> None:
+        secret = "opaque-runtime-secret-value-1234567890"
+        with patched_env(OCR_PLUGIN_ACCESS_TOKEN=secret):
+            self.assertEqual(redact_sensitive(f"credential={secret}"), "credential=***")
+            self.assertNotIn(secret, redact_sensitive(f"credential={secret.replace('-', '%2D')}"))
+
+    def test_does_not_redact_short_or_benign_environment_values(self) -> None:
+        text = "short=tiny mode=readonly host=example.com"
+        with patched_env(
+            OCR_PLUGIN_ACCESS_TOKEN="tiny",
+            OCR_TOKENIZER_MODE="readonly",
+            OCR_PLUGIN_HOST="example.com",
+        ):
+            self.assertEqual(redact_sensitive(text), text)
+
     def test_url_userinfo_is_redacted_when_url_is_embedded_in_prose(self) -> None:
         for delimiter in (" ", ",", ".", ";", ")"):
             with self.subTest(delimiter=delimiter):
