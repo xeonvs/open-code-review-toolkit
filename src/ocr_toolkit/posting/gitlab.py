@@ -76,6 +76,52 @@ class GitLabResponseTooLarge(Exception):
     """GitLab response exceeded the bounded read budget."""
 
 
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Allow HTTPS redirects only within the configured GitLab origin."""
+
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> urllib.request.Request | None:
+        if request.get_method() not in {"GET", "HEAD"}:
+            return None
+        redirected = super().redirect_request(
+            request, file_pointer, code, message, headers, new_url
+        )
+        if redirected is None:
+            return None
+        try:
+            original = urllib.parse.urlsplit(request.full_url)
+            destination = urllib.parse.urlsplit(redirected.full_url)
+            original_port = original.port or 443
+            destination_port = destination.port or 443
+        except ValueError:
+            return None
+        if (
+            original.scheme.lower() != "https"
+            or destination.scheme.lower() != "https"
+            or original.hostname != destination.hostname
+            or destination.username is not None
+            or destination.password is not None
+            or original_port != destination_port
+        ):
+            return None
+        return redirected
+
+
+def _open_gitlab_request(request: urllib.request.Request) -> Any:
+    """Open one GitLab request with redirect handling disabled."""
+
+    return urllib.request.build_opener(_SameOriginRedirectHandler()).open(
+        request, timeout=DEFAULT_HTTP_TIMEOUT_SECONDS
+    )
+
+
 def _read_limited_response(response: Any) -> bytes:
     """Read a GitLab response body and fail when it exceeds the success budget."""
 
@@ -138,7 +184,7 @@ def api_request_url(
     for attempt in range(max_attempts):
         retry_after: float | None = None
         try:
-            with urllib.request.urlopen(request, timeout=DEFAULT_HTTP_TIMEOUT_SECONDS) as response:
+            with _open_gitlab_request(request) as response:
                 raw = _read_limited_response(response).decode("utf-8", errors="replace")
                 if not raw:
                     return {}
@@ -226,7 +272,7 @@ def api_write_url_detailed(
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        with urllib.request.urlopen(request, timeout=DEFAULT_HTTP_TIMEOUT_SECONDS) as response:
+        with _open_gitlab_request(request) as response:
             return GitLabWriteResult(
                 "posted", _parse_response_body(_read_limited_response(response))
             )
@@ -305,6 +351,27 @@ def load_gitlab_config() -> GitLabConfig | None:
             "Missing GITLAB_API_TOKEN; a dedicated GitLab API token is required for OCR posting.",
             file=sys.stderr,
         )
+        return None
+
+    try:
+        parsed_server = urllib.parse.urlsplit(server_url)
+        parsed_server_port = parsed_server.port
+        parsed_server_hostname = parsed_server.hostname
+        parsed_server_username = parsed_server.username
+        parsed_server_password = parsed_server.password
+    except ValueError:
+        print("CI_SERVER_URL must be an absolute HTTPS URL.", file=sys.stderr)
+        return None
+    if (
+        parsed_server.scheme.lower() != "https"
+        or not parsed_server_hostname
+        or (parsed_server_port is None and parsed_server.netloc.endswith(":"))
+        or parsed_server_username is not None
+        or parsed_server_password is not None
+        or parsed_server.query
+        or parsed_server.fragment
+    ):
+        print("CI_SERVER_URL must be an absolute HTTPS URL.", file=sys.stderr)
         return None
 
     auth_header = "PRIVATE-TOKEN"

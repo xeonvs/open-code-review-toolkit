@@ -72,6 +72,15 @@ class AnsiblePlaybookDetectionTests(unittest.TestCase):
 
 
 class GuidanceTrustTests(unittest.TestCase):
+    def test_keyword_window_bounds_both_sides_on_one_long_line(self) -> None:
+        text = "a" * 2_000 + " security " + "b" * 2_000
+
+        excerpt = context_instructions._keyword_window(text, radius=100)
+
+        self.assertLessEqual(len(excerpt), 200)
+        self.assertIn("security", excerpt)
+        self.assertNotIn("a" * 500, excerpt)
+
     def test_keyword_window_uses_original_text_offsets(self) -> None:
         text = "ß" * 2_000 + "\nSecurity must validate input.\n" + "x" * 800
 
@@ -573,6 +582,22 @@ class ManifestParsingTests(unittest.TestCase):
         self.assertIn("deploy/Chart.yaml: appVersion=2.4.6", versions)
         self.assertFalse(any("fixture" in item for item in versions))
 
+    def test_application_version_discovery_is_global_and_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index in range(90):
+                manifest = root / "collections" / f"item-{index:03d}" / "defaults" / "main.yml"
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text("item_version: 1.0.0\n", encoding="utf-8")
+            target = root / "roles" / "service" / "defaults" / "main.yml"
+            target.parent.mkdir(parents=True)
+            target.write_text("service_version: 2.4.6\n", encoding="utf-8")
+
+            with patched_root(root):
+                versions = context_ansible.extract_application_versions([], limit=160)
+
+        self.assertIn("roles/service/defaults/main.yml: service_version=2.4.6", versions)
+
     def test_application_version_discovery_skips_changed_fixture_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -793,6 +818,23 @@ class ManifestParsingTests(unittest.TestCase):
         self.assertIn("- ... and 1 requirements file(s) omitted", background)
         self.assertNotIn("requirements-style dependencies (`requirements-2.txt`)", background)
 
+    def test_requirements_path_cap_reports_omitted_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            changed = []
+            for index in range(32):
+                path = f"requirements-{index:02d}.txt"
+                (root / path).write_text("package==1.0\n", encoding="utf-8")
+                changed.append(path)
+
+            with (
+                patched_root(root),
+                patched_attr(context_repo, "changed_files", lambda: changed),
+            ):
+                background = context_render.build_context()
+
+        self.assertIn("- ... and 2 requirements file(s) omitted", background)
+
 
 class ApplicationVersionExtractionTests(unittest.TestCase):
     def test_application_version_extracts_nested_ci_image_name(self) -> None:
@@ -936,6 +978,118 @@ class ApplicationVersionExtractionTests(unittest.TestCase):
 
 
 class ContextRenderingTests(unittest.TestCase):
+    def test_build_context_discovers_related_unchanged_version_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "roles" / "demo" / "tasks").mkdir(parents=True)
+            (root / "roles" / "demo" / "tasks" / "main.yml").write_text(
+                "- debug: msg=ok\n", encoding="utf-8"
+            )
+            (root / "defaults.yml").write_text("service_version: 2.4.6\n", encoding="utf-8")
+
+            with patched_root(root):
+                with patched_attr(
+                    context_repo,
+                    "changed_files",
+                    lambda: ["roles/demo/tasks/main.yml"],
+                ):
+                    rendered = context_render.build_context()
+
+        self.assertIn("defaults.yml: service_version=2.4.6", rendered)
+
+    def test_discovered_application_versions_precede_requirement_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "roles" / "demo" / "tasks").mkdir(parents=True)
+            (root / "roles" / "demo" / "tasks" / "main.yml").write_text(
+                "- debug: msg=ok\n", encoding="utf-8"
+            )
+            (root / "defaults.yml").write_text("service_version: 2.4.6\n", encoding="utf-8")
+            (root / "requirements.yml").write_text(
+                "- src: https://example.com/collection.git\n  version: 1.0.0\n",
+                encoding="utf-8",
+            )
+
+            with patched_root(root):
+                with patched_attr(
+                    context_repo,
+                    "changed_files",
+                    lambda: ["roles/demo/tasks/main.yml"],
+                ):
+                    rendered = context_render.build_context()
+
+        self.assertLess(
+            rendered.index("defaults.yml: service_version=2.4.6"),
+            rendered.index("requirements.yml: https://example.com/collection.git=1.0.0"),
+        )
+
+    def test_tiny_section_budget_never_returns_partial_heading(self) -> None:
+        section = context_planner.ContextSection(title="Multibyte section", body="данные" * 20)
+
+        rendered = context_planner._truncate_section(section, 6)
+
+        self.assertEqual(rendered, "")
+
+    def test_python_change_includes_existing_root_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "module.py").write_text("print('ok')\n", encoding="utf-8")
+            (root / "requirements.txt").write_text("example-package==1.2.3\n", encoding="utf-8")
+
+            with patched_root(root):
+                with patched_attr(context_repo, "changed_files", lambda: ["module.py"]):
+                    rendered = context_render.build_context()
+
+        self.assertIn("requirements-style dependencies (`requirements.txt`)", rendered)
+        self.assertIn("example-package==1.2.3", rendered)
+
+    def test_non_python_change_does_not_seed_root_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("docs\n", encoding="utf-8")
+            (root / "requirements.txt").write_text("example-package==1.2.3\n", encoding="utf-8")
+
+            with patched_root(root):
+                with patched_attr(context_repo, "changed_files", lambda: ["README.md"]):
+                    rendered = context_render.build_context()
+
+        self.assertNotIn("requirements-style dependencies", rendered)
+
+    def test_recursive_glob_matches_root_and_nested_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "galaxy.yml").write_text("name: root\n", encoding="utf-8")
+            (root / "nested").mkdir()
+            (root / "nested" / "galaxy.yml").write_text("name: nested\n", encoding="utf-8")
+
+            with patched_root(root):
+                matches = [
+                    path.relative_to(root).as_posix()
+                    for path in context_repo.iter_repo_glob(
+                        "**/galaxy.yml", frozenset(), files_only=True
+                    )
+                ]
+
+        self.assertEqual(matches, ["galaxy.yml", "nested/galaxy.yml"])
+
+    def test_recursive_globstar_segment_can_match_zero_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "inventory").mkdir()
+            (root / "inventory" / "prod.yml").write_text("all: {}\n", encoding="utf-8")
+            (root / "inventory" / "region").mkdir()
+            (root / "inventory" / "region" / "prod.yml").write_text("all: {}\n", encoding="utf-8")
+
+            with patched_root(root):
+                matches = [
+                    path.relative_to(root).as_posix()
+                    for path in context_repo.iter_repo_glob(
+                        "inventory/**/*", frozenset(), files_only=True
+                    )
+                ]
+
+        self.assertEqual(matches, ["inventory/prod.yml", "inventory/region/prod.yml"])
+
     def test_context_planner_keeps_every_active_domain_under_pressure(self) -> None:
         sections = [
             context_planner.ContextSection(
@@ -1058,12 +1212,12 @@ class ContextRenderingTests(unittest.TestCase):
                     patched_attr(context_render, "read_accepted_decisions", lambda **_kwargs: ""),
                     patched_env(
                         OCR_BACKGROUND_MAX_BYTES="65536",
-                        OCR_BACKGROUND_MAX_CHARS="7900",
+                        OCR_BACKGROUND_MAX_CHARS="7950",
                     ),
                 ):
                     rendered = context_render.build_context()
 
-                self.assertLessEqual(len(rendered), 7_900)
+                self.assertLessEqual(len(rendered), 7_950)
                 self.assertLessEqual(len(rendered.encode("utf-8")), 65_536)
                 for title in present:
                     self.assertIn(f"## {title}", rendered)
@@ -1596,9 +1750,9 @@ class DocumentationConsistencyTests(unittest.TestCase):
         ci = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         internals = (HELPER_DIR.parents[1] / "docs" / "security.md").read_text(encoding="utf-8")
 
-        self.assertIn('OCR_VERSION: "v1.7.11"', ci)
-        self.assertIn("v1.7.11", docs)
-        self.assertIn("v1.7.11", internals)
+        self.assertIn('OCR_VERSION: "v1.7.12"', ci)
+        self.assertIn("v1.7.12", docs)
+        self.assertIn("v1.7.12", internals)
         self.assertIn("openai-responses", docs)
         self.assertIn("OCR_MCP_SERVERS_JSON", docs)
         self.assertIn("stdio bridge", docs)

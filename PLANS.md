@@ -2,7 +2,7 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Initial standalone toolkit extraction
+## Completed Plan: Initial standalone toolkit extraction
 
 Status: completed
 Owner: Codex
@@ -25,7 +25,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 - The extraction source is read-only; never edit, stage, commit, switch branches, or inspect its untracked private test material.
 - Do not copy local paths, private identities, private infrastructure, or the one-time private audit criteria into tracked files.
-- Do not bundle or download the upstream binary in the Python package.
+- Do not bundle or download the OCR binary in the Python package.
 - Runtime configuration remains environment-only in v0.1.
 - Posting accepts only `GITLAB_API_TOKEN`; remove all legacy fallback variables and messages.
 - Do not provide the old package namespace or `python -m` compatibility contract.
@@ -35,7 +35,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 ### Inputs
 
-- Local extraction specification in ignored `TASK.md`.
+- Local extraction material kept outside version control.
 - Tracked runtime and test sources from the read-only source repository at commit `b770f6e66b504a675ba7f594b55f4b156b8a2a53`.
 - Tracked rules and design documentation listed by the extraction specification.
 - `engineering-workflow` v0.4.0 scaffold and validation guidance.
@@ -44,7 +44,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 - [x] Target directory exists and is initialized as a Git repository on `main`.
 - [x] Multi-agent support is disabled by project-local Codex configuration.
-- [x] `TASK.md` is ignored via `.git/info/exclude` and absent from Git status.
+- [x] Local extraction material is ignored and absent from Git status.
 - [x] Source repository branch, commit, tracked candidate list, and pre-existing untracked paths were recorded without opening private untracked content.
 - [x] Source baseline in the specification records 252 passing tests and standard-library-only runtime code.
 - [x] Engineering-workflow audit classified the target as a minimal repository.
@@ -82,7 +82,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 ### Latest Validation Results
 
-- `git check-ignore -v TASK.md`: ignored by `.git/info/exclude`.
+- Local extraction material is ignored outside tracked repository content.
 - Engineering workflow audit: minimal repository; no prompt-injection warnings.
 - Source read-only inventory: expected tracked candidates present; only the known private untracked paths were reported and not inspected.
 - `engineering-workflow` scaffold and read-only validator applied; canonical workflow files are present.
@@ -92,7 +92,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 - No repository credential values are available locally, so no secret value was invented or copied from another project. OIDC publication needs no PyPI token; only owner-created `RELEASE_PR_TOKEN` remains to be stored in the `release-preparation` environment.
 - Pre-commit security review is in progress using the diff-scoped Codex Security workflow in single-agent mode, followed by a final engineering review.
 - Focused security review found and fixed one fail-open posting path: missing/invalid GitLab configuration now exits nonzero and has a regression test. No unresolved high-confidence vulnerability remains in the reviewed trust boundaries.
-- Engineering review also corrected the public GitLab example to the actual OCR v1.7.11 `--format json` CLI contract and added a regression assertion.
+- Engineering review also corrected the public GitLab example to the supported OCR `--format json` CLI contract and added a regression assertion.
 - Dependabot version updates are configured monthly in grouped Python-tooling and GitHub Actions PRs; vulnerability alerts and automated security fixes are enabled through GitHub.
 - Public-safety scans found no private paths, infrastructure markers, legacy integration names, high-confidence secret patterns, or local specification files in the staged tree.
 - Source repository verification still reports branch `ai-ocr` at `b770f6e66b504a675ba7f594b55f4b156b8a2a53` with only the two pre-existing untracked paths documented by the extraction input.
@@ -111,11 +111,11 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 - Stop for owner action before PAT setup, Trusted Publisher setup, final public-package approval, or visibility changes.
 - Owner gates: create/store the scoped `RELEASE_PR_TOKEN`; configure PyPI and TestPyPI Trusted Publishers; upgrade GitHub or pass the public-visibility privacy checkpoint; then enable branch protection/rulesets, required checks/reviews, environment reviewers, private vulnerability reporting, secret-scanning push protection, and immutable releases.
 
-## Active Plan: Private TestPyPI preview
+## Completed Plan: Private TestPyPI preview
 
-Status: in progress
+Status: completed
 Owner: Codex
-Last Updated: 2026-07-17
+Last Updated: 2026-07-18
 
 ### Goal
 
@@ -128,7 +128,7 @@ Keep the source repository private while publishing a prerelease to TestPyPI for
 3. [x] Make unavailable GitHub Free/private integrations skip cleanly while preserving local dependency and secret checks.
 4. [x] Validate the workflow syntax, quality suite, build, and focused security properties.
 5. [x] Open pull request #2 and wait for all applicable GitHub Actions checks.
-6. [ ] Hand off exact owner steps for the TestPyPI pending Trusted Publisher.
+6. [x] Configure the TestPyPI Trusted Publisher, publish `0.1.0a1`, and verify the public artifacts.
 
 ### Locked Decisions
 
@@ -141,7 +141,7 @@ Keep the source repository private while publishing a prerelease to TestPyPI for
 - `scripts/quality.sh check`: 259 tests and 26 subtests passed; branch coverage 72.67% against the 70% gate; Ruff and strict mypy passed.
 - All workflow YAML files parsed successfully and `git diff --check` passed.
 - A synthetic `0.1.0a1` wheel and sdist built successfully, passed Twine metadata checks, contained the exact requested version, and installed into a Python 3.13 smoke environment.
-- The wheel and sdist contain neither `TASK.md` nor `.codex`, `.git`, or `.idea` paths. The local task and Codex config remain ignored and untracked.
+- The wheel and sdist contain no local extraction material, Codex configuration, Git metadata, or IDE metadata. Local-only configuration remains ignored and untracked.
 - Gitleaks v8.30.1 scanned all Git history and the built `dist/` artifacts with no leaks found.
 - Zizmor 1.27.0 reported no findings in the private-preview, Security, and Dependency Review workflows. The pre-existing production release workflow has only low/informational hardening suggestions and remains fail-closed while private.
 - Focused review confirms that the preview publishes only from the current `main` SHA, accepts only canonical prerelease versions, refuses an existing TestPyPI version, stores no index credential, disables provenance disclosure from the private workflow, and smoke-installs from TestPyPI without dependency confusion fallback.
@@ -150,3 +150,34 @@ Keep the source repository private while publishing a prerelease to TestPyPI for
 ## Recently Completed
 
 - None yet.
+
+## Completed Plan: OCR 1.7.12 compatibility and correctness hardening
+
+Status: completed
+Owner: Codex
+Last Updated: 2026-07-18
+
+### Goal
+
+Harden the current standalone toolkit with regression coverage, update OCR compatibility to 1.7.12, and reach a clean review/security state before opening a pull request.
+
+### Work Queue
+
+1. [x] Verify the OCR 1.7.12 release, checksum, CLI contract, and local installation.
+2. [x] Reassess inherited behavior against the current toolkit and preserve only applicable product fixes.
+3. [x] Add focused regression tests and implement confirmed fixes without broad refactors.
+4. [x] Update public documentation, examples, compatibility pins, prerelease metadata, and Towncrier fragments.
+5. [x] Complete targeted and full quality, build, package, and supply-chain validation.
+6. [x] Validate bounded context, manifest, and version discovery against a tracked consumer snapshot without adding consumer-specific behavior.
+7. [x] Complete iterative internal self-review and repair cycles with no remaining actionable findings.
+8. [x] Complete the full repository security scan, fix validated findings, and seal a post-remediation rescan with no open findings.
+9. [x] Update this plan to post-change truth before commit and pull request creation.
+
+### Locked Decisions
+
+- Local-only material remains ignored and is not staged, committed, packaged, or quoted into public artifacts.
+- The source integration repository remains read-only; fixes are implemented in the standalone toolkit only.
+- Consumer validation may inspect only tracked source-integration files and run the standalone toolkit against that repository. No consumer-specific path, host, package, version, or layout may enter toolkit runtime code, tests, documentation, or examples.
+- Multi-agent Codex features remain disabled for this project; the complete security scan ran sequentially with exhaustive primary-agent receipts.
+- Runtime dependencies remain empty; fixes should use the standard library.
+- The package version remains SCM-derived. This change advances the next development/release line through changelog fragments and the eventual release tag rather than hard-coding a package version.

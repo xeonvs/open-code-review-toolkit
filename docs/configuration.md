@@ -2,7 +2,7 @@
 
 Open Code Review Toolkit uses environment variables only in v0.1. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
 
-## Upstream OCR and LLM
+## OCR and LLM
 
 | Variable | Purpose |
 | --- | --- |
@@ -17,7 +17,7 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 | `OCR_LLM_VALIDATE_MODEL` | `true`, `false`, or `auto`; defaults to `false`. |
 | `OCR_LLM_MODELS_URL` | Explicit `/models` metadata URL. |
 | `OCR_LLM_ALLOWED_MODELS` | Optional comma-separated offline allowlist for `auto` validation. |
-| `OCR_CONFIG_PATH` | Override the upstream OCR JSON config path. |
+| `OCR_CONFIG_PATH` | Override the OCR JSON config path. |
 
 ## MCP
 
@@ -26,7 +26,7 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 | `OCR_MCP_SERVERS_JSON` | JSON object mapping server names to command, arguments, environment, and optional tool allowlists. |
 | `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
 
-MCP commands run as child processes of upstream OCR. Treat their executable, arguments, environment, output, and tool access as privileged configuration.
+MCP commands run as child processes of OCR. Treat their executable, arguments, environment, output, and tool access as privileged configuration.
 
 ## GitLab CI inputs
 
@@ -38,6 +38,6 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 ## Context controls
 
-The `OCR_CONTEXT_*` family bounds files, bytes, changed paths, instructions, manifest content, dependency output, and generated background size. The default output is `.review-context/dependencies.md`. The generator rejects symlink escapes and prunes common vendor/build directories.
+The `OCR_CONTEXT_*` family bounds files, bytes, changed paths, instructions, manifest content, dependency output, and generated background size. `OCR_BACKGROUND_MAX_CHARS` defaults to and is capped at `7950`; `OCR_BACKGROUND_MAX_BYTES` independently enforces the UTF-8 byte budget. The default output is `.review-context/dependencies.md`. The generator rejects symlink escapes and prunes common vendor/build directories.
 
 Run `ocr-ci --help` and each subcommand's help for command arguments. Secret values are redacted from operational error text.

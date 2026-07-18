@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Unused PEP 440 prerelease version, for example 0.1.0a1
+        description: Unused PEP 440 prerelease version, for example 0.1.0a2
         required: true
         type: string
 

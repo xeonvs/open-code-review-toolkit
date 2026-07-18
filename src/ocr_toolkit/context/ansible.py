@@ -372,6 +372,10 @@ def extract_application_versions(
         "**/Containerfile.*",
         "**/values*.yaml",
         "**/values*.yml",
+        "**/defaults/**/*.yml",
+        "**/defaults/**/*.yaml",
+        "**/vars/**/*.yml",
+        "**/vars/**/*.yaml",
     ]
 
     candidate_suffixes = (
@@ -405,8 +409,9 @@ def extract_application_versions(
 
     if include_discovered:
         auto_discovery_limit = max(80, limit * 4)
+        discovered_files: set[str] = set()
         for pattern in candidate_patterns:
-            candidate_files.update(
+            discovered_files.update(
                 rel_path
                 for rel_path in context_repo.rel_glob_files(
                     [pattern],
@@ -416,6 +421,10 @@ def extract_application_versions(
                 )
                 if not _is_background_version_fixture_path(rel_path)
             )
+        for rel_path in sorted(discovered_files):
+            candidate_files.add(rel_path)
+            if len(candidate_files) >= auto_discovery_limit:
+                break
 
     results: list[str] = []
     seen: set[str] = set()

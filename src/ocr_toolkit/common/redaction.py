@@ -30,6 +30,13 @@ SENSITIVE_ENV_NAMES = (
     "OPENAI_API_KEY",
 )
 
+SECRET_SHAPED_ENV_NAME_RE = re.compile(
+    r"(?:^|_)(?:API_?KEY|AUTH_?TOKEN|ACCESS_?TOKEN|BEARER|CREDENTIAL|"
+    r"PASSWORD|PRIVATE_?KEY|SECRET|TOKEN)(?:$|_)",
+    flags=re.IGNORECASE,
+)
+MIN_DISCOVERED_SECRET_LENGTH = 16
+
 
 REDACTION_TOKEN_SEPARATOR = r"[-_\s\u200b-\u200f\u202a-\u202e\u2060-\u206f]*"
 REDACTION_TOKEN_ALIASES = {
@@ -108,7 +115,14 @@ def redact_env_secret_values(text: str) -> str:
 
     redacted = text
     variants: set[str] = set()
-    for name in SENSITIVE_ENV_NAMES:
+    candidate_names = set(SENSITIVE_ENV_NAMES)
+    candidate_names.update(
+        name
+        for name, value in os.environ.items()
+        if len(value.strip()) >= MIN_DISCOVERED_SECRET_LENGTH
+        and SECRET_SHAPED_ENV_NAME_RE.search(name)
+    )
+    for name in candidate_names:
         value = os.environ.get(name)
         if not value or len(value) < 4:
             continue

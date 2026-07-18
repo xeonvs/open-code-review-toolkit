@@ -6,7 +6,7 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.7.11"
+  OCR_VERSION: "v1.7.12"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"

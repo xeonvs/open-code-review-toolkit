@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -20,21 +24,23 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PR_TOKEN }}
+          persist-credentials: false
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: "0.11.29"
       - run: uv sync --frozen
       - name: Validate version and synchronized main
         env:
+          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
           VERSION: ${{ inputs.version }}
         run: |
-          test "${{ github.event.repository.private }}" = "false"
-          CANONICAL_VERSION=$(uv run python -c "from packaging.version import Version; print(Version('${VERSION}'))")
+          test "${REPOSITORY_PRIVATE}" = "false"
+          CANONICAL_VERSION=$(uv run python -c 'import os; from packaging.version import Version; print(Version(os.environ["VERSION"]))')
           test "${CANONICAL_VERSION}" = "${VERSION}"
           case "${VERSION}" in *+*) echo "local versions cannot be published" >&2; exit 1;; esac
           test "$(git branch --show-current)" = main
-          git fetch origin main
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          REMOTE_MAIN=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          test "$(git rev-parse HEAD)" = "${REMOTE_MAIN}"
           test "$(git tag -l "v${VERSION}")" = ""
           test -n "$(find changelog.d -type f -name '*.md' ! -name README.md -print -quit)"
           uv run towncrier build --version "${VERSION}" --yes
@@ -47,6 +53,7 @@ jobs:
           branch=release/v${VERSION}
           git config user.name "release automation"
           git config user.email "release-automation@users.noreply.github.com"
+          gh auth setup-git
           git switch -c "${branch}"
           git add CHANGELOG.md changelog.d .release-version
           git commit -m "Prepare release v${VERSION}"

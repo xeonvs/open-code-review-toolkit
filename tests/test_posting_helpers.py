@@ -712,7 +712,7 @@ class PostingWorkflowTests(unittest.TestCase):
 
     def test_anchorless_comment_can_remap_to_unambiguous_changed_path(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
-        comment = {"path": "wrong.py", "existing_code": "set -- review"}
+        comment = {"path": "", "existing_code": "set -- review"}
 
         def fake_unique_existing_code_line(
             _refs: dict[str, str],
@@ -728,7 +728,7 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 path, line = workflow.remap_existing_code_location(
                     refs,
-                    "wrong.py",
+                    "",
                     comment,
                     diff_line_cache={},
                     file_line_cache={},
@@ -737,9 +737,39 @@ class PostingWorkflowTests(unittest.TestCase):
 
         self.assertEqual((path, line), (".gitlab-ci.yml", 12))
 
+    def test_known_path_does_not_remap_to_different_file(self) -> None:
+        refs = {"base_sha": "base", "head_sha": "head"}
+        comment = {"path": "known.py", "existing_code": "same()"}
+
+        def fake_unique_existing_code_line(
+            _refs: dict[str, str],
+            path: str,
+            _comment: dict[str, Any],
+            **_kwargs: Any,
+        ) -> int:
+            return 12 if path == "other.py" else 0
+
+        def fail_if_changed_paths_are_loaded(*_args: Any) -> list[str]:
+            self.fail("known paths must not trigger cross-file remapping")
+
+        with patched_attr(workflow, "changed_new_paths", fail_if_changed_paths_are_loaded):
+            with patched_attr(
+                workflow, "unique_existing_code_line", fake_unique_existing_code_line
+            ):
+                path, line = workflow.remap_existing_code_location(
+                    refs,
+                    "known.py",
+                    comment,
+                    diff_line_cache={},
+                    file_line_cache={},
+                    changed_path_cache={},
+                )
+
+        self.assertEqual((path, line), ("known.py", 0))
+
     def test_anchorless_comment_stays_fallback_when_changed_path_match_is_ambiguous(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
-        comment = {"path": "wrong.py", "existing_code": "same()"}
+        comment = {"path": "", "existing_code": "same()"}
 
         def fake_unique_existing_code_line(
             _refs: dict[str, str],
@@ -755,18 +785,18 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 path, line = workflow.remap_existing_code_location(
                     refs,
-                    "wrong.py",
+                    "",
                     comment,
                     diff_line_cache={},
                     file_line_cache={},
                     changed_path_cache={},
                 )
 
-        self.assertEqual((path, line), ("wrong.py", 0))
+        self.assertEqual((path, line), ("", 0))
 
     def test_anchorless_comment_skips_cross_file_remap_when_diff_is_too_large(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
-        comment = {"path": "wrong.py", "existing_code": "same()"}
+        comment = {"path": "", "existing_code": "same()"}
         calls = 0
 
         def fake_unique_existing_code_line(*_args: Any, **_kwargs: Any) -> int:
@@ -784,15 +814,15 @@ class PostingWorkflowTests(unittest.TestCase):
         ):
             path, line = workflow.remap_existing_code_location(
                 refs,
-                "wrong.py",
+                "",
                 comment,
                 diff_line_cache={},
                 file_line_cache={},
                 changed_path_cache={},
             )
 
-        self.assertEqual((path, line), ("wrong.py", 0))
-        self.assertEqual(calls, 1)
+        self.assertEqual((path, line), ("", 0))
+        self.assertEqual(calls, 0)
 
     def test_ocr_failure_details_neutralize_quick_actions(self) -> None:
         notes: list[str] = []
@@ -1009,7 +1039,7 @@ class GitLabSnapshotTests(unittest.TestCase):
         def fake_urlopen(_request: Any, **_kwargs: Any) -> FakeResponse:
             return FakeResponse()
 
-        with patched_attr(urllib.request, "urlopen", fake_urlopen):
+        with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
             response = gitlab.api_request(gitlab_config(), "/notes", method="GET")
             write_response = gitlab.api_write_url_detailed(
                 "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes",
@@ -1045,7 +1075,7 @@ class GitLabSnapshotTests(unittest.TestCase):
         def fake_urlopen(_request: Any, **_kwargs: Any) -> FakeResponse:
             return FakeResponse()
 
-        with patched_attr(urllib.request, "urlopen", fake_urlopen):
+        with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
             with redirect_stderr(io.StringIO()):
                 response = gitlab.api_request(gitlab_config(), "/notes", method="GET")
                 write_response = gitlab.api_write_url_detailed(
@@ -1064,7 +1094,7 @@ class GitLabSnapshotTests(unittest.TestCase):
 
         stderr = io.StringIO()
         with patched_env(OCR_LLM_TOKEN="super-secret-value"), redirect_stderr(stderr):
-            with patched_attr(urllib.request, "urlopen", fake_urlopen):
+            with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
                 write_response = gitlab.api_write_url_detailed(
                     "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes",
                     "token",
@@ -1098,7 +1128,7 @@ class GitLabSnapshotTests(unittest.TestCase):
 
         stderr = io.StringIO()
         with patched_env(OCR_LLM_TOKEN="super-secret-value"), redirect_stderr(stderr):
-            with patched_attr(urllib.request, "urlopen", fake_urlopen):
+            with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
                 write_response = gitlab.api_write_url_detailed(
                     "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes",
                     "token",
@@ -1209,6 +1239,117 @@ class GitLabSnapshotTests(unittest.TestCase):
 
 
 class ApiErrorRedactionTests(unittest.TestCase):
+    def test_gitlab_redirect_handler_refuses_credential_forwarding(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request(
+            "https://gitlab.example.com/api",
+            headers={"PRIVATE-TOKEN": "gitlab-secret-value"},
+        )
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://other.example.com/capture"
+        )
+
+        self.assertIsNone(redirected)
+
+    def test_gitlab_redirect_handler_allows_same_origin_https_redirect(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request(
+            "https://gitlab.example.com/api",
+            headers={"PRIVATE-TOKEN": "gitlab-secret-value"},
+        )
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://gitlab.example.com/api/"
+        )
+
+        self.assertIsNotNone(redirected)
+        assert redirected is not None
+        self.assertEqual(redirected.full_url, "https://gitlab.example.com/api/")
+        self.assertEqual(redirected.get_header("Private-token"), "gitlab-secret-value")
+
+    def test_gitlab_redirect_handler_rejects_https_downgrade(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request(
+            "https://gitlab.example.com/api",
+            headers={"PRIVATE-TOKEN": "gitlab-secret-value"},
+        )
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "http://gitlab.example.com/api/"
+        )
+
+        self.assertIsNone(redirected)
+
+    def test_gitlab_redirect_handler_rejects_redirect_userinfo(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request("https://gitlab.example.com/api")
+
+        redirected = handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://user:password@gitlab.example.com/api/",
+        )
+
+        self.assertIsNone(redirected)
+
+    def test_gitlab_redirect_handler_treats_default_https_port_as_same_origin(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request("https://gitlab.example.com/api")
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://gitlab.example.com:443/api/"
+        )
+
+        self.assertIsNotNone(redirected)
+
+    def test_gitlab_redirect_handler_rejects_write_redirect(self) -> None:
+        handler = gitlab._SameOriginRedirectHandler()
+        request = urllib.request.Request(
+            "https://gitlab.example.com/api", data=b"{}", method="POST"
+        )
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://gitlab.example.com/api/"
+        )
+
+        self.assertIsNone(redirected)
+
+    def test_gitlab_config_rejects_non_https_server_before_token_lookup(self) -> None:
+        with patched_env(
+            CI_SERVER_URL="http://gitlab.example.com",
+            CI_PROJECT_ID="1",
+            CI_MERGE_REQUEST_IID="2",
+            GITLAB_API_TOKEN="gitlab-secret-value",
+        ):
+            with patched_attr(
+                gitlab,
+                "fetch_current_user_id",
+                lambda *_args: self.fail("token must not be sent to HTTP"),
+            ):
+                config = gitlab.load_gitlab_config()
+
+        self.assertIsNone(config)
+
+    def test_gitlab_config_rejects_server_url_with_embedded_credentials(self) -> None:
+        with patched_env(
+            CI_SERVER_URL="https://user:password@gitlab.example.com",
+            CI_PROJECT_ID="1",
+            CI_MERGE_REQUEST_IID="2",
+            GITLAB_API_TOKEN="gitlab-secret-value",
+        ):
+            with patched_attr(
+                gitlab,
+                "fetch_current_user_id",
+                lambda *_args: self.fail("invalid origin must not receive the token"),
+            ):
+                config = gitlab.load_gitlab_config()
+
+        self.assertIsNone(config)
+
     def test_api_error_body_is_redacted_before_logging(self) -> None:
         class FakeResponse:
             def __init__(self, body: bytes) -> None:
@@ -1224,7 +1365,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             b'{"message":"Authorization: Basic abc123","private_token":"secret", "password":"pw"}'
         )
 
-        def fake_urlopen(_request: Any, timeout: int = 0) -> Any:
+        def fake_urlopen(_request: Any) -> Any:
             raise urllib.error.HTTPError(
                 "https://gitlab.example.com/api",
                 500,
@@ -1234,7 +1375,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             )
 
         stderr = io.StringIO()
-        with redirect_stderr(stderr), patched_attr(urllib.request, "urlopen", fake_urlopen):
+        with redirect_stderr(stderr), patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
             response = gitlab.api_request_url(
                 "https://gitlab.example.com/api",
                 "token",
@@ -1256,7 +1397,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-        def fake_urlopen(_request: Any, timeout: int = 0) -> Any:
+        def fake_urlopen(_request: Any) -> Any:
             raise urllib.error.HTTPError(
                 "https://gitlab.example.com/api",
                 400,
@@ -1266,7 +1407,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             )
 
         with redirect_stderr(io.StringIO()):
-            with patched_attr(urllib.request, "urlopen", fake_urlopen):
+            with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
                 write_result = gitlab.api_write_url_detailed(
                     "https://gitlab.example.com/api",
                     "token",
@@ -1289,7 +1430,9 @@ class ApiErrorRedactionTests(unittest.TestCase):
         )
 
         with patched_attr(
-            urllib.request, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(error)
+            gitlab,
+            "_open_gitlab_request",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(error),
         ):
             write_result = gitlab.api_write_url_detailed(
                 "https://gitlab.example.com/api",
@@ -1308,7 +1451,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-        def fake_urlopen(_request: Any, timeout: int = 0) -> Any:
+        def fake_urlopen(_request: Any) -> Any:
             raise urllib.error.HTTPError(
                 "https://gitlab.example.com/api",
                 400,
@@ -1318,7 +1461,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             )
 
         with redirect_stderr(io.StringIO()):
-            with patched_attr(urllib.request, "urlopen", fake_urlopen):
+            with patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
                 write_result = gitlab.api_write_url_detailed(
                     "https://gitlab.example.com/api",
                     "token",
@@ -1337,7 +1480,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-        def fake_urlopen(_request: Any, timeout: int = 0) -> Any:
+        def fake_urlopen(_request: Any) -> Any:
             raise urllib.error.HTTPError(
                 "https://gitlab.example.com/api",
                 500,
@@ -1347,7 +1490,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
             )
 
         stderr = io.StringIO()
-        with redirect_stderr(stderr), patched_attr(urllib.request, "urlopen", fake_urlopen):
+        with redirect_stderr(stderr), patched_attr(gitlab, "_open_gitlab_request", fake_urlopen):
             response = gitlab.api_request_url(
                 "https://gitlab.example.com/api",
                 "token",
@@ -1473,6 +1616,26 @@ class OcrResultLoadingTests(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertIn("insufficient_funds", matches[0])
         self.assertIn("Insufficient user balance", matches[0])
+
+    def test_billing_classifier_matches_status_code_shapes(self) -> None:
+        warnings = [
+            {"status_code": 402, "message": "provider rejected request"},
+            {"error": {"details": {"status_code": "402"}}},
+            '{"status_code": 402, "message": "provider rejected request"}',
+            "status_code: 402",
+        ]
+
+        matches = result.llm_billing_failure_warnings(warnings)
+
+        self.assertEqual(len(matches), 4)
+
+    def test_billing_classifier_ignores_non_billing_status_code(self) -> None:
+        warnings = [
+            {"status_code": 200, "message": "billing report generated"},
+            '{"status_code": 200, "message": "billing report generated"}',
+        ]
+
+        self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
 
     def test_token_usage_mapping_is_depth_bounded(self) -> None:
         value: dict[str, Any] = {"total_tokens": 123}

@@ -1,6 +1,6 @@
 # Security and trust model
 
-The toolkit bridges four trust domains: repository content, upstream OCR and its LLM/MCP providers, CI secrets, and the GitLab API. None of the first three should be assumed safe merely because a job runs in a trusted project.
+The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP providers, CI secrets, and the GitLab API. None of the first three should be assumed safe merely because a job runs in a trusted project.
 
 ## Preserved safety properties
 
@@ -18,6 +18,6 @@ The toolkit bridges four trust domains: repository content, upstream OCR and its
 
 Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.
 
-Pin upstream Open Code Review `v1.7.11` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
+Pin Open Code Review `v1.7.12` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
 
 The detailed environment contract is in [configuration.md](configuration.md). Vulnerability reporting is in [SECURITY.md](../SECURITY.md).
