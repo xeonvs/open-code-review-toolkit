@@ -11,8 +11,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analysis:
+    name: analyze-supply-chain
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:

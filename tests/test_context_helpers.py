@@ -978,6 +978,31 @@ class ApplicationVersionExtractionTests(unittest.TestCase):
 
 
 class ContextRenderingTests(unittest.TestCase):
+    def test_review_language_contract_defaults_to_english_and_supports_russian(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("docs\n", encoding="utf-8")
+
+            with (
+                patched_root(root),
+                patched_attr(context_repo, "changed_files", lambda: ["README.md"]),
+            ):
+                with patched_env(OCR_REVIEW_LANGUAGE=""):
+                    english = context_render.build_context()
+                with patched_env(OCR_REVIEW_LANGUAGE="Russian"):
+                    russian = context_render.build_context()
+
+        self.assertIn("Response language: English.", english)
+        self.assertIn(
+            "All user-visible review comments, summaries, warnings and recommendations MUST be written",
+            english,
+        )
+        self.assertIn("Response language: Russian.", russian)
+        self.assertIn(
+            "All user-visible review comments, summaries, warnings and recommendations MUST be written",
+            russian,
+        )
+
     def test_build_context_discovers_related_unchanged_version_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1762,6 +1787,9 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertNotIn("## OCR JSON metadata", docs)
         self.assertIn('OCR_LLM_VALIDATE_MODEL: "false"', ci)
         self.assertIn('OCR_LLM_ALLOWED_MODELS: ""', ci)
+        self.assertIn('OCR_REVIEW_LANGUAGE: "Russian"', ci)
+        self.assertIn("defaults to `English`", docs)
+        self.assertIn("set `Russian`", docs)
         self.assertIn("ocr-ci preflight", ci)
         self.assertIn("ocr-ci configure", ci)
         self.assertIn("uv run pytest", ci)

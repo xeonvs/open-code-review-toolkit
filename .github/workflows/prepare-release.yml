@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   prepare:
+    name: prepare-release-pr
     runs-on: ubuntu-latest
     environment: release-preparation
     steps:

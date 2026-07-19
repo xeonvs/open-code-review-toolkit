@@ -9,6 +9,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.markdown import (
     markdown_code_block,
     markdown_fence_transition,
@@ -56,7 +57,6 @@ from ocr_toolkit.context.settings import (
     DEFAULT_BACKGROUND_MAX_CHARS,
     MAX_BACKGROUND_MAX_BYTES,
     MAX_BACKGROUND_MAX_CHARS,
-    _safe_language_label,
     getenv_int,
     inline_code,
     string_list_value,
@@ -247,7 +247,7 @@ def limit_text_bytes(text: str, max_bytes: int) -> str:
 def build_context() -> str:
     """Build the complete Markdown review background."""
 
-    response_language = _safe_language_label(os.environ.get("OCR_REVIEW_LANGUAGE", "Russian"))
+    response_language = resolve_review_language()
     raw_changed = context_repo.changed_files()
     changed_unavailable = raw_changed is None
     changed: list[str] = list(raw_changed) if raw_changed is not None else []

@@ -181,3 +181,44 @@ Harden the current standalone toolkit with regression coverage, update OCR compa
 - Multi-agent Codex features remain disabled for this project; the complete security scan ran sequentially with exhaustive primary-agent receipts.
 - Runtime dependencies remain empty; fixes should use the standard library.
 - The package version remains SCM-derived. This change advances the next development/release line through changelog fragments and the eventual release tag rather than hard-coding a package version.
+
+## Completed Plan: Unified review language and automatic TestPyPI alpha releases
+
+Status: completed
+Owner: Codex
+Last Updated: 2026-07-19
+
+### Goal
+
+Make `OCR_REVIEW_LANGUAGE` the single safe language contract with default `English`, synchronize public GitLab examples, support Python 3.14, and publish one deterministic TestPyPI alpha for every successful merge into `main`.
+
+### Work Queue
+
+1. [x] Implement one shared language resolver used by runtime configuration and generated context; remove the legacy language identifier from tracked and built content.
+2. [x] Pin the synthetic GitLab example to a checksum-verified TestPyPI wheel downloaded with bounded retries and timeouts.
+3. [x] Convert the TestPyPI workflow to automatic `main` publication using `0.1.0a${GITHUB_RUN_NUMBER}` and idempotent PEP 691 artifact verification.
+4. [x] Add regression, workflow, versioning, registry-state, documentation, and packaging tests.
+5. [x] Extend package metadata, CI, documentation, and install smokes through Python 3.14.
+6. [x] Run iterative internal self-review and repair cycles until no actionable findings remain.
+7. [x] Run the full repository Codex Security scan, fix every validated finding, repeat self-review and validation, and seal a clean post-remediation scan.
+8. [x] Validate the package and read-only consumer flow and close this implementation plan to post-change truth before commit and pull-request publication.
+
+### Validation Evidence
+
+- The complete quality wrapper passes with 301 tests, 26 subtests, 73.37% branch coverage, Ruff format/check, and strict mypy.
+- Independent Python 3.10 and Python 3.14 test runs pass the complete 301-test suite.
+- Duplicate `0.1.0a3` wheel and sdist builds are byte-identical, pass Twine, exclude ignored local files, and install successfully on supported Python versions.
+- `pip-audit --skip-editable`, locked dependency validation, YAML parsing, and Zizmor over every GitHub workflow pass; Zizmor reports no findings.
+- Live TestPyPI PEP 691 metadata for `0.1.0a2` matches the public example's immutable wheel URL and SHA-256.
+- A full repository Codex Security scan covered runtime and privileged CI surfaces. One production-release artifact-binding issue was fixed; the sealed post-remediation result has no open findings or deferred scope.
+- A tracked-only archive of the read-only consumer repository generates bounded context with the default English review language and no toolkit-specific hardcoding; its existing local untracked files remain unchanged and unread.
+
+### Locked Decisions
+
+- Default review language is `English`; `Russian` is the documented explicit example.
+- Supported Python versions are 3.10 through 3.14 on Linux and macOS.
+- The legacy language identifier is removed rather than supported as an alias.
+- TestPyPI run number maps directly to the alpha number; run #3 publishes `0.1.0a3`, reruns are idempotent, and subsequent merges consume subsequent alpha numbers.
+- The public example remains pinned to the already verified `0.1.0a2` wheel; the automatic workflow never commits its own published URL back to `main`.
+- Production PyPI publication, Git tags, and GitHub Release creation are not executed in this change; their existing workflow now verifies published files against the reviewed artifact hashes.
+- Pull-request checks, squash merge, and independent `0.1.0a3` TestPyPI verification are operational follow-through after this implementation plan is closed.

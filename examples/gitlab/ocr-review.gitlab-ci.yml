@@ -7,9 +7,13 @@ default:
 
 variables:
   OCR_VERSION: "v1.7.12"
+  OCR_TOOLKIT_WHEEL_URL: "https://test-files.pythonhosted.org/packages/86/b4/bcf78c35a2a72198e36f08aefc9d4ae1d613afc6cdfa42a3e44773ff7edf/open_code_review_toolkit-0.1.0a2-py3-none-any.whl"
+  OCR_TOOLKIT_WHEEL_SHA256: "d118ba5ecc5cb5027df11588bede6428be87771b87b82c47ccc7f8a08d3de6d8"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"
+  # Reviews default to English. To request Russian, set:
+  # OCR_REVIEW_LANGUAGE: "Russian"
 
 lint:
   stage: lint
@@ -32,12 +36,26 @@ open_code_review:
   timeout: 30m
   script:
     - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git
-    - curl --fail --location --silent --show-error "https://github.com/alibaba/open-code-review/releases/download/${OCR_VERSION}/ocr-linux-x64" --output /usr/local/bin/ocr
+    - >-
+      curl --fail --location --silent --show-error
+      --retry 3 --retry-delay 2 --retry-connrefused
+      --connect-timeout 10 --max-time 120
+      --proto '=https' --proto-redir '=https'
+      "https://github.com/alibaba/open-code-review/releases/download/${OCR_VERSION}/ocr-linux-x64"
+      --output /usr/local/bin/ocr
     - echo "Set OCR_SHA256 to the checksum published for the pinned OCR_VERSION before using this example"
     - test -n "${OCR_SHA256:-}"
     - echo "${OCR_SHA256}  /usr/local/bin/ocr" | sha256sum --check --strict
     - chmod 0755 /usr/local/bin/ocr
-    - pip install open-code-review-toolkit
+    - >-
+      curl --fail --location --silent --show-error
+      --retry 3 --retry-delay 2 --retry-connrefused
+      --connect-timeout 10 --max-time 120
+      --proto '=https' --proto-redir '=https'
+      "${OCR_TOOLKIT_WHEEL_URL}"
+      --output /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl
+    - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl" | sha256sum --check --strict
+    - pip install --no-deps /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl
     - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
     - ocr-ci preflight
     - ocr-ci configure
