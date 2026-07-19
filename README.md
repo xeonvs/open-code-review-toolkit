@@ -3,7 +3,7 @@
 Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository context generation, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
 > [!NOTE]
-> The project is under active development. It currently targets Python 3.10-3.13 on Linux and macOS; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
+> The project is under active development. It currently targets Python 3.10-3.14 on Linux and macOS; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
 
 ## Install
 
@@ -16,6 +16,7 @@ ocr-ci --help
 ```
 
 The current compatibility target is OCR `1.7.12`. CI should pin the release and verify its published checksum before execution.
+Review output defaults to English. Set `OCR_REVIEW_LANGUAGE=Russian` to use Russian consistently in both OCR configuration and generated review context.
 
 ## GitLab CI quick start
 

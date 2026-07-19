@@ -8,6 +8,7 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 | --- | --- |
 | `OCR_LLM_URL` | OpenAI-compatible chat or responses endpoint. |
 | `OCR_LLM_MODEL` | Exact model identifier passed to OCR. |
+| `OCR_REVIEW_LANGUAGE` | Single review language used by OCR config and generated context. Defaults to `English`; set `Russian` for Russian review output. |
 | `OCR_LLM_TOKEN` | LLM credential. Never written into generated context. |
 | `OCR_LLM_AUTH_HEADER` | Optional authorization header name; defaults to `Authorization`. |
 | `OCR_LLM_EXTRA_HEADERS` | Optional JSON object of additional string headers. |

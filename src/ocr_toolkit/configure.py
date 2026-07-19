@@ -9,6 +9,7 @@ import sys
 from typing import Any
 from urllib.parse import urlsplit
 
+from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
 
@@ -117,7 +118,7 @@ def _llm_extra_body(protocol: str) -> dict[str, Any] | None:
 def build_config_updates() -> dict[str, Any]:
     """Build OCR config updates from already-normalized CI environment."""
 
-    cli_language = _required_env("OCR_CLI_LANGUAGE")
+    review_language = resolve_review_language()
     llm_url = _required_env("OCR_LLM_URL")
     llm_token = _required_env("OCR_LLM_TOKEN")
     try:
@@ -147,7 +148,7 @@ def build_config_updates() -> dict[str, Any]:
         raise OCRRuntimeConfigError("OCR_LLM_AUTH_HEADER is not a valid HTTP header name")
 
     updates: dict[str, Any] = {
-        "language": cli_language,
+        "language": review_language,
         "llm.url": llm_url,
         "llm.auth_token": llm_token,
         "llm.model": llm_model,

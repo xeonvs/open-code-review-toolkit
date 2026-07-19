@@ -6,6 +6,7 @@ import io
 import unittest
 from contextlib import redirect_stderr
 
+from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.markdown import (
     inline_code,
     markdown_code_block,
@@ -108,12 +109,18 @@ class SettingsTests(unittest.TestCase):
         stderr = io.StringIO()
 
         with redirect_stderr(stderr):
-            language = context_settings._safe_language_label(raw)
+            language = resolve_review_language(raw)
 
-        self.assertEqual(language, "Russian")
+        self.assertEqual(language, "English")
         logged = stderr.getvalue()
         self.assertNotIn("test-redaction-value", logged)
         self.assertNotIn("Authorization", logged)
+        self.assertIn("falling back to English", logged)
+
+    def test_review_language_defaults_to_english_and_preserves_russian(self) -> None:
+        self.assertEqual(resolve_review_language(""), "English")
+        self.assertEqual(resolve_review_language("   "), "English")
+        self.assertEqual(resolve_review_language("Russian"), "Russian")
 
     def test_invalid_ocr_exit_code_does_not_log_raw_value(self) -> None:
         stderr = io.StringIO()

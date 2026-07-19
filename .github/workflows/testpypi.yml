@@ -1,12 +1,8 @@
 name: TestPyPI preview
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Unused PEP 440 prerelease version, for example 0.1.0a2
-        required: true
-        type: string
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -17,12 +13,14 @@ concurrency:
 
 jobs:
   build:
-    name: build-preview
+    name: verify-and-build-preview
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.validate.outputs.version }}
+      version: ${{ steps.preview.outputs.version }}
+      publish: ${{ steps.registry.outputs.publish }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -31,65 +29,163 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: "0.11.29"
-      - id: validate
-        name: Validate preview version and source
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+      - id: preview
+        name: Resolve deterministic alpha version
         run: |
           test "${GITHUB_REF}" = refs/heads/main
-          REMOTE_MAIN=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
-          test "$(git rev-parse HEAD)" = "${REMOTE_MAIN}"
-          CANONICAL_VERSION=$(uv run --with packaging python -c 'import os; from packaging.version import Version; print(Version(os.environ["VERSION"]))')
-          test "${CANONICAL_VERSION}" = "${VERSION}"
-          uv run --with packaging python -c 'import os; from packaging.version import Version; assert Version(os.environ["VERSION"]).is_prerelease'
-          case "${VERSION}" in *+*) echo "local versions cannot be published" >&2; exit 1;; esac
-          test "$(git tag -l "v${VERSION}")" = ""
-          curl --fail --silent --show-error "https://test.pypi.org/pypi/open-code-review-toolkit/${VERSION}/json" >/dev/null && { echo "version ${VERSION} already exists on TestPyPI" >&2; exit 1; } || test "$?" = 22
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          VERSION=$(python scripts/testpypi_preview.py version --run-number "${GITHUB_RUN_NUMBER}")
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct "${GITHUB_SHA}")
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "source_date_epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
       - run: uv sync --frozen
-      - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
-      - name: Build preview artifacts
+      - run: ./scripts/quality.sh check
+      - run: uv run pip-audit --skip-editable
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
-          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.validate.outputs.version }}
-        run: uv run python -m build
-      - run: uv run twine check dist/*
-      - name: Verify exact artifact version
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+      - name: Build deterministic preview artifacts
         env:
-          VERSION: ${{ steps.validate.outputs.version }}
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.preview.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ steps.preview.outputs.source_date_epoch }}
         run: |
-          uv run python -c 'import os, pathlib; names=[p.name for p in pathlib.Path("dist").iterdir()]; prefix="open_code_review_toolkit-" + os.environ["VERSION"]; assert len(names) == 2 and all(name.startswith(prefix) for name in names), names'
+          uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
+          uv run python -m build --no-isolation
+          uv run twine check dist/*
+          python -m venv /tmp/wheel-smoke
+          /tmp/wheel-smoke/bin/pip install --no-deps dist/*.whl
+          /tmp/wheel-smoke/bin/ocr-ci --help
+          python -m venv /tmp/sdist-smoke
+          /tmp/sdist-smoke/bin/pip install --no-deps dist/*.tar.gz
+          /tmp/sdist-smoke/bin/ocr-ci --help
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          artifacts = sorted(Path("dist").iterdir())
+          hashes = {
+              artifact.name: hashlib.sha256(artifact.read_bytes()).hexdigest()
+              for artifact in artifacts
+          }
+          Path("artifact-hashes.json").write_text(
+              json.dumps(hashes, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+      - id: registry
+        name: Check idempotent TestPyPI state
+        env:
+          VERSION: ${{ steps.preview.outputs.version }}
+        run: |
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 2 --retry-connrefused \
+            --connect-timeout 10 --max-time 120 \
+            --proto '=https' --proto-redir '=https' \
+            --header 'Accept: application/vnd.pypi.simple.v1+json' \
+            https://test.pypi.org/simple/open-code-review-toolkit/ \
+            --output /tmp/testpypi-index.json
+          STATE=$(python scripts/testpypi_preview.py check-index \
+            --version "${VERSION}" \
+            --index-json /tmp/testpypi-index.json \
+            --hashes-json artifact-hashes.json)
+          case "${STATE}" in
+            publish) echo "publish=true" >> "${GITHUB_OUTPUT}" ;;
+            already-published) echo "publish=false" >> "${GITHUB_OUTPUT}" ;;
+            *) echo "unexpected TestPyPI state: ${STATE}" >&2; exit 1 ;;
+          esac
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: testpypi-distributions-${{ steps.validate.outputs.version }}
-          path: dist/
+          name: testpypi-preview-distributions
+          path: |
+            dist
+            artifact-hashes.json
           if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
   publish:
-    name: publish-testpypi
+    name: publish-preview
     needs: build
+    if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: testpypi-public-disclosure
     permissions:
       contents: read
-      id-token: write # Exchanged for a short-lived TestPyPI token.
+      id-token: write # TestPyPI Trusted Publishing through OIDC.
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: testpypi-distributions-${{ needs.build.outputs.version }}
-          path: dist
+          name: testpypi-preview-distributions
       - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
+          packages-dir: dist
           repository-url: https://test.pypi.org/legacy/
           attestations: false
-      - name: Install published preview
+
+  verify:
+    name: verify-published-preview
+    needs: [build, publish]
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: testpypi-preview-distributions
+      - name: Verify and install immutable published artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          python -m venv /tmp/testpypi
           for attempt in 1 2 3 4 5; do
-            /tmp/testpypi/bin/pip install --no-deps --index-url https://test.pypi.org/simple/ "open-code-review-toolkit==${VERSION}" && break
+            if curl --fail --location --silent --show-error \
+              --retry 3 --retry-delay 2 --retry-connrefused \
+              --connect-timeout 10 --max-time 120 \
+              --proto '=https' --proto-redir '=https' \
+              --header 'Accept: application/vnd.pypi.simple.v1+json' \
+              https://test.pypi.org/simple/open-code-review-toolkit/ \
+              --output /tmp/testpypi-index.json && \
+              test "$(python scripts/testpypi_preview.py check-index \
+                --version "${VERSION}" \
+                --index-json /tmp/testpypi-index.json \
+                --hashes-json artifact-hashes.json)" = already-published; then
+              break
+            fi
             test "${attempt}" -lt 5 || exit 1
             sleep 15
           done
-          /tmp/testpypi/bin/ocr-ci --help
+          python scripts/testpypi_preview.py artifact-manifest \
+            --version "${VERSION}" \
+            --index-json /tmp/testpypi-index.json \
+            --hashes-json artifact-hashes.json > /tmp/artifact-manifest.json
+          python - <<'PY' > /tmp/artifact-downloads.tsv
+          import json
+          from pathlib import Path
+
+          for item in json.loads(Path("/tmp/artifact-manifest.json").read_text()):
+              print(item["sha256"], item["url"], item["filename"], sep="\t")
+          PY
+          mkdir -p /tmp/testpypi-artifacts
+          while IFS=$'\t' read -r sha256 url filename; do
+            curl --fail --location --silent --show-error \
+              --retry 3 --retry-delay 2 --retry-connrefused \
+              --connect-timeout 10 --max-time 120 \
+              --proto '=https' --proto-redir '=https' \
+              "${url}" --output "/tmp/testpypi-artifacts/${filename}"
+            echo "${sha256}  /tmp/testpypi-artifacts/${filename}" | sha256sum --check --strict
+          done < /tmp/artifact-downloads.tsv
+          python -m venv /tmp/testpypi-wheel
+          /tmp/testpypi-wheel/bin/pip install --no-deps /tmp/testpypi-artifacts/*.whl
+          /tmp/testpypi-wheel/bin/ocr-ci --help
+          python -m venv /tmp/testpypi-sdist
+          /tmp/testpypi-sdist/bin/pip install --no-deps /tmp/testpypi-artifacts/*.tar.gz
+          /tmp/testpypi-sdist/bin/ocr-ci --help

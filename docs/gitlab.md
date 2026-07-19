@@ -6,7 +6,7 @@ The toolkit's first provider adapter posts review results to GitLab merge reques
 
 Install `open-code-review-toolkit` from PyPI. Install Open Code Review separately and pin `v1.7.12`; verify the release checksum before making the binary executable. The package never downloads OCR.
 
-Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example generates one background file and passes it once with `--background-file`.
+Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates one background file, and passes it once with `--background-file`.
 
 ## Required secrets
 
@@ -16,9 +16,11 @@ Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-c
 
 Store secrets as masked, protected CI variables. Do not place them in YAML, command arguments, artifacts, or generated context. Posting deliberately does not accept a GitLab job token.
 
+`OCR_REVIEW_LANGUAGE` is an optional non-secret setting shared by OCR configuration and generated context. It defaults to `English`; set `Russian` for Russian review output.
+
 ## Operating model
 
-`ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` and `mcp-config` write OCR configuration without invoking a config subprocess. `context` creates bounded Markdown. `post` interprets a JSON artifact and publishes bounded notes with rollback and ownership safeguards.
+`ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` and `context` resolve the same `OCR_REVIEW_LANGUAGE` value, so the OCR system prompt and review background cannot disagree. `configure` and `mcp-config` write OCR configuration without invoking a config subprocess. `context` creates bounded Markdown. `post` interprets a JSON artifact and publishes bounded notes with rollback and ownership safeguards.
 
 OCR is configured through its `openai-responses` provider. Optional stdio bridge tools are supplied with `OCR_MCP_SERVERS_JSON`; treat every configured MCP command as privileged code.
 

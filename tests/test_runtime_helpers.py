@@ -17,15 +17,30 @@ from typing import Any
 from ocr_toolkit import config_writer, mcp_config, preflight
 from ocr_toolkit import configure as ocr_configure
 from tests.support import (
+    cleared_env,
     patched_attr,
     patched_env,
 )
 
 
 class MCPConfigTests(unittest.TestCase):
+    def test_runtime_config_defaults_review_language_to_english(self) -> None:
+        with (
+            cleared_env("OCR_REVIEW_LANGUAGE"),
+            patched_env(
+                OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+                OCR_LLM_TOKEN="llm-secret",
+                OCR_LLM_MODEL="openai/gpt-test",
+                OCR_USE_ANTHROPIC="false",
+            ),
+        ):
+            updates = ocr_configure.build_config_updates()
+
+        self.assertEqual(updates["language"], "English")
+
     def test_runtime_config_rejects_non_https_llm_url_before_storing_token(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="http://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -38,7 +53,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_rejects_llm_url_with_embedded_credentials(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://user:password@gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -51,7 +66,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_rejects_llm_url_with_invalid_port(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example:not-a-port/v1/responses",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -62,7 +77,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_updates_parse_headers_body_and_language(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -87,7 +102,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_default_auth_header_matches_preflight(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -101,7 +116,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_rejects_duplicate_auth_extra_header(self) -> None:
         with (
             patched_env(
-                OCR_CLI_LANGUAGE="English",
+                OCR_REVIEW_LANGUAGE="English",
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
@@ -117,7 +132,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_supports_openai_responses_protocol(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example/v1/responses",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -132,7 +147,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_rejects_conflicting_protocol_modes(self) -> None:
         with (
             patched_env(
-                OCR_CLI_LANGUAGE="English",
+                OCR_REVIEW_LANGUAGE="English",
                 OCR_LLM_URL="https://gateway.example/v1/responses",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
@@ -148,7 +163,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_requires_core_llm_env(self) -> None:
         with (
             patched_env(
-                OCR_CLI_LANGUAGE="English",
+                OCR_REVIEW_LANGUAGE="English",
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="",
                 OCR_LLM_MODEL="openai/gpt-test",
@@ -201,7 +216,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_preserves_explicit_empty_extra_body(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
@@ -215,7 +230,7 @@ class MCPConfigTests(unittest.TestCase):
 
     def test_runtime_config_merges_anthropic_disable_thinking_with_extra_body(self) -> None:
         with patched_env(
-            OCR_CLI_LANGUAGE="English",
+            OCR_REVIEW_LANGUAGE="English",
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="anthropic/claude-test",
@@ -233,7 +248,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_rejects_conflicting_anthropic_thinking_body(self) -> None:
         with (
             patched_env(
-                OCR_CLI_LANGUAGE="English",
+                OCR_REVIEW_LANGUAGE="English",
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="anthropic/claude-test",
