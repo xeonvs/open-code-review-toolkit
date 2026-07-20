@@ -1,27 +1,34 @@
-# Release process
+# Releases
 
-Versions come from SCM tags through hatch-vcs. Automatic TestPyPI previews use final alpha versions derived from the immutable workflow run number; release tags use `vX.Y.Z`. Public interfaces may evolve before 1.0, but every user-visible 0.1.x change still needs a Towncrier fragment.
+Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.1.x change still requires a Towncrier fragment.
 
-## Private TestPyPI preview
+## Development builds
 
-Every push to `main` runs the **TestPyPI preview** workflow. The workflow maps its immutable run number directly to the alpha number (`run #3` becomes `0.1.0a3`), repeats quality and security gates, builds deterministic wheel and sdist artifacts, and publishes only through TestPyPI OIDC. A rerun reuses the same version and succeeds only when the already-published artifact SHA-256 values match exactly. It does not create a Git tag, publish a GitHub Release, or publish to production PyPI. TestPyPI is still public disclosure, so merge only reviewed commits. TestPyPI has a separate account database from PyPI.
+Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `0.2.0.devN`; rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
 
-The workflow validates that checkout `HEAD` is the triggering `main` SHA, verifies the exact local artifact set against the PEP 691 Simple API, and fails closed on partial releases or SHA conflicts. The OIDC publish job runs only when the version is absent; verification always downloads immutable published files with bounded retries/timeouts, checks their SHA-256 values, and smoke-installs both wheel and sdist.
+Development builds never create tags or GitHub Releases and never publish to production PyPI. TestPyPI is public disclosure, so only reviewed pull requests may reach `main`.
 
-GitHub artifact attestations are omitted from this private preview because GitHub Free supports them only for public repositories. The PyPA publisher's PEP 740 attestations are also disabled so the public TestPyPI preview does not publish provenance claims about the private workflow. The production workflow retains both forms of provenance for use after the repository becomes public.
+## Stable release
 
-Configure a pending TestPyPI Trusted Publisher with project name `open-code-review-toolkit`, owner `xeonvs`, repository `open-code-review-toolkit`, workflow `testpypi.yml`, and environment `testpypi-public-disclosure`. No TestPyPI API token is stored in GitHub.
+Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-version`, `.release-source-date-epoch`, package metadata, documentation, checksum-pinned examples, and the Towncrier changelog. The pull request title must be exactly `Release vX.Y.Z`. Required CI, security, CodeQL, Dependency Review, and build checks must pass before squash merge.
 
-## Production preparation
+Squash-merging that exact repository-owned release PR is the only human publication gate. The **Release** workflow then:
 
-The manual preparation workflow validates a PEP 440 version, a synchronized `main`, changelog fragments, and the generated changelog. It creates a release branch and pull request using a fine-grained repository-scoped `RELEASE_PR_TOKEN` with only the required Contents and pull-request permissions. Required CI must run on that PR. GitHub does not allow the workflow to mint this PAT; an owner must create it and add it to the `release-preparation` environment.
+1. validates the branch, title, merge commit, canonical version, and tracked build epoch;
+2. repeats quality, dependency, packaging, and artifact-set checks;
+3. builds wheel and sdist once, records SHA-256 values, and creates GitHub provenance attestations;
+4. publishes or exact-hash-verifies the same bytes on TestPyPI through OIDC;
+5. publishes or exact-hash-verifies the same bytes on PyPI through OIDC;
+6. creates an annotated `vX.Y.Z` tag and GitHub Release with wheel, sdist, `SHA256SUMS`, `artifact-hashes.json`, and the matching `CHANGELOG.md` section.
 
-## Publication
+Registry reruns are fail-closed. An absent release may be published and an exact existing artifact set may be accepted; partial sets, extra files, unexpected hosts, or digest mismatches stop the workflow. No registry API token or long-lived release PAT is stored in GitHub.
 
-Production release preparation is fail-closed while the repository is private. After the repository becomes public and its available protections are enabled, the special release PR must be approved by someone other than its author and merged. The release workflow rechecks that approval, binds wheel and sdist to the exact reviewed merge commit, creates an annotated tag and draft GitHub Release, and waits at a protected environment for final approval. TestPyPI is public disclosure, so approval occurs before its OIDC Trusted Publishing step.
+## Required configuration
 
-The workflow verifies each published TestPyPI and PyPI file against the SHA-256 of the reviewed build artifact, downloads it with bounded HTTPS retries and timeouts, and smoke-installs the local wheel and sdist with dependencies disabled. It then publishes the GitHub Release. No repository PyPI token is used.
+- TestPyPI Trusted Publisher: workflow `release.yml`, environment `testpypi-public-disclosure`.
+- PyPI Trusted Publisher: workflow `release.yml`, environment `pypi-production`.
+- Both environments restrict deployment to protected `main` and do not add a second manual approval after the release PR merge.
+- The `main` ruleset requires pull requests, linear history, signed commits, resolved conversations, required merge checks, and blocks deletion and force pushes.
+- Public security features include secret scanning and push protection, private vulnerability reporting, Dependabot, CodeQL, Dependency Review, OpenSSF Scorecard, and immutable releases.
 
-Trusted Publisher records, protected environments, branch protection, and the release-preparation credential require owner setup. Repository visibility changes are separate manual actions.
-
-The repository is initially private. GitHub Free does not enforce protected branches or environment reviewers on a private repository, and Dependency Review, CodeQL upload, and Scorecard integrations are unavailable there. Those jobs skip while private. Until public-release preparation, use pull requests by policy, inspect their checks manually, and treat the empty environment protection rules as a production-release blocker.
+After publication, independently compare TestPyPI, PyPI, the GitHub workflow artifact, and GitHub Release assets by SHA-256, then smoke-install the wheel on Python 3.10 and the sdist on Python 3.14.

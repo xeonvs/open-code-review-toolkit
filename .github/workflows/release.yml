@@ -4,6 +4,20 @@ on:
   pull_request:
     types: [closed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      pull-request-number:
+        description: Merged release pull-request number
+        required: true
+        type: number
+      version:
+        description: Exact release version without a leading v
+        required: true
+        type: string
+      merge-commit:
+        description: Exact full merge commit SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,81 +31,117 @@ jobs:
     name: authorize-release
     if: >-
       github.event.repository.private == false &&
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/v') &&
-      startsWith(github.event.pull_request.title, 'Release v')
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: read # Inspect approving reviews on the merged release PR.
+      pull-requests: read # Resolve the authoritative merged release PR.
     outputs:
-      approved: ${{ steps.review.outputs.approved }}
+      approved: ${{ steps.authorize.outputs.approved }}
+      branch: ${{ steps.authorize.outputs.branch }}
+      commit: ${{ steps.authorize.outputs.commit }}
+      pr-number: ${{ steps.authorize.outputs.pr-number }}
+      title: ${{ steps.authorize.outputs.title }}
+      version: ${{ steps.authorize.outputs.version }}
     steps:
-      - id: review
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          persist-credentials: false
+      - id: authorize
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs['pull-request-number'] }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_COMMIT: ${{ inputs['merge-commit'] }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          approved=$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}/reviews" --jq --arg author "${PR_AUTHOR}" '[.[] | select(.state == "APPROVED" and .user.login != $author)] | length > 0')
-          test "${approved}" = true
-          echo "approved=true" >> "${GITHUB_OUTPUT}"
+          if [ "${EVENT_NAME}" = workflow_dispatch ]; then
+            PR_NUMBER=${INPUT_PR_NUMBER}
+            REQUESTED_VERSION=${INPUT_VERSION}
+            REQUESTED_COMMIT=${INPUT_COMMIT}
+          else
+            PR_NUMBER=${EVENT_PR_NUMBER}
+            REQUESTED_VERSION=
+            REQUESTED_COMMIT=
+          fi
+          gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/release-pr.json
+          python scripts/release_authorization.py \
+            --pr-json /tmp/release-pr.json \
+            --repository "${REPOSITORY}" \
+            --requested-version "${REQUESTED_VERSION}" \
+            --requested-commit "${REQUESTED_COMMIT}" \
+            --github-output "${GITHUB_OUTPUT}"
 
   build:
     name: build-and-attest-release
-    if: >-
-      github.event.repository.private == false &&
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/v') &&
-      startsWith(github.event.pull_request.title, 'Release v')
     needs: authorize
+    if: needs.authorize.outputs.approved == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
-      contents: write # Create the release tag and draft GitHub Release.
+      contents: read
       id-token: write # Sign provenance for the reviewed distributions.
       attestations: write # Attach GitHub artifact attestations.
     outputs:
+      commit: ${{ needs.authorize.outputs.commit }}
+      source-date-epoch: ${{ steps.validate.outputs.source-date-epoch }}
       tag: ${{ steps.validate.outputs.tag }}
+      testpypi-state: ${{ steps.registry.outputs.testpypi-state }}
+      pypi-state: ${{ steps.registry.outputs.pypi-state }}
       version: ${{ steps.validate.outputs.version }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.authorize.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: "0.11.29"
       - id: validate
+        name: Validate the authorized release merge
         env:
-          EXPECTED_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
-          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
-          RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
+          RELEASE_BRANCH: ${{ needs.authorize.outputs.branch }}
+          RELEASE_TITLE: ${{ needs.authorize.outputs.title }}
         run: |
-          test "${REPOSITORY_PRIVATE}" = "false"
           test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT}"
           test -f .release-version
-          VERSION=$(cat .release-version)
+          test -f .release-source-date-epoch
+          VERSION=$(tr -d '\n' < .release-version)
+          SOURCE_DATE_EPOCH=$(tr -d '\n' < .release-source-date-epoch)
           test "${RELEASE_BRANCH}" = "release/v${VERSION}"
+          test "${RELEASE_TITLE}" = "Release v${VERSION}"
           CANONICAL_VERSION=$(uv run python -c "from packaging.version import Version; print(Version('${VERSION}'))")
           test "${CANONICAL_VERSION}" = "${VERSION}"
           case "${VERSION}" in *+*) echo "local versions cannot be published" >&2; exit 1;; esac
-          test "$(git tag -l "v${VERSION}")" = ""
+          case "${SOURCE_DATE_EPOCH}" in *[!0-9]*|'') echo "invalid SOURCE_DATE_EPOCH" >&2; exit 1;; esac
+          if git rev-parse "v${VERSION}^{commit}" >/dev/null 2>&1; then
+            test "$(git rev-parse "v${VERSION}^{commit}")" = "${EXPECTED_COMMIT}"
+          fi
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
-          git config user.name "release automation"
-          git config user.email "release-automation@users.noreply.github.com"
-          git tag -a "v${VERSION}" -m "v${VERSION}" "${EXPECTED_COMMIT}"
+          echo "source-date-epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
       - run: uv sync --frozen
-      - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
-      - run: uv run python -m build
+      - run: ./scripts/quality.sh check
+      - run: uv run pip-audit --skip-editable
+      - name: Build deterministic release artifacts
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.validate.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ steps.validate.outputs.source-date-epoch }}
+        run: |
+          uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
+          uv run python -m build --no-isolation
       - run: uv run twine check dist/*
       - name: Verify exact artifact version
         env:
           VERSION: ${{ steps.validate.outputs.version }}
         run: |
-          uv run python -c "import pathlib; names=[p.name for p in pathlib.Path('dist').iterdir()]; prefix='open_code_review_toolkit-' + '${VERSION}'; assert len(names) == 2 and all(name.startswith(prefix) for name in names), names"
+          uv run python -c "import pathlib; names=[p.name for p in pathlib.Path('dist').iterdir()]; expected=set(__import__('scripts.testpypi_preview', fromlist=['expected_filenames']).expected_filenames('${VERSION}')); assert set(names) == expected, names"
       - name: Record reviewed artifact hashes
         run: |
           python - <<'PY'
@@ -107,170 +157,214 @@ jobs:
           Path("artifact-hashes.json").write_text(
               json.dumps(hashes, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
+          Path("SHA256SUMS").write_text(
+              "".join(f"{digest}  {name}\n" for name, digest in sorted(hashes.items())),
+              encoding="utf-8",
+          )
           PY
+      - id: registry
+        name: Classify existing registry state
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          classify() {
+            registry=$1
+            url=$2
+            output=$3
+            if ! status=$(curl --location --silent --show-error \
+              --retry 3 --retry-delay 2 --retry-connrefused \
+              --connect-timeout 10 --max-time 120 \
+              --proto '=https' --proto-redir '=https' \
+              --header 'Accept: application/vnd.pypi.simple.v1+json' \
+              --write-out '%{http_code}' \
+              "${url}" --output "${output}"); then
+              echo "${registry} index request failed" >&2
+              exit 1
+            fi
+            case "${status}" in
+              200) ;;
+              404) printf '{"files": []}\n' > "${output}" ;;
+              *) echo "unexpected ${registry} index HTTP status: ${status}" >&2; exit 1 ;;
+            esac
+            state=$(python scripts/testpypi_preview.py check-index \
+              --version "${VERSION}" \
+              --index-json "${output}" \
+              --hashes-json artifact-hashes.json)
+            case "${state}" in publish|already-published) ;;
+              *) echo "unexpected ${registry} state: ${state}" >&2; exit 1;;
+            esac
+            echo "${registry}-state=${state}" >> "${GITHUB_OUTPUT}"
+          }
+          classify testpypi https://test.pypi.org/simple/open-code-review-toolkit/ /tmp/testpypi-index.json
+          classify pypi https://pypi.org/simple/open-code-review-toolkit/ /tmp/pypi-index.json
       - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/*
-      - name: Push validated tag and create draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.validate.outputs.tag }}
-        run: |
-          git push origin "${TAG}"
-          gh release create "${TAG}" dist/* --draft --verify-tag --title "${TAG}" --generate-notes
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: reviewed-distributions
+          name: reviewed-release-distributions
           path: |
             dist/
             artifact-hashes.json
+            SHA256SUMS
           if-no-files-found: error
           retention-days: 7
 
-  testpypi:
-    name: publish-and-verify-testpypi
-    needs: [authorize, build]
-    if: needs.authorize.outputs.approved == 'true'
+  publish-testpypi:
+    name: publish-testpypi
+    needs: build
+    if: needs.build.outputs.testpypi-state == 'publish'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: testpypi-public-disclosure
     permissions:
       contents: read
-      id-token: write # Publish the exact reviewed artifacts to TestPyPI.
+      id-token: write # TestPyPI Trusted Publishing through OIDC.
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: reviewed-distributions
+          name: reviewed-release-distributions
           path: .
       - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
-      - name: Verify exact TestPyPI artifacts
-        env:
-          VERSION: ${{ needs.build.outputs.version }}
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              --header 'Accept: application/vnd.pypi.simple.v1+json' \
-              https://test.pypi.org/simple/open-code-review-toolkit/ \
-              --output /tmp/testpypi-index.json; then
-              if python scripts/testpypi_preview.py artifact-manifest \
-                --version "${VERSION}" \
-                --index-json /tmp/testpypi-index.json \
-                --hashes-json artifact-hashes.json \
-                > /tmp/artifact-manifest.json; then
-                break
-              fi
-            fi
-            test "${attempt}" -lt 5 || exit 1
-            sleep 15
-          done
-          python scripts/testpypi_preview.py artifact-manifest \
-            --version "${VERSION}" \
-            --index-json /tmp/testpypi-index.json \
-            --hashes-json artifact-hashes.json \
-            > /tmp/artifact-manifest.json
-          python - <<'PY' > /tmp/artifact-downloads.tsv
-          import json
-          from pathlib import Path
+          attestations: true
 
-          for item in json.loads(Path("/tmp/artifact-manifest.json").read_text()):
-              print(item["sha256"], item["url"], item["filename"], sep="\t")
-          PY
-          mkdir -p /tmp/testpypi-artifacts
-          while IFS=$'\t' read -r sha256 url filename; do
-            curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              "${url}" --output "/tmp/testpypi-artifacts/${filename}"
-            echo "${sha256}  /tmp/testpypi-artifacts/${filename}" | sha256sum --check --strict
-          done < /tmp/artifact-downloads.tsv
-          python -m venv /tmp/testpypi-wheel
-          /tmp/testpypi-wheel/bin/pip install --no-deps /tmp/testpypi-artifacts/*.whl
-          /tmp/testpypi-wheel/bin/ocr-ci --help
-          python -m venv /tmp/testpypi-sdist
-          /tmp/testpypi-sdist/bin/pip install --no-deps /tmp/testpypi-artifacts/*.tar.gz
-          /tmp/testpypi-sdist/bin/ocr-ci --help
-
-  pypi:
-    name: publish-and-verify-pypi
-    needs: [authorize, build, testpypi]
-    if: needs.authorize.outputs.approved == 'true'
+  verify-testpypi:
+    name: verify-testpypi
+    needs: [build, publish-testpypi]
+    if: >-
+      always() && needs.build.result == 'success' &&
+      (needs.publish-testpypi.result == 'success' || needs.publish-testpypi.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: pypi-production
+    timeout-minutes: 15
     permissions:
-      contents: write # Publish the existing draft GitHub Release after PyPI verification.
-      id-token: write # Publish the exact reviewed artifacts to PyPI.
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.build.outputs.commit }}
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: reviewed-distributions
+          name: reviewed-release-distributions
           path: .
-      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
-      - name: Verify exact PyPI artifacts
+      - name: Verify and smoke exact TestPyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              --header 'Accept: application/vnd.pypi.simple.v1+json' \
-              https://pypi.org/simple/open-code-review-toolkit/ \
-              --output /tmp/pypi-index.json; then
-              if python scripts/testpypi_preview.py artifact-manifest \
-                --version "${VERSION}" \
-                --index-json /tmp/pypi-index.json \
-                --hashes-json artifact-hashes.json \
-                --artifact-host files.pythonhosted.org \
-                > /tmp/artifact-manifest.json; then
-                break
-              fi
-            fi
-            test "${attempt}" -lt 5 || exit 1
-            sleep 15
-          done
-          python scripts/testpypi_preview.py artifact-manifest \
-            --version "${VERSION}" \
-            --index-json /tmp/pypi-index.json \
-            --hashes-json artifact-hashes.json \
-            --artifact-host files.pythonhosted.org \
-            > /tmp/artifact-manifest.json
-          python - <<'PY' > /tmp/artifact-downloads.tsv
-          import json
-          from pathlib import Path
+        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json
 
-          for item in json.loads(Path("/tmp/artifact-manifest.json").read_text()):
-              print(item["sha256"], item["url"], item["filename"], sep="\t")
-          PY
-          mkdir -p /tmp/pypi-artifacts
-          while IFS=$'\t' read -r sha256 url filename; do
-            curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              "${url}" --output "/tmp/pypi-artifacts/${filename}"
-            echo "${sha256}  /tmp/pypi-artifacts/${filename}" | sha256sum --check --strict
-          done < /tmp/artifact-downloads.tsv
-          python -m venv /tmp/pypi-wheel
-          /tmp/pypi-wheel/bin/pip install --no-deps /tmp/pypi-artifacts/*.whl
-          /tmp/pypi-wheel/bin/ocr-ci --help
-          python -m venv /tmp/pypi-sdist
-          /tmp/pypi-sdist/bin/pip install --no-deps /tmp/pypi-artifacts/*.tar.gz
-          /tmp/pypi-sdist/bin/ocr-ci --help
-      - env:
+  publish-pypi:
+    name: publish-pypi
+    needs: [build, verify-testpypi]
+    if: needs.build.outputs.pypi-state == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi-production
+    permissions:
+      contents: read
+      id-token: write # PyPI Trusted Publishing through OIDC.
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reviewed-release-distributions
+          path: .
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          attestations: true
+
+  verify-pypi:
+    name: verify-pypi
+    needs: [build, verify-testpypi, publish-pypi]
+    if: >-
+      always() && needs.build.result == 'success' && needs.verify-testpypi.result == 'success' &&
+      (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reviewed-release-distributions
+          path: .
+      - name: Verify and smoke exact PyPI artifacts
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: ./scripts/verify_registry_artifacts.sh pypi "${VERSION}" artifact-hashes.json
+
+  github-release:
+    name: publish-github-release
+    needs: [authorize, build, verify-pypi]
+    if: needs.verify-pypi.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # Create the authorized tag and immutable release.
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.authorize.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: true # Required only in this final job to push the authorized release tag.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reviewed-release-distributions
+          path: .
+      - name: Publish tag and GitHub Release
+        env:
+          EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build.outputs.tag }}
-        run: gh release edit "${TAG}" --draft=false
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          python scripts/release_notes.py --version "${VERSION}" --output /tmp/release-notes.md
+          git config user.name "release automation"
+          git config user.email "release-automation@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+            test "$(git rev-parse "${TAG}^{commit}")" = "${EXPECTED_COMMIT}"
+          else
+            git tag -a "${TAG}" -m "${TAG}" "${EXPECTED_COMMIT}"
+            git push origin "${TAG}"
+          fi
+          release_exists=false
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            release_exists=true
+          else
+            gh release create "${TAG}" --draft --verify-tag --title "${TAG}" --notes-file /tmp/release-notes.md
+          fi
+          release_is_draft=$(gh release view "${TAG}" --json isDraft --jq .isDraft)
+          if [ "${release_exists}" = false ] || [ "${release_is_draft}" = true ]; then
+            gh release upload "${TAG}" dist/* artifact-hashes.json SHA256SUMS --clobber
+          fi
+          release_dir=/tmp/github-release-assets
+          mkdir -p "${release_dir}"
+          gh release download "${TAG}" --dir "${release_dir}"
+          expected=$(printf '%s\n' \
+            "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
+            "open_code_review_toolkit-${VERSION}.tar.gz" \
+            artifact-hashes.json SHA256SUMS | sort)
+          actual=$(find "${release_dir}" -type f -maxdepth 1 -exec basename {} \; | sort)
+          test "${actual}" = "${expected}"
+          (cd "${release_dir}" && sha256sum --check --strict SHA256SUMS)
+          cmp artifact-hashes.json "${release_dir}/artifact-hashes.json"
+          cmp SHA256SUMS "${release_dir}/SHA256SUMS"
+          gh release view "${TAG}" --json body,name > /tmp/github-release.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import os
+
+          release = json.loads(Path("/tmp/github-release.json").read_text(encoding="utf-8"))
+          expected_body = Path("/tmp/release-notes.md").read_text(encoding="utf-8")
+          if release != {"body": expected_body, "name": os.environ["TAG"]}:
+              raise SystemExit("existing GitHub Release metadata does not match")
+          PY
+          if [ "${release_is_draft}" = true ]; then
+            gh release edit "${TAG}" --draft=false
+          fi

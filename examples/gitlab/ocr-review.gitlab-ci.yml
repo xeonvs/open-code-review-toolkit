@@ -6,9 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.7.12"
-  OCR_TOOLKIT_WHEEL_URL: "https://test-files.pythonhosted.org/packages/86/b4/bcf78c35a2a72198e36f08aefc9d4ae1d613afc6cdfa42a3e44773ff7edf/open_code_review_toolkit-0.1.0a2-py3-none-any.whl"
-  OCR_TOOLKIT_WHEEL_SHA256: "d118ba5ecc5cb5027df11588bede6428be87771b87b82c47ccc7f8a08d3de6d8"
+  OCR_VERSION: "v1.7.13"
+  OCR_TOOLKIT_VERSION: "0.1.0"
+  OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v0.1.0/SHA256SUMS"
+  OCR_SHA256: "4f0d8cf68b59c7e3573fa8312779401aa48ee498733fb59245eb664791a09c20"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"
@@ -22,10 +23,7 @@ lint:
       when: on_success
     - when: never
   script:
-    - pip install uv
-    - uv sync --frozen
-    - uv run ruff check .
-    - uv run pytest
+    - echo "Run the repository's own required lint and test commands here before AI review"
 
 open_code_review:
   stage: ai_review
@@ -41,10 +39,8 @@ open_code_review:
       --retry 3 --retry-delay 2 --retry-connrefused
       --connect-timeout 10 --max-time 120
       --proto '=https' --proto-redir '=https'
-      "https://github.com/alibaba/open-code-review/releases/download/${OCR_VERSION}/ocr-linux-x64"
+      "https://github.com/alibaba/open-code-review/releases/download/${OCR_VERSION}/opencodereview-linux-amd64"
       --output /usr/local/bin/ocr
-    - echo "Set OCR_SHA256 to the checksum published for the pinned OCR_VERSION before using this example"
-    - test -n "${OCR_SHA256:-}"
     - echo "${OCR_SHA256}  /usr/local/bin/ocr" | sha256sum --check --strict
     - chmod 0755 /usr/local/bin/ocr
     - >-
@@ -52,10 +48,20 @@ open_code_review:
       --retry 3 --retry-delay 2 --retry-connrefused
       --connect-timeout 10 --max-time 120
       --proto '=https' --proto-redir '=https'
-      "${OCR_TOOLKIT_WHEEL_URL}"
-      --output /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl
-    - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl" | sha256sum --check --strict
-    - pip install --no-deps /tmp/open_code_review_toolkit-0.1.0a2-py3-none-any.whl
+      "${OCR_TOOLKIT_CHECKSUMS_URL}"
+      --output /tmp/open-code-review-toolkit-SHA256SUMS
+    - export OCR_TOOLKIT_WHEEL="open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl"
+    - export OCR_TOOLKIT_WHEEL_SHA256="$(awk -v file="${OCR_TOOLKIT_WHEEL}" '$2 == file { print $1 }' /tmp/open-code-review-toolkit-SHA256SUMS)"
+    - echo "${OCR_TOOLKIT_WHEEL_SHA256}" | grep -Eq '^[0-9a-f]{64}$'
+    - echo "open-code-review-toolkit==${OCR_TOOLKIT_VERSION} --hash=sha256:${OCR_TOOLKIT_WHEEL_SHA256}" > /tmp/ocr-toolkit-requirement.txt
+    - >-
+      pip download --isolated --disable-pip-version-check
+      --require-hashes --no-deps --only-binary=:all:
+      --retries 3 --timeout 10
+      --index-url https://pypi.org/simple
+      --dest /tmp --requirement /tmp/ocr-toolkit-requirement.txt
+    - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/${OCR_TOOLKIT_WHEEL}" | sha256sum --check --strict
+    - pip install --no-deps /tmp/open_code_review_toolkit-0.1.0-py3-none-any.whl
     - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
     - ocr-ci preflight
     - ocr-ci configure
@@ -73,6 +79,4 @@ open_code_review_self_test:
       when: manual
     - when: never
   script:
-    - pip install uv
-    - uv sync --frozen
-    - env -u OCR_LLM_TOKEN uv run pytest
+    - env -u OCR_LLM_TOKEN ocr-ci preflight

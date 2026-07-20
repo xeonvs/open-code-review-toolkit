@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Open Code Review Toolkit contributors" }]
 keywords = ["code-review", "gitlab", "ci", "open-code-review"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: MacOS",
@@ -75,7 +75,7 @@ include = [
 ]
 
 [tool.hatch.version.raw-options]
-fallback_version = "0.1.0a3.dev0"
+fallback_version = "0.2.0.dev0"
 
 [tool.ruff]
 target-version = "py310"

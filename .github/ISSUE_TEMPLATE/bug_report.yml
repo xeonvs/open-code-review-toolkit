@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Toolkit version
-      placeholder: 0.1.0a1
+      placeholder: 0.1.0
     validations:
       required: true
   - type: dropdown

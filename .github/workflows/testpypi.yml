@@ -1,4 +1,4 @@
-name: TestPyPI preview
+name: TestPyPI development build
 
 on:
   push:
@@ -8,12 +8,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: testpypi-preview
+  group: testpypi-development
   cancel-in-progress: false
 
 jobs:
   build:
-    name: verify-and-build-preview
+    name: verify-and-build-development
+    if: >-
+      !(startsWith(github.event.head_commit.message, 'Release v') &&
+      contains(github.event.head_commit.message, '(#'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -30,11 +33,11 @@ jobs:
         with:
           version: "0.11.29"
       - id: preview
-        name: Resolve deterministic alpha version
+        name: Resolve deterministic development version
         run: |
           test "${GITHUB_REF}" = refs/heads/main
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          VERSION=$(python scripts/testpypi_preview.py version --run-number "${GITHUB_RUN_NUMBER}")
+          VERSION=$(python scripts/testpypi_preview.py development-version --run-number "${GITHUB_RUN_NUMBER}")
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct "${GITHUB_SHA}")
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "source_date_epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
@@ -45,7 +48,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: "false"
-      - name: Build deterministic preview artifacts
+      - name: Build deterministic development artifacts
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.preview.outputs.version }}
           SOURCE_DATE_EPOCH: ${{ steps.preview.outputs.source_date_epoch }}
@@ -96,7 +99,7 @@ jobs:
           esac
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: testpypi-preview-distributions
+          name: testpypi-development-distributions
           path: |
             dist
             artifact-hashes.json
@@ -105,7 +108,7 @@ jobs:
           overwrite: true
 
   publish:
-    name: publish-preview
+    name: publish-development
     needs: build
     if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
@@ -117,15 +120,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: testpypi-preview-distributions
+          name: testpypi-development-distributions
       - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: dist
           repository-url: https://test.pypi.org/legacy/
-          attestations: false
+          attestations: true
 
   verify:
-    name: verify-published-preview
+    name: verify-published-development
     needs: [build, publish]
     if: >-
       always() &&
@@ -141,7 +144,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: testpypi-preview-distributions
+          name: testpypi-development-distributions
       - name: Verify and install immutable published artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
