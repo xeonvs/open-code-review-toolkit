@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic versioning and PEP 691 checks for TestPyPI previews."""
+"""Deterministic development versioning and PEP 691 release checks."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 PACKAGE = "open-code-review-toolkit"
 DIST_PREFIX = "open_code_review_toolkit"
+DEFAULT_NEXT_VERSION_FILE = Path(".next-version")
 SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 VERSION_RE = re.compile(
     r"^(?:[1-9][0-9]*!)?[0-9]+(?:\.[0-9]+)+"
@@ -26,12 +27,16 @@ class PreviewError(ValueError):
     """The requested preview state is invalid or conflicts with TestPyPI."""
 
 
-def preview_version(run_number: int) -> str:
-    """Map one immutable workflow run number to one alpha version."""
+def development_version(run_number: int, next_version: str) -> str:
+    """Map one immutable workflow run number to a development version."""
 
     if run_number < 1:
         raise PreviewError(f"workflow run number must be positive; got {run_number}")
-    return f"0.1.0a{run_number}"
+    if not VERSION_RE.fullmatch(next_version) or any(
+        marker in next_version for marker in ("a", "b", "rc", "post", "dev")
+    ):
+        raise PreviewError(f"next version must be a canonical final release: {next_version}")
+    return f"{next_version}.dev{run_number}"
 
 
 def expected_filenames(version: str) -> dict[str, str]:
@@ -171,8 +176,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    version_parser = subparsers.add_parser("version")
+    version_parser = subparsers.add_parser("development-version")
     version_parser.add_argument("--run-number", required=True, type=int)
+    version_parser.add_argument("--next-version-file", type=Path, default=DEFAULT_NEXT_VERSION_FILE)
 
     check_parser = subparsers.add_parser("check-index")
     check_parser.add_argument("--version", required=True)
@@ -189,8 +195,9 @@ def main() -> int:
 
     args = parser.parse_args()
     try:
-        if args.command == "version":
-            print(preview_version(args.run_number))
+        if args.command == "development-version":
+            next_version = args.next_version_file.read_text(encoding="utf-8").strip()
+            print(development_version(args.run_number, next_version))
         elif args.command == "check-index":
             payload = json.loads(args.index_json.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):

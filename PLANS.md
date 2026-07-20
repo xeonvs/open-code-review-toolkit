@@ -2,6 +2,50 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Completed Plan: Public release 0.1.0 preparation
+
+Status: completed
+Owner: Codex
+Last Updated: 2026-07-20
+
+### Goal
+
+Publish the first stable public toolkit release as one reproducible artifact set across TestPyPI, PyPI, and an immutable GitHub Release; update the supported Open Code Review CLI to 1.7.13; and establish a protected public trunk with deterministic `0.2.0.devN` TestPyPI builds after future merges.
+
+### Work Queue
+
+1. [x] Update the local OCR binary and toolkit contract to the verified 1.7.13 release.
+2. [x] Replace private alpha and PAT-based release preparation with public trunk development builds and a local release-PR flow.
+3. [x] Make the stable workflow reproducible and idempotent across TestPyPI, PyPI, Git tagging, attestations, and GitHub Release publication.
+4. [x] Generate the 0.1.0 changelog, stable package metadata, release notes, documentation, and checksum-pinned public example.
+5. [x] Enable and validate the GitHub protections and security features unlocked by public visibility.
+6. [x] Complete iterative self-review, full quality/build/package checks, and a diff-scoped Codex Security scan; repair every actionable result.
+7. [x] Close this plan to post-change truth and prepare the release branch for commit, pull request, required-check monitoring, and the single squash-merge gate.
+8. [ ] After the owner merges the release PR, verify exact 0.1.0 bytes on TestPyPI, PyPI, and GitHub, plus tag, attestations, independent installs, and the next 0.2.0.devN build.
+
+### Locked Decisions
+
+- The repository is public and remains public throughout release publication.
+- The owner-configured TestPyPI and PyPI Trusted Publishers are the only registry credentials; no API token or release PAT is stored in GitHub.
+- Feature work remains trunk-based through pull requests into protected `main`; no persistent `develop` branch is introduced.
+- Every non-release merge to `main` publishes one idempotent `0.2.0.dev<GITHUB_RUN_NUMBER>` development build to TestPyPI.
+- Squash-merging the exact `release/v0.1.0` pull request is the only human publication gate. The external publication chain then runs automatically and fails closed.
+- TestPyPI, PyPI, and GitHub Release receive the same reviewed wheel and sdist bytes; an existing partial or hash-conflicting release is never overwritten.
+- GitHub distribution consists of release assets, checksums, and provenance attestations. GitHub Packages is not used because it does not provide a Python package registry.
+- Runtime dependencies remain empty and supported Python remains 3.10 through 3.14.
+
+### Validation Record
+
+- Local OCR was atomically replaced with the official darwin-arm64 v1.7.13 binary after SHA-256 verification; `ocr --version` reports commit `a4a281c1`.
+- `scripts/quality.sh check` passed on the final staged diff: 312 tests and 26 subtests with 73.37% branch coverage, plus Ruff formatting/lint and strict mypy.
+- The complete test suite passed independently on Python 3.10.20 and 3.14.6 with 312 tests and 26 subtests on each interpreter.
+- `pip-audit --skip-editable`, Gitleaks v8.30.1 over all history and the staged diff, Zizmor v1.27.0, YAML parsing, shell syntax, `uv lock --check`, and `git diff --check` passed.
+- Two independent exact `0.1.0` builds were byte-identical. Twine, metadata, archive-content inspection, wheel install, and sdist install passed. Reviewed SHA-256 values are `ad2ddac2fe39bc204a1ea5f80340a126faee96797de97e8505c18b2acb7d6016` for the wheel and `912923a8cedee8a2a4de103b1b490120212b1d0bad49e35b9d5718b205886386` for the sdist.
+- Codex Security diff scan completed with 39 of 39 staged files covered. One low-severity immutable-release rerun finding was remediated; validation and attack-path analysis leave zero open findings and zero deferred work.
+- Public GitHub readback confirms the active `main` ruleset, immutable releases, private vulnerability reporting, secret scanning with push protection, Dependabot security updates, and protected-branch policies on both publication environments. CodeQL and OpenSSF Scorecard completed successfully after public disclosure.
+- Pull-request readback exposed that the distribution build previously ran only after pushes to `main`; the build workflow now runs as a bounded `build-distributions` pull-request gate with non-isolated builds and no-dependency smoke installs. Its follow-up contract tests, YAML parse, Ruff, Zizmor, Gitleaks, and diff review passed.
+- Owner-configured TestPyPI and PyPI Trusted Publishers remain the only publication credentials. Registry publication, tag creation, GitHub Release publication, attestations, and independent external installs are intentionally pending the owner squash-merge gate.
+
 ## Completed Plan: Initial standalone toolkit extraction
 
 Status: completed
@@ -56,7 +100,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 3. [x] Implement and test the unified `ocr-ci` parser and required subcommands.
 4. [x] Add packaging, quality tooling, changelog infrastructure, and a reproducible lockfile.
 5. [x] Rewrite public documentation and add synthetic GitLab fixtures/examples.
-6. [x] Add pinned CI, build, security, dependency review, Scorecard, Dependabot, release-preparation, provenance, and OIDC release workflows.
+6. [x] Add pinned CI, build, security, dependency review, Scorecard, Dependabot, provenance, and OIDC release workflows.
 7. [x] Run tests, coverage, Ruff, strict mypy, build/twine/install/CLI smoke checks, workflow checks, and generic secret scanning.
 8. [x] Run the one-time public-safety/privacy audit and verify the source repository is unchanged.
 9. [x] Update this plan to final truth and prepare the clean initial import commit after every available gate passed.
@@ -89,7 +133,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 - 258 adapted tests pass; measured branch coverage is 72.51% against the 70% gate.
 - Private GitHub repository created; Actions default to read-only tokens, SHA pinning is enforced, allowed Actions are restricted, Dependabot alerts/security fixes are enabled, and TestPyPI/PyPI environments exist.
 - GitHub Free rejected branch protection, rulesets, secret-scanning push protection, and environment approval rules for this private repository. These remain owner gates: upgrade the plan or make the repository public only after the privacy/license checkpoint, then enable them before any release.
-- No repository credential values are available locally, so no secret value was invented or copied from another project. OIDC publication needs no PyPI token; only owner-created `RELEASE_PR_TOKEN` remains to be stored in the `release-preparation` environment.
+- No repository credential values were invented or copied from another project. OIDC publication needs no PyPI token, and stable release pull requests are prepared locally without a long-lived GitHub credential.
 - Pre-commit security review is in progress using the diff-scoped Codex Security workflow in single-agent mode, followed by a final engineering review.
 - Focused security review found and fixed one fail-open posting path: missing/invalid GitLab configuration now exits nonzero and has a regression test. No unresolved high-confidence vulnerability remains in the reviewed trust boundaries.
 - Engineering review also corrected the public GitLab example to the supported OCR `--format json` CLI contract and added a regression assertion.
@@ -109,7 +153,7 @@ Create the first production-quality standalone Open Code Review Toolkit reposito
 
 - Do not create the initial commit while any validation, privacy audit, or source-integrity check is pending.
 - Stop for owner action before PAT setup, Trusted Publisher setup, final public-package approval, or visibility changes.
-- Owner gates: create/store the scoped `RELEASE_PR_TOKEN`; configure PyPI and TestPyPI Trusted Publishers; upgrade GitHub or pass the public-visibility privacy checkpoint; then enable branch protection/rulesets, required checks/reviews, environment reviewers, private vulnerability reporting, secret-scanning push protection, and immutable releases.
+- The later public-release plan replaced these historical owner gates with local release-PR preparation, Trusted Publishing, public rulesets, private vulnerability reporting, secret-scanning push protection, and immutable releases.
 
 ## Completed Plan: Private TestPyPI preview
 

@@ -4,7 +4,7 @@ The toolkit's first provider adapter posts review results to GitLab merge reques
 
 ## Installation
 
-Install `open-code-review-toolkit` from PyPI. Install Open Code Review separately and pin `v1.7.12`; verify the release checksum before making the binary executable. The package never downloads OCR.
+Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.7.13`; verify the release checksum before making the binary executable. The package never downloads OCR.
 
 Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates one background file, and passes it once with `--background-file`.
 

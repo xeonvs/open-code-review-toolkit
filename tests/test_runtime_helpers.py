@@ -485,7 +485,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.12\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.13\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
@@ -513,7 +513,7 @@ class PreflightTests(unittest.TestCase):
 
     def test_validate_ocr_binary_rejects_version_prefix_collision(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.120\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.130\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
