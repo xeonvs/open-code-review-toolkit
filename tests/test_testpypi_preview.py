@@ -80,6 +80,13 @@ def test_neighbouring_alpha_is_not_mistaken_for_requested_version() -> None:
     assert preview.classify_index(neighbouring, "0.1.0a3", hashes) == "publish"
 
 
+def test_stable_release_ignores_existing_development_versions() -> None:
+    hashes = expected_hashes("0.2.0")
+    development = payload(expected_hashes("0.2.0.dev7"))
+
+    assert preview.classify_index(development, "0.2.0", hashes) == "publish"
+
+
 @pytest.mark.parametrize(
     "published,local",
     [
@@ -212,6 +219,15 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     assert "python -m build --no-isolation" in workflow
     assert workflow.count("pip install --no-deps") == 1
     assert "scripts/install_local_artifact.py" in workflow
+
+
+def test_ci_matrix_uses_supported_python_endpoints_on_each_os() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert workflow.count('python: "3.10"') == 2
+    assert workflow.count('python: "3.14"') == 2
+    for intermediate in ("3.11", "3.12", "3.13"):
+        assert f'python: "{intermediate}"' not in workflow
 
 
 def test_required_dependency_review_runs_for_every_pull_request() -> None:
