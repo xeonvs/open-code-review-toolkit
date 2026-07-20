@@ -65,4 +65,10 @@ jobs:
       - run: uv run python -m build
       - run: uv run twine check dist/*
       - run: python -m venv /tmp/wheel-smoke && /tmp/wheel-smoke/bin/pip install dist/*.whl && /tmp/wheel-smoke/bin/ocr-ci --help
-      - run: python -m venv /tmp/sdist-smoke && /tmp/sdist-smoke/bin/pip install dist/*.tar.gz && /tmp/sdist-smoke/bin/ocr-ci --help
+      - run: |
+          python -m venv /tmp/sdist-smoke
+          python scripts/install_local_artifact.py \
+            --python /tmp/sdist-smoke/bin/python \
+            --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
+            --requirements /tmp/sdist-smoke-requirements.txt
+          /tmp/sdist-smoke/bin/ocr-ci --help
