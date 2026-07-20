@@ -10,6 +10,8 @@ variables:
   OCR_TOOLKIT_VERSION: "0.1.0"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v0.1.0/SHA256SUMS"
   OCR_SHA256: "4f0d8cf68b59c7e3573fa8312779401aa48ee498733fb59245eb664791a09c20"
+  OCR_POST_MODE: "draft"
+  OCR_STRICT_POSTING: "true"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"

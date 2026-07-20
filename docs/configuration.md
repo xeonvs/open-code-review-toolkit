@@ -41,4 +41,6 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 The `OCR_CONTEXT_*` family bounds files, bytes, changed paths, instructions, manifest content, dependency output, and generated background size. `OCR_BACKGROUND_MAX_CHARS` defaults to and is capped at `7950`; `OCR_BACKGROUND_MAX_BYTES` independently enforces the UTF-8 byte budget. The default output is `.review-context/dependencies.md`. The generator rejects symlink escapes and prunes common vendor/build directories.
 
+Use the default `OCR_POST_MODE=draft` for normal CI so all current notes are created as drafts before they are published and replaceable notes from the previous run are removed. Draft publication is sequential rather than atomic; the previous review is preserved unless every current draft publishes. Set `OCR_STRICT_POSTING=true` when the review job is a required merge gate; keep the default `false` only for advisory pipelines where GitLab posting availability must not block the pipeline. Reviewer commands and the complete repeated-run contract are documented in [GitLab review operations](operations.md).
+
 Run `ocr-ci --help` and each subcommand's help for command arguments. Secret values are redacted from operational error text.

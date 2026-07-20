@@ -140,7 +140,7 @@ class PostingIdentityTests(unittest.TestCase):
             markers.comment_fingerprint_candidates({**comment, "line": 40}),
         )
 
-    def test_occurrence_skip_does_not_suppress_later_duplicate(self) -> None:
+    def test_occurrence_suppression_does_not_suppress_later_duplicate(self) -> None:
         comments = [
             {
                 "path": "file.py",
@@ -158,14 +158,16 @@ class PostingIdentityTests(unittest.TestCase):
             },
         ]
         markers.annotate_comment_fingerprints(comments)
-        previous = snapshot.BotCommentRefs(skip_fingerprints={comments[0]["_ocr_fingerprint"]})
+        previous = snapshot.BotCommentRefs(
+            suppressed_fingerprints={comments[0]["_ocr_fingerprint"]}
+        )
 
-        kept, dropped = snapshot.filter_skipped_comments(comments, previous)
+        kept, dropped = snapshot.filter_suppressed_comments(comments, previous)
 
         self.assertEqual(kept, [comments[1]])
         self.assertEqual(dropped, 1)
 
-    def test_base_fingerprint_skip_only_suppresses_one_duplicate(self) -> None:
+    def test_base_fingerprint_suppression_only_suppresses_one_duplicate(self) -> None:
         comments = [
             {
                 "path": "file.py",
@@ -185,9 +187,9 @@ class PostingIdentityTests(unittest.TestCase):
         base = markers.comment_fingerprint(comments[0])
         self.assertIsNotNone(base)
         markers.annotate_comment_fingerprints(comments)
-        previous = snapshot.BotCommentRefs(skip_fingerprints={base or ""})
+        previous = snapshot.BotCommentRefs(suppressed_fingerprints={base or ""})
 
-        kept, dropped = snapshot.filter_skipped_comments(comments, previous)
+        kept, dropped = snapshot.filter_suppressed_comments(comments, previous)
 
         self.assertEqual(kept, [comments[1]])
         self.assertEqual(dropped, 1)
@@ -222,20 +224,120 @@ class PostingIdentityTests(unittest.TestCase):
         )
 
     def test_ocr_reply_command_must_be_whole_body(self) -> None:
-        self.assertIsNotNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr skip"))
-        self.assertIsNotNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr keep\n\n  \r\n"))
+        self.assertIsNotNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr suppress"))
+        self.assertIsNotNone(markers.OCR_REPLY_COMMAND_RE.search("/OCR RESOLVE\n\n  \r\n"))
         self.assertIsNone(
-            markers.OCR_REPLY_COMMAND_RE.search("Please run this example:\n```\n/ocr skip\n```")
+            markers.OCR_REPLY_COMMAND_RE.search("Please run this example:\n```\n/ocr suppress\n```")
         )
-        self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr skip please"))
+        self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr suppress please"))
+        self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr skip"))
+        self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr keep"))
 
-    def test_filter_skipped_comments_uses_posting_anchor_line(self) -> None:
+    def test_suppress_command_preserves_open_discussion_and_suppresses_finding(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        fingerprint = "a" * FINGERPRINT_LEN
+        snapshot.process_discussion_for_refs(
+            gitlab_config(),
+            refs,
+            "discussion-id",
+            [
+                {
+                    "id": 10,
+                    "body": build_marker(fingerprint) + "\nbody",
+                    "author": {"id": 7},
+                    "position": {"new_path": "file.py", "new_line": 7},
+                },
+                {"id": 11, "body": "/ocr suppress", "author": {"id": 8}},
+            ],
+        )
+
+        self.assertEqual(refs.suppressed_inline_keys, {("file.py", 7)})
+        self.assertEqual(refs.suppressed_fingerprints, {fingerprint})
+        self.assertEqual(refs.discussions_to_resolve, [])
+        self.assertEqual(refs.discussion_note_refs, [])
+
+    def test_resolve_command_suppresses_and_schedules_discussion_resolution(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        fingerprint = "b" * FINGERPRINT_LEN
+        snapshot.process_discussion_for_refs(
+            gitlab_config(),
+            refs,
+            "discussion-id",
+            [
+                {
+                    "id": 10,
+                    "body": build_marker(fingerprint) + "\nbody",
+                    "author": {"id": 7},
+                    "position": {"new_path": "file.py", "new_line": 9},
+                },
+                {"id": 11, "body": "/ocr resolve", "author": {"id": 8}},
+            ],
+        )
+
+        self.assertEqual(refs.suppressed_inline_keys, {("file.py", 9)})
+        self.assertEqual(refs.suppressed_fingerprints, {fingerprint})
+        self.assertEqual(refs.discussions_to_resolve, ["discussion-id"])
+
+    def test_latest_human_lifecycle_command_wins(self) -> None:
+        notes = [
+            {"body": "/ocr resolve", "author": {"id": 8}},
+            {"body": "/ocr suppress", "author": {"id": 9}},
+            {"body": "/ocr resolve", "author": {"id": 7}},
+        ]
+
+        self.assertEqual(snapshot.reviewer_command_in_thread(gitlab_config(), notes), "suppress")
+
+    def test_legacy_command_is_an_ordinary_human_reply(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        fingerprint = "c" * FINGERPRINT_LEN
+        snapshot.process_discussion_for_refs(
+            gitlab_config(),
+            refs,
+            "discussion-id",
+            [
+                {
+                    "id": 10,
+                    "body": build_marker(fingerprint) + "\nbody",
+                    "author": {"id": 7},
+                    "position": {"new_path": "file.py", "new_line": 11},
+                },
+                {"id": 11, "body": "/ocr keep", "author": {"id": 8}},
+            ],
+        )
+
+        self.assertEqual(refs.suppressed_fingerprints, {fingerprint})
+        self.assertEqual(refs.discussions_to_resolve, [])
+        self.assertEqual(refs.discussion_note_refs, [])
+
+    def test_resolved_discussion_remains_suppressed_without_resolve_request(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        fingerprint = "d" * FINGERPRINT_LEN
+        snapshot.process_discussion_for_refs(
+            gitlab_config(),
+            refs,
+            "discussion-id",
+            [
+                {
+                    "id": 10,
+                    "body": build_marker(fingerprint) + "\nbody",
+                    "author": {"id": 7},
+                    "resolved": True,
+                    "position": {"new_path": "file.py", "new_line": 13},
+                }
+            ],
+        )
+
+        self.assertEqual(refs.suppressed_fingerprints, {fingerprint})
+        self.assertEqual(refs.discussions_to_resolve, [])
+        self.assertEqual(refs.discussion_note_refs, [])
+
+    def test_filter_suppressed_comments_uses_posting_anchor_line(self) -> None:
         previous = snapshot.BotCommentRefs(
-            skip_inline_keys={("file.py", 7)},
+            suppressed_inline_keys={("file.py", 7)},
         )
         comments = [{"path": " file.py ", "start_line": 7, "line": 9, "content": "x"}]
 
-        kept, dropped = snapshot.filter_skipped_comments(comments, previous)
+        kept, dropped = snapshot.filter_suppressed_comments(comments, previous)
 
         self.assertEqual(kept, [])
         self.assertEqual(dropped, 1)
@@ -283,7 +385,7 @@ class PostingIdentityTests(unittest.TestCase):
             ),
             patched_attr(
                 workflow,
-                "filter_skipped_comments",
+                "filter_suppressed_comments",
                 lambda comments, _previous: (comments, 0),
             ),
             patched_attr(
@@ -339,7 +441,7 @@ class PostingIdentityTests(unittest.TestCase):
                     ):
                         with patched_attr(
                             workflow,
-                            "filter_skipped_comments",
+                            "filter_suppressed_comments",
                             lambda comments, _previous: (comments, 0),
                         ):
                             with patched_attr(
@@ -379,7 +481,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIn("delete-old", calls)
         self.assertNotIn("rollback", calls)
 
-    def test_no_comments_note_redacts_message_warnings_and_skipped_count(self) -> None:
+    def test_no_comments_note_redacts_message_warnings_and_suppressed_count(self) -> None:
         notes: list[tuple[str, str]] = []
 
         def fake_post_review_note_bounded(
@@ -395,7 +497,9 @@ class PostingIdentityTests(unittest.TestCase):
             workflow, "collect_previous_bot_comment_refs", lambda _config: snapshot.BotCommentRefs()
         ):
             with patched_attr(
-                workflow, "filter_skipped_comments", lambda comments, _previous: ([], len(comments))
+                workflow,
+                "filter_suppressed_comments",
+                lambda comments, _previous: ([], len(comments)),
             ):
                 with patched_attr(
                     workflow, "post_review_note_bounded", fake_post_review_note_bounded
@@ -407,7 +511,7 @@ class PostingIdentityTests(unittest.TestCase):
                             lambda *_args: None,
                         ):
                             with patched_attr(
-                                workflow, "resolve_keep_threads", lambda *_args: None
+                                workflow, "resolve_requested_discussions", lambda *_args: None
                             ):
                                 exit_code = workflow.post_results(
                                     gitlab_config(),
@@ -445,7 +549,9 @@ class PostingIdentityTests(unittest.TestCase):
             workflow, "collect_previous_bot_comment_refs", lambda _config: snapshot.BotCommentRefs()
         ):
             with patched_attr(
-                workflow, "filter_skipped_comments", lambda comments, _previous: (comments, 0)
+                workflow,
+                "filter_suppressed_comments",
+                lambda comments, _previous: (comments, 0),
             ):
                 with patched_attr(
                     workflow, "post_review_note_bounded", fake_post_review_note_bounded
@@ -457,7 +563,7 @@ class PostingIdentityTests(unittest.TestCase):
                             lambda *_args: None,
                         ):
                             with patched_attr(
-                                workflow, "resolve_keep_threads", lambda *_args: None
+                                workflow, "resolve_requested_discussions", lambda *_args: None
                             ):
                                 exit_code = workflow.post_results(
                                     gitlab_config(), {"comments": [], "warnings": []}
@@ -484,7 +590,9 @@ class PostingIdentityTests(unittest.TestCase):
                     with patched_attr(
                         workflow, "delete_previous_bot_comments_if_collected", lambda *_args: None
                     ):
-                        with patched_attr(workflow, "resolve_keep_threads", lambda *_args: None):
+                        with patched_attr(
+                            workflow, "resolve_requested_discussions", lambda *_args: None
+                        ):
                             exit_code = workflow.post_results(
                                 gitlab_config(),
                                 {

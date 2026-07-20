@@ -234,7 +234,7 @@ def format_omitted_comments_summary(
 
     return (
         "**Open Code Review omitted comments**\n\n"
-        f"After reviewer skip filters, Open Code Review has "
+        f"After reviewer suppression filters, Open Code Review has "
         f"{publishable_total} publishable comment(s). This CI job publishes "
         f"at most {publish_limit} comment(s) per run. The remaining {omitted} "
         "comment(s) were "
