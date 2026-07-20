@@ -27,11 +27,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  classify:
+    name: classify-release-trigger
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      release: ${{ steps.classify.outputs.release }}
+    steps:
+      - id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          release=false
+          if [ "${EVENT_NAME}" = workflow_dispatch ]; then
+            release=true
+          elif [ "${PR_MERGED}" = true ] && [[ "${PR_HEAD_REF}" == release/v* ]]; then
+            release=true
+          fi
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
+
   authorize:
     name: authorize-release
+    needs: classify
     if: >-
       github.event.repository.private == false &&
-      (github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true)
+      needs.classify.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
