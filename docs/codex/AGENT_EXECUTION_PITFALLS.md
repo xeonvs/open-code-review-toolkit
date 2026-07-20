@@ -1,5 +1,21 @@
 # Agent Execution Pitfalls
 
+## Closing a public-contract change after only the feature merge
+
+**Failure mode:** A feature changes a public command or integration contract, its pull request merges, and a TestPyPI `.devN` build succeeds. The plan is then marked completed even though stable PyPI users still receive the old behavior.
+
+**Why it happens:** Implementation, preview publication, and stable delivery are treated as separate mental tasks even when the user asked for one outcome. SCM-derived versions also make the source tree appear ready for the next version without proving that a stable tag or package exists.
+
+**Required prevention:**
+
+1. Classify the work at plan start and write the target stable version into `PLANS.md`.
+2. Treat feature merge and TestPyPI `.devN` verification as intermediate receipts.
+3. When release is required, prepare the version/changelog release PR immediately after the development build is verified.
+4. Keep the objective active until the release workflow publishes and independent readback confirms PyPI, TestPyPI, the signed tag, immutable GitHub Release, hashes, attestations, and supported-Python installs.
+5. If publication is intentionally deferred, record who deferred it, why, and the exact command or PR needed to resume.
+
+**Closure question:** "Can a user installing from production PyPI obtain the promised behavior now?" If not, the stable-release objective is not complete.
+
 This note records recurring execution mistake patterns discovered during real work. Record generalized lessons, not one-off complaints.
 
 ## Planning And Context Discipline

@@ -15,6 +15,9 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 9. Require changelog fragments for user-visible 0.1.x changes and SCM tags for versions.
 10. Treat TestPyPI as public disclosure and preserve the manual privacy/license gate before publishing.
 11. Treat automated security scores as evidence to classify, not targets to game; remediate concrete repository-owned risk and document temporal or governance constraints truthfully.
+12. Version public behavior deliberately. An incompatible pre-1.0 contract change may select the next minor version, but it is not delivered to stable users until the versioned package and release artifacts are published and independently verified.
+13. Keep implementation and release as one traceable objective whenever stable publication is requested or required. Feature validation proves readiness; registry and GitHub readback prove delivery.
+14. A deferral is a blocked or pending release state, not successful closure. Preserve the exact continuation point so a later agent does not infer that a development build satisfied a stable-release promise.
 
 ## Documentation Ownership
 
@@ -23,5 +26,5 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 - `docs/gitlab.md` owns GitLab installation and operating guidance.
 - `docs/security.md` owns the runtime trust model; `SECURITY.md` owns vulnerability reporting.
 - `docs/development.md` owns local contributor commands.
-- `docs/release.md` owns the release and disclosure process.
+- `docs/release.md` owns release classification, delivery, and disclosure.
 - `AGENTS.md`, `PLANS.md`, and `docs/codex/` own agent workflow rather than product behavior.

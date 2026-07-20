@@ -35,7 +35,11 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 
 ## Change Closure
 
-- Add a Towncrier fragment for user-visible changes during the 0.1.x line.
+- Add a Towncrier fragment for every user-visible change during the 0.x line.
+- At plan start, classify every user-visible change as `no-release`, `release-required`, or `release-deferred`; record the classification and target stable version in `PLANS.md`. Removed or incompatibly changed CLI, environment, schema, reviewer-command, or documented integration behavior is always `release-required`.
+- For `release-required` work, keep the plan active across feature PR, merge, TestPyPI development verification, release PR, stable TestPyPI/PyPI publication, tag/immutable GitHub Release, provenance/hash checks, and supported-Python smoke installs. A feature merge or `.devN` build is an intermediate checkpoint, not closure.
+- Publication can stop before a stable release only when the user explicitly defers it. Record the deferral reason, target version, completed checkpoints, and exact resume action in `PLANS.md`; do not mark the release objective completed.
+- Before handoff, reconcile the promised outcome against external state rather than local files alone: read PyPI/TestPyPI versions, GitHub tag/Release, Actions conclusions, and artifact attestations when those systems are in scope.
 - Before staging or committing, update `PLANS.md` and promoted backlog items to post-commit truth.
 - Run `git diff --check` and the validation appropriate to the changed subsystem.
 - Compact or archive completed plan detail only after validation and handoff are recorded.
