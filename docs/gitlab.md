@@ -22,6 +22,8 @@ Store secrets as masked, protected CI variables. Do not place them in YAML, comm
 
 `ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` and `context` resolve the same `OCR_REVIEW_LANGUAGE` value, so the OCR system prompt and review background cannot disagree. `configure` and `mcp-config` write OCR configuration without invoking a config subprocess. `context` creates bounded Markdown. `post` interprets a JSON artifact and publishes bounded notes with rollback and ownership safeguards.
 
+Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
+
 OCR is configured through its `openai-responses` provider. Optional stdio bridge tools are supplied with `OCR_MCP_SERVERS_JSON`; treat every configured MCP command as privileged code.
 
 Use merge-request source and base SHAs, not a merge-result commit, when choosing the reviewed range. Keep the self-test job manual. See [docs/security.md](security.md) for trust boundaries and [docs/configuration.md](configuration.md) for every input.

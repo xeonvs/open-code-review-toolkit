@@ -47,7 +47,7 @@ from ocr_toolkit.posting.snapshot import (
     cleanup_drafts_created_by_this_run,
     collect_previous_bot_comment_refs,
     delete_previous_bot_comments_if_collected,
-    filter_skipped_comments,
+    filter_suppressed_comments,
     posting_failure_exit,
     print_posting_failure_banner,
     publish_failure_exit,
@@ -382,7 +382,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if previous_bot_comment_refs is None:
         print(
             "Cannot collect previous OCR bot comments reliably; refusing to publish "
-            "new OCR review notes so resolved, /ocr skip, and /ocr keep state is preserved.",
+            "new OCR review notes so resolved, /ocr suppress, and /ocr resolve state is preserved.",
             file=sys.stderr,
         )
         print_posting_failure_banner()
@@ -390,11 +390,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
 
     annotate_comment_fingerprints(comments)
 
-    comments, skipped_count = filter_skipped_comments(comments, previous_bot_comment_refs)
-    if skipped_count:
+    comments, suppressed_count = filter_suppressed_comments(comments, previous_bot_comment_refs)
+    if suppressed_count:
         print(
-            f"Skipped {skipped_count} OCR comment(s) at locations resolved or "
-            "skipped by the reviewer."
+            f"Suppressed {suppressed_count} OCR comment(s) at locations resolved or "
+            "suppressed by the reviewer."
         )
 
     publishable_comment_count = len(comments)
@@ -412,11 +412,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
 
     if publishable_comment_count == 0:
         raw_message = clean_text(result.get("message"))
-        if skipped_count:
-            skipped_message = (
-                f"{skipped_count} OCR comment(s) were suppressed by prior reviewer actions."
+        if suppressed_count:
+            suppressed_message = (
+                f"{suppressed_count} OCR comment(s) were suppressed by prior reviewer actions."
             )
-            raw_message = f"{raw_message} {skipped_message}" if raw_message else skipped_message
+            raw_message = (
+                f"{raw_message} {suppressed_message}" if raw_message else suppressed_message
+            )
         message = neutralize_quick_actions(
             redact_sensitive(raw_message) or "No review comments generated."
         )
@@ -449,7 +451,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not finalize_posting(config, draft_note_ids):
             return publish_failure_exit(config, draft_note_ids)
         delete_previous_bot_comments_if_collected(config, previous_bot_comment_refs)
-        resolve_keep_threads(config, previous_bot_comment_refs)
+        resolve_requested_discussions(config, previous_bot_comment_refs)
         return 0
 
     refs = get_diff_refs(config)
@@ -596,7 +598,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return publish_failure_exit(config, draft_note_ids)
 
     delete_previous_bot_comments_if_collected(config, previous_bot_comment_refs)
-    resolve_keep_threads(config, previous_bot_comment_refs)
+    resolve_requested_discussions(config, previous_bot_comment_refs)
 
     print(
         f"Posted OCR comments: mode={post_mode()}, inline={inline_count}, "
@@ -606,19 +608,21 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     return 0
 
 
-def resolve_keep_threads(config: GitLabConfig, previous_refs: BotCommentRefs | None) -> None:
-    """Resolve threads marked with `/ocr keep` after a successful post."""
+def resolve_requested_discussions(
+    config: GitLabConfig, previous_refs: BotCommentRefs | None
+) -> None:
+    """Resolve discussions marked with `/ocr resolve` after successful posting."""
 
-    if previous_refs is None or not previous_refs.threads_to_resolve:
+    if previous_refs is None or not previous_refs.discussions_to_resolve:
         return
 
     resolved = 0
-    for discussion_id in previous_refs.threads_to_resolve:
+    for discussion_id in previous_refs.discussions_to_resolve:
         if resolve_discussion(config, discussion_id):
             resolved += 1
 
     if resolved:
-        print(f"Resolved {resolved} OCR thread(s) per /ocr keep reply.")
+        print(f"Resolved {resolved} OCR discussion(s) per /ocr resolve reply.")
 
 
 def invalid_ocr_schema_exit(

@@ -42,16 +42,14 @@ class BotCommentRefs:
     all_discussion_note_refs: list[tuple[str, int]] = field(default_factory=list)
     all_draft_note_ids: list[int] = field(default_factory=list)
     # (path, new_line) pairs the reviewer marked as resolved or asked to
-    # skip via a reply command. New OCR comments hitting these locations
+    # suppress via a reply command. New OCR comments hitting these locations
     # are dropped before posting.
-    skip_inline_keys: set[tuple[str, int]] = field(default_factory=set)
-    # Fingerprints (see `comment_fingerprint`) from past resolved or
-    # skip-flagged comments. New comments with a matching fingerprint are
-    # dropped regardless of line number, so the skip survives line shifts.
-    skip_fingerprints: set[str] = field(default_factory=set)
-    # Threads that the bot should resolve programmatically after the
-    # current run finishes (used by /ocr keep replies).
-    threads_to_resolve: list[str] = field(default_factory=list)
+    suppressed_inline_keys: set[tuple[str, int]] = field(default_factory=set)
+    # Fingerprints from past resolved, human-touched, or explicitly suppressed
+    # comments. Matching findings are dropped regardless of ordinary line shifts.
+    suppressed_fingerprints: set[str] = field(default_factory=set)
+    # Discussions that the bot should resolve after successful posting.
+    discussions_to_resolve: list[str] = field(default_factory=list)
 
 
 def cleanup_drafts_created_by_this_run(config: GitLabConfig, draft_note_ids: list[int]) -> None:
@@ -61,18 +59,18 @@ def cleanup_drafts_created_by_this_run(config: GitLabConfig, draft_note_ids: lis
         delete_draft_note(config, note_id)
 
 
-def filter_skipped_comments(
+def filter_suppressed_comments(
     comments: Sequence[dict[str, Any]],
     previous_refs: BotCommentRefs | None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Drop OCR comments the reviewer asked to ignore."""
+    """Drop OCR comments that should not be published again."""
 
     if previous_refs is None:
         return list(comments), 0
 
-    skip_keys = previous_refs.skip_inline_keys
-    skip_fingerprints = previous_refs.skip_fingerprints
-    if not skip_keys and not skip_fingerprints:
+    suppressed_keys = previous_refs.suppressed_inline_keys
+    suppressed_fingerprints = previous_refs.suppressed_fingerprints
+    if not suppressed_keys and not suppressed_fingerprints:
         return list(comments), 0
 
     kept: list[dict[str, Any]] = []
@@ -81,12 +79,12 @@ def filter_skipped_comments(
     for comment in comments:
         path = str(comment.get("path") or "").strip()
         line = comment_line(comment)
-        if path and line > 0 and (path, line) in skip_keys:
+        if path and line > 0 and (path, line) in suppressed_keys:
             dropped += 1
             continue
-        if skip_fingerprints:
+        if suppressed_fingerprints:
             fingerprints = comment_fingerprint_candidates(comment)
-            matched = fingerprints.intersection(skip_fingerprints)
+            matched = fingerprints.intersection(suppressed_fingerprints)
             base_fingerprint = comment_fingerprint(comment)
             if base_fingerprint in matched:
                 if base_fingerprint in consumed_base_fingerprints:
@@ -106,7 +104,7 @@ def discussion_inline_key(discussion: dict[str, Any]) -> tuple[str, int] | None:
 
     GitLab inline discussions store the diff position on the first note.
     For non-inline (general) discussions the position is missing — those
-    are not tracked in the skip-set because they have no anchor line.
+    are not tracked in the suppression set because they have no anchor line.
     """
 
     notes = discussion.get("notes")
@@ -129,10 +127,10 @@ def discussion_inline_key(discussion: dict[str, Any]) -> tuple[str, int] | None:
 
 
 def reviewer_command_in_thread(config: GitLabConfig, notes: Sequence[Any]) -> str | None:
-    """Return the last reviewer-issued `/ocr (skip|keep)` command, or None.
+    """Return the last reviewer-issued lifecycle command, or None.
 
     Looks only at notes whose author is NOT the bot, so the bot's own
-    follow-ups cannot trigger a skip. The newest matching command wins.
+    follow-ups cannot change lifecycle state. The newest matching command wins.
     """
 
     bot_user_id = config.current_user_id
@@ -163,15 +161,14 @@ def process_discussion_for_refs(
     *,
     preserve_human_touched: bool = True,
 ) -> None:
-    """Classify a discussion into delete/skip/keep buckets.
+    """Classify a discussion into cleanup, suppression, and resolve buckets.
 
     Behavior:
-    - resolved threads: pull their inline key + bot fingerprints into the
-      skip-set and keep them on the MR (do NOT add to discussion_note_refs);
-    - unresolved threads with a reviewer `/ocr skip` reply: same as
-      resolved — skip new comments at that location, keep the thread;
-    - unresolved threads with a `/ocr keep` reply: schedule programmatic
-      resolution after posting, and skip new comments there;
+    - resolved discussions: preserve them and suppress matching findings;
+    - unresolved discussions with `/ocr suppress`: preserve them open and
+      suppress matching findings;
+    - unresolved discussions with `/ocr resolve`: suppress matching findings
+      and schedule resolution after a successful posting transaction;
     - unresolved threads with any human reply: preserve the full discussion
       and suppress duplicates, because reviewer-visible context now belongs
       to that conversation even without an explicit `/ocr` command;
@@ -217,13 +214,13 @@ def process_discussion_for_refs(
         inline_key = discussion_inline_key({"notes": [first_note]})
 
     if preserve_human_touched and (
-        is_resolved or reviewer_command in {"skip", "keep"} or human_reply
+        is_resolved or reviewer_command in {"suppress", "resolve"} or human_reply
     ):
         if inline_key is not None:
-            refs.skip_inline_keys.add(inline_key)
-        refs.skip_fingerprints.update(fingerprints)
-        if reviewer_command == "keep" and not is_resolved:
-            refs.threads_to_resolve.append(discussion_id)
+            refs.suppressed_inline_keys.add(inline_key)
+        refs.suppressed_fingerprints.update(fingerprints)
+        if reviewer_command == "resolve" and not is_resolved:
+            refs.discussions_to_resolve.append(discussion_id)
         return
 
     for note in bot_notes:
@@ -366,10 +363,10 @@ def subtract_bot_comment_ids(current: BotCommentRefs, baseline: BotCommentRefs) 
     """Return the delete-able id deltas between current and baseline refs.
 
     Only the three id-bearing fields (plain notes, inline discussion
-    notes, draft notes) are subtracted. Skip/keep state from the
+    notes, draft notes) are subtracted. Suppression/resolve state from the
     baseline is intentionally NOT copied because the only caller
     (`rollback_current_run_comments`) consumes the result to delete
-    ids only. If a future caller needs skip/keep state, fetch the
+    ids only. If a future caller needs lifecycle state, fetch the
     baseline separately rather than using this delta.
     """
 

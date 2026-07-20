@@ -14,6 +14,7 @@ WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "testpypi.yml"
 RELEASE_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "release.yml"
 BUILD_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "build.yml"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
+DEPENDENCY_REVIEW_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "dependency-review.yml"
 REGISTRY_VERIFY = PROJECT_ROOT / "scripts" / "verify_registry_artifacts.sh"
 
 
@@ -211,3 +212,11 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     assert "python -m build --no-isolation" in workflow
     assert workflow.count("pip install --no-deps") == 1
     assert "scripts/install_local_artifact.py" in workflow
+
+
+def test_required_dependency_review_runs_for_every_pull_request() -> None:
+    workflow = DEPENDENCY_REVIEW_WORKFLOW.read_text(encoding="utf-8")
+    pull_request_block = workflow.split("  pull_request:", 1)[1].split("\n\npermissions:", 1)[0]
+
+    assert "paths:" not in pull_request_block
+    assert "paths-ignore:" not in pull_request_block

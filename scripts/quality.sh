@@ -5,6 +5,8 @@ mode=${1:-check}
 log_dir=${OCR_TOOLKIT_LOG_DIR:-.quality-logs}
 mkdir -p "$log_dir"
 log_file="$log_dir/${mode}.log"
+quality_environment=${OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv}
+export UV_PROJECT_ENVIRONMENT=$quality_environment
 
 case "$mode" in
   format)

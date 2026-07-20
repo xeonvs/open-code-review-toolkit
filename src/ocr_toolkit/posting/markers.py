@@ -19,7 +19,9 @@ MARKER_WITH_FINGERPRINT_RE = re.compile(
 )
 
 
-OCR_REPLY_COMMAND_RE = re.compile(r"(?i)\A[ \t]*/ocr[ \t]+(skip|keep)[ \t]*(?:\r?\n[ \t]*)*\Z")
+OCR_REPLY_COMMAND_RE = re.compile(
+    r"(?i)\A[ \t]*/ocr[ \t]+(suppress|resolve)[ \t]*(?:\r?\n[ \t]*)*\Z"
+)
 
 
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
@@ -94,7 +96,7 @@ def comment_fingerprint(comment: dict[str, Any]) -> str | None:
 
     The hash combines path, normalized review text, and the commented code
     fragment (`existing_code`) when OCR provides it. It omits the anchor line
-    only when that code anchor exists, so resolved findings and `/ocr skip`
+    only when that code anchor exists, so resolved findings and `/ocr suppress`
     survive ordinary line shifts without broadening generic no-code comments
     across a whole file. Returns None for comments missing a usable path.
 
@@ -162,8 +164,8 @@ def legacy_comment_fingerprint(comment: dict[str, Any]) -> str | None:
     """Return the pre-migration 16-hex fingerprint for one OCR finding.
 
     Why: markers produced before the 8→16 byte digest migration are still
-    stored in resolved/skip-flagged threads. Without this companion,
-    `/ocr skip` decisions made under the old length would silently stop
+    stored in resolved or suppressed discussions. Without this companion,
+    `/ocr suppress` decisions made under the old length would silently stop
     suppressing their findings after the migration. Same line-based
     payload as the previous fingerprint implementation, narrower digest.
     """
@@ -180,7 +182,7 @@ def comment_fingerprint_candidates(comment: dict[str, Any]) -> set[str]:
     annotated = comment.get("_ocr_fingerprint")
     if isinstance(annotated, str) and annotated:
         # For duplicate findings, the annotated marker is the current run's
-        # identity. Do not also include the base hash: a skip on the first
+        # identity. Do not also include the base hash: suppressing the first
         # duplicate would suppress every later duplicate in the same file.
         candidates = {annotated}
         if line_number(comment.get("start_line") or comment.get("line")) > 0:
@@ -249,8 +251,8 @@ def is_diff_note(note: dict[str, Any]) -> bool:
 
     Such notes are owned by the /discussions cycle and must NOT be
     deleted via DELETE /notes/{id}, otherwise a reviewer-preserved
-    thread (resolved, /ocr skip, /ocr keep) gets destroyed despite our
-    decision to keep it.
+    thread (resolved, /ocr suppress, /ocr resolve) gets destroyed despite our
+    decision to preserve it.
     """
 
     if note.get("type") == "DiffNote":
