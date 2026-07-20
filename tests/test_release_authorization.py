@@ -10,6 +10,7 @@ from types import ModuleType
 import pytest
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "release_authorization.py"
+WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "release.yml"
 
 
 def load_script() -> ModuleType:
@@ -87,3 +88,20 @@ def test_recovery_inputs_must_match_the_merged_pr() -> None:
         release.authorize_release(
             release_pr(), "example/open-code-review-toolkit", requested_commit="b" * 40
         )
+
+
+def test_release_workflow_classifies_ordinary_merges_before_authorization() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "name: classify-release-trigger" in workflow
+    assert '[[ "${PR_HEAD_REF}" == release/v* ]]' in workflow
+    assert "needs: classify" in workflow
+    assert "needs.classify.outputs.release == 'true'" in workflow
+
+
+def test_release_workflow_keeps_strict_release_authorization() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "python scripts/release_authorization.py" in workflow
+    assert 'test "${RELEASE_BRANCH}" = "release/v${VERSION}"' in workflow
+    assert "github.event.pull_request.merged == true" not in workflow

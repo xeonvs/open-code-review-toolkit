@@ -185,7 +185,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "release_exists=false" in workflow
     assert "release_is_draft=$(gh release view" in workflow
     assert "existing GitHub Release metadata does not match" in workflow
-    assert workflow.count("timeout-minutes:") == 7
+    assert workflow.count("timeout-minutes:") == 8
     assert "--retry 3 --retry-delay 2 --retry-connrefused" in verifier
     assert "--connect-timeout 10 --max-time 120" in verifier
     assert "--proto '=https' --proto-redir '=https'" in verifier
@@ -201,9 +201,11 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
 
 def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     workflow = BUILD_WORKFLOW.read_text(encoding="utf-8")
+    pull_request_block = workflow.split("  pull_request:", 1)[1].split("  push:", 1)[0]
 
     assert "pull_request:" in workflow
     assert "branches: [main]" in workflow
+    assert "paths:" not in pull_request_block
     assert '"scripts/install_local_artifact.py"' in workflow
     assert "timeout-minutes: 15" in workflow
     assert "python -m build --no-isolation" in workflow
