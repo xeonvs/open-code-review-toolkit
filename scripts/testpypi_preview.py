@@ -79,7 +79,7 @@ def classify_index(payload: dict[str, Any], version: str, expected_hashes: dict[
         version_prefix = f"{DIST_PREFIX}-{version}"
         if filename not in names:
             suffix = filename.removeprefix(version_prefix)
-            if suffix != filename and suffix.startswith(("-", ".")):
+            if suffix != filename and suffix.startswith("-"):
                 raise PreviewError(f"unexpected TestPyPI artifact for {version}: {filename}")
             continue
         hashes = item.get("hashes")
