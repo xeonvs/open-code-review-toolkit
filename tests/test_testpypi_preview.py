@@ -12,6 +12,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "testpypi_preview.py"
 PROJECT_ROOT = SCRIPT.parents[1]
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "testpypi.yml"
 RELEASE_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "release.yml"
+BUILD_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "build.yml"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
 REGISTRY_VERIFY = PROJECT_ROOT / "scripts" / "verify_registry_artifacts.sh"
 
@@ -193,3 +194,13 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert '"${destination}"/*.tar.gz' in verifier
     assert "pip install --no-deps --index-url" not in verifier
     assert '"open-code-review-toolkit==${VERSION}"' not in workflow
+
+
+def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
+    workflow = BUILD_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "pull_request:" in workflow
+    assert "branches: [main]" in workflow
+    assert "timeout-minutes: 15" in workflow
+    assert "python -m build --no-isolation" in workflow
+    assert workflow.count("pip install --no-deps") == 2
