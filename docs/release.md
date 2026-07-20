@@ -1,10 +1,25 @@
 # Releases
 
-Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.1.x change still requires a Towncrier fragment.
+Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.x change still requires a Towncrier fragment.
+
+## Release-required changes
+
+A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one active plan through both development and release delivery. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
+
+The delivery sequence is:
+
+1. merge the feature through protected `main`;
+2. verify the deterministic `.devN` wheel and sdist on TestPyPI;
+3. prepare a signed `release/vX.Y.Z` pull request containing the stable version marker, deterministic epoch, generated Towncrier changelog, and next development line;
+4. use release-PR merge as the human authorization gate;
+5. monitor TestPyPI stable publication, production PyPI publication, signed tag, provenance, and immutable GitHub Release;
+6. independently compare artifact hashes and smoke-install the wheel on Python 3.10 and the sdist on Python 3.14.
+
+Do not mark the objective complete after step 1 or 2. If the owner explicitly defers stable publication, record the target version and exact resume point in `PLANS.md`.
 
 ## Development builds
 
-Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `0.2.0.devN`; rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
+Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
 
 Development builds never create tags or GitHub Releases and never publish to production PyPI. TestPyPI is public disclosure, so only reviewed pull requests may reach `main`.
 
