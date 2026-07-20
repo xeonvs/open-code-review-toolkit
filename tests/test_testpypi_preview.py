@@ -152,7 +152,7 @@ def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
     assert workflow.count("--proto '=https' --proto-redir '=https'") == 3
     assert "sha256sum --check --strict" in workflow
     assert "pip install --no-deps /tmp/testpypi-artifacts/*.whl" in workflow
-    assert "pip install --no-deps /tmp/testpypi-artifacts/*.tar.gz" in workflow
+    assert "scripts/install_local_artifact.py" in workflow
     assert "--index-url" not in workflow
     assert "python -m build --no-isolation" in workflow
 
@@ -191,7 +191,10 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "--proto '=https' --proto-redir '=https'" in verifier
     assert "sha256sum --check --strict" in verifier
     assert '"${destination}"/*.whl' in verifier
-    assert '"${destination}"/*.tar.gz' in verifier
+    assert "scripts/install_local_artifact.py" in verifier
+    assert "--require-hashes" in (PROJECT_ROOT / "scripts/install_local_artifact.py").read_text(
+        encoding="utf-8"
+    )
     assert "pip install --no-deps --index-url" not in verifier
     assert '"open-code-review-toolkit==${VERSION}"' not in workflow
 
@@ -201,6 +204,8 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
 
     assert "pull_request:" in workflow
     assert "branches: [main]" in workflow
+    assert '"scripts/install_local_artifact.py"' in workflow
     assert "timeout-minutes: 15" in workflow
     assert "python -m build --no-isolation" in workflow
-    assert workflow.count("pip install --no-deps") == 2
+    assert workflow.count("pip install --no-deps") == 1
+    assert "scripts/install_local_artifact.py" in workflow

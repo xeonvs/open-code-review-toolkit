@@ -14,6 +14,7 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 8. Use coherent production-quality slices when work must be decomposed; do not leave placeholder architecture as a milestone.
 9. Require changelog fragments for user-visible 0.1.x changes and SCM tags for versions.
 10. Treat TestPyPI as public disclosure and preserve the manual privacy/license gate before publishing.
+11. Treat automated security scores as evidence to classify, not targets to game; remediate concrete repository-owned risk and document temporal or governance constraints truthfully.
 
 ## Documentation Ownership
 

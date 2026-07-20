@@ -60,7 +60,10 @@ jobs:
           /tmp/wheel-smoke/bin/pip install --no-deps dist/*.whl
           /tmp/wheel-smoke/bin/ocr-ci --help
           python -m venv /tmp/sdist-smoke
-          /tmp/sdist-smoke/bin/pip install --no-deps dist/*.tar.gz
+          python scripts/install_local_artifact.py \
+            --python /tmp/sdist-smoke/bin/python \
+            --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
+            --requirements /tmp/sdist-smoke-requirements.txt
           /tmp/sdist-smoke/bin/ocr-ci --help
           python - <<'PY'
           import hashlib
@@ -190,5 +193,8 @@ jobs:
           /tmp/testpypi-wheel/bin/pip install --no-deps /tmp/testpypi-artifacts/*.whl
           /tmp/testpypi-wheel/bin/ocr-ci --help
           python -m venv /tmp/testpypi-sdist
-          /tmp/testpypi-sdist/bin/pip install --no-deps /tmp/testpypi-artifacts/*.tar.gz
+          python scripts/install_local_artifact.py \
+            --python /tmp/testpypi-sdist/bin/python \
+            --artifact "$(find /tmp/testpypi-artifacts -maxdepth 1 -name '*.tar.gz' -print -quit)" \
+            --requirements /tmp/testpypi-sdist-requirements.txt
           /tmp/testpypi-sdist/bin/ocr-ci --help

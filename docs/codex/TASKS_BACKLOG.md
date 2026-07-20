@@ -2,6 +2,48 @@
 
 This file tracks future work that is not active. Active extraction work is owned by `PLANS.md`.
 
+## Backlog Item: Native fuzzing campaign
+
+Status: parked
+Priority: medium
+
+### Activation Trigger
+
+- A supported Python fuzzing backend is selected with reproducible local execution, bounded CI resources, and corpus ownership.
+
+### Goal
+
+Fuzz the untrusted-input boundaries with meaningful targets for result normalization, context rendering, GitLab payload parsing, and registry metadata validation. Integrate a public fuzzing service only after the targets demonstrate useful coverage and stable crash minimization.
+
+### Next Safe Action
+
+1. Compare Atheris with property-based alternatives across Python 3.10-3.14 and design a small synthetic seed corpus without adding a runtime dependency.
+
+### Exit Criteria
+
+- Native targets run locally and in bounded CI, retain minimized synthetic regressions, publish no repository or provider secrets, and are recognized by the selected fuzzing service.
+
+## Backlog Item: OpenSSF Best Practices registration
+
+Status: owner action
+Priority: low
+
+### Activation Trigger
+
+- The owner is ready to authenticate at `bestpractices.dev` and attest every passing-level criterion truthfully.
+
+### Goal
+
+Register the public repository for an OpenSSF Best Practices badge without guessing owner-only governance or project-usage answers.
+
+### Next Safe Action
+
+1. Complete the passing-level questionnaire with evidence links to the public repository and leave unsupported criteria unmet.
+
+### Exit Criteria
+
+- The public badge record exists, all answers have current evidence, and the README displays only the earned status.
+
 ## Backlog Item: Additional provider adapters
 
 Status: parked

@@ -75,5 +75,8 @@ python -m venv "/tmp/${registry}-wheel"
 "/tmp/${registry}-wheel/bin/pip" install --no-deps "${destination}"/*.whl
 "/tmp/${registry}-wheel/bin/ocr-ci" --help
 python -m venv "/tmp/${registry}-sdist"
-"/tmp/${registry}-sdist/bin/pip" install --no-deps "${destination}"/*.tar.gz
+python scripts/install_local_artifact.py \
+  --python "/tmp/${registry}-sdist/bin/python" \
+  --artifact "$(find "${destination}" -maxdepth 1 -name '*.tar.gz' -print -quit)" \
+  --requirements "/tmp/${registry}-sdist-requirements.txt"
 "/tmp/${registry}-sdist/bin/ocr-ci" --help

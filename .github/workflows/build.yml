@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths: ["pyproject.toml", "uv.lock", "src/**", "README.md", "LICENSE"]
+    paths: ["pyproject.toml", "uv.lock", "src/**", "scripts/install_local_artifact.py", "README.md", "LICENSE"]
   push:
     branches: [main]
-    paths: ["pyproject.toml", "uv.lock", "src/**", "README.md", "LICENSE"]
+    paths: ["pyproject.toml", "uv.lock", "src/**", "scripts/install_local_artifact.py", "README.md", "LICENSE"]
 
 permissions:
   contents: read
@@ -34,7 +34,13 @@ jobs:
       - run: uv run python -m build --no-isolation
       - run: uv run twine check dist/*
       - run: python -m venv /tmp/wheel-smoke && /tmp/wheel-smoke/bin/pip install --no-deps dist/*.whl && /tmp/wheel-smoke/bin/ocr-ci --help
-      - run: python -m venv /tmp/sdist-smoke && /tmp/sdist-smoke/bin/pip install --no-deps dist/*.tar.gz && /tmp/sdist-smoke/bin/ocr-ci --help
+      - run: |
+          python -m venv /tmp/sdist-smoke
+          python scripts/install_local_artifact.py \
+            --python /tmp/sdist-smoke/bin/python \
+            --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
+            --requirements /tmp/sdist-smoke-requirements.txt
+          /tmp/sdist-smoke/bin/ocr-ci --help
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: distributions

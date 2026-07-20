@@ -20,4 +20,10 @@ Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and
 
 Pin Open Code Review `v1.7.13` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
 
+## Repository security posture
+
+Protected `main` requires pull requests, signed commits, a current branch, resolved review threads, and the complete CI, package-build, dependency, secret, and CodeQL check set. The project currently has one maintainer, so it cannot truthfully require an independent human approval for maintainer-authored changes. This is an explicit residual risk: automated review does not replace a second human. External contributions still receive maintainer review, and independent approval will become mandatory when a second active maintainer can provide it without blocking security fixes.
+
+OpenSSF Scorecard findings are interpreted as supply-chain posture signals rather than vulnerability reports. Repository-age and historical-coverage checks improve only with time and repeated runs; badge registration requires owner attestations; a useful fuzzing integration requires native fuzz targets and infrastructure rather than a workflow added only to satisfy a scanner. Actionable repository-owned findings are fixed through normal signed pull requests.
+
 The detailed environment contract is in [configuration.md](configuration.md). Vulnerability reporting is in [SECURITY.md](../SECURITY.md).
