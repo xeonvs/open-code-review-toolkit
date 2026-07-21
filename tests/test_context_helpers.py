@@ -1775,9 +1775,20 @@ class DocumentationConsistencyTests(unittest.TestCase):
         ci = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         internals = (HELPER_DIR.parents[1] / "docs" / "security.md").read_text(encoding="utf-8")
 
-        self.assertIn('OCR_VERSION: "v1.7.13"', ci)
-        self.assertIn("v1.7.13", docs)
-        self.assertIn("v1.7.13", internals)
+        self.assertIn('OCR_VERSION: "v1.7.14"', ci)
+        self.assertIn("v1.7.14", docs)
+        self.assertIn("v1.7.14", internals)
+        self.assertIn(
+            'OCR_SHA256: "f5ee3118b72fe702c94457aa466ebad82b8d4bf6ced6e0347534f4cfdbcc5f8b"',
+            ci,
+        )
+        configuration = (HELPER_DIR.parents[1] / "docs" / "configuration.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(".opencodereview/accepted-decisions.md", configuration)
+        self.assertIn("ocr-accept: generated-client-timeout", configuration)
+        self.assertIn("not a source-code parser", configuration)
+        self.assertIn("prevent self-whitelisting", configuration)
         self.assertIn("openai-responses", docs)
         self.assertIn("OCR_MCP_SERVERS_JSON", docs)
         self.assertIn("stdio bridge", docs)

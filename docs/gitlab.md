@@ -4,7 +4,7 @@ The toolkit's first provider adapter posts review results to GitLab merge reques
 
 ## Installation
 
-Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.7.13`; verify the release checksum before making the binary executable. The package never downloads OCR.
+Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.7.14`; verify the release checksum before making the binary executable. The package never downloads OCR.
 
 Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates one background file, and passes it once with `--background-file`.
 
@@ -23,6 +23,8 @@ Store secrets as masked, protected CI variables. Do not place them in YAML, comm
 `ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` and `context` resolve the same `OCR_REVIEW_LANGUAGE` value, so the OCR system prompt and review background cannot disagree. `configure` and `mcp-config` write OCR configuration without invoking a config subprocess. `context` creates bounded Markdown. `post` interprets a JSON artifact and publishes bounded notes with rollback and ownership safeguards.
 
 Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
+
+For a deliberate project-wide tradeoff that should be supplied to every review, add a narrowly scoped entry to `.opencodereview/accepted-decisions.md` in an earlier reviewed merge request. The [configuration reference](configuration.md#accepted-project-decisions) documents its `ocr-accept` marker convention, prompt-level semantics, and self-whitelisting guard.
 
 OCR is configured through its `openai-responses` provider. Optional stdio bridge tools are supplied with `OCR_MCP_SERVERS_JSON`; treat every configured MCP command as privileged code.
 

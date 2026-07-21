@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 from types import ModuleType
 
@@ -26,6 +27,13 @@ def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 
     assert release.release_notes(changelog, "0.1.0") == "## 0.1.0 - now\n\nfirst\n"
+
+
+def test_repository_changelog_has_one_section_for_each_version() -> None:
+    changelog = (SCRIPT.parents[1] / "CHANGELOG.md").read_text(encoding="utf-8")
+    versions = re.findall(r"^## (\d+\.\d+\.\d+)(?: - .+)?$", changelog, re.MULTILINE)
+
+    assert len(versions) == len(set(versions))
 
 
 def test_version_is_treated_as_text_not_a_regular_expression() -> None:
