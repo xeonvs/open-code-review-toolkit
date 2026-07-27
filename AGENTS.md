@@ -14,6 +14,8 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 
 - `AGENTS.md` - short repository map and durable pointers.
 - `PLANS.md` - active, blocked, or recently completed execution registry.
+- `docs/engineering/toolkit_strategy.md` - durable product and architecture strategy.
+- `ROADMAP.md` - outcome-oriented milestones and dependencies.
 - `docs/engineering/project_principles.md` - durable cross-cutting rules and ownership boundaries.
 - `docs/codex/TASKS_BACKLOG.md` - future work that is not active.
 - `docs/codex/AGENT_EXECUTION_PITFALLS.md` - recurring execution mistakes.

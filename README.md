@@ -28,6 +28,14 @@ Suppression uses both the GitLab diff position and a stable finding fingerprint,
 
 Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the context generator supplies them to OCR only when the current merge request is not changing that file. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
 
+## Project development
+
+The project is evolving from bounded background generation toward a shared Repository Evidence Engine: one deterministic evidence model will support both a compact OCR bootstrap and a built-in read-only MCP server. Development is ordered by outcomes and dependencies rather than speculative dates.
+
+- [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
+- [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
+- [Backlog](docs/codex/TASKS_BACKLOG.md) - inactive implementation-ready work; active execution remains in `PLANS.md`.
+
 ## GitLab CI quick start
 
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
