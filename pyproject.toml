@@ -61,13 +61,7 @@ version-file = "src/ocr_toolkit/_version.py"
 packages = ["src/ocr_toolkit"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-  "/src",
-  "/README.md",
-  "/LICENSE",
-  "/pyproject.toml",
-]
-exclude = ["/.gitignore"]
+only-include = ["src", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.hatch.version.raw-options]
 fallback_version = "0.3.0.dev0"
