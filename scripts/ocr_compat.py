@@ -17,6 +17,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -475,7 +476,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def _stub_gateway() -> Any:
+def _stub_gateway() -> Iterator[str]:
     _StubHandler.request_count = 0
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
