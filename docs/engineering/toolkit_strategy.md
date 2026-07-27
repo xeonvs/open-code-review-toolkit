@@ -133,7 +133,7 @@ Automatic routing is conditional on stable evidence, latency, token, and review-
 
 Fast-moving upstream compatibility is a product capability, not an ad hoc version string update. One machine-readable manifest should define recommended and tested OCR releases and known capabilities. Version and capability inspection is centralized, additive output fields are parsed tolerantly, and required contract removal fails closed.
 
-Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence, but it cannot itself declare compatibility or upgrade production pins. Observed, machine-tested, human-reviewed, tested, recommended, and incompatible states remain distinct. Human review classifies changelog and contract impact; updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with release classification based on user-visible impact.
+Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence. A conservative same-minor maintenance classifier may prepare a mechanical compatibility patch only when every consumed contract remains stable and release notes contain no material signal. Minor/major, ambiguous, changed, or failed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
 
 ## Architectural invariants
 

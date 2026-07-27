@@ -63,17 +63,11 @@ packages = ["src/ocr_toolkit"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/src",
-  "/tests",
-  "/examples",
-  "/docs",
-  "/changelog.d",
   "/README.md",
-  "/CONTRIBUTING.md",
-  "/SECURITY.md",
   "/LICENSE",
-  "/CHANGELOG.md",
   "/pyproject.toml",
 ]
+exclude = ["/.gitignore"]
 
 [tool.hatch.version.raw-options]
 fallback_version = "0.3.0.dev0"

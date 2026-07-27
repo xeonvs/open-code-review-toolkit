@@ -1,6 +1,7 @@
 # Releases
 
 Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.x change still requires a Towncrier fragment.
+OCR compatibility updates may be prepared mechanically only after the [qualification policy](compatibility.md) returns `automatic-safe`; this never replaces the protected feature and stable-release PR gates.
 
 ## Release-required changes
 
