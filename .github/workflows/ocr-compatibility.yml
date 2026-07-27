@@ -103,6 +103,7 @@ jobs:
       - name: Prepare automatic-safe compatibility patch
         id: classify
         env:
+          GH_TOKEN: ${{ github.token }}
           CANDIDATE_TAG: ${{ matrix.tag }}
         run: |
           classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-compat/evidence.json"))["classification"])')
@@ -166,6 +167,11 @@ jobs:
           fi
           version=${CANDIDATE_TAG#v}
           branch="automation/ocr-${version}"
+          bot_login=$(gh api user --jq .login)
+          if [ "${bot_login}" = "github-actions[bot]" ]; then
+            echo "OCR_UPDATE_BOT_TOKEN must identify a non-Actions bot so PR workflows run." >&2
+            exit 1
+          fi
           git config user.name "OCR compatibility automation"
           git config user.email "ocr-compatibility@users.noreply.github.com"
           gh auth setup-git

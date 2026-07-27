@@ -652,7 +652,6 @@ def _replace_exact(text: str, old: str, new: str, *, source: str) -> str:
 def prepare_update(
     *,
     manifest_path: Path,
-    evidence_path: Path,
     evidence: dict[str, Any],
     fragment_number: int,
     root: Path = ROOT,
@@ -833,7 +832,6 @@ def main(argv: list[str] | None = None) -> int:
             evidence = load_json(args.evidence)
             changed = prepare_update(
                 manifest_path=args.manifest,
-                evidence_path=args.evidence,
                 evidence=evidence,
                 fragment_number=args.fragment_number,
             )

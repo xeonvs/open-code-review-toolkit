@@ -245,7 +245,6 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
 
     changed = module.prepare_update(
         manifest_path=manifest_path,
-        evidence_path=evidence_path,
         evidence=evidence,
         fragment_number=42,
         root=root,
@@ -278,7 +277,6 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     with pytest.raises(module.CompatibilityError, match="automatic-safe"):
         module.prepare_update(
             manifest_path=MANIFEST,
-            evidence_path=tmp_path / "candidate.json",
             evidence=evidence,
             fragment_number=42,
             root=PROJECT_ROOT,
