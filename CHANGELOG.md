@@ -1,3 +1,14 @@
+## 0.2.1 - 2026-07-27
+
+### Features
+
+- Target Open Code Review 1.7.17 in preflight validation and the checksum-pinned GitLab CI example. ([#12](https://github.com/xeonvs/open-code-review-toolkit/issues/12))
+
+### Documentation
+
+- Document the durable toolkit strategy, milestone roadmap, and reconciled implementation backlog. ([#13](https://github.com/xeonvs/open-code-review-toolkit/issues/13))
+
+
 ## 0.2.0 - 2026-07-21
 
 ### Features
