@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Publish stable 0.2.1
+## Completed Plan: Publish stable 0.2.1
 
-Status: active
+Status: completed
 Owner: Codex
 Last Updated: 2026-07-27
 Release Classification: release-required
@@ -20,8 +20,8 @@ Publish the OCR compatibility update and durable strategy/roadmap documentation 
 2. [x] Create `release/v0.2.1` from exact `origin/main` and confirm stable trusted-publisher environments, protected-main ruleset, and release workflow authorization contract remain configured.
 3. [x] Set stable release metadata, assemble the 0.2.1 changelog from issue #12 and #13 fragments, and remove only those consumed fragments.
 4. [x] Run complete quality, deterministic build, artifact metadata, wheel/sdist smoke-install, and release-contract validation; correct every finding.
-5. [ ] Commit and push the signed release branch, open `Release v0.2.1`, and merge only after every required check succeeds.
-6. [ ] Monitor production publication and independently reconcile stable TestPyPI/PyPI files, immutable GitHub Release assets, hashes, attestations, and Python 3.10/3.14 installs before closing this plan.
+5. [x] Commit and push the signed release branch, open `Release v0.2.1`, and merge only after every required check succeeds.
+6. [x] Monitor production publication and independently reconcile stable TestPyPI/PyPI files, immutable GitHub Release assets, hashes, attestations, and Python 3.10/3.14 installs before closing this plan.
 
 ### Release Inputs
 
@@ -37,6 +37,14 @@ Publish the OCR compatibility update and durable strategy/roadmap documentation 
 - `twine check` passes for wheel and sdist; metadata reports version `0.2.1`, Python 3.10-3.14 classifiers, and no runtime dependencies.
 - Python 3.10 installs the wheel and Python 3.14 builds/installs the hash-locked sdist; both report package version `0.2.1` and run `ocr-ci --help`.
 - The release authorization helper accepts the exact repository-owned `release/v0.2.1` / `Release v0.2.1` contract. `git diff --check` is clean.
+
+### Publication Record
+
+- Release PR #15 passed every required CI, security, dependency, CodeQL, and build check and merged as signed squash commit `24a6ba6f3684acda6d6698f7a2269fa58f0cd28a`.
+- Release workflow `30258933950` completed successfully: stable TestPyPI and PyPI publication, exact registry verification, build-provenance attestation, and GitHub Release publication all passed.
+- TestPyPI, PyPI, and immutable GitHub Release `v0.2.1` contain the same wheel (`46c8ef99f4cb6b62b22d5407474aa32e1c2e41b7fb02a08a880c1d4803893d4b`) and sdist (`15d8eb5bd14d614d6c4aad3c3d801c2724451a8c2cb78e43a367c9fcedf4f607`). `SHA256SUMS` and `artifact-hashes.json` agree with those files.
+- GitHub provenance verification succeeds for both published distributions. The annotated `v0.2.1` tag targets exact release merge `24a6ba6`; the release is non-draft, non-prerelease, and immutable.
+- Independently downloaded PyPI artifacts install successfully: the wheel on Python 3.10 and hash-locked sdist on Python 3.14 both report `0.2.1` and run `ocr-ci --help`.
 
 ## Completed Plan: Establish durable strategy and roadmap
 
