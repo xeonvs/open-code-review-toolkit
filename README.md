@@ -15,7 +15,7 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is OCR `1.7.14`. CI should pin the release and verify its published checksum before execution.
+The current compatibility target is OCR `1.7.17`. CI should pin the release and verify its published checksum before execution.
 Review output defaults to English. Set `OCR_REVIEW_LANGUAGE=Russian` to use Russian consistently in both OCR configuration and generated review context.
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
@@ -27,6 +27,14 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
 Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the context generator supplies them to OCR only when the current merge request is not changing that file. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
+
+## Project development
+
+The project is evolving from bounded background generation toward a shared Repository Evidence Engine: one deterministic evidence model will support both a compact OCR bootstrap and a built-in read-only MCP server. Development is ordered by outcomes and dependencies rather than speculative dates.
+
+- [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
+- [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
+- [Backlog](docs/codex/TASKS_BACKLOG.md) - inactive implementation-ready work; active execution remains in `PLANS.md`.
 
 ## GitLab CI quick start
 

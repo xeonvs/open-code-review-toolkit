@@ -1775,11 +1775,11 @@ class DocumentationConsistencyTests(unittest.TestCase):
         ci = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         internals = (HELPER_DIR.parents[1] / "docs" / "security.md").read_text(encoding="utf-8")
 
-        self.assertIn('OCR_VERSION: "v1.7.14"', ci)
-        self.assertIn("v1.7.14", docs)
-        self.assertIn("v1.7.14", internals)
+        self.assertIn('OCR_VERSION: "v1.7.17"', ci)
+        self.assertIn("v1.7.17", docs)
+        self.assertIn("v1.7.17", internals)
         self.assertIn(
-            'OCR_SHA256: "f5ee3118b72fe702c94457aa466ebad82b8d4bf6ced6e0347534f4cfdbcc5f8b"',
+            'OCR_SHA256: "ab2fae81796a00dda292def8261bec2203d03f3909673c08219e7c5df5f4feee"',
             ci,
         )
         configuration = (HELPER_DIR.parents[1] / "docs" / "configuration.md").read_text(
