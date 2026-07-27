@@ -42,3 +42,18 @@ This note records recurring execution mistake patterns discovered during real wo
 
 - Promote a repeated stable lesson into `docs/engineering/project_principles.md`.
 - Record actionable future work in `docs/codex/TASKS_BACKLOG.md` only when it has an activation trigger and next safe action.
+
+## Deriving rollout dependencies from the desired end state
+
+**Failure mode:** A backlog is organized as a linear path through the target architecture. Existing capabilities become blocked on future components, independent foundations become coupled, or one technical refactor ships an unsafe intermediate user state.
+
+**Why it happens:** Architecture dependencies, implementation conveniences, and user-visible release dependencies are treated as the same graph. Candidate priorities may also be inferred from code that already exists rather than demonstrated repository demand. Field-completeness tests then preserve a structurally complete but semantically incorrect backlog.
+
+**Required prevention:**
+
+1. Inventory implemented primitives before assigning dependencies; a future integration may depend on a component even when current operation and documentation do not.
+2. Label each edge as an implementation, safety, or rollout dependency and remove edges that express only the desired end state.
+3. Test every proposed intermediate release: if it removes information or safety before its replacement is available, combine the work into one user-visible slice or retain an explicit compatibility mode.
+4. Keep independent foundations parallel and join them only at the first interface that consumes both.
+5. Select ecosystem and framework priorities from anonymized inventory, deterministic detection, synthetic fixtures, and expected review impact rather than parser familiarity.
+6. Review critical forbidden and required edges explicitly when the backlog changes. Do not encode mutable item counts, identifiers, wording, or temporary dependency edges into the permanent product test suite.

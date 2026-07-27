@@ -73,6 +73,8 @@ Complete manifests, dependency inventories, guidance documents, and external iss
 
 The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. External MCP configuration is composed with this server rather than replacing it. Reserved names prevent downstream configuration from shadowing built-in tools.
 
+Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. `legacy_background` remains the compatibility and rollback projection until the built-in server is registered and its OCR capability contract passes; `compact_bootstrap` must not become the default in an intermediate release that removes detailed facts without providing on-demand evidence.
+
 ## Evidence domains
 
 ### Dependencies, runtimes, and components
@@ -93,11 +95,11 @@ Version-specific library documentation belongs to a separate future documentatio
 
 ## External MCP and references
 
-YouTrack, Confluence, documentation, and other external sources connect directly to OCR through narrowly scoped read-only MCP tools. While OCR lacks stable native remote MCP support, the toolkit may support the existing HTTP-to-stdio proxy pattern. It composes configurations, validates explicit tool allowlists, detects candidate references in merge-request metadata, and adds only normalized identifiers and usage instructions to the bootstrap. It does not prefetch or duplicate external content.
+YouTrack, Confluence, documentation, and other external sources connect directly to OCR through narrowly scoped read-only MCP tools. The toolkit already configures external stdio servers with explicit tool allowlists and protected secret injection. While OCR lacks stable native remote MCP support, the toolkit may support the existing HTTP-to-stdio proxy pattern. Automatic candidate-reference detection in merge-request metadata is planned, not implemented; when introduced, it adds only normalized identifiers and usage instructions to the bootstrap and does not prefetch or duplicate external content.
 
-All merge-request metadata and external MCP responses are untrusted evidence. Safe integration requires configured project-key patterns, allowed hosts or spaces, canonical parsing, bounded reference counts and link traversal, narrow tools instead of generic URL fetch, explicit prompt-injection guidance, and audit metadata for detected and retrieved references. External content cannot change review policy, suppress findings, authorize actions, modify tool permissions, or grant write access.
+All merge-request metadata and external MCP responses are untrusted evidence. A dedicated threat model must precede automatic reference detection and public provider-specific YouTrack or Confluence examples; it does not depend on the future built-in evidence MCP. Safe integration requires configured project-key patterns, allowed hosts or spaces, canonical parsing, bounded reference counts and link traversal, narrow tools instead of generic URL fetch, explicit prompt-injection guidance, and audit metadata for detected and retrieved references. External content cannot change review policy, suppress findings, authorize actions, modify tool permissions, or grant write access.
 
-Public examples use only synthetic services and cover generic stdio MCP, HTTP-to-stdio proxying, read-only YouTrack, read-only Confluence, and composition with the built-in evidence MCP. External-system writes remain outside the generic toolkit scope.
+Public examples use only synthetic services. Current-operation examples cover generic stdio MCP, HTTP-to-stdio proxying, read-only YouTrack, and read-only Confluence after the external-reference threat model is complete. Composition with the built-in evidence MCP is a later integration stage with reserved namespace and collision contracts. External-system writes remain outside the generic toolkit scope.
 
 ## Project policy and guidance
 
@@ -131,7 +133,7 @@ Automatic routing is conditional on stable evidence, latency, token, and review-
 
 Fast-moving upstream compatibility is a product capability, not an ad hoc version string update. One machine-readable manifest should define recommended and tested OCR releases and known capabilities. Version and capability inspection is centralized, additive output fields are parsed tolerantly, and required contract removal fails closed.
 
-Contract tests cover the supported release set. Scheduled automation detects new upstream releases, records changelog impact, and runs compatibility checks, but never upgrades production pins automatically. Updating the recommended version remains a reviewed, checksum-pinned change with release classification based on user-visible impact.
+Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence, but it cannot itself declare compatibility or upgrade production pins. Observed, machine-tested, human-reviewed, tested, recommended, and incompatible states remain distinct. Human review classifies changelog and contract impact; updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with release classification based on user-visible impact.
 
 ## Architectural invariants
 
