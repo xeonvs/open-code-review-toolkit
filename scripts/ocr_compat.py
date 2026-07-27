@@ -83,7 +83,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         _headers: Any,
         _new_url: str,
     ) -> None:
-        return None
+        raise CompatibilityError("metadata redirects are not allowed")
 
 
 METADATA_OPENER = urllib.request.build_opener(_NoRedirectHandler)
@@ -313,6 +313,13 @@ def _download(asset: Asset, directory: Path) -> Path:
         with urllib.request.urlopen(  # nosec B310
             request, timeout=HTTP_TIMEOUT_SECONDS
         ) as response:
+            final = urllib.parse.urlsplit(response.geturl())
+            if final.scheme != "https" or final.hostname not in {
+                "github.com",
+                "objects.githubusercontent.com",
+                "release-assets.githubusercontent.com",
+            }:
+                _fail(f"asset redirect ended at an untrusted origin: {response.geturl()}")
             with destination.open("xb") as output:
                 while chunk := response.read(64 * 1024):
                     count += len(chunk)
@@ -574,7 +581,7 @@ def classify_candidate(
     base = _version(baseline)
     candidate = _version(version)
     reasons: list[str] = []
-    if candidate[:2] != base[:2] or candidate[2] <= base[2]:
+    if candidate[:2] != base[:2] or candidate[2] != base[2] + 1:
         reasons.append("candidate is not a newer patch in the tested major/minor line")
     if not contracts_passed:
         reasons.append("one or more deterministic compatibility probes failed")
@@ -664,7 +671,7 @@ def prepare_update(
         _fail("candidate evidence version must be a string")
     if (
         _version(version)[:2] != _version(old_version)[:2]
-        or _version(version)[2] <= _version(old_version)[2]
+        or _version(version)[2] != _version(old_version)[2] + 1
     ):
         _fail("candidate no longer satisfies the same-minor patch invariant")
     evidence_name = f"ocr-{version}.json"

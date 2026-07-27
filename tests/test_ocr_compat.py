@@ -84,6 +84,36 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
     assert [item["tag_name"] for item in unseen] == ["v1.7.18", "v2.0.0"]
 
 
+def test_discovery_pages_until_the_monitoring_floor() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    first_page = [release("1.7.18")]
+    first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
+    second_page = [release("1.7.17")]
+    requested: list[str] = []
+
+    def fake_request(url: str) -> list[dict[str, Any]]:
+        requested.append(url)
+        return first_page if "page=1" in url else second_page
+
+    with patched_attr(module, "_request_json", fake_request):
+        unseen = module.discover_unseen(manifest)
+
+    assert [item["tag_name"] for item in unseen] == ["v1.7.18"]
+    assert len(requested) == 2
+
+
+def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    page = [release("1.7.18")]
+    page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
+
+    with patched_attr(module, "_request_json", lambda _url: page):
+        with pytest.raises(module.CompatibilityError, match="monitoring floor"):
+            module.discover_unseen(manifest)
+
+
 def test_automatic_safe_policy_is_conservative() -> None:
     module = load_script()
 
@@ -105,6 +135,12 @@ def test_automatic_safe_policy_is_conservative() -> None:
         release_notes="fix: update documentation",
         contracts_passed=True,
     )
+    skipped, skipped_reasons = module.classify_candidate(
+        baseline="1.7.17",
+        version="1.7.19",
+        release_notes="fix: update documentation",
+        contracts_passed=True,
+    )
 
     assert automatic == "automatic-safe"
     assert reasons
@@ -112,6 +148,8 @@ def test_automatic_safe_policy_is_conservative() -> None:
     assert any("material" in reason for reason in breaking_reasons)
     assert minor == "human-review-required"
     assert any("major/minor" in reason for reason in minor_reasons)
+    assert skipped == "human-review-required"
+    assert any("newer patch" in reason for reason in skipped_reasons)
 
 
 def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
