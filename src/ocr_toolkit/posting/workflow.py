@@ -131,7 +131,7 @@ def changed_new_lines(
             timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
-        lines = set()
+        lines: set[int] = set()
         if cache is not None:
             cache[cache_key] = lines
         return lines
@@ -217,7 +217,7 @@ def head_file_lines(
             size_result.returncode != 0
             or int(size_result.stdout.strip() or "0") > MAX_REMAP_FILE_BYTES
         ):
-            lines = []
+            lines: list[tuple[int, str]] = []
             if cache is not None:
                 cache[cache_key] = lines
             return lines

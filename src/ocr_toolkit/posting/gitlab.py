@@ -125,7 +125,7 @@ def _open_gitlab_request(request: urllib.request.Request) -> Any:
 def _read_limited_response(response: Any) -> bytes:
     """Read a GitLab response body and fail when it exceeds the success budget."""
 
-    body = response.read(MAX_API_RESPONSE_BODY_BYTES)
+    body: bytes = response.read(MAX_API_RESPONSE_BODY_BYTES)
     if len(body) >= MAX_API_RESPONSE_BODY_BYTES and response.read(1):
         raise GitLabResponseTooLarge(f"GitLab response exceeds {MAX_API_RESPONSE_BODY_BYTES} bytes")
     return body
@@ -323,11 +323,13 @@ def fetch_current_user_id(server_url: str, api_token: str, auth_header: str) -> 
         return None
 
     raw_user_id = result.get("id")
-    try:
-        return int(raw_user_id)
-    except (TypeError, ValueError):
-        print_user_id_failure_banner("GET /user response has no valid id field")
-        return None
+    if isinstance(raw_user_id, (str, int, float)) and not isinstance(raw_user_id, bool):
+        try:
+            return int(raw_user_id)
+        except ValueError:
+            pass
+    print_user_id_failure_banner("GET /user response has no valid id field")
+    return None
 
 
 def load_gitlab_config() -> GitLabConfig | None:
@@ -481,10 +483,12 @@ def draft_note_id(value: Any) -> int | None:
     if isinstance(raw_id, bool):
         return None
 
-    try:
-        return int(raw_id)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(raw_id, (str, int, float)) and not isinstance(raw_id, bool):
+        try:
+            return int(raw_id)
+        except ValueError:
+            pass
+    return None
 
 
 def created_draft_note(response: Any, context: str) -> DraftNoteCreation | None:

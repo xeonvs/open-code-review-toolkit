@@ -196,9 +196,9 @@ def parse_pyproject(path: Path) -> dict[str, Any]:
 
     try:
         try:
-            import tomllib
+            import tomllib  # type: ignore[import-untyped]
         except ModuleNotFoundError:
-            import tomli as tomllib  # type: ignore[import-not-found]
+            import tomli as tomllib
 
         data = tomllib.loads(text)
     except ModuleNotFoundError:
@@ -209,9 +209,12 @@ def parse_pyproject(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         return {"present": True, "parse_error": JSON_OBJECT_PARSE_ERROR}
 
-    project = data.get("project") if isinstance(data.get("project"), dict) else {}
-    tool = data.get("tool") if isinstance(data.get("tool"), dict) else {}
-    poetry = tool.get("poetry") if isinstance(tool.get("poetry"), dict) else {}
+    raw_project = data.get("project")
+    raw_tool = data.get("tool")
+    project: dict[Any, Any] = raw_project if isinstance(raw_project, dict) else {}
+    tool: dict[Any, Any] = raw_tool if isinstance(raw_tool, dict) else {}
+    raw_poetry = tool.get("poetry")
+    poetry: dict[Any, Any] = raw_poetry if isinstance(raw_poetry, dict) else {}
 
     dependencies: list[str] = []
     if isinstance(project.get("dependencies"), list):
@@ -233,12 +236,14 @@ def parse_pyproject(path: Path) -> dict[str, Any]:
                     f"group.{group_name}: {redact_url_userinfo(str(dep))}" for dep in group_deps
                 )
 
-    poetry_deps = poetry.get("dependencies") if isinstance(poetry.get("dependencies"), dict) else {}
+    raw_poetry_deps = poetry.get("dependencies")
+    poetry_deps: dict[Any, Any] = raw_poetry_deps if isinstance(raw_poetry_deps, dict) else {}
     for name, version in poetry_deps.items():
         if str(name).lower() != "python":
             dependencies.append(f"{name}: {redact_url_userinfo(str(version))}")
 
-    poetry_groups = poetry.get("group") if isinstance(poetry.get("group"), dict) else {}
+    raw_poetry_groups = poetry.get("group")
+    poetry_groups: dict[Any, Any] = raw_poetry_groups if isinstance(raw_poetry_groups, dict) else {}
     for group_name, group_value in poetry_groups.items():
         if not isinstance(group_value, dict):
             continue
@@ -354,10 +359,14 @@ def parse_composer_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         return {"present": True, "parse_error": JSON_OBJECT_PARSE_ERROR}
 
-    require = data.get("require") if isinstance(data.get("require"), dict) else {}
-    require_dev = data.get("require-dev") if isinstance(data.get("require-dev"), dict) else {}
-    config = data.get("config") if isinstance(data.get("config"), dict) else {}
-    platform = config.get("platform") if isinstance(config.get("platform"), dict) else {}
+    raw_require = data.get("require")
+    raw_require_dev = data.get("require-dev")
+    raw_config = data.get("config")
+    require: dict[Any, Any] = raw_require if isinstance(raw_require, dict) else {}
+    require_dev: dict[Any, Any] = raw_require_dev if isinstance(raw_require_dev, dict) else {}
+    config: dict[Any, Any] = raw_config if isinstance(raw_config, dict) else {}
+    raw_platform = config.get("platform")
+    platform: dict[Any, Any] = raw_platform if isinstance(raw_platform, dict) else {}
 
     platform_items, platform_omitted = limited_manifest_items(
         [f"{name}: {version}" for name, version in platform.items()]
@@ -433,10 +442,13 @@ def parse_package_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         return {"present": True, "parse_error": JSON_OBJECT_PARSE_ERROR}
 
-    engines = data.get("engines") if isinstance(data.get("engines"), dict) else {}
-    dependencies = data.get("dependencies") if isinstance(data.get("dependencies"), dict) else {}
-    dev_dependencies = (
-        data.get("devDependencies") if isinstance(data.get("devDependencies"), dict) else {}
+    raw_engines = data.get("engines")
+    raw_dependencies = data.get("dependencies")
+    raw_dev_dependencies = data.get("devDependencies")
+    engines: dict[Any, Any] = raw_engines if isinstance(raw_engines, dict) else {}
+    dependencies: dict[Any, Any] = raw_dependencies if isinstance(raw_dependencies, dict) else {}
+    dev_dependencies: dict[Any, Any] = (
+        raw_dev_dependencies if isinstance(raw_dev_dependencies, dict) else {}
     )
 
     engines_items, engines_omitted = limited_manifest_items(

@@ -240,10 +240,12 @@ def author_id_from_note(note: dict[str, Any]) -> int | None:
         if isinstance(author, dict):
             raw_author_id = author.get("id")
 
-    try:
-        return int(raw_author_id)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(raw_author_id, (str, int, float)) and not isinstance(raw_author_id, bool):
+        try:
+            return int(raw_author_id)
+        except ValueError:
+            pass
+    return None
 
 
 def is_diff_note(note: dict[str, Any]) -> bool:
