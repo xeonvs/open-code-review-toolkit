@@ -2,6 +2,49 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Complete M0 foundation and release v0.3.0
+
+Status: active; implementation in progress
+Owner: Codex
+Last Updated: 2026-07-27
+Tracking Issue: #19
+Release Classification: release-required
+Target Stable Version: 0.3.0
+
+### Goal
+
+Complete roadmap milestone M0 as one production-quality feature: add a bounded Bandit repository gate, establish one versioned OCR compatibility manifest, automate checksum-verified evidence collection for unseen stable OCR releases without automatic upgrades, and carry the result through the full protected release path to stable 0.3.0 publication.
+
+### Fixed Decisions
+
+- Start from protected `main` merge `808a7f7`, which is the merged tree of PR #18 and has successful post-merge CI, Security, CodeQL, Scorecard, and TestPyPI development workflows.
+- Deliver implementation through one `feature/m0-foundation` PR with coherent signed intermediate commits, then a separate `release/v0.3.0` PR. Do not push the feature branch or open its PR until iterative self-review, full local validation, and the single final local OCR review are complete.
+- OCR 1.7.17 is the only tested and recommended baseline. Releases after 1.7.17 remain observed candidates until checksum-verified machine evidence and explicit human qualification are recorded.
+- Candidate execution is Linux amd64; all published upstream assets and the checksum file are independently verified. The compatibility contract covers only toolkit-consumed CLI and JSON behavior and permits unknown additive upstream fields.
+- The final OCR gate is one checksum-verified OCR 1.7.17 review of the complete `main..HEAD` feature diff. Any finding is fixed and locally revalidated before the feature branch is committed for PR handoff; OCR is not rerun.
+
+### Work Queue
+
+1. [x] Reconcile the checkout with merged PR #18, refresh `main`, verify a clean tree, and create tracking issue #19 and `feature/m0-foundation`.
+2. [ ] Add Bandit 1.9.4 as a development-only dependency; scan only `src/ocr_toolkit` at medium severity and confidence; document narrow B108 suppressions; expose the scan through `scripts/quality.sh security`; add a dedicated Security workflow job and make its context a protected-main requirement after merge-safe workflow validation.
+3. [ ] Add a versioned OCR support manifest with 1.7.17 as the only tested/recommended baseline, all upstream asset metadata, deterministic machine evidence, human rationale, and cross-field validation.
+4. [ ] Add a standard-library-only qualification harness for bounded stable-release discovery, double-source checksum verification, Linux amd64 execution, synthetic CLI/preview/review contract probes, normalized evidence, and fail-closed behavior.
+5. [ ] Add scheduled/manual candidate qualification automation with read-only contents access plus scoped issue creation, idempotent candidate issues, artifact evidence, no automatic manifest edits, and explicit human promotion decisions.
+6. [ ] Update public security/development/compatibility documentation, roadmap/strategy/backlog state, and Towncrier fragments; add unit, contract, workflow, adversarial, and documentation tests.
+7. [ ] Complete multiple self-review and fix cycles covering architecture, security boundaries, workflow permissions/idempotency, test quality, documentation truth, and repository hygiene.
+8. [ ] Run the complete local matrix: `scripts/quality.sh check`, Bandit, build/Twine, wheel and sdist smoke installs, lockfile check, workflow/config contract tests, public-content scan, Markdown target validation, and `git diff --check`.
+9. [ ] Run exactly one local OCR 1.7.17 review over `main..HEAD` with project rules and prepared background; retain ignored local evidence, fix all actionable findings, and rerun deterministic validation without rerunning OCR.
+10. [ ] Push the signed feature branch, open a non-draft PR, resolve review feedback, require all protected checks including Bandit, merge through protected `main`, and verify the resulting 0.3.0.devN TestPyPI artifacts, hashes, attestations, and smoke installs.
+11. [ ] Create signed `release/v0.3.0` from refreshed `main`, render and verify Towncrier release notes, set reproducible release authorization metadata, validate the exact release diff, open the release PR, and merge only after all protected checks pass.
+12. [ ] Monitor stable TestPyPI, PyPI, annotated tag, provenance, and immutable GitHub Release; independently reconcile all distribution hashes and smoke-install the wheel on Python 3.10 and hash-locked sdist on Python 3.14.
+13. [ ] Record exact external evidence in `PLANS.md`, merge the documentation-only closure PR, verify its checks, and only then compact the completed M0 plan.
+
+### Release Gates
+
+- Feature merge and any TestPyPI `.devN` build are intermediate checkpoints, not completion.
+- A stable release is blocked by any unseen upstream stable OCR release above 1.7.17 until its machine evidence and human compatibility classification are recorded; promotion to tested/recommended remains a separate explicit decision.
+- Release closure requires registry/GitHub hash equality, GitHub artifact attestation verification, immutable non-draft release state, exact tag target, and supported-Python smoke installs.
+
 ## Completed Plan: Refine roadmap dependency and rollout safety
 
 Status: completed

@@ -827,8 +827,9 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
 
     args = argv if argv is not None else sys.argv[1:]
-    result_path = Path(args[0]) if len(args) >= 1 else Path("/tmp/ocr-result.json")
-    stderr_path = Path(args[1]) if len(args) >= 2 else Path("/tmp/ocr-stderr.log")
+    # Defaults are per-job files in the isolated CI container; callers can override both.
+    result_path = Path(args[0]) if len(args) >= 1 else Path("/tmp/ocr-result.json")  # nosec B108
+    stderr_path = Path(args[1]) if len(args) >= 2 else Path("/tmp/ocr-stderr.log")  # nosec B108
 
     config = load_gitlab_config()
     if config is None:

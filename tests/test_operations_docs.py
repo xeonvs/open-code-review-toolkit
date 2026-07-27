@@ -56,3 +56,16 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
     assert 'OCR_STRICT_POSTING: "true"' in example
     assert "OCR_POST_MODE=draft" in configuration
     assert "OCR_STRICT_POSTING=true" in configuration
+
+
+def test_security_workflow_has_a_bounded_bandit_job() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "security.yml").read_text(
+        encoding="utf-8"
+    )
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    assert "sast-bandit:" in workflow
+    assert "./scripts/quality.sh security" in workflow
+    assert "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" in development
+    assert "# nosec B108" in security

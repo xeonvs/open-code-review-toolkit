@@ -38,6 +38,7 @@ ocr-ci = "ocr_toolkit.cli:main"
 
 [dependency-groups]
 dev = [
+  "bandit==1.9.4",
   "build>=1.2.2",
   "coverage[toml]>=7.6",
   "hatch-vcs>=0.4",
@@ -98,6 +99,11 @@ python_version = "3.10"
 strict = true
 files = ["src/ocr_toolkit"]
 exclude = ["src/ocr_toolkit/_version.py"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+severity = "medium"
+confidence = "medium"
 warn_unreachable = false
 disable_error_code = ["arg-type", "assignment", "import-not-found", "index", "name-defined", "no-any-return", "no-redef", "union-attr", "unused-ignore", "var-annotated"]
 

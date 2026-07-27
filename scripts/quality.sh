@@ -24,9 +24,12 @@ case "$mode" in
   types)
     set -- uv run mypy src/ocr_toolkit
     ;;
+  security)
+    set -- uv run bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
+    ;;
   check)
     : >"$log_file"
-    for command in "ruff format --check ." "ruff check ." "mypy src/ocr_toolkit" "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70"; do
+    for command in "ruff format --check ." "ruff check ." "mypy src/ocr_toolkit" "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70"; do
       if ! uv run sh -c "$command" >>"$log_file" 2>&1; then
         echo "quality check failed: $command" >&2
         tail -n 80 "$log_file" >&2
@@ -37,7 +40,7 @@ case "$mode" in
     exit 0
     ;;
   *)
-    echo "usage: scripts/quality.sh [check|format|lint|test|coverage|types]" >&2
+    echo "usage: scripts/quality.sh [check|format|lint|test|coverage|types|security]" >&2
     exit 2
     ;;
 esac
