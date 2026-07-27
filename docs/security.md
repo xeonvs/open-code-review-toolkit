@@ -18,7 +18,7 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 
 Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.
 
-Pin Open Code Review `v1.7.14` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
+Pin Open Code Review `v1.7.17` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
 
 ## Repository security posture
 
