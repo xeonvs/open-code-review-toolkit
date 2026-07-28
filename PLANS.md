@@ -2,6 +2,47 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Implement M1 evidence architecture for v0.4.0
+
+Status: active; implementation started on feature/m1-evidence-architecture
+Owner: Codex
+Last Updated: 2026-07-28
+Release Classification: release-deferred
+Target Stable Version: 0.4.0
+Tracking Issue: #30
+
+### Goal
+
+Replace the bounded legacy Markdown context generator with a schema-versioned repository evidence engine, base/head snapshots and typed deltas, compact bootstrap projection, and a built-in read-only MCP server. Preserve all safe legacy facts through semantic parity checks, remove the legacy public contract only after end-to-end verification, and improve GitLab review outcome rendering.
+
+### Work Queue
+
+1. [x] Update the effective local OCR binary to verified upstream v1.8.0 while retaining a rollback copy.
+2. [ ] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.
+3. [ ] Implement the dependency-free evidence schema, bounded store, redaction-before-storage, deterministic identities, and serialization (BL-004).
+4. [ ] Adapt existing collectors to emit evidence while retaining a temporary legacy projection for semantic parity (BL-005).
+5. [ ] Implement immutable base/head snapshots and typed repository deltas with explicit missing, rename, deletion, symlink, submodule, and shallow-clone behavior (BL-006).
+6. [ ] Add compact bootstrap and deterministic JSON projections.
+7. [ ] Implement and register the bounded read-only `ocr_toolkit_evidence` stdio MCP server (BL-007).
+8. [ ] Improve GitLab summary outcomes, zero-counter suppression, severity/category presentation, and the default-on `OCR_POST_EMOJI` switch.
+9. [ ] Run legacy/evidence semantic parity cycles, component-level MCP verification, and a full synthetic GitLab-style OCR v1.8.0 E2E without posting.
+10. [ ] Remove the legacy implementation, CLI, environment contract, and compatibility path after the new path passes all gates.
+11. [ ] Reconcile user, agent, engineering, security, configuration, roadmap, plan, and backlog documentation.
+12. [ ] Run complete validation, review the full feature diff with OCR through the new local MCP, fix valid findings, push, and open a ready feature PR.
+
+### Validation And Review Gates
+
+- Every completed implementation slice receives a signed checkpoint commit after targeted tests, `scripts/quality.sh check`, `git diff --check`, and plan/backlog reconciliation.
+- Review each committed diff for correctness, architecture, security, compatibility, tests, documentation, and hidden legacy dependencies. Fix every valid finding in a signed follow-up commit and repeat the gate before starting the next slice.
+- Semantic parity compares facts, trust, ref, component, and provenance rather than exact Markdown. Any unexplained divergence starts another analysis, implementation, test, and review cycle.
+- Final validation includes unit, contract, adversarial, packaging, clean-install, protocol, subprocess MCP, source/head snapshot, failure-mode, and real OCR v1.8.0 E2E checks.
+
+### Release Deferral And Closure
+
+- This feature PR is the implementation source for v0.4.0, but the current authorization stops before merge. Do not merge the feature PR, publish a `.devN`, open the release PR, tag, or publish stable artifacts.
+- Resume action after explicit authorization: merge the feature PR; verify required Actions and the resulting TestPyPI development build; prepare and merge the v0.4.0 release PR; verify stable TestPyPI and PyPI artifacts, tag and immutable GitHub Release, hashes, attestations/provenance, and supported-Python smoke installs; then reconcile M1 as established and compact this plan.
+- Until that release sequence completes, M1 remains `next` in the roadmap and this plan remains active/release-deferred even after the feature PR is ready.
+
 ## Completed Plan: Reconcile completed M0 planning state
 
 Status: completed; planning sources reconciled and M1 entry state verified
