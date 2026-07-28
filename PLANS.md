@@ -2,6 +2,40 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Completed Plan: Reconcile completed M0 planning state
+
+Status: completed; planning sources reconciled and M1 entry state verified
+Owner: Codex
+Last Updated: 2026-07-28
+Release Classification: no-release
+Target Stable Version: not applicable
+
+### Goal
+
+Make the roadmap and backlog consistently represent M0 as completed after the verified 0.3.0 release closure, without changing runtime or published behavior.
+
+### Work Queue
+
+1. [x] Reconcile the M0 execution plan, protected repository state, release, issue, and compatibility-workflow evidence.
+2. [x] Audit the release-closure instructions and history to identify why publication receipts were reconciled without reconciling the roadmap and future-work backlog.
+3. [x] Mark M0 unambiguously established in every roadmap representation, use a documented status color legend for all milestone nodes, and remove completed M0 implementation items from the future-work backlog.
+4. [x] Correct stale completed-item retention in the remaining backlog; restore unimplemented BL-004 as the ready entry point for M1.
+5. [x] Add a durable release-closure instruction requiring status-bearing roadmap diagrams, tables, backlog, and execution plans to be reconciled together.
+6. [x] Review the resulting planning diff, render the Mermaid graph with Mermaid CLI 11.16.0, validate status/dependency references and repository whitespace, and record post-change truth.
+
+### Release Gates
+
+- This is a planning-state correction only: no runtime, CLI, configuration, schema, integration, or packaging behavior changes.
+- No Towncrier fragment or stable release is required.
+- Mermaid colors encode status only: established is green, next is blue, planned is neutral gray, and conditional is amber. Nodes with mixed phases use the earliest actionable status, while the label retains the detailed phase split.
+
+### Closure Evidence
+
+- Repository history shows the 0.3.0 closure PR updated only `PLANS.md`; it did not perform the promised post-release cleanup of `ROADMAP.md` and `docs/codex/TASKS_BACKLOG.md`.
+- The M0 feature commit also marked BL-004 complete even though its evidence-model deliverables were not implemented; source inspection confirms the model remains the first M1 implementation slice, so BL-004 is restored as `ready`.
+- Mermaid CLI 11.16.0 rendered the roadmap successfully with all seven milestone nodes colored according to the documented status legend: one established, two next, three planned, and one conditional.
+- Targeted stale-state and dependency searches plus `git diff --check` pass. Public runtime, package contents, CLI/configuration contracts, and release artifacts are unchanged.
+
 ## Completed Plan: Qualify OCR 1.8.0, add native remote MCP, and release v0.3.1
 
 Status: completed; stable release, development-line verification, and external reconciliation verified

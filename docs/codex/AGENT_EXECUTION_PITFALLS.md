@@ -24,6 +24,7 @@ This note records recurring execution mistake patterns discovered during real wo
 - Do not treat a local working specification as publishable documentation; translate its public requirements and keep private audit criteria outside tracked files.
 - Do not silently reduce extraction scope because the source is large; split it into coherent, validated subsystem slices.
 - Do not commit completed work while the active plan still says `planned` or `in_progress`.
+- Do not close a milestone by updating only its execution plan. Reconcile roadmap labels, diagram status colors, and the future backlog in the same closure change. Remove an entry only after its own deliverables and validation are proven complete; preserve unfinished adjacent work even if an earlier feature plan accidentally marked it complete.
 
 ## Source And Privacy Boundaries
 
