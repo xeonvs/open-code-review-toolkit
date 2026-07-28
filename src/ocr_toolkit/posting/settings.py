@@ -98,6 +98,21 @@ def post_mode() -> str:
     return "draft"
 
 
+@cache
+def post_emoji() -> bool:
+    """Return whether toolkit-added status and finding emoji are enabled."""
+
+    value = getenv("OCR_POST_EMOJI", "true").strip().lower()
+    if not value:
+        value = "true"
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    print("OCR_POST_EMOJI must be boolean; using enabled by default.", file=sys.stderr)
+    return True
+
+
 def strict_posting() -> bool:
     """Return whether posting failures should make this script fail."""
 

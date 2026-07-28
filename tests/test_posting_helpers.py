@@ -960,6 +960,18 @@ class PostingWorkflowTests(unittest.TestCase):
 
 
 class PostingSummaryTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        settings.post_emoji.cache_clear()
+        settings.post_mode.cache_clear()
+
+    def test_post_emoji_defaults_on_and_accepts_explicit_false(self) -> None:
+        settings.post_emoji.cache_clear()
+        with patched_env(OCR_POST_EMOJI=""):
+            self.assertTrue(settings.post_emoji())
+        settings.post_emoji.cache_clear()
+        with patched_env(OCR_POST_EMOJI="false"):
+            self.assertFalse(settings.post_emoji())
+
     def test_tool_calls_prefers_calls_when_by_tool_is_empty(self) -> None:
         summary = posting_formatting.format_tool_calls_summary(
             {"by_tool": {}, "calls": [{"name": "file_read"}, {"tool": "code_search"}]}
@@ -1025,6 +1037,78 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("`missing_line`: 1", summary)
         self.assertIn("reviewed SHA: `abc123`", summary)
         self.assertIn("MR head SHA: `def456`", summary)
+        self.assertTrue(summary.startswith("# Open Code Review summary\n"))
+        self.assertIn("✅ Found 3 issue(s).", summary)
+
+    def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="skipped",
+            outcome_message="No supported files changed.",
+            emoji=False,
+        )
+
+        self.assertIn("No supported files changed.", summary)
+        self.assertNotIn("0 posted", summary)
+        self.assertNotIn(posting_formatting.SEVERITY_EMOJI["low"], summary)
+
+    def test_clean_summary_is_positive_and_has_no_zero_tool_counter(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="success",
+            outcome_message="No comments generated. Looks good to me.",
+            tool_calls_summary=posting_formatting.format_tool_calls_summary(
+                {"total": 0, "by_tool": {}}
+            ),
+            emoji=True,
+        )
+
+        self.assertIn("✅ No comments generated. Looks good to me.", summary)
+        self.assertNotIn("tool calls", summary)
+
+    def test_warning_and_error_outcomes_never_look_clean(self) -> None:
+        warning = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_warnings",
+            outcome_message="Some files were reviewed with warnings.",
+            emoji=True,
+        )
+        error = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_errors",
+            outcome_message="Some files could not be reviewed due to errors.",
+            emoji=True,
+        )
+
+        self.assertIn("⚠️ Some files were reviewed with warnings.", warning)
+        self.assertIn("❌ Some files could not be reviewed due to errors.", error)
+        self.assertNotIn("✅", error)
+
+    def test_all_finding_categories_and_severities_have_optional_emoji(self) -> None:
+        for value, marker in posting_formatting.SEVERITY_EMOJI.items():
+            with self.subTest(severity=value):
+                tagged = posting_formatting.format_finding_tags({"severity": value}, emoji=True)
+                plain = posting_formatting.format_finding_tags({"severity": value}, emoji=False)
+                self.assertIn(marker, tagged)
+                self.assertNotIn(marker, plain)
+        for value, marker in posting_formatting.CATEGORY_EMOJI.items():
+            with self.subTest(category=value):
+                tagged = posting_formatting.format_finding_tags({"category": value}, emoji=True)
+                plain = posting_formatting.format_finding_tags({"category": value}, emoji=False)
+                self.assertIn(marker, tagged)
+                self.assertNotIn(marker, plain)
 
     def test_security_signal_is_promoted_when_present(self) -> None:
         guide = posting_formatting.format_reviewer_guide(
@@ -1111,7 +1195,10 @@ class PostingSummaryTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("**OCR tags:** `severity:high` `category:security`", body)
+        self.assertIn("🚨", body)
+        self.assertIn("🔒", body)
+        self.assertIn("`severity:high`", body)
+        self.assertIn("`category:security`", body)
         self.assertIn("Needs attention", body)
 
     def test_inline_comment_ignores_invalid_metadata_tags(self) -> None:

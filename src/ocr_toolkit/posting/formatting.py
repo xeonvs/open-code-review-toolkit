@@ -36,6 +36,7 @@ from ocr_toolkit.posting.settings import (
     MAX_TOOL_CALL_NAME_CHARS,
     MAX_TOOL_CALL_SUMMARY_TOOLS,
     SUGGESTION_HEADER,
+    post_emoji,
     post_mode,
 )
 
@@ -62,6 +63,23 @@ OCR_FINDING_CATEGORY_ORDER = (
     "style",
     "other",
 )
+
+SEVERITY_EMOJI = {
+    "critical": "❌",
+    "high": "🚨",
+    "medium": "⚠️",
+    "low": "ℹ️",  # noqa: RUF001 - intentional information emoji
+}
+CATEGORY_EMOJI = {
+    "bug": "🐛",
+    "security": "🔒",
+    "performance": "⚡",
+    "maintainability": "🛠️",
+    "test": "🧪",
+    "style": "🎨",
+    "documentation": "📚",
+    "other": "📌",
+}
 
 
 def suggestion_range_suffix(comment: dict[str, Any]) -> str:
@@ -103,15 +121,18 @@ def finding_metadata(comment: dict[str, Any]) -> tuple[str, str]:
     return severity, category
 
 
-def format_finding_tags(comment: dict[str, Any]) -> str:
+def format_finding_tags(comment: dict[str, Any], *, emoji: bool | None = None) -> str:
     """Return GitLab-visible tags for structured OCR finding metadata."""
 
     severity, category = finding_metadata(comment)
     tags = []
+    use_emoji = post_emoji() if emoji is None else emoji
     if severity:
-        tags.append(inline_code(f"severity:{severity}"))
+        prefix = f"{SEVERITY_EMOJI[severity]} " if use_emoji else ""
+        tags.append(prefix + inline_code(f"severity:{severity}"))
     if category:
-        tags.append(inline_code(f"category:{category}"))
+        prefix = f"{CATEGORY_EMOJI[category]} " if use_emoji else ""
+        tags.append(prefix + inline_code(f"category:{category}"))
     return f"**OCR tags:** {' '.join(tags)}" if tags else ""
 
 
@@ -141,13 +162,15 @@ def format_suggestion_block(comment: dict[str, Any]) -> str:
     return f"\n\n{SUGGESTION_HEADER}\n```suggestion:{range_suffix}\n{suggestion}\n```"
 
 
-def format_inline_comment(comment: dict[str, Any], include_suggestion: bool = True) -> str:
+def format_inline_comment(
+    comment: dict[str, Any], include_suggestion: bool = True, *, emoji: bool | None = None
+) -> str:
     """Format one OCR comment as Markdown for an inline GitLab discussion."""
 
     raw_content = clean_text(comment.get("content")) or "Open Code Review reported an issue here."
     content = neutralize_suggestion_fences(neutralize_quick_actions(raw_content))
     content = "\n".join(escape_control_chars(line) for line in content.split("\n"))
-    tags = format_finding_tags(comment)
+    tags = format_finding_tags(comment, emoji=emoji)
     body = f"{tags}\n\n{content}" if tags else content
     if include_suggestion:
         body += format_suggestion_block(comment)
@@ -155,7 +178,7 @@ def format_inline_comment(comment: dict[str, Any], include_suggestion: bool = Tr
     return body
 
 
-def format_fallback_comment(comment: dict[str, Any]) -> str:
+def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = None) -> str:
     """Format an OCR comment for a fallback non-inline MR note."""
 
     path = clean_text(comment.get("path")) or "unknown"
@@ -175,7 +198,8 @@ def format_fallback_comment(comment: dict[str, Any]) -> str:
 
     safe_path = _inline_code(path, escape_controls=True)
     body = (
-        f"### {safe_path}{location}\n\n{format_inline_comment(comment, include_suggestion=False)}"
+        f"### {safe_path}{location}\n\n"
+        f"{format_inline_comment(comment, include_suggestion=False, emoji=emoji)}"
     )
 
     existing = code_text(comment.get("existing_code"))
@@ -203,7 +227,9 @@ def format_fallback_comment(comment: dict[str, Any]) -> str:
     return body
 
 
-def format_fallback_comment_chunks(comments: Sequence[dict[str, Any]]) -> list[str]:
+def format_fallback_comment_chunks(
+    comments: Sequence[dict[str, Any]], *, emoji: bool | None = None
+) -> list[str]:
     """Split fallback comments into safe chunks before publishing MR notes."""
 
     chunks: list[str] = []
@@ -211,7 +237,7 @@ def format_fallback_comment_chunks(comments: Sequence[dict[str, Any]]) -> list[s
 
     for comment in comments:
         item = truncate_note_body(
-            format_fallback_comment(comment), max_chars=FALLBACK_NOTE_CHUNK_BUDGET
+            format_fallback_comment(comment, emoji=emoji), max_chars=FALLBACK_NOTE_CHUNK_BUDGET
         )
         separator = "\n\n---\n\n" if current else ""
 
@@ -390,6 +416,8 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
         return ""
 
     if total is None:
+        return ""
+    if total == 0:
         return ""
 
     line = f"- tool calls: {total} total"
@@ -705,15 +733,33 @@ def summarize_result(
     fallback_reasons: Mapping[str, int] | None = None,
     reviewed_sha: str = "",
     mr_head_sha: str = "",
+    outcome_status: str = "success",
+    outcome_message: str = "",
+    emoji: bool | None = None,
 ) -> str:
     """Build a compact summary note for the MR."""
 
+    use_emoji = post_emoji() if emoji is None else emoji
+    status_markers = {
+        "success": "✅",
+        "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
+        "completed_with_warnings": "⚠️",
+        "completed_with_errors": "❌",
+    }
+    marker = f"{status_markers.get(outcome_status, '❌')} " if use_emoji else ""
+    safe_message = compact_control_text(outcome_message, max_chars=500)
+    if not safe_message:
+        safe_message = f"Found {total} issue(s)." if total else "No issues found."
     lines = [
-        f"**Open Code Review** found **{total}** issue(s).",
+        "# Open Code Review summary",
+        f"{marker}{safe_message}",
+        "",
         f"- posting mode: `{post_mode()}`",
-        f"- {inline_count} posted as inline discussion(s)",
-        f"- {fallback_count} posted as fallback summary item(s)",
     ]
+    if inline_count:
+        lines.append(f"- {inline_count} posted as inline discussion(s)")
+    if fallback_count:
+        lines.append(f"- {fallback_count} posted as fallback summary item(s)")
 
     if reviewed_sha:
         lines.append(f"- reviewed SHA: {_inline_code(reviewed_sha)}")

@@ -59,6 +59,7 @@ post_review_note = gitlab_api.post_review_note
 from ocr_toolkit.posting.settings import (
     max_post_comments,
     ocr_exit_code,
+    post_emoji,
     post_mode,
     strict_posting,
 )
@@ -352,6 +353,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
     token_usage_summary = format_token_usage_summary(result)
+    status = clean_text(result.get("status")) or "success"
+    allowed_statuses = {
+        "success",
+        "skipped",
+        "completed_with_warnings",
+        "completed_with_errors",
+    }
+    if status not in allowed_statuses:
+        return invalid_ocr_schema_exit(config, "field 'status' is unsupported")
+    outcome_message = clean_text(result.get("message"))
 
     if not isinstance(comments_value, list):
         return invalid_ocr_schema_exit(config, "field 'comments' must be a list")
@@ -409,6 +420,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
         comments = comments[:publish_limit]
 
+    emoji = post_emoji()
     reviewer_guide = format_reviewer_guide(comments, omitted_count)
 
     if publishable_comment_count == 0:
@@ -420,10 +432,21 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             raw_message = (
                 f"{raw_message} {suppressed_message}" if raw_message else suppressed_message
             )
-        message = neutralize_quick_actions(
-            redact_sensitive(raw_message) or "No review comments generated."
+        message = neutralize_quick_actions(redact_sensitive(raw_message))
+        marker = {
+            "success": "✅",
+            "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
+            "completed_with_warnings": "⚠️",
+            "completed_with_errors": "❌",
+        }[status]
+        fallback_message = (
+            "No review comments generated. No issues found."
+            if status == "success"
+            else "Review did not complete cleanly."
         )
-        body = message
+        body = "# Open Code Review summary\n\n"
+        body += f"{marker} " if emoji else ""
+        body += message or fallback_message
         if warnings:
             warning_lines = [
                 neutralize_quick_actions(redact_sensitive(clean_text(warning)))
@@ -506,7 +529,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             config=config,
             path=path,
             line=line,
-            body=format_inline_comment(raw_comment),
+            body=format_inline_comment(raw_comment, emoji=emoji),
             refs=refs,
             draft_note_ids=draft_note_ids,
             fingerprint=clean_text(raw_comment.get("_ocr_fingerprint")) or None,
@@ -534,7 +557,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             return 1
 
     if failed_comments:
-        fallback_chunks = format_fallback_comment_chunks(failed_comments)
+        fallback_chunks = format_fallback_comment_chunks(failed_comments, emoji=emoji)
 
         for index, fallback_chunk in enumerate(fallback_chunks, start=1):
             fallback_title = (
@@ -587,6 +610,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_sha(),
             mr_head_sha=mr_head_sha(),
+            outcome_status=status,
+            outcome_message=outcome_message,
+            emoji=emoji,
         ),
         draft_note_ids,
     )
