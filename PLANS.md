@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Qualify OCR 1.8.0, add native remote MCP, and release v0.3.1
+## Completed Plan: Qualify OCR 1.8.0, add native remote MCP, and release v0.3.1
 
-Status: active; stable publication reconciled, closure PR in progress
+Status: completed; stable release, development-line verification, and external reconciliation verified
 Owner: Codex
 Last Updated: 2026-07-28
 Tracking Issue: #24
@@ -56,6 +56,7 @@ Human-qualify OCR 1.8.0 from the successful M0 workflow evidence, promote it to 
 - The one permitted complete local OCR review used the checksum-verified OCR 1.8.0 Darwin arm64 binary and the toolkit's `ocr-ci review` path against a disposable index containing all 24 changed files. No GitLab command or credential was used. OCR returned success with six actionable findings; all were repaired: visible quality-sync failures, broader credential-header rejection, environment-secret and URL bounds, regular-file/hard-link/FIFO artifact validation, and same-inode output separation. Post-review deterministic validation passes with 368 tests plus 41 subtests, compatibility validation/discovery, lockfile, Towncrier draft, build/Twine, minimal artifact inspection, Python 3.10/3.14 wheel smoke installs, and `git diff --check`; no second OCR review was run.
 - Feature PR #25 merged as protected-main squash `4513956` after every required CI, security, dependency, build, and CodeQL check passed with no review threads. TestPyPI workflow run `30350463053` then built, published, provenance-attested, hash-verified, and wheel/sdist smoke-installed immutable `0.3.0.dev18`. That version reflects the pre-release `.next-version` state inherited from 0.3.0; this release PR advances the stable authorization and next development line to 0.3.1.
 - Release PR #26 merged as protected-main squash `035864d`; release workflow run `30351032061` published and verified the same bytes on TestPyPI and PyPI, then created annotated tag `v0.3.1` targeting that merge and an immutable GitHub Release. Wheel SHA-256 is `d37233e0f8736418f69b5a26fe1342dbed7b0c16a75962ce7f98200cfd9a71ee`; sdist SHA-256 is `aa403ec1b4bc052ae6d3a97980e81bc356e3513dd196cdb37f51488028c1452e`. Registry and GitHub hashes agree, both artifacts have release-workflow provenance bound to `035864d`, and fresh local smoke installs passed for the wheel on Python 3.10 and sdist on Python 3.14. Issue #23 is closed; closure of tracking issue #24 is carried by this documentation-only PR.
+- Documentation closure PR #27 merged as `532b7a3`, closed issue #24, and passed every protected check. Its post-merge TestPyPI workflow run `30351569649` published, provenance-attested, hash-verified, and wheel/sdist smoke-installed `0.3.1.dev20`; all post-merge CI, Security, CodeQL, and OpenSSF runs also passed.
 
 ## Completed Plan: Complete M0 foundation and release v0.3.0
 
