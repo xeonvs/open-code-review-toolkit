@@ -9,6 +9,12 @@ from ocr_toolkit.evidence.model import (
     Sensitivity,
     TrustClass,
 )
+from ocr_toolkit.evidence.repository import (
+    GitRepositoryReader,
+    RepositoryEvidenceError,
+    build_file_snapshot,
+    file_deltas,
+)
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError, EvidenceStoreLimits
 
 __all__ = [
@@ -19,7 +25,11 @@ __all__ = [
     "EvidenceStore",
     "EvidenceStoreError",
     "EvidenceStoreLimits",
+    "GitRepositoryReader",
     "RefRole",
+    "RepositoryEvidenceError",
     "Sensitivity",
     "TrustClass",
+    "build_file_snapshot",
+    "file_deltas",
 ]

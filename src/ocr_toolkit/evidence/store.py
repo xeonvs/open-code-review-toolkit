@@ -146,6 +146,13 @@ class EvidenceStore:
         if message not in self.diagnostics:
             self.diagnostics.append(message)
 
+    def add_diagnostic(self, message: str) -> None:
+        """Record one bounded public coverage notice without repeated noise."""
+
+        if not message or len(message) > 1024:
+            raise EvidenceStoreError("evidence diagnostic must contain between 1 and 1024 characters")
+        self._diagnose_once(redact_env_secret_values(redact_sensitive(message)))
+
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
         """Return all records in deterministic public ordering."""

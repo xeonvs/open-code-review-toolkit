@@ -20,15 +20,16 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 1. [x] Update the effective local OCR binary to verified upstream v1.8.0 while retaining a rollback copy.
 2. [x] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.
 3. [x] Implement the dependency-free evidence schema, bounded store, redaction-before-storage, deterministic identities, and serialization (BL-004).
-4. [ ] Adapt existing collectors to emit evidence while retaining a temporary legacy projection for semantic parity (BL-005).
-5. [ ] Implement immutable base/head snapshots and typed repository deltas with explicit missing, rename, deletion, symlink, submodule, and shallow-clone behavior (BL-006).
-6. [ ] Add compact bootstrap and deterministic JSON projections.
-7. [ ] Implement and register the bounded read-only `ocr_toolkit_evidence` stdio MCP server (BL-007).
-8. [ ] Improve GitLab summary outcomes, zero-counter suppression, severity/category presentation, and the default-on `OCR_POST_EMOJI` switch.
-9. [ ] Run legacy/evidence semantic parity cycles, component-level MCP verification, and a full synthetic GitLab-style OCR v1.8.0 E2E without posting.
-10. [ ] Remove the legacy implementation, CLI, environment contract, and compatibility path after the new path passes all gates.
-11. [ ] Reconcile user, agent, engineering, security, configuration, roadmap, plan, and backlog documentation.
-12. [ ] Run complete validation, review the full feature diff with OCR through the new local MCP, fix valid findings, push, and open a ready feature PR.
+4. [x] Implement immutable base/head file snapshots and repository-file deltas with explicit missing, both rename sides, deletion, symlink, submodule, and shallow-clone behavior (first BL-005 slice).
+5. [ ] Complete typed dependency/runtime/container collection and deltas for both refs without routing facts through legacy Markdown (remaining BL-005).
+6. [ ] Separate collection, storage, planning, and rendering completely; retain legacy rendering only as a temporary parity projection until final removal (BL-006).
+7. [x] Add compact bootstrap and deterministic JSON projections.
+8. [ ] Implement and register the bounded read-only `ocr_toolkit_evidence` stdio MCP server (BL-007).
+9. [ ] Improve GitLab summary outcomes, zero-counter suppression, severity/category presentation, and the default-on `OCR_POST_EMOJI` switch.
+10. [ ] Run legacy/evidence semantic parity cycles, component-level MCP verification, and a full synthetic GitLab-style OCR v1.8.0 E2E without posting.
+11. [ ] Remove the legacy implementation, CLI, environment contract, and compatibility path after the new path passes all gates.
+12. [ ] Reconcile user, agent, engineering, security, configuration, roadmap, plan, and backlog documentation.
+13. [ ] Run complete validation, review the full feature diff with OCR through the new local MCP, fix valid findings, push, and open a ready feature PR.
 
 ### Validation And Review Gates
 
@@ -38,6 +39,7 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 - Final validation includes unit, contract, adversarial, packaging, clean-install, protocol, subprocess MCP, source/head snapshot, failure-mode, and real OCR v1.8.0 E2E checks.
 - Baseline before M1 runtime changes: 368 tests and 41 subtests passed. OCR v1.8.0 structured skip, clean result, subtask error, severity, and category contracts are pinned in synthetic fixtures sourced from upstream tag v1.8.0. Existing context regression coverage remains the legacy behavior baseline.
 - BL-004 evidence model validation: 17 focused evidence/OCR contract tests pass; Ruff and mypy pass. Self-review added strict unknown-field rejection, mapping-key redaction, sensitivity promotion, and deduplication that supports structured JSON values. The v0.4.0 Towncrier draft was rendered successfully, and fragment authoring guidance now covers grouped related outcomes without using the changelog as a backlog.
+- Snapshot/projection checkpoint validation: 26 focused evidence tests pass; Ruff and mypy pass. Synthetic two-commit repositories cover add, delete, both rename sides, changed blobs, unavailable commits, symlink refusal, tree/blob limits, semantic retention of the bounded legacy context, and explicit compact-bootstrap truncation. Self-review found that the transitional collector still calls `build_context()` and reparses Markdown; BL-005 and BL-006 therefore remain incomplete until typed collectors are projection-independent.
 
 ### Release Deferral And Closure
 
