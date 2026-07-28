@@ -131,7 +131,7 @@ def changed_new_lines(
             timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
-        lines = set()
+        lines: set[int] = set()
         if cache is not None:
             cache[cache_key] = lines
         return lines
@@ -217,7 +217,7 @@ def head_file_lines(
             size_result.returncode != 0
             or int(size_result.stdout.strip() or "0") > MAX_REMAP_FILE_BYTES
         ):
-            lines = []
+            lines: list[tuple[int, str]] = []
             if cache is not None:
                 cache[cache_key] = lines
             return lines
@@ -827,8 +827,9 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
 
     args = argv if argv is not None else sys.argv[1:]
-    result_path = Path(args[0]) if len(args) >= 1 else Path("/tmp/ocr-result.json")
-    stderr_path = Path(args[1]) if len(args) >= 2 else Path("/tmp/ocr-stderr.log")
+    # Defaults are per-job files in the isolated CI container; callers can override both.
+    result_path = Path(args[0]) if len(args) >= 1 else Path("/tmp/ocr-result.json")  # nosec B108
+    stderr_path = Path(args[1]) if len(args) >= 2 else Path("/tmp/ocr-stderr.log")  # nosec B108
 
     config = load_gitlab_config()
     if config is None:

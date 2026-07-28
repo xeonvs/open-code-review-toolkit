@@ -38,6 +38,7 @@ ocr-ci = "ocr_toolkit.cli:main"
 
 [dependency-groups]
 dev = [
+  "bandit==1.9.4",
   "build>=1.2.2",
   "coverage[toml]>=7.6",
   "hatch-vcs>=0.4",
@@ -60,19 +61,7 @@ version-file = "src/ocr_toolkit/_version.py"
 packages = ["src/ocr_toolkit"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-  "/src",
-  "/tests",
-  "/examples",
-  "/docs",
-  "/changelog.d",
-  "/README.md",
-  "/CONTRIBUTING.md",
-  "/SECURITY.md",
-  "/LICENSE",
-  "/CHANGELOG.md",
-  "/pyproject.toml",
-]
+only-include = ["src", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.hatch.version.raw-options]
 fallback_version = "0.3.0.dev0"
@@ -100,6 +89,11 @@ files = ["src/ocr_toolkit"]
 exclude = ["src/ocr_toolkit/_version.py"]
 warn_unreachable = false
 disable_error_code = ["arg-type", "assignment", "import-not-found", "index", "name-defined", "no-any-return", "no-redef", "union-attr", "unused-ignore", "var-annotated"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+severity = "medium"
+confidence = "medium"
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers"

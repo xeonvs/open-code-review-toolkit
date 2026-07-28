@@ -1,0 +1,78 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "b5e529b3a617c00f55e44a1da1731891833e051a442be55f67e47c8487a901e2",
+      "size": 46114976
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "d1771b962ae518bd0e75093b695633e1d12f80700521f5eb5872651b83595012",
+      "size": 43865874
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "ab2fae81796a00dda292def8261bec2203d03f3909673c08219e7c5df5f4feee",
+      "size": 44626082
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "1f9b0d12dec307e136a3fe28611be29058303d403d03b210d25aa0aa59a61f98",
+      "size": 42139810
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "a29f17e6cc67a721784dbe0db2a5d3d2c35109323aad78ddf3c11bb9aa2fa886",
+      "size": 45830144
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "d928d412f6466ddf4cdc0dd54d0a78a3c4b21149d2153cec99028a6d5e5b30bf",
+      "size": 42713088
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "27975ba11c94b5d28710b228216acb32324c875e0b21d7ecce85dac7f116c2bc",
+      "size": 572
+    }
+  ],
+  "classification": "human-qualified-baseline",
+  "classification_reasons": [
+    "Compatibility impact and exact asset digests were reviewed in toolkit issue #12 and released as toolkit 0.2.1."
+  ],
+  "contracts": {
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-07-26T07:52:23Z",
+  "result": "compatible",
+  "schema_version": 1,
+  "tag": "v1.7.17",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.7.17"
+}

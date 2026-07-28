@@ -162,11 +162,13 @@ def resolve_output_path(value: str) -> Path | None:
     requested = Path(value)
     logical_output = requested if requested.is_absolute() else root_lexical / requested
     logical_output = logical_output.absolute()
-    temp_lexical = Path(tempfile.gettempdir()).absolute()
+    # tempfile supplies the platform temp root; containment and symlink checks follow.
+    temp_lexical = Path(tempfile.gettempdir()).absolute()  # nosec B108
     allowed_roots = [(root_lexical, root), (root, root)]
     temp_resolved = temp_lexical.resolve()
     allowed_roots.extend([(temp_lexical, temp_resolved), (temp_resolved, temp_resolved)])
-    tmp_path = Path("/tmp")
+    # POSIX /tmp may be a distinct lexical alias (for example, /private/tmp).
+    tmp_path = Path("/tmp")  # nosec B108
     if tmp_path.exists():
         tmp_lexical = tmp_path.absolute()
         tmp_resolved = tmp_path.resolve()

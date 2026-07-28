@@ -19,6 +19,9 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.
 
 Pin Open Code Review `v1.7.17` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP servers are privileged child processes; allow only reviewed commands and tools.
+The [OCR compatibility policy](compatibility.md) requires double-source asset digest verification, bounded downloads, an executed Linux contract probe, and protected PR/release gates; qualification automation never writes directly to `main` or promotes an ambiguous release.
+
+The repository runs Bandit as a bounded SAST gate over `src/ocr_toolkit` at medium-or-higher severity and confidence. Narrow `# nosec B108` annotations are permitted only beside fixed CI temporary paths whose isolation or containment is explained in the adjacent source comment; tests, examples, and broad plugin suppressions are not part of that exception policy.
 
 ## Repository security posture
 

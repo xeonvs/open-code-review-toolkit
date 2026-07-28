@@ -1,0 +1,196 @@
+name: OCR compatibility
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Optional exact stable upstream tag, for example v1.7.18
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ocr-compatibility
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: discover-stable-releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Validate support manifest
+        run: PYTHONPATH=src python scripts/ocr_compat.py validate
+      - name: Discover unseen stable releases
+        if: inputs.tag == ''
+        run: PYTHONPATH=src python scripts/ocr_compat.py discover --output /tmp/ocr-releases.json
+      - name: Use requested stable release
+        if: inputs.tag != ''
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["REQUESTED_TAG"]
+          if re.fullmatch(r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag) is None:
+              raise SystemExit("requested tag must be a stable semantic version")
+          normalized = tag if tag.startswith("v") else f"v{tag}"
+          Path("/tmp/ocr-releases.json").write_text(
+              json.dumps({"releases": [{"tag_name": normalized}]}) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - id: matrix
+        name: Build bounded qualification matrix
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          releases = json.loads(Path("/tmp/ocr-releases.json").read_text(encoding="utf-8"))["releases"]
+          if len(releases) > 10:
+              raise SystemExit("refusing to qualify more than 10 releases per run")
+          tags = [release["tag_name"] for release in releases]
+          with Path("/tmp/matrix-output").open("w", encoding="utf-8") as output:
+              output.write("matrix=" + json.dumps({"tag": tags}, separators=(",", ":")) + "\n")
+          PY
+          cat /tmp/matrix-output >>"${GITHUB_OUTPUT}"
+
+  qualify:
+    name: qualify-${{ matrix.tag }}
+    needs: discover
+    if: fromJSON(needs.discover.outputs.matrix).tag[0] != null
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Qualify candidate
+        env:
+          CANDIDATE_TAG: ${{ matrix.tag }}
+        run: |
+          mkdir -p /tmp/ocr-compat
+          PYTHONPATH=src python scripts/ocr_compat.py qualify \
+            --tag "${CANDIDATE_TAG}" \
+            --output /tmp/ocr-compat/evidence.json \
+            --issue-body /tmp/ocr-compat/issue.md
+      - name: Prepare automatic-safe compatibility patch
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ matrix.tag }}
+        run: |
+          classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-compat/evidence.json"))["classification"])')
+          echo "classification=${classification}" >>"${GITHUB_OUTPUT}"
+          if [ "${classification}" = automatic-safe ]; then
+            marker="<!-- ocr-compat-candidate:${CANDIDATE_TAG} -->"
+            issue=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state all --search "${marker} in:body" --json number --jq '.[0].number // empty')
+            if [ -z "${issue}" ]; then
+              issue_url=$(gh issue create --repo "${GITHUB_REPOSITORY}" \
+                --title "[OCR compatibility] Qualify ${CANDIDATE_TAG}" \
+                --label dependencies \
+                --body-file /tmp/ocr-compat/issue.md)
+              issue=${issue_url##*/}
+              case "${issue}" in
+                ''|*[!0-9]*) echo "cannot parse created issue number from ${issue_url}" >&2; exit 1 ;;
+              esac
+            fi
+            PYTHONPATH=src python scripts/ocr_compat.py prepare-update \
+              --evidence /tmp/ocr-compat/evidence.json \
+              --fragment-number "${issue}"
+            git diff --binary >"/tmp/ocr-compat/${CANDIDATE_TAG}.patch"
+            test -s "/tmp/ocr-compat/${CANDIDATE_TAG}.patch"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ocr-compatibility-${{ matrix.tag }}
+          path: /tmp/ocr-compat/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Create or update qualification issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ matrix.tag }}
+          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker="<!-- ocr-compat-candidate:${CANDIDATE_TAG} -->"
+          issue=$(gh issue list --repo "${REPOSITORY}" --state all --search "${marker} in:body" --json number --jq '.[0].number // empty')
+          cp /tmp/ocr-compat/issue.md /tmp/ocr-compat/final-issue.md
+          printf '\n### Workflow evidence\n\n- run: %s\n- classification: `%s`\n' "${RUN_URL}" "${CLASSIFICATION}" >>/tmp/ocr-compat/final-issue.md
+          if [ "${CLASSIFICATION}" = automatic-safe ]; then
+            printf '%s\n' '- a mechanical compatibility patch is attached to the workflow artifact' '- opening a real PR requires the optional OCR update bot credential so protected checks are triggered' >>/tmp/ocr-compat/final-issue.md
+          fi
+          if [ -n "${issue}" ]; then
+            gh issue edit "${issue}" --repo "${REPOSITORY}" --body-file /tmp/ocr-compat/final-issue.md
+            gh issue reopen "${issue}" --repo "${REPOSITORY}" || true
+          else
+            gh issue create --repo "${REPOSITORY}" \
+              --title "[OCR compatibility] Qualify ${CANDIDATE_TAG}" \
+              --label dependencies \
+              --body-file /tmp/ocr-compat/final-issue.md
+          fi
+      - name: Open automatic-safe compatibility PR when bot credential is configured
+        if: steps.classify.outputs.classification == 'automatic-safe'
+        env:
+          GH_TOKEN: ${{ secrets.OCR_UPDATE_BOT_TOKEN }}
+          CANDIDATE_TAG: ${{ matrix.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "OCR_UPDATE_BOT_TOKEN is not configured; patch artifact and issue are the resume path."
+            exit 0
+          fi
+          version=${CANDIDATE_TAG#v}
+          branch="automation/ocr-${version}"
+          bot_login=$(gh api user --jq .login)
+          if [ "${bot_login}" = "github-actions[bot]" ]; then
+            echo "OCR_UPDATE_BOT_TOKEN must identify a non-Actions bot so PR workflows run." >&2
+            exit 1
+          fi
+          git config user.name "OCR compatibility automation"
+          git config user.email "ocr-compatibility@users.noreply.github.com"
+          gh auth setup-git
+          git fetch origin "${branch}" || true
+          git switch -C "${branch}" "${GITHUB_SHA}"
+          git add compatibility/ocr-support.json compatibility/evidence/ \
+            src/ocr_toolkit/preflight.py examples/gitlab/ocr-review.gitlab-ci.yml \
+            README.md docs/gitlab.md docs/security.md changelog.d/
+          git commit -m "Target OCR ${version}"
+          git push --force-with-lease="${branch}" origin "${branch}"
+          existing=$(gh pr list --repo "${REPOSITORY}" --state open --head "${branch}" --json number --jq '.[0].number // empty')
+          if [ -z "${existing}" ]; then
+            gh pr create --repo "${REPOSITORY}" \
+              --base main \
+              --head "${branch}" \
+              --title "Target OCR ${version}" \
+              --label dependencies \
+              --body "Checksum-verified automatic-safe OCR compatibility update. Machine evidence and the exact generated patch are attached to workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. This PR does not publish a release; merge remains subject to every protected check and the separate stable release workflow."
+          fi

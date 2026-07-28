@@ -56,3 +56,45 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
     assert 'OCR_STRICT_POSTING: "true"' in example
     assert "OCR_POST_MODE=draft" in configuration
     assert "OCR_STRICT_POSTING=true" in configuration
+
+
+def test_security_workflow_has_a_bounded_bandit_job() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    assert "sast-bandit:" in workflow
+    assert "./scripts/quality.sh security" in workflow
+    assert (
+        "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" in development
+    )
+    assert "# nosec B108" in security
+
+
+def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ocr-compatibility.yml").read_text(
+        encoding="utf-8"
+    )
+    policy = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
+
+    assert "schedule:" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "contents: read" in workflow
+    assert "issues: write" in workflow
+    assert "pull-requests: write" not in workflow
+    assert "persist-credentials: false" in workflow
+    assert "max-parallel: 2" in workflow
+    assert "refusing to qualify more than 10 releases" in workflow
+    assert "OCR_UPDATE_BOT_TOKEN" in workflow
+    assert "gh auth setup-git" in workflow
+    assert "git switch -C" in workflow
+    assert "git push --force-with-lease" in workflow
+    issue_create = workflow.split("issue_url=$(gh issue create", 1)[1].split(
+        "issue=${issue_url##*/}", 1
+    )[0]
+    assert "--json" not in issue_create
+    assert "git push origin main" not in workflow
+    assert "gh pr merge" not in workflow
+    assert "automatic-safe" in workflow
+    assert "human-review-required" in policy
+    assert "never writes directly to `main`" in policy

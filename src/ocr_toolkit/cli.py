@@ -33,9 +33,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
     post_parser.add_argument(
-        "--result", default="/tmp/ocr-result.json", help="OCR JSON result path."
+        # The public GitLab example writes this fixed path inside an isolated CI job.
+        "--result",
+        default="/tmp/ocr-result.json",  # nosec B108
+        help="OCR JSON result path.",
     )
-    post_parser.add_argument("--stderr", default="/tmp/ocr-stderr.log", help="OCR stderr log path.")
+    post_parser.add_argument(
+        # The file contains only the current job's OCR stderr and is never shared.
+        "--stderr",
+        default="/tmp/ocr-stderr.log",  # nosec B108
+        help="OCR stderr log path.",
+    )
     return parser
 
 

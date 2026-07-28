@@ -15,9 +15,9 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M0 Foundation
 
-### BL-001: Add Bandit as a repository security gate
+### Completed in M0: Add Bandit as a repository security gate
 
-- **Status:** ready
+- **Status:** completed; retained here until the 0.3.0 release closes
 - **Priority:** high
 - **Roadmap theme:** M0 Foundation
 - **Dependencies:** Existing isolated quality environment and security workflow.
@@ -29,9 +29,9 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Validation:** Positive and negative synthetic fixtures where configuration needs proof, complete quality gate, and security workflow dry run or equivalent command.
 - **Release classification expectation:** `no-release`, unless remediation changes user-visible behavior.
 
-### BL-002: Centralize OCR compatibility in a machine-readable manifest
+### Completed in M0: Centralize OCR compatibility in a machine-readable manifest
 
-- **Status:** ready
+- **Status:** completed; retained here until the 0.3.0 release closes
 - **Priority:** high
 - **Roadmap theme:** M0 Foundation
 - **Dependencies:** Current recommended/tested OCR baseline and preflight checks.
@@ -43,7 +43,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Validation:** Contract fixtures for supported, additive, malformed, and incompatible OCR outputs plus release-pin consistency tests.
 - **Release classification expectation:** `release-required`.
 
-### BL-003: Detect and qualify upstream OCR release candidates
+### Completed in M0: Detect and qualify upstream OCR release candidates
 
 - **Status:** planned
 - **Priority:** high
@@ -61,7 +61,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ### BL-004: Define the common repository evidence model
 
-- **Status:** ready
+- **Status:** completed; retained here until the 0.3.0 release closes
 - **Priority:** high
 - **Roadmap theme:** M1 Evidence architecture
 - **Dependencies:** Existing bounded context and repository-ref contracts.
