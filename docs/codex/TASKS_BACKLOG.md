@@ -2,7 +2,7 @@
 
 This file contains implementation-ready future work derived from the [toolkit strategy](../engineering/toolkit_strategy.md) and ordered by the [roadmap](../../ROADMAP.md). Active execution belongs in `PLANS.md`; roadmap outcomes are intentionally not repeated here.
 
-Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Release classification is an expectation to be confirmed when work is activated.
+Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Release classification is an expectation to be confirmed when work is activated. Completed work is recorded in `PLANS.md` and the roadmap rather than retained as future backlog.
 
 ## Existing backlog reconciliation
 
@@ -13,59 +13,15 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Additional provider adapters | Retained, clarified, and reprioritized | BL-021 is explicitly about code-hosting and review-host adapters beyond GitLab, not repository ecosystem/framework evidence. |
 | File-based user configuration | Retained and redesigned | BL-020 waits for profile, MCP, and evidence schemas while preserving environment precedence and excluding secrets. |
 
-## M0 Foundation
-
-### Completed in M0: Add Bandit as a repository security gate
-
-- **Status:** completed; retained here until the 0.3.0 release closes
-- **Priority:** high
-- **Roadmap theme:** M0 Foundation
-- **Dependencies:** Existing isolated quality environment and security workflow.
-- **Activation trigger:** Strategy and backlog documentation is merged.
-- **Goal:** Detect high-signal Python security defects in the toolkit without turning analyzers into a downstream product capability.
-- **Scoped deliverables:** Add a development-only pinned Bandit dependency; scan `src/ocr_toolkit`; integrate concise execution with `scripts/quality.sh` and the repository security workflow; document narrow, justified suppressions.
-- **Acceptance criteria:** Local and CI scans use identical configuration, produce no unexplained findings, keep full logs out of agent context, and add no runtime dependency.
-- **Exclusions:** Scanning downstream repositories, auto-fixing findings, broad ignore lists, or treating Bandit as evidence supplied to OCR.
-- **Validation:** Positive and negative synthetic fixtures where configuration needs proof, complete quality gate, and security workflow dry run or equivalent command.
-- **Release classification expectation:** `no-release`, unless remediation changes user-visible behavior.
-
-### Completed in M0: Centralize OCR compatibility in a machine-readable manifest
-
-- **Status:** completed; retained here until the 0.3.0 release closes
-- **Priority:** high
-- **Roadmap theme:** M0 Foundation
-- **Dependencies:** Current recommended/tested OCR baseline and preflight checks.
-- **Activation trigger:** The next OCR compatibility change or before evidence MCP depends on an OCR capability.
-- **Goal:** Replace scattered exact-version assumptions with one reviewed compatibility and capability source.
-- **Scoped deliverables:** Define a dependency-free manifest for one recommended production release, the tested support set, required capabilities, and explicitly reviewed incompatible releases; centralize version/capability inspection; generate or validate documentation and CI pins from it; fail closed when required contracts disappear. Observed upstream candidates remain workflow evidence until a reviewed change promotes them into the manifest.
-- **Acceptance criteria:** Preflight, public examples, tests, and documentation agree with the manifest; recommended, tested, observed, and incompatible states cannot be conflated; additive version output remains tolerated; unknown or missing required capabilities fail with actionable errors.
-- **Exclusions:** Automatic production upgrades, downloading OCR, or supporting arbitrary historical releases.
-- **Validation:** Contract fixtures for supported, additive, malformed, and incompatible OCR outputs plus release-pin consistency tests.
-- **Release classification expectation:** `release-required`.
-
-### Completed in M0: Detect and qualify upstream OCR release candidates
-
-- **Status:** planned
-- **Priority:** high
-- **Roadmap theme:** M0 Foundation
-- **Dependencies:** BL-002.
-- **Activation trigger:** BL-002 defines the manifest states, required capabilities, and reusable compatibility probes.
-- **Goal:** Discover every unseen stable upstream release, produce reproducible compatibility evidence, and route it to human impact review without changing production support claims.
-- **Scoped deliverables:** Add a daily and manually dispatchable workflow that enumerates all stable releases newer than the newest reviewed manifest entry instead of checking only `latest`; process candidates oldest-first under bounded count, download-size, retry, and timeout limits; reject drafts, prereleases, unexpected tags, missing assets, and malformed checksum manifests; cross-check GitHub asset digests with the signed-in API response and official checksum manifest before executing the runner-platform binary; run dependency-free offline probes for version identity, required commands/flags, help/config surface, and preview behavior in a synthetic repository; run result-schema and adapter contract fixtures for the supported set; archive normalized release metadata, notes, probe results, runner platform, and digests as an artifact; open or update one marker-keyed GitHub issue per candidate with machine evidence and a mandatory human classification checklist.
-- **Acceptance criteria:** Intermediate releases cannot be skipped; reruns are idempotent and do not duplicate issues; issue content includes only bounded normalized metadata, probe results, and links rather than copied release notes; upstream metadata is treated as untrusted text and never interpolated into shell or workflow expressions; a passing probe is scoped to its actual runner platform and labels only a candidate as machine-tested, not compatible or recommended; human review records one of `compatible`, `compatible-with-toolkit-change`, `incompatible`, or `unknown`, with changelog impact and required follow-up; no workflow path edits the manifest, CI pin, checksum, documentation, tag, release, or package registry.
-- **Exclusions:** Automatic semantic changelog classification, automatic manifest or production-pin updates, automatic pull requests or merges, executing unverified assets, real LLM/provider calls, external repository data, or claiming platform coverage that was not actually exercised.
-- **Validation:** Recorded synthetic GitHub release pages containing multiple unseen versions, pagination, reruns, drafts/prereleases, invalid tags, missing/oversized assets, checksum mismatch, malicious release text, probe regression, issue deduplication, and no-change behavior; workflow permissions and shell-safety checks; successful manual dry run against official metadata with writes disabled.
-- **Release classification expectation:** `no-release`; subsequent compatibility bumps are classified separately.
-
 ## M1 Evidence architecture
 
 ### BL-004: Define the common repository evidence model
 
-- **Status:** completed; retained here until the 0.3.0 release closes
+- **Status:** ready
 - **Priority:** high
 - **Roadmap theme:** M1 Evidence architecture
 - **Dependencies:** Existing bounded context and repository-ref contracts.
-- **Activation trigger:** M0 planning sources are merged.
+- **Activation trigger:** M0 is established and its planning sources are reconciled.
 - **Goal:** Give all collectors and projections one deterministic representation of repository facts.
 - **Scoped deliverables:** Define dependency-free, schema-versioned evidence types for kind/typed value, source path, git ref, component scope, provenance, confidence, trust/sensitivity class, and optional staleness; specify stable identity, ordering, deduplication, redaction-before-storage, and global/per-kind bounds.
 - **Acceptance criteria:** Existing context facts can be represented without losing trust or origin; raw secrets cannot enter the evidence store or serialized projections; unknown kinds/versions and malformed or over-limit facts degrade explicitly; serialization is deterministic and backward-readable across the supported schema set.
@@ -106,7 +62,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Status:** planned
 - **Priority:** high
 - **Roadmap theme:** M1 Evidence architecture
-- **Dependencies:** BL-002, BL-004 through BL-006, and current MCP validation.
+- **Dependencies:** Current OCR compatibility manifest, BL-004 through BL-006, and current MCP validation.
 - **Activation trigger:** Evidence collection and selection are projection-independent, and the supported OCR capability contract can validate MCP registration before review.
 - **Goal:** Replace large background inventories with a compact trusted overview while preserving on-demand access to every removed evidence class.
 - **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; retain `legacy_background` as compatibility and rollback mode; enable `compact_bootstrap` by default only after built-in MCP registration and capability validation succeed.
@@ -240,7 +196,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
-- **Dependencies:** BL-002 and BL-007.
+- **Dependencies:** Current OCR compatibility manifest and BL-007.
 - **Activation trigger:** Profile model and limit differences can be documented without changing per-tool routing.
 - **Goal:** Offer `economy`, `standard`, and `strong` choices for one OCR review run.
 - **Scoped deliverables:** Define explicit profile configuration selecting a run-level model and a documented closed set of existing OCR limits; publish the effective profile without credentials; validate profile/model availability through the compatibility contract, environment precedence, and rendered effective configuration.

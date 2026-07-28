@@ -45,5 +45,6 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Publication can stop before a stable release only when the user explicitly defers it. Record the deferral reason, target version, completed checkpoints, and exact resume action in `PLANS.md`; do not mark the release objective completed.
 - Before handoff, reconcile the promised outcome against external state rather than local files alone: read PyPI/TestPyPI versions, GitHub tag/Release, Actions conclusions, and artifact attestations when those systems are in scope.
 - Before staging or committing, update `PLANS.md` and promoted backlog items to post-commit truth.
+- When a milestone or release closes, reconcile every status-bearing representation in the same closure change: `PLANS.md`, roadmap table and diagram, and backlog. Remove only work proven complete by the merged implementation and validation evidence, preserve unfinished work even when it was previously grouped into the closing plan, and ensure diagram labels and status colors agree.
 - Run `git diff --check` and the validation appropriate to the changed subsystem.
 - Compact or archive completed plan detail only after validation and handoff are recorded.

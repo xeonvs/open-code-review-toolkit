@@ -3,15 +3,26 @@
 This roadmap describes ordered outcomes rather than release dates. Architecture direction lives in the [toolkit strategy](docs/engineering/toolkit_strategy.md); implementation-ready inactive work lives in the [backlog](docs/codex/TASKS_BACKLOG.md); current execution lives in [PLANS.md](PLANS.md).
 
 Status vocabulary: **established** means the documented foundation exists, **next** is the nearest implementation horizon, **planned** has defined dependencies, and **conditional** requires its activation signal.
+The diagram uses the same statuses as colors: green for established, blue for next, gray for planned, and amber for conditional. A milestone spanning two phases uses the earliest actionable status color while retaining both phases in its label.
 
 ```mermaid
 flowchart LR
-    M0["M0 Foundation<br/>established / next"] --> M1["M1 Evidence architecture<br/>next"]
+    M0["M0 Foundation<br/>established"] --> M1["M1 Evidence architecture<br/>next"]
     M0 --> M3["M3 External MCP hardening<br/>next / planned"]
     M1 --> M2["M2 Ecosystem and framework coverage<br/>planned"]
     M1 --> M4["M4 Policy and project guidance<br/>planned"]
     M1 --> M5["M5 Profiles and quality measurement<br/>planned"]
     M5 --> M6["M6 Later and conditional work<br/>conditional"]
+
+    classDef established fill:#1f883d,stroke:#116329,color:#ffffff
+    classDef next fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef planned fill:#57606a,stroke:#424a53,color:#ffffff
+    classDef conditional fill:#9a6700,stroke:#7d4e00,color:#ffffff
+
+    class M0 established
+    class M1,M3 next
+    class M2,M4,M5 planned
+    class M6 conditional
 ```
 
 | Milestone | Status | Intended outcome | Major dependency | Completion signal |
