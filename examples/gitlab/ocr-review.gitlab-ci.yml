@@ -68,8 +68,10 @@ open_code_review:
     - ocr-ci preflight
     - ocr-ci configure
     - ocr-ci mcp-config
-    - REVIEW_BACKGROUND_FILE=".review-context/dependencies.md"
-    - ocr-ci context --output "${REVIEW_BACKGROUND_FILE}"
+    - REVIEW_BACKGROUND_FILE=".review-context/bootstrap.md"
+    - OCR_EVIDENCE_STORE_PATH=".review-context/evidence.json"
+    - export OCR_EVIDENCE_STORE_PATH
+    - ocr-ci evidence-build --store "${OCR_EVIDENCE_STORE_PATH}" --bootstrap "${REVIEW_BACKGROUND_FILE}"
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
     - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --background-file "${REVIEW_BACKGROUND_FILE}" --rule examples/gitlab/rules.json --format json || export OCR_EXIT_CODE=$?
     - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log

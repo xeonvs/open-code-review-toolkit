@@ -14,6 +14,8 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 - Human replies are ownership boundaries: automation must not rewrite or resolve a discussion after a human takes part.
 - Merge-request source SHA and merge-result SHA remain distinct.
 
+The evidence engine reads exact base/head Git objects without checkout, refuses symlinks and submodules, stores redacted typed records in owner-only files, and exposes them through a closed read-only MCP tool with bounded requests, responses, filters, and pagination. Target/base guidance may describe policy; changed source/head guidance and accepted decisions cannot authorize the review that introduces them. The compact bootstrap carries only refs, coverage, counts, diagnostics, and MCP usage instructions; detailed values remain in the evidence store.
+
 ## Deployment guidance
 
 Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.

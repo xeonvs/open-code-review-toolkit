@@ -1594,11 +1594,13 @@ class RuleCoverageTests(unittest.TestCase):
         ]
 
         self.assertIn(
-            'REVIEW_BACKGROUND_FILE=".review-context/dependencies.md"',
+            'REVIEW_BACKGROUND_FILE=".review-context/bootstrap.md"',
             review_block,
         )
         self.assertEqual(review_block.count("--background-file"), 1)
-        self.assertNotIn("cat .review-context/dependencies.md", review_block)
+        self.assertNotIn("cat .review-context/bootstrap.md", review_block)
+        self.assertIn("ocr-ci evidence-build", review_block)
+        self.assertIn('OCR_EVIDENCE_STORE_PATH=".review-context/evidence.json"', review_block)
 
     def test_lint_job_is_required_in_merge_request_pipeline(self) -> None:
         ci_text = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
@@ -1621,7 +1623,7 @@ class RuleCoverageTests(unittest.TestCase):
     def test_ci_does_not_run_ocr_helper_regressions_by_default(self) -> None:
         ci_text = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         helper_test = "uv run pytest tests"
-        context_generation = "ocr-ci context"
+        context_generation = "ocr-ci evidence-build"
         token_export = "export OCR_LLM_TOKEN="
 
         self.assertIn(helper_test, ci_text)

@@ -31,9 +31,9 @@ Repository-maintenance analyzers such as Bandit remain valid quality controls fo
 
 ## Current state
 
-The current context implementation is a bounded Markdown generator rather than an evidence engine. It already detects changed-file categories, reads selected manifests, extracts Python, JavaScript, Go, PHP, Ansible, container, and GitLab CI facts, and includes target-branch-safe project guidance and accepted decisions. It redacts sensitive values, limits reads and output, and degrades explicitly when evidence is incomplete.
+The M1 implementation provides a schema-versioned Repository Evidence Engine with bounded immutable base/head reads, typed dependency/runtime/image/guidance records and deltas, redaction-before-storage, a compact bootstrap, and the built-in read-only `ocr_toolkit_evidence` MCP server. MCP configuration registers that server alongside reviewed external stdio or remote servers with explicit tool allowlists.
 
-These capabilities are partial foundations: most facts are rendered directly, dependency versions primarily reflect declarations rather than resolved source/target state, and `context/render.py` still combines collection, prioritization, and presentation. MCP configuration currently validates and installs external stdio servers with explicit tool allowlists; the toolkit does not yet provide a built-in evidence MCP.
+The legacy bounded Markdown renderer remains temporarily isolated as a parity projection while characterization and end-to-end checks prove semantic retention. It is not a source for typed facts and is removed with its CLI/environment contract after those gates pass.
 
 GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
 
