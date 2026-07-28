@@ -19,7 +19,7 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 
 1. [x] Update the effective local OCR binary to verified upstream v1.8.0 while retaining a rollback copy.
 2. [x] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.
-3. [ ] Implement the dependency-free evidence schema, bounded store, redaction-before-storage, deterministic identities, and serialization (BL-004).
+3. [x] Implement the dependency-free evidence schema, bounded store, redaction-before-storage, deterministic identities, and serialization (BL-004).
 4. [ ] Adapt existing collectors to emit evidence while retaining a temporary legacy projection for semantic parity (BL-005).
 5. [ ] Implement immutable base/head snapshots and typed repository deltas with explicit missing, rename, deletion, symlink, submodule, and shallow-clone behavior (BL-006).
 6. [ ] Add compact bootstrap and deterministic JSON projections.
@@ -37,6 +37,7 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 - Semantic parity compares facts, trust, ref, component, and provenance rather than exact Markdown. Any unexplained divergence starts another analysis, implementation, test, and review cycle.
 - Final validation includes unit, contract, adversarial, packaging, clean-install, protocol, subprocess MCP, source/head snapshot, failure-mode, and real OCR v1.8.0 E2E checks.
 - Baseline before M1 runtime changes: 368 tests and 41 subtests passed. OCR v1.8.0 structured skip, clean result, subtask error, severity, and category contracts are pinned in synthetic fixtures sourced from upstream tag v1.8.0. Existing context regression coverage remains the legacy behavior baseline.
+- BL-004 evidence model validation: 17 focused evidence/OCR contract tests pass; Ruff and mypy pass. Self-review added strict unknown-field rejection, mapping-key redaction, sensitivity promotion, and deduplication that supports structured JSON values. The v0.4.0 Towncrier draft was rendered successfully, and fragment authoring guidance now covers grouped related outcomes without using the changelog as a backlog.
 
 ### Release Deferral And Closure
 
