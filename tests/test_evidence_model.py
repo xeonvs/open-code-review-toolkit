@@ -112,6 +112,18 @@ def test_store_redacts_sensitive_mapping_keys() -> None:
     assert store.records[0].sensitivity.value == "redacted"
 
 
+def test_store_does_not_change_existing_parent_permissions(tmp_path: Path) -> None:
+    """Keep caller-owned shared artifact directories unchanged."""
+
+    parent = tmp_path / "shared-artifacts"
+    parent.mkdir(mode=0o755)
+    parent.chmod(0o755)
+
+    EvidenceStore().write(parent / "evidence.json")
+
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o755
+
+
 def test_store_deduplicates_and_reports_deterministic_limits() -> None:
     """Omit over-budget facts explicitly without corrupting accepted records."""
 

@@ -466,6 +466,14 @@ class MCPConfigTests(unittest.TestCase):
         with self.assertRaises(mcp_config.MCPConfigError):
             mcp_config.parse_mcp_servers(raw)
 
+    def test_parse_rejects_the_reserved_builtin_server_name(self) -> None:
+        raw = json.dumps(
+            {mcp_config.BUILTIN_EVIDENCE_SERVER: {"command": "synthetic-override"}}
+        )
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
+            mcp_config.parse_mcp_servers(raw)
+
     def test_configure_mcp_servers_writes_config_without_subprocess(self) -> None:
         raw = json.dumps(
             {
@@ -503,6 +511,10 @@ class MCPConfigTests(unittest.TestCase):
         self.assertEqual(config["mcp_servers"]["remote"]["command"], "bridge")
         self.assertEqual(config["mcp_servers"]["remote"]["setup"], "")
         self.assertEqual(config["mcp_servers"]["remote"]["env"], ["AUTH=bridge-secret-value"])
+        self.assertEqual(
+            config["mcp_servers"][mcp_config.BUILTIN_EVIDENCE_SERVER]["tools"],
+            ["ocr_toolkit_evidence"],
+        )
 
     def test_configure_mcp_servers_replaces_stale_servers(self) -> None:
         raw = json.dumps(
@@ -536,9 +548,11 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(set(config["mcp_servers"]), {"fresh"})
+        self.assertEqual(
+            set(config["mcp_servers"]), {"fresh", mcp_config.BUILTIN_EVIDENCE_SERVER}
+        )
 
-    def test_configure_mcp_servers_clears_config_when_disabled(self) -> None:
+    def test_configure_mcp_servers_replaces_external_config_with_builtin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             old_home = os.environ.get("HOME")
             os.environ["HOME"] = tmp
@@ -559,7 +573,7 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(config["mcp_servers"], {})
+        self.assertEqual(set(config["mcp_servers"]), {mcp_config.BUILTIN_EVIDENCE_SERVER})
 
     def test_configure_mcp_servers_merges_existing_servers_by_default(self) -> None:
         raw = json.dumps({"local": {"command": "new", "args": []}})
@@ -579,7 +593,10 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(set(config["mcp_servers"]), {"local", "stale"})
+        self.assertEqual(
+            set(config["mcp_servers"]),
+            {"local", "stale", mcp_config.BUILTIN_EVIDENCE_SERVER},
+        )
 
     def test_configure_native_remote_server_does_not_print_url_or_secret(self) -> None:
         raw = json.dumps(

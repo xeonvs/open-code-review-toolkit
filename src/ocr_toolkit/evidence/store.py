@@ -206,8 +206,12 @@ class EvidenceStore:
     def write(self, path: Path) -> None:
         """Atomically write a private store without exposing a partial file."""
 
+        parent_created = not path.parent.exists()
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(path.parent, 0o700)
+        # Do not mutate a caller-owned shared ancestor such as /tmp or the
+        # repository root. Newly created artifact directories remain private.
+        if parent_created:
+            os.chmod(path.parent, 0o700)
         fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
         try:
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)

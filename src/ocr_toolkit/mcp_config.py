@@ -12,6 +12,7 @@ from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, read_ocr_config, update_ocr_config
+from ocr_toolkit.evidence.mcp import TOOL_NAME
 
 MAX_MCP_CONFIG_BYTES = 64_000
 MAX_MCP_SERVERS = 16
@@ -33,6 +34,8 @@ SENSITIVE_HEADER_NAME_RE = re.compile(
 )
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off", ""}
+BUILTIN_EVIDENCE_SERVER = "ocr_toolkit_evidence"
+DEFAULT_EVIDENCE_STORE_PATH = ".review-context/evidence.json"
 
 
 class MCPConfigError(Exception):
@@ -300,6 +303,10 @@ def parse_mcp_servers(raw: str | None = None) -> list[MCPServerConfig]:
             raise MCPConfigError(f"servers[{index}].name is invalid")
         if name in seen:
             raise MCPConfigError(f"duplicate MCP server name {name!r}")
+        if name == BUILTIN_EVIDENCE_SERVER:
+            raise MCPConfigError(
+                f"MCP server name {BUILTIN_EVIDENCE_SERVER!r} is reserved by the toolkit"
+            )
         seen.add(name)
         transport = server.get("type", "stdio")
         if transport not in {"stdio", "remote"}:
@@ -401,23 +408,30 @@ def configure_mcp_servers() -> int:
         print(f"Invalid OCR MCP configuration: {redact_sensitive(str(exc))}", file=sys.stderr)
         return 1
 
-    if not servers:
-        try:
-            if replace:
-                update_ocr_config({"mcp_servers": {}})
-        except OCRConfigError as exc:
-            print(
-                f"Failed to clear OCR MCP servers: {redact_sensitive(str(exc))}",
-                file=sys.stderr,
-            )
-            return 1
-        if replace:
-            print("OCR MCP servers: none configured; existing servers cleared")
-        else:
-            print("OCR MCP servers: none configured; existing servers preserved")
-        return 0
+    evidence_store = os.environ.get("OCR_EVIDENCE_STORE_PATH", DEFAULT_EVIDENCE_STORE_PATH)
+    if not evidence_store or len(evidence_store) > MAX_MCP_STRING_CHARS:
+        print("Invalid OCR MCP configuration: OCR_EVIDENCE_STORE_PATH is invalid", file=sys.stderr)
+        return 1
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in evidence_store):
+        print(
+            "Invalid OCR MCP configuration: OCR_EVIDENCE_STORE_PATH contains control characters",
+            file=sys.stderr,
+        )
+        return 1
 
-    mcp_servers: dict[str, Any] = {}
+    mcp_servers: dict[str, Any] = {
+        BUILTIN_EVIDENCE_SERVER: {
+            "type": "stdio",
+            "command": "ocr-ci",
+            "args": ["evidence-serve", "--store", evidence_store],
+            "env": [],
+            "tools": [TOOL_NAME],
+            "setup": (
+                "Read-only bounded repository evidence. Start with action=summary, "
+                "then narrow with list or fetch one stable ID with get."
+            ),
+        }
+    }
     secret_values: list[str] = []
     for server in servers:
         if server.transport == "stdio":
@@ -452,6 +466,9 @@ def configure_mcp_servers() -> int:
                 existing = {}
             if not isinstance(existing, dict):
                 raise OCRConfigError("OCR config mcp_servers value is not an object")
+            # The generated definition is authoritative on every run. The
+            # public parser rejects this reserved name, while replacing a
+            # previous toolkit-generated value keeps configuration idempotent.
             mcp_servers = {**existing, **mcp_servers}
         update_ocr_config({"mcp_servers": mcp_servers})
     except OCRConfigError as exc:
@@ -471,6 +488,10 @@ def configure_mcp_servers() -> int:
             f"OCR MCP server configured: {server.name} type={server.transport} "
             f"{detail} tools={len(server.tools)}"
         )
+    print(
+        f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} "
+        "type=stdio args=3 env=0 tools=1"
+    )
 
     return 0
 
