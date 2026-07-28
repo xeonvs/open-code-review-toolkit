@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Qualify OCR 1.8.0, add native remote MCP, and release v0.3.1
 
-Status: active; implementation in progress
+Status: active; stable publication reconciled, closure PR in progress
 Owner: Codex
 Last Updated: 2026-07-28
 Tracking Issue: #24
@@ -37,8 +37,8 @@ Human-qualify OCR 1.8.0 from the successful M0 workflow evidence, promote it to 
 6. [x] Run targeted checks, the complete local validation matrix, and three self-review/fix cycles covering architecture/compatibility, security/redaction, and documentation/packaging/release completeness.
 7. [x] Run exactly one final local OCR 1.8.0 review over the complete feature diff, retain ignored evidence, fix every actionable finding, and rerun the deterministic validation matrix without another OCR review.
 8. [x] Update plan/backlog to post-commit truth, create signed feature commits, push the branch, open the non-draft feature PR, resolve review feedback, pass all protected checks, merge, and verify the exact immutable TestPyPI development artifacts, provenance, and smoke installs.
-9. [ ] Create signed `release/v0.3.1` from refreshed `main`, render and verify Towncrier release notes, open the exact-title release PR, pass all gates, merge, and monitor stable TestPyPI/PyPI/tag/immutable GitHub Release publication.
-10. [ ] Reconcile registry, workflow, and GitHub hashes and provenance; smoke-install the wheel on Python 3.10 and hash-locked sdist on Python 3.14; close issues #23 and the tracking issue through a checked documentation-only closure PR.
+9. [x] Create signed `release/v0.3.1` from refreshed `main`, render and verify Towncrier release notes, open the exact-title release PR, pass all gates, merge, and monitor stable TestPyPI/PyPI/tag/immutable GitHub Release publication.
+10. [x] Reconcile registry, workflow, and GitHub hashes and provenance; smoke-install the wheel on Python 3.10 and hash-locked sdist on Python 3.14; close issues #23 and the tracking issue through a checked documentation-only closure PR.
 
 ### Release Gates
 
@@ -55,6 +55,7 @@ Human-qualify OCR 1.8.0 from the successful M0 workflow evidence, promote it to 
 - Three self-review cycles fixed merge-vs-replace MCP semantics, private artifact race/permissions, remote field and control-character bounds, ruleset coverage, stale artifact-dependent tests, and repeated quality-environment mutation. The quality wrapper now repairs an interrupted missing-`RECORD` install only inside its disposable environment, syncs once, and runs all tools with `--no-sync`; its focused 366-test run is warning-free.
 - The one permitted complete local OCR review used the checksum-verified OCR 1.8.0 Darwin arm64 binary and the toolkit's `ocr-ci review` path against a disposable index containing all 24 changed files. No GitLab command or credential was used. OCR returned success with six actionable findings; all were repaired: visible quality-sync failures, broader credential-header rejection, environment-secret and URL bounds, regular-file/hard-link/FIFO artifact validation, and same-inode output separation. Post-review deterministic validation passes with 368 tests plus 41 subtests, compatibility validation/discovery, lockfile, Towncrier draft, build/Twine, minimal artifact inspection, Python 3.10/3.14 wheel smoke installs, and `git diff --check`; no second OCR review was run.
 - Feature PR #25 merged as protected-main squash `4513956` after every required CI, security, dependency, build, and CodeQL check passed with no review threads. TestPyPI workflow run `30350463053` then built, published, provenance-attested, hash-verified, and wheel/sdist smoke-installed immutable `0.3.0.dev18`. That version reflects the pre-release `.next-version` state inherited from 0.3.0; this release PR advances the stable authorization and next development line to 0.3.1.
+- Release PR #26 merged as protected-main squash `035864d`; release workflow run `30351032061` published and verified the same bytes on TestPyPI and PyPI, then created annotated tag `v0.3.1` targeting that merge and an immutable GitHub Release. Wheel SHA-256 is `d37233e0f8736418f69b5a26fe1342dbed7b0c16a75962ce7f98200cfd9a71ee`; sdist SHA-256 is `aa403ec1b4bc052ae6d3a97980e81bc356e3513dd196cdb37f51488028c1452e`. Registry and GitHub hashes agree, both artifacts have release-workflow provenance bound to `035864d`, and fresh local smoke installs passed for the wheel on Python 3.10 and sdist on Python 3.14. Issue #23 is closed; closure of tracking issue #24 is carried by this documentation-only PR.
 
 ## Completed Plan: Complete M0 foundation and release v0.3.0
 
