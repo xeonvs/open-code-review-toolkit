@@ -159,6 +159,10 @@ def test_collector_and_projections_preserve_legacy_context(
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.context" for record in store.records)
+    assert not any(
+        record.provenance.startswith("legacy.") and record.kind != "repository.context"
+        for record in store.records
+    )
     assert "# Repository evidence bootstrap" in bootstrap
     assert "ocr_toolkit_evidence" in bootstrap
     assert "legacy-background.md" not in bootstrap
