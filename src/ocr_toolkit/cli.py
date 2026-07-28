@@ -12,6 +12,7 @@ from ocr_toolkit import configure, mcp_config, preflight, review_runner
 from ocr_toolkit.context import render as context_render
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.mcp import serve as serve_evidence
+from ocr_toolkit.evidence.parity import compare_legacy_projection, render_parity_json
 from ocr_toolkit.evidence.project import render_bootstrap, render_json
 from ocr_toolkit.posting.workflow import main as posting_main
 
@@ -58,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
         "evidence-serve", help="Serve one private evidence store through read-only MCP."
     )
     evidence_serve.add_argument("--store", required=True, help="Private evidence JSON path.")
+    evidence_parity = subparsers.add_parser(
+        "evidence-parity", help="Compare temporary legacy facts with typed evidence."
+    )
+    evidence_parity.add_argument("--store", required=True, help="Private evidence JSON path.")
 
     post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
     post_parser.add_argument(
@@ -103,6 +108,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "evidence-serve":
         return serve_evidence(Path(args.store))
+    if args.command == "evidence-parity":
+        from ocr_toolkit.evidence.store import EvidenceStore
+
+        store = EvidenceStore.read(Path(args.store))
+        report = render_parity_json(store)
+        sys.stdout.write(report)
+        return 0 if compare_legacy_projection(store).complete else 1
     if args.command == "post":
         return posting_main([args.result, args.stderr])
     raise AssertionError(f"unhandled command: {args.command}")

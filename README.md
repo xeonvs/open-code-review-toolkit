@@ -17,7 +17,7 @@ ocr-ci --help
 
 The current compatibility target is OCR `1.8.0`. CI should pin the release and verify its published checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
-Review output defaults to English. Set `OCR_REVIEW_LANGUAGE=Russian` to use Russian consistently in OCR configuration and review guidance.
+Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
 

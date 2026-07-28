@@ -21,7 +21,10 @@ from ocr_toolkit.evidence.model import (
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 
 MAX_MANIFEST_ITEMS = 512
-REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9_.-]+)\s*(?:===|==|~=|>=|<=|!=|>|<)\s*([^;\s]+)")
+REQUIREMENT_RE = re.compile(
+    r"^([A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?)\s*"
+    r"(?:===|==|~=|>=|<=|!=|>|<)\s*([^;\s]+)"
+)
 IMAGE_LINE_RE = re.compile(r"^\s*image\s*:\s*['\"]?([^'\"\s#]+)")
 ANSIBLE_NAME_RE = re.compile(r"^\s*-?\s*name\s*:\s*['\"]?([^'\"#\s]+)")
 ANSIBLE_VERSION_RE = re.compile(r"^\s*version\s*:\s*['\"]?([^'\"#\s]+)")
@@ -98,6 +101,27 @@ def _parse_pyproject(text: str) -> list[ManifestFact]:
                         _dependency("dependency.declared", "python", name, version, "project")
                     )
     tool = data.get("tool") if isinstance(data, dict) else None
+    dependency_groups = data.get("dependency-groups") if isinstance(data, dict) else None
+    if isinstance(dependency_groups, dict):
+        for group_name, dependencies in sorted(dependency_groups.items()):
+            if not isinstance(dependencies, list):
+                continue
+            for value in dependencies[:MAX_MANIFEST_ITEMS]:
+                if not isinstance(value, str):
+                    continue
+                match = REQUIREMENT_RE.match(value)
+                name = match.group(1) if match else value.split(";", 1)[0].strip()
+                version = match.group(2) if match else value
+                if name:
+                    facts.append(
+                        _dependency(
+                            "dependency.declared",
+                            "python",
+                            name,
+                            version,
+                            f"group:{group_name}",
+                        )
+                    )
     poetry = tool.get("poetry") if isinstance(tool, dict) else None
     if isinstance(poetry, dict):
         dependencies = poetry.get("dependencies")

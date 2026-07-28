@@ -16,7 +16,7 @@ Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-c
 
 Store secrets as masked, protected CI variables. Do not place them in YAML, command arguments, evidence artifacts, or the generated bootstrap. Posting deliberately does not accept a GitLab job token.
 
-`OCR_REVIEW_LANGUAGE` is an optional non-secret OCR configuration setting. It defaults to `English`; set `Russian` for Russian review output.
+`OCR_REVIEW_LANGUAGE` is an optional non-secret OCR configuration setting and defaults to `English`. Set an explicit language name only when localized review output is required; `Russian` is one example.
 
 ## Operating model
 

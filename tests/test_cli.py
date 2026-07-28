@@ -29,6 +29,10 @@ class CliTests(unittest.TestCase):
             parser.parse_args(["evidence-serve", "--store", "evidence.json"]).command,
             "evidence-serve",
         )
+        self.assertEqual(
+            parser.parse_args(["evidence-parity", "--store", "evidence.json"]).command,
+            "evidence-parity",
+        )
         self.assertEqual(parser.parse_args(["post"]).command, "post")
 
     def test_context_dispatch_forwards_output(self) -> None:

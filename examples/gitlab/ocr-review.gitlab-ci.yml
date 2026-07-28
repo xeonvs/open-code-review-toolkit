@@ -15,7 +15,7 @@ variables:
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"
-  # Reviews default to English. To request Russian, set:
+  # Reviews default to English. To request another language, for example Russian, set:
   # OCR_REVIEW_LANGUAGE: "Russian"
 
 lint:
