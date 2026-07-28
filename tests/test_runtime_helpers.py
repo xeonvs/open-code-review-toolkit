@@ -284,6 +284,133 @@ class MCPConfigTests(unittest.TestCase):
         self.assertEqual(servers[0].args, ["https://mcp.example/sse"])
         self.assertIn("AUTH_TOKEN=secret-token", servers[0].env)
         self.assertIn("MODE=readonly", servers[0].env)
+        self.assertEqual(servers[0].transport, "stdio")
+
+    def test_parse_native_remote_server_with_env_backed_header(self) -> None:
+        raw = json.dumps(
+            {
+                "servers": [
+                    {
+                        "name": "remote",
+                        "type": "remote",
+                        "url": "https://mcp.synthetic.invalid/v1/mcp?tenant=alpha",
+                        "headers": {"X-Client": "ocr-toolkit"},
+                        "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+                        "tools": ["search"],
+                    }
+                ]
+            }
+        )
+
+        with patched_env(SYNTHETIC_MCP_TOKEN="remote-secret-value"):
+            servers = mcp_config.parse_mcp_servers(raw)
+
+        self.assertEqual(servers[0].transport, "remote")
+        self.assertEqual(servers[0].url, "https://mcp.synthetic.invalid/v1/mcp?tenant=alpha")
+        self.assertEqual(
+            servers[0].headers,
+            {"X-Client": "ocr-toolkit", "Authorization": "$SYNTHETIC_MCP_TOKEN"},
+        )
+        self.assertEqual(servers[0].secret_values, ["remote-secret-value"])
+
+    def test_native_remote_server_rejects_unsafe_url_and_transport_fields(self) -> None:
+        invalid_servers = (
+            {"name": "remote", "type": "remote", "url": "http://mcp.invalid"},
+            {"name": "remote", "type": "remote", "url": "https://mcp.invalid/v1\nnext"},
+            {"name": "remote", "type": "remote", "url": "https://user@mcp.invalid/v1"},
+            {"name": "remote", "type": "remote", "url": "https://mcp.invalid/v1#secret"},
+            {
+                "name": "remote",
+                "type": "remote",
+                "url": "https://mcp.invalid/v1",
+                "command": "proxy",
+            },
+            {
+                "name": "local",
+                "type": "stdio",
+                "command": "local",
+                "url": "https://mcp.invalid",
+            },
+        )
+        for server in invalid_servers:
+            with self.subTest(server=server), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [server]}))
+
+    def test_native_remote_server_rejects_unsafe_headers(self) -> None:
+        cases = (
+            {"Authorization": "Bearer literal-secret"},
+            {"X-Auth": "literal-secret"},
+            {"X-Api-Key": "literal-secret"},
+            {"Ocp-Apim-Subscription-Key": "literal-secret"},
+            {"X-Test": "line-one\r\nInjected: value"},
+        )
+        for headers in cases:
+            raw = json.dumps(
+                {
+                    "servers": [
+                        {
+                            "name": "remote",
+                            "type": "remote",
+                            "url": "https://mcp.invalid/v1",
+                            "headers": headers,
+                        }
+                    ]
+                }
+            )
+            with self.subTest(headers=headers), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(raw)
+
+    def test_native_remote_server_rejects_duplicate_and_missing_env_headers(self) -> None:
+        duplicate = {
+            "name": "remote",
+            "type": "remote",
+            "url": "https://mcp.invalid/v1",
+            "headers": {"X-Client": "toolkit"},
+            "headers_from": {"x-client": "SYNTHETIC_MCP_TOKEN"},
+        }
+        missing = {
+            "name": "remote",
+            "type": "remote",
+            "url": "https://mcp.invalid/v1",
+            "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+        }
+        with patched_env(SYNTHETIC_MCP_TOKEN="remote-secret-value"):
+            with self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [duplicate]}))
+        with cleared_env("SYNTHETIC_MCP_TOKEN"):
+            with self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [missing]}))
+        with patched_env(SYNTHETIC_MCP_TOKEN="token\r\nInjected: value"):
+            with self.assertRaises(mcp_config.MCPConfigError, msg="header env must reject CRLF"):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [missing]}))
+        with patched_env(SYNTHETIC_MCP_TOKEN="x" * (mcp_config.MAX_MCP_HEADER_VALUE_CHARS + 1)):
+            with self.assertRaises(mcp_config.MCPConfigError, msg="header env must be bounded"):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [missing]}))
+
+    def test_mcp_server_rejects_oversized_individual_fields(self) -> None:
+        cases = (
+            {"name": "local", "command": "x" * (mcp_config.MAX_MCP_STRING_CHARS + 1)},
+            {
+                "name": "local",
+                "command": "tool",
+                "args": ["x" * (mcp_config.MAX_MCP_STRING_CHARS + 1)],
+            },
+            {
+                "name": "remote",
+                "type": "remote",
+                "url": "https://mcp.invalid/v1",
+                "headers": {"X-Context": "x" * (mcp_config.MAX_MCP_HEADER_VALUE_CHARS + 1)},
+            },
+            {
+                "name": "remote",
+                "type": "remote",
+                "url": "https://mcp.invalid/v1",
+                "setup": "x" * (mcp_config.MAX_MCP_SETUP_CHARS + 1),
+            },
+        )
+        for server in cases:
+            with self.subTest(server=server), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps({"servers": [server]}))
 
     def test_parse_documented_named_server_map(self) -> None:
         raw = json.dumps(
@@ -399,7 +526,7 @@ class MCPConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
             try:
-                with patched_env(OCR_MCP_SERVERS_JSON=raw):
+                with patched_env(OCR_MCP_SERVERS_JSON=raw, OCR_MCP_REPLACE="true"):
                     exit_code = mcp_config.configure_mcp_servers()
                 config = json.loads(config_path.read_text(encoding="utf-8"))
             finally:
@@ -422,7 +549,7 @@ class MCPConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
             try:
-                with patched_env(OCR_MCP_SERVERS_JSON=""):
+                with patched_env(OCR_MCP_SERVERS_JSON="", OCR_MCP_REPLACE="true"):
                     exit_code = mcp_config.configure_mcp_servers()
                 config = json.loads(config_path.read_text(encoding="utf-8"))
             finally:
@@ -433,6 +560,66 @@ class MCPConfigTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(config["mcp_servers"], {})
+
+    def test_configure_mcp_servers_merges_existing_servers_by_default(self) -> None:
+        raw = json.dumps({"local": {"command": "new", "args": []}})
+        with tempfile.TemporaryDirectory() as tmp:
+            old_home = os.environ.get("HOME")
+            os.environ["HOME"] = tmp
+            config_path = Path(tmp) / ".opencodereview" / "config.json"
+            try:
+                config_writer.update_ocr_config({"mcp_servers": {"stale": {"command": "old"}}})
+                with patched_env(OCR_MCP_SERVERS_JSON=raw), cleared_env("OCR_MCP_REPLACE"):
+                    exit_code = mcp_config.configure_mcp_servers()
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+            finally:
+                if old_home is None:
+                    os.environ.pop("HOME", None)
+                else:
+                    os.environ["HOME"] = old_home
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(set(config["mcp_servers"]), {"local", "stale"})
+
+    def test_configure_native_remote_server_does_not_print_url_or_secret(self) -> None:
+        raw = json.dumps(
+            {
+                "remote": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1?tenant=secret-query",
+                    "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+                }
+            }
+        )
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            old_home = os.environ.get("HOME")
+            os.environ["HOME"] = tmp
+            try:
+                with (
+                    patched_env(
+                        OCR_MCP_SERVERS_JSON=raw,
+                        SYNTHETIC_MCP_TOKEN="remote-secret-value",
+                    ),
+                    redirect_stdout(stdout),
+                ):
+                    exit_code = mcp_config.configure_mcp_servers()
+                config = json.loads(
+                    (Path(tmp) / ".opencodereview" / "config.json").read_text(encoding="utf-8")
+                )
+            finally:
+                if old_home is None:
+                    os.environ.pop("HOME", None)
+                else:
+                    os.environ["HOME"] = old_home
+
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("secret-query", stdout.getvalue())
+        self.assertNotIn("remote-secret-value", stdout.getvalue())
+        self.assertEqual(
+            config["mcp_servers"]["remote"]["headers"]["Authorization"],
+            "$SYNTHETIC_MCP_TOKEN",
+        )
 
     def test_config_writer_sets_nested_values_with_private_permissions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -485,7 +672,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.17\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.8.0\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

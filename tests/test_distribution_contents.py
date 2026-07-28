@@ -39,3 +39,10 @@ def test_sdist_includes_only_runtime_and_end_user_material() -> None:
 def test_wheel_is_built_only_from_runtime_package() -> None:
     pyproject = PYPROJECT.read_text(encoding="utf-8")
     assert '[tool.hatch.build.targets.wheel]\npackages = ["src/ocr_toolkit"]' in pyproject
+
+
+def test_review_runner_is_inside_the_wheel_runtime_package() -> None:
+    pyproject = PYPROJECT.read_text(encoding="utf-8")
+
+    assert (PROJECT_ROOT / "src/ocr_toolkit/review_runner.py").is_file()
+    assert '[tool.hatch.build.targets.wheel]\npackages = ["src/ocr_toolkit"]' in pyproject

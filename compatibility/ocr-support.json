@@ -1,5 +1,5 @@
 {
-  "monitoring_floor": "1.7.17",
+  "monitoring_floor": "1.8.0",
   "releases": [
     {
       "assets": [
@@ -46,9 +46,27 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.7.17",
       "status": "tested",
       "version": "1.7.17"
+    },
+    {
+      "assets": [
+        {"name": "opencodereview-darwin-amd64", "sha256": "8d16a5fd931d903d531ce9e0b1e9b276dc6e69efbe8e95928b24a82da627328d", "size": 46182128},
+        {"name": "opencodereview-darwin-arm64", "sha256": "997ceabbc276b9f5ef6f74933abd63d6ea3666f14eb6afed90dbb8e11c635c3b", "size": 43916994},
+        {"name": "opencodereview-linux-amd64", "sha256": "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94", "size": 44691618},
+        {"name": "opencodereview-linux-arm64", "sha256": "cebca8cfcdd5d62b2121654a9a4d9b025ef36c935578c2036b59b6a2cc2b269b", "size": 42139810},
+        {"name": "opencodereview-windows-amd64.exe", "sha256": "6146e9e5bfaef8e10a532ce252a0578e92c791a728ba501246901f16f3702b42", "size": 45896704},
+        {"name": "opencodereview-windows-arm64.exe", "sha256": "09065b259cfc057e839ef3bb8f599edccd8a9d8e9bf87667c6dfb5ffca0f221c", "size": 42772480},
+        {"name": "sha256sum.txt", "sha256": "b17db83d6c365dca9ba86f821324111decfe71a3354c4053d8f5eef9bf494cb5", "size": 572}
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.0.json",
+      "evidence_sha256": "207e4cd963f2f78a18e95621cae8a1043d55172be38bb496958aeb8fc9ca5229",
+      "human_conclusion": "Compatible; workflow run 30344510383 and issue #23 verified consumed CLI/JSON contracts. Native remote MCP is adopted in toolkit 0.3.1; other upstream 1.8.0 changes require no toolkit runtime adaptation.",
+      "published_at": "2026-07-28T02:35:58Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.0",
+      "status": "tested",
+      "version": "1.8.0"
     }
   ],
-  "recommended_version": "1.7.17",
+  "recommended_version": "1.8.0",
   "schema_version": 1,
   "upstream_repository": "alibaba/open-code-review"
 }

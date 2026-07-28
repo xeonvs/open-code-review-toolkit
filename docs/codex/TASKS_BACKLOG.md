@@ -175,19 +175,19 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Validation:** Threat model, adversarial MR/issue/page fixtures, Unicode/URL canonicalization, bound tests, and attack-path review.
 - **Release classification expectation:** `no-release` for the threat model alone; automatic detection or public integration behavior is classified separately.
 
-### BL-012: Document current external read-only MCP operation
+### BL-012: Define and validate managed OAuth for remote MCP
 
 - **Status:** ready
 - **Priority:** high
 - **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** BL-011 and the existing external stdio MCP configurator.
-- **Activation trigger:** The external-reference threat model defines safe provider-specific examples.
-- **Goal:** Make the toolkit's existing external MCP capability deployable without waiting for the Repository Evidence Engine.
-- **Scoped deliverables:** Document generic stdio MCP, the HTTP-to-stdio proxy pattern, read-only YouTrack and Confluence configurations, explicit tool allowlists, protected environment injection, setup-command constraints, redaction, limits, and current fail-closed behavior using synthetic hosts and payloads.
-- **Acceptance criteria:** Examples match the current implementation, expose narrow read tools only, keep credentials out of generated files and logs, distinguish configuration from future automatic reference detection, and require no built-in evidence MCP.
-- **Exclusions:** Built-in/external composition, reserved evidence namespaces, external writes, generic URL fetch, documentation mirroring, or issue/page prefetch.
-- **Validation:** Executable synthetic configurations, allowlist/secret/setup failure fixtures, redaction checks, link validation, and documentation contract tests.
-- **Release classification expectation:** `no-release` for documentation-only work.
+- **Dependencies:** Native remote Streamable HTTP and stdio proxy fallback shipped with toolkit 0.3.1, plus BL-011 external-content constraints.
+- **Activation trigger:** A supported provider requires authorization-code OAuth rather than static environment-backed headers, and a reviewed stdio proxy is insufficient for pilot operations.
+- **Goal:** Add a provider-neutral authorization boundary without placing long-lived OAuth material in repository content or OCR config.
+- **Scoped deliverables:** Define authorization-code plus PKCE, browser callback ownership, refresh and revocation, secure token persistence, tenant/resource binding, dynamic-client-registration policy, sanitized audit events, and provider conformance fixtures before selecting an implementation boundary.
+- **Acceptance criteria:** Tokens never enter argv, repository files, generated context, or logs; refresh/revocation and tenant changes fail closed; synthetic static-header and browser-OAuth fixtures preserve native HTTP and stdio fallback.
+- **Exclusions:** Provider SDKs in the zero-dependency runtime, automatic reference discovery, writes, generic web access, or treating a permanent token as OAuth lifecycle support.
+- **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
+- **Release classification expectation:** `release-required` once public authorization behavior is selected.
 
 ### BL-013: Compose external MCP with built-in evidence MCP
 

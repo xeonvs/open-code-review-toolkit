@@ -62,6 +62,7 @@ from ocr_toolkit.posting.settings import (
     post_mode,
     strict_posting,
 )
+from ocr_toolkit.review_runner import read_stderr_excerpt
 
 
 def finalize_posting(config: GitLabConfig, draft_note_ids: list[int]) -> bool:
@@ -707,33 +708,6 @@ def post_llm_provider_failure(
         file=sys.stderr,
     )
     return 1
-
-
-STDERR_PROBE_BYTES = 64 * 1024
-
-
-def read_stderr_excerpt(stderr_path: Path, max_chars: int = 4000) -> str:
-    """Read a bounded, redacted excerpt of an OCR stderr log.
-
-    Reads at most STDERR_PROBE_BYTES so a multi-megabyte stderr does
-    not stress the runner memory. Redaction runs on the full probe
-    BEFORE truncation so a secret bisected by the char limit is still
-    matched against its full environment-value form.
-    """
-
-    if not stderr_path.exists():
-        return ""
-
-    try:
-        with stderr_path.open("rb") as handle:
-            chunk = handle.read(STDERR_PROBE_BYTES)
-    except OSError:
-        return ""
-
-    text = chunk.decode("utf-8", errors="replace").strip()
-    if not text:
-        return ""
-    return redact_sensitive(text)[:max_chars]
 
 
 def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:

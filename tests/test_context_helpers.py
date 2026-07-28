@@ -1775,11 +1775,11 @@ class DocumentationConsistencyTests(unittest.TestCase):
         ci = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         internals = (HELPER_DIR.parents[1] / "docs" / "security.md").read_text(encoding="utf-8")
 
-        self.assertIn('OCR_VERSION: "v1.7.17"', ci)
-        self.assertIn("v1.7.17", docs)
-        self.assertIn("v1.7.17", internals)
+        self.assertIn('OCR_VERSION: "v1.8.0"', ci)
+        self.assertIn("v1.8.0", docs)
+        self.assertIn("v1.8.0", internals)
         self.assertIn(
-            'OCR_SHA256: "ab2fae81796a00dda292def8261bec2203d03f3909673c08219e7c5df5f4feee"',
+            'OCR_SHA256: "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94"',
             ci,
         )
         configuration = (HELPER_DIR.parents[1] / "docs" / "configuration.md").read_text(
@@ -1791,7 +1791,7 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("prevent self-whitelisting", configuration)
         self.assertIn("openai-responses", docs)
         self.assertIn("OCR_MCP_SERVERS_JSON", docs)
-        self.assertIn("stdio bridge", docs)
+        self.assertIn("stdio commands and remote endpoints", docs)
         self.assertIn("manual", docs.lower())
         self.assertIn("trusted contributors", docs.lower())
         self.assertIn("docs/security.md", docs)
