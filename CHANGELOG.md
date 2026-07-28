@@ -1,3 +1,10 @@
+## 0.3.1 - 2026-07-28
+
+### Features
+
+- Qualify Open Code Review 1.8.0 as the tested and recommended baseline, add native HTTPS Streamable HTTP MCP servers with environment-backed headers while preserving stdio fallback, and run OCR through a private-artifact wrapper that emits bounded redacted failure diagnostics to CI logs without posting. Repair interrupted package metadata only inside the disposable quality environment and avoid repeated synchronization noise. ([#24](https://github.com/xeonvs/open-code-review-toolkit/issues/24))
+
+
 ## 0.3.0 - 2026-07-28
 
 ### Features
