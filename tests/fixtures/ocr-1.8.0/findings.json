@@ -1,0 +1,27 @@
+{
+  "status": "success",
+  "tool_calls": {
+    "total": 2,
+    "by_tool": {
+      "file_read": 2
+    }
+  },
+  "comments": [
+    {
+      "path": "src/example.py",
+      "content": "Synthetic critical finding.",
+      "start_line": 1,
+      "end_line": 1,
+      "category": "security",
+      "severity": "critical"
+    },
+    {
+      "path": "tests/test_example.py",
+      "content": "Synthetic low-priority finding.",
+      "start_line": 2,
+      "end_line": 2,
+      "category": "test",
+      "severity": "low"
+    }
+  ]
+}

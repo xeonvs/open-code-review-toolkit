@@ -18,7 +18,7 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 ### Work Queue
 
 1. [x] Update the effective local OCR binary to verified upstream v1.8.0 while retaining a rollback copy.
-2. [ ] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.
+2. [x] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.
 3. [ ] Implement the dependency-free evidence schema, bounded store, redaction-before-storage, deterministic identities, and serialization (BL-004).
 4. [ ] Adapt existing collectors to emit evidence while retaining a temporary legacy projection for semantic parity (BL-005).
 5. [ ] Implement immutable base/head snapshots and typed repository deltas with explicit missing, rename, deletion, symlink, submodule, and shallow-clone behavior (BL-006).
@@ -36,6 +36,7 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 - Review each committed diff for correctness, architecture, security, compatibility, tests, documentation, and hidden legacy dependencies. Fix every valid finding in a signed follow-up commit and repeat the gate before starting the next slice.
 - Semantic parity compares facts, trust, ref, component, and provenance rather than exact Markdown. Any unexplained divergence starts another analysis, implementation, test, and review cycle.
 - Final validation includes unit, contract, adversarial, packaging, clean-install, protocol, subprocess MCP, source/head snapshot, failure-mode, and real OCR v1.8.0 E2E checks.
+- Baseline before M1 runtime changes: 368 tests and 41 subtests passed. OCR v1.8.0 structured skip, clean result, subtask error, severity, and category contracts are pinned in synthetic fixtures sourced from upstream tag v1.8.0. Existing context regression coverage remains the legacy behavior baseline.
 
 ### Release Deferral And Closure
 

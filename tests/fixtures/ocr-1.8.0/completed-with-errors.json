@@ -1,0 +1,17 @@
+{
+  "status": "completed_with_errors",
+  "message": "Some files could not be reviewed due to errors.",
+  "tool_calls": {
+    "total": 1,
+    "by_tool": {
+      "file_read": 1
+    }
+  },
+  "comments": [],
+  "warnings": [
+    {
+      "type": "subtask_error",
+      "message": "Synthetic upstream failure."
+    }
+  ]
+}
