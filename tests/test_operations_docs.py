@@ -87,7 +87,12 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "refusing to qualify more than 10 releases" in workflow
     assert "OCR_UPDATE_BOT_TOKEN" in workflow
     assert "gh auth setup-git" in workflow
-    assert "git push --set-upstream origin" in workflow
+    assert "git switch -C" in workflow
+    assert "git push --force-with-lease" in workflow
+    issue_create = workflow.split("issue_url=$(gh issue create", 1)[1].split(
+        "issue=${issue_url##*/}", 1
+    )[0]
+    assert "--json" not in issue_create
     assert "git push origin main" not in workflow
     assert "gh pr merge" not in workflow
     assert "automatic-safe" in workflow

@@ -67,6 +67,24 @@ def test_manifest_rejects_evidence_hash_mismatch() -> None:
         module.validate_manifest(manifest, PROJECT_ROOT)
 
 
+def test_manifest_rejects_floor_above_recommended() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    manifest["monitoring_floor"] = "2.0.0"
+
+    with pytest.raises(module.CompatibilityError, match="monitoring_floor"):
+        module.validate_manifest(manifest, PROJECT_ROOT)
+
+
+def test_manifest_rejects_assets_that_differ_from_evidence() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    manifest["releases"][0]["assets"][0]["sha256"] = "f" * 64
+
+    with pytest.raises(module.CompatibilityError, match="assets disagree"):
+        module.validate_manifest(manifest, PROJECT_ROOT)
+
+
 def test_discovery_filters_known_prerelease_and_old_versions() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)

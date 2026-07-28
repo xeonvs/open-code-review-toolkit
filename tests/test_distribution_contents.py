@@ -12,9 +12,7 @@ def test_sdist_includes_only_runtime_and_end_user_material() -> None:
     end = pyproject.index("[tool.hatch.version.raw-options]")
     sdist = pyproject[start:end]
 
-    assert (
-        'only-include = ["src", "README.md", "LICENSE", "pyproject.toml"]' in sdist
-    )
+    assert 'only-include = ["src", "README.md", "LICENSE", "pyproject.toml"]' in sdist
     # Hatch force-includes the active VCS exclusion file in standard sdists; a custom
     # build hook would add more packaging code than this single metadata file.
     assert "ignore-vcs" not in sdist

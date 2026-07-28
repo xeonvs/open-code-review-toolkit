@@ -141,7 +141,8 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     if not isinstance(recommended, str) or not isinstance(floor, str):
         _fail("recommended_version and monitoring_floor must be strings")
     _version(recommended)
-    _version(floor)
+    if _version(floor) > _version(recommended):
+        _fail("monitoring_floor cannot be newer than recommended_version")
     releases = manifest.get("releases")
     if not isinstance(releases, list) or not releases:
         _fail("manifest releases must be a non-empty list")
@@ -198,6 +199,21 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
         evidence = load_json(evidence_path)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             _fail(f"evidence does not qualify {version} as compatible")
+        evidence_assets = evidence.get("assets")
+        if not isinstance(evidence_assets, list):
+            _fail(f"evidence assets are missing for {version}")
+        manifest_asset_tuples = sorted(
+            (asset["name"], asset["size"], asset["sha256"])
+            for asset in assets
+            if isinstance(asset, dict)
+        )
+        evidence_asset_tuples = sorted(
+            (asset.get("name"), asset.get("size"), asset.get("sha256"))
+            for asset in evidence_assets
+            if isinstance(asset, dict)
+        )
+        if manifest_asset_tuples != evidence_asset_tuples:
+            _fail(f"manifest and evidence assets disagree for {version}")
     if not recommended_found:
         _fail("recommended_version is missing from releases")
 
@@ -559,7 +575,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     token_summary = format_token_usage_summary(sample)
     if not token_summary or "total" not in token_summary:
         _fail("toolkit token summary rejected the candidate result contract")
-    if "1 total" not in format_tool_calls_summary(sample["tool_calls"]):
+    if "1 total" not in format_tool_calls_summary(sample.get("tool_calls")):
         _fail("toolkit tool-call summary rejected the candidate result contract")
 
     return {
