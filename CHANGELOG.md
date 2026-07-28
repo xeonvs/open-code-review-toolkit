@@ -1,3 +1,14 @@
+## 0.3.0 - 2026-07-28
+
+### Features
+
+- Add a bounded Bandit security gate and checksum-verified OCR compatibility qualification without automatic upstream upgrades. ([#19](https://github.com/xeonvs/open-code-review-toolkit/issues/19))
+
+### Documentation
+
+- Correct roadmap dependencies and rollout invariants for external MCP, repository evidence, compact bootstrap, and framework selection. ([#17](https://github.com/xeonvs/open-code-review-toolkit/issues/17))
+
+
 ## 0.2.1 - 2026-07-27
 
 ### Features
