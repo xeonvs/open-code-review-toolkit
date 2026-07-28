@@ -36,23 +36,27 @@ def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str,
     }
 
 
-def test_committed_manifest_is_valid_and_has_one_tested_baseline() -> None:
+def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.7.17"
-    assert manifest["monitoring_floor"] == "1.7.17"
+    assert manifest["recommended_version"] == "1.8.0"
+    assert manifest["monitoring_floor"] == "1.8.0"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
-        ("1.7.17", "tested")
+        ("1.7.17", "tested"),
+        ("1.8.0", "tested"),
     ]
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    manifest["releases"][0]["status"] = "observed-candidate"
+    recommended = next(
+        item for item in manifest["releases"] if item["version"] == manifest["recommended_version"]
+    )
+    recommended["status"] = "observed-candidate"
 
     with pytest.raises(module.CompatibilityError, match="recommended_version"):
         module.validate_manifest(manifest, PROJECT_ROOT)
@@ -89,9 +93,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
     payload = [
-        release("1.7.18"),
-        release("1.7.17"),
-        {**release("1.7.19"), "prerelease": True},
+        release("1.8.1"),
+        release("1.8.0"),
+        {**release("1.8.2"), "prerelease": True},
         release("2.0.0", body="breaking: replace result schema"),
         {"tag_name": "nightly", "draft": False, "prerelease": False},
     ]
@@ -99,15 +103,15 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
     with patched_attr(module, "_request_json", lambda _url: payload):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.7.18", "v2.0.0"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.1", "v2.0.0"]
 
 
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.7.18")]
+    first_page = [release("1.8.1")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.7.17")]
+    second_page = [release("1.8.0")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -117,14 +121,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.7.18"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.1"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.7.18")]
+    page = [release("1.8.1")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -225,23 +229,24 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     (root / "examples" / "gitlab").mkdir(parents=True)
     (root / "docs").mkdir(parents=True)
     (root / "changelog.d").mkdir()
-    baseline_evidence = PROJECT_ROOT / "compatibility" / "evidence" / "ocr-1.7.17.json"
-    (root / "compatibility" / "evidence" / "ocr-1.7.17.json").write_bytes(
-        baseline_evidence.read_bytes()
-    )
+    for evidence_name in ("ocr-1.7.17.json", "ocr-1.8.0.json"):
+        baseline_evidence = PROJECT_ROOT / "compatibility" / "evidence" / evidence_name
+        (root / "compatibility" / "evidence" / evidence_name).write_bytes(
+            baseline_evidence.read_bytes()
+        )
     manifest_path = root / "compatibility" / "ocr-support.json"
     manifest_path.write_bytes(MANIFEST.read_bytes())
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
-    preflight.write_text('EXPECTED_OCR_VERSION = "1.7.17"\n', encoding="utf-8")
+    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.0"\n', encoding="utf-8")
     example = root / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
     example.write_text(
-        'OCR_VERSION: "v1.7.17"\n'
-        'OCR_SHA256: "ab2fae81796a00dda292def8261bec2203d03f3909673c08219e7c5df5f4feee"\n',
+        'OCR_VERSION: "v1.8.0"\n'
+        'OCR_SHA256: "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94"\n',
         encoding="utf-8",
     )
-    (root / "README.md").write_text("OCR 1.7.17 baseline\n", encoding="utf-8")
-    (root / "docs" / "gitlab.md").write_text("Pin v1.7.17 in GitLab.\n", encoding="utf-8")
-    (root / "docs" / "security.md").write_text("Verify OCR 1.7.17.\n", encoding="utf-8")
+    (root / "README.md").write_text("OCR 1.8.0 baseline\n", encoding="utf-8")
+    (root / "docs" / "gitlab.md").write_text("Pin v1.8.0 in GitLab.\n", encoding="utf-8")
+    (root / "docs" / "security.md").write_text("Verify OCR 1.8.0.\n", encoding="utf-8")
     assets = json.loads(baseline_evidence.read_text(encoding="utf-8"))["assets"]
     assets = [dict(asset) for asset in assets]
     for asset in assets:
@@ -249,8 +254,8 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     evidence = {
         "schema_version": 1,
         "upstream_repository": module.UPSTREAM_REPOSITORY,
-        "version": "1.7.18",
-        "tag": "v1.7.18",
+        "version": "1.8.1",
+        "tag": "v1.8.1",
         "published_at": "2026-07-28T00:00:00Z",
         "result": "compatible",
         "classification": "automatic-safe",
@@ -270,7 +275,7 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",
-        "compatibility/evidence/ocr-1.7.18.json",
+        "compatibility/evidence/ocr-1.8.1.json",
         "src/ocr_toolkit/preflight.py",
         "examples/gitlab/ocr-review.gitlab-ci.yml",
         "README.md",
@@ -279,13 +284,13 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "changelog.d/42.feature.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert updated["recommended_version"] == "1.7.18"
-    assert updated["monitoring_floor"] == "1.7.18"
-    assert 'EXPECTED_OCR_VERSION = "1.7.18"' in preflight.read_text(encoding="utf-8")
+    assert updated["recommended_version"] == "1.8.1"
+    assert updated["monitoring_floor"] == "1.8.1"
+    assert 'EXPECTED_OCR_VERSION = "1.8.1"' in preflight.read_text(encoding="utf-8")
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.7.18"' in example_text
+    assert 'OCR_VERSION: "v1.8.1"' in example_text
     assert f'OCR_SHA256: "{"a" * 64}"' in example_text
-    assert "1.7.18" in (root / "README.md").read_text(encoding="utf-8")
+    assert "1.8.1" in (root / "README.md").read_text(encoding="utf-8")
 
 
 def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:

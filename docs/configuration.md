@@ -24,10 +24,28 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 
 | Variable | Purpose |
 | --- | --- |
-| `OCR_MCP_SERVERS_JSON` | JSON object mapping server names to command, arguments, environment, and optional tool allowlists. |
+| `OCR_MCP_SERVERS_JSON` | JSON object mapping names to bounded stdio or native Streamable HTTP definitions. |
 | `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
 
-MCP commands run as child processes of OCR. Treat their executable, arguments, environment, output, and tool access as privileged configuration.
+Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.0 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
+
+```json
+{
+  "documentation": {
+    "type": "remote",
+    "url": "https://mcp.synthetic.invalid/v1/mcp",
+    "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+    "tools": ["search"]
+  },
+  "oauth_proxy": {
+    "command": "synthetic-mcp-proxy",
+    "args": ["--read-only"],
+    "tools": ["read_page"]
+  }
+}
+```
+
+Treat stdio executables, remote endpoints, arguments, environment, output, headers, and tool access as privileged configuration. Native remote MCP is preferred when static environment-backed headers suffice. Keep stdio for local tools and OAuth-owning proxies.
 
 ## GitLab CI inputs
 
@@ -36,6 +54,8 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 ## Posting controls
 
 `OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, and `OCR_POST_ERROR_DETAILS` control write behavior and bounded error reporting. Invalid numeric or boolean values fail closed or fall back to conservative defaults as documented in command output. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+
+`ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. `OCR_POST_ERROR_DETAILS=1` separately opts into including that same safe excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
 
 ## Context controls
 

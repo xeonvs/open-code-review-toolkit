@@ -15,7 +15,7 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is OCR `1.7.17`. CI should pin the release and verify its published checksum before execution.
+The current compatibility target is OCR `1.8.0`. CI should pin the release and verify its published checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. Set `OCR_REVIEW_LANGUAGE=Russian` to use Russian consistently in both OCR configuration and generated review context.
 
@@ -49,7 +49,7 @@ ocr-ci preflight
 ocr-ci configure
 ocr-ci mcp-config
 ocr-ci context --output .review-context/dependencies.md
-# run: ocr review ... --format json
+ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- ... --format json
 ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 ```
 

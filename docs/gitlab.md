@@ -4,7 +4,7 @@ The toolkit's first provider adapter posts review results to GitLab merge reques
 
 ## Installation
 
-Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.7.17`; verify the release checksum before making the binary executable. The package never downloads OCR.
+Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.8.0`; verify the release checksum before making the binary executable. The package never downloads OCR.
 
 Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates one background file, and passes it once with `--background-file`.
 
@@ -26,6 +26,6 @@ Repeated reviews have a reviewer-controlled lifecycle rather than appending the 
 
 For a deliberate project-wide tradeoff that should be supplied to every review, add a narrowly scoped entry to `.opencodereview/accepted-decisions.md` in an earlier reviewed merge request. The [configuration reference](configuration.md#accepted-project-decisions) documents its `ocr-accept` marker convention, prompt-level semantics, and self-whitelisting guard.
 
-OCR is configured through its `openai-responses` provider. Optional stdio bridge tools are supplied with `OCR_MCP_SERVERS_JSON`; treat every configured MCP command as privileged code.
+OCR is configured through its `openai-responses` provider. Run the review through `ocr-ci review` so failed OCR stderr is retained privately and a bounded redacted diagnostic appears in the runner log. This command never posts; `ocr-ci post` remains the explicit GitLab write boundary. MCP tools are supplied with `OCR_MCP_SERVERS_JSON`; treat stdio commands and remote endpoints as privileged configuration.
 
 Use merge-request source and base SHAs, not a merge-result commit, when choosing the reviewed range. Keep the self-test job manual. See [docs/security.md](security.md) for trust boundaries and [docs/configuration.md](configuration.md) for every input.

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 
-from ocr_toolkit import configure, mcp_config, preflight
+from ocr_toolkit import configure, mcp_config, preflight, review_runner
 from ocr_toolkit.context import render as context_render
 from ocr_toolkit.posting.workflow import main as posting_main
 
@@ -21,6 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("preflight", help="Validate OCR, GitLab, and LLM access.")
     subparsers.add_parser("configure", help="Write the OCR runtime configuration.")
     subparsers.add_parser("mcp-config", help="Write OCR MCP server configuration.")
+    review_parser = subparsers.add_parser(
+        "review", help="Run OCR with private artifacts and safe failure diagnostics."
+    )
+    review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
+    review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
+    review_parser.add_argument(
+        "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
+    )
 
     context_parser = subparsers.add_parser(
         "context", help="Generate bounded repository review context."
@@ -57,6 +67,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return configure.main()
     if args.command == "mcp-config":
         return mcp_config.configure_mcp_servers()
+    if args.command == "review":
+        ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
+        try:
+            return review_runner.run_review(Path(args.result), Path(args.stderr), ocr_args)
+        except review_runner.ReviewRunnerError as exc:
+            print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
+            return 2
     if args.command == "context":
         return context_render.main(["--output", args.output])
     if args.command == "post":

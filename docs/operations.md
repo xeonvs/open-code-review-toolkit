@@ -66,6 +66,10 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 `OCR_STRICT_POSTING=false` is the advisory default: an OCR or posting error remains visible in the job log and, when possible, in an MR note, but the posting helper exits successfully. Set `OCR_STRICT_POSTING=true` when OCR review is a required merge gate so OCR failures, an unavailable GitLab API, an unsafe previous-state snapshot, an invalid OCR result, or failed publication make the job fail.
 
+## OCR diagnostics
+
+Run OCR through `ocr-ci review --result PATH --stderr PATH -- ...`. This wrapper does not post to GitLab: it creates private artifacts and, on failure, prints only a bounded redacted stderr excerpt to the runner log. Pass the paths and captured exit code to `ocr-ci post` afterward. Set `OCR_POST_ERROR_DETAILS=1` only when that safe excerpt should also appear in the merge-request failure note.
+
 ## GitLab identity and permissions
 
 Use a dedicated project access token with `api` scope and at least the Developer role. Store it in `GITLAB_API_TOKEN`. The toolkit needs to read merge-request notes, discussions, diff refs, and the current token identity; create and delete its own notes or drafts; publish drafts; and resolve discussions requested by reviewers.

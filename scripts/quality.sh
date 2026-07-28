@@ -8,29 +8,51 @@ log_file="$log_dir/${mode}.log"
 quality_environment=${OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv}
 export UV_PROJECT_ENVIRONMENT=$quality_environment
 
+# An interrupted editable install can leave dist-info without RECORD. uv then
+# warns while trying an uninstall that cannot be complete. This environment is
+# private to the quality wrapper, so rebuild only that disposable environment
+# before uv attempts package synchronization.
+for metadata in "$quality_environment"/lib/python*/site-packages/open_code_review_toolkit-*.dist-info; do
+  [ -e "$metadata" ] || continue
+  if [ ! -f "$metadata/RECORD" ]; then
+    uv venv --clear "$quality_environment" >"$log_dir/environment-repair.log" 2>&1
+    break
+  fi
+done
+
+# Synchronize the disposable environment before `uv run`. Besides keeping the
+# subsequent commands quiet, this prevents uv from inspecting or repairing the
+# developer's active environment when the wrapper is launched from one.
+environment_sync_log=$log_dir/environment-sync.log
+if ! uv sync --locked --all-groups >"$environment_sync_log" 2>&1; then
+  echo "quality environment sync failed; last 80 lines follow" >&2
+  tail -n 80 "$environment_sync_log" >&2
+  exit 1
+fi
+
 case "$mode" in
   format)
-    set -- uv run ruff format .
+    set -- uv run --no-sync ruff format .
     ;;
   lint)
-    set -- uv run ruff check .
+    set -- uv run --no-sync ruff check .
     ;;
   test)
-    set -- uv run pytest -q
+    set -- uv run --no-sync pytest -q
     ;;
   coverage)
-    set -- uv run pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70
+    set -- uv run --no-sync pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70
     ;;
   types)
-    set -- uv run mypy src/ocr_toolkit
+    set -- uv run --no-sync mypy src/ocr_toolkit
     ;;
   security)
-    set -- uv run bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
+    set -- uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
     ;;
   check)
     : >"$log_file"
     for command in "ruff format --check ." "ruff check ." "mypy src/ocr_toolkit" "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70"; do
-      if ! uv run sh -c "$command" >>"$log_file" 2>&1; then
+      if ! uv run --no-sync sh -c "$command" >>"$log_file" 2>&1; then
         echo "quality check failed: $command" >&2
         tail -n 80 "$log_file" >&2
         exit 1
