@@ -14,7 +14,7 @@ The delivery sequence is:
 3. prepare a signed `release/vX.Y.Z` pull request containing the stable version marker, deterministic epoch, generated Towncrier changelog, and next development line;
 4. use release-PR merge as the human authorization gate;
 5. monitor TestPyPI stable publication, production PyPI publication, signed tag, provenance, and immutable GitHub Release;
-6. independently compare artifact hashes and smoke-install the wheel on Python 3.10 and the sdist on Python 3.14.
+6. independently compare artifact hashes and smoke-install the wheel on Python 3.12 and the sdist on Python 3.14.
 
 Do not mark the objective complete after step 1 or 2. If the owner explicitly defers stable publication, record the target version and exact resume point in `PLANS.md`.
 
@@ -47,4 +47,4 @@ Registry reruns are fail-closed. An absent release may be published and an exact
 - The `main` ruleset requires pull requests, linear history, signed commits, resolved conversations, required merge checks, and blocks deletion and force pushes.
 - Public security features include secret scanning and push protection, private vulnerability reporting, Dependabot, CodeQL, Dependency Review, OpenSSF Scorecard, and immutable releases.
 
-After publication, independently compare TestPyPI, PyPI, the GitHub workflow artifact, and GitHub Release assets by SHA-256, then smoke-install the wheel on Python 3.10 and the sdist on Python 3.14.
+After publication, independently compare TestPyPI, PyPI, the GitHub workflow artifact, and GitHub Release assets by SHA-256, then smoke-install the wheel on Python 3.12 and the sdist on Python 3.14.

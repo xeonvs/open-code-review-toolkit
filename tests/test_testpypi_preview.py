@@ -224,9 +224,9 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
 def test_ci_matrix_uses_supported_python_endpoints_on_each_os() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert workflow.count('python: "3.10"') == 2
+    assert workflow.count('python: "3.12"') == 2
     assert workflow.count('python: "3.14"') == 2
-    for intermediate in ("3.11", "3.12", "3.13"):
+    for intermediate in ("3.10", "3.11", "3.13"):
         assert f'python: "{intermediate}"' not in workflow
 
 

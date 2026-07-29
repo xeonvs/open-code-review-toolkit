@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from ocr_toolkit.evidence import GitRepositoryReader, RefRole
 from ocr_toolkit.evidence.ansible_requirements import (
     MAX_GALAXY_REQUIREMENTS,
     parse_galaxy_requirements,
 )
+from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import (
     MANIFEST_COLLECTORS,
     MAX_MANIFEST_INCLUDE_DIAGNOSTICS,
@@ -21,6 +25,7 @@ from ocr_toolkit.evidence.collectors import (
     manifest_collector,
     parse_manifest,
 )
+from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
 
 
@@ -89,6 +94,295 @@ def test_supported_manifest_parsers_emit_typed_facts() -> None:
             },
         )
     ]
+
+
+def test_python_declarations_cover_pep621_optional_groups_and_poetry() -> None:
+    """Preserve declaration scopes, constraints, includes, and exact text."""
+
+    facts = parse_manifest(
+        "services/api/pyproject.toml",
+        """
+[project]
+requires-python = ">=3.9"
+dependencies = [
+  "Core_Pkg[http]>=1.2,<2; python_version >= '3.9'",
+  "direct @ https://user:secret@example.invalid/packages/direct.whl",
+]
+[project.optional-dependencies]
+docs = ["Sphinx~=8.0"]
+[dependency-groups]
+lint = ["ruff==0.12.0"]
+test = [{include-group = "lint"}, "pytest>=8"]
+[tool.poetry.dependencies]
+python = "^3.9"
+legacy = "^2.0"
+mypy = {version = "^1.16", extras = ["dmypy"], python = ">=3.11"}
+private = {git = "https://build:secret@git.example.invalid/team/pkg.git", rev = "abc123"}
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4"
+""",
+    )
+
+    assert any(
+        fact.kind == "runtime.declared"
+        and fact.identity == "python"
+        and fact.value["constraint"] == ">=3.9"
+        for fact in facts
+    )
+    declarations = {fact.identity: fact.value for fact in facts if fact.component == "python"}
+    assert declarations["project:core-pkg"]["requirement"] == (
+        "Core_Pkg[http]>=1.2,<2; python_version >= '3.9'"
+    )
+    assert declarations["project:core-pkg"]["extras"] == ["http"]
+    assert "secret" not in str(declarations["project:direct"])
+    assert declarations["optional:docs:sphinx"]["scope"] == "optional:docs"
+    assert declarations["group:test:ruff"]["requirement"] == "ruff==0.12.0"
+    assert declarations["group:test:pytest"]["version"] == "8"
+    assert declarations["poetry:legacy"]["version"] == "^2.0"
+    assert declarations["poetry:mypy"]["extras"] == ["dmypy"]
+    assert declarations["poetry:private"]["git"] == ("https://***@git.example.invalid/team/pkg.git")
+    assert declarations["poetry-group:dev:pytest"]["version"] == "^8.4"
+
+
+def test_python_dependency_group_cycles_and_missing_includes_are_diagnostic() -> None:
+    """Bound PEP 735 recursion and report unsupported graph edges explicitly."""
+
+    collector = manifest_collector("pyproject.toml")
+    assert collector is not None
+    parsed = collector.parse(
+        """
+[dependency-groups]
+a = [{include-group = "b"}]
+b = [{include-group = "a"}, {include-group = "missing"}, {bad = "shape"}]
+"""
+    )
+
+    assert any("include cycle skipped" in notice for notice in parsed.notices)
+    assert any("include is missing: missing" in notice for notice in parsed.notices)
+    assert any("entry is unsupported" in notice for notice in parsed.notices)
+
+
+def test_python_dependency_group_names_are_normalized_and_collisions_reported() -> None:
+    """Apply PEP 735 name normalization without ambiguous expansion."""
+
+    collector = manifest_collector("pyproject.toml")
+    assert collector is not None
+    parsed = collector.parse(
+        """
+[dependency-groups]
+Test_Group = ["pytest>=8"]
+test-group = ["coverage>=7"]
+consumer = [{include-group = "test.group"}]
+"""
+    )
+
+    assert not parsed.facts
+    assert any("duplicated after normalization" in notice for notice in parsed.notices)
+    assert any("include is ambiguous" in notice for notice in parsed.notices)
+
+
+def test_python_lock_formats_preserve_resolved_scopes_and_markers() -> None:
+    """Model uv, Poetry, Pipenv, and standardized Python lock semantics."""
+
+    cases = {
+        "uv.lock": """
+version = 1
+[[package]]
+name = "alpha_pkg"
+version = "1.2.3"
+marker = "python_version >= '3.9'"
+""",
+        "poetry.lock": """
+[[package]]
+name = "beta"
+version = "2.0.0"
+optional = true
+groups = ["main", "docs"]
+python-versions = ">=3.9"
+markers = "sys_platform == 'linux'"
+""",
+        "Pipfile.lock": json.dumps(
+            {
+                "default": {"gamma": {"version": "==3.1", "index": "pypi"}},
+                "develop": {"delta": {"ref": "deadbeef", "markers": "os_name == 'posix'"}},
+            }
+        ),
+        "pylock.prod.toml": """
+lock-version = "1.0"
+[[packages]]
+name = "epsilon"
+version = "4.0"
+marker = "platform_system == 'Linux'"
+[[packages]]
+name = "editable_source"
+directory = {path = ".", editable = true}
+""",
+    }
+
+    locked = {
+        path: [fact for fact in parse_manifest(path, text) if fact.kind == "dependency.locked"]
+        for path, text in cases.items()
+    }
+    assert locked["uv.lock"][0].value["scope"] == "uv.lock"
+    assert {fact.value["scope"] for fact in locked["poetry.lock"]} == {
+        "poetry:docs",
+        "poetry:main",
+    }
+    assert {fact.value["scope"] for fact in locked["Pipfile.lock"]} == {
+        "pipenv:default",
+        "pipenv:develop",
+    }
+    assert locked["pylock.prod.toml"][0].value["marker"] == ("platform_system == 'Linux'")
+    editable = next(
+        fact.value for fact in locked["pylock.prod.toml"] if fact.value["name"] == "editable-source"
+    )
+    assert editable["source"] == "directory"
+    assert "version" not in editable
+
+
+def test_pylock_requires_a_supported_version_and_package_array() -> None:
+    """Reject files that do not satisfy the versioned pylock contract."""
+
+    for text in (
+        "packages = []",
+        'lock-version = "2.0"\npackages = []',
+        'lock-version = "1.0"',
+    ):
+        with pytest.raises(ValueError):
+            parse_manifest("pylock.toml", text)
+
+
+def test_python_requirements_includes_are_recursive_bounded_and_safe(tmp_path: Path) -> None:
+    """Read local includes from immutable blobs without following unsafe paths."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "constraints").mkdir()
+    (tmp_path / "requirements.txt").write_text(
+        '-r "constraints/base.in"\n-r ../outside.txt\n', encoding="utf-8"
+    )
+    (tmp_path / "constraints/base.in").write_text(
+        "included_pkg==1.0\n-r nested.txt\n", encoding="utf-8"
+    )
+    (tmp_path / "constraints/nested.txt").write_text(
+        "nested-pkg @ https://user:secret@example.invalid/pkg.whl\n", encoding="utf-8"
+    )
+    _git(
+        tmp_path,
+        "add",
+        "requirements.txt",
+        "constraints/base.in",
+        "constraints/nested.txt",
+    )
+    _git(tmp_path, "commit", "-qm", "requirements includes")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    dependencies = [record for record in records if record.kind == "dependency.declared"]
+    assert {record.source_path for record in dependencies} == {
+        "constraints/base.in",
+        "constraints/nested.txt",
+    }
+    assert all("secret" not in str(record.value) for record in dependencies)
+    assert any(
+        "requirements.txt: Python requirements include is outside the supported tree" in item
+        for item in diagnostics
+    )
+
+
+def test_python_requirements_refuse_symlink_and_submodule_includes(tmp_path: Path) -> None:
+    """Never dereference include targets that are not regular immutable blobs."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.txt").write_text("-r linked.txt\n-r nested.txt\n", encoding="utf-8")
+    (tmp_path / "linked.txt").symlink_to("requirements.txt")
+    (tmp_path / "nested.txt").write_text("nested==1.0\n", encoding="utf-8")
+    _git(tmp_path, "add", "requirements.txt", "linked.txt", "nested.txt")
+    synthetic_commit = _git(tmp_path, "write-tree")
+    synthetic_commit = _git(tmp_path, "commit-tree", synthetic_commit, "-m", "nested tree")
+    _git(
+        tmp_path,
+        "update-index",
+        "--cacheinfo",
+        "160000",
+        synthetic_commit,
+        "nested.txt",
+    )
+    _git(tmp_path, "commit", "-qm", "unsafe include modes")
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path), _git(tmp_path, "rev-parse", "HEAD"), RefRole.HEAD
+    )
+
+    assert not any(
+        record.kind == "dependency.declared" and record.value.get("name") == "nested"
+        for record in records
+    )
+    assert sum("Python requirements include is missing" in item for item in diagnostics) == 2
+
+
+def test_python_evidence_deltas_are_queryable_through_builtin_mcp(tmp_path: Path) -> None:
+    """Expose declared, resolved, and runtime changes through the MCP contract."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.11"\ndependencies = ["demo==1"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[[package]]\nname = "demo"\nversion = "1"\n',
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", "pyproject.toml", "uv.lock")
+    _git(tmp_path, "commit", "-qm", "base Python evidence")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.12"\ndependencies = ["demo==2"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[[package]]\nname = "demo"\nversion = "2"\n',
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", "pyproject.toml", "uv.lock")
+    _git(tmp_path, "commit", "-qm", "head Python evidence")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    response = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "ocr_toolkit_evidence",
+                "arguments": {
+                    "action": "list",
+                    "kind": "dependency.locked",
+                    "ref": "head",
+                },
+            },
+        },
+    )
+
+    assert {delta.kind for delta in store.deltas} >= {
+        "dependency.declared",
+        "dependency.locked",
+        "runtime.declared",
+    }
+    lock_delta = next(delta for delta in store.deltas if delta.kind == "dependency.locked")
+    assert lock_delta.change == "changed"
+    assert lock_delta.before["version"] == "1"
+    assert lock_delta.after["version"] == "2"
+    payload = json.loads(response["result"]["content"][0]["text"])
+    assert payload["records"][0]["value"]["fact"]["version"] == "2"
 
 
 def test_ansible_requirements_preserve_types_sources_and_missing_versions() -> None:
@@ -189,7 +483,7 @@ def test_manifest_registry_is_authoritative_and_unambiguous() -> None:
         "collections/requirements.yml": "ansible",
     }
 
-    assert len(MANIFEST_COLLECTORS) == 8
+    assert len(MANIFEST_COLLECTORS) == 12
     assert {
         path: collector.ecosystem
         for path in cases
@@ -288,6 +582,39 @@ def test_malformed_manifest_becomes_bounded_diagnostic(tmp_path: Path) -> None:
 
     assert not records
     assert diagnostics == ["head:package.json: typed collection unavailable (JSONDecodeError)"]
+
+
+def test_python_missing_lock_is_absence_but_malformed_lock_is_diagnostic(
+    tmp_path: Path,
+) -> None:
+    """Distinguish an optional missing lock from a present unreadable candidate."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["demo>=1"]\n', encoding="utf-8"
+    )
+    _git(tmp_path, "add", "pyproject.toml")
+    _git(tmp_path, "commit", "-qm", "declarations without a lock")
+    declared_sha = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path), declared_sha, RefRole.BASE
+    )
+    assert any(record.kind == "dependency.declared" for record in records)
+    assert not any(record.kind == "dependency.locked" for record in records)
+    assert diagnostics == []
+
+    (tmp_path / "pylock.toml").write_text('lock-version = "2.0"\npackages = []\n', encoding="utf-8")
+    _git(tmp_path, "add", "pylock.toml")
+    _git(tmp_path, "commit", "-qm", "unsupported lock")
+    malformed_sha = _git(tmp_path, "rev-parse", "HEAD")
+
+    _records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path), malformed_sha, RefRole.HEAD
+    )
+    assert diagnostics == ["head:pylock.toml: typed collection unavailable (ValueError)"]
 
 
 def test_changed_head_guidance_cannot_self_authorize_policy(tmp_path: Path) -> None:

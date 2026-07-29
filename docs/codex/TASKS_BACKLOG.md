@@ -243,7 +243,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Priority:** medium
 - **Roadmap theme:** M6 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1.
-- **Activation trigger:** High-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.10-3.14 are agreed.
+- **Activation trigger:** High-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.12-3.14 are agreed.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, and registry-metadata boundaries.
 - **Scoped deliverables:** Use a bounded spike to choose Atheris, property-based testing, or both for named targets and supported Python versions; define synthetic seeds; fuzz selected parsers; minimize and retain regressions; version corpora with parser contracts; evaluate public service integration only after useful local results.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.

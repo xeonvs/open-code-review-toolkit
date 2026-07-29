@@ -8,10 +8,13 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-import tomllib  # type: ignore[import-untyped]
-
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.manifest_model import (
+    MAX_MANIFEST_ITEMS,
+    ManifestFact,
+    ManifestParseResult,
+)
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceDelta,
@@ -20,21 +23,24 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.python_manifests import (
+    parse_pipfile_lock,
+    parse_poetry_lock,
+    parse_pylock,
+    parse_pyproject,
+    parse_requirements,
+    parse_uv_lock,
+)
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
     RepositoryObject,
 )
 
-MAX_MANIFEST_ITEMS = 512
 MAX_MANIFEST_INCLUDE_FILES = 32
 MAX_MANIFEST_INCLUDE_DEPTH = 8
 MAX_MANIFEST_INCLUDE_DIAGNOSTICS = 64
 MAX_MANIFEST_INCLUDE_EDGES = 4_096
-REQUIREMENT_RE = re.compile(
-    r"^([A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?)\s*"
-    r"(?:===|==|~=|>=|<=|!=|>|<)\s*([^;\s]+)"
-)
 IMAGE_LINE_RE = re.compile(r"^\s*image\s*:\s*['\"]?([^'\"\s#]+)")
 GUIDANCE_PATHS = {
     "PR_REVIEW.md",
@@ -55,25 +61,6 @@ CONTEXT_YAML_DIRECTORIES = (
 
 
 @dataclass(frozen=True, slots=True)
-class ManifestFact:
-    """Describe one normalized typed fact before ref provenance is attached."""
-
-    kind: str
-    component: str
-    identity: str
-    value: EvidenceValue
-
-
-@dataclass(frozen=True, slots=True)
-class ManifestParseResult:
-    """Return bounded manifest facts together with safe coverage notices."""
-
-    facts: tuple[ManifestFact, ...]
-    notices: tuple[str, ...] = ()
-    include_paths: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class ManifestCollector:
     """Bind manifest path matching, ecosystem metadata, and a bounded parser."""
 
@@ -84,10 +71,19 @@ class ManifestCollector:
 
 @dataclass(frozen=True, slots=True)
 class ManifestBlobSet:
-    """Return immutable manifest blobs and explicit graph-read diagnostics."""
+    """Return immutable Galaxy blobs and explicit graph-read diagnostics."""
 
     blobs: dict[str, bytes]
     galaxy_paths: tuple[str, ...]
+    diagnostics: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PythonRequirementBlobSet:
+    """Return immutable requirements blobs and graph-read diagnostics."""
+
+    blobs: dict[str, bytes]
+    requirement_paths: tuple[str, ...]
     diagnostics: tuple[str, ...]
 
 
@@ -111,102 +107,6 @@ def _mapping_dependencies(
     for name, version in sorted(data.items())[:MAX_MANIFEST_ITEMS]:
         if isinstance(name, str) and isinstance(version, (str, int, float)):
             facts.append(_dependency(kind, component, name, version, scope))
-    return facts
-
-
-def _parse_pyproject(text: str) -> list[ManifestFact]:
-    """Parse PEP 621 and Poetry dependency declarations."""
-
-    data = tomllib.loads(text)
-    facts: list[ManifestFact] = []
-    project = data.get("project") if isinstance(data, dict) else None
-    if isinstance(project, dict):
-        requires_python = project.get("requires-python")
-        if isinstance(requires_python, str):
-            facts.append(
-                ManifestFact(
-                    "runtime.declared",
-                    "python",
-                    "python",
-                    {"name": "python", "constraint": requires_python},
-                )
-            )
-        dependencies = project.get("dependencies")
-        if isinstance(dependencies, list):
-            for value in dependencies[:MAX_MANIFEST_ITEMS]:
-                if not isinstance(value, str):
-                    continue
-                match = REQUIREMENT_RE.match(value)
-                name = match.group(1) if match else value.split(";", 1)[0].strip()
-                version = match.group(2) if match else value
-                if name:
-                    facts.append(
-                        _dependency("dependency.declared", "python", name, version, "project")
-                    )
-    tool = data.get("tool") if isinstance(data, dict) else None
-    dependency_groups = data.get("dependency-groups") if isinstance(data, dict) else None
-    if isinstance(dependency_groups, dict):
-        for group_name, dependencies in sorted(dependency_groups.items()):
-            if not isinstance(dependencies, list):
-                continue
-            for value in dependencies[:MAX_MANIFEST_ITEMS]:
-                if not isinstance(value, str):
-                    continue
-                match = REQUIREMENT_RE.match(value)
-                name = match.group(1) if match else value.split(";", 1)[0].strip()
-                version = match.group(2) if match else value
-                if name:
-                    facts.append(
-                        _dependency(
-                            "dependency.declared",
-                            "python",
-                            name,
-                            version,
-                            f"group:{group_name}",
-                        )
-                    )
-    poetry = tool.get("poetry") if isinstance(tool, dict) else None
-    if isinstance(poetry, dict):
-        dependencies = poetry.get("dependencies")
-        if isinstance(dependencies, dict):
-            facts.extend(
-                _mapping_dependencies(dependencies, "dependency.declared", "python", "poetry")
-            )
-        groups = poetry.get("group")
-        if isinstance(groups, dict):
-            for group_name, raw_group in sorted(groups.items()):
-                dependencies = (
-                    raw_group.get("dependencies") if isinstance(raw_group, dict) else None
-                )
-                if isinstance(dependencies, dict):
-                    facts.extend(
-                        _mapping_dependencies(
-                            dependencies,
-                            "dependency.declared",
-                            "python",
-                            f"poetry-group:{group_name}",
-                        )
-                    )
-    return facts
-
-
-def _parse_requirements(text: str) -> list[ManifestFact]:
-    """Parse bounded pinned or constrained Python requirement lines."""
-
-    facts = []
-    for line in text.splitlines():
-        clean = line.strip()
-        if not clean or clean.startswith(("#", "-")):
-            continue
-        match = REQUIREMENT_RE.match(clean)
-        if match:
-            facts.append(
-                _dependency(
-                    "dependency.declared", "python", match.group(1), match.group(2), "requirements"
-                )
-            )
-        if len(facts) >= MAX_MANIFEST_ITEMS:
-            break
     return facts
 
 
@@ -376,12 +276,23 @@ def _is_python_requirements(path: str) -> bool:
     """Match Python requirement manifests without matching Ansible YAML."""
 
     name = PurePosixPath(path).name.casefold()
-    return name.startswith("requirements") and name.endswith(".txt")
+    return name.startswith("requirements") and name.endswith((".txt", ".in"))
+
+
+def _is_pylock(path: str) -> bool:
+    """Match the standardized pylock.toml name and its permitted variants."""
+
+    name = PurePosixPath(path).name.casefold()
+    return name == "pylock.toml" or (name.startswith("pylock.") and name.endswith(".toml"))
 
 
 MANIFEST_COLLECTORS = (
-    ManifestCollector("python", _name_is("pyproject.toml"), _without_notices(_parse_pyproject)),
-    ManifestCollector("python", _is_python_requirements, _without_notices(_parse_requirements)),
+    ManifestCollector("python", _name_is("pyproject.toml"), parse_pyproject),
+    ManifestCollector("python", _is_python_requirements, parse_requirements),
+    ManifestCollector("python", _name_is("uv.lock"), parse_uv_lock),
+    ManifestCollector("python", _name_is("poetry.lock"), parse_poetry_lock),
+    ManifestCollector("python", _name_is("Pipfile.lock"), parse_pipfile_lock),
+    ManifestCollector("python", _is_pylock, parse_pylock),
     ManifestCollector(
         "javascript", _name_is("package.json"), _without_notices(_parse_package_json)
     ),
@@ -477,8 +388,10 @@ def _is_context_yaml(path: str, changed: set[str]) -> bool:
     )
 
 
-def _resolve_manifest_include(path: str, include_path: str) -> str | None:
-    """Resolve a Galaxy include inside the immutable repository tree."""
+def _resolve_manifest_include(
+    path: str, include_path: str, *, suffixes: tuple[str, ...]
+) -> str | None:
+    """Resolve a local manifest include inside the immutable repository tree."""
 
     if (
         not include_path
@@ -499,7 +412,7 @@ def _resolve_manifest_include(path: str, include_path: str) -> str | None:
         else:
             parts.append(part)
     resolved = "/".join(parts)
-    return resolved if resolved.casefold().endswith((".yml", ".yaml")) else None
+    return resolved if resolved.casefold().endswith(suffixes) else None
 
 
 def _include_cycle_diagnostics(edges: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
@@ -569,14 +482,18 @@ def _include_cycle_diagnostics(edges: Mapping[str, tuple[str, ...]]) -> tuple[st
     return tuple(diagnostics)
 
 
-def _bound_include_diagnostics(diagnostics: list[str]) -> tuple[str, ...]:
+def _bound_include_diagnostics(
+    diagnostics: list[str],
+    *,
+    truncation_notice: str = "Ansible Galaxy include diagnostics were truncated",
+) -> tuple[str, ...]:
     """Cap graph diagnostics and retain one explicit truncation notice."""
 
     if len(diagnostics) <= MAX_MANIFEST_INCLUDE_DIAGNOSTICS:
         return tuple(diagnostics)
     return (
         *diagnostics[: MAX_MANIFEST_INCLUDE_DIAGNOSTICS - 1],
-        "Ansible Galaxy include diagnostics were truncated",
+        truncation_notice,
     )
 
 
@@ -650,7 +567,7 @@ def _read_manifest_graph(
                 diagnostics.append(f"{path}: Ansible Galaxy include is not UTF-8")
                 continue
             for include_path in parsed.include_paths:
-                resolved = _resolve_manifest_include(path, include_path)
+                resolved = _resolve_manifest_include(path, include_path, suffixes=(".yml", ".yaml"))
                 if resolved is None:
                     diagnostics.append(f"{path}: invalid Ansible Galaxy include skipped")
                     continue
@@ -674,6 +591,99 @@ def _read_manifest_graph(
     diagnostics.extend(_include_cycle_diagnostics(normalized_edges))
     galaxy_paths = tuple(sorted(path for path in visited if path in blobs))
     return ManifestBlobSet(blobs, galaxy_paths, _bound_include_diagnostics(diagnostics))
+
+
+def _read_python_requirement_graph(
+    reader: GitRepositoryReader,
+    entries_by_path: Mapping[str, RepositoryObject],
+    initial_paths: tuple[str, ...],
+    initial_blobs: dict[str, bytes],
+) -> PythonRequirementBlobSet:
+    """Read bounded local requirements includes from one immutable Git ref."""
+
+    blobs = dict(initial_blobs)
+    diagnostics: list[str] = []
+    visited: set[str] = set()
+    admitted = set(initial_paths)
+    pending = [(path, "") for path in initial_paths]
+    included_files = 0
+    included_edges = 0
+    file_limit_reported = False
+    edge_limit_reported = False
+    for depth in range(MAX_MANIFEST_INCLUDE_DEPTH + 1):
+        if not pending:
+            break
+        level_sources: dict[str, list[str]] = {}
+        for path, included_from in pending:
+            level_sources.setdefault(path, []).append(included_from)
+        pending = []
+        to_read: list[RepositoryObject] = []
+        process_paths: list[str] = []
+        for path in sorted(level_sources):
+            if path in visited:
+                continue
+            sources = tuple(dict.fromkeys(level_sources[path]))
+            source = next((value for value in sources if value), path)
+            entry = entries_by_path.get(path)
+            if entry is None or entry.is_symlink or entry.is_submodule:
+                diagnostics.append(f"{source}: Python requirements include is missing: {path}")
+                visited.add(path)
+                continue
+            if path not in admitted:
+                if included_files >= MAX_MANIFEST_INCLUDE_FILES:
+                    if not file_limit_reported:
+                        diagnostics.append(
+                            f"{source}: Python requirements includes were truncated after "
+                            f"{MAX_MANIFEST_INCLUDE_FILES} files"
+                        )
+                        file_limit_reported = True
+                    continue
+                admitted.add(path)
+                included_files += 1
+                to_read.append(entry)
+            process_paths.append(path)
+        if to_read:
+            read = reader.read_candidate_blobs(tuple(sorted(to_read, key=lambda item: item.path)))
+            blobs.update(read.blobs)
+            diagnostics.extend(read.diagnostics)
+        for path in process_paths:
+            visited.add(path)
+            try:
+                parsed = parse_requirements(blobs[path].decode("utf-8"))
+            except UnicodeDecodeError:
+                diagnostics.append(f"{path}: Python requirements include is not UTF-8")
+                continue
+            for include_path in parsed.include_paths:
+                resolved = _resolve_manifest_include(path, include_path, suffixes=(".txt", ".in"))
+                if resolved is None:
+                    diagnostics.append(
+                        f"{path}: Python requirements include is outside the supported tree"
+                    )
+                    continue
+                if included_edges >= MAX_MANIFEST_INCLUDE_EDGES:
+                    if not edge_limit_reported:
+                        diagnostics.append(
+                            "Python requirements include graph was truncated after "
+                            f"{MAX_MANIFEST_INCLUDE_EDGES} edges"
+                        )
+                        edge_limit_reported = True
+                    continue
+                included_edges += 1
+                if depth == MAX_MANIFEST_INCLUDE_DEPTH:
+                    diagnostics.append(
+                        f"{path}: Python requirements include depth exceeded at {resolved}"
+                    )
+                else:
+                    pending.append((resolved, path))
+    requirement_paths = tuple(sorted(path for path in visited if path in blobs))
+    return PythonRequirementBlobSet(
+        blobs,
+        requirement_paths,
+        _bound_include_diagnostics(
+            diagnostics,
+            truncation_notice="Python requirements include diagnostics were truncated",
+        ),
+    )
 
 
 def collect_ref_facts(
@@ -725,10 +735,26 @@ def collect_ref_facts(
     except RepositoryEvidenceError as exc:
         diagnostics.append(f"collector include batch read failed: {exc}")
         graph = ManifestBlobSet(blobs, galaxy_roots, ())
-    blobs = graph.blobs
+    python_roots = tuple(sorted(path for path in blobs if _is_python_requirements(path)))
+    try:
+        python_graph = _read_python_requirement_graph(
+            reader, entries_by_path, python_roots, graph.blobs
+        )
+    except RepositoryEvidenceError as exc:
+        diagnostics.append(f"Python requirements include batch read failed: {exc}")
+        python_graph = PythonRequirementBlobSet(graph.blobs, python_roots, ())
+    blobs = python_graph.blobs
     diagnostics.extend(f"{ref.value}:{message}" for message in graph.diagnostics)
-    paths = dict.fromkeys((*tuple(entry.path for entry in candidates), *graph.galaxy_paths))
+    diagnostics.extend(f"{ref.value}:{message}" for message in python_graph.diagnostics)
+    paths = dict.fromkeys(
+        (
+            *tuple(entry.path for entry in candidates),
+            *graph.galaxy_paths,
+            *python_graph.requirement_paths,
+        )
+    )
     galaxy_paths = set(graph.galaxy_paths)
+    python_requirement_paths = set(python_graph.requirement_paths)
     for path in paths:
         if path not in blobs:
             # Bounded candidate omissions are already represented by explicit
@@ -743,6 +769,7 @@ def collect_ref_facts(
         if (
             not is_supported_manifest(path)
             and path not in galaxy_paths
+            and path not in python_requirement_paths
             and not image_source
             and not guidance_source
             and not topology_source
@@ -751,11 +778,17 @@ def collect_ref_facts(
         try:
             blob = blobs[path]
             text = blob.decode("utf-8")
-            if is_supported_manifest(path) or path in galaxy_paths:
+            if (
+                is_supported_manifest(path)
+                or path in galaxy_paths
+                or path in python_requirement_paths
+            ):
                 collector = (
                     manifest_collector(path)
                     if is_supported_manifest(path)
-                    else manifest_collector("requirements.yml")
+                    else manifest_collector(
+                        "requirements.yml" if path in galaxy_paths else "requirements.txt"
+                    )
                 )
                 if collector is None:  # pragma: no cover - guarded by registry predicate
                     raise ValueError("supported manifest has no collector")
@@ -797,7 +830,6 @@ def collect_ref_facts(
             RepositoryEvidenceError,
             UnicodeDecodeError,
             json.JSONDecodeError,
-            tomllib.TOMLDecodeError,
             ValueError,
             RecursionError,
         ) as exc:
