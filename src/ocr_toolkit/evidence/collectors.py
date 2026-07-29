@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 
 import tomllib  # type: ignore[import-untyped]
 
+from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceDelta,
@@ -454,6 +455,7 @@ def collect_ref_facts(
             is_supported_manifest(entry.path)
             or PurePosixPath(entry.path).name.casefold().startswith(".gitlab-ci")
             or _is_context_yaml(entry.path, changed)
+            or topology_candidate(entry.path)
             or entry.path in GUIDANCE_PATHS
             or entry.path.casefold() == ACCEPTED_DECISIONS_PATH
         )
@@ -479,7 +481,13 @@ def collect_ref_facts(
             ".gitlab-ci"
         ) or _is_context_yaml(path, changed)
         guidance_source = path in GUIDANCE_PATHS or path_folded == ACCEPTED_DECISIONS_PATH
-        if not is_supported_manifest(path) and not image_source and not guidance_source:
+        topology_source = topology_candidate(path)
+        if (
+            not is_supported_manifest(path)
+            and not image_source
+            and not guidance_source
+            and not topology_source
+        ):
             continue
         try:
             blob = blobs[path]
@@ -513,7 +521,13 @@ def collect_ref_facts(
                     ]
                 )
             else:
-                facts = _image_facts(path, text)
+                facts = [
+                    *(_image_facts(path, text) if image_source else []),
+                    *(
+                        ManifestFact(fact.kind, "ansible", fact.identity, fact.value)
+                        for fact in collect_topology(path, text)
+                    ),
+                ]
         except (
             RepositoryEvidenceError,
             UnicodeDecodeError,
