@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.javascript_manifests import (
     parse_package_json,
     parse_package_lock,
@@ -113,33 +114,6 @@ def _mapping_dependencies(
     for name, version in sorted(data.items())[:MAX_MANIFEST_ITEMS]:
         if isinstance(name, str) and isinstance(version, (str, int, float)):
             facts.append(_dependency(kind, component, name, version, scope))
-    return facts
-
-
-def _parse_go_mod(text: str) -> list[ManifestFact]:
-    """Parse Go language and module requirement declarations."""
-
-    facts = []
-    in_require = False
-    for raw in text.splitlines():
-        line = raw.strip()
-        if line.startswith("go "):
-            facts.append(
-                ManifestFact(
-                    "runtime.declared", "go", "go", {"name": "go", "constraint": line[3:].strip()}
-                )
-            )
-        elif line == "require (":
-            in_require = True
-        elif line == ")" and in_require:
-            in_require = False
-        elif line.startswith("require ") or in_require:
-            body = line.removeprefix("require ").split("//", 1)[0].strip()
-            parts = body.split()
-            if len(parts) >= 2:
-                facts.append(_dependency("dependency.declared", "go", parts[0], parts[1], "module"))
-        if len(facts) >= MAX_MANIFEST_ITEMS:
-            break
     return facts
 
 
@@ -260,7 +234,8 @@ MANIFEST_COLLECTORS = (
     ),
     ManifestCollector("javascript", _name_is("yarn.lock"), parse_yarn_lock),
     ManifestCollector("javascript", _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
-    ManifestCollector("go", _name_is("go.mod"), _without_notices(_parse_go_mod)),
+    ManifestCollector("go", _name_is("go.mod"), parse_go_mod),
+    ManifestCollector("go", _name_is("go.sum"), parse_go_sum),
     ManifestCollector("php", _name_is("composer.json"), _without_notices(_parse_composer_declared)),
     ManifestCollector("php", _name_is("composer.lock"), _without_notices(_parse_composer_locked)),
     ManifestCollector(

@@ -78,7 +78,11 @@ def test_supported_manifest_parsers_emit_typed_facts() -> None:
 
     assert {fact.kind for fact in pyproject} == {"runtime.declared", "dependency.declared"}
     assert {fact.kind for fact in package} == {"runtime.declared", "dependency.declared"}
-    assert {fact.kind for fact in go} == {"runtime.declared", "dependency.declared"}
+    assert {fact.kind for fact in go} == {
+        "repository.manifest",
+        "runtime.declared",
+        "dependency.declared",
+    }
     assert {fact.kind for fact in composer} == {"dependency.locked"}
     assert [(fact.component, fact.identity, fact.value) for fact in ansible] == [
         (
