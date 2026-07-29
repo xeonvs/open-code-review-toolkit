@@ -19,10 +19,12 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_text,
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.invocation import collect_invocation_evidence
 from ocr_toolkit.evidence.mcp import TOOL_NAME, evidence_summary
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import RepositoryEvidenceError
 from ocr_toolkit.evidence.store import EvidenceStoreError
+from ocr_toolkit.providers.gitlab import invocation_identifiers
 
 STDERR_PROBE_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
@@ -110,6 +112,12 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     try:
         prepare_artifact_directory(artifacts)
         store = collect_repository_evidence(base_ref=refs.base, head_ref=refs.head)
+        head_sha = store.head.commit_sha if store.head else ""
+        identifiers = invocation_identifiers(os.environ)
+        for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
+            if not store.add(record):
+                store.add_diagnostic("review invocation evidence was truncated by store limits")
+                break
         store.write(artifacts.store)
         composition = mcp_config.build_mcp_composition()
         bootstrap = render_bootstrap(store, capabilities=composition.capabilities)

@@ -40,6 +40,7 @@ KNOWN_KINDS = frozenset(
         "ansible.role_defaults",
         "ansible.inventory",
         "ansible.inventory_group",
+        "review.ci_context",
         "dependency.declared",
         "dependency.locked",
         "runtime.declared",

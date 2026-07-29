@@ -5,6 +5,8 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 ## Preserved safety properties
 
 - Repository reads are bounded, rooted, symlink-aware, and exclude common dependency/build trees.
+- Review-invocation metadata is provider-normalized from a closed allowlist. GitLab evidence includes only bounded numeric project, pipeline, job, and merge-request identifiers; URLs, refs, tokens, and arbitrary environment values are not collected. Invocation facts carry a distinct trust class and are not treated as repository or toolkit assertions.
+- Review-invocation metadata is provider-normalized from a closed allowlist. GitLab evidence includes only bounded numeric project, pipeline, job, and merge-request identifiers; URLs, refs, tokens, and arbitrary environment values are not collected. Invocation facts carry a distinct trust class and are not treated as repository or toolkit assertions.
 - Generated Markdown escapes control characters and neutralizes GitLab quick actions.
 - Secrets and credential-shaped values are redacted before operational output.
 - OCR result and provider response reads have byte limits.

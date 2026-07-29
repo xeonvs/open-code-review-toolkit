@@ -37,6 +37,7 @@ class TrustClass(str, Enum):
     TOOLKIT = "toolkit"
     TARGET_REPOSITORY = "target_repository"
     SOURCE_REPOSITORY = "source_repository"
+    INVOCATION = "invocation"
     DERIVED = "derived"
 
 

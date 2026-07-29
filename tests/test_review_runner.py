@@ -9,6 +9,7 @@ import subprocess
 from contextlib import redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 import pytest
 
@@ -144,6 +145,15 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
     artifacts = review_runner.repository_artifacts(tmp_path)
 
     class Store:
+        head = SimpleNamespace(commit_sha="b" * 40)
+
+        def add(self, record: object) -> bool:
+            events.append(("enrich", record))
+            return True
+
+        def add_diagnostic(self, diagnostic: str) -> None:
+            events.append(("diagnostic", diagnostic))
+
         def write(self, path: Path) -> None:
             events.append(("write", path))
 
@@ -167,6 +177,12 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
     with (
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
         patched_attr(review_runner, "collect_repository_evidence", collect),
+        patched_attr(
+            review_runner,
+            "collect_invocation_evidence",
+            lambda _identifiers, *, head_sha: (f"invocation:{head_sha}",),
+        ),
+        patched_attr(review_runner, "invocation_identifiers", lambda _environment: ("ci",)),
         patched_attr(review_runner.mcp_config, "build_mcp_composition", lambda: composition),
         patched_attr(
             review_runner.mcp_config,
@@ -194,11 +210,12 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
 
     assert result == 7
     assert events[0] == ("collect", {"base_ref": "base", "head_ref": "head"})
-    assert events[1] == ("write", artifacts.store)
-    assert events[2] == ("bootstrap", artifacts.bootstrap, "bootstrap")
-    assert events[3] == "apply"
-    assert events[4][0] == "ocr"  # type: ignore[index]
-    assert events[4][3][-2:] == [  # type: ignore[index]
+    assert events[1] == ("enrich", f"invocation:{'b' * 40}")
+    assert events[2] == ("write", artifacts.store)
+    assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")
+    assert events[4] == "apply"
+    assert events[5][0] == "ocr"  # type: ignore[index]
+    assert events[5][3][-2:] == [  # type: ignore[index]
         "--background-file",
         str(artifacts.bootstrap),
     ]
