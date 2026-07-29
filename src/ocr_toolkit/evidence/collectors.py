@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 import tomllib  # type: ignore[import-untyped]
 
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
+from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceDelta,
@@ -19,16 +20,22 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
-from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.evidence.repository import (
+    GitRepositoryReader,
+    RepositoryEvidenceError,
+    RepositoryObject,
+)
 
 MAX_MANIFEST_ITEMS = 512
+MAX_MANIFEST_INCLUDE_FILES = 32
+MAX_MANIFEST_INCLUDE_DEPTH = 8
+MAX_MANIFEST_INCLUDE_DIAGNOSTICS = 64
+MAX_MANIFEST_INCLUDE_EDGES = 4_096
 REQUIREMENT_RE = re.compile(
     r"^([A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?)\s*"
     r"(?:===|==|~=|>=|<=|!=|>|<)\s*([^;\s]+)"
 )
 IMAGE_LINE_RE = re.compile(r"^\s*image\s*:\s*['\"]?([^'\"\s#]+)")
-ANSIBLE_NAME_RE = re.compile(r"^\s*-?\s*name\s*:\s*['\"]?([^'\"#\s]+)")
-ANSIBLE_VERSION_RE = re.compile(r"^\s*version\s*:\s*['\"]?([^'\"#\s]+)")
 GUIDANCE_PATHS = {
     "PR_REVIEW.md",
     "AGENTS.md",
@@ -58,12 +65,30 @@ class ManifestFact:
 
 
 @dataclass(frozen=True, slots=True)
+class ManifestParseResult:
+    """Return bounded manifest facts together with safe coverage notices."""
+
+    facts: tuple[ManifestFact, ...]
+    notices: tuple[str, ...] = ()
+    include_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ManifestCollector:
     """Bind manifest path matching, ecosystem metadata, and a bounded parser."""
 
     ecosystem: str
     matches: Callable[[str], bool]
-    parse: Callable[[str], list[ManifestFact]]
+    parse: Callable[[str], ManifestParseResult]
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestBlobSet:
+    """Return immutable manifest blobs and explicit graph-read diagnostics."""
+
+    blobs: dict[str, bytes]
+    galaxy_paths: tuple[str, ...]
+    diagnostics: tuple[str, ...]
 
 
 def _dependency(kind: str, component: str, name: str, version: object, scope: str) -> ManifestFact:
@@ -289,31 +314,30 @@ def _parse_composer(text: str, *, locked: bool) -> list[ManifestFact]:
     return facts[:MAX_MANIFEST_ITEMS]
 
 
-def _parse_ansible_requirements(text: str) -> list[ManifestFact]:
-    """Parse bounded Ansible collection/role name and version pairs."""
+def _parse_ansible_requirements(text: str) -> ManifestParseResult:
+    """Parse Galaxy roles and collections while preserving optional fields."""
 
+    parsed = parse_galaxy_requirements(text)
     facts = []
-    pending_name: str | None = None
-    for line in text.splitlines():
-        name = ANSIBLE_NAME_RE.match(line)
-        if name:
-            pending_name = name.group(1)
-            continue
-        version = ANSIBLE_VERSION_RE.match(line)
-        if version and pending_name:
-            facts.append(
-                _dependency(
-                    "dependency.declared",
-                    "ansible",
-                    pending_name,
-                    version.group(1),
-                    "requirements",
-                )
+    for item in parsed.requirements:
+        value: dict[str, EvidenceValue] = {
+            "name": item.name,
+            "requirement_type": item.requirement_type,
+            "scope": item.requirement_type,
+            "version": item.version,
+            "version_state": "declared" if item.version is not None else "unspecified",
+        }
+        if item.source is not None:
+            value["source"] = item.source
+        facts.append(
+            ManifestFact(
+                "dependency.declared",
+                "ansible",
+                f"{item.requirement_type}:{item.name.casefold()}",
+                value,
             )
-            pending_name = None
-        if len(facts) >= MAX_MANIFEST_ITEMS:
-            break
-    return facts
+        )
+    return ManifestParseResult(tuple(facts), parsed.notices, parsed.include_paths)
 
 
 def _parse_composer_declared(text: str) -> list[ManifestFact]:
@@ -335,6 +359,19 @@ def _name_is(*names: str) -> Callable[[str], bool]:
     return lambda path: PurePosixPath(path).name.casefold() in normalized
 
 
+def _without_notices(
+    parser: Callable[[str], list[ManifestFact]],
+) -> Callable[[str], ManifestParseResult]:
+    """Adapt a parser whose bounded format cannot yet emit coverage notices."""
+
+    def parse(text: str) -> ManifestParseResult:
+        """Return parser facts through the common manifest result contract."""
+
+        return ManifestParseResult(tuple(parser(text)))
+
+    return parse
+
+
 def _is_python_requirements(path: str) -> bool:
     """Match Python requirement manifests without matching Ansible YAML."""
 
@@ -343,13 +380,19 @@ def _is_python_requirements(path: str) -> bool:
 
 
 MANIFEST_COLLECTORS = (
-    ManifestCollector("python", _name_is("pyproject.toml"), _parse_pyproject),
-    ManifestCollector("python", _is_python_requirements, _parse_requirements),
-    ManifestCollector("javascript", _name_is("package.json"), _parse_package_json),
-    ManifestCollector("javascript", _name_is("package-lock.json"), _parse_package_lock),
-    ManifestCollector("go", _name_is("go.mod"), _parse_go_mod),
-    ManifestCollector("php", _name_is("composer.json"), _parse_composer_declared),
-    ManifestCollector("php", _name_is("composer.lock"), _parse_composer_locked),
+    ManifestCollector("python", _name_is("pyproject.toml"), _without_notices(_parse_pyproject)),
+    ManifestCollector("python", _is_python_requirements, _without_notices(_parse_requirements)),
+    ManifestCollector(
+        "javascript", _name_is("package.json"), _without_notices(_parse_package_json)
+    ),
+    ManifestCollector(
+        "javascript",
+        _name_is("package-lock.json"),
+        _without_notices(_parse_package_lock),
+    ),
+    ManifestCollector("go", _name_is("go.mod"), _without_notices(_parse_go_mod)),
+    ManifestCollector("php", _name_is("composer.json"), _without_notices(_parse_composer_declared)),
+    ManifestCollector("php", _name_is("composer.lock"), _without_notices(_parse_composer_locked)),
     ManifestCollector(
         "ansible",
         _name_is("requirements.yml", "requirements.yaml"),
@@ -371,7 +414,7 @@ def parse_manifest(path: str, text: str) -> list[ManifestFact]:
     """Parse a supported manifest through the authoritative collector registry."""
 
     collector = manifest_collector(path)
-    return collector.parse(text) if collector else []
+    return list(collector.parse(text).facts) if collector else []
 
 
 def is_supported_manifest(path: str) -> bool:
@@ -434,6 +477,205 @@ def _is_context_yaml(path: str, changed: set[str]) -> bool:
     )
 
 
+def _resolve_manifest_include(path: str, include_path: str) -> str | None:
+    """Resolve a Galaxy include inside the immutable repository tree."""
+
+    if (
+        not include_path
+        or include_path.startswith(("/", "~"))
+        or "\x00" in include_path
+        or ":" in include_path
+        or "\\" in include_path
+    ):
+        return None
+    parts: list[str] = []
+    for part in (PurePosixPath(path).parent / include_path).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                return None
+            parts.pop()
+        else:
+            parts.append(part)
+    resolved = "/".join(parts)
+    return resolved if resolved.casefold().endswith((".yml", ".yaml")) else None
+
+
+def _include_cycle_diagnostics(edges: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """Describe one canonical closing edge per cyclic Galaxy component."""
+
+    nodes = set(edges)
+    nodes.update(target for targets in edges.values() for target in targets)
+    visited: set[str] = set()
+    finish_order: list[str] = []
+    for root in sorted(nodes):
+        if root in visited:
+            continue
+        visited.add(root)
+        traversal: list[tuple[str, bool]] = [(root, False)]
+        while traversal:
+            path, expanded = traversal.pop()
+            if expanded:
+                finish_order.append(path)
+                continue
+            traversal.append((path, True))
+            for target in reversed(sorted(edges.get(path, ()))):
+                if target not in visited:
+                    visited.add(target)
+                    traversal.append((target, False))
+
+    reverse_edges: dict[str, list[str]] = {path: [] for path in nodes}
+    for path, targets in edges.items():
+        for target in targets:
+            reverse_edges[target].append(path)
+    components: list[tuple[str, ...]] = []
+    assigned: set[str] = set()
+    for root in reversed(finish_order):
+        if root in assigned:
+            continue
+        component: list[str] = []
+        component_stack = [root]
+        assigned.add(root)
+        while component_stack:
+            path = component_stack.pop()
+            component.append(path)
+            for source in reversed(sorted(reverse_edges[path])):
+                if source not in assigned:
+                    assigned.add(source)
+                    component_stack.append(source)
+        components.append(tuple(component))
+
+    diagnostics: list[str] = []
+
+    def component_key(path: str) -> tuple[int, str, str]:
+        """Order graph paths by repository depth and stable spelling."""
+
+        return path.count("/"), path.casefold(), path
+
+    for component in sorted(components, key=lambda item: min(component_key(path) for path in item)):
+        members = set(component)
+        anchor = min(component, key=component_key)
+        if len(component) == 1 and anchor not in edges.get(anchor, ()):
+            continue
+        # Every predecessor inside a strongly connected component closes a
+        # path back to the canonical anchor; selecting one makes diagnostics
+        # independent from root discovery and traversal order.
+        source = min(
+            (path for path in members if anchor in edges.get(path, ())),
+            key=component_key,
+        )
+        diagnostics.append(f"{source}: Ansible Galaxy include cycle skipped: {anchor}")
+    return tuple(diagnostics)
+
+
+def _bound_include_diagnostics(diagnostics: list[str]) -> tuple[str, ...]:
+    """Cap graph diagnostics and retain one explicit truncation notice."""
+
+    if len(diagnostics) <= MAX_MANIFEST_INCLUDE_DIAGNOSTICS:
+        return tuple(diagnostics)
+    return (
+        *diagnostics[: MAX_MANIFEST_INCLUDE_DIAGNOSTICS - 1],
+        "Ansible Galaxy include diagnostics were truncated",
+    )
+
+
+def _read_manifest_graph(
+    reader: GitRepositoryReader,
+    entries_by_path: Mapping[str, RepositoryObject],
+    initial_paths: tuple[str, ...],
+    initial_blobs: dict[str, bytes],
+) -> ManifestBlobSet:
+    """Read bounded Galaxy includes in one immutable Git batch per graph depth."""
+
+    blobs = dict(initial_blobs)
+    diagnostics: list[str] = []
+    visited: set[str] = set()
+    admitted = set(initial_paths)
+    root_paths = set(initial_paths)
+    edges: dict[str, list[str]] = {}
+    pending = [(path, "") for path in initial_paths]
+    included_files = 0
+    file_limit_reported = False
+    included_edges = 0
+    edge_limit_reported = False
+    for depth in range(MAX_MANIFEST_INCLUDE_DEPTH + 1):
+        if not pending:
+            break
+        level_sources: dict[str, list[str]] = {}
+        for path, included_from in pending:
+            level_sources.setdefault(path, []).append(included_from)
+        level = [
+            (path, tuple(dict.fromkeys(level_sources[path]))) for path in sorted(level_sources)
+        ]
+        pending = []
+        to_read: list[RepositoryObject] = []
+        process_paths: list[str] = []
+        for path, included_from_values in level:
+            if path in visited:
+                continue
+            included_from = next((value for value in included_from_values if value), "")
+            entry = entries_by_path.get(path)
+            if entry is None or entry.is_symlink or entry.is_submodule:
+                for source in included_from_values:
+                    diagnostics.append(f"{source}: Ansible Galaxy include is missing: {path}")
+                visited.add(path)
+                continue
+            if path not in root_paths and path not in admitted:
+                if included_files >= MAX_MANIFEST_INCLUDE_FILES:
+                    if not file_limit_reported:
+                        diagnostics.append(
+                            f"{included_from}: Ansible Galaxy includes were truncated after "
+                            f"{MAX_MANIFEST_INCLUDE_FILES} files"
+                        )
+                        file_limit_reported = True
+                    continue
+                admitted.add(path)
+                included_files += 1
+            if path not in blobs:
+                to_read.append(entry)
+            process_paths.append(path)
+        if to_read:
+            read = reader.read_candidate_blobs(tuple(to_read))
+            blobs.update(read.blobs)
+            diagnostics.extend(read.diagnostics)
+        for path in process_paths:
+            visited.add(path)
+            blob = blobs.get(path)
+            if blob is None:
+                continue
+            try:
+                parsed = parse_galaxy_requirements(blob.decode("utf-8"))
+            except UnicodeDecodeError:
+                diagnostics.append(f"{path}: Ansible Galaxy include is not UTF-8")
+                continue
+            for include_path in parsed.include_paths:
+                resolved = _resolve_manifest_include(path, include_path)
+                if resolved is None:
+                    diagnostics.append(f"{path}: invalid Ansible Galaxy include skipped")
+                    continue
+                if included_edges >= MAX_MANIFEST_INCLUDE_EDGES:
+                    if not edge_limit_reported:
+                        diagnostics.append(
+                            f"{path}: Ansible Galaxy include graph was truncated after "
+                            f"{MAX_MANIFEST_INCLUDE_EDGES} edges"
+                        )
+                        edge_limit_reported = True
+                    continue
+                included_edges += 1
+                edges.setdefault(path, []).append(resolved)
+                if depth >= MAX_MANIFEST_INCLUDE_DEPTH:
+                    diagnostics.append(
+                        f"{path}: Ansible Galaxy include depth exceeded at {resolved}"
+                    )
+                else:
+                    pending.append((resolved, path))
+    normalized_edges = {path: tuple(dict.fromkeys(targets)) for path, targets in edges.items()}
+    diagnostics.extend(_include_cycle_diagnostics(normalized_edges))
+    galaxy_paths = tuple(sorted(path for path in visited if path in blobs))
+    return ManifestBlobSet(blobs, galaxy_paths, _bound_include_diagnostics(diagnostics))
+
+
 def collect_ref_facts(
     reader: GitRepositoryReader,
     commit_sha: str,
@@ -448,6 +690,7 @@ def collect_ref_facts(
     trust = TrustClass.TARGET_REPOSITORY if ref == RefRole.BASE else TrustClass.SOURCE_REPOSITORY
     changed = {path.casefold() for path in changed_paths}
     entries = reader.list_objects(commit_sha)
+    entries_by_path = {entry.path: entry for entry in entries}
     candidates = tuple(
         entry
         for entry in entries
@@ -470,8 +713,23 @@ def collect_ref_facts(
         return records, diagnostics
     blobs = read.blobs
     diagnostics.extend(f"{ref.value}:{message}" for message in read.diagnostics)
-    for entry in candidates:
-        path = entry.path
+    galaxy_roots = tuple(
+        entry.path
+        for entry in candidates
+        if (collector := manifest_collector(entry.path)) is not None
+        and collector.ecosystem == "ansible"
+        and entry.path in blobs
+    )
+    try:
+        graph = _read_manifest_graph(reader, entries_by_path, galaxy_roots, blobs)
+    except RepositoryEvidenceError as exc:
+        diagnostics.append(f"collector include batch read failed: {exc}")
+        graph = ManifestBlobSet(blobs, galaxy_roots, ())
+    blobs = graph.blobs
+    diagnostics.extend(f"{ref.value}:{message}" for message in graph.diagnostics)
+    paths = dict.fromkeys((*tuple(entry.path for entry in candidates), *graph.galaxy_paths))
+    galaxy_paths = set(graph.galaxy_paths)
+    for path in paths:
         if path not in blobs:
             # Bounded candidate omissions are already represented by explicit
             # coverage diagnostics; they must not abort the remaining facts.
@@ -484,6 +742,7 @@ def collect_ref_facts(
         topology_source = topology_candidate(path)
         if (
             not is_supported_manifest(path)
+            and path not in galaxy_paths
             and not image_source
             and not guidance_source
             and not topology_source
@@ -492,10 +751,16 @@ def collect_ref_facts(
         try:
             blob = blobs[path]
             text = blob.decode("utf-8")
-            if is_supported_manifest(path):
-                collector = manifest_collector(path)
+            if is_supported_manifest(path) or path in galaxy_paths:
+                collector = (
+                    manifest_collector(path)
+                    if is_supported_manifest(path)
+                    else manifest_collector("requirements.yml")
+                )
                 if collector is None:  # pragma: no cover - guarded by registry predicate
                     raise ValueError("supported manifest has no collector")
+                parsed = collector.parse(text)
+                diagnostics.extend(f"{ref.value}:{path}: {notice}" for notice in parsed.notices)
                 facts = [
                     ManifestFact(
                         "repository.manifest",
@@ -503,7 +768,7 @@ def collect_ref_facts(
                         path,
                         {"path": path, "ecosystem": collector.ecosystem},
                     ),
-                    *collector.parse(text),
+                    *parsed.facts,
                 ]
             elif guidance_source:
                 facts = (

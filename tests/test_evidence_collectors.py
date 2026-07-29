@@ -6,13 +6,22 @@ import subprocess
 from pathlib import Path
 
 from ocr_toolkit.evidence import GitRepositoryReader, RefRole
+from ocr_toolkit.evidence.ansible_requirements import (
+    MAX_GALAXY_REQUIREMENTS,
+    parse_galaxy_requirements,
+)
 from ocr_toolkit.evidence.collectors import (
     MANIFEST_COLLECTORS,
+    MAX_MANIFEST_INCLUDE_DIAGNOSTICS,
+    MAX_MANIFEST_INCLUDE_EDGES,
+    MAX_MANIFEST_INCLUDE_FILES,
+    _bound_include_diagnostics,
     collect_ref_facts,
     fact_deltas,
     manifest_collector,
     parse_manifest,
 )
+from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
 
 
 def _git(root: Path, *args: str) -> str:
@@ -25,6 +34,20 @@ def _git(root: Path, *args: str) -> str:
         capture_output=True,
     )
     return completed.stdout.strip()
+
+
+class RecordingReader(GitRepositoryReader):
+    """Record batch sizes while retaining production immutable reads."""
+
+    def __init__(self, root: Path) -> None:
+        super().__init__(root)
+        self.batch_sizes: list[int] = []
+
+    def read_candidate_blobs(self, entries: tuple[RepositoryObject, ...]) -> BoundedBlobRead:
+        """Record one batch and delegate its authenticated object reads."""
+
+        self.batch_sizes.append(len(entries))
+        return super().read_candidate_blobs(entries)
 
 
 def test_supported_manifest_parsers_emit_typed_facts() -> None:
@@ -53,9 +76,105 @@ def test_supported_manifest_parsers_emit_typed_facts() -> None:
     assert {fact.kind for fact in package} == {"runtime.declared", "dependency.declared"}
     assert {fact.kind for fact in go} == {"runtime.declared", "dependency.declared"}
     assert {fact.kind for fact in composer} == {"dependency.locked"}
-    assert [(fact.component, fact.identity) for fact in ansible] == [
-        ("ansible", "requirements:community.general")
+    assert [(fact.component, fact.identity, fact.value) for fact in ansible] == [
+        (
+            "ansible",
+            "collection:community.general",
+            {
+                "name": "community.general",
+                "requirement_type": "collection",
+                "scope": "collection",
+                "version": "10.1.0",
+                "version_state": "declared",
+            },
+        )
     ]
+
+
+def test_ansible_requirements_preserve_types_sources_and_missing_versions() -> None:
+    """Model common Galaxy role and collection shapes without inventing pins."""
+
+    parsed = parse_galaxy_requirements(
+        """
+roles:
+  - name: synthetic.web
+  - src: https://user:secret@example.invalid/team/role.git
+    name: local_role
+    version: v2.0.0
+collections:
+  - name: synthetic.collection
+    source: https://galaxy.example.invalid/api/
+    version: '>=1.0.0' # supported range
+  - synthetic.unpinned
+"""
+    )
+
+    assert parsed.notices == ()
+    assert [
+        (item.requirement_type, item.name, item.version, item.source)
+        for item in parsed.requirements
+    ] == [
+        ("role", "synthetic.web", None, None),
+        (
+            "role",
+            "local_role",
+            "v2.0.0",
+            "https://***@example.invalid/team/role.git",
+        ),
+        (
+            "collection",
+            "synthetic.collection",
+            ">=1.0.0",
+            "https://galaxy.example.invalid/api/",
+        ),
+        ("collection", "synthetic.unpinned", None, None),
+    ]
+
+
+def test_ansible_requirements_support_legacy_role_list_and_json_mapping() -> None:
+    """Retain the historical role-only form and JSON-compatible YAML subset."""
+
+    legacy = parse_galaxy_requirements(
+        "- name: synthetic.one\n"
+        "- src: git+https://example.invalid/two.git\n  version: main\n"
+        "- synthetic.three, 3.0.0\n"
+    )
+    json_mapping = parse_galaxy_requirements(
+        '{"collections":[{"name":"synthetic.collection"}],"roles":[]}'
+    )
+
+    assert [(item.requirement_type, item.name) for item in legacy.requirements] == [
+        ("role", "synthetic.one"),
+        ("role", "git+https://example.invalid/two.git"),
+        ("role", "synthetic.three"),
+    ]
+    assert legacy.requirements[1].source == "git+https://example.invalid/two.git"
+    assert legacy.requirements[2].version == "3.0.0"
+    assert [(item.requirement_type, item.name) for item in json_mapping.requirements] == [
+        ("collection", "synthetic.collection")
+    ]
+
+
+def test_ansible_requirements_report_malformed_conflicting_and_truncated_items() -> None:
+    """Make lossy parsing explicit while preserving a deterministic first declaration."""
+
+    document = (
+        "collections:\n"
+        "  - name: synthetic.same\n    version: 1.0.0\n"
+        "  - name: synthetic.same\n    version: 2.0.0\n"
+        "  - unsupported: item\n"
+        + "".join(f"  - name: synthetic.item_{index}\n" for index in range(MAX_GALAXY_REQUIREMENTS))
+    )
+
+    parsed = parse_galaxy_requirements(document)
+
+    assert parsed.requirements[0].version == "1.0.0"
+    assert len(parsed.requirements) == MAX_GALAXY_REQUIREMENTS - 1
+    assert parsed.notices == (
+        "Ansible Galaxy skipped 1 malformed requirement item(s)",
+        "Ansible Galaxy skipped 1 conflicting duplicate requirement item(s)",
+        f"Ansible Galaxy requirements were truncated after {MAX_GALAXY_REQUIREMENTS} items",
+    )
 
 
 def test_manifest_registry_is_authoritative_and_unambiguous() -> None:
@@ -237,3 +356,265 @@ def test_collector_reports_oversized_candidate_and_keeps_other_facts(tmp_path: P
     assert any(record.source_path == "requirements.txt" for record in records)
     assert not any(record.source_path == "package.json" for record in records)
     assert diagnostics == ["head:omitted package.json: blob exceeds 20 bytes"]
+
+
+def test_ansible_requirement_includes_are_bounded_batched_and_typed(tmp_path: Path) -> None:
+    """Read one immutable batch per include depth and type arbitrary include names."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text(
+        "- include: requirements/one.yml\n- include: requirements/two.yml\n",
+        encoding="utf-8",
+    )
+    requirements = tmp_path / "requirements"
+    requirements.mkdir()
+    (requirements / "one.yml").write_text(
+        "- name: synthetic.one\n  version: 1.0.0\n", encoding="utf-8"
+    )
+    (requirements / "two.yml").write_text(
+        "- name: synthetic.two\n  version: 2.0.0\n", encoding="utf-8"
+    )
+    _git(tmp_path, "add", "requirements.yml", "requirements")
+    _git(tmp_path, "commit", "-qm", "requirements")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    reader = RecordingReader(tmp_path)
+    records, diagnostics = collect_ref_facts(reader, head, RefRole.HEAD)
+
+    dependencies = {
+        (record.source_path, record.value["fact"]["name"])
+        for record in records
+        if record.kind == "dependency.declared"
+    }
+    assert dependencies == {
+        ("requirements/one.yml", "synthetic.one"),
+        ("requirements/two.yml", "synthetic.two"),
+    }
+    assert diagnostics == []
+    assert reader.batch_sizes == [1, 2]
+
+
+def test_ansible_requirement_shared_include_is_read_once_per_depth(tmp_path: Path) -> None:
+    """Deduplicate a shared immutable object before constructing its Git batch."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text(
+        "- include: requirements/one.yml\n- include: requirements/two.yml\n",
+        encoding="utf-8",
+    )
+    requirements = tmp_path / "requirements"
+    requirements.mkdir()
+    for name in ("one", "two"):
+        (requirements / f"{name}.yml").write_text("- include: shared.yml\n", encoding="utf-8")
+    (requirements / "shared.yml").write_text(
+        "- name: synthetic.shared\n  version: 1.0.0\n", encoding="utf-8"
+    )
+    _git(tmp_path, "add", "requirements.yml", "requirements")
+    _git(tmp_path, "commit", "-qm", "shared requirement")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    reader = RecordingReader(tmp_path)
+    records, diagnostics = collect_ref_facts(reader, head, RefRole.HEAD)
+
+    shared = [
+        record
+        for record in records
+        if record.kind == "dependency.declared" and record.source_path == "requirements/shared.yml"
+    ]
+    assert len(shared) == 1
+    assert diagnostics == []
+    assert reader.batch_sizes == [1, 2, 1]
+
+
+def test_ansible_requirement_includes_report_missing_cycle_and_traversal(
+    tmp_path: Path,
+) -> None:
+    """Reject escaping paths and cycles while retaining safe sibling facts."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text(
+        "- include: nested/roles.yml\n- include: ../outside.yml\n- include: missing.yml\n",
+        encoding="utf-8",
+    )
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "roles.yml").write_text(
+        "- name: synthetic.safe\n- include: ../requirements.yml\n", encoding="utf-8"
+    )
+    _git(tmp_path, "add", "requirements.yml", "nested/roles.yml")
+    _git(tmp_path, "commit", "-qm", "include boundaries")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert any(
+        record.kind == "dependency.declared"
+        and record.source_path == "nested/roles.yml"
+        and record.value["fact"]["name"] == "synthetic.safe"
+        for record in records
+    )
+    assert diagnostics == [
+        "head:requirements.yml: invalid Ansible Galaxy include skipped",
+        "head:requirements.yml: Ansible Galaxy include is missing: missing.yml",
+        "head:nested/roles.yml: Ansible Galaxy include cycle skipped: requirements.yml",
+    ]
+
+
+def test_ansible_requirement_cycle_is_reported_when_both_files_are_roots(
+    tmp_path: Path,
+) -> None:
+    """Detect a cycle even when every conventional requirements file is preloaded."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text(
+        "- include: nested/requirements.yml\n", encoding="utf-8"
+    )
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "requirements.yml").write_text("- include: ../requirements.yml\n", encoding="utf-8")
+    _git(tmp_path, "add", "requirements.yml", "nested/requirements.yml")
+    _git(tmp_path, "commit", "-qm", "cycle")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    _records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert diagnostics == [
+        "head:nested/requirements.yml: Ansible Galaxy include cycle skipped: requirements.yml"
+    ]
+
+
+def test_ansible_requirement_graph_diagnostics_have_one_bounded_tail() -> None:
+    """Keep adversarial include failures within one deterministic diagnostic budget."""
+
+    diagnostics = [f"missing include {index}" for index in range(100)]
+
+    bounded = _bound_include_diagnostics(diagnostics)
+
+    assert len(bounded) == MAX_MANIFEST_INCLUDE_DIAGNOSTICS
+    assert bounded[-1] == "Ansible Galaxy include diagnostics were truncated"
+
+
+def test_ansible_requirement_include_file_limit_is_reported_once(tmp_path: Path) -> None:
+    """Stop expanding a wide include graph with one stable coverage notice."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    include_count = MAX_MANIFEST_INCLUDE_FILES + 2
+    (tmp_path / "requirements.yml").write_text(
+        "".join(f"- include: requirements/item-{index}.yml\n" for index in range(include_count)),
+        encoding="utf-8",
+    )
+    requirements = tmp_path / "requirements"
+    requirements.mkdir()
+    for index in range(include_count):
+        (requirements / f"item-{index}.yml").write_text(
+            f"- name: synthetic.role_{index}\n", encoding="utf-8"
+        )
+    _git(tmp_path, "add", "requirements.yml", "requirements")
+    _git(tmp_path, "commit", "-qm", "wide requirements")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    dependencies = [record for record in records if record.kind == "dependency.declared"]
+    assert len(dependencies) == MAX_MANIFEST_INCLUDE_FILES
+    assert diagnostics == [
+        "head:requirements.yml: Ansible Galaxy includes were truncated after "
+        f"{MAX_MANIFEST_INCLUDE_FILES} files"
+    ]
+
+
+def test_ansible_requirement_include_depth_is_reported_once(tmp_path: Path) -> None:
+    """Keep a deep include chain bounded while retaining its admitted facts."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    chain = tmp_path / "requirements-chain"
+    chain.mkdir()
+    (tmp_path / "requirements.yml").write_text(
+        "- include: requirements-chain/level-0.yml\n", encoding="utf-8"
+    )
+    for index in range(9):
+        next_include = f"- include: level-{index + 1}.yml\n" if index < 8 else ""
+        (chain / f"level-{index}.yml").write_text(
+            f"- name: synthetic.depth_{index}\n{next_include}", encoding="utf-8"
+        )
+    _git(tmp_path, "add", "requirements.yml", "requirements-chain")
+    _git(tmp_path, "commit", "-qm", "deep requirements")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert len([record for record in records if record.kind == "dependency.declared"]) == 8
+    assert diagnostics == [
+        "head:requirements-chain/level-7.yml: Ansible Galaxy include depth exceeded at "
+        "requirements-chain/level-8.yml"
+    ]
+
+
+def test_ansible_requirement_symlink_include_is_not_followed(tmp_path: Path) -> None:
+    """Refuse symlink targets even when their repository path looks supported."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text("- include: linked.yml\n", encoding="utf-8")
+    (tmp_path / "actual.yml").write_text("- name: synthetic.not_followed\n", encoding="utf-8")
+    (tmp_path / "linked.yml").symlink_to("actual.yml")
+    _git(tmp_path, "add", "requirements.yml", "actual.yml", "linked.yml")
+    _git(tmp_path, "commit", "-qm", "symlink include")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert not any(
+        record.kind == "dependency.declared" and record.source_path == "linked.yml"
+        for record in records
+    )
+    assert diagnostics == ["head:requirements.yml: Ansible Galaxy include is missing: linked.yml"]
+
+
+def test_ansible_requirement_include_edge_limit_is_reported_once(tmp_path: Path) -> None:
+    """Bound adversarial fan-out before it can expand the immutable read queue."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    source_count = MAX_MANIFEST_INCLUDE_EDGES // MAX_GALAXY_REQUIREMENTS + 1
+    (tmp_path / "requirements.yml").write_text(
+        "".join(f"- include: fanout/source-{index}.yml\n" for index in range(source_count)),
+        encoding="utf-8",
+    )
+    fanout = tmp_path / "fanout"
+    fanout.mkdir()
+    for source in range(source_count):
+        (fanout / f"source-{source}.yml").write_text(
+            "".join(
+                f"- include: missing-{source}-{target}.yml\n"
+                for target in range(MAX_GALAXY_REQUIREMENTS)
+            ),
+            encoding="utf-8",
+        )
+    _git(tmp_path, "add", "requirements.yml", "fanout")
+    _git(tmp_path, "commit", "-qm", "wide requirement graph")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    _, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert sum("include graph was truncated" in item for item in diagnostics) == 1
+    assert any(
+        f"Ansible Galaxy include graph was truncated after {MAX_MANIFEST_INCLUDE_EDGES} edges"
+        in item
+        for item in diagnostics
+    )
+    assert diagnostics[-1] == "head:Ansible Galaxy include diagnostics were truncated"

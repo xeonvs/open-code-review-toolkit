@@ -123,3 +123,69 @@ def test_topology_is_queryable_from_the_evidence_mcp(tmp_path: Path) -> None:
     assert item["value"]["fact"] == {"path": "inventory.yml", "group": "workers"}
     fetched = _mcp_payload(call_tool(store, {"action": "get", "id": item["id"]}))
     assert fetched["record"] == item
+
+
+def test_galaxy_requirement_change_is_queryable_from_the_evidence_mcp(
+    tmp_path: Path,
+) -> None:
+    """Carry source-aware Galaxy declarations and semantic deltas through MCP."""
+
+    environment = {
+        "GIT_AUTHOR_NAME": "Synthetic Author",
+        "GIT_AUTHOR_EMAIL": "author@example.invalid",
+        "GIT_COMMITTER_NAME": "Synthetic Committer",
+        "GIT_COMMITTER_EMAIL": "committer@example.invalid",
+    }
+
+    def git(*args: str) -> str:
+        """Run one synthetic repository command with deterministic identity."""
+
+        completed = subprocess.run(
+            ["git", "-C", str(tmp_path), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        return completed.stdout.strip()
+
+    git("init", "-q")
+    requirements = tmp_path / "requirements.yml"
+    requirements.write_text(
+        "collections:\n  - name: synthetic.collection\n    version: 1.0.0\n",
+        encoding="utf-8",
+    )
+    git("add", "requirements.yml")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+    requirements.write_text(
+        "collections:\n  - name: synthetic.collection\n    version: 2.0.0\n",
+        encoding="utf-8",
+    )
+    git("add", "requirements.yml")
+    git("commit", "-qm", "update collection")
+    head = git("rev-parse", "HEAD")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    galaxy_delta = next(
+        delta
+        for delta in store.deltas
+        if delta.kind == "dependency.declared" and delta.component == "ansible"
+    )
+    listed = _mcp_payload(
+        call_tool(
+            store,
+            {"action": "list", "component": "ansible", "ref": "head"},
+        )
+    )
+
+    assert galaxy_delta.change == "changed"
+    assert galaxy_delta.identity == ("requirements.yml:collection:synthetic.collection")
+    assert galaxy_delta.before["version"] == "1.0.0"
+    assert galaxy_delta.after["version"] == "2.0.0"
+    dependency = next(
+        record for record in listed["records"] if record["kind"] == "dependency.declared"
+    )
+    assert dependency["value"]["fact"]["requirement_type"] == "collection"
+    fetched = _mcp_payload(call_tool(store, {"action": "get", "id": dependency["id"]}))
+    assert fetched["record"] == dependency
