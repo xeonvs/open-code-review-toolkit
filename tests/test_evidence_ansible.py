@@ -36,14 +36,16 @@ def test_collects_root_playbook_without_misclassifying_generic_yaml() -> None:
 
 
 def test_collects_canonical_role_surfaces_only() -> None:
-    """Describe role metadata/defaults without scanning arbitrary role YAML."""
+    """Describe role metadata/defaults/vars without scanning arbitrary role YAML."""
 
     metadata = collect_topology("roles/api/meta/main.yml", "galaxy_info: {}\n")
     defaults = collect_topology("roles/api/defaults/main.yaml", "port: 8080\n")
+    variables = collect_topology("roles/api/vars/main.yml", "runtime_version: 2.0.0\n")
 
-    assert [(fact.kind, fact.identity) for fact in (*metadata, *defaults)] == [
+    assert [(fact.kind, fact.identity) for fact in (*metadata, *defaults, *variables)] == [
         ("ansible.role_metadata", "roles/api/meta/main.yml"),
         ("ansible.role_defaults", "roles/api/defaults/main.yaml"),
+        ("ansible.role_vars", "roles/api/vars/main.yml"),
     ]
     assert not topology_candidate("roles/api/tasks/main.yml")
 

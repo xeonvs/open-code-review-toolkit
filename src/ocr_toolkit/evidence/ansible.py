@@ -44,10 +44,11 @@ def _role_surface(path: str) -> tuple[str, str] | None:
     if (
         len(parts) == 4
         and folded[0] == "roles"
-        and folded[2] in {"meta", "defaults"}
+        and folded[2] in {"meta", "defaults", "vars"}
         and folded[3] in {"main.yml", "main.yaml"}
     ):
-        return parts[1], "metadata" if folded[2] == "meta" else "defaults"
+        surface = "metadata" if folded[2] == "meta" else folded[2]
+        return parts[1], surface
     return None
 
 

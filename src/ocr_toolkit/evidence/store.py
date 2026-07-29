@@ -38,6 +38,7 @@ KNOWN_KINDS = frozenset(
         "ansible.playbook",
         "ansible.role_metadata",
         "ansible.role_defaults",
+        "ansible.role_vars",
         "ansible.inventory",
         "ansible.inventory_group",
         "review.ci_context",
@@ -47,6 +48,7 @@ KNOWN_KINDS = frozenset(
         "runtime.detected",
         "container.image",
         "ci.image",
+        "application.version",
         "diagnostic.coverage",
     }
 )

@@ -69,6 +69,45 @@ def test_parity_matches_independently_typed_dependency_and_image() -> None:
     assert '"complete":true' in render_parity_json(store)
 
 
+def test_parity_matches_application_version_and_normalized_image_facts() -> None:
+    """Compare the final typed infrastructure shape with legacy version lines."""
+
+    store = EvidenceStore()
+    assert store.add(
+        _record(
+            "repository.context",
+            "## Python context\n- app_version: 2.0.0\n- image: `registry.example.invalid/acme/app:2.0.0`\n",
+            "legacy.context_projection",
+        )
+    )
+    assert store.add(
+        _record(
+            "application.version",
+            {
+                "identity": "values.yaml:app_version",
+                "fact": {"key": "app_version", "version": "2.0.0"},
+            },
+            "typed parser:values.yaml",
+        )
+    )
+    assert store.add(
+        _record(
+            "container.image",
+            {
+                "identity": "values.yaml:image:app",
+                "fact": {"name": "registry.example.invalid/acme/app", "version": "2.0.0"},
+            },
+            "typed parser:values.yaml",
+        )
+    )
+
+    report = compare_legacy_projection(store)
+
+    assert report.complete
+    assert report.comparable == 2
+    assert report.matched == 2
+
+
 def test_parity_reports_missing_fact_and_does_not_count_legacy_reparse() -> None:
     store = EvidenceStore()
     assert store.add(

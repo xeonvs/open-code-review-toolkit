@@ -83,13 +83,22 @@ def _typed_tokens(record: EvidenceRecord) -> set[str]:
     fact = record.value.get("fact")
     if not isinstance(fact, dict):
         return set()
-    if record.kind in {"dependency.declared", "dependency.locked"}:
+    if record.kind in {"dependency.declared", "dependency.locked", "application.version"}:
         name = fact.get("name")
+        if record.kind == "application.version":
+            name = fact.get("key")
         version = fact.get("version") or fact.get("constraint")
         if isinstance(name, str) and isinstance(version, str):
             return {f"dependency:{name.casefold()}:{version.casefold()}"}
     if record.kind in {"container.image", "ci.image"}:
         image = fact.get("image")
+        if not isinstance(image, str):
+            name = fact.get("name")
+            version = fact.get("version")
+            if isinstance(name, str) and isinstance(version, str):
+                image = (
+                    f"{name}@{version}" if version.startswith("sha256:") else f"{name}:{version}"
+                )
         if isinstance(image, str):
             return {f"image:{image.casefold()}"}
     return set()

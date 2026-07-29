@@ -12,6 +12,7 @@ from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
 from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
 from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
+from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
 from ocr_toolkit.evidence.javascript_manifests import (
     parse_package_json,
     parse_package_lock,
@@ -566,6 +567,7 @@ def collect_ref_facts(
             or PurePosixPath(entry.path).name.casefold().startswith(".gitlab-ci")
             or _is_context_yaml(entry.path, changed)
             or topology_candidate(entry.path)
+            or infrastructure_candidate(entry.path)
             or entry.path in GUIDANCE_PATHS
             or entry.path.casefold() == ACCEPTED_DECISIONS_PATH
         )
@@ -623,6 +625,7 @@ def collect_ref_facts(
         ) or _is_context_yaml(path, changed)
         guidance_source = path in GUIDANCE_PATHS or path_folded == ACCEPTED_DECISIONS_PATH
         topology_source = topology_candidate(path)
+        infrastructure_source = infrastructure_candidate(path)
         if (
             not is_supported_manifest(path)
             and path not in galaxy_paths
@@ -630,6 +633,7 @@ def collect_ref_facts(
             and not image_source
             and not guidance_source
             and not topology_source
+            and not infrastructure_source
         ):
             continue
         try:
@@ -676,8 +680,17 @@ def collect_ref_facts(
                     ]
                 )
             else:
+                infrastructure = (
+                    parse_infrastructure_pins(path, text)
+                    if infrastructure_source
+                    else ManifestParseResult(())
+                )
+                diagnostics.extend(
+                    f"{ref.value}:{path}: {notice}" for notice in infrastructure.notices
+                )
                 facts = [
                     *(_image_facts(path, text) if image_source else []),
+                    *infrastructure.facts,
                     *(
                         ManifestFact(fact.kind, "ansible", fact.identity, fact.value)
                         for fact in collect_topology(path, text)
@@ -698,6 +711,7 @@ def collect_ref_facts(
             identity = (
                 f"{path}:{fact.identity}"
                 if fact.kind.startswith(("dependency.", "runtime.", "ci.", "container."))
+                and not fact.identity.startswith(f"{path}:")
                 else fact.identity
             )
             records.append(
