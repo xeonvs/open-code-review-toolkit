@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import stat
 import subprocess
@@ -14,8 +15,197 @@ from types import SimpleNamespace
 import pytest
 
 from ocr_toolkit import review_runner
+from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from tests.support import patched_attr, patched_env
+
+
+def test_evidence_mcp_self_query_exercises_all_read_actions() -> None:
+    """Fail preflight unless summary, list, and stable-ID get share one store."""
+
+    sha = "a" * 40
+    record = EvidenceRecord(
+        kind="repository.manifest",
+        value={"path": "pyproject.toml"},
+        source_path="pyproject.toml",
+        ref=RefRole.HEAD,
+        commit_sha=sha,
+        component="python",
+        provenance="test",
+    )
+    store = EvidenceStore()
+    assert store.add(record)
+    store.head = EvidenceSnapshot(RefRole.HEAD, sha, (record,))
+
+    review_runner._verify_evidence_mcp(store)
+
+
+def test_evidence_mcp_self_query_rejects_invalid_list_envelope() -> None:
+    """Treat malformed internal MCP responses as a preflight failure."""
+
+    store = EvidenceStore()
+
+    def call(_store: EvidenceStore, arguments: object) -> dict[str, object]:
+        action = arguments.get("action") if isinstance(arguments, dict) else None
+        if action == "summary":
+            return {"isError": False}
+        return {"isError": False, "content": [{"text": json.dumps({"records": {}})}]}
+
+    with (
+        patched_attr(review_runner, "call_tool", call),
+        pytest.raises(review_runner.ReviewRunnerError, match="invalid records"),
+    ):
+        review_runner._verify_evidence_mcp(store)
+
+
+def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Path) -> None:
+    """Accept proven built-in usage and reject a completed review without it."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 2, "by_tool": {"ocr_toolkit_evidence": 2}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+        "ocr_toolkit_evidence": 2
+    }
+    assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
+        "schema_version": 1,
+        "mcp_usage": {"ocr_toolkit_evidence": 2},
+    }
+
+    result.write_text(
+        json.dumps({"status": "success", "tool_calls": {"total": 1, "by_tool": {"file_read": 1}}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
+        review_runner._record_ocr_result_mcp_usage(result, composition)
+
+
+def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> None:
+    """Do not invent an MCP-use requirement when OCR found no supported files."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps({"status": "skipped", "tool_calls": {"total": 0, "by_tool": {}}}),
+        encoding="utf-8",
+    )
+
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
+
+
+def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> None:
+    """Do not trust OCR output that impersonates toolkit-authored provenance."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 1,
+                    "by_tool": {"ocr_toolkit_evidence": 1},
+                },
+                "_ocr_toolkit": {"schema_version": 1, "mcp_usage": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="valid bounded JSON"):
+        review_runner._record_ocr_result_mcp_usage(result, composition)
+
+
+def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -> None:
+    """Aggregate only known positive tool calls under their owning servers."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "completed_with_warnings",
+                "tool_calls": {
+                    "total": 8,
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 2,
+                        "search_docs": 3,
+                        "get_docs": 2,
+                        "unconfigured_tool": 1,
+                        "invalid_bool": True,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
+            MCPCapability("documentation", ("search_docs", "get_docs")),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+        "documentation": 5,
+        "ocr_toolkit_evidence": 2,
+    }
+
+
+def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) -> None:
+    """Do not replace a result name that aliases another filesystem entry."""
+
+    target = tmp_path / "target.json"
+    original = json.dumps(
+        {
+            "status": "success",
+            "tool_calls": {
+                "total": 1,
+                "by_tool": {"ocr_toolkit_evidence": 1},
+            },
+        }
+    )
+    target.write_text(original, encoding="utf-8")
+    result = tmp_path / "result.json"
+    os.link(target, result)
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="valid bounded JSON"):
+        review_runner._record_ocr_result_mcp_usage(result, composition)
+
+    assert target.read_text(encoding="utf-8") == original
 
 
 def test_run_review_writes_private_artifacts_and_returns_success() -> None:
@@ -172,7 +362,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
 
     def run(result: Path, stderr: Path, args: list[str]) -> int:
         events.append(("ocr", result, stderr, args))
-        return 7
+        return 0
 
     with (
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
@@ -189,6 +379,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             "apply_mcp_composition",
             lambda _composition: events.append("apply"),
         ),
+        patched_attr(
+            review_runner.mcp_config,
+            "verify_mcp_composition",
+            lambda _composition: events.append("verify"),
+        ),
         patched_attr(review_runner, "render_bootstrap", lambda *_args, **_kwargs: "bootstrap"),
         patched_attr(
             review_runner,
@@ -200,6 +395,14 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             "evidence_summary",
             lambda *_args: {"base": "a" * 40, "head": "b" * 40, "records": 3},
         ),
+        patched_attr(
+            review_runner, "_verify_evidence_mcp", lambda _store: events.append("self-query")
+        ),
+        patched_attr(
+            review_runner,
+            "_record_ocr_result_mcp_usage",
+            lambda _result, _registry: events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
+        ),
         patched_attr(review_runner, "run_review", run),
     ):
         result = review_runner.run_evidence_review(
@@ -208,14 +411,17 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             ["--from", "base", "--to", "head", "--format", "json"],
         )
 
-    assert result == 7
+    assert result == 0
     assert events[0] == ("collect", {"base_ref": "base", "head_ref": "head"})
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
     assert events[2] == ("write", artifacts.store)
     assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")
     assert events[4] == "apply"
-    assert events[5][0] == "ocr"  # type: ignore[index]
-    assert events[5][3][-2:] == [  # type: ignore[index]
+    assert events[5] == "verify"
+    assert events[6] == "self-query"
+    assert events[7][0] == "ocr"  # type: ignore[index]
+    assert events[7][3][-2:] == [  # type: ignore[index]
         "--background-file",
         str(artifacts.bootstrap),
     ]
+    assert events[8] == "ocr-usage"

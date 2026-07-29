@@ -15,6 +15,7 @@ from ocr_toolkit.common.markdown import (
 from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
+from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
 from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
@@ -436,6 +437,30 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
     return f"{line} ({', '.join(detail_parts)})"
 
 
+def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
+    """Report MCP servers from the safe receipt produced by `ocr-ci review`."""
+
+    if (
+        not isinstance(toolkit_metadata, dict)
+        or toolkit_metadata.get("schema_version") != TOOLKIT_RESULT_SCHEMA_VERSION
+    ):
+        return ""
+    mcp_usage = toolkit_metadata.get("mcp_usage")
+    if not isinstance(mcp_usage, dict):
+        return ""
+    used: list[tuple[str, int]] = []
+    for raw_server, raw_count in sorted(mcp_usage.items()):
+        server = clean_text(raw_server)
+        count = nonnegative_int(raw_count)
+        if not server or count is None or count <= 0:
+            continue
+        used.append((server, count))
+    if not used:
+        return ""
+    details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
+    return f"- MCP used: {len(used)} server(s) ({details})"
+
+
 TOKEN_USAGE_KEYS = (
     "usage",
     "token_usage",
@@ -728,6 +753,7 @@ def summarize_result(
     comments: Sequence[dict[str, Any]] = (),
     omitted_count: int = 0,
     tool_calls_summary: str = "",
+    mcp_usage_summary: str = "",
     token_usage_summary: str = "",
     reviewer_guide: str = "",
     fallback_reasons: Mapping[str, int] | None = None,
@@ -791,6 +817,9 @@ def summarize_result(
 
     if tool_calls_summary:
         lines.append(tool_calls_summary)
+
+    if mcp_usage_summary:
+        lines.append(mcp_usage_summary)
 
     if token_usage_summary:
         lines.append(token_usage_summary)

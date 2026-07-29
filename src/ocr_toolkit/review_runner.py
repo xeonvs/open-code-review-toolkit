@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import subprocess
@@ -20,10 +21,16 @@ from ocr_toolkit.evidence.artifacts import (
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
-from ocr_toolkit.evidence.mcp import TOOL_NAME, evidence_summary
+from ocr_toolkit.evidence.mcp import TOOL_NAME, call_tool, evidence_summary
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import RepositoryEvidenceError
-from ocr_toolkit.evidence.store import EvidenceStoreError
+from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.ocr_result import (
+    OcrResultMalformed,
+    OcrResultMissing,
+    OcrResultTooLarge,
+    attach_toolkit_metadata,
+)
 from ocr_toolkit.providers.gitlab import invocation_identifiers
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -40,6 +47,84 @@ class ReviewRefs:
 
     base: str
     head: str
+
+
+def _verify_evidence_mcp(store: EvidenceStore) -> None:
+    """Exercise summary, paginated list, and stable-ID get before starting OCR."""
+
+    summary = call_tool(store, {"action": "summary"})
+    if summary.get("isError") is True:
+        raise ReviewRunnerError("OCR evidence MCP summary self-query failed")
+    listed = call_tool(store, {"action": "list", "ref": "head", "page_size": 1})
+    if listed.get("isError") is True:
+        raise ReviewRunnerError("OCR evidence MCP list self-query failed")
+    content = listed.get("content")
+    if not isinstance(content, list) or not content or not isinstance(content[0], dict):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned an invalid envelope")
+    text = content[0].get("text")
+    if not isinstance(text, str):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid text")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid JSON") from exc
+    records = payload.get("records") if isinstance(payload, dict) else None
+    if not isinstance(records, list):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid records")
+    if records:
+        record_id = records[0].get("id") if isinstance(records[0], dict) else None
+        fetched = call_tool(store, {"action": "get", "id": record_id})
+        if fetched.get("isError") is True:
+            raise ReviewRunnerError("OCR evidence MCP get self-query failed")
+
+
+def _mcp_usage_receipt(
+    payload: dict[str, object], composition: mcp_config.MCPComposition
+) -> dict[str, object]:
+    """Return bounded MCP usage tied to one validated review-time registry."""
+
+    status = payload.get("status")
+    if status not in {"success", "completed_with_warnings", "completed_with_errors"}:
+        if status == "skipped":
+            return {"mcp_usage": {}}
+        raise ReviewRunnerError("OCR result has an unsupported status")
+    tool_calls = payload.get("tool_calls")
+    by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+    owners = {
+        tool: capability.server
+        for capability in composition.capabilities
+        for tool in capability.tools
+    }
+    usage: dict[str, int] = {}
+    if isinstance(by_tool, dict):
+        for tool, count in by_tool.items():
+            if (
+                isinstance(tool, str)
+                and isinstance(count, int)
+                and not isinstance(count, bool)
+                and count > 0
+                and tool in owners
+            ):
+                owner = owners[tool]
+                usage[owner] = usage.get(owner, 0) + count
+    if usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
+        raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+    return {"mcp_usage": dict(sorted(usage.items()))}
+
+
+def _record_ocr_result_mcp_usage(
+    result_path: Path, composition: mcp_config.MCPComposition
+) -> dict[str, int]:
+    """Verify MCP use and bind its safe review-time receipt to the OCR result."""
+
+    try:
+        _payload, metadata = attach_toolkit_metadata(
+            result_path, lambda payload: _mcp_usage_receipt(payload, composition)
+        )
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
+        raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
+    usage = metadata.get("mcp_usage")
+    return usage if isinstance(usage, dict) else {}
 
 
 def _option_values(args: list[str], name: str, short: str | None = None) -> list[str]:
@@ -123,7 +208,9 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
         write_private_text(artifacts.bootstrap, bootstrap)
         mcp_config.apply_mcp_composition(composition)
+        mcp_config.verify_mcp_composition(composition)
         summary = evidence_summary(store)
+        _verify_evidence_mcp(store)
     except (
         EvidenceStoreError,
         OSError,
@@ -144,11 +231,27 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         f"builtin_tool={TOOL_NAME}",
         file=sys.stderr,
     )
-    return run_review(
+    print(
+        "OCR MCP registry: ready "
+        f"servers={len(composition.capabilities)} mandatory={TOOL_NAME} self_query=summary",
+        file=sys.stderr,
+    )
+    exit_code = run_review(
         result_path,
         stderr_path,
         [*ocr_args, "--background-file", str(artifacts.bootstrap)],
     )
+    if exit_code == 0:
+        usage = _record_ocr_result_mcp_usage(result_path, composition)
+        calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
+        if calls > 0:
+            print(
+                f"OCR evidence usage: verified tool={TOOL_NAME} calls={calls}",
+                file=sys.stderr,
+            )
+        else:
+            print("OCR evidence usage: skipped no-supported-files review", file=sys.stderr)
+    return exit_code
 
 
 def _open_private_artifact(path: Path, label: str) -> BufferedWriter:

@@ -20,7 +20,7 @@ Store secrets as masked, protected CI variables. Do not place them in YAML, comm
 
 ## Operating model
 
-`ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` resolves `OCR_REVIEW_LANGUAGE`; `evidence-build` creates a private schema-versioned evidence store and compact background bootstrap. `configure` and `mcp-config` write OCR configuration without invoking a config subprocess; `mcp-config` always registers the built-in `ocr_toolkit_evidence` read-only stdio server. `post` interprets a JSON artifact and publishes bounded notes with rollback and ownership safeguards.
+`ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` resolves `OCR_REVIEW_LANGUAGE`. `ocr-ci review` owns evidence collection, private artifacts, compact bootstrap, and the complete MCP registry: the mandatory `ocr_toolkit_evidence` server and every optional configured MCP are independent entries. After OCR succeeds, `review` validates mandatory evidence use and atomically binds a safe schema-versioned per-server MCP-use receipt to the private result. `post` reads that review-time receipt instead of reconstructing configuration, then publishes bounded notes with rollback and ownership safeguards.
 
 Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
 

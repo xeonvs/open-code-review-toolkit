@@ -193,6 +193,8 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 
 ## M5 Review profiles and quality measurement
 
+Telemetry is intentionally outside M1. OCR already exposes provider-level review duration, LLM request/token, and per-tool call duration/count metrics, while the toolkit currently configures that upstream telemetry without adding a second runtime telemetry stack. M5 owns the decision whether a provider-neutral toolkit telemetry layer is needed after M1 E2E testing measures the actual upstream coverage gaps.
+
 ### BL-016: Add explicit run-level review profiles
 
 - **Status:** planned
@@ -213,10 +215,10 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
 - **Dependencies:** BL-016 and stable discussion/fingerprint lifecycle.
-- **Activation trigger:** Explicit profiles can label comparable runs.
+- **Activation trigger:** Explicit profiles can label comparable runs, and M1 E2E/operational evidence demonstrates material gaps that upstream OCR telemetry and structured result artifacts cannot cover reliably.
 - **Goal:** Produce privacy-safe evidence for profile tuning and any future routing decision.
-- **Scoped deliverables:** Define bounded low-cardinality metrics for latency, token use when available, evidence/MCP use, findings, repeats, suppression, resolution, and human ownership; define run/profile/schema-version identifiers, aggregation windows, retention, opt-in export, and local/no-export behavior.
-- **Acceptance criteria:** Metrics contain no source, prompts, finding text, paths, user identities, secrets, external contents, or unbounded project/MR labels; missing provider telemetry is explicit; failed/partial and repeated runs are distinguishable and comparable without changing review behavior; telemetry failure cannot fail review.
+- **Scoped deliverables:** Begin with a gap audit of upstream OCR telemetry and structured result artifacts. If gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate coverage includes run/profile latency and status; token availability; evidence/store bounds and degradation; bootstrap size; independent MCP readiness and usage; findings; posting/rollback; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from upstream telemetry or bounded result artifacts.
+- **Acceptance criteria:** The gap audit may conclude that upstream OCR telemetry plus bounded result-derived reporting is sufficient, in which case no toolkit telemetry runtime is added. If a layer is justified, metrics contain no source, prompts, tool arguments/results, finding text, paths, URLs, user identities, secrets, external contents, or unbounded project/MR labels; labels use closed vocabularies and bounded cardinality; built-in and optional MCP servers remain independently attributable; upstream OCR and toolkit metrics cannot double-count the same semantic event; missing provider telemetry is explicit; failed/partial/skipped and repeated runs are distinguishable without changing review behavior; telemetry failure cannot fail review.
 - **Exclusions:** User surveillance, ranking developers, automatic routing, or mandatory external telemetry.
 - **Validation:** Synthetic lifecycle aggregation, redaction/privacy tests, missing-data behavior, and deterministic export fixtures.
 - **Release classification expectation:** `release-required` if exposed publicly; otherwise `no-release`.

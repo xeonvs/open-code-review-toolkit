@@ -7,6 +7,12 @@ import re
 import sys
 from functools import cache
 
+from ocr_toolkit.ocr_result import (  # noqa: F401 -- retained import contract
+    DEFAULT_MAX_RESULT_BYTES,
+    MAX_RESULT_BYTES_HARD_LIMIT,
+    max_result_bytes,
+)
+
 SUGGESTION_HEADER = "**Suggestion:**"
 
 
@@ -44,12 +50,6 @@ DEFAULT_MAX_POST_COMMENTS = 50
 
 
 MAX_POST_COMMENTS_HARD_LIMIT = 200
-
-
-DEFAULT_MAX_RESULT_BYTES = 2_000_000
-
-
-MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 
 
 MAX_TOOL_CALL_SUMMARY_TOOLS = 6
@@ -147,37 +147,6 @@ def max_post_comments() -> int:
             file=sys.stderr,
         )
         return MAX_POST_COMMENTS_HARD_LIMIT
-
-    return parsed
-
-
-def max_result_bytes() -> int:
-    """Return the maximum OCR JSON artifact size to read into memory."""
-
-    raw = getenv("OCR_MAX_RESULT_BYTES", str(DEFAULT_MAX_RESULT_BYTES)).strip()
-    try:
-        parsed = int(raw)
-    except ValueError:
-        print(
-            f"OCR_MAX_RESULT_BYTES is not an integer; using default {DEFAULT_MAX_RESULT_BYTES}.",
-            file=sys.stderr,
-        )
-        return DEFAULT_MAX_RESULT_BYTES
-
-    if parsed <= 0:
-        print(
-            f"OCR_MAX_RESULT_BYTES must be positive; using default {DEFAULT_MAX_RESULT_BYTES}.",
-            file=sys.stderr,
-        )
-        return DEFAULT_MAX_RESULT_BYTES
-
-    if parsed > MAX_RESULT_BYTES_HARD_LIMIT:
-        print(
-            f"OCR_MAX_RESULT_BYTES exceeds hard limit {MAX_RESULT_BYTES_HARD_LIMIT}; "
-            f"using {MAX_RESULT_BYTES_HARD_LIMIT}.",
-            file=sys.stderr,
-        )
-        return MAX_RESULT_BYTES_HARD_LIMIT
 
     return parsed
 

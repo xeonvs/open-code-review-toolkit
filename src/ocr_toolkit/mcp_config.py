@@ -422,7 +422,7 @@ def _existing_capability(name: str, value: Any) -> MCPCapability:
 
 
 def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCPComposition:
-    """Compose validated external servers with the mandatory built-in server."""
+    """Build OCR's registry from independent optional and mandatory MCP entries."""
 
     payload: dict[str, dict[str, Any]] = {}
     capabilities: list[MCPCapability] = []
@@ -469,6 +469,15 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
     }
     capabilities.append(MCPCapability(BUILTIN_EVIDENCE_SERVER, (TOOL_NAME,), builtin=True))
     capabilities.sort(key=lambda capability: (not capability.builtin, capability.server))
+    owners: dict[str, str] = {}
+    for capability in capabilities:
+        for tool in capability.tools:
+            owner = owners.setdefault(tool, capability.server)
+            if owner != capability.server:
+                raise MCPConfigError(
+                    f"MCP tool name {tool!r} is declared by both {owner!r} "
+                    f"and {capability.server!r}"
+                )
     return MCPComposition(
         payload=payload,
         capabilities=tuple(capabilities),
@@ -491,6 +500,19 @@ def apply_mcp_composition(composition: MCPComposition) -> None:
     except (OCRConfigError, OSError) as exc:
         safe_error = _redact_extra_values(str(exc), list(composition.secret_values))
         raise MCPConfigError(f"Failed to update OCR MCP configuration: {safe_error}") from exc
+
+
+def verify_mcp_composition(composition: MCPComposition) -> None:
+    """Confirm OCR configuration retained every independently composed MCP entry."""
+
+    try:
+        configured = read_ocr_config().get("mcp_servers")
+    except (OCRConfigError, OSError) as exc:
+        raise MCPConfigError("Failed to read back OCR MCP configuration") from exc
+    if not isinstance(configured, dict):
+        raise MCPConfigError("OCR MCP configuration readback is not an object")
+    if configured != composition.payload:
+        raise MCPConfigError("OCR MCP configuration readback does not match the composed registry")
 
 
 def _redact_extra_values(text: str, values: list[str]) -> str:

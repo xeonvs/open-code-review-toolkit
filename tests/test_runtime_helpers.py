@@ -24,6 +24,31 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def test_composition_readback_preserves_independent_registry_entries(self) -> None:
+        composition = mcp_config.MCPComposition(
+            payload={
+                mcp_config.BUILTIN_EVIDENCE_SERVER: {
+                    "type": "stdio",
+                    "tools": [mcp_config.TOOL_NAME],
+                },
+                "documentation": {"type": "remote", "tools": ["docs_read"]},
+            },
+            capabilities=(),
+            external_servers=(),
+            secret_values=(),
+        )
+        with patched_attr(
+            mcp_config, "read_ocr_config", lambda: {"mcp_servers": composition.payload}
+        ):
+            mcp_config.verify_mcp_composition(composition)
+
+        mismatched = {"mcp_servers": {mcp_config.BUILTIN_EVIDENCE_SERVER: {}}}
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: mismatched),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "does not match"),
+        ):
+            mcp_config.verify_mcp_composition(composition)
+
     def test_composition_keeps_external_and_replaces_stale_builtin(self) -> None:
         external = mcp_config.MCPServerConfig(
             name="synthetic_docs",
@@ -57,10 +82,34 @@ class MCPConfigTests(unittest.TestCase):
         builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
         self.assertEqual(builtin["command"], "ocr-ci")
         self.assertEqual(builtin["setup"], "")
+        self.assertIsNot(builtin, composition.payload["existing"])
+        self.assertIsNot(builtin, composition.payload["synthetic_docs"])
+        self.assertEqual(composition.payload["synthetic_docs"]["command"], "synthetic-docs")
         self.assertEqual(
             [capability.server for capability in composition.capabilities],
             [mcp_config.BUILTIN_EVIDENCE_SERVER, "existing", "synthetic_docs"],
         )
+
+    def test_composition_rejects_tool_names_shared_by_independent_servers(self) -> None:
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_docs",
+            transport="stdio",
+            command="synthetic-docs",
+            url=None,
+            args=[],
+            tools=["shared_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        current = {"mcp_servers": {"existing": {"type": "stdio", "tools": ["shared_read"]}}}
+
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: current),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "declared by both"),
+        ):
+            mcp_config.compose_mcp_servers([external], replace=False)
 
     def test_replace_drops_external_state_but_keeps_builtin(self) -> None:
         with patched_attr(

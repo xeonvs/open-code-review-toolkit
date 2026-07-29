@@ -13,11 +13,19 @@ from typing import Any
 
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.ocr_result import (
+    TOOLKIT_RESULT_KEY,
+    OcrResultMalformed,
+    OcrResultMissing,
+    OcrResultTooLarge,
+    load_ocr_result,
+)
 from ocr_toolkit.posting import gitlab as gitlab_api
 from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, compact_escaped_text
 from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
     format_inline_comment,
+    format_mcp_usage_summary,
     format_omitted_comments_summary,
     format_reviewer_guide,
     format_token_usage_summary,
@@ -35,13 +43,7 @@ from ocr_toolkit.posting.gitlab import (
     resolve_discussion,
 )
 from ocr_toolkit.posting.markers import annotate_comment_fingerprints
-from ocr_toolkit.posting.result import (
-    OcrResultMalformed,
-    OcrResultMissing,
-    OcrResultTooLarge,
-    llm_billing_failure_warnings,
-    load_ocr_result,
-)
+from ocr_toolkit.posting.result import llm_billing_failure_warnings
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
     cleanup_drafts_created_by_this_run,
@@ -352,6 +354,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
+    mcp_usage_summary = format_mcp_usage_summary(result.get(TOOLKIT_RESULT_KEY))
     token_usage_summary = format_token_usage_summary(result)
     status = clean_text(result.get("status")) or "success"
     allowed_statuses = {
@@ -386,6 +389,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             config,
             billing_warnings,
             tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
         )
 
@@ -605,6 +609,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             comments=comments,
             omitted_count=omitted_count,
             tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
@@ -686,6 +691,7 @@ def post_llm_provider_failure(
     config: GitLabConfig,
     warnings: Sequence[str],
     tool_calls_summary: str = "",
+    mcp_usage_summary: str = "",
     token_usage_summary: str = "",
 ) -> int:
     """Post a visible OCR provider failure and preserve previous review notes."""
@@ -711,6 +717,8 @@ def post_llm_provider_failure(
         body_parts.extend(["", "**Provider warnings:**", *warning_items])
     if tool_calls_summary:
         body_parts.extend(["", tool_calls_summary])
+    if mcp_usage_summary:
+        body_parts.append(mcp_usage_summary)
     if token_usage_summary:
         body_parts.append(token_usage_summary)
 

@@ -42,13 +42,11 @@ The project is evolving from bounded background generation toward a shared Repos
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
 2. Pin and checksum the OCR binary.
 3. Install this package.
-4. Run the five helper stages around `ocr review`:
+4. Run the four public helper stages around `ocr review`:
 
 ```console
 ocr-ci preflight
 ocr-ci configure
-ocr-ci mcp-config
-ocr-ci context --output .review-context/dependencies.md
 ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- ... --format json
 ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 ```

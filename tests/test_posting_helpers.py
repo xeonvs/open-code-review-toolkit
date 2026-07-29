@@ -1072,6 +1072,33 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("✅ No comments generated. Looks good to me.", summary)
         self.assertNotIn("tool calls", summary)
 
+    def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 1,
+                "mcp_usage": {
+                    "ocr_toolkit_evidence": 2,
+                    "documentation": 1,
+                    "unused_optional": 0,
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- MCP used: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+        )
+        self.assertNotIn("unused_optional", summary)
+        self.assertNotIn("file_read", summary)
+
+    def test_mcp_usage_summary_omits_zero_usage(self) -> None:
+        self.assertEqual(
+            posting_formatting.format_mcp_usage_summary(
+                {"schema_version": 1, "mcp_usage": {}},
+            ),
+            "",
+        )
+
     def test_warning_and_error_outcomes_never_look_clean(self) -> None:
         warning = posting_formatting.summarize_result(
             total=0,
@@ -1700,6 +1727,16 @@ class ApiErrorRedactionTests(unittest.TestCase):
 
 
 class OcrResultLoadingTests(unittest.TestCase):
+    def test_result_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            result_path = Path(tmp) / "result.json"
+            result_path.symlink_to(target)
+
+            with self.assertRaises(result.OcrResultMissing):
+                result.load_ocr_result(result_path)
+
     def test_oversized_result_is_rejected_before_reading(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ocr.json"
