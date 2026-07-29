@@ -9,7 +9,9 @@ from enum import Enum
 from pathlib import PurePosixPath
 from typing import TypeAlias, cast
 
-EvidenceValue: TypeAlias = "None | bool | int | float | str | list[EvidenceValue] | dict[str, EvidenceValue]"
+EvidenceValue: TypeAlias = (
+    "None | bool | int | float | str | list[EvidenceValue] | dict[str, EvidenceValue]"
+)
 
 
 class RefRole(str, Enum):
@@ -105,11 +107,15 @@ class EvidenceRecord:
     def __post_init__(self) -> None:
         """Validate the public record contract and derive its stable identifier."""
 
-        if not self.kind or not all(part.replace("_", "").isalnum() for part in self.kind.split(".")):
+        if not self.kind or not all(
+            part.replace("_", "").isalnum() for part in self.kind.split(".")
+        ):
             raise ValueError("kind must contain dot-separated alphanumeric identifiers")
         _validate_value(self.value)
         object.__setattr__(self, "source_path", _normalize_source_path(self.source_path))
-        if self.commit_sha and (len(self.commit_sha) != 40 or not all(c in "0123456789abcdef" for c in self.commit_sha)):
+        if self.commit_sha and (
+            len(self.commit_sha) != 40 or not all(c in "0123456789abcdef" for c in self.commit_sha)
+        ):
             raise ValueError("commit_sha must be an empty value or a lowercase 40-character SHA-1")
         if not self.component or len(self.component) > 256:
             raise ValueError("component must contain between 1 and 256 characters")
@@ -210,7 +216,9 @@ class EvidenceSnapshot:
         # Record values may contain dicts or lists and therefore are intentionally
         # not hashable. Content-addressed IDs provide safe deduplication.
         unique = {record.id: record for record in self.records}
-        ordered = tuple(sorted(unique.values(), key=lambda item: (item.kind, item.source_path, item.id)))
+        ordered = tuple(
+            sorted(unique.values(), key=lambda item: (item.kind, item.source_path, item.id))
+        )
         object.__setattr__(self, "records", ordered)
 
 

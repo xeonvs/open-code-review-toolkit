@@ -178,7 +178,9 @@ class GitRepositoryReader:
         if entry.is_symlink:
             raise RepositoryEvidenceError(f"refusing to follow repository symlink: {entry.path}")
         if entry.is_submodule or entry.object_type != "blob":
-            raise RepositoryEvidenceError(f"refusing to read non-file repository object: {entry.path}")
+            raise RepositoryEvidenceError(
+                f"refusing to read non-file repository object: {entry.path}"
+            )
         size_result = self._run(["cat-file", "-s", entry.object_sha])
         assert isinstance(size_result.stdout, str)
         try:
@@ -202,9 +204,7 @@ class GitRepositoryReader:
 
         base = self.resolve_commit(base_ref)
         head = self.resolve_commit(head_ref)
-        result = self._run(
-            ["diff", "--name-status", "--find-renames", "--no-ext-diff", base, head]
-        )
+        result = self._run(["diff", "--name-status", "--find-renames", "--no-ext-diff", base, head])
         assert isinstance(result.stdout, str)
         if result.returncode != 0:
             raise RepositoryEvidenceError("failed to compare immutable repository refs")
@@ -265,8 +265,12 @@ def build_file_snapshot(
 def file_deltas(base: EvidenceSnapshot, head: EvidenceSnapshot) -> tuple[EvidenceDelta, ...]:
     """Compute explicit file-level deltas from immutable evidence snapshots."""
 
-    before = {record.source_path: record for record in base.records if record.kind == "repository.file"}
-    after = {record.source_path: record for record in head.records if record.kind == "repository.file"}
+    before = {
+        record.source_path: record for record in base.records if record.kind == "repository.file"
+    }
+    after = {
+        record.source_path: record for record in head.records if record.kind == "repository.file"
+    }
     deltas = []
     for path in sorted(before.keys() | after.keys()):
         old = before.get(path)

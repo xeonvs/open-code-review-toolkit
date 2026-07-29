@@ -13,6 +13,7 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from ocr_toolkit import review_runner
+from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from tests.support import patched_attr, patched_env
 
 
@@ -118,3 +119,86 @@ def test_run_review_rejects_fifo_artifact_without_blocking() -> None:
 
         with pytest.raises(review_runner.ReviewRunnerError, match="private result artifact"):
             review_runner.run_review(result_path, Path(tmp) / "stderr.log", ["--from", "base"])
+
+
+def test_review_refs_require_one_immutable_diff_mode() -> None:
+    assert review_runner._review_refs(["--from", "base", "--to=head"]) == (
+        review_runner.ReviewRefs("base", "head")
+    )
+    assert review_runner._review_refs(["-c", "abc123"]) == review_runner.ReviewRefs(
+        "abc123^", "abc123"
+    )
+    with pytest.raises(review_runner.ReviewRunnerError, match="immutable"):
+        review_runner._review_refs([])
+    with pytest.raises(review_runner.ReviewRunnerError, match="cannot be combined"):
+        review_runner._review_refs(["--commit", "abc123", "--from", "base"])
+
+
+def test_review_rejects_caller_owned_background_file() -> None:
+    with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci"):
+        review_runner._reject_owned_background(["--background-file", "other.md"])
+
+
+def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) -> None:
+    events: list[object] = []
+    artifacts = review_runner.repository_artifacts(tmp_path)
+
+    class Store:
+        def write(self, path: Path) -> None:
+            events.append(("write", path))
+
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    def collect(**kwargs: str) -> Store:
+        events.append(("collect", kwargs))
+        return Store()
+
+    def run(result: Path, stderr: Path, args: list[str]) -> int:
+        events.append(("ocr", result, stderr, args))
+        return 7
+
+    with (
+        patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
+        patched_attr(review_runner, "collect_repository_evidence", collect),
+        patched_attr(review_runner.mcp_config, "build_mcp_composition", lambda: composition),
+        patched_attr(
+            review_runner.mcp_config,
+            "apply_mcp_composition",
+            lambda _composition: events.append("apply"),
+        ),
+        patched_attr(review_runner, "render_bootstrap", lambda *_args, **_kwargs: "bootstrap"),
+        patched_attr(
+            review_runner,
+            "write_private_text",
+            lambda path, content: events.append(("bootstrap", path, content)),
+        ),
+        patched_attr(
+            review_runner,
+            "evidence_summary",
+            lambda *_args: {"base": "a" * 40, "head": "b" * 40, "records": 3},
+        ),
+        patched_attr(review_runner, "run_review", run),
+    ):
+        result = review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            ["--from", "base", "--to", "head", "--format", "json"],
+        )
+
+    assert result == 7
+    assert events[0] == ("collect", {"base_ref": "base", "head_ref": "head"})
+    assert events[1] == ("write", artifacts.store)
+    assert events[2] == ("bootstrap", artifacts.bootstrap, "bootstrap")
+    assert events[3] == "apply"
+    assert events[4][0] == "ocr"  # type: ignore[index]
+    assert events[4][3][-2:] == [  # type: ignore[index]
+        "--background-file",
+        str(artifacts.bootstrap),
+    ]

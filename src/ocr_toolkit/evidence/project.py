@@ -3,8 +3,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+from typing import Protocol
 
 from ocr_toolkit.evidence.store import EvidenceStore
+
+
+class CapabilityView(Protocol):
+    """Expose only MCP capability fields that are safe for the bootstrap."""
+
+    server: str
+    tools: tuple[str, ...]
+    builtin: bool
+
 
 DEFAULT_BOOTSTRAP_MAX_CHARS = 4_000
 MAX_BOOTSTRAP_MAX_CHARS = 7_950
@@ -21,10 +32,7 @@ def _clip(text: str, *, max_chars: int, max_bytes: int) -> str:
     char_budget = max(0, max_chars - len(notice))
     byte_budget = max(0, max_bytes - len(notice.encode("utf-8")))
     clipped = (
-        text[:char_budget]
-        .encode("utf-8")[:byte_budget]
-        .decode("utf-8", errors="ignore")
-        .rstrip()
+        text[:char_budget].encode("utf-8")[:byte_budget].decode("utf-8", errors="ignore").rstrip()
     )
     return clipped + notice
 
@@ -32,6 +40,7 @@ def _clip(text: str, *, max_chars: int, max_bytes: int) -> str:
 def render_bootstrap(
     store: EvidenceStore,
     *,
+    capabilities: Sequence[CapabilityView] = (),
     max_chars: int = DEFAULT_BOOTSTRAP_MAX_CHARS,
     max_bytes: int = DEFAULT_BOOTSTRAP_MAX_BYTES,
 ) -> str:
@@ -67,16 +76,23 @@ def render_bootstrap(
         f"- deltas: {', '.join(f'{state}={count}' for state, count in sorted(changes.items())) or 'none'}",
     ]
     if store.diagnostics:
-        lines.extend(("", "## Coverage notices", *(f"- {item}" for item in sorted(store.diagnostics))))
-    lines.extend(
-        (
-            "",
-            "## Detailed evidence",
-            (
-                "Use the read-only `ocr_toolkit_evidence` tool. Start with `action=summary`, "
-                "narrow with `action=list`, and retrieve one stable record with `action=get`."
-            ),
+        lines.extend(
+            ("", "## Coverage notices", *(f"- {item}" for item in sorted(store.diagnostics)))
         )
+    lines.extend(("", "## MCP capabilities"))
+    if capabilities:
+        for capability in capabilities:
+            marker = " (built-in evidence)" if capability.builtin else ""
+            tool_names = ", ".join(f"`{tool}`" for tool in capability.tools)
+            lines.append(
+                f"- `{capability.server}`{marker}: "
+                f"{tool_names or 'all server tools (not allowlisted)'}"
+            )
+    else:
+        lines.append("- `ocr_toolkit_evidence` (built-in evidence): `ocr_toolkit_evidence`")
+    lines.append(
+        "Use the built-in `ocr_toolkit_evidence` tool first: start with `action=summary`, "
+        "narrow with `action=list`, and retrieve one stable record with `action=get`."
     )
     return _clip("\n".join(lines).rstrip() + "\n", max_chars=max_chars, max_bytes=max_bytes)
 

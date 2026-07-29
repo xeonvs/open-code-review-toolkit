@@ -24,6 +24,75 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def test_composition_keeps_external_and_replaces_stale_builtin(self) -> None:
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_docs",
+            transport="stdio",
+            command="synthetic-docs",
+            url=None,
+            args=[],
+            tools=["docs_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        current = {
+            "mcp_servers": {
+                "existing": {"type": "stdio", "tools": ["existing_read"]},
+                mcp_config.BUILTIN_EVIDENCE_SERVER: {
+                    "type": "stdio",
+                    "command": "stale-command",
+                    "tools": [mcp_config.TOOL_NAME],
+                },
+            }
+        }
+        with patched_attr(mcp_config, "read_ocr_config", lambda: current):
+            composition = mcp_config.compose_mcp_servers([external], replace=False)
+
+        self.assertEqual(
+            set(composition.payload),
+            {"existing", "synthetic_docs", mcp_config.BUILTIN_EVIDENCE_SERVER},
+        )
+        builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
+        self.assertEqual(builtin["command"], "ocr-ci")
+        self.assertEqual(builtin["setup"], "")
+        self.assertEqual(
+            [capability.server for capability in composition.capabilities],
+            [mcp_config.BUILTIN_EVIDENCE_SERVER, "existing", "synthetic_docs"],
+        )
+
+    def test_replace_drops_external_state_but_keeps_builtin(self) -> None:
+        with patched_attr(
+            mcp_config,
+            "read_ocr_config",
+            lambda: (_ for _ in ()).throw(AssertionError("replace must not read state")),
+        ):
+            composition = mcp_config.compose_mcp_servers([], replace=True)
+
+        self.assertEqual(set(composition.payload), {mcp_config.BUILTIN_EVIDENCE_SERVER})
+
+    def test_external_server_cannot_claim_builtin_tool(self) -> None:
+        raw = json.dumps(
+            {
+                "servers": [
+                    {
+                        "name": "synthetic_docs",
+                        "command": "synthetic-docs",
+                        "tools": [mcp_config.TOOL_NAME],
+                    }
+                ]
+            }
+        )
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
+            mcp_config.parse_mcp_servers(raw)
+
+    def test_external_server_requires_explicit_tool_allowlist(self) -> None:
+        raw = json.dumps({"synthetic_docs": {"command": "synthetic-docs", "tools": []}})
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "explicitly allow"):
+            mcp_config.parse_mcp_servers(raw)
+
     def test_runtime_config_defaults_review_language_to_english(self) -> None:
         with (
             cleared_env("OCR_REVIEW_LANGUAGE"),
@@ -418,8 +487,9 @@ class MCPConfigTests(unittest.TestCase):
                 "documentation": {
                     "command": "bridge",
                     "args": ["https://docs.example.invalid/mcp"],
+                    "tools": ["docs_read"],
                 },
-                "source": {"command": "source-bridge"},
+                "source": {"command": "source-bridge", "tools": ["source_read"]},
             }
         )
 
@@ -467,9 +537,7 @@ class MCPConfigTests(unittest.TestCase):
             mcp_config.parse_mcp_servers(raw)
 
     def test_parse_rejects_the_reserved_builtin_server_name(self) -> None:
-        raw = json.dumps(
-            {mcp_config.BUILTIN_EVIDENCE_SERVER: {"command": "synthetic-override"}}
-        )
+        raw = json.dumps({mcp_config.BUILTIN_EVIDENCE_SERVER: {"command": "synthetic-override"}})
 
         with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
             mcp_config.parse_mcp_servers(raw)
@@ -484,6 +552,7 @@ class MCPConfigTests(unittest.TestCase):
                         "args": ["https://mcp.example/sse"],
                         "setup": "",
                         "env_from": {"AUTH": "OCR_MCP_REMOTE_TOKEN"},
+                        "tools": ["remote_read"],
                     }
                 ]
             }
@@ -523,6 +592,7 @@ class MCPConfigTests(unittest.TestCase):
                     {
                         "name": "fresh",
                         "command": "bridge",
+                        "tools": ["fresh_read"],
                     }
                 ]
             }
@@ -548,9 +618,7 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(
-            set(config["mcp_servers"]), {"fresh", mcp_config.BUILTIN_EVIDENCE_SERVER}
-        )
+        self.assertEqual(set(config["mcp_servers"]), {"fresh", mcp_config.BUILTIN_EVIDENCE_SERVER})
 
     def test_configure_mcp_servers_replaces_external_config_with_builtin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -576,13 +644,15 @@ class MCPConfigTests(unittest.TestCase):
         self.assertEqual(set(config["mcp_servers"]), {mcp_config.BUILTIN_EVIDENCE_SERVER})
 
     def test_configure_mcp_servers_merges_existing_servers_by_default(self) -> None:
-        raw = json.dumps({"local": {"command": "new", "args": []}})
+        raw = json.dumps({"local": {"command": "new", "args": [], "tools": ["local_read"]}})
         with tempfile.TemporaryDirectory() as tmp:
             old_home = os.environ.get("HOME")
             os.environ["HOME"] = tmp
             config_path = Path(tmp) / ".opencodereview" / "config.json"
             try:
-                config_writer.update_ocr_config({"mcp_servers": {"stale": {"command": "old"}}})
+                config_writer.update_ocr_config(
+                    {"mcp_servers": {"stale": {"command": "old", "tools": ["stale_read"]}}}
+                )
                 with patched_env(OCR_MCP_SERVERS_JSON=raw), cleared_env("OCR_MCP_REPLACE"):
                     exit_code = mcp_config.configure_mcp_servers()
                 config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -605,6 +675,7 @@ class MCPConfigTests(unittest.TestCase):
                     "type": "remote",
                     "url": "https://mcp.synthetic.invalid/v1?tenant=secret-query",
                     "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+                    "tools": ["remote_read"],
                 }
             }
         )

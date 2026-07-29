@@ -18,13 +18,17 @@ from ocr_toolkit.evidence.repository import (
 from ocr_toolkit.evidence.store import EvidenceStore
 
 
-def _commit_refs(reader: GitRepositoryReader) -> tuple[str, str]:
+def _commit_refs(
+    reader: GitRepositoryReader, base_ref: str | None = None, head_ref: str | None = None
+) -> tuple[str, str]:
     """Resolve explicit CI refs, falling back to the local parent and HEAD."""
 
-    head_ref = os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA") or os.environ.get(
-        "CI_COMMIT_SHA", "HEAD"
+    head_ref = (
+        head_ref
+        or os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA")
+        or os.environ.get("CI_COMMIT_SHA", "HEAD")
     )
-    base_ref = os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA")
+    base_ref = base_ref or os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA")
     if not base_ref:
         try:
             base_ref = reader.resolve_commit(f"{head_ref}^")
@@ -54,11 +58,13 @@ def _legacy_projection(markdown: str, *, sha: str) -> EvidenceRecord:
     )
 
 
-def collect_repository_evidence(root: Path | None = None) -> EvidenceStore:
+def collect_repository_evidence(
+    root: Path | None = None, *, base_ref: str | None = None, head_ref: str | None = None
+) -> EvidenceStore:
     """Build one evidence store from immutable refs and existing bounded collectors."""
 
     reader = GitRepositoryReader(root or Path.cwd())
-    base_sha, head_sha = _commit_refs(reader)
+    base_sha, head_sha = _commit_refs(reader, base_ref, head_ref)
     changed = reader.changed_paths(base_sha, head_sha)
     base = build_file_snapshot(reader, base_sha, RefRole.BASE, paths=changed)
     head = build_file_snapshot(reader, head_sha, RefRole.HEAD, paths=changed)

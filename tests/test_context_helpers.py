@@ -1593,14 +1593,12 @@ class RuleCoverageTests(unittest.TestCase):
             )
         ]
 
-        self.assertIn(
-            'REVIEW_BACKGROUND_FILE=".review-context/bootstrap.md"',
-            review_block,
-        )
-        self.assertEqual(review_block.count("--background-file"), 1)
+        self.assertNotIn("REVIEW_BACKGROUND_FILE", review_block)
+        self.assertNotIn("--background-file", review_block)
         self.assertNotIn("cat .review-context/bootstrap.md", review_block)
-        self.assertIn("ocr-ci evidence-build", review_block)
-        self.assertIn('OCR_EVIDENCE_STORE_PATH=".review-context/evidence.json"', review_block)
+        self.assertNotIn("ocr-ci evidence-build", review_block)
+        self.assertNotIn("OCR_EVIDENCE_STORE_PATH", review_block)
+        self.assertNotIn("ocr-ci mcp-config", review_block)
 
     def test_lint_job_is_required_in_merge_request_pipeline(self) -> None:
         ci_text = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
@@ -1623,7 +1621,6 @@ class RuleCoverageTests(unittest.TestCase):
     def test_ci_does_not_run_ocr_helper_regressions_by_default(self) -> None:
         ci_text = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
         helper_test = "uv run pytest tests"
-        context_generation = "ocr-ci evidence-build"
         token_export = "export OCR_LLM_TOKEN="
 
         self.assertIn(helper_test, ci_text)
@@ -1631,7 +1628,7 @@ class RuleCoverageTests(unittest.TestCase):
         self.assertIn('OCR_LLM_ALLOWED_MODELS: ""', ci_text)
         self.assertIn("OCR_RUN_HELPER_TESTS:-false", ci_text)
         self.assertLess(ci_text.index(helper_test), ci_text.index(token_export))
-        self.assertLess(ci_text.index(helper_test), ci_text.index(context_generation))
+        self.assertLess(ci_text.index(token_export), ci_text.index("ocr-ci review"))
         self.assertIn("--format json", ci_text)
         self.assertNotIn("--output-format", ci_text)
         self.assertIn("\nopen_code_review_self_test:\n", ci_text)
@@ -1807,8 +1804,7 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("ocr-ci configure", ci)
         self.assertIn("uv run pytest tests", ci)
         self.assertIn("ocr-ci preflight", ci)
-        self.assertIn("--background-file", ci)
-        self.assertEqual(ci.count("--background-file"), 1)
+        self.assertNotIn("--background-file", ci)
         self.assertNotIn('set -- "$@" --background ', ci)
         self.assertNotIn("review-background.md", ci)
         self.assertIn('--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"', ci)

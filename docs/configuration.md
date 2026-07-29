@@ -26,9 +26,8 @@ Open Code Review Toolkit uses environment variables for CI/runtime configuration
 | --- | --- |
 | `OCR_MCP_SERVERS_JSON` | JSON object mapping names to bounded stdio or native Streamable HTTP definitions. |
 | `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
-| `OCR_EVIDENCE_STORE_PATH` | Private evidence JSON read by the built-in `ocr_toolkit_evidence` server. Defaults to `.review-context/evidence.json`. |
 
-Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.0 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
+Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. Every external server requires a non-empty explicit `tools` allowlist so its discovered tool set cannot shadow the mandatory built-in evidence tool. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.0 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
 
 ```json
 {
@@ -62,9 +61,11 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 ## Repository evidence
 
-Run `ocr-ci evidence-build --store .review-context/evidence.json --bootstrap .review-context/bootstrap.md` after `ocr-ci mcp-config` and before OCR. The store contains bounded, redacted, schema-versioned records and immutable base/head deltas; the compact bootstrap points OCR to the built-in read-only MCP tool for detail. Both generated files are owner-only. The collector reads Git objects without checkout, does not follow symlinks or submodules, never executes repository content, and treats source-ref policy changes as untrusted.
+`ocr-ci review` owns this lifecycle. Before OCR starts it collects the exact immutable `--from`/`--to` refs (or the parent/commit pair selected by `--commit`), writes bounded redacted schema-versioned evidence, composes the mandatory built-in MCP server with validated external servers, and supplies the matching compact bootstrap to OCR. Callers may add inline OCR `--background` text, but cannot replace the toolkit-owned background file.
 
-`ocr-ci evidence-serve --store PATH` is normally launched by OCR from the generated MCP configuration. Its only tool is `ocr_toolkit_evidence`, with `summary`, paginated/filterable `list`, and stable-ID `get` actions. It has no mutation action, network access, or shell execution.
+The private `.review-context/evidence.json` store and `.review-context/bootstrap.md` projection are internal implementation artifacts, not public path configuration. Keep `.review-context/` ignored. The directory is mode `0700`, files are mode `0600`, and symlink or non-regular-file targets are rejected. The collector reads Git objects without checkout, does not follow repository symlinks or submodules, never executes repository content, and treats source-ref policy changes as untrusted.
+
+The compact bootstrap contains the same safe server/tool capability inventory that was written to OCR configuration. The mandatory built-in tool is `ocr_toolkit_evidence`, with `summary`, paginated/filterable `list`, and stable-ID `get` actions. It has no mutation action, network access, or shell execution; validated external MCP definitions can add capabilities but cannot remove or shadow it.
 
 ### Accepted project decisions
 

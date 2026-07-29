@@ -56,9 +56,7 @@ def test_record_id_is_canonical_and_content_addressed() -> None:
     assert first.id != base.id
 
 
-@pytest.mark.parametrize(
-    "path", ["", "/etc/passwd", "../secret", "safe/../secret", "./manifest"]
-)
+@pytest.mark.parametrize("path", ["", "/etc/passwd", "../secret", "safe/../secret", "./manifest"])
 def test_record_rejects_unsafe_source_paths(path: str) -> None:
     """Prevent evidence provenance from escaping the repository namespace."""
 
@@ -79,17 +77,23 @@ def test_snapshot_deduplicates_orders_and_rejects_mixed_refs() -> None:
     two = record("a", kind="runtime.declared")
     snapshot = EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (one, two, one))
 
-    assert snapshot.records == tuple(sorted((one, two), key=lambda item: (item.kind, item.source_path, item.id)))
+    assert snapshot.records == tuple(
+        sorted((one, two), key=lambda item: (item.kind, item.source_path, item.id))
+    )
     with pytest.raises(ValueError, match="match the snapshot"):
         EvidenceSnapshot(RefRole.BASE, BASE_SHA, (one,))
 
 
-def test_store_redacts_before_persistence_and_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_store_redacts_before_persistence_and_round_trips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ensure raw environment credentials cannot enter serialized evidence."""
 
     monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-secret-token-value")
     store = EvidenceStore()
-    assert store.add(record("url=https://user:pass@example.invalid token=synthetic-secret-token-value"))
+    assert store.add(
+        record("url=https://user:pass@example.invalid token=synthetic-secret-token-value")
+    )
     path = tmp_path / "private" / "evidence.json"
     store.write(path)
 
@@ -127,7 +131,9 @@ def test_store_does_not_change_existing_parent_permissions(tmp_path: Path) -> No
 def test_store_deduplicates_and_reports_deterministic_limits() -> None:
     """Omit over-budget facts explicitly without corrupting accepted records."""
 
-    store = EvidenceStore(EvidenceStoreLimits(max_records=2, max_records_per_kind=1, max_bytes=4096))
+    store = EvidenceStore(
+        EvidenceStoreLimits(max_records=2, max_records_per_kind=1, max_bytes=4096)
+    )
     first = record("first")
     assert store.add(first)
     assert store.add(first)

@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import os
+import stat
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from ocr_toolkit.evidence import RefRole
+from ocr_toolkit.evidence.artifacts import (
+    prepare_artifact_directory,
+    repository_artifacts,
+    write_private_text,
+)
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.project import render_bootstrap, render_json
 from ocr_toolkit.evidence.repository import (
@@ -181,3 +187,32 @@ def test_bootstrap_truncation_is_explicit() -> None:
     assert len(bootstrap) <= 400
     assert len(bootstrap.encode("utf-8")) <= 1024
     assert "bootstrap truncated" in bootstrap
+
+
+def test_internal_artifacts_are_private_regular_files(tmp_path: Path) -> None:
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+    write_private_text(artifacts.bootstrap, "synthetic bootstrap")
+
+    assert stat.S_IMODE(artifacts.directory.stat().st_mode) == 0o700
+    assert stat.S_IMODE(artifacts.bootstrap.stat().st_mode) == 0o600
+    assert artifacts.bootstrap.read_text(encoding="utf-8") == "synthetic bootstrap"
+
+
+def test_internal_artifacts_reject_symlink_directory(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (tmp_path / ".review-context").symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(OSError, match="directory symlink"):
+        prepare_artifact_directory(repository_artifacts(tmp_path))
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO support is unavailable")
+def test_internal_artifacts_reject_fifo_without_blocking(tmp_path: Path) -> None:
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+    os.mkfifo(artifacts.bootstrap)
+
+    with pytest.raises(OSError):
+        write_private_text(artifacts.bootstrap, "synthetic bootstrap")

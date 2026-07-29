@@ -55,7 +55,7 @@ def _text_result(payload: object) -> dict[str, object]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def _summary(store: EvidenceStore) -> dict[str, object]:
+def evidence_summary(store: EvidenceStore) -> dict[str, object]:
     """Build compact counts and immutable refs without detailed values."""
 
     kinds: dict[str, int] = {}
@@ -173,7 +173,7 @@ def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
     action = typed.get("action")
     if action == "summary":
         allowed = {"action"}
-        payload = _summary(store)
+        payload = evidence_summary(store)
     elif action == "list":
         allowed = {"action", "kind", "component", "ref", "page_size", "cursor"}
         payload = _list_records(store, typed)
@@ -291,7 +291,9 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
             continue
         serialized = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
         if len(serialized.encode("utf-8")) > MAX_RESPONSE_BYTES:
-            serialized = json.dumps(_error(response.get("id"), -32603, "Response exceeds the byte limit"))
+            serialized = json.dumps(
+                _error(response.get("id"), -32603, "Response exceeds the byte limit")
+            )
         stdout.write(serialized + "\n")
         stdout.flush()
     return 0

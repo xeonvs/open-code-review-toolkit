@@ -111,9 +111,7 @@ def test_json_rpc_initialize_lists_read_only_tool_and_returns_safe_errors() -> N
             "params": {"protocolVersion": "2025-06-18"},
         },
     )
-    listed = handle_request(
-        store, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
-    )
+    listed = handle_request(store, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     failed = handle_request(
         store,
         {

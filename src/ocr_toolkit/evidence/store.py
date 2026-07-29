@@ -64,7 +64,9 @@ class EvidenceStoreLimits:
         if not 1 <= self.max_records <= 100_000:
             raise EvidenceStoreError("max_records must be between 1 and 100000")
         if not 1 <= self.max_records_per_kind <= self.max_records:
-            raise EvidenceStoreError("max_records_per_kind must be positive and no greater than max_records")
+            raise EvidenceStoreError(
+                "max_records_per_kind must be positive and no greater than max_records"
+            )
         if not 1024 <= self.max_bytes <= 20_000_000:
             raise EvidenceStoreError("max_bytes must be between 1024 and 20000000")
         if not 1 <= self.max_value_chars <= 1_000_000:
@@ -119,9 +121,7 @@ class EvidenceStore:
             confidence=record.confidence,
             trust=record.trust,
             sensitivity=(
-                record.sensitivity
-                if redacted_value == record.value
-                else Sensitivity.REDACTED
+                record.sensitivity if redacted_value == record.value else Sensitivity.REDACTED
             ),
             staleness=record.staleness,
         )
@@ -150,14 +150,18 @@ class EvidenceStore:
         """Record one bounded public coverage notice without repeated noise."""
 
         if not message or len(message) > 1024:
-            raise EvidenceStoreError("evidence diagnostic must contain between 1 and 1024 characters")
+            raise EvidenceStoreError(
+                "evidence diagnostic must contain between 1 and 1024 characters"
+            )
         self._diagnose_once(redact_env_secret_values(redact_sensitive(message)))
 
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
         """Return all records in deterministic public ordering."""
 
-        return tuple(sorted(self._records.values(), key=lambda item: (item.kind, item.source_path, item.id)))
+        return tuple(
+            sorted(self._records.values(), key=lambda item: (item.kind, item.source_path, item.id))
+        )
 
     def to_dict(self) -> dict[str, object]:
         """Return the complete versioned store representation."""
@@ -198,7 +202,9 @@ class EvidenceStore:
     def to_json(self) -> str:
         """Serialize the store canonically while enforcing its byte budget."""
 
-        serialized = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        serialized = json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
         if len(serialized.encode("utf-8")) > self.limits.max_bytes:
             raise EvidenceStoreError("serialized evidence store exceeds its byte budget")
         return serialized + "\n"
@@ -268,7 +274,9 @@ class EvidenceStore:
         except (TypeError, ValueError) as exc:
             raise EvidenceStoreError(str(exc)) from exc
         diagnostics = raw.get("diagnostics", [])
-        if not isinstance(diagnostics, list) or not all(isinstance(item, str) for item in diagnostics):
+        if not isinstance(diagnostics, list) or not all(
+            isinstance(item, str) for item in diagnostics
+        ):
             raise EvidenceStoreError("evidence store diagnostics must be strings")
         store.diagnostics = list(cast(list[str], diagnostics))
         store._read_snapshots(raw.get("snapshots", {}))
@@ -290,7 +298,9 @@ class EvidenceStore:
             diagnostics = item.get("diagnostics", [])
             if not isinstance(ids, list) or not all(isinstance(value, str) for value in ids):
                 raise EvidenceStoreError(f"invalid {name} snapshot record ids")
-            if not isinstance(diagnostics, list) or not all(isinstance(value, str) for value in diagnostics):
+            if not isinstance(diagnostics, list) or not all(
+                isinstance(value, str) for value in diagnostics
+            ):
                 raise EvidenceStoreError(f"invalid {name} snapshot diagnostics")
             try:
                 records = tuple(self._records[str(record_id)] for record_id in ids)
