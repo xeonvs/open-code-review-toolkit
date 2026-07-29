@@ -6,7 +6,13 @@ import json
 import re
 from dataclasses import dataclass
 
-from ocr_toolkit.evidence.model import EvidenceRecord
+from ocr_toolkit.context.render import build_context
+from ocr_toolkit.evidence.model import (
+    Confidence,
+    EvidenceRecord,
+    RefRole,
+    TrustClass,
+)
 from ocr_toolkit.evidence.store import EvidenceStore
 
 LEGACY_DEPENDENCY_RE = re.compile(
@@ -38,6 +44,24 @@ class ParityReport:
             "matched": self.matched,
             "missing": list(self.missing),
         }
+
+
+def attach_legacy_projection(store: EvidenceStore) -> None:
+    """Attach the temporary renderer oracle outside the production review flow."""
+
+    head_sha = store.head.commit_sha if store.head else None
+    store.add(
+        EvidenceRecord(
+            kind="repository.context",
+            value=build_context(),
+            source_path=".review-context/legacy-background.md",
+            ref=RefRole.HEAD,
+            commit_sha=head_sha,
+            provenance="legacy.context_projection",
+            confidence=Confidence.DERIVED,
+            trust=TrustClass.DERIVED,
+        )
+    )
 
 
 def _legacy_context(store: EvidenceStore) -> str:

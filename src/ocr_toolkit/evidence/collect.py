@@ -6,9 +6,8 @@ import os
 from pathlib import Path
 
 from ocr_toolkit.context.categorize import categorize_files
-from ocr_toolkit.context.render import build_context
 from ocr_toolkit.evidence.collectors import collect_ref_facts, fact_deltas
-from ocr_toolkit.evidence.model import Confidence, EvidenceRecord, RefRole, TrustClass
+from ocr_toolkit.evidence.model import EvidenceRecord, RefRole, TrustClass
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
@@ -41,21 +40,6 @@ def _component_for_path(path: str) -> str:
     """Return the stable first-directory component or repository root."""
 
     return path.split("/", 1)[0] if "/" in path else "repository"
-
-
-def _legacy_projection(markdown: str, *, sha: str) -> EvidenceRecord:
-    """Retain legacy Markdown only as a temporary parity projection."""
-
-    return EvidenceRecord(
-        kind="repository.context",
-        value=markdown,
-        source_path=".review-context/legacy-background.md",
-        ref=RefRole.HEAD,
-        commit_sha=sha,
-        provenance="legacy.context_projection",
-        confidence=Confidence.DERIVED,
-        trust=TrustClass.DERIVED,
-    )
 
 
 def collect_repository_evidence(
@@ -103,7 +87,6 @@ def collect_repository_evidence(
                     trust=TrustClass.SOURCE_REPOSITORY,
                 )
             )
-    store.add(_legacy_projection(build_context(), sha=head_sha))
     for diagnostic in (
         *base.diagnostics,
         *head.diagnostics,

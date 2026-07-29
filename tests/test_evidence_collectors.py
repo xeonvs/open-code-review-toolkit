@@ -114,3 +114,51 @@ def test_changed_head_guidance_cannot_self_authorize_policy(tmp_path: Path) -> N
 
     assert [record.kind for record in base_records] == ["repository.guidance"]
     assert not head_records
+
+
+def test_collector_skips_unrelated_unchanged_yaml(tmp_path: Path) -> None:
+    """Avoid scanning arbitrary YAML that cannot supply review context."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "archive.yaml").write_text("image: ignored.example/app:1\n", encoding="utf-8")
+    (tmp_path / "changed.txt").write_text("base\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    (tmp_path / "changed.txt").write_text("head\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path), head, RefRole.HEAD, changed_paths=["changed.txt"]
+    )
+
+    assert not diagnostics
+    assert not any(record.source_path == "archive.yaml" for record in records)
+
+
+def test_collector_reports_oversized_candidate_and_keeps_other_facts(tmp_path: Path) -> None:
+    """Treat one oversized manifest as bounded coverage loss, not ref failure."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "package.json").write_text(
+        '{"dependencies":{"library":"1.2.3"}}\n', encoding="utf-8"
+    )
+    (tmp_path / "requirements.txt").write_text("library==1.2.3\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "manifests")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path, max_file_bytes=20),
+        head,
+        RefRole.HEAD,
+        changed_paths=["package.json", "requirements.txt"],
+    )
+
+    assert any(record.source_path == "requirements.txt" for record in records)
+    assert not any(record.source_path == "package.json" for record in records)
+    assert diagnostics == ["head:omitted package.json: blob exceeds 20 bytes"]

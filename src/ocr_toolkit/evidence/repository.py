@@ -20,6 +20,37 @@ from ocr_toolkit.evidence.model import (
 OBJECT_LINE_RE = re.compile(
     r"^(?P<mode>[0-7]{6}) (?P<type>blob|tree|commit) (?P<sha>[0-9a-f]{40})\t(?P<path>.+)$"
 )
+BATCH_HEADER_RE = re.compile(
+    rb"^(?P<sha>[0-9a-f]{40}) (?P<type>blob|tree|commit) (?P<size>[0-9]+)\n$"
+)
+MAX_BATCH_BLOB_BYTES = 32_000_000
+
+
+def _git_environment() -> dict[str, str]:
+    """Return a Git environment without caller-injected configuration entries."""
+
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"}
+        and not key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+    }
+    environment.update(
+        {
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_PAGER": "cat",
+            "LC_ALL": "C",
+        }
+    )
+    return environment
+
+
+def _git_prefix(root: Path) -> list[str]:
+    """Return the fixed safe prefix for read-only repository Git commands."""
+
+    return ["git", "-c", "core.hooksPath=/dev/null", "-C", str(root)]
 
 
 class RepositoryEvidenceError(ValueError):
@@ -46,6 +77,14 @@ class RepositoryObject:
         """Return whether this entry is a submodule commit pointer."""
 
         return self.mode == "160000" or self.object_type == "commit"
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedBlobRead:
+    """Return successfully read blobs and explicit per-candidate omissions."""
+
+    blobs: dict[str, bytes]
+    diagnostics: tuple[str, ...]
 
 
 def normalize_repo_path(value: str) -> str:
@@ -85,19 +124,11 @@ class GitRepositoryReader:
     ) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
         """Run Git without a shell, hooks, prompts, or repository-controlled paging."""
 
-        environment = {
-            **os.environ,
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_OPTIONAL_LOCKS": "0",
-            "GIT_PAGER": "cat",
-            "LC_ALL": "C",
-        }
         return subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-C", str(root), *args],
+            [*_git_prefix(root), *args],
             capture_output=True,
             check=False,
-            env=environment,
+            env=_git_environment(),
             text=text,
             timeout=timeout,
         )
@@ -196,6 +227,172 @@ class GitRepositoryReader:
         if content.returncode != 0 or len(content.stdout) != size:
             raise RepositoryEvidenceError("failed to read the complete repository blob")
         return content.stdout
+
+    @staticmethod
+    def _batch_request(entries: tuple[RepositoryObject, ...]) -> bytes:
+        """Validate immutable blob entries and encode an object-ID-only request."""
+
+        if len(entries) > 10_000:
+            raise RepositoryEvidenceError("batch blob request exceeds 10000 entries")
+        seen_paths: set[str] = set()
+        request = bytearray()
+        for entry in entries:
+            if normalize_repo_path(entry.path) != entry.path or not re.fullmatch(
+                r"[0-9a-f]{40}", entry.object_sha
+            ):
+                raise RepositoryEvidenceError("batch blob entry is not normalized")
+            if entry.path in seen_paths:
+                raise RepositoryEvidenceError(f"duplicate batch blob path: {entry.path}")
+            seen_paths.add(entry.path)
+            if entry.is_symlink:
+                raise RepositoryEvidenceError(
+                    f"refusing to follow repository symlink: {entry.path}"
+                )
+            if entry.is_submodule or entry.object_type != "blob":
+                raise RepositoryEvidenceError(
+                    f"refusing to read non-file repository object: {entry.path}"
+                )
+            request.extend(entry.object_sha.encode("ascii"))
+            request.extend(b"\n")
+        return bytes(request)
+
+    def _batch_sizes(self, entries: tuple[RepositoryObject, ...]) -> tuple[int, ...]:
+        """Return authenticated object sizes from one bounded batch-check process."""
+
+        request = self._batch_request(entries)
+
+        environment = _git_environment()
+        command_prefix = [*_git_prefix(self.root), "cat-file"]
+        try:
+            size_result = subprocess.run(
+                [*command_prefix, "--batch-check"],
+                cwd=self.root,
+                env=environment,
+                input=request,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RepositoryEvidenceError("bounded Git batch size check failed") from exc
+        if size_result.returncode != 0:
+            raise RepositoryEvidenceError("Git batch size check failed")
+        headers = size_result.stdout.splitlines(keepends=True)
+        if len(headers) != len(entries):
+            raise RepositoryEvidenceError("Git returned an invalid batch size response")
+        sizes = []
+        for entry, header in zip(entries, headers, strict=True):
+            match = BATCH_HEADER_RE.fullmatch(header)
+            if match is None or match.group("sha").decode("ascii") != entry.object_sha:
+                raise RepositoryEvidenceError("Git returned an invalid batch size header")
+            if match.group("type") != b"blob":
+                raise RepositoryEvidenceError("Git batch object is not a blob")
+            sizes.append(int(match.group("size")))
+        return tuple(sizes)
+
+    def _batch_contents(
+        self, entries: tuple[RepositoryObject, ...], sizes: tuple[int, ...]
+    ) -> dict[str, bytes]:
+        """Read preflighted immutable blobs and validate every response frame."""
+
+        if len(entries) != len(sizes):
+            raise RepositoryEvidenceError("batch blob size count does not match request")
+        request = self._batch_request(entries)
+        environment = _git_environment()
+        command_prefix = [*_git_prefix(self.root), "cat-file"]
+        try:
+            result = subprocess.run(
+                [*command_prefix, "--batch"],
+                cwd=self.root,
+                env=environment,
+                input=request,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RepositoryEvidenceError("bounded Git batch read failed") from exc
+        if result.returncode != 0:
+            raise RepositoryEvidenceError("Git batch read failed")
+
+        output = result.stdout
+        offset = 0
+        decoded: dict[str, bytes] = {}
+        for entry, expected_size in zip(entries, sizes, strict=True):
+            newline = output.find(b"\n", offset)
+            if newline < 0:
+                raise RepositoryEvidenceError("Git returned a truncated batch header")
+            match = BATCH_HEADER_RE.fullmatch(output[offset : newline + 1])
+            if match is None:
+                raise RepositoryEvidenceError("Git returned an invalid batch header")
+            if match.group("sha").decode("ascii") != entry.object_sha:
+                raise RepositoryEvidenceError("Git returned an unexpected batch object")
+            if match.group("type") != b"blob":
+                raise RepositoryEvidenceError("Git batch object is not a blob")
+            size = int(match.group("size"))
+            if size != expected_size:
+                raise RepositoryEvidenceError("Git batch object size changed after preflight")
+            start = newline + 1
+            end = start + size
+            if end >= len(output) or output[end] != 0x0A:
+                raise RepositoryEvidenceError("Git returned a truncated batch blob")
+            decoded[entry.path] = output[start:end]
+            offset = end + 1
+        if offset != len(output):
+            raise RepositoryEvidenceError("Git returned unexpected trailing batch data")
+        return decoded
+
+    def read_blobs(self, entries: tuple[RepositoryObject, ...]) -> dict[str, bytes]:
+        """Read regular blobs strictly through two immutable Git batch processes."""
+
+        if not entries:
+            return {}
+        sizes = self._batch_sizes(entries)
+        total_size = 0
+        for entry, size in zip(entries, sizes, strict=True):
+            if size > self.max_file_bytes:
+                raise RepositoryEvidenceError(
+                    f"repository blob exceeds {self.max_file_bytes} bytes: {entry.path}"
+                )
+            total_size += size
+            if total_size > MAX_BATCH_BLOB_BYTES:
+                raise RepositoryEvidenceError(
+                    f"batch blob content exceeds {MAX_BATCH_BLOB_BYTES} bytes"
+                )
+        return self._batch_contents(entries, sizes)
+
+    def read_candidate_blobs(self, entries: tuple[RepositoryObject, ...]) -> BoundedBlobRead:
+        """Read candidates within bounds while reporting deterministic omissions."""
+
+        if not entries:
+            return BoundedBlobRead({}, ())
+        sizes = self._batch_sizes(entries)
+        accepted_entries = []
+        accepted_sizes = []
+        diagnostics = []
+        total_size = 0
+        for entry, size in zip(entries, sizes, strict=True):
+            if size > self.max_file_bytes:
+                diagnostics.append(
+                    f"omitted {entry.path}: blob exceeds {self.max_file_bytes} bytes"
+                )
+                continue
+            if total_size + size > MAX_BATCH_BLOB_BYTES:
+                diagnostics.append(
+                    f"omitted {entry.path}: batch content exceeds {MAX_BATCH_BLOB_BYTES} bytes"
+                )
+                continue
+            accepted_entries.append(entry)
+            accepted_sizes.append(size)
+            total_size += size
+        blobs = (
+            self._batch_contents(tuple(accepted_entries), tuple(accepted_sizes))
+            if accepted_entries
+            else {}
+        )
+        return BoundedBlobRead(blobs, tuple(diagnostics))
 
     def changed_paths(
         self, base_ref: str, head_ref: str, *, max_paths: int = 10_000

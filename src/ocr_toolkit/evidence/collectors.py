@@ -36,6 +36,14 @@ GUIDANCE_PATHS = {
     ".github/copilot-instructions.md",
 }
 ACCEPTED_DECISIONS_PATH = ".opencodereview/accepted-decisions.md"
+CONTEXT_YAML_DIRECTORIES = (
+    ".circleci/",
+    ".github/workflows/",
+    "deploy/",
+    "k8s/",
+    "kubernetes/",
+    "manifests/",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,6 +368,20 @@ def _image_facts(path: str, text: str) -> list[ManifestFact]:
     return facts
 
 
+def _is_context_yaml(path: str, changed: set[str]) -> bool:
+    """Select YAML that can affect this review or a known CI/container surface."""
+
+    folded = path.casefold()
+    if not folded.endswith((".yml", ".yaml")):
+        return False
+    name = PurePosixPath(folded).name
+    return (
+        folded in changed
+        or name.startswith((".gitlab-ci", "compose.", "docker-compose."))
+        or folded.startswith(CONTEXT_YAML_DIRECTORIES)
+    )
+
+
 def collect_ref_facts(
     reader: GitRepositoryReader,
     commit_sha: str,
@@ -373,19 +395,43 @@ def collect_ref_facts(
     diagnostics = []
     trust = TrustClass.TARGET_REPOSITORY if ref == RefRole.BASE else TrustClass.SOURCE_REPOSITORY
     changed = {path.casefold() for path in changed_paths}
-    for entry in reader.list_objects(commit_sha):
+    entries = reader.list_objects(commit_sha)
+    candidates = tuple(
+        entry
+        for entry in entries
+        if (
+            is_supported_manifest(entry.path)
+            or PurePosixPath(entry.path).name.casefold().startswith(".gitlab-ci")
+            or _is_context_yaml(entry.path, changed)
+            or entry.path in GUIDANCE_PATHS
+            or entry.path.casefold() == ACCEPTED_DECISIONS_PATH
+        )
+        and not entry.is_symlink
+        and not entry.is_submodule
+        and entry.object_type == "blob"
+    )
+    try:
+        read = reader.read_candidate_blobs(candidates)
+    except RepositoryEvidenceError as exc:
+        diagnostics.append(f"collector batch read failed: {exc}")
+        return records, diagnostics
+    blobs = read.blobs
+    diagnostics.extend(f"{ref.value}:{message}" for message in read.diagnostics)
+    for entry in candidates:
         path = entry.path
+        if path not in blobs:
+            # Bounded candidate omissions are already represented by explicit
+            # coverage diagnostics; they must not abort the remaining facts.
+            continue
         path_folded = path.casefold()
         image_source = PurePosixPath(path).name.casefold().startswith(
             ".gitlab-ci"
-        ) or path.casefold().endswith((".yml", ".yaml"))
+        ) or _is_context_yaml(path, changed)
         guidance_source = path in GUIDANCE_PATHS or path_folded == ACCEPTED_DECISIONS_PATH
         if not is_supported_manifest(path) and not image_source and not guidance_source:
             continue
         try:
-            blob = reader.read_blob(commit_sha, path)
-            if blob is None:
-                continue
+            blob = blobs[path]
             text = blob.decode("utf-8")
             if is_supported_manifest(path):
                 facts = parse_manifest(path, text)

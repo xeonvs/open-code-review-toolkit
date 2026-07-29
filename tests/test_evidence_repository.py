@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit.evidence import RefRole
+from ocr_toolkit.evidence import repository as evidence_repository
 from ocr_toolkit.evidence.artifacts import (
     prepare_artifact_directory,
     repository_artifacts,
@@ -20,10 +21,12 @@ from ocr_toolkit.evidence.project import render_bootstrap, render_json
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
+    RepositoryObject,
     build_file_snapshot,
     file_deltas,
     normalize_repo_path,
 )
+from tests.support import patched_attr
 
 
 def git(root: Path, *args: str) -> str:
@@ -164,11 +167,8 @@ def test_collector_and_projections_preserve_legacy_context(
 
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
-    assert any(record.kind == "repository.context" for record in store.records)
-    assert not any(
-        record.provenance.startswith("legacy.") and record.kind != "repository.context"
-        for record in store.records
-    )
+    assert all(record.kind != "repository.context" for record in store.records)
+    assert not any(record.provenance.startswith("legacy.") for record in store.records)
     assert "# Repository evidence bootstrap" in bootstrap
     assert "ocr_toolkit_evidence" in bootstrap
     assert "legacy-background.md" not in bootstrap
@@ -216,3 +216,84 @@ def test_internal_artifacts_reject_fifo_without_blocking(tmp_path: Path) -> None
 
     with pytest.raises(OSError):
         write_private_text(artifacts.bootstrap, "synthetic bootstrap")
+
+
+def test_reader_batches_multiple_blob_reads(tmp_path: Path) -> None:
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root)
+    entries = tuple(
+        entry for entry in reader.list_objects(head) if entry.path in {"changed.txt", "moved.txt"}
+    )
+    original_run = evidence_repository.subprocess.run
+    batch_calls: list[str] = []
+
+    def counting_run(*args: object, **kwargs: object) -> object:
+        command = args[0]
+        if isinstance(command, list) and command[-1] in {"--batch-check", "--batch"}:
+            batch_calls.append(command[-1])
+        return original_run(*args, **kwargs)
+
+    with patched_attr(evidence_repository.subprocess, "run", counting_run):
+        blobs = reader.read_blobs(entries)
+
+    assert batch_calls == ["--batch-check", "--batch"]
+    assert blobs == {"changed.txt": b"after\n", "moved.txt": b"renamed\n"}
+
+
+def test_candidate_batch_omits_only_over_limit_blobs(tmp_path: Path) -> None:
+    """Preserve useful facts when a different candidate exceeds the file budget."""
+
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root, max_file_bytes=7)
+    entries = tuple(
+        entry for entry in reader.list_objects(head) if entry.path in {"added.txt", "moved.txt"}
+    )
+
+    result = reader.read_candidate_blobs(entries)
+
+    assert result.blobs == {"added.txt": b"added\n"}
+    assert result.diagnostics == ("omitted moved.txt: blob exceeds 7 bytes",)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (b"not-a-header\n", "invalid batch header"),
+        (b"f" * 40 + b" blob 6\nadded\n\n", "unexpected batch object"),
+        (None, "truncated batch blob"),
+    ],
+)
+def test_reader_rejects_malformed_batch_content(
+    tmp_path: Path, payload: bytes | None, message: str
+) -> None:
+    """Reject malformed, mismatched, and truncated Git batch response frames."""
+
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root)
+    entry = next(item for item in reader.list_objects(head) if item.path == "added.txt")
+    original_run = evidence_repository.subprocess.run
+
+    def corrupting_run(*args: object, **kwargs: object) -> object:
+        command = args[0]
+        if isinstance(command, list) and command[-1] == "--batch":
+            content = f"{entry.object_sha} blob 6\nadded".encode() if payload is None else payload
+            return subprocess.CompletedProcess(command, 0, content, b"")
+        return original_run(*args, **kwargs)
+
+    with patched_attr(evidence_repository.subprocess, "run", corrupting_run):
+        with pytest.raises(RepositoryEvidenceError, match=message):
+            reader.read_blobs((entry,))
+
+
+def test_reader_rejects_duplicate_and_untrusted_batch_entries(tmp_path: Path) -> None:
+    """Keep direct batch callers from injecting paths or object expressions."""
+
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root)
+    entry = next(item for item in reader.list_objects(head) if item.path == "added.txt")
+
+    with pytest.raises(RepositoryEvidenceError, match="duplicate"):
+        reader.read_blobs((entry, entry))
+    injected = RepositoryObject("../outside", "100644", "blob", entry.object_sha)
+    with pytest.raises(RepositoryEvidenceError, match="normalized"):
+        reader.read_blobs((injected,))

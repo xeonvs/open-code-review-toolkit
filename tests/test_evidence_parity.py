@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceStore, RefRole, TrustClass
-from ocr_toolkit.evidence.parity import compare_legacy_projection, render_parity_json
+from ocr_toolkit.evidence.parity import (
+    attach_legacy_projection,
+    compare_legacy_projection,
+    render_parity_json,
+)
 
 SHA = "a" * 40
 
@@ -97,3 +103,19 @@ def test_parity_requires_a_nonempty_comparable_fixture() -> None:
 
     assert not report.complete
     assert report.missing == ("coverage:no-comparable-legacy-facts",)
+
+
+def test_legacy_projection_requires_explicit_migration_oracle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = EvidenceStore()
+    monkeypatch.setattr(
+        "ocr_toolkit.evidence.parity.build_context",
+        lambda: "## Python context\n- requests: `2.32.0`\n",
+    )
+
+    attach_legacy_projection(store)
+
+    records = [record for record in store.records if record.kind == "repository.context"]
+    assert len(records) == 1
+    assert records[0].provenance == "legacy.context_projection"
