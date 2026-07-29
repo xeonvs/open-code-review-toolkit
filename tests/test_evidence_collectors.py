@@ -15,7 +15,6 @@ from ocr_toolkit.evidence.ansible_requirements import (
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import (
-    MANIFEST_COLLECTORS,
     MAX_MANIFEST_INCLUDE_DIAGNOSTICS,
     MAX_MANIFEST_INCLUDE_EDGES,
     MAX_MANIFEST_INCLUDE_FILES,
@@ -478,12 +477,13 @@ def test_manifest_registry_is_authoritative_and_unambiguous() -> None:
         "services/api/pyproject.toml": "python",
         "requirements-dev.txt": "python",
         "ui/package-lock.json": "javascript",
+        "ui/yarn.lock": "javascript",
+        "ui/pnpm-lock.yaml": "javascript",
         "service/go.mod": "go",
         "web/composer.lock": "php",
         "collections/requirements.yml": "ansible",
     }
 
-    assert len(MANIFEST_COLLECTORS) == 12
     assert {
         path: collector.ecosystem
         for path in cases

@@ -10,6 +10,12 @@ from pathlib import PurePosixPath
 
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.javascript_manifests import (
+    parse_package_json,
+    parse_package_lock,
+    parse_pnpm_lock,
+    parse_yarn_lock,
+)
 from ocr_toolkit.evidence.manifest_model import (
     MAX_MANIFEST_ITEMS,
     ManifestFact,
@@ -107,53 +113,6 @@ def _mapping_dependencies(
     for name, version in sorted(data.items())[:MAX_MANIFEST_ITEMS]:
         if isinstance(name, str) and isinstance(version, (str, int, float)):
             facts.append(_dependency(kind, component, name, version, scope))
-    return facts
-
-
-def _parse_package_json(text: str) -> list[ManifestFact]:
-    """Parse JavaScript runtime and dependency declarations."""
-
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("package.json must contain an object")
-    facts = []
-    for key, scope in (("dependencies", "runtime"), ("devDependencies", "development")):
-        values = data.get(key)
-        if isinstance(values, dict):
-            facts.extend(_mapping_dependencies(values, "dependency.declared", "javascript", scope))
-    engines = data.get("engines")
-    if isinstance(engines, dict):
-        for name, constraint in sorted(engines.items()):
-            if isinstance(name, str) and isinstance(constraint, str):
-                facts.append(
-                    ManifestFact(
-                        "runtime.declared",
-                        "javascript",
-                        name.casefold(),
-                        {"name": name, "constraint": constraint},
-                    )
-                )
-    return facts[:MAX_MANIFEST_ITEMS]
-
-
-def _parse_package_lock(text: str) -> list[ManifestFact]:
-    """Parse resolved versions from npm lockfile packages or dependencies."""
-
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("package-lock.json must contain an object")
-    packages = data.get("packages")
-    facts = []
-    if isinstance(packages, dict):
-        for path, raw in sorted(packages.items()):
-            if not path or not isinstance(raw, dict):
-                continue
-            version = raw.get("version")
-            name = raw.get("name") or str(path).removeprefix("node_modules/")
-            if isinstance(name, str) and isinstance(version, str):
-                facts.append(_dependency("dependency.locked", "javascript", name, version, "npm"))
-            if len(facts) >= MAX_MANIFEST_ITEMS:
-                break
     return facts
 
 
@@ -293,14 +252,14 @@ MANIFEST_COLLECTORS = (
     ManifestCollector("python", _name_is("poetry.lock"), parse_poetry_lock),
     ManifestCollector("python", _name_is("Pipfile.lock"), parse_pipfile_lock),
     ManifestCollector("python", _is_pylock, parse_pylock),
-    ManifestCollector(
-        "javascript", _name_is("package.json"), _without_notices(_parse_package_json)
-    ),
+    ManifestCollector("javascript", _name_is("package.json"), parse_package_json),
     ManifestCollector(
         "javascript",
         _name_is("package-lock.json"),
-        _without_notices(_parse_package_lock),
+        parse_package_lock,
     ),
+    ManifestCollector("javascript", _name_is("yarn.lock"), parse_yarn_lock),
+    ManifestCollector("javascript", _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
     ManifestCollector("go", _name_is("go.mod"), _without_notices(_parse_go_mod)),
     ManifestCollector("php", _name_is("composer.json"), _without_notices(_parse_composer_declared)),
     ManifestCollector("php", _name_is("composer.lock"), _without_notices(_parse_composer_locked)),
