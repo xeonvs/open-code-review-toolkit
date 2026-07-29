@@ -139,7 +139,7 @@ def test_store_deduplicates_and_reports_deterministic_limits() -> None:
     assert store.add(first)
     assert not store.add(record("second"))
     assert store.add(record("3.12", kind="runtime.declared"))
-    assert not store.add(record("python", kind="component.kind"))
+    assert not store.add(record("python", kind="repository.change_category"))
 
     assert len(store.records) == 2
     assert store.diagnostics == [

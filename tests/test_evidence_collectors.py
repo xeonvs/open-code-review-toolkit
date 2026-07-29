@@ -6,7 +6,13 @@ import subprocess
 from pathlib import Path
 
 from ocr_toolkit.evidence import GitRepositoryReader, RefRole
-from ocr_toolkit.evidence.collectors import collect_ref_facts, fact_deltas, parse_manifest
+from ocr_toolkit.evidence.collectors import (
+    MANIFEST_COLLECTORS,
+    collect_ref_facts,
+    fact_deltas,
+    manifest_collector,
+    parse_manifest,
+)
 
 
 def _git(root: Path, *args: str) -> str:
@@ -52,6 +58,67 @@ def test_supported_manifest_parsers_emit_typed_facts() -> None:
     ]
 
 
+def test_manifest_registry_is_authoritative_and_unambiguous() -> None:
+    """Use one registry for discovery, ecosystem metadata, and parsing."""
+
+    cases = {
+        "services/api/pyproject.toml": "python",
+        "requirements-dev.txt": "python",
+        "ui/package-lock.json": "javascript",
+        "service/go.mod": "go",
+        "web/composer.lock": "php",
+        "collections/requirements.yml": "ansible",
+    }
+
+    assert len(MANIFEST_COLLECTORS) == 8
+    assert {
+        path: collector.ecosystem
+        for path in cases
+        if (collector := manifest_collector(path)) is not None
+    } == cases
+    assert manifest_collector("docs/requirements.rst") is None
+
+
+def test_source_aware_identities_preserve_case_sensitive_git_paths(tmp_path: Path) -> None:
+    """Do not collapse facts from distinct case-sensitive tree entries."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+
+    def plumbing(*args: str, input_text: str) -> str:
+        """Create Git objects without relying on checkout filesystem semantics."""
+
+        completed = subprocess.run(
+            ["git", "-C", str(tmp_path), *args],
+            input=input_text,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return completed.stdout.strip()
+
+    lower = plumbing("hash-object", "-w", "--stdin", input_text="library==1.0\n")
+    upper = plumbing("hash-object", "-w", "--stdin", input_text="library==2.0\n")
+    tree = plumbing(
+        "mktree",
+        input_text=(
+            f"100644 blob {upper}\tRequirements.txt\n100644 blob {lower}\trequirements.txt\n"
+        ),
+    )
+    head = plumbing("commit-tree", tree, input_text="case-sensitive manifests\n")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert not diagnostics
+    assert {
+        record.value["identity"] for record in records if record.kind == "dependency.declared"
+    } == {
+        "Requirements.txt:requirements:library",
+        "requirements.txt:requirements:library",
+    }
+
+
 def test_collects_both_refs_and_derives_dependency_and_image_deltas(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.email", "agent@example.invalid")
@@ -76,9 +143,17 @@ def test_collects_both_refs_and_derives_dependency_and_image_deltas(tmp_path: Pa
     assert {record.ref for record in base_records} == {RefRole.BASE}
     assert {record.ref for record in head_records} == {RefRole.HEAD}
     changes = {(delta.kind, delta.identity): delta for delta in deltas}
-    assert changes[("dependency.declared", "requirements:requests")].change == "changed"
-    assert changes[("ci.image", "python:3.12")].change == "removed"
-    assert changes[("ci.image", "python:3.13")].change == "added"
+    dependency_identity = "requirements.txt:requirements:requests"
+    assert changes[("dependency.declared", dependency_identity)].change == "changed"
+    assert changes[("dependency.declared", dependency_identity)].before["version"] == "2.31.0"
+    image_delta = changes[("ci.image", ".gitlab-ci.yml:python")]
+    assert image_delta.change == "changed"
+    assert image_delta.before["version"] == "3.12"
+    assert image_delta.after["version"] == "3.13"
+    assert {record.kind for record in head_records if record.source_path == "requirements.txt"} == {
+        "repository.manifest",
+        "dependency.declared",
+    }
 
 
 def test_malformed_manifest_becomes_bounded_diagnostic(tmp_path: Path) -> None:

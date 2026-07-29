@@ -44,7 +44,7 @@ def test_parity_matches_independently_typed_dependency_and_image() -> None:
         _record(
             "dependency.declared",
             {
-                "identity": "requirements:requests",
+                "identity": "requirements.txt:requirements:requests",
                 "fact": {"name": "requests", "version": "2.32.0"},
             },
             "typed parser:requirements.txt",
@@ -53,7 +53,10 @@ def test_parity_matches_independently_typed_dependency_and_image() -> None:
     assert store.add(
         _record(
             "ci.image",
-            {"identity": "python:3.13", "fact": {"image": "python:3.13"}},
+            {
+                "identity": ".gitlab-ci.yml:python",
+                "fact": {"image": "python:3.13", "name": "python", "version": "3.13"},
+            },
             "typed parser:.gitlab-ci.yml",
         )
     )

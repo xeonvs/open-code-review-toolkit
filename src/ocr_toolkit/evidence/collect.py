@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ocr_toolkit.context.categorize import categorize_files
+from ocr_toolkit.evidence.categorize import categorize_paths
 from ocr_toolkit.evidence.collectors import collect_ref_facts, fact_deltas
 from ocr_toolkit.evidence.model import EvidenceRecord, RefRole, TrustClass
 from ocr_toolkit.evidence.repository import (
@@ -52,6 +52,8 @@ def collect_repository_evidence(
     changed = reader.changed_paths(base_sha, head_sha)
     base = build_file_snapshot(reader, base_sha, RefRole.BASE, paths=changed)
     head = build_file_snapshot(reader, head_sha, RefRole.HEAD, paths=changed)
+    base_paths = {record.source_path for record in base.records}
+    head_paths = {record.source_path for record in head.records}
     store = EvidenceStore(base=base, head=head, deltas=file_deltas(base, head))
     base_facts, base_fact_diagnostics = collect_ref_facts(
         reader, base_sha, RefRole.BASE, changed_paths=changed
@@ -72,21 +74,34 @@ def collect_repository_evidence(
         if not store.add(record):
             store.add_diagnostic("typed evidence was truncated by store limits")
             break
-    categories = categorize_files(list(changed))
+    categories = categorize_paths(list(changed))
+    categories_truncated = False
     for category, paths in sorted(categories.items()):
         for path in paths:
-            store.add(
+            in_head = path in head_paths
+            in_base = path in base_paths
+            if not in_head and not in_base:
+                continue
+            ref = RefRole.HEAD if in_head else RefRole.BASE
+            if not store.add(
                 EvidenceRecord(
-                    kind="component.kind",
-                    value=category,
+                    kind="repository.change_category",
+                    value={"category": category, "path": path},
                     source_path=path,
-                    ref=RefRole.HEAD,
-                    commit_sha=head_sha,
+                    ref=ref,
+                    commit_sha=head_sha if ref == RefRole.HEAD else base_sha,
                     component=_component_for_path(path),
-                    provenance="context.categorize",
-                    trust=TrustClass.SOURCE_REPOSITORY,
+                    provenance="evidence.categorize",
+                    trust=(
+                        TrustClass.SOURCE_REPOSITORY
+                        if ref == RefRole.HEAD
+                        else TrustClass.TARGET_REPOSITORY
+                    ),
                 )
-            )
+            ):
+                categories_truncated = True
+    if categories_truncated:
+        store.add_diagnostic("change-category evidence was truncated by store limits")
     for diagnostic in (
         *base.diagnostics,
         *head.diagnostics,

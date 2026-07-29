@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -54,6 +54,15 @@ class ManifestFact:
     component: str
     identity: str
     value: EvidenceValue
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestCollector:
+    """Bind manifest path matching, ecosystem metadata, and a bounded parser."""
+
+    ecosystem: str
+    matches: Callable[[str], bool]
+    parse: Callable[[str], list[ManifestFact]]
 
 
 def _dependency(kind: str, component: str, name: str, version: object, scope: str) -> ManifestFact:
@@ -306,43 +315,81 @@ def _parse_ansible_requirements(text: str) -> list[ManifestFact]:
     return facts
 
 
-def parse_manifest(path: str, text: str) -> list[ManifestFact]:
-    """Dispatch one supported manifest path to a bounded typed parser."""
+def _parse_composer_declared(text: str) -> list[ManifestFact]:
+    """Parse declared Composer requirements through the shared bounded parser."""
+
+    return _parse_composer(text, locked=False)
+
+
+def _parse_composer_locked(text: str) -> list[ManifestFact]:
+    """Parse resolved Composer packages through the shared bounded parser."""
+
+    return _parse_composer(text, locked=True)
+
+
+def _name_is(*names: str) -> Callable[[str], bool]:
+    """Build a case-insensitive basename matcher for the manifest registry."""
+
+    normalized = frozenset(name.casefold() for name in names)
+    return lambda path: PurePosixPath(path).name.casefold() in normalized
+
+
+def _is_python_requirements(path: str) -> bool:
+    """Match Python requirement manifests without matching Ansible YAML."""
 
     name = PurePosixPath(path).name.casefold()
-    if name == "pyproject.toml":
-        return _parse_pyproject(text)
-    if name.startswith("requirements") and name.endswith(".txt"):
-        return _parse_requirements(text)
-    if name == "package.json":
-        return _parse_package_json(text)
-    if name == "package-lock.json":
-        return _parse_package_lock(text)
-    if name == "go.mod":
-        return _parse_go_mod(text)
-    if name == "composer.json":
-        return _parse_composer(text, locked=False)
-    if name == "composer.lock":
-        return _parse_composer(text, locked=True)
-    if name in {"requirements.yml", "requirements.yaml"}:
-        return _parse_ansible_requirements(text)
-    return []
+    return name.startswith("requirements") and name.endswith(".txt")
+
+
+MANIFEST_COLLECTORS = (
+    ManifestCollector("python", _name_is("pyproject.toml"), _parse_pyproject),
+    ManifestCollector("python", _is_python_requirements, _parse_requirements),
+    ManifestCollector("javascript", _name_is("package.json"), _parse_package_json),
+    ManifestCollector("javascript", _name_is("package-lock.json"), _parse_package_lock),
+    ManifestCollector("go", _name_is("go.mod"), _parse_go_mod),
+    ManifestCollector("php", _name_is("composer.json"), _parse_composer_declared),
+    ManifestCollector("php", _name_is("composer.lock"), _parse_composer_locked),
+    ManifestCollector(
+        "ansible",
+        _name_is("requirements.yml", "requirements.yaml"),
+        _parse_ansible_requirements,
+    ),
+)
+
+
+def manifest_collector(path: str) -> ManifestCollector | None:
+    """Return the single registered collector for a repository path."""
+
+    matches = tuple(collector for collector in MANIFEST_COLLECTORS if collector.matches(path))
+    if len(matches) > 1:
+        raise ValueError(f"manifest registry has ambiguous collectors for {path}")
+    return matches[0] if matches else None
+
+
+def parse_manifest(path: str, text: str) -> list[ManifestFact]:
+    """Parse a supported manifest through the authoritative collector registry."""
+
+    collector = manifest_collector(path)
+    return collector.parse(text) if collector else []
 
 
 def is_supported_manifest(path: str) -> bool:
-    """Return whether a repository path has a typed manifest parser."""
+    """Return whether a repository path has a registered typed parser."""
 
-    name = PurePosixPath(path).name.casefold()
-    return name in {
-        "pyproject.toml",
-        "package.json",
-        "package-lock.json",
-        "go.mod",
-        "composer.json",
-        "composer.lock",
-        "requirements.yml",
-        "requirements.yaml",
-    } or (name.startswith("requirements") and name.endswith(".txt"))
+    return manifest_collector(path) is not None
+
+
+def _image_reference(reference: str) -> tuple[str, str | None]:
+    """Split an OCI-style reference into stable name and mutable version parts."""
+
+    if "@" in reference:
+        name, digest = reference.rsplit("@", 1)
+        return name, digest
+    slash = reference.rfind("/")
+    colon = reference.rfind(":")
+    if colon > slash:
+        return reference[:colon], reference[colon + 1 :]
+    return reference, None
 
 
 def _image_facts(path: str, text: str) -> list[ManifestFact]:
@@ -358,9 +405,13 @@ def _image_facts(path: str, text: str) -> list[ManifestFact]:
         match = IMAGE_LINE_RE.match(line)
         if match:
             image = match.group(1)
+            name, version = _image_reference(image)
             facts.append(
                 ManifestFact(
-                    kind, "ci" if kind == "ci.image" else "container", image, {"image": image}
+                    kind,
+                    "ci" if kind == "ci.image" else "container",
+                    name.casefold(),
+                    {"image": image, "name": name, "version": version},
                 )
             )
         if len(facts) >= MAX_MANIFEST_ITEMS:
@@ -434,7 +485,18 @@ def collect_ref_facts(
             blob = blobs[path]
             text = blob.decode("utf-8")
             if is_supported_manifest(path):
-                facts = parse_manifest(path, text)
+                collector = manifest_collector(path)
+                if collector is None:  # pragma: no cover - guarded by registry predicate
+                    raise ValueError("supported manifest has no collector")
+                facts = [
+                    ManifestFact(
+                        "repository.manifest",
+                        collector.ecosystem,
+                        path,
+                        {"path": path, "ecosystem": collector.ecosystem},
+                    ),
+                    *collector.parse(text),
+                ]
             elif guidance_source:
                 facts = (
                     []
@@ -465,10 +527,15 @@ def collect_ref_facts(
             )
             continue
         for fact in facts:
+            identity = (
+                f"{path}:{fact.identity}"
+                if fact.kind.startswith(("dependency.", "runtime.", "ci.", "container."))
+                else fact.identity
+            )
             records.append(
                 EvidenceRecord(
                     kind=fact.kind,
-                    value={"identity": fact.identity, "fact": fact.value},
+                    value={"identity": identity, "fact": fact.value},
                     source_path=path,
                     ref=ref,
                     commit_sha=commit_sha,

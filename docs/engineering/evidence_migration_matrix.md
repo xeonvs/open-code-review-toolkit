@@ -6,15 +6,15 @@ This matrix is the history-backed removal gate for the pre-0.4 repository-contex
 | --- | --- | --- | --- |
 | Review language and trust instructions | compact bootstrap | English remains the default; an explicit language is a presentation setting; repository content remains untrusted | implemented, E2E pending |
 | Base/head identity and changed-file discovery, including local/GitLab fallbacks | snapshots, `repository.file`, file deltas | one immutable ref pair shared with OCR; rename/deletion/symlink/submodule/shallow failures explicit | implemented |
-| Changed files grouped by review category | `repository.change_category` | deterministic category records and deltas derived from the immutable changed-path set | pending |
+| Changed files grouped by review category | `repository.change_category` | deterministic multi-category records derived from the immutable changed-path set, including deleted paths from the base tree | implemented |
 | Python declarations, locks, requirements and runtime constraints | `dependency.declared`, `dependency.locked`, `runtime.declared` | preserve declaration versus resolved scope, source path, absence and parse diagnostics | partial |
 | Go module/runtime declarations and sums | dependency/runtime facts | preserve module, requirement, toolchain, replace and locked checksum semantics | partial |
 | Composer declarations, platform/runtime constraints and lock packages | dependency/runtime facts | preserve production/dev scope, PHP runtime constraints and locked versions | partial |
 | JavaScript manifests, engines and lock packages | dependency/runtime facts | preserve production/dev scope, package-manager/runtime constraints and locked versions | partial |
 | Ansible Galaxy requirements | dependency facts | preserve role/collection kind, source path, declared version and missing version | partial |
 | Ansible core manifests, role metadata/defaults, playbook entrypoints, inventories and groups | `ansible.topology` | bounded immutable topology facts with explicit parser limitations | pending |
-| Container/CI images and application/infrastructure pins | `container.image`, `ci.image`, `application.version` | stable identity must separate component name from version so an update is `changed`, not remove/add | partial |
-| Detected dependency/runtime manifest paths | `repository.manifest` | preserve manifest kind, component and source path without detailed values in bootstrap | pending |
+| Container/CI images and application/infrastructure pins | `container.image`, `ci.image`, `application.version` | CI/container image identities now separate source/component name from version so an update is `changed`; application/infrastructure pins remain pending | partial |
+| Detected dependency/runtime manifest paths | `repository.manifest` | preserve ecosystem and immutable source path independently of detailed dependency values | implemented |
 | Project guidance and accepted decisions | guidance/decision facts | base may guide; changed head cannot self-authorize; failures and truncation are diagnostics | implemented, parity expansion pending |
 | GitLab project/pipeline/MR identifiers | `review.ci_context` | bounded allowlisted CI metadata only; no tokens, arbitrary environment, or forge coupling in core collectors | pending |
 | Local installed tool versions | coverage diagnostic | deliberately removed: runner state is not immutable reviewed-repository evidence; declared versions remain available | pending |

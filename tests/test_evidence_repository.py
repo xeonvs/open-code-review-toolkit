@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit.evidence import RefRole
+from ocr_toolkit.evidence import RefRole, TrustClass
 from ocr_toolkit.evidence import repository as evidence_repository
 from ocr_toolkit.evidence.artifacts import (
     prepare_artifact_directory,
@@ -167,6 +167,7 @@ def test_collector_and_projections_preserve_legacy_context(
 
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
+    assert any(record.kind == "repository.change_category" for record in store.records)
     assert all(record.kind != "repository.context" for record in store.records)
     assert not any(record.provenance.startswith("legacy.") for record in store.records)
     assert "# Repository evidence bootstrap" in bootstrap
@@ -174,6 +175,31 @@ def test_collector_and_projections_preserve_legacy_context(
     assert "legacy-background.md" not in bootstrap
     assert len(bootstrap) <= 4_000
     assert serialized == store.to_json()
+
+
+def test_deleted_path_keeps_a_base_trust_change_category(tmp_path: Path) -> None:
+    """Represent deleted-path categories without inventing a head-tree source."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    (root / "removed.py").write_text("print('synthetic')\n", encoding="utf-8")
+    git(root, "add", "removed.py")
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+    git(root, "rm", "-q", "removed.py")
+    git(root, "commit", "-qm", "head")
+    head = git(root, "rev-parse", "HEAD")
+
+    store = collect_repository_evidence(root, base_ref=base, head_ref=head)
+    category = next(
+        record for record in store.records if record.kind == "repository.change_category"
+    )
+
+    assert category.value == {"category": "python", "path": "removed.py"}
+    assert category.ref == RefRole.BASE
+    assert category.commit_sha == base
+    assert category.trust == TrustClass.TARGET_REPOSITORY
 
 
 def test_bootstrap_truncation_is_explicit() -> None:
