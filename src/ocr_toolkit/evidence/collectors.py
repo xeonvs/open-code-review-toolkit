@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
 from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.javascript_manifests import (
     parse_package_json,
@@ -94,59 +95,6 @@ class PythonRequirementBlobSet:
     diagnostics: tuple[str, ...]
 
 
-def _dependency(kind: str, component: str, name: str, version: object, scope: str) -> ManifestFact:
-    """Create one normalized dependency fact."""
-
-    return ManifestFact(
-        kind,
-        component,
-        f"{scope}:{name.casefold()}",
-        {"name": name, "version": str(version), "scope": scope},
-    )
-
-
-def _mapping_dependencies(
-    data: Mapping[str, object], kind: str, component: str, scope: str
-) -> list[ManifestFact]:
-    """Collect bounded string dependency entries from one mapping."""
-
-    facts = []
-    for name, version in sorted(data.items())[:MAX_MANIFEST_ITEMS]:
-        if isinstance(name, str) and isinstance(version, (str, int, float)):
-            facts.append(_dependency(kind, component, name, version, scope))
-    return facts
-
-
-def _parse_composer(text: str, *, locked: bool) -> list[ManifestFact]:
-    """Parse Composer declared or locked package versions."""
-
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("Composer manifest must contain an object")
-    facts = []
-    if locked:
-        for scope in ("packages", "packages-dev"):
-            packages = data.get(scope)
-            if isinstance(packages, list):
-                for raw in packages:
-                    if (
-                        isinstance(raw, dict)
-                        and isinstance(raw.get("name"), str)
-                        and isinstance(raw.get("version"), str)
-                    ):
-                        facts.append(
-                            _dependency(
-                                "dependency.locked", "php", raw["name"], raw["version"], scope
-                            )
-                        )
-    else:
-        for scope in ("require", "require-dev"):
-            values = data.get(scope)
-            if isinstance(values, dict):
-                facts.extend(_mapping_dependencies(values, "dependency.declared", "php", scope))
-    return facts[:MAX_MANIFEST_ITEMS]
-
-
 def _parse_ansible_requirements(text: str) -> ManifestParseResult:
     """Parse Galaxy roles and collections while preserving optional fields."""
 
@@ -173,36 +121,11 @@ def _parse_ansible_requirements(text: str) -> ManifestParseResult:
     return ManifestParseResult(tuple(facts), parsed.notices, parsed.include_paths)
 
 
-def _parse_composer_declared(text: str) -> list[ManifestFact]:
-    """Parse declared Composer requirements through the shared bounded parser."""
-
-    return _parse_composer(text, locked=False)
-
-
-def _parse_composer_locked(text: str) -> list[ManifestFact]:
-    """Parse resolved Composer packages through the shared bounded parser."""
-
-    return _parse_composer(text, locked=True)
-
-
 def _name_is(*names: str) -> Callable[[str], bool]:
     """Build a case-insensitive basename matcher for the manifest registry."""
 
     normalized = frozenset(name.casefold() for name in names)
     return lambda path: PurePosixPath(path).name.casefold() in normalized
-
-
-def _without_notices(
-    parser: Callable[[str], list[ManifestFact]],
-) -> Callable[[str], ManifestParseResult]:
-    """Adapt a parser whose bounded format cannot yet emit coverage notices."""
-
-    def parse(text: str) -> ManifestParseResult:
-        """Return parser facts through the common manifest result contract."""
-
-        return ManifestParseResult(tuple(parser(text)))
-
-    return parse
 
 
 def _is_python_requirements(path: str) -> bool:
@@ -236,8 +159,8 @@ MANIFEST_COLLECTORS = (
     ManifestCollector("javascript", _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
     ManifestCollector("go", _name_is("go.mod"), parse_go_mod),
     ManifestCollector("go", _name_is("go.sum"), parse_go_sum),
-    ManifestCollector("php", _name_is("composer.json"), _without_notices(_parse_composer_declared)),
-    ManifestCollector("php", _name_is("composer.lock"), _without_notices(_parse_composer_locked)),
+    ManifestCollector("php", _name_is("composer.json"), parse_composer_json),
+    ManifestCollector("php", _name_is("composer.lock"), parse_composer_lock),
     ManifestCollector(
         "ansible",
         _name_is("requirements.yml", "requirements.yaml"),
