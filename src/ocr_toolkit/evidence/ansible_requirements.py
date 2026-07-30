@@ -235,9 +235,12 @@ def _yaml_candidates(text: str) -> tuple[list[tuple[str, object]], int]:
                     fields[field.group(1)] = value
             else:
                 scalar = _clean_scalar(body)
-                if scalar is not None and ":" not in scalar:
-                    fields["name"] = scalar
-                else:
+                if scalar is not None and (_looks_like_role_source(scalar) or ":" not in scalar):
+                    if section == "role" and _looks_like_role_source(scalar):
+                        fields["src"] = scalar
+                    else:
+                        fields["name"] = scalar
+                elif scalar is None:
                     malformed += 1
                     item_indent = None
             continue

@@ -78,6 +78,30 @@ def test_collects_bounded_ini_and_yaml_inventory_groups() -> None:
     assert not topology_candidate("inventories/stage/group_vars/all.yml")
 
 
+def test_inventory_children_use_the_declared_yaml_indentation() -> None:
+    """Accept sibling groups at a consistent indentation wider than two spaces."""
+
+    facts = collect_topology(
+        "inventory.yml",
+        """all:
+    children:
+        web:
+            hosts:
+                web-1:
+        workers:
+            vars:
+                queue: default
+    vars:
+        ignored: true
+""",
+    )
+
+    assert [fact.identity for fact in facts if fact.kind.endswith("group")] == [
+        "inventory.yml:web",
+        "inventory.yml:workers",
+    ]
+
+
 def test_topology_is_queryable_from_the_evidence_mcp(tmp_path: Path) -> None:
     """Carry immutable topology through the store into filtered MCP queries."""
 

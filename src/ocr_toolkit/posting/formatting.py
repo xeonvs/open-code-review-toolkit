@@ -209,18 +209,18 @@ def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = Non
     if existing.strip() and suggestion.strip():
         body += "\n\n<details><summary>Suggested change details</summary>\n\n"
         body += "**Before:**\n"
-        body += neutralize_quick_actions(
-            markdown_code_block(
-                "text", truncate_code_text(existing, MAX_FALLBACK_CODE_DETAILS_CHARS)
-            )
+        body += markdown_code_block(
+            "text",
+            neutralize_quick_actions(truncate_code_text(existing, MAX_FALLBACK_CODE_DETAILS_CHARS)),
         )
         body += "\n\n"
 
         body += "**After:**\n"
-        body += neutralize_quick_actions(
-            markdown_code_block(
-                "text", truncate_code_text(suggestion, MAX_FALLBACK_CODE_DETAILS_CHARS)
-            )
+        body += markdown_code_block(
+            "text",
+            neutralize_quick_actions(
+                truncate_code_text(suggestion, MAX_FALLBACK_CODE_DETAILS_CHARS)
+            ),
         )
         body += "\n\n"
         body += "</details>"

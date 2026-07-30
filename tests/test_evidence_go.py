@@ -109,6 +109,24 @@ malformed line
     assert parsed.notices == ("go.sum skipped a malformed checksum line",)
 
 
+def test_go_mod_preserves_comment_markers_inside_quoted_tokens() -> None:
+    """Treat double slash as a comment only outside interpreted and raw strings."""
+
+    parsed = parse_go_mod(
+        """module `example.invalid/team//service`
+replace example.invalid/quoted => "../local//copy" // local checkout
+replace example.invalid/raw => `../raw//copy`
+require "example.invalid/team//module" v1.2.3 // indirect
+"""
+    )
+
+    facts = {fact.identity: fact for fact in parsed.facts}
+    assert facts["module"].value["name"] == "example.invalid/team//service"
+    assert facts["replace:example.invalid/quoted"].value["replacement"] == "../local//copy"
+    assert facts["replace:example.invalid/raw"].value["replacement"] == "../raw//copy"
+    assert facts["indirect:example.invalid/team//module"].value["version"] == "v1.2.3"
+
+
 def test_go_parsers_apply_one_aggregate_bound_with_notice() -> None:
     """Bound module and checksum facts rather than multiplying per directive."""
 

@@ -252,6 +252,21 @@ def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
     assert "Authorization: ***" in output.getvalue()
 
 
+def test_run_review_normalizes_timeout_failures() -> None:
+    """Expose OCR timeouts through the runner's public failure contract."""
+
+    def time_out(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise subprocess.TimeoutExpired(argv, 30)
+
+    with TemporaryDirectory() as tmp, patched_attr(review_runner.subprocess, "run", time_out):
+        with pytest.raises(review_runner.ReviewRunnerError, match="configured timeout"):
+            review_runner.run_review(
+                Path(tmp) / "result.json",
+                Path(tmp) / "stderr.log",
+                ["--from", "base", "--to", "head"],
+            )
+
+
 def test_run_review_rejects_symlink_artifact() -> None:
     with TemporaryDirectory() as tmp:
         target = Path(tmp) / "target"
@@ -325,6 +340,41 @@ def test_review_refs_require_one_immutable_diff_mode() -> None:
         review_runner._review_refs(["--commit", "abc123", "--from", "base"])
 
 
+def test_review_refs_are_resolved_before_evidence_and_ocr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bind both consumers to the same commit pair before the review starts."""
+
+    class Reader:
+        def __init__(self, root: Path) -> None:
+            assert root == tmp_path
+
+        def resolve_commit(self, ref: str) -> str:
+            return {"target": "a" * 40, "source": "b" * 40}[ref]
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", Reader)
+
+    assert review_runner._immutable_review_refs(
+        review_runner.ReviewRefs("target", "source")
+    ) == review_runner.ReviewRefs("a" * 40, "b" * 40)
+
+
+def test_immutable_ref_rewrite_preserves_non_diff_ocr_options() -> None:
+    """Keep caller review settings while replacing only movable diff selectors."""
+
+    assert review_runner._without_diff_options(
+        [
+            "--from",
+            "target",
+            "--to=source",
+            "--format",
+            "json",
+            "--max-comments=20",
+        ]
+    ) == ["--format", "json", "--max-comments=20"]
+
+
 def test_review_rejects_caller_owned_background_file() -> None:
     with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci"):
         review_runner._reject_owned_background(["--background-file", "other.md"])
@@ -365,6 +415,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         return 0
 
     with (
+        patched_attr(
+            review_runner,
+            "_immutable_review_refs",
+            lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
+        ),
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
         patched_attr(review_runner, "collect_repository_evidence", collect),
         patched_attr(
@@ -412,7 +467,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         )
 
     assert result == 0
-    assert events[0] == ("collect", {"base_ref": "base", "head_ref": "head"})
+    assert events[0] == ("collect", {"base_ref": "a" * 40, "head_ref": "b" * 40})
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
     assert events[2] == ("write", artifacts.store)
     assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")
@@ -420,7 +475,13 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
     assert events[5] == "verify"
     assert events[6] == "self-query"
     assert events[7][0] == "ocr"  # type: ignore[index]
-    assert events[7][3][-2:] == [  # type: ignore[index]
+    assert events[7][3] == [  # type: ignore[index]
+        "--from",
+        "a" * 40,
+        "--to",
+        "b" * 40,
+        "--format",
+        "json",
         "--background-file",
         str(artifacts.bootstrap),
     ]

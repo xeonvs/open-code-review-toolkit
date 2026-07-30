@@ -37,6 +37,12 @@ def _clip(text: str, *, max_chars: int, max_bytes: int) -> str:
     return clipped + notice
 
 
+def _neutralize_markdown_line(message: str) -> str:
+    """Keep an untrusted diagnostic on one inert Markdown list line."""
+
+    return message.replace("\r", " ").replace("\n", " ").replace("`", r"\`")
+
+
 def render_bootstrap(
     store: EvidenceStore,
     *,
@@ -77,7 +83,11 @@ def render_bootstrap(
     ]
     if store.diagnostics:
         lines.extend(
-            ("", "## Coverage notices", *(f"- {item}" for item in sorted(store.diagnostics)))
+            (
+                "",
+                "## Coverage notices",
+                *(f"- {_neutralize_markdown_line(item)}" for item in sorted(store.diagnostics)),
+            )
         )
     lines.extend(("", "## MCP capabilities"))
     if capabilities:

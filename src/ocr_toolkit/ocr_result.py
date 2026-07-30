@@ -200,7 +200,15 @@ def _read_descriptor(descriptor: int, *, limit: int) -> bytes:
             f"OCR result JSON is {metadata.st_size} bytes, above OCR_MAX_RESULT_BYTES={limit}"
         )
     os.lseek(descriptor, 0, os.SEEK_SET)
-    data = os.read(descriptor, limit + 1)
+    chunks: list[bytes] = []
+    remaining = limit + 1
+    while remaining:
+        chunk = os.read(descriptor, min(64 * 1024, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    data = b"".join(chunks)
     if len(data) > limit:
         raise OcrResultTooLarge(f"OCR result JSON grew above OCR_MAX_RESULT_BYTES={limit}")
     return data

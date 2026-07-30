@@ -117,6 +117,7 @@ def _inventory_groups(text: str) -> tuple[str, ...]:
 
     groups: set[str] = set()
     children_indent: int | None = None
+    group_indent: int | None = None
     for raw_line in text.splitlines():
         ini = INI_GROUP_RE.match(raw_line)
         if ini:
@@ -127,16 +128,23 @@ def _inventory_groups(text: str) -> tuple[str, ...]:
         children = YAML_CHILDREN_RE.match(raw_line)
         if children:
             children_indent = len(children.group("indent"))
+            group_indent = None
             continue
         yaml_group = YAML_GROUP_RE.match(raw_line)
         if yaml_group and children_indent is not None:
             indent = len(yaml_group.group("indent"))
             if indent <= children_indent:
                 children_indent = None
-            elif indent == children_indent + 2:
-                groups.add(yaml_group.group("group"))
-                if len(groups) >= MAX_TOPOLOGY_ITEMS:
-                    break
+                group_indent = None
+            else:
+                # YAML indentation width is repository-defined; the first key
+                # below children establishes the sibling group depth.
+                if group_indent is None:
+                    group_indent = indent
+                if indent == group_indent:
+                    groups.add(yaml_group.group("group"))
+                    if len(groups) >= MAX_TOPOLOGY_ITEMS:
+                        break
     return tuple(sorted(groups))
 
 

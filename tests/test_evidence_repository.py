@@ -9,7 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit.evidence import RefRole, TrustClass
+from ocr_toolkit.evidence import (
+    EvidenceRecord,
+    EvidenceStore,
+    EvidenceStoreError,
+    RefRole,
+    TrustClass,
+)
 from ocr_toolkit.evidence import repository as evidence_repository
 from ocr_toolkit.evidence.artifacts import (
     prepare_artifact_directory,
@@ -181,6 +187,25 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert serialized == store.to_json()
 
 
+def test_collection_keeps_snapshots_atomic_when_store_rejects_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail clearly instead of persisting snapshots that reference rejected records."""
+
+    root, base, head = synthetic_repository(tmp_path)
+    original_add = EvidenceStore.add
+
+    def reject_one_file(store: EvidenceStore, record: EvidenceRecord) -> bool:
+        if record.kind == "repository.file" and record.source_path == "added.txt":
+            return False
+        return original_add(store, record)
+
+    monkeypatch.setattr(EvidenceStore, "add", reject_one_file)
+
+    with pytest.raises(EvidenceStoreError, match="snapshot records"):
+        collect_repository_evidence(root, base_ref=base, head_ref=head)
+
+
 def test_deleted_path_keeps_a_base_trust_change_category(tmp_path: Path) -> None:
     """Represent deleted-path categories without inventing a head-tree source."""
 
@@ -209,14 +234,24 @@ def test_deleted_path_keeps_a_base_trust_change_category(tmp_path: Path) -> None
 def test_bootstrap_truncation_is_explicit() -> None:
     """Never make compact-output clipping indistinguishable from complete coverage."""
 
-    from ocr_toolkit.evidence import EvidenceStore
-
     store = EvidenceStore(diagnostics=["x" * 900])
     bootstrap = render_bootstrap(store, max_chars=400, max_bytes=1024)
 
     assert len(bootstrap) <= 400
     assert len(bootstrap.encode("utf-8")) <= 1024
     assert "bootstrap truncated" in bootstrap
+
+
+def test_bootstrap_neutralizes_untrusted_diagnostic_markdown() -> None:
+    """Do not let repository-derived diagnostics escape their list item."""
+
+    store = EvidenceStore(diagnostics=["notice\n# injected\n```tool\ncall\n```"])
+
+    rendered = render_bootstrap(store)
+
+    assert "\n# injected" not in rendered
+    assert "```tool" not in rendered
+    assert r"- notice # injected \`\`\`tool call \`\`\`" in rendered
 
 
 def test_internal_artifacts_are_private_regular_files(tmp_path: Path) -> None:
@@ -248,6 +283,21 @@ def test_internal_artifacts_reject_fifo_without_blocking(tmp_path: Path) -> None
         write_private_text(artifacts.bootstrap, "synthetic bootstrap")
 
 
+def test_internal_artifacts_reject_existing_hard_links(tmp_path: Path) -> None:
+    """Never overwrite another file through a repository-controlled hard link."""
+
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+    target = tmp_path / "runner-owned.txt"
+    target.write_text("preserve me", encoding="utf-8")
+    os.link(target, artifacts.bootstrap)
+
+    with pytest.raises(OSError, match="hard link"):
+        write_private_text(artifacts.bootstrap, "replacement")
+
+    assert target.read_text(encoding="utf-8") == "preserve me"
+
+
 def test_reader_batches_multiple_blob_reads(tmp_path: Path) -> None:
     root, _base, head = synthetic_repository(tmp_path)
     reader = GitRepositoryReader(root)
@@ -268,6 +318,28 @@ def test_reader_batches_multiple_blob_reads(tmp_path: Path) -> None:
 
     assert batch_calls == ["--batch-check", "--batch"]
     assert blobs == {"changed.txt": b"after\n", "moved.txt": b"renamed\n"}
+
+
+def test_git_environment_removes_object_store_and_replacement_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep object identity bound to the validated repository root."""
+
+    names = (
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_WORK_TREE",
+    )
+    for name in names:
+        monkeypatch.setenv(name, "/synthetic/untrusted")
+
+    environment = evidence_repository._git_environment()
+
+    assert all(name not in environment for name in names)
 
 
 def test_candidate_batch_omits_only_over_limit_blobs(tmp_path: Path) -> None:

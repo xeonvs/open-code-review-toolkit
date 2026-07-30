@@ -197,6 +197,30 @@ def test_initialized_notification_and_post_handshake_operations() -> None:
     assert called["result"]["content"][0]["type"] == "text"
 
 
+def test_notifications_never_receive_json_rpc_responses() -> None:
+    """Honor the no-response contract for every request without an id."""
+
+    store = _store()
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "evidence.json"
+        store.write(path)
+        notifications = [
+            {"jsonrpc": "2.0", "method": "ping"},
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+            },
+            {"jsonrpc": "2.0", "method": "synthetic/unknown"},
+        ]
+        stdin = io.StringIO("".join(json.dumps(item) + "\n" for item in notifications))
+        stdout = io.StringIO()
+
+        assert serve(path, stdin, stdout) == 0
+
+    assert stdout.getvalue() == ""
+
+
 def test_initialize_negotiates_current_revision_for_unknown_client_version() -> None:
     """Return one supported revision and leave acceptance to the client."""
 
@@ -228,6 +252,34 @@ def test_stdio_uses_stdout_only_for_protocol_and_bounds_requests() -> None:
     responses = [json.loads(line) for line in stdout.getvalue().splitlines()]
     assert responses[0]["result"] == {}
     assert responses[1]["error"]["code"] == -32700
+
+
+def test_stdio_stops_reading_an_oversized_request_at_the_boundary() -> None:
+    """Do not materialize an unbounded protocol line before rejecting it."""
+
+    class RecordingInput(io.StringIO):
+        """Record every explicit readline limit requested by the server."""
+
+        def __init__(self, value: str) -> None:
+            super().__init__(value)
+            self.limits: list[int] = []
+
+        def readline(self, size: int = -1, /) -> str:
+            self.limits.append(size)
+            return super().readline(size)
+
+    store = _store()
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "evidence.json"
+        store.write(path)
+        stdin = RecordingInput("x" * (MAX_REQUEST_BYTES * 4) + "\n")
+        stdout = io.StringIO()
+
+        assert serve(path, stdin, stdout) == 0
+
+    assert stdin.limits
+    assert all(0 < limit <= MAX_REQUEST_BYTES + 2 for limit in stdin.limits)
+    assert json.loads(stdout.getvalue())["error"]["code"] == -32700
 
 
 def test_composed_server_launches_without_path_lookup() -> None:

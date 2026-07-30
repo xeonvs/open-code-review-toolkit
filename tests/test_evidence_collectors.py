@@ -120,6 +120,10 @@ test = [{include-group = "lint"}, "pytest>=8"]
 python = "^3.9"
 legacy = "^2.0"
 mypy = {version = "^1.16", extras = ["dmypy"], python = ">=3.11"}
+multienv = [
+  {version = "<2", python = "<3.11"},
+  {version = ">=2", python = ">=3.11"},
+]
 private = {git = "https://build:secret@git.example.invalid/team/pkg.git", rev = "abc123"}
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4"
@@ -145,6 +149,18 @@ pytest = "^8.4"
     assert declarations["poetry:mypy"]["extras"] == ["dmypy"]
     assert declarations["poetry:private"]["git"] == ("https://***@git.example.invalid/team/pkg.git")
     assert declarations["poetry-group:dev:pytest"]["version"] == "^8.4"
+    poetry_runtime = next(
+        fact
+        for fact in facts
+        if fact.identity == "poetry:python" and fact.kind == "runtime.declared"
+    )
+    assert poetry_runtime.value["constraint"] == "^3.9"
+    alternatives = [
+        fact for fact in facts if fact.identity.startswith("poetry:multienv:alternative:")
+    ]
+    assert len(alternatives) == 2
+    assert {fact.value["version"] for fact in alternatives} == {"<2", ">=2"}
+    assert {fact.value["python"] for fact in alternatives} == {"<3.11", ">=3.11"}
 
 
 def test_python_dependency_group_cycles_and_missing_includes_are_diagnostic() -> None:
@@ -182,6 +198,50 @@ consumer = [{include-group = "test.group"}]
     assert not parsed.facts
     assert any("duplicated after normalization" in notice for notice in parsed.notices)
     assert any("include is ambiguous" in notice for notice in parsed.notices)
+
+
+def test_poetry_alternative_identities_are_stable_across_source_order() -> None:
+    """Keep parallel Poetry constraints stable when the TOML array is reordered."""
+
+    first = parse_manifest(
+        "pyproject.toml",
+        """[tool.poetry.dependencies]
+package = [
+  {version = "<2", python = "<3.11"},
+  {version = ">=2", python = ">=3.11"},
+]
+""",
+    )
+    reordered = parse_manifest(
+        "pyproject.toml",
+        """[tool.poetry.dependencies]
+package = [
+  {python = ">=3.11", version = ">=2"},
+  {python = "<3.11", version = "<2"},
+]
+""",
+    )
+
+    assert [fact.identity for fact in first] == [fact.identity for fact in reordered]
+    assert [fact.value for fact in first] == [fact.value for fact in reordered]
+
+
+def test_poetry_same_applicability_alternatives_use_deterministic_suffixes() -> None:
+    """Avoid identity collisions without making array order semantically significant."""
+
+    facts = parse_manifest(
+        "pyproject.toml",
+        """[tool.poetry.dependencies]
+package = [
+  {version = "<2", python = "*"},
+  {version = ">=2", python = "*"},
+]
+""",
+    )
+
+    alternatives = [fact for fact in facts if fact.identity.startswith("poetry:package:")]
+    assert len({fact.identity for fact in alternatives}) == 2
+    assert alternatives[1].identity == f"{alternatives[0].identity}-2"
 
 
 def test_python_lock_formats_preserve_resolved_scopes_and_markers() -> None:
@@ -425,6 +485,29 @@ collections:
             "https://galaxy.example.invalid/api/",
         ),
         ("collection", "synthetic.unpinned", None, None),
+    ]
+
+
+def test_galaxy_yaml_is_key_order_independent_and_accepts_role_urls() -> None:
+    """Preserve valid entries when optional fields precede identity fields."""
+
+    parsed = parse_galaxy_requirements(
+        """roles:
+  - scm: git
+    src: https://example.invalid/roles/web.git
+    name: synthetic.web
+  - git+https://example.invalid/roles/worker.git
+collections: []
+"""
+    )
+
+    assert parsed.notices == ()
+    assert [(item.name, item.source) for item in parsed.requirements] == [
+        ("synthetic.web", "https://example.invalid/roles/web.git"),
+        (
+            "git+https://example.invalid/roles/worker.git",
+            "git+https://example.invalid/roles/worker.git",
+        ),
     ]
 
 

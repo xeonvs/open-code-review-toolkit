@@ -114,10 +114,10 @@ def _resolved_image(reference: str) -> tuple[str, str] | None:
     return name, version
 
 
-def _nested_image_references(text: str) -> tuple[tuple[str, str], ...]:
+def _nested_image_references(text: str) -> tuple[tuple[str, str, bool], ...]:
     """Recognize bounded YAML image name/tag or name/digest mappings."""
 
-    references: list[tuple[str, str]] = []
+    references: list[tuple[str, str, bool]] = []
     lines = text.splitlines()
     for index, raw in enumerate(lines):
         match = re.match(r"(?i)^(?P<indent>\s*)image\s*:\s*$", raw)
@@ -137,9 +137,10 @@ def _nested_image_references(text: str) -> tuple[tuple[str, str], ...]:
             if field is not None:
                 fields[field.group(1).casefold()] = field.group(2)
         name = fields.get("repository") or fields.get("name")
-        version = fields.get("digest") or fields.get("tag")
+        digest = fields.get("digest")
+        version = digest or fields.get("tag")
         if name and version:
-            references.append((name, version))
+            references.append((name, version, digest is not None))
     return tuple(references)
 
 
@@ -187,8 +188,8 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
     facts: list[ManifestFact] = []
     seen: set[tuple[str, str]] = set()
 
-    for name, version in _nested_image_references(text):
-        separator = "@" if version.startswith("sha256:") else ":"
+    for name, version, is_digest in _nested_image_references(text):
+        separator = "@" if is_digest else ":"
         fact = _image_fact(path, "image", f"{name}{separator}{version}")
         if fact is not None:
             facts.append(fact)
@@ -233,9 +234,7 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
         else:
             key, value = match.group(1), match.group(2)
         normalized_key = key.casefold().replace("-", "_")
-        if normalized_key in _METADATA_KEYS or any(
-            marker in value for marker in ("{{", "{%", "${")
-        ):
+        if normalized_key in _METADATA_KEYS or any(marker in value for marker in ("{{", "{%", "$")):
             continue
         is_image = normalized_key == "image" or normalized_key.endswith("image")
         if is_image:

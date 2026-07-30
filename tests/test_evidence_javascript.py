@@ -136,6 +136,25 @@ def test_package_lock_versions_preserve_resolved_metadata_and_nested_v1() -> Non
     assert v3.facts[0].value["engines"] == {"node": ">=20"}
 
 
+def test_package_lock_v1_reports_truncated_tree_traversal() -> None:
+    """Expose coverage loss when invalid nodes consume the traversal budget."""
+
+    dependency_count = MAX_MANIFEST_ITEMS * 16 + 1
+    parsed = parse_package_lock(
+        json.dumps(
+            {
+                "lockfileVersion": 1,
+                "dependencies": {f"package-{index:05d}": None for index in range(dependency_count)},
+            }
+        )
+    )
+
+    assert parsed.facts == ()
+    assert parsed.notices == (
+        f"package-lock.json traversal was truncated after {MAX_MANIFEST_ITEMS * 16} items",
+    )
+
+
 @pytest.mark.parametrize(
     "payload",
     [

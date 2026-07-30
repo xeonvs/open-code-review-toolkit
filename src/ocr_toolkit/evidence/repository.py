@@ -24,6 +24,7 @@ BATCH_HEADER_RE = re.compile(
     rb"^(?P<sha>[0-9a-f]{40}) (?P<type>blob|tree|commit) (?P<size>[0-9]+)\n$"
 )
 MAX_BATCH_BLOB_BYTES = 32_000_000
+MAX_GIT_TEXT_BYTES = 8_000_000
 
 
 def _git_environment() -> dict[str, str]:
@@ -32,7 +33,18 @@ def _git_environment() -> dict[str, str]:
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key not in {"GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"}
+        if key
+        not in {
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            "GIT_COMMON_DIR",
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_DIR",
+            "GIT_INDEX_FILE",
+            "GIT_OBJECT_DIRECTORY",
+            "GIT_REPLACE_REF_BASE",
+            "GIT_WORK_TREE",
+        }
         and not key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
     }
     environment.update(
@@ -124,7 +136,7 @@ class GitRepositoryReader:
     ) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
         """Run Git without a shell, hooks, prompts, or repository-controlled paging."""
 
-        return subprocess.run(
+        completed = subprocess.run(
             [*_git_prefix(root), *args],
             capture_output=True,
             check=False,
@@ -132,6 +144,19 @@ class GitRepositoryReader:
             text=text,
             timeout=timeout,
         )
+        stdout_size = (
+            len(completed.stdout.encode("utf-8"))
+            if isinstance(completed.stdout, str)
+            else len(completed.stdout)
+        )
+        stderr_size = (
+            len(completed.stderr.encode("utf-8"))
+            if isinstance(completed.stderr, str)
+            else len(completed.stderr)
+        )
+        if stdout_size > MAX_GIT_TEXT_BYTES or stderr_size > MAX_GIT_TEXT_BYTES:
+            raise RepositoryEvidenceError("Git plumbing output exceeds the bounded byte limit")
+        return completed
 
     def _run(
         self, args: list[str], *, timeout: int = 15, text: bool = True

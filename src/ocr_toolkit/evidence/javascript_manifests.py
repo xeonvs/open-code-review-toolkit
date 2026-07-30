@@ -184,8 +184,8 @@ def _lock_fact(name: str, version: str, path: str, package: Mapping[str, object]
     )
 
 
-def _v1_lock_facts(dependencies: object) -> list[ManifestFact]:
-    """Flatten bounded npm lockfile v1 dependency trees."""
+def _v1_lock_facts(dependencies: object) -> tuple[list[ManifestFact], bool]:
+    """Flatten an npm v1 tree and report traversal-budget exhaustion."""
 
     if not isinstance(dependencies, dict):
         raise ValueError("package-lock.json v1 must contain a dependencies object")
@@ -197,10 +197,10 @@ def _v1_lock_facts(dependencies: object) -> list[ManifestFact]:
     ]
     traversed = 0
     while stack and len(facts) <= MAX_MANIFEST_ITEMS:
+        if traversed >= _MAX_LOCK_TRAVERSAL_ITEMS:
+            return facts, True
         path, raw_package = stack.pop()
         traversed += 1
-        if traversed > _MAX_LOCK_TRAVERSAL_ITEMS:
-            break
         if not isinstance(raw_package, dict):
             continue
         name = _lock_name(path, raw_package)
@@ -214,7 +214,7 @@ def _v1_lock_facts(dependencies: object) -> list[ManifestFact]:
                 for child_name, child_package in sorted(nested.items(), reverse=True)
                 if isinstance(child_name, str)
             )
-    return facts
+    return facts, False
 
 
 def parse_package_lock(text: str) -> ManifestParseResult:
@@ -226,7 +226,11 @@ def parse_package_lock(text: str) -> ManifestParseResult:
         raise ValueError("package-lock.json lockfileVersion must be 1, 2, or 3")
     notices: list[str] = []
     if version == 1:
-        facts = _v1_lock_facts(data.get("dependencies"))
+        facts, traversal_truncated = _v1_lock_facts(data.get("dependencies"))
+        if traversal_truncated:
+            notices.append(
+                f"package-lock.json traversal was truncated after {_MAX_LOCK_TRAVERSAL_ITEMS} items"
+            )
         return _bounded_result(facts, notices, "package-lock.json")
 
     packages = data.get("packages")

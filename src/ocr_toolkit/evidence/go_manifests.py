@@ -34,18 +34,82 @@ def _module_fact(kind: str, path: str, version: str, scope: str) -> ManifestFact
 def _split_go_line(raw: str) -> tuple[str, str | None]:
     """Strip one Go comment and return its body plus the comment text."""
 
-    body, separator, comment = raw.partition("//")
-    return body.strip(), comment.strip() if separator else None
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(raw):
+        if quote == '"':
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+        elif quote == "`":
+            if character == quote:
+                quote = None
+        elif character in {'"', "`"}:
+            quote = character
+        elif character == "/" and raw[index : index + 2] == "//":
+            return raw[:index].strip(), raw[index + 2 :].strip()
+    return raw.strip(), None
+
+
+def _go_tokens(text: str) -> list[str]:
+    """Tokenize the bounded go.mod subset while preserving quoted content."""
+
+    tokens: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if quote == '"':
+            if escaped:
+                current.append(character)
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            else:
+                current.append(character)
+        elif quote == "`":
+            if character == quote:
+                quote = None
+            else:
+                current.append(character)
+        elif character in {'"', "`"}:
+            quote = character
+        elif text[index : index + 2] == "=>":
+            if current:
+                tokens.append("".join(current))
+                current = []
+            tokens.append("=>")
+            index += 1
+        elif character.isspace():
+            if current:
+                tokens.append("".join(current))
+                current = []
+        else:
+            current.append(character)
+        index += 1
+    if quote is not None or escaped:
+        return []
+    if current:
+        tokens.append("".join(current))
+    return tokens
 
 
 def _replacement_fact(body: str) -> ManifestFact | None:
     """Parse one replace directive, including local replacements without versions."""
 
-    source, separator, target = body.partition("=>")
-    if not separator:
+    parts = _go_tokens(body)
+    if parts.count("=>") != 1:
         return None
-    source_parts = source.split()
-    target_parts = target.split()
+    separator = parts.index("=>")
+    source_parts = parts[:separator]
+    target_parts = parts[separator + 1 :]
     if len(source_parts) not in {1, 2} or len(target_parts) not in {1, 2}:
         return None
     value: dict[str, EvidenceValue] = {
@@ -104,16 +168,24 @@ def parse_go_mod(text: str) -> ManifestParseResult:
         directive = block or keyword
         directive_body = line if block is not None else body
         if directive == "module" and directive_body:
-            module_path = directive_body
+            directive_tokens = _go_tokens(directive_body)
+            if len(directive_tokens) != 1:
+                notices.append("go.mod skipped a malformed module directive")
+                continue
+            module_path = directive_tokens[0]
             facts.append(
                 ManifestFact(
                     "repository.manifest",
                     "go",
                     "module",
-                    {"name": directive_body, "manifest_type": "go.module"},
+                    {"name": module_path, "manifest_type": "go.module"},
                 )
             )
         elif directive in {"go", "toolchain"} and directive_body:
+            directive_tokens = _go_tokens(directive_body)
+            if len(directive_tokens) != 1:
+                notices.append(f"go.mod skipped a malformed {directive} directive")
+                continue
             facts.append(
                 ManifestFact(
                     "runtime.declared",
@@ -121,13 +193,13 @@ def parse_go_mod(text: str) -> ManifestParseResult:
                     directive,
                     {
                         "name": directive,
-                        "constraint": directive_body,
+                        "constraint": directive_tokens[0],
                         "source": "go.mod",
                     },
                 )
             )
         elif directive == "require":
-            parts = directive_body.split()
+            parts = _go_tokens(directive_body)
             if len(parts) == 2:
                 scope = "indirect" if comment == "indirect" else "direct"
                 facts.append(_module_fact("dependency.declared", parts[0], parts[1], scope))
@@ -135,18 +207,23 @@ def parse_go_mod(text: str) -> ManifestParseResult:
             if (fact := _replacement_fact(directive_body)) is not None:
                 facts.append(fact)
         elif directive == "exclude":
-            parts = directive_body.split()
+            parts = _go_tokens(directive_body)
             if len(parts) == 2:
                 facts.append(_module_fact("dependency.declared", parts[0], parts[1], "exclude"))
         elif directive == "tool" and directive_body:
-            facts.append(
-                ManifestFact(
-                    "dependency.declared",
-                    "go",
-                    f"tool:{directive_body}",
-                    {"name": directive_body, "scope": "tool"},
+            directive_tokens = _go_tokens(directive_body)
+            if len(directive_tokens) == 1:
+                tool_name = directive_tokens[0]
+                facts.append(
+                    ManifestFact(
+                        "dependency.declared",
+                        "go",
+                        f"tool:{tool_name}",
+                        {"name": tool_name, "scope": "tool"},
+                    )
                 )
-            )
+            else:
+                notices.append("go.mod skipped a malformed tool directive")
         elif directive == "retract" and directive_body:
             facts.append(
                 ManifestFact(

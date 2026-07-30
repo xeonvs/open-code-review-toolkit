@@ -59,6 +59,8 @@ def write_private_text(path: Path, content: str) -> None:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
             raise OSError(f"private artifact is not a regular file: {path}")
+        if metadata.st_nlink != 1:
+            raise OSError(f"private artifact is an existing hard link: {path}")
         os.fchmod(descriptor, 0o600)
         os.ftruncate(descriptor, 0)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

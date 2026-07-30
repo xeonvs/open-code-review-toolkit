@@ -23,7 +23,7 @@ from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
 from ocr_toolkit.evidence.mcp import TOOL_NAME, call_tool, evidence_summary
 from ocr_toolkit.evidence.project import render_bootstrap
-from ocr_toolkit.evidence.repository import RepositoryEvidenceError
+from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
     OcrResultMalformed,
@@ -159,6 +159,25 @@ def _one_option(args: list[str], name: str, short: str | None = None) -> str | N
     return values[0] if values else None
 
 
+def _without_diff_options(args: list[str]) -> list[str]:
+    """Return OCR arguments without caller-supplied diff selectors."""
+
+    remaining: list[str] = []
+    index = 0
+    valued = {"--from", "--to", "--commit", "-c"}
+    while index < len(args):
+        item = args[index]
+        if item in valued:
+            index += 2
+            continue
+        if item.startswith(("--from=", "--to=", "--commit=")):
+            index += 1
+            continue
+        remaining.append(item)
+        index += 1
+    return remaining
+
+
 def _review_refs(args: list[str]) -> ReviewRefs:
     """Derive immutable evidence refs from the exact OCR diff arguments."""
 
@@ -178,6 +197,13 @@ def _review_refs(args: list[str]) -> ReviewRefs:
     return ReviewRefs(base, head)
 
 
+def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
+    """Resolve both OCR and evidence collection to one immutable commit pair."""
+
+    reader = GitRepositoryReader(Path.cwd())
+    return ReviewRefs(reader.resolve_commit(refs.base), reader.resolve_commit(refs.head))
+
+
 def _reject_owned_background(args: list[str]) -> None:
     """Reject caller attempts to replace the toolkit-owned bootstrap file."""
 
@@ -190,7 +216,7 @@ def _reject_owned_background(args: list[str]) -> None:
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
-    refs = _review_refs(ocr_args)
+    refs = _immutable_review_refs(_review_refs(ocr_args))
     _reject_owned_background(ocr_args)
     artifacts = repository_artifacts()
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
@@ -239,7 +265,15 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     exit_code = run_review(
         result_path,
         stderr_path,
-        [*ocr_args, "--background-file", str(artifacts.bootstrap)],
+        [
+            "--from",
+            refs.base,
+            "--to",
+            refs.head,
+            *_without_diff_options(ocr_args),
+            "--background-file",
+            str(artifacts.bootstrap),
+        ],
     )
     if exit_code == 0:
         usage = _record_ocr_result_mcp_usage(result_path, composition)
@@ -335,6 +369,8 @@ def run_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int
                 stdout=result_file,
                 stderr=stderr_file,
             )
+    except subprocess.TimeoutExpired as exc:
+        raise ReviewRunnerError("OCR review exceeded its configured timeout") from exc
     except OSError as exc:
         raise ReviewRunnerError(f"could not execute OCR: {exc}") from exc
     finally:

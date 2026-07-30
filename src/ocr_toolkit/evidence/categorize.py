@@ -30,7 +30,8 @@ CATEGORY_ORDER = (
 DEPENDENCY_MANIFEST_PATTERN = re.compile(
     r"(^|/)(requirements[^/]*\.(?:txt|in)|constraints[^/]*\.(?:txt|in)|"
     r"requirements/[^/]+\.(?:txt|in)|requirements\.ya?ml|pyproject\.toml|"
-    r"poetry\.lock|uv\.lock|Pipfile(\.lock)?|package(-lock)?\.json|"
+    r"pylock(?:\.[^/]+)?\.toml|poetry\.lock|uv\.lock|Pipfile(\.lock)?|"
+    r"package(-lock)?\.json|"
     r"pnpm-lock\.yaml|yarn\.lock|composer\.(json|lock)|go\.(mod|sum)|"
     r"Cargo\.(toml|lock)|Gemfile(\.lock)?|pom\.xml|build\.gradle(\.kts)?|"
     r"gradle\.lockfile)$",

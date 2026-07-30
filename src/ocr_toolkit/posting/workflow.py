@@ -446,7 +446,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         fallback_message = (
             "No review comments generated. No issues found."
             if status == "success"
-            else "Review did not complete cleanly."
+            else (
+                "No supported files changed."
+                if status == "skipped"
+                else "Review did not complete cleanly."
+            )
         )
         body = "# Open Code Review summary\n\n"
         body += f"{marker} " if emoji else ""
@@ -463,6 +467,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 )
         if tool_calls_summary:
             body += f"\n\n{tool_calls_summary}"
+        if mcp_usage_summary:
+            body += f"\n{mcp_usage_summary}"
         if token_usage_summary:
             body += f"\n{token_usage_summary}"
         if reviewer_guide:

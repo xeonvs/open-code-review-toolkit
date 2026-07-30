@@ -106,7 +106,12 @@ def _repository_identity(data: Mapping[str, object]) -> str | None:
     classification = repository_type.casefold()
     if isinstance(url, str):
         safe_url = redact_url_userinfo(url)
-        parsed = urlsplit(safe_url)
+        try:
+            parsed = urlsplit(safe_url)
+        except ValueError:
+            # Repository URLs are optional context. A malformed URL must not
+            # discard unrelated dependency and platform facts.
+            return classification
         if parsed.hostname:
             classification = f"{classification}:{parsed.hostname.casefold()}"
         elif safe_url.startswith(("./", "../", "/")):
@@ -143,6 +148,40 @@ def _repository_facts(data: object) -> list[ManifestFact]:
                 "php",
                 f"composer:repository:{identity}",
                 {"manifest_type": "composer.repository", "source": classification},
+            )
+        )
+    return facts
+
+
+def _platform_override_facts(data: object) -> list[ManifestFact]:
+    """Preserve Composer platform overrides, including disabled packages."""
+
+    if not isinstance(data, Mapping):
+        return []
+    facts: list[ManifestFact] = []
+    for raw_name, raw_constraint in sorted(data.items(), key=lambda item: str(item[0]).casefold()):
+        if not isinstance(raw_name, str):
+            continue
+        name = _package_name(raw_name)
+        if name is None or not _is_platform_package(name):
+            continue
+        if raw_constraint is not False:
+            fact = _declared_fact(name, raw_constraint, "platform-override")
+            if fact is not None:
+                facts.append(fact)
+            continue
+        facts.append(
+            ManifestFact(
+                "runtime.declared",
+                "php",
+                f"platform-override:{name}",
+                {
+                    "manifest_type": "composer.declaration",
+                    "name": name,
+                    "constraint": False,
+                    "scope": "platform-override",
+                    "platform": True,
+                },
             )
         )
     return facts
@@ -187,7 +226,7 @@ def parse_composer_json(text: str) -> ManifestParseResult:
         facts.extend(_mapping_facts(data.get(key), scope))
     config = data.get("config")
     if isinstance(config, Mapping):
-        facts.extend(_mapping_facts(config.get("platform"), "platform-override"))
+        facts.extend(_platform_override_facts(config.get("platform")))
     facts.extend(_repository_facts(data.get("repositories")))
     return _bounded_result(facts, [], "composer.json")
 

@@ -28,6 +28,17 @@ def test_categories_are_deterministic_and_allow_relevant_overlap() -> None:
     assert categories["templates"] == ("roles/api/templates/app.service.j2",)
 
 
+def test_categories_include_standard_and_named_pylock_manifests() -> None:
+    """Keep every supported PEP 751 lock manifest in dependency review scope."""
+
+    categories = categorize_paths(["pylock.toml", "locks/pylock.production.toml"])
+
+    assert categories["dependency_manifests"] == (
+        "locks/pylock.production.toml",
+        "pylock.toml",
+    )
+
+
 def test_explicit_playbook_category_coexists_with_other_categories() -> None:
     """Keep semantic playbook detection independent from suffix categories."""
 

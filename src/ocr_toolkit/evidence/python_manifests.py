@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shlex
@@ -111,6 +112,80 @@ def _safe_poetry_value(value: object) -> EvidenceValue | None:
     return None
 
 
+def _poetry_declaration(
+    name: str, constraint: object, scope: str, identity_suffix: str = ""
+) -> ManifestFact | None:
+    """Normalize one Poetry dependency or interpreter declaration."""
+
+    normalized_name = _normalize_name(name)
+    is_interpreter = scope == "poetry" and normalized_name == "python"
+    value: dict[str, EvidenceValue] = {"name": normalized_name, "scope": scope}
+    version_key = "constraint" if is_interpreter else "version"
+    if isinstance(constraint, bool):
+        value[version_key] = "*" if constraint else "disabled"
+    elif isinstance(constraint, (str, int, float)):
+        value[version_key] = str(constraint)
+    elif isinstance(constraint, dict):
+        for key in (
+            "version",
+            "markers",
+            "python",
+            "platform",
+            "source",
+            "optional",
+            "extras",
+            "git",
+            "branch",
+            "rev",
+            "tag",
+            "subdirectory",
+            "url",
+            "path",
+            "develop",
+            "allow-prereleases",
+        ):
+            if (safe_value := _safe_poetry_value(constraint.get(key))) is not None:
+                value[version_key if key == "version" and is_interpreter else key] = safe_value
+    else:
+        return None
+    identity = f"{scope}:{normalized_name}{identity_suffix}"
+    return ManifestFact(
+        "runtime.declared" if is_interpreter else "dependency.declared",
+        "python",
+        identity,
+        value,
+    )
+
+
+def _poetry_alternative_key(constraint: dict[object, object]) -> str:
+    """Return the source-order-independent identity key for one constraint table."""
+
+    # Version is fact data: changing only it must remain one typed delta. The
+    # applicability fields distinguish alternatives for the same package.
+    applicability = {
+        key: safe_value
+        for key, item in sorted(constraint.items(), key=lambda entry: str(entry[0]))
+        if isinstance(key, str)
+        and key != "version"
+        and (safe_value := _safe_poetry_value(item)) is not None
+    }
+    digest = hashlib.sha256(
+        json.dumps(applicability, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:12]
+    return f":alternative:{digest}"
+
+
+def _poetry_alternative_sort_key(constraint: dict[object, object]) -> str:
+    """Return a deterministic order for otherwise equivalent alternatives."""
+
+    supported = {
+        key: safe_value
+        for key, item in sorted(constraint.items(), key=lambda entry: str(entry[0]))
+        if isinstance(key, str) and (safe_value := _safe_poetry_value(item)) is not None
+    }
+    return json.dumps(supported, ensure_ascii=False, sort_keys=True)
+
+
 def _poetry_declarations(data: object, scope: str) -> list[ManifestFact]:
     """Collect Poetry declarations under an explicit stable scope."""
 
@@ -120,43 +195,22 @@ def _poetry_declarations(data: object, scope: str) -> list[ManifestFact]:
     for name, constraint in sorted(data.items()):
         if not isinstance(name, str):
             continue
-        normalized_name = _normalize_name(name)
-        value: dict[str, EvidenceValue] = {"name": normalized_name, "scope": scope}
-        if isinstance(constraint, bool):
-            value["version"] = "*" if constraint else "disabled"
-        elif isinstance(constraint, (str, int, float)):
-            value["version"] = str(constraint)
-        elif isinstance(constraint, dict):
-            for key in (
-                "version",
-                "markers",
-                "python",
-                "platform",
-                "source",
-                "optional",
-                "extras",
-                "git",
-                "branch",
-                "rev",
-                "tag",
-                "subdirectory",
-                "url",
-                "path",
-                "develop",
-                "allow-prereleases",
-            ):
-                if (safe_value := _safe_poetry_value(constraint.get(key))) is not None:
-                    value[key] = safe_value
-        else:
+        if not isinstance(constraint, list):
+            if fact := _poetry_declaration(name, constraint, scope):
+                facts.append(fact)
             continue
-        facts.append(
-            ManifestFact(
-                "dependency.declared",
-                "python",
-                f"{scope}:{normalized_name}",
-                value,
-            )
+        alternatives = sorted(
+            (item for item in constraint if isinstance(item, dict)),
+            key=lambda item: (_poetry_alternative_key(item), _poetry_alternative_sort_key(item)),
         )
+        suffix_counts: dict[str, int] = {}
+        for alternative in alternatives:
+            base_suffix = _poetry_alternative_key(alternative)
+            duplicate = suffix_counts.get(base_suffix, 0) + 1
+            suffix_counts[base_suffix] = duplicate
+            suffix = f"{base_suffix}-{duplicate}" if duplicate > 1 else base_suffix
+            if fact := _poetry_declaration(name, alternative, scope, suffix):
+                facts.append(fact)
     return facts
 
 

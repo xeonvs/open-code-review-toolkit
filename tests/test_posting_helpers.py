@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import random
 import tempfile
 import unittest
@@ -566,14 +567,59 @@ class PostingIdentityTests(unittest.TestCase):
                                 workflow, "resolve_requested_discussions", lambda *_args: None
                             ):
                                 exit_code = workflow.post_results(
-                                    gitlab_config(), {"comments": [], "warnings": []}
+                                    gitlab_config(),
+                                    {
+                                        "comments": [],
+                                        "warnings": [],
+                                        "_ocr_toolkit": {
+                                            "schema_version": 1,
+                                            "mcp_usage": {"ocr_toolkit_evidence": 2},
+                                        },
+                                    },
                                 )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0][0], "**Open Code Review**")
         self.assertIn("No review comments generated", notes[0][1])
+        self.assertIn("MCP used: 1 server(s)", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
+
+    def test_skipped_review_without_message_posts_neutral_outcome(self) -> None:
+        """Do not describe a supported no-files skip as a failed review."""
+
+        notes: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow, "delete_previous_bot_comments_if_collected", lambda *_args: None
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {"status": "skipped", "comments": [], "warnings": []},
+            )
+
+        assert exit_code == 0
+        assert "No supported files changed." in notes[0]
+        assert "did not complete cleanly" not in notes[0]
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
@@ -1213,6 +1259,24 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertNotIn("\n/close", body)
         self.assertNotIn("\n/label review", body)
 
+    def test_fallback_code_details_keep_fences_after_quick_action_neutralization(self) -> None:
+        """Do not let neutralization escape or corrupt the surrounding code fence."""
+
+        body = posting_formatting.format_fallback_comment(
+            {
+                "path": "synthetic.py",
+                "content": "Explain the replacement",
+                "existing_code": "old\n/close",
+                "suggestion_code": "new\n/label review",
+            },
+            emoji=False,
+        )
+
+        assert body.count("```text") == 2
+        assert body.count("```") == 4
+        assert "\n/close" not in body
+        assert "\n/label review" not in body
+
     def test_inline_comment_formats_structured_ocr_metadata_as_tags(self) -> None:
         body = posting_formatting.format_inline_comment(
             {
@@ -1727,6 +1791,22 @@ class ApiErrorRedactionTests(unittest.TestCase):
 
 
 class OcrResultLoadingTests(unittest.TestCase):
+    def test_result_reader_retries_short_descriptor_reads(self) -> None:
+        """Accumulate valid JSON when the operating system returns short reads."""
+
+        original_read = os.read
+
+        def short_read(descriptor: int, count: int) -> bytes:
+            return original_read(descriptor, min(count, 3))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.json"
+            path.write_text('{"comments": []}', encoding="utf-8")
+            with patched_attr(os, "read", short_read):
+                loaded = result.load_ocr_result(path)
+
+        self.assertEqual(loaded, {"comments": []})
+
     def test_result_symlink_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "target.json"
@@ -1804,6 +1884,14 @@ class OcrResultLoadingTests(unittest.TestCase):
         ]
 
         self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
+
+    def test_billing_classifier_tolerates_cyclic_warning_objects(self) -> None:
+        """Do not recurse forever if an in-memory caller supplies a cycle."""
+
+        warning: dict[str, Any] = {"message": "ordinary warning"}
+        warning["error"] = warning
+
+        self.assertEqual(result.llm_billing_failure_warnings([warning]), [])
 
     def test_billing_classifier_reads_nested_provider_error_fields(self) -> None:
         warnings = [

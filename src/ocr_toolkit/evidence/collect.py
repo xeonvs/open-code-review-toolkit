@@ -14,7 +14,7 @@ from ocr_toolkit.evidence.repository import (
     build_file_snapshot,
     file_deltas,
 )
-from ocr_toolkit.evidence.store import EvidenceStore
+from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 
 def _commit_refs(
@@ -68,8 +68,15 @@ def collect_repository_evidence(
             key=lambda item: (item.kind, item.component, item.identity),
         )
     )
-    for record in (*base.records, *head.records):
-        store.add(record)
+    rejected_snapshot_records = [
+        record for record in (*base.records, *head.records) if not store.add(record)
+    ]
+    if rejected_snapshot_records:
+        # Snapshots and their record-id indexes are one atomic contract. Persisting a
+        # partial record set would create an artifact that cannot be loaded safely.
+        raise EvidenceStoreError(
+            "repository snapshot records exceed the configured evidence store limits"
+        )
     for record in typed_facts:
         if not store.add(record):
             store.add_diagnostic("typed evidence was truncated by store limits")

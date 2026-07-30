@@ -78,6 +78,30 @@ templated_version: ${RELEASE_VERSION}
     assert not any("RELEASE_VERSION" in json.dumps(fact.value) for fact in parsed.facts)
 
 
+def test_infrastructure_rejects_plain_variables_and_preserves_digest_fields() -> None:
+    """Do not emit unresolved pins or reinterpret digest fields as image tags."""
+
+    parsed = parse_infrastructure_pins(
+        "deploy/values.yml",
+        """service_version: $APP_VERSION_2
+image:
+  repository: registry.example.invalid/acme/service
+  digest: SHA512:0123456789abcdef
+worker:
+  image:
+    repository: registry.example.invalid/acme/worker
+    digest: custom-algorithm:abcdef0123456789
+""",
+    )
+
+    assert all(fact.kind != "application.version" for fact in parsed.facts)
+    images = {fact.value["name"]: fact.value["version"] for fact in parsed.facts}
+    assert images == {
+        "registry.example.invalid/acme/service": "SHA512:0123456789abcdef",
+        "registry.example.invalid/acme/worker": "custom-algorithm:abcdef0123456789",
+    }
+
+
 def test_infrastructure_parser_handles_dockerfile_platform_and_rejects_unpinned_images() -> None:
     """Keep pinned FROM references while rejecting latest, aliases, and interpolation."""
 

@@ -119,6 +119,27 @@ def test_composer_repositories_are_classified_without_credentials() -> None:
     assert "secret" not in json.dumps(values)
     assert "private-component" not in json.dumps(values)
 
+
+def test_composer_json_isolates_bad_repository_urls_and_disabled_platforms() -> None:
+    """Keep valid manifest facts when optional URLs are malformed or platforms hidden."""
+
+    parsed = parse_composer_json(
+        json.dumps(
+            {
+                "require": {"vendor/runtime": "^1.2"},
+                "repositories": [{"type": "vcs", "url": "https://[invalid/repository"}],
+                "config": {"platform": {"php": "8.3.0", "ext-xdebug": False}},
+            }
+        )
+    )
+
+    facts = {fact.identity: fact for fact in parsed.facts}
+    assert facts["production:vendor/runtime"].value["constraint"] == "^1.2"
+    assert facts["composer:repository:index-0"].value["source"] == "vcs"
+    assert facts["platform-override:php"].value["constraint"] == "8.3.0"
+    assert facts["platform-override:ext-xdebug"].component == "php"
+    assert facts["platform-override:ext-xdebug"].value["constraint"] is False
+
     named = parse_composer_json(
         json.dumps(
             {

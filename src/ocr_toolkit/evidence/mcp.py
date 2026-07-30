@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO, cast
@@ -26,6 +27,7 @@ MAX_REQUEST_BYTES = 64_000
 MAX_RESPONSE_BYTES = 64_000
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
+_MISSING_REQUEST_ID = object()
 
 
 class EvidenceMCPError(ValueError):
@@ -223,13 +225,22 @@ def _tool_definition() -> dict[str, object]:
 def _success(request_id: object, result: object) -> dict[str, object]:
     """Create a JSON-RPC success response."""
 
-    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+    response: dict[str, object] = {"jsonrpc": "2.0", "result": result}
+    if request_id is not _MISSING_REQUEST_ID:
+        response["id"] = request_id
+    return response
 
 
 def _error(request_id: object, code: int, message: str) -> dict[str, object]:
     """Create a JSON-RPC error response without repository-derived details."""
 
-    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+    response: dict[str, object] = {
+        "jsonrpc": "2.0",
+        "error": {"code": code, "message": message},
+    }
+    if request_id is not _MISSING_REQUEST_ID:
+        response["id"] = request_id
+    return response
 
 
 def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | None:
@@ -237,10 +248,10 @@ def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | Non
 
     if not isinstance(raw, dict) or raw.get("jsonrpc") != "2.0":
         return _error(None, -32600, "Invalid Request")
-    request_id = raw.get("id")
+    request_id = raw.get("id", _MISSING_REQUEST_ID)
     method = raw.get("method")
     params = raw.get("params", {})
-    if method == "notifications/initialized" and "id" not in raw:
+    if isinstance(method, str) and method.startswith("notifications/") and "id" not in raw:
         return None
     if method == "initialize":
         if not isinstance(params, dict):
@@ -273,6 +284,23 @@ def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | Non
     return _error(request_id, -32601, "Method not found")
 
 
+def _bounded_lines(stdin: TextIO) -> Iterator[str]:
+    """Read protocol lines without allowing one request to grow without a bound."""
+
+    while True:
+        # TextIO limits code points rather than bytes. The byte check below remains
+        # authoritative, while this cap prevents unbounded allocation before it.
+        line = stdin.readline(MAX_REQUEST_BYTES + 2)
+        if not line:
+            return
+        if not line.endswith("\n") or len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
+            yield ""
+            while line and not line.endswith("\n"):
+                line = stdin.readline(MAX_REQUEST_BYTES + 2)
+            continue
+        yield line
+
+
 def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> int:
     """Serve newline-delimited MCP JSON-RPC until the client closes stdin."""
 
@@ -281,8 +309,9 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
     except (OSError, EvidenceStoreError) as exc:
         print(f"Cannot load evidence store: {exc}", file=sys.stderr)
         return 2
-    for line in stdin:
-        if len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
+    for line in _bounded_lines(stdin):
+        has_request_id = True
+        if not line or len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
             response = _error(None, -32700, "Request exceeds the byte limit")
         else:
             try:
@@ -290,8 +319,9 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
             except (json.JSONDecodeError, RecursionError):
                 response = _error(None, -32700, "Parse error")
             else:
+                has_request_id = isinstance(request, dict) and "id" in request
                 response = handle_request(store, request)
-        if response is None:
+        if response is None or not has_request_id:
             continue
         serialized = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
         if len(serialized.encode("utf-8")) > MAX_RESPONSE_BYTES:
