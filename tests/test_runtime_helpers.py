@@ -806,6 +806,21 @@ class MCPConfigTests(unittest.TestCase):
             with self.assertRaises(config_writer.OCRConfigError):
                 config_writer.read_ocr_config(config_path)
 
+    def test_config_writer_rejects_oversized_and_linked_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b"{" + b"x" * config_writer.MAX_OCR_CONFIG_BYTES)
+            with self.assertRaisesRegex(config_writer.OCRConfigError, "bounded byte limit"):
+                config_writer.read_ocr_config(oversized)
+
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            linked = root / "linked.json"
+            os.link(target, linked)
+            with self.assertRaisesRegex(config_writer.OCRConfigError, "one link"):
+                config_writer.read_ocr_config(linked)
+
     def test_invalid_json_error_does_not_echo_secret_payload(self) -> None:
         stderr = io.StringIO()
         with patched_env(OCR_MCP_SERVERS_JSON='{"secret":"bridge-secret-value"'):

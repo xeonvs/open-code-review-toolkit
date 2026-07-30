@@ -10,6 +10,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+MAX_OCR_CONFIG_BYTES = 1_000_000
+
 
 class OCRConfigError(Exception):
     """OCR configuration could not be read or written safely."""
@@ -25,16 +27,40 @@ def read_ocr_config(path: Path | None = None) -> dict[str, Any]:
     """Read OCR config JSON, returning an empty config when it is absent."""
 
     config_path = path or ocr_config_path()
-    if not config_path.exists():
-        return {}
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = -1
     try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
+        descriptor = os.open(config_path, flags)
+    except FileNotFoundError:
+        return {}
+    except OSError as exc:
+        raise OCRConfigError(f"cannot read OCR config: {exc}") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise OCRConfigError("OCR config must be a private regular file with one link")
+        if metadata.st_size > MAX_OCR_CONFIG_BYTES:
+            raise OCRConfigError("OCR config exceeds the bounded byte limit")
+        chunks: list[bytes] = []
+        remaining = MAX_OCR_CONFIG_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > MAX_OCR_CONFIG_BYTES:
+            raise OCRConfigError("OCR config exceeds the bounded byte limit")
+        data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise OCRConfigError(f"OCR config is not valid JSON: {exc}") from exc
     except UnicodeDecodeError as exc:
         raise OCRConfigError(f"OCR config is not valid UTF-8: {exc}") from exc
-    except OSError as exc:
-        raise OCRConfigError(f"cannot read OCR config: {exc}") from exc
+    finally:
+        os.close(descriptor)
     if not isinstance(data, dict):
         raise OCRConfigError("OCR config top-level value is not an object")
     return data
@@ -51,6 +77,8 @@ def write_ocr_config(config: Mapping[str, Any], path: Path | None = None) -> Non
         raise OCRConfigError(f"cannot prepare OCR config directory: {exc}") from exc
 
     payload = json.dumps(config, ensure_ascii=False, indent=4, sort_keys=True) + "\n"
+    if len(payload.encode("utf-8")) > MAX_OCR_CONFIG_BYTES:
+        raise OCRConfigError("OCR config exceeds the bounded byte limit")
     tmp_name = ""
     try:
         with tempfile.NamedTemporaryFile(

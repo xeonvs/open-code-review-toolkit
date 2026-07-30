@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import (
@@ -106,6 +107,19 @@ FileLineCache = dict[tuple[str, str], list[tuple[int, str]]]
 ChangedPathCache = dict[tuple[str, str], list[str]]
 MAX_CROSS_FILE_REMAP_PATHS = 200
 MAX_REMAP_FILE_BYTES = 2_000_000
+MAX_REMAP_DIFF_BYTES = 8_000_000
+
+
+def _git_read_environment() -> dict[str, str]:
+    """Return an isolated environment for untrusted-repository Git reads."""
+
+    return isolated_git_environment()
+
+
+def _git_read_prefix() -> list[str]:
+    """Return Git arguments that disable repository-controlled hooks."""
+
+    return read_only_git_prefix()
 
 
 def changed_new_lines(
@@ -120,7 +134,7 @@ def changed_new_lines(
     try:
         result = subprocess.run(
             [
-                "git",
+                *_git_read_prefix(),
                 "diff",
                 "--unified=0",
                 refs["base_sha"],
@@ -131,6 +145,7 @@ def changed_new_lines(
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             text=True,
             timeout=15,
         )
@@ -141,6 +156,11 @@ def changed_new_lines(
         return lines
 
     if result.returncode != 0:
+        lines = set()
+        if cache is not None:
+            cache[cache_key] = lines
+        return lines
+    if len(result.stdout.encode("utf-8")) > MAX_REMAP_DIFF_BYTES:
         lines = set()
         if cache is not None:
             cache[cache_key] = lines
@@ -168,7 +188,7 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
     try:
         result = subprocess.run(
             [
-                "git",
+                *_git_read_prefix(),
                 "diff",
                 "--name-only",
                 "--diff-filter=ACMR",
@@ -179,7 +199,7 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            text=True,
+            env=_git_read_environment(),
             timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -193,7 +213,15 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
             cache[cache_key] = paths
         return paths
 
-    paths = sorted(path for path in result.stdout.split("\0") if path)
+    if len(result.stdout) > MAX_REMAP_DIFF_BYTES:
+        paths = []
+        if cache is not None:
+            cache[cache_key] = paths
+        return paths
+    try:
+        paths = sorted(path.decode("utf-8") for path in result.stdout.split(b"\0") if path)
+    except UnicodeDecodeError:
+        paths = []
     if cache is not None:
         cache[cache_key] = paths
     return paths
@@ -210,10 +238,11 @@ def head_file_lines(
 
     try:
         size_result = subprocess.run(
-            ["git", "cat-file", "-s", f"{refs['head_sha']}:{path}"],
+            [*_git_read_prefix(), "cat-file", "-s", f"{refs['head_sha']}:{path}"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             text=True,
             timeout=15,
         )
@@ -226,10 +255,11 @@ def head_file_lines(
                 cache[cache_key] = lines
             return lines
         file_text = subprocess.run(
-            ["git", "show", f"{refs['head_sha']}:{path}"],
+            [*_git_read_prefix(), "show", f"{refs['head_sha']}:{path}"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             timeout=15,
         )
     except (OSError, ValueError, subprocess.SubprocessError):

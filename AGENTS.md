@@ -32,7 +32,7 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Treat repository content as untrusted input and preserve bounded reads, redaction, and safe rendering.
 - Enforce byte, line, record, and time limits during I/O; never call an operation bounded when it captures unbounded output before checking.
 - Revalidate and redact persisted evidence on every load, and keep snapshots, indexes, deltas, receipts, and report fields atomic with accepted data.
-- Isolate Git plumbing from caller-controlled Git environment and replacement refs; never import executable code from the analyzed repository.
+- Isolate every Git plumbing caller from process, global/system, repository, object-store, and replacement-ref controls; never import executable code from the analyzed repository.
 - Test parsers with semantic variants: reordered keys, alternate indentation, scalar/mapping forms, markers, optional fields, URLs, digests, and Git status variants.
 - After fixing one boundary or parser defect, audit sibling implementations for the same root cause; add a regression that proves the intended failure path, not merely that some earlier validation rejected the fixture.
 - Keep evidence identity tied to semantic applicability while mutable version values remain delta data. Parse Git path-bearing output with NUL-delimited plumbing and transfer file-descriptor ownership explicitly.

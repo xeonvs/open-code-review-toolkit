@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.evidence import (
     EvidenceRecord,
     EvidenceStore,
@@ -422,6 +423,25 @@ def test_git_environment_removes_object_store_and_replacement_overrides(
     environment = evidence_repository._git_environment()
 
     assert all(name not in environment for name in names)
+    assert environment["GIT_NO_REPLACE_OBJECTS"] == "1"
+    assert environment["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert environment["GIT_CONFIG_SYSTEM"] == os.devnull
+    assert environment == isolated_git_environment()
+    assert evidence_repository._git_prefix(Path("/synthetic/repository")) == (
+        read_only_git_prefix(Path("/synthetic/repository"))
+    )
+
+
+def test_reader_ignores_repository_replacement_refs(tmp_path: Path) -> None:
+    """Bind immutable evidence to object ids, not mutable refs/replace state."""
+
+    root, base, head = synthetic_repository(tmp_path)
+    git(root, "replace", base, head)
+
+    reader = GitRepositoryReader(root)
+
+    assert reader.read_blob(base, "changed.txt") == b"before\n"
+    assert reader.read_blob(head, "changed.txt") == b"after\n"
 
 
 def test_candidate_batch_omits_only_over_limit_blobs(tmp_path: Path) -> None:

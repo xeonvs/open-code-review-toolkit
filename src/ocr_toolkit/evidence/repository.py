@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceDelta,
@@ -31,39 +31,13 @@ MAX_GIT_TEXT_BYTES = 8_000_000
 def _git_environment() -> dict[str, str]:
     """Return a Git environment without caller-injected configuration entries."""
 
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key
-        not in {
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-            "GIT_COMMON_DIR",
-            "GIT_CONFIG_COUNT",
-            "GIT_CONFIG_PARAMETERS",
-            "GIT_DIR",
-            "GIT_INDEX_FILE",
-            "GIT_OBJECT_DIRECTORY",
-            "GIT_REPLACE_REF_BASE",
-            "GIT_WORK_TREE",
-        }
-        and not key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
-    }
-    environment.update(
-        {
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_OPTIONAL_LOCKS": "0",
-            "GIT_PAGER": "cat",
-            "LC_ALL": "C",
-        }
-    )
-    return environment
+    return isolated_git_environment()
 
 
 def _git_prefix(root: Path) -> list[str]:
     """Return the fixed safe prefix for read-only repository Git commands."""
 
-    return ["git", "-c", "core.hooksPath=/dev/null", "-C", str(root)]
+    return read_only_git_prefix(root)
 
 
 class RepositoryEvidenceError(ValueError):

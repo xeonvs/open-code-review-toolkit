@@ -68,7 +68,7 @@ This note records recurring execution mistake patterns discovered during real wo
 
 **Why it happens:** Ordinary fixtures make the final value look bounded, hiding the allocation and decoding that already happened. ASCII-only tests hide byte/code-point divergence.
 
-**Correction:** Bound the read itself, stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git output, and subprocess termination.
+**Correction:** Bound the read itself, including persisted configuration and sibling helper paths; stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git or config input, and subprocess termination.
 
 ## Trusting toolkit-created evidence on reload
 
@@ -77,6 +77,14 @@ This note records recurring execution mistake patterns discovered during real wo
 **Why it happens:** File ownership is confused with future content integrity. Persistence is not treated as a fresh deserialization boundary.
 
 **Correction:** Validate, bound, normalize, redact, and cross-check every persisted field on every read. Test missing references, oversized nested delta values, secrets, control characters, hard links, and schema/type mismatches.
+
+## Clearing only process-level Git overrides
+
+**Failure mode:** A primary Git reader clears `GIT_DIR` and object-store variables, but repository replacement refs, global/system config, or a sibling posting helper still changes which objects a reviewed SHA names.
+
+**Why it happens:** Git isolation is treated as one environment-variable checklist or one module's concern instead of a shared object-identity invariant. Removing `GIT_REPLACE_REF_BASE` prevents a custom namespace but does not disable default `refs/replace`.
+
+**Correction:** Audit every Git plumbing caller together. Scrub process-level overrides, point global/system configuration to the null device, constrain repository configuration, set `GIT_NO_REPLACE_OBJECTS=1`, and verify with a real repository replacement-ref regression.
 
 ## Testing only the canonical parser spelling
 

@@ -14,6 +14,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting import gitlab, markers, payloads, result, settings, snapshot, workflow
@@ -812,6 +813,53 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(cached_lines, {3, 4, 20})
         self.assertEqual(len(calls), 1)
 
+    def test_changed_new_paths_decodes_nul_delimited_utf8(self) -> None:
+        class Result:
+            returncode = 0
+            stdout = "src/naïve.py\0src/other.py\0".encode()
+
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: Result()):
+            paths = workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"})
+
+        self.assertEqual(paths, ["src/naïve.py", "src/other.py"])
+
+    def test_changed_new_paths_rejects_oversized_output(self) -> None:
+        class Result:
+            returncode = 0
+            stdout = b"x" * (workflow.MAX_REMAP_DIFF_BYTES + 1)
+
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: Result()):
+            paths = workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"})
+
+        self.assertEqual(paths, [])
+
+    def test_posting_git_reads_ignore_replacements_and_caller_overrides(self) -> None:
+        with patched_env(
+            GIT_CONFIG_COUNT="1",
+            GIT_CONFIG_KEY_0="core.hooksPath",
+            GIT_CONFIG_VALUE_0="/synthetic/hooks",
+            GIT_OBJECT_DIRECTORY="/synthetic/objects",
+            GIT_REPLACE_REF_BASE="refs/replace/custom/",
+        ):
+            environment = workflow._git_read_environment()
+
+        self.assertEqual(environment["GIT_NO_REPLACE_OBJECTS"], "1")
+        self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
+        self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
+        self.assertEqual(environment["GIT_CONFIG_SYSTEM"], os.devnull)
+        self.assertNotIn("GIT_OBJECT_DIRECTORY", environment)
+        self.assertNotIn("GIT_REPLACE_REF_BASE", environment)
+        self.assertFalse(
+            any(
+                name == "GIT_CONFIG_COUNT"
+                or name == "GIT_CONFIG_PARAMETERS"
+                or name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+                for name in environment
+            )
+        )
+        self.assertEqual(environment, isolated_git_environment())
+        self.assertEqual(workflow._git_read_prefix(), read_only_git_prefix())
+
     def test_existing_code_remap_ignores_blank_lines_with_line_mapping(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
         comment = {"existing_code": "foo()\n\nbar()"}
@@ -846,7 +894,10 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(lines, [])
         self.assertEqual(cached, [])
         self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][:3], ["git", "cat-file", "-s"])
+        self.assertEqual(
+            calls[0][:5],
+            ["git", "-c", "core.hooksPath=/dev/null", "cat-file", "-s"],
+        )
 
     def test_existing_code_remap_anchors_changed_line_inside_window(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}

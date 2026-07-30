@@ -29,6 +29,8 @@ The [OCR compatibility policy](compatibility.md) requires double-source asset di
 
 Remote MCP is HTTPS-only, forbids URL userinfo and fragments, and never logs endpoint URLs or header values. Put credentials in protected/masked CI variables and reference them through `headers_from`; literal credential-like headers fail closed. OCR expands the resulting `$VARIABLE` at connection time. Full browser OAuth, PKCE, refresh-token persistence, tenant binding, and revocation remain outside 0.3.1; use a reviewed stdio OAuth proxy when those flows are required.
 
+All toolkit-owned Git plumbing ignores process-level repository/object-store overrides, global and system Git configuration, and replacement refs before it derives evidence or remaps an inline finding. Existing OCR configuration is treated as hostile persisted input: reads are descriptor-based, single-link, and byte-bounded before JSON parsing.
+
 The repository runs Bandit as a bounded SAST gate over `src/ocr_toolkit` at medium-or-higher severity and confidence. Narrow `# nosec B108` annotations are permitted only beside fixed CI temporary paths whose isolation or containment is explained in the adjacent source comment; tests, examples, and broad plugin suppressions are not part of that exception policy.
 
 ## Repository security posture
