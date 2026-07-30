@@ -6,7 +6,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 Status: active; implementation started on feature/m1-evidence-architecture
 Owner: Codex
-Last Updated: 2026-07-29
+Last Updated: 2026-07-30
 Release Classification: release-deferred
 Target Stable Version: 0.4.0
 Tracking Issue: #30
@@ -16,6 +16,8 @@ Tracking Issue: #30
 Replace the bounded legacy Markdown context generator with a schema-versioned repository evidence engine, base/head snapshots and typed deltas, compact bootstrap projection, and a built-in read-only MCP server. Preserve all safe legacy facts through semantic parity checks, remove the legacy public contract only after end-to-end verification, and improve GitLab review outcome rendering.
 
 ### Work Queue
+
+0. [x] Refresh the zero-runtime-dependency build/test toolchain and pinned GitHub Actions from authoritative upstream release metadata. The 12 direct build/dev requirements have a combined declared floor of Python 3.10 and no declared upper bound; the already approved M1 toolkit contract remains Python 3.12 through 3.14. The complete locked toolchain and 524 tests plus 53 subtests pass separately on 3.12, 3.13, and 3.14, while 3.15 remains unclaimed until the complete toolchain and project suite are qualified there. All 11 Action repositories resolve their documented stable tags to the pinned immutable SHAs. The isolated quality gate passes formatting, lint, strict typing, Bandit, 524 tests plus 53 subtests, and 78.37% coverage. Fresh wheel/sdist artifacts pass Twine 7, zero-runtime-dependency metadata checks, and Python 3.12 wheel/Python 3.14 sdist smoke installs. Package metadata and CI remain the version source of truth; the README development notice no longer duplicates Python numbers. This is release-deferred work for 0.4.0 and remains a separate signed checkpoint from legacy removal.
 
 1. [x] Update the effective local OCR binary to verified upstream v1.8.0 while retaining a rollback copy.
 2. [x] Freeze legacy context behavior and upstream OCR v1.8.0 result contracts in synthetic tests and fixtures.

@@ -221,13 +221,14 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     assert "scripts/install_local_artifact.py" in workflow
 
 
-def test_ci_matrix_uses_supported_python_endpoints_on_each_os() -> None:
+def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert workflow.count('python: "3.12"') == 2
+    assert workflow.count('python: "3.13"') == 1
     assert workflow.count('python: "3.14"') == 2
-    for intermediate in ("3.10", "3.11", "3.13"):
-        assert f'python: "{intermediate}"' not in workflow
+    for unsupported in ("3.10", "3.11", "3.15"):
+        assert f'python: "{unsupported}"' not in workflow
 
 
 def test_required_dependency_review_runs_for_every_pull_request() -> None:

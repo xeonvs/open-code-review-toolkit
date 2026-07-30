@@ -10,7 +10,7 @@ from pathlib import PurePosixPath
 from typing import TypeAlias, cast
 
 EvidenceValue: TypeAlias = (
-    "None | bool | int | float | str | list[EvidenceValue] | dict[str, EvidenceValue]"
+    "bool | int | float | str | list[EvidenceValue] | dict[str, EvidenceValue] | None"
 )
 
 
