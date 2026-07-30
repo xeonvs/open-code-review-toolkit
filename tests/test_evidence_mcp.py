@@ -238,6 +238,23 @@ def test_initialize_negotiates_current_revision_for_unknown_client_version() -> 
     assert negotiated["result"]["protocolVersion"] == PROTOCOL_VERSION
 
 
+def test_initialize_falls_back_for_type_confused_protocol_version() -> None:
+    """Treat an unhashable client protocol value as unsupported input."""
+
+    negotiated = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": []},
+        },
+    )
+
+    assert negotiated is not None
+    assert negotiated["result"]["protocolVersion"] == PROTOCOL_VERSION
+
+
 def test_stdio_uses_stdout_only_for_protocol_and_bounds_requests() -> None:
     store = _store()
     with tempfile.TemporaryDirectory() as directory:

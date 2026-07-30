@@ -17,8 +17,9 @@ from ocr_toolkit.evidence.model import (
     TrustClass,
 )
 
-OBJECT_LINE_RE = re.compile(
-    r"^(?P<mode>[0-7]{6}) (?P<type>blob|tree|commit) (?P<sha>[0-9a-f]{40})\t(?P<path>.+)$"
+OBJECT_RECORD_RE = re.compile(
+    rb"^(?P<mode>[0-7]{6}) (?P<type>blob|tree|commit) (?P<sha>[0-9a-f]{40})\t(?P<path>.*)$",
+    re.DOTALL,
 )
 BATCH_HEADER_RE = re.compile(
     rb"^(?P<sha>[0-9a-f]{40}) (?P<type>blob|tree|commit) (?P<size>[0-9]+)\n$"
@@ -110,7 +111,9 @@ def normalize_repo_path(value: str) -> str:
     ):
         raise RepositoryEvidenceError("repository path must be normalized and relative")
     normalized = PurePosixPath(value).as_posix()
-    if normalized.startswith("-") or "\x00" in normalized or "\n" in normalized:
+    if normalized.startswith("-") or any(
+        character == "\x7f" or ord(character) < 32 for character in normalized
+    ):
         raise RepositoryEvidenceError("repository path contains unsupported control syntax")
     return normalized
 
@@ -181,24 +184,30 @@ class GitRepositoryReader:
         """List bounded tree entries without following symlinks or submodules."""
 
         sha = self.resolve_commit(ref)
-        result = self._run(["ls-tree", "-r", "--full-tree", sha], timeout=30)
-        assert isinstance(result.stdout, str)
+        result = self._run(["ls-tree", "-z", "-r", "--full-tree", sha], timeout=30, text=False)
+        assert isinstance(result.stdout, bytes)
         if result.returncode != 0:
             raise RepositoryEvidenceError("failed to enumerate repository tree")
-        lines = result.stdout.splitlines()
-        if len(lines) > max_entries:
+        records = result.stdout.split(b"\0")
+        if records and records[-1] == b"":
+            records.pop()
+        if len(records) > max_entries:
             raise RepositoryEvidenceError("repository tree exceeds the bounded entry limit")
         entries = []
-        for line in lines:
-            match = OBJECT_LINE_RE.fullmatch(line)
+        for record in records:
+            match = OBJECT_RECORD_RE.fullmatch(record)
             if match is None:
                 raise RepositoryEvidenceError("Git returned an unsupported tree entry")
+            try:
+                raw_path = match.group("path").decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise RepositoryEvidenceError("repository path is not valid UTF-8") from exc
             entries.append(
                 RepositoryObject(
-                    path=normalize_repo_path(match.group("path")),
-                    mode=match.group("mode"),
-                    object_type=match.group("type"),
-                    object_sha=match.group("sha"),
+                    path=normalize_repo_path(raw_path),
+                    mode=match.group("mode").decode("ascii"),
+                    object_type=match.group("type").decode("ascii"),
+                    object_sha=match.group("sha").decode("ascii"),
                 )
             )
         return tuple(entries)
@@ -208,21 +217,27 @@ class GitRepositoryReader:
 
         safe_path = normalize_repo_path(path)
         sha = self.resolve_commit(ref)
-        result = self._run(["ls-tree", sha, "--", safe_path])
-        assert isinstance(result.stdout, str)
-        if result.returncode != 0 or not result.stdout.strip():
+        result = self._run(["ls-tree", "-z", sha, "--", safe_path], text=False)
+        assert isinstance(result.stdout, bytes)
+        if result.returncode != 0 or not result.stdout:
             return None
-        lines = result.stdout.splitlines()
-        if len(lines) != 1:
+        records = result.stdout.split(b"\0")
+        if records[-1] or len(records) != 2:
             raise RepositoryEvidenceError("Git returned an ambiguous tree entry")
-        match = OBJECT_LINE_RE.fullmatch(lines[0])
-        if match is None or normalize_repo_path(match.group("path")) != safe_path:
+        match = OBJECT_RECORD_RE.fullmatch(records[0])
+        if match is None:
+            raise RepositoryEvidenceError("Git returned an invalid tree entry")
+        try:
+            returned_path = normalize_repo_path(match.group("path").decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise RepositoryEvidenceError("repository paths must be valid UTF-8") from exc
+        if returned_path != safe_path:
             raise RepositoryEvidenceError("Git returned a mismatched tree entry")
         return RepositoryObject(
             path=safe_path,
-            mode=match.group("mode"),
-            object_type=match.group("type"),
-            object_sha=match.group("sha"),
+            mode=match.group("mode").decode("ascii"),
+            object_type=match.group("type").decode("ascii"),
+            object_sha=match.group("sha").decode("ascii"),
         )
 
     def read_blob(self, ref: str, path: str) -> bytes | None:
@@ -426,19 +441,33 @@ class GitRepositoryReader:
 
         base = self.resolve_commit(base_ref)
         head = self.resolve_commit(head_ref)
-        result = self._run(["diff", "--name-status", "--find-renames", "--no-ext-diff", base, head])
-        assert isinstance(result.stdout, str)
+        result = self._run(
+            ["diff", "--name-status", "-z", "--find-renames", "--no-ext-diff", base, head],
+            text=False,
+        )
+        assert isinstance(result.stdout, bytes)
         if result.returncode != 0:
             raise RepositoryEvidenceError("failed to compare immutable repository refs")
         paths: set[str] = set()
-        for line in result.stdout.splitlines():
-            parts = line.split("\t")
-            if len(parts) < 2:
-                raise RepositoryEvidenceError("Git returned an invalid name-status row")
-            for raw_path in parts[1:]:
-                paths.add(normalize_repo_path(raw_path))
+        fields = result.stdout.split(b"\0")
+        if fields and fields[-1] == b"":
+            fields.pop()
+        index = 0
+        while index < len(fields):
+            status = fields[index]
+            index += 1
+            path_count = 2 if status[:1] in {b"R", b"C"} else 1
+            if not status or index + path_count > len(fields):
+                raise RepositoryEvidenceError("Git returned an invalid name-status record")
+            for raw_path in fields[index : index + path_count]:
+                try:
+                    decoded_path = raw_path.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise RepositoryEvidenceError("changed path is not valid UTF-8") from exc
+                paths.add(normalize_repo_path(decoded_path))
                 if len(paths) > max_paths:
                     raise RepositoryEvidenceError("changed path count exceeds the bounded limit")
+            index += path_count
         return tuple(sorted(paths))
 
 

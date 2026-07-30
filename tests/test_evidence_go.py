@@ -91,6 +91,19 @@ ignore internal/generated
     )
 
 
+def test_go_excludes_keep_multiple_versions_distinct() -> None:
+    parsed = parse_go_mod(
+        "module example.invalid/acme/service\n"
+        "exclude example.invalid/acme/legacy v1.0.0\n"
+        "exclude example.invalid/acme/legacy v1.1.0\n"
+    )
+
+    excluded = [fact for fact in parsed.facts if fact.value.get("scope") == "exclude"]
+    assert len(excluded) == 2
+    assert {fact.value["version"] for fact in excluded} == {"v1.0.0", "v1.1.0"}
+    assert len({fact.identity for fact in excluded}) == 2
+
+
 def test_go_sum_preserves_module_and_go_mod_checksum_pairs() -> None:
     """Keep both module zip and go.mod checksums as resolved facts."""
 

@@ -1,10 +1,12 @@
 """Typed immutable Ansible topology collector tests."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
 from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
+from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.mcp import call_tool
 
@@ -78,6 +80,38 @@ def test_collects_bounded_ini_and_yaml_inventory_groups() -> None:
     assert not topology_candidate("inventories/stage/group_vars/all.yml")
 
 
+def test_yaml_inventory_accepts_top_level_groups_and_rejects_metadata_files() -> None:
+    inventory = collect_topology(
+        "inventories/prod/hosts.yaml",
+        "web:\n  hosts:\n    web-01:\n  vars:\n    port: 443\n",
+    )
+
+    assert any(
+        fact.kind == "ansible.inventory_group" and fact.value["group"] == "web"
+        for fact in inventory
+    )
+    assert not topology_candidate("inventories/prod/README.md")
+    assert not topology_candidate("inventories/prod/schema.json")
+
+
+def test_galaxy_nested_installer_fields_do_not_override_dependency_identity() -> None:
+    parsed = parse_galaxy_requirements(
+        """
+roles:
+  - name: synthetic.web
+    version: 1.0.0
+    options:
+      name: malicious.override
+      version: 9.9.9
+"""
+    )
+
+    assert len(parsed.requirements) == 1
+    requirement = parsed.requirements[0]
+    assert requirement.name == "synthetic.web"
+    assert requirement.version == "1.0.0"
+
+
 def test_inventory_children_use_the_declared_yaml_indentation() -> None:
     """Accept sibling groups at a consistent indentation wider than two spaces."""
 
@@ -105,12 +139,20 @@ def test_inventory_children_use_the_declared_yaml_indentation() -> None:
 def test_topology_is_queryable_from_the_evidence_mcp(tmp_path: Path) -> None:
     """Carry immutable topology through the store into filtered MCP queries."""
 
-    environment = {
-        "GIT_AUTHOR_NAME": "Synthetic Author",
-        "GIT_AUTHOR_EMAIL": "author@example.invalid",
-        "GIT_COMMITTER_NAME": "Synthetic Committer",
-        "GIT_COMMITTER_EMAIL": "committer@example.invalid",
-    }
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update(
+        {
+            "GIT_AUTHOR_NAME": "Synthetic Author",
+            "GIT_AUTHOR_EMAIL": "author@example.invalid",
+            "GIT_COMMITTER_NAME": "Synthetic Committer",
+            "GIT_COMMITTER_EMAIL": "committer@example.invalid",
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            "GIT_CONFIG_KEY_1": "core.hooksPath",
+            "GIT_CONFIG_VALUE_1": str(tmp_path / "disabled-hooks"),
+        }
+    )
 
     def git(*args: str) -> str:
         """Run one synthetic repository command with deterministic identity."""

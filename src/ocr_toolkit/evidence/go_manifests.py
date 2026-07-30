@@ -209,7 +209,15 @@ def parse_go_mod(text: str) -> ManifestParseResult:
         elif directive == "exclude":
             parts = _go_tokens(directive_body)
             if len(parts) == 2:
-                facts.append(_module_fact("dependency.declared", parts[0], parts[1], "exclude"))
+                excluded = _module_fact("dependency.declared", parts[0], parts[1], "exclude")
+                facts.append(
+                    ManifestFact(
+                        excluded.kind,
+                        excluded.component,
+                        f"{excluded.identity}:{parts[1]}",
+                        excluded.value,
+                    )
+                )
         elif directive == "tool" and directive_body:
             directive_tokens = _go_tokens(directive_body)
             if len(directive_tokens) == 1:

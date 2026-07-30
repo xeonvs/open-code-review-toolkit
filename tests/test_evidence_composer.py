@@ -166,6 +166,8 @@ def test_composer_virtual_platform_package_set_matches_schema_semantics() -> Non
                     "composer": "^2.8",
                     "composer-runtime-api": "^2.2",
                     "composer-plugin-api": "^2.6",
+                    "php-debug": "8.3",
+                    "php-zts": "8.3",
                     "hhvm": "^4",
                     "lib-icu": ">=72",
                 }
@@ -178,6 +180,8 @@ def test_composer_virtual_platform_package_set_matches_schema_semantics() -> Non
         "production:composer",
         "production:composer-runtime-api",
         "production:composer-plugin-api",
+        "production:php-debug",
+        "production:php-zts",
         "production:hhvm",
         "production:lib-icu",
     }

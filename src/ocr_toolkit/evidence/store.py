@@ -28,6 +28,7 @@ from ocr_toolkit.evidence.model import (
 )
 
 SCHEMA_VERSION = 1
+MAX_SERIALIZED_BYTES = 20_000_000
 KNOWN_KINDS = frozenset(
     {
         "repository.file",
@@ -86,8 +87,8 @@ class EvidenceStoreLimits:
             raise EvidenceStoreError(
                 "max_records_per_kind must be positive and no greater than max_records"
             )
-        if not 1024 <= self.max_bytes <= 20_000_000:
-            raise EvidenceStoreError("max_bytes must be between 1024 and 20000000")
+        if not 1024 <= self.max_bytes <= MAX_SERIALIZED_BYTES:
+            raise EvidenceStoreError(f"max_bytes must be between 1024 and {MAX_SERIALIZED_BYTES}")
         if not 1 <= self.max_value_chars <= 1_000_000:
             raise EvidenceStoreError("max_value_chars must be between 1 and 1000000")
 
@@ -240,7 +241,7 @@ class EvidenceStore:
         serialized = json.dumps(
             self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
-        if len(serialized.encode("utf-8")) > self.limits.max_bytes:
+        if len((serialized + "\n").encode("utf-8")) > self.limits.max_bytes:
             raise EvidenceStoreError("serialized evidence store exceeds its byte budget")
         return serialized + "\n"
 
@@ -275,8 +276,10 @@ class EvidenceStore:
     def read(cls, path: Path) -> EvidenceStore:
         """Read and strictly validate an untrusted serialized store."""
 
-        raw_bytes = path.read_bytes()
-        if len(raw_bytes) > 20_000_000:
+        hard_read_limit = MAX_SERIALIZED_BYTES
+        with path.open("rb") as handle:
+            raw_bytes = handle.read(hard_read_limit + 1)
+        if len(raw_bytes) > hard_read_limit:
             raise EvidenceStoreError("evidence store exceeds the hard read limit")
         try:
             raw = json.loads(raw_bytes)

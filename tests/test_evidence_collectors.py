@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -25,6 +26,7 @@ from ocr_toolkit.evidence.collectors import (
     parse_manifest,
 )
 from ocr_toolkit.evidence.mcp import handle_request
+from ocr_toolkit.evidence.python_manifests import parse_requirements
 from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
 
 
@@ -136,12 +138,17 @@ pytest = "^8.4"
         and fact.value["constraint"] == ">=3.9"
         for fact in facts
     )
+    declaration_facts = [
+        fact for fact in facts if fact.component == "python" and fact.kind == "dependency.declared"
+    ]
     declarations = {fact.identity: fact.value for fact in facts if fact.component == "python"}
-    assert declarations["project:core-pkg"]["requirement"] == (
-        "Core_Pkg[http]>=1.2,<2; python_version >= '3.9'"
-    )
-    assert declarations["project:core-pkg"]["extras"] == ["http"]
-    assert "secret" not in str(declarations["project:direct"])
+    core = next(fact for fact in declaration_facts if fact.value.get("name") == "core-pkg")
+    assert core.identity.startswith("project:core-pkg:")
+    assert core.value["requirement"] == ("Core_Pkg[http]>=1.2,<2; python_version >= '3.9'")
+    assert core.value["extras"] == ["http"]
+    direct = next(fact for fact in declaration_facts if fact.value.get("name") == "direct")
+    assert direct.identity.startswith("project:direct:")
+    assert "secret" not in str(direct.value)
     assert declarations["optional:docs:sphinx"]["scope"] == "optional:docs"
     assert declarations["group:test:ruff"]["requirement"] == "ruff==0.12.0"
     assert declarations["group:test:pytest"]["version"] == "8"
@@ -161,6 +168,32 @@ pytest = "^8.4"
     assert len(alternatives) == 2
     assert {fact.value["version"] for fact in alternatives} == {"<2", ">=2"}
     assert {fact.value["python"] for fact in alternatives} == {"<3.11", ">=3.11"}
+
+
+def test_python_requirement_identity_tracks_applicability_not_version() -> None:
+    first = parse_requirements(
+        "demo[http]==1.0 ; python_version < '3.14'\ndemo[cli]==1.0 ; python_version >= '3.14'\n"
+    )
+    second = parse_requirements(
+        "demo[cli]==2.0 ; python_version >= '3.14'\ndemo[http]==2.0 ; python_version < '3.14'\n"
+    )
+
+    first_by_marker = {fact.value["requirement"].split(";", 1)[1]: fact for fact in first.facts}
+    second_by_marker = {fact.value["requirement"].split(";", 1)[1]: fact for fact in second.facts}
+    assert set(first_by_marker) == set(second_by_marker)
+    assert all(
+        first_by_marker[marker].identity == second_by_marker[marker].identity
+        for marker in first_by_marker
+    )
+    assert len({fact.identity for fact in first.facts}) == 2
+
+
+def test_python_requirement_inline_tab_comment_is_not_evidence() -> None:
+    parsed = parse_requirements("demo==1.0\t# token=super-secret\n")
+
+    assert len(parsed.facts) == 1
+    value = cast(dict[str, object], parsed.facts[0].value)
+    assert value["requirement"] == "demo==1.0"
 
 
 def test_python_dependency_group_cycles_and_missing_includes_are_diagnostic() -> None:

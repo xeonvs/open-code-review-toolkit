@@ -257,7 +257,11 @@ def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | Non
         if not isinstance(params, dict):
             return _error(request_id, -32602, "Invalid params")
         version = params.get("protocolVersion")
-        negotiated_version = version if version in SUPPORTED_PROTOCOL_VERSIONS else PROTOCOL_VERSION
+        negotiated_version = (
+            version
+            if isinstance(version, str) and version in SUPPORTED_PROTOCOL_VERSIONS
+            else PROTOCOL_VERSION
+        )
         return _success(
             request_id,
             {
@@ -325,9 +329,10 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
             continue
         serialized = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
         if len(serialized.encode("utf-8")) > MAX_RESPONSE_BYTES:
-            serialized = json.dumps(
-                _error(response.get("id"), -32603, "Response exceeds the byte limit")
-            )
+            safe_id = response.get("id")
+            if not isinstance(safe_id, (str, int)) or isinstance(safe_id, bool):
+                safe_id = None
+            serialized = json.dumps(_error(safe_id, -32603, "Response exceeds the byte limit"))
         stdout.write(serialized + "\n")
         stdout.flush()
     return 0

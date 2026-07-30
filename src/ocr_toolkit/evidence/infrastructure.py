@@ -188,12 +188,18 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
     facts: list[ManifestFact] = []
     seen: set[tuple[str, str]] = set()
 
+    def add_fact(fact: ManifestFact | None) -> None:
+        """Deduplicate before budget accounting and keep the first semantic fact."""
+
+        if fact is None or (fact.kind, fact.identity) in seen:
+            return
+        facts.append(fact)
+        seen.add((fact.kind, fact.identity))
+
     for name, version, is_digest in _nested_image_references(text):
         separator = "@" if is_digest else ":"
         fact = _image_fact(path, "image", f"{name}{separator}{version}")
-        if fact is not None:
-            facts.append(fact)
-            seen.add((fact.kind, fact.identity))
+        add_fact(fact)
 
     if PurePosixPath(path).name.casefold().startswith(("dockerfile", "containerfile")):
         stage_names: set[str] = set()
@@ -211,19 +217,23 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
                 if reference.casefold() in stage_names
                 else _image_fact(path, "FROM", reference)
             )
-            if fact is not None and (fact.kind, fact.identity) not in seen:
-                facts.append(fact)
-                seen.add((fact.kind, fact.identity))
+            add_fact(fact)
 
     nested_indents: list[int] = []
+    scope_stack: list[tuple[int, str]] = []
     for raw in text.splitlines():
         stripped = raw.strip()
         indent = len(raw) - len(raw.lstrip())
         nested_indents = [parent for parent in nested_indents if indent > parent]
+        scope_stack = [(parent, name) for parent, name in scope_stack if indent > parent]
         if re.match(r"(?i)^image\s*:\s*$", stripped):
             nested_indents.append(indent)
             continue
         if nested_indents:
+            continue
+        mapping_key = re.match(r"^[\"']?([A-Za-z0-9_.-]+)[\"']?\s*:\s*$", stripped)
+        if mapping_key is not None:
+            scope_stack.append((indent, mapping_key.group(1).casefold()))
             continue
         match = _VERSION_LINE_RE.match(raw)
         if match is None:
@@ -247,15 +257,14 @@ def parse_infrastructure_pins(path: str, text: str) -> ManifestParseResult:
                 or safe_value.casefold() in {"true", "false", "yes", "no", "null", "none", "latest"}
             ):
                 continue
+            scope = "/".join(name for _indent, name in scope_stack)
             fact = ManifestFact(
                 "application.version",
                 "infrastructure",
-                f"{path}:{normalized_key}",
+                f"{path}:{scope.casefold()}:{normalized_key}",
                 {"key": key, "version": safe_value, "source_path": path},
             )
-        if fact is not None and (fact.kind, fact.identity) not in seen:
-            facts.append(fact)
-            seen.add((fact.kind, fact.identity))
+        add_fact(fact)
 
     notices = (
         (f"infrastructure facts were truncated after {MAX_MANIFEST_ITEMS} items",)

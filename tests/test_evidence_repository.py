@@ -38,13 +38,20 @@ from tests.support import patched_attr
 def git(root: Path, *args: str) -> str:
     """Run one deterministic Git command in a synthetic repository."""
 
-    environment = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "Synthetic Author",
-        "GIT_AUTHOR_EMAIL": "author@example.invalid",
-        "GIT_COMMITTER_NAME": "Synthetic Committer",
-        "GIT_COMMITTER_EMAIL": "committer@example.invalid",
-    }
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update(
+        {
+            "GIT_AUTHOR_NAME": "Synthetic Author",
+            "GIT_AUTHOR_EMAIL": "author@example.invalid",
+            "GIT_COMMITTER_NAME": "Synthetic Committer",
+            "GIT_COMMITTER_EMAIL": "committer@example.invalid",
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            "GIT_CONFIG_KEY_1": "core.hooksPath",
+            "GIT_CONFIG_VALUE_1": str(root / "disabled-hooks"),
+        }
+    )
     result = subprocess.run(
         ["git", "-C", str(root), *args],
         capture_output=True,
@@ -79,8 +86,51 @@ def synthetic_repository(tmp_path: Path) -> tuple[Path, str, str]:
     return root, base, head
 
 
+def test_reader_preserves_utf8_paths_and_rejects_control_paths(tmp_path: Path) -> None:
+    """Parse UTF-8 records atomically and reject control-bearing paths explicitly."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    old_path = "old\tname.txt"
+    renamed_path = "renamed\nname.txt"
+    added_path = "café.txt"
+    (root / old_path).write_text("before\n", encoding="utf-8")
+    git(root, "add", "--", old_path)
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+
+    git(root, "mv", "--", old_path, renamed_path)
+    (root / added_path).write_text("added\n", encoding="utf-8")
+    git(root, "add", "--", added_path)
+    git(root, "commit", "-qm", "head")
+    head = git(root, "rev-parse", "HEAD")
+
+    reader = GitRepositoryReader(root)
+    with pytest.raises(RepositoryEvidenceError, match="control syntax"):
+        reader.changed_paths(base, head)
+    with pytest.raises(RepositoryEvidenceError, match="control syntax"):
+        reader.list_objects(head)
+    with pytest.raises(RepositoryEvidenceError, match="control syntax"):
+        reader.object_at(head, renamed_path)
+
+    assert reader.object_at(head, added_path) is not None
+    assert reader.read_blob(head, added_path) == b"added\n"
+
+
 @pytest.mark.parametrize(
-    "path", ["", "/etc/passwd", "../escape", "safe/../escape", "./file", "-option", "a\\b"]
+    "path",
+    [
+        "",
+        "/etc/passwd",
+        "../escape",
+        "safe/../escape",
+        "./file",
+        "-option",
+        "a\\b",
+        "tab\tname",
+        "delete\x7fname",
+    ],
 )
 def test_normalize_repo_path_rejects_unsafe_values(path: str) -> None:
     """Keep model-controlled paths outside Git option and traversal syntax."""
@@ -262,6 +312,38 @@ def test_internal_artifacts_are_private_regular_files(tmp_path: Path) -> None:
     assert stat.S_IMODE(artifacts.directory.stat().st_mode) == 0o700
     assert stat.S_IMODE(artifacts.bootstrap.stat().st_mode) == 0o600
     assert artifacts.bootstrap.read_text(encoding="utf-8") == "synthetic bootstrap"
+
+
+def test_private_text_writer_does_not_reclose_transferred_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Close only raw descriptors still owned after ``fdopen`` fails."""
+
+    closed: list[int] = []
+    real_close = os.close
+
+    class FailingStream:
+        def __init__(self, descriptor: int) -> None:
+            self.descriptor = descriptor
+
+        def __enter__(self) -> FailingStream:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            real_close(self.descriptor)
+
+        def write(self, _content: str) -> None:
+            raise OSError("synthetic write failure")
+
+    monkeypatch.setattr(
+        os, "fdopen", lambda descriptor, *_args, **_kwargs: FailingStream(descriptor)
+    )
+    monkeypatch.setattr(os, "close", lambda descriptor: closed.append(descriptor))
+
+    with pytest.raises(OSError, match="synthetic write failure"):
+        write_private_text(tmp_path / "private.txt", "content")
+
+    assert closed == []
 
 
 def test_internal_artifacts_reject_symlink_directory(tmp_path: Path) -> None:

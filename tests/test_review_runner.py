@@ -36,8 +36,17 @@ def test_evidence_mcp_self_query_exercises_all_read_actions() -> None:
     store = EvidenceStore()
     assert store.add(record)
     store.head = EvidenceSnapshot(RefRole.HEAD, sha, (record,))
+    actions: list[str] = []
+    real_call = review_runner.call_tool
 
-    review_runner._verify_evidence_mcp(store)
+    def record_call(store: EvidenceStore, arguments: dict[str, object]) -> dict[str, object]:
+        actions.append(str(arguments.get("action")))
+        return real_call(store, arguments)
+
+    with patched_attr(review_runner, "call_tool", record_call):
+        review_runner._verify_evidence_mcp(store)
+
+    assert actions == ["summary", "list", "get"]
 
 
 def test_evidence_mcp_self_query_rejects_invalid_list_envelope() -> None:
@@ -98,7 +107,14 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
 
     result = tmp_path / "result.json"
     result.write_text(
-        json.dumps({"status": "skipped", "tool_calls": {"total": 0, "by_tool": {}}}),
+        json.dumps(
+            {
+                "status": "skipped",
+                "message": "No supported files changed.",
+                "comments": [],
+                "tool_calls": {"total": 0, "by_tool": {}},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -109,6 +125,39 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
         secret_values=(),
     )
     assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "status": "skipped",
+            "message": "provider skipped",
+            "comments": [],
+            "tool_calls": {"total": 0, "by_tool": {}},
+        },
+        {
+            "status": "skipped",
+            "message": "No supported files changed.",
+            "comments": [],
+            "tool_calls": {"total": 1, "by_tool": {}},
+        },
+    ],
+)
+def test_ocr_result_rejects_unpinned_skipped_contract(
+    tmp_path: Path, payload: dict[str, object]
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps(payload), encoding="utf-8")
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="no-supported-files contract"):
+        review_runner._record_ocr_result_mcp_usage(result, composition)
 
 
 def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> None:
@@ -250,21 +299,6 @@ def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
     assert "provider timeout" in output.getvalue()
     assert "synthetic-secret-value" not in output.getvalue()
     assert "Authorization: ***" in output.getvalue()
-
-
-def test_run_review_normalizes_timeout_failures() -> None:
-    """Expose OCR timeouts through the runner's public failure contract."""
-
-    def time_out(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        raise subprocess.TimeoutExpired(argv, 30)
-
-    with TemporaryDirectory() as tmp, patched_attr(review_runner.subprocess, "run", time_out):
-        with pytest.raises(review_runner.ReviewRunnerError, match="configured timeout"):
-            review_runner.run_review(
-                Path(tmp) / "result.json",
-                Path(tmp) / "stderr.log",
-                ["--from", "base", "--to", "head"],
-            )
 
 
 def test_run_review_rejects_symlink_artifact() -> None:

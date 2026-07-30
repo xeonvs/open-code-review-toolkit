@@ -453,7 +453,11 @@ class MCPConfigTests(unittest.TestCase):
             },
         )
         for server in invalid_servers:
-            with self.subTest(server=server), self.assertRaises(mcp_config.MCPConfigError):
+            server["tools"] = ["docs_read"]
+            with (
+                self.subTest(server=server),
+                self.assertRaisesRegex(mcp_config.MCPConfigError, "url|field|command"),
+            ):
                 mcp_config.parse_mcp_servers(json.dumps({"servers": [server]}))
 
     def test_native_remote_server_rejects_unsafe_headers(self) -> None:
@@ -472,12 +476,16 @@ class MCPConfigTests(unittest.TestCase):
                             "name": "remote",
                             "type": "remote",
                             "url": "https://mcp.invalid/v1",
+                            "tools": ["docs_read"],
                             "headers": headers,
                         }
                     ]
                 }
             )
-            with self.subTest(headers=headers), self.assertRaises(mcp_config.MCPConfigError):
+            with (
+                self.subTest(headers=headers),
+                self.assertRaisesRegex(mcp_config.MCPConfigError, "headers"),
+            ):
                 mcp_config.parse_mcp_servers(raw)
 
     def test_native_remote_server_rejects_duplicate_and_missing_env_headers(self) -> None:
@@ -562,6 +570,7 @@ class MCPConfigTests(unittest.TestCase):
                     {
                         "name": "remote",
                         "command": "bridge",
+                        "tools": ["docs_read"],
                         "env_from": {"TOKEN": "MISSING_MCP_TOKEN"},
                     }
                 ]
@@ -570,7 +579,7 @@ class MCPConfigTests(unittest.TestCase):
 
         old_value = os.environ.pop("MISSING_MCP_TOKEN", None)
         try:
-            with self.assertRaises(mcp_config.MCPConfigError):
+            with self.assertRaisesRegex(mcp_config.MCPConfigError, "MISSING_MCP_TOKEN"):
                 mcp_config.parse_mcp_servers(raw)
         finally:
             if old_value is not None:

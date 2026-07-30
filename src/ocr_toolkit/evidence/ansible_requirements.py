@@ -174,6 +174,7 @@ def _yaml_candidates(text: str) -> tuple[list[tuple[str, object]], int]:
     section: str | None = None
     section_indent = -1
     item_indent: int | None = None
+    field_indent: int | None = None
     fields: dict[str, str] = {}
 
     def flush() -> None:
@@ -225,6 +226,7 @@ def _yaml_candidates(text: str) -> tuple[list[tuple[str, object]], int]:
         if stripped.startswith("-"):
             flush()
             item_indent = indent
+            field_indent = None
             body = stripped[1:].strip()
             if not body:
                 continue
@@ -246,6 +248,10 @@ def _yaml_candidates(text: str) -> tuple[list[tuple[str, object]], int]:
             continue
         if item_indent is None or indent <= item_indent:
             malformed += 1
+            continue
+        if field_indent is None:
+            field_indent = indent
+        if indent != field_indent:
             continue
         field = _FIELD_RE.match(stripped)
         if field:

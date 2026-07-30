@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,8 +16,22 @@ from ocr_toolkit.evidence.mcp import handle_request
 def _git(root: Path, *args: str) -> str:
     """Run one Git command against a synthetic repository."""
 
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update(
+        {
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            "GIT_CONFIG_KEY_1": "core.hooksPath",
+            "GIT_CONFIG_VALUE_1": str(root / "disabled-hooks"),
+        }
+    )
     completed = subprocess.run(
-        ["git", "-C", str(root), *args], check=True, text=True, capture_output=True
+        ["git", "-C", str(root), *args],
+        check=True,
+        text=True,
+        capture_output=True,
+        env=environment,
     )
     return completed.stdout.strip()
 
@@ -58,12 +73,12 @@ templated_version: ${RELEASE_VERSION}
         fact.identity: fact.value for fact in parsed.facts if fact.kind == "application.version"
     }
     assert versions == {
-        "deploy/values.yaml:appversion": {
+        "deploy/values.yaml::appversion": {
             "key": "appVersion",
             "version": "2.4.1",
             "source_path": "deploy/values.yaml",
         },
-        "deploy/values.yaml:runtime_version": {
+        "deploy/values.yaml::runtime_version": {
             "key": "runtime_version",
             "version": "8.3.7",
             "source_path": "deploy/values.yaml",
@@ -76,6 +91,43 @@ templated_version: ${RELEASE_VERSION}
     assert images["registry.example.invalid/acme/worker"]["version"] == "sha256:0123456789abcdef"
     assert not any("schema_version" in fact.identity for fact in parsed.facts)
     assert not any("RELEASE_VERSION" in json.dumps(fact.value) for fact in parsed.facts)
+
+
+def test_nested_image_duplicate_is_deduplicated_before_budget() -> None:
+    text = "\n".join(
+        [
+            "image:",
+            "  repository: registry.example.invalid/acme/api",
+            "  tag: '1.2.3'",
+            *[
+                f"image: registry.example.invalid/acme/worker-{index}:1.0.0"
+                for index in range(MAX_MANIFEST_ITEMS)
+            ],
+        ]
+    )
+
+    parsed = parse_infrastructure_pins("deploy/values.yaml", text)
+
+    assert len(parsed.facts) == MAX_MANIFEST_ITEMS
+    assert (
+        sum(fact.value.get("name") == "registry.example.invalid/acme/api" for fact in parsed.facts)
+        == 1
+    )
+    assert parsed.notices == (
+        f"infrastructure facts were truncated after {MAX_MANIFEST_ITEMS} items",
+    )
+
+
+def test_repeated_scoped_application_versions_remain_distinct() -> None:
+    parsed = parse_infrastructure_pins(
+        "deploy/values.yaml",
+        "services:\n  api:\n    app_version: 1.0.0\n  worker:\n    app_version: 2.0.0\n",
+    )
+
+    versions = [fact for fact in parsed.facts if fact.kind == "application.version"]
+    assert len(versions) == 2
+    assert {fact.value["version"] for fact in versions} == {"1.0.0", "2.0.0"}
+    assert len({fact.identity for fact in versions}) == 2
 
 
 def test_infrastructure_rejects_plain_variables_and_preserves_digest_fields() -> None:
@@ -138,7 +190,7 @@ def test_infrastructure_parser_redacts_and_bounds_untrusted_values() -> None:
     values = [
         f"service_{index:04d}_version: 1.0.{index}" for index in range(MAX_MANIFEST_ITEMS + 1)
     ]
-    values.append("registry_version: https://user:secret@example.invalid/v1")
+    values.insert(0, "registry_version: https://user:secret@example.invalid/v1")
     parsed = parse_infrastructure_pins("deploy/config.yaml", "\n".join(values))
 
     assert len(parsed.facts) == MAX_MANIFEST_ITEMS

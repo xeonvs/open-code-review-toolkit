@@ -86,6 +86,18 @@ def _mcp_usage_receipt(
     status = payload.get("status")
     if status not in {"success", "completed_with_warnings", "completed_with_errors"}:
         if status == "skipped":
+            tool_calls = payload.get("tool_calls")
+            by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+            if (
+                payload.get("message") != "No supported files changed."
+                or payload.get("comments") != []
+                or not isinstance(tool_calls, dict)
+                or tool_calls.get("total") != 0
+                or by_tool != {}
+            ):
+                raise ReviewRunnerError(
+                    "OCR skipped result does not match the pinned no-supported-files contract"
+                )
             return {"mcp_usage": {}}
         raise ReviewRunnerError("OCR result has an unsupported status")
     tool_calls = payload.get("tool_calls")
@@ -369,8 +381,6 @@ def run_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int
                 stdout=result_file,
                 stderr=stderr_file,
             )
-    except subprocess.TimeoutExpired as exc:
-        raise ReviewRunnerError("OCR review exceeded its configured timeout") from exc
     except OSError as exc:
         raise ReviewRunnerError(f"could not execute OCR: {exc}") from exc
     finally:

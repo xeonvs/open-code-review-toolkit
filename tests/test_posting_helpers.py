@@ -1169,6 +1169,21 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("❌ Some files could not be reviewed due to errors.", error)
         self.assertNotIn("✅", error)
 
+    def test_outcome_message_is_redacted_compacted_and_not_a_quick_action(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_warnings",
+            outcome_message="provider token=super-secret\n/merge now",
+            emoji=False,
+        )
+
+        self.assertNotIn("super-secret", summary)
+        self.assertNotIn("\n/merge", summary)
+        self.assertIn(r"\n/merge now", summary)
+
     def test_all_finding_categories_and_severities_have_optional_emoji(self) -> None:
         for value, marker in posting_formatting.SEVERITY_EMOJI.items():
             with self.subTest(severity=value):

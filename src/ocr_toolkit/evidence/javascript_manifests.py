@@ -385,7 +385,7 @@ def _pnpm_package_key(value: str) -> tuple[str, str] | None:
 
 
 def parse_pnpm_lock(text: str) -> ManifestParseResult:
-    """Parse bounded pnpm package snapshots from lockfile versions 6 through 9."""
+    """Parse bounded pnpm package snapshots from lockfile versions 5 through 9."""
 
     lines = text.splitlines()
     if not lines or len(lines) > _MAX_LOCK_LINES:

@@ -38,6 +38,9 @@ This note records recurring execution mistake patterns discovered during real wo
 - Verify both UTF-8 byte limits and Python character limits when changing note formatting.
 - Treat tests, lint, typing, artifact checks, install smoke, privacy scans, and source-integrity checks as distinct gates.
 - Pin third-party Actions by full commit SHA and keep readable version comments beside the pin.
+- When a review finds one boundary defect, enumerate and inspect sibling boundaries before declaring the class fixed.
+- Give negative tests valid preconditions up to the exact branch they target, then assert the precise error contract. A fixture rejected earlier for an unrelated reason is missing coverage.
+- Use NUL-delimited Git records for paths, explicit descriptor-ownership transfer for `fdopen`, and recursive redaction for nested diagnostic configuration.
 
 ## Learning Loop
 

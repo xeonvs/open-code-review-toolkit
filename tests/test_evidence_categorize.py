@@ -43,10 +43,14 @@ def test_explicit_playbook_category_coexists_with_other_categories() -> None:
     """Keep semantic playbook detection independent from suffix categories."""
 
     categories = categorize_paths(
-        ["playbooks/deploy.yml"], ansible_playbooks=["playbooks/deploy.yml"]
+        ["playbooks/deploy.yml", "requirements.yml"],
+        ansible_playbooks=["playbooks/deploy.yml"],
     )
 
-    assert categories == {"ansible_playbooks": ("playbooks/deploy.yml",)}
+    assert categories == {
+        "dependency_manifests": ("requirements.yml",),
+        "ansible_playbooks": ("playbooks/deploy.yml",),
+    }
 
 
 def test_categories_cover_ci_inventory_and_keep_declared_order() -> None:

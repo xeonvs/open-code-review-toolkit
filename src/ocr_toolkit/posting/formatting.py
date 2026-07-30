@@ -15,6 +15,7 @@ from ocr_toolkit.common.markdown import (
 from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
+from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -773,7 +774,9 @@ def summarize_result(
         "completed_with_errors": "❌",
     }
     marker = f"{status_markers.get(outcome_status, '❌')} " if use_emoji else ""
-    safe_message = compact_control_text(outcome_message, max_chars=500)
+    safe_message = neutralize_quick_actions(
+        compact_control_text(redact_sensitive(outcome_message), max_chars=500)
+    )
     if not safe_message:
         safe_message = f"Found {total} issue(s)." if total else "No issues found."
     lines = [

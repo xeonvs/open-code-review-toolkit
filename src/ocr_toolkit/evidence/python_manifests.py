@@ -25,6 +25,7 @@ _REQUIREMENT_NAME_RE = re.compile(
     r"^([A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?(?:\[[A-Za-z0-9_,.-]+\])?)"
 )
 _SIMPLE_VERSION_RE = re.compile(r"^(?:===|==|~=|>=|<=|!=|>|<)\s*([^,;\s]+)")
+_INLINE_REQUIREMENT_COMMENT_RE = re.compile(r"\s+#")
 _PYLOCK_SUPPORTED_MAJOR = 1
 
 
@@ -57,10 +58,21 @@ def _declared_requirement(value: str, scope: str) -> ManifestFact | None:
     if simple_version is not None:
         # Keep the scalar consumed by legacy delta users alongside the exact text.
         fact_value["version"] = simple_version.group(1)
+    identity_metadata = {key: fact_value[key] for key in ("extras",) if key in fact_value}
+    marker = requirement.partition(";")[2].strip()
+    if marker:
+        identity_metadata["marker"] = marker
+    direct_reference = requirement[match.end() :].strip()
+    if direct_reference.startswith("@"):
+        identity_metadata["direct_reference"] = redact_url_userinfo(direct_reference)
+    identity = f"{scope}:{normalized_name}"
+    if identity_metadata:
+        selector = json.dumps(identity_metadata, sort_keys=True, separators=(",", ":"))
+        identity = f"{identity}:{hashlib.sha256(selector.encode()).hexdigest()[:16]}"
     return ManifestFact(
         "dependency.declared",
         "python",
-        f"{scope}:{normalized_name}",
+        identity,
         fact_value,
     )
 
@@ -332,7 +344,8 @@ def parse_requirements(text: str) -> ManifestParseResult:
     includes: list[str] = []
     notices: list[str] = []
     for raw_line in text.splitlines():
-        clean = raw_line.split(" #", 1)[0].strip()
+        comment = _INLINE_REQUIREMENT_COMMENT_RE.search(raw_line)
+        clean = raw_line[: comment.start()].strip() if comment else raw_line.strip()
         if not clean or clean.startswith("#"):
             continue
         include = PYTHON_REQUIREMENT_INCLUDE_RE.match(clean)

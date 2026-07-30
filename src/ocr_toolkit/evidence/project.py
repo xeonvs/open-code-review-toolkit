@@ -78,7 +78,7 @@ def render_bootstrap(
         "## Evidence coverage",
         f"- records: {len(store.records)}",
         f"- components: {', '.join(components) if components else 'none'}",
-        f"- kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(kind_counts.items()))}",
+        f"- kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(kind_counts.items())) or 'none'}",
         f"- deltas: {', '.join(f'{state}={count}' for state, count in sorted(changes.items())) or 'none'}",
     ]
     if store.diagnostics:

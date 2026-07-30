@@ -15,7 +15,9 @@ from ocr_toolkit.evidence.manifest_model import (
 from ocr_toolkit.evidence.model import EvidenceValue
 
 _PLATFORM_PREFIXES = ("ext-", "lib-", "composer-")
-_COMPOSER_PLATFORM_NAMES = frozenset({"php", "php-64bit", "php-ipv6", "hhvm", "composer"})
+_COMPOSER_PLATFORM_NAMES = frozenset(
+    {"php", "php-64bit", "php-debug", "php-ipv6", "php-zts", "hhvm", "composer"}
+)
 _SOURCE_TYPES = frozenset({"git", "hg", "fossil", "svn"})
 
 
@@ -163,7 +165,7 @@ def _platform_override_facts(data: object) -> list[ManifestFact]:
         if not isinstance(raw_name, str):
             continue
         name = _package_name(raw_name)
-        if name is None or not _is_platform_package(name):
+        if not _is_platform_package(name):
             continue
         if raw_constraint is not False:
             fact = _declared_fact(name, raw_constraint, "platform-override")

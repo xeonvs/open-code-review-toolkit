@@ -63,12 +63,12 @@ def write_private_text(path: Path, content: str) -> None:
             raise OSError(f"private artifact is an existing hard link: {path}")
         os.fchmod(descriptor, 0o600)
         os.ftruncate(descriptor, 0)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream = os.fdopen(descriptor, "w", encoding="utf-8")
+        descriptor = -1
+        with stream:
             stream.write(content)
     except BaseException:
-        # fdopen owns the descriptor once constructed; close only if that failed.
-        try:
+        # fdopen owns the descriptor once constructed. Never close a recycled fd.
+        if descriptor >= 0:
             os.close(descriptor)
-        except OSError:
-            pass
         raise

@@ -108,6 +108,8 @@ def _normalize_source_path(value: str) -> str:
     raw_parts = value.split("/")
     if path.is_absolute() or not value or any(part in {"", ".", ".."} for part in raw_parts):
         raise ValueError("source_path must be a normalized repository-relative path")
+    if any(character == "\x7f" or ord(character) < 32 for character in value):
+        raise ValueError("source_path must not contain control characters")
     return path.as_posix()
 
 
@@ -230,7 +232,10 @@ class EvidenceRecord:
             sensitivity=Sensitivity(metadata["sensitivity"]),
             staleness=staleness,
         )
-        if raw.get("id") not in {None, record.id}:
+        raw_id = raw.get("id")
+        if raw_id is not None and not isinstance(raw_id, str):
+            raise ValueError("evidence record id must be a string")
+        if raw_id not in {None, record.id}:
             raise ValueError("evidence record id does not match its canonical content")
         return record
 

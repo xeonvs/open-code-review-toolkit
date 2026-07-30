@@ -83,7 +83,18 @@ def test_record_rejects_non_string_metadata(field: str, value: object) -> None:
         EvidenceRecord.from_dict(payload)
 
 
-@pytest.mark.parametrize("path", ["", "/etc/passwd", "../secret", "safe/../secret", "./manifest"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "",
+        "/etc/passwd",
+        "../secret",
+        "safe/../secret",
+        "./manifest",
+        "tab\tmanifest",
+        "line\nmanifest",
+    ],
+)
 def test_record_rejects_unsafe_source_paths(path: str) -> None:
     """Prevent evidence provenance from escaping the repository namespace."""
 
@@ -224,6 +235,32 @@ def test_store_detects_tampered_record_identity(tmp_path: Path) -> None:
 
     with pytest.raises(EvidenceStoreError, match="id does not match"):
         EvidenceStore.read(path)
+
+
+def test_record_rejects_non_string_persisted_identity() -> None:
+    """Reject type-confused IDs before comparing them with canonical identity."""
+
+    raw = record().to_dict()
+    raw["id"] = []
+
+    with pytest.raises(ValueError, match="id must be a string"):
+        EvidenceRecord.from_dict(raw)
+
+
+def test_store_byte_budget_includes_serialized_trailing_newline(tmp_path: Path) -> None:
+    """Enforce the exact byte count emitted by ``to_json`` and ``write``."""
+
+    constrained = EvidenceStore(EvidenceStoreLimits(max_bytes=1024))
+    size = len(constrained.to_json().encode("utf-8"))
+    padding = "x" * (1024 - size - 1)
+    constrained.add_diagnostic(padding)
+    without_newline = json.dumps(
+        constrained.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    assert len(without_newline.encode("utf-8")) == 1024
+
+    with pytest.raises(EvidenceStoreError, match="byte budget"):
+        constrained.write(tmp_path / "evidence.json")
 
 
 def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:

@@ -506,6 +506,8 @@ def _read_python_requirement_graph(
             diagnostics.extend(read.diagnostics)
         for path in process_paths:
             visited.add(path)
+            if path not in blobs:
+                continue
             try:
                 parsed = parse_requirements(blobs[path].decode("utf-8"))
             except UnicodeDecodeError:

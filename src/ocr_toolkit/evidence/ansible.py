@@ -55,27 +55,26 @@ def _role_surface(path: str) -> tuple[str, str] | None:
 def _is_inventory_path(path: str) -> bool:
     """Recognize conventional inventory paths while excluding variable payloads."""
 
-    parts = PurePosixPath(path).parts
+    pure = PurePosixPath(path)
+    parts = pure.parts
     if not parts:
         return False
     name = parts[-1].casefold()
     folded = tuple(part.casefold() for part in parts)
     if "group_vars" in folded or "host_vars" in folded:
         return False
-    return (
-        name
-        in {
-            "hosts",
-            "hosts.ini",
-            "hosts.yml",
-            "hosts.yaml",
-            "inventory",
-            "inventory.ini",
-            "inventory.yml",
-            "inventory.yaml",
-        }
-        or "inventory" in folded
-        or "inventories" in folded
+    return name in {
+        "hosts",
+        "hosts.ini",
+        "hosts.yml",
+        "hosts.yaml",
+        "inventory",
+        "inventory.ini",
+        "inventory.yml",
+        "inventory.yaml",
+    } or (
+        ("inventory" in folded or "inventories" in folded)
+        and pure.suffix.casefold() in {"", ".ini", ".yml", ".yaml"}
     )
 
 
@@ -118,6 +117,7 @@ def _inventory_groups(text: str) -> tuple[str, ...]:
     groups: set[str] = set()
     children_indent: int | None = None
     group_indent: int | None = None
+    top_level_group: str | None = None
     for raw_line in text.splitlines():
         ini = INI_GROUP_RE.match(raw_line)
         if ini:
@@ -131,6 +131,22 @@ def _inventory_groups(text: str) -> tuple[str, ...]:
             group_indent = None
             continue
         yaml_group = YAML_GROUP_RE.match(raw_line)
+        if yaml_group and len(yaml_group.group("indent")) == 0:
+            group = yaml_group.group("group")
+            top_level_group = group if group not in {"all", "ungrouped"} else None
+            children_indent = None
+            group_indent = None
+            continue
+        if (
+            yaml_group
+            and top_level_group is not None
+            and yaml_group.group("group") in {"hosts", "children", "vars"}
+        ):
+            groups.add(top_level_group)
+            if yaml_group.group("group") == "children":
+                children_indent = len(yaml_group.group("indent"))
+                group_indent = None
+            continue
         if yaml_group and children_indent is not None:
             indent = len(yaml_group.group("indent"))
             if indent <= children_indent:
