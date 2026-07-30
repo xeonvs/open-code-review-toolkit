@@ -8,8 +8,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ocr_toolkit import configure, mcp_config, preflight, review_runner
-from ocr_toolkit.evidence.artifacts import repository_artifacts
-from ocr_toolkit.evidence.mcp import serve as serve_evidence
 from ocr_toolkit.posting.workflow import main as posting_main
 
 
@@ -32,8 +30,6 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument(
         "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
     )
-
-    subparsers.add_parser("evidence-serve", help=argparse.SUPPRESS)
 
     post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
     post_parser.add_argument(
@@ -68,8 +64,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         except review_runner.ReviewRunnerError as exc:
             print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2
-    if args.command == "evidence-serve":
-        return serve_evidence(repository_artifacts().store)
     if args.command == "post":
         return posting_main([args.result, args.stderr])
     raise AssertionError(f"unhandled command: {args.command}")

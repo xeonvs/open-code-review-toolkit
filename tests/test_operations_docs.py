@@ -98,3 +98,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "automatic-safe" in workflow
     assert "human-review-required" in policy
     assert "never writes directly to `main`" in policy
+    assert "Go MCP SDK v1.6.1" in policy
+    assert "`2025-11-25`" in policy
+    assert "initialized notification" in policy
+    assert "absolute Python executable in isolated mode" in policy

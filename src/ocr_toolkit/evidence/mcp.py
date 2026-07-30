@@ -15,8 +15,13 @@ from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 TOOL_NAME = "ocr_toolkit_evidence"
 SERVER_NAME = "open-code-review-toolkit-evidence"
-PROTOCOL_VERSION = "2025-06-18"
-SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", PROTOCOL_VERSION}
+PROTOCOL_VERSION = "2025-11-25"
+SUPPORTED_PROTOCOL_VERSIONS = {
+    "2024-11-05",
+    "2025-03-26",
+    "2025-06-18",
+    PROTOCOL_VERSION,
+}
 MAX_REQUEST_BYTES = 64_000
 MAX_RESPONSE_BYTES = 64_000
 DEFAULT_PAGE_SIZE = 20
@@ -241,12 +246,11 @@ def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | Non
         if not isinstance(params, dict):
             return _error(request_id, -32602, "Invalid params")
         version = params.get("protocolVersion")
-        if version not in SUPPORTED_PROTOCOL_VERSIONS:
-            return _error(request_id, -32602, "Unsupported protocol version")
+        negotiated_version = version if version in SUPPORTED_PROTOCOL_VERSIONS else PROTOCOL_VERSION
         return _success(
             request_id,
             {
-                "protocolVersion": version,
+                "protocolVersion": negotiated_version,
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": SERVER_NAME, "version": __version__},
             },

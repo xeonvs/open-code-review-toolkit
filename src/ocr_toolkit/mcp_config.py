@@ -458,10 +458,17 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
         capabilities = [item for item in capabilities if item.server != server.name]
         capabilities.append(capability)
 
+    if not sys.executable or not os.path.isabs(sys.executable):
+        raise MCPConfigError(
+            "the running Python executable must be absolute for built-in MCP launch"
+        )
     payload[BUILTIN_EVIDENCE_SERVER] = {
         "type": "stdio",
-        "command": "ocr-ci",
-        "args": ["evidence-serve"],
+        # OCR starts MCP servers in the untrusted repository and may use a
+        # restricted PATH. Isolated mode prevents repository files from
+        # shadowing the toolkit while the venv path binds this exact install.
+        "command": sys.executable,
+        "args": ["-I", "-m", "ocr_toolkit.evidence"],
         "env": [],
         "tools": [TOOL_NAME],
         # OCR executes setup through a shell in the analyzed repository root.
@@ -550,7 +557,7 @@ def configure_mcp_servers() -> int:
             f"OCR MCP server configured: {server.name} type={server.transport} "
             f"{detail} tools={len(server.tools)}"
         )
-    print(f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} type=stdio args=1 env=0 tools=1")
+    print(f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} type=stdio args=3 env=0 tools=1")
 
     return 0
 

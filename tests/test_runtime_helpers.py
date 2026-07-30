@@ -6,6 +6,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -80,7 +81,8 @@ class MCPConfigTests(unittest.TestCase):
             {"existing", "synthetic_docs", mcp_config.BUILTIN_EVIDENCE_SERVER},
         )
         builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
-        self.assertEqual(builtin["command"], "ocr-ci")
+        self.assertEqual(builtin["command"], sys.executable)
+        self.assertEqual(builtin["args"], ["-I", "-m", "ocr_toolkit.evidence"])
         self.assertEqual(builtin["setup"], "")
         self.assertIsNot(builtin, composition.payload["existing"])
         self.assertIsNot(builtin, composition.payload["synthetic_docs"])
