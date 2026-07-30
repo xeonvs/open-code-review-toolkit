@@ -15,7 +15,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M1 Evidence architecture
 
-BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the authorized feature PR, merge, and deferred v0.4.0 release gates prove the milestone complete. The implementation, synthetic E2E, two real OCR loops, Codex Security correction, final Python 3.12/package gate, and signed local ready-PR checkpoint are recorded in the active plan, not by prematurely removing backlog scope.
+BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the authorized feature PR, merge, and v0.4.0 release gates prove the milestone complete. The implementation, synthetic E2E, two real OCR loops, Codex Security correction, final Python 3.12/package gate, and signed local checkpoint are recorded in the active plan, while the complete release cycle authorized on 2026-07-30 is in progress.
 
 ### BL-004: Define the common repository evidence model
 
