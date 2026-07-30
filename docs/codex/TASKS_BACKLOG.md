@@ -15,7 +15,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M1 Evidence architecture
 
-BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the feature is fully validated and the v0.4.0 release sequence proves completion. Implemented checkpoints are recorded in the active plan, not by prematurely removing backlog scope.
+BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the final real OCR and security correction loops, ready PR, merge, and deferred v0.4.0 release gates prove the milestone complete. The implementation and synthetic-E2E checkpoints are recorded in the active plan, not by prematurely removing backlog scope.
 
 ### BL-004: Define the common repository evidence model
 
