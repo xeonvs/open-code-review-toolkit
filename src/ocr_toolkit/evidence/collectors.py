@@ -736,7 +736,9 @@ def fact_deltas(records: Iterable[EvidenceRecord]) -> tuple[EvidenceDelta, ...]:
     base: dict[tuple[str, str, str], EvidenceRecord] = {}
     head: dict[tuple[str, str, str], EvidenceRecord] = {}
     for record in records:
-        if not isinstance(record.value, dict) or not isinstance(record.value.get("identity"), str):
+        if not isinstance(record.value, Mapping) or not isinstance(
+            record.value.get("identity"), str
+        ):
             continue
         key = (record.kind, record.component, record.value["identity"])
         if record.ref == RefRole.BASE:
@@ -748,9 +750,11 @@ def fact_deltas(records: Iterable[EvidenceRecord]) -> tuple[EvidenceDelta, ...]:
         before = base.get(key)
         after = head.get(key)
         before_value = (
-            before.value.get("fact") if before and isinstance(before.value, dict) else None
+            before.value.get("fact") if before and isinstance(before.value, Mapping) else None
         )
-        after_value = after.value.get("fact") if after and isinstance(after.value, dict) else None
+        after_value = (
+            after.value.get("fact") if after and isinstance(after.value, Mapping) else None
+        )
         change = "removed" if after is None else "added" if before is None else "changed"
         if before is not None and after is not None and before_value == after_value:
             continue

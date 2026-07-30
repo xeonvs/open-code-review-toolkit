@@ -20,6 +20,18 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 14. A deferral is a blocked or pending release state, not successful closure. Preserve the exact continuation point so a later agent does not infer that a development build satisfied a stable-release promise.
 15. Keep the toolkit release version single-sourced from VCS tags through `hatch-vcs`. Runtime code reads `ocr_toolkit.__version__`; it must not duplicate an upcoming or current release literal in servers, user agents, reports, or tests. Schema, wire-protocol, fixture, and qualified-upstream versions are separate compatibility contracts: use explicitly named constants and change them only with their own migration or qualification evidence.
 
+## Boundary Invariants
+
+1. Enforce limits while consuming or producing data, not after an unbounded operation completes. Every limit names and tests its unit: bytes, code points, lines, records, or elapsed time.
+2. Treat repository content, persisted evidence, subprocess output, inherited environment, and working-directory imports as untrusted at every boundary. Revalidate and redact on load even when the toolkit created the artifact.
+3. Bind Git plumbing to the validated repository and immutable refs. Remove caller-controlled repository/object-store environment and disable replace-object behavior.
+4. Test semantic parsers against the external format, including key reordering, indentation width, scalar/mapping alternatives, markers, optional fields, status variants, digests, URLs, and bounded malformed-input degradation.
+5. Keep related state transitions atomic: snapshots, indexes, deltas, receipts, and reports must not reference records or mandatory fields that were rejected, truncated, or omitted.
+6. Prove executable integrations from installed artifacts with restricted environments, hostile working-directory shadow modules, private permissions, and the real protocol client when available.
+7. Compose mandatory report metadata once and apply it to skipped, clean, warning, error, and finding outcomes through one invariant matrix.
+8. Profile realistic bounded data by separating cold-start validation from steady-state requests; optimize the measured bottleneck rather than protocol dispatch by assumption.
+9. Before implementing a parser or trust boundary, record the grammar, normalization and degradation policies, budget units, inherited-process state, and adversarial fixtures in the active plan or tests.
+
 ## Documentation Ownership
 
 - `README.md` owns the concise public introduction and quick start.

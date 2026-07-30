@@ -4,14 +4,37 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePosixPath
+from types import MappingProxyType
 from typing import TypeAlias, cast
 
 EvidenceValue: TypeAlias = (
-    "bool | int | float | str | list[EvidenceValue] | dict[str, EvidenceValue] | None"
+    "bool | int | float | str | list[EvidenceValue] | tuple[EvidenceValue, ...] "
+    "| Mapping[str, EvidenceValue] | None"
 )
+
+
+def _freeze_value(value: EvidenceValue) -> EvidenceValue:
+    """Return a recursively immutable JSON-compatible value."""
+
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze_value(item) for key, item in value.items()})
+    return value
+
+
+def _thaw_value(value: EvidenceValue) -> EvidenceValue:
+    """Return a fresh ordinary JSON value for serialization callers."""
+
+    if isinstance(value, (list, tuple)):
+        return [_thaw_value(item) for item in value]
+    if isinstance(value, Mapping):
+        return {key: _thaw_value(item) for key, item in value.items()}
+    return value
 
 
 class RefRole(str, Enum):
@@ -65,11 +88,11 @@ def _validate_value(value: EvidenceValue, *, depth: int = 0) -> None:
         if value != value or value in {float("inf"), float("-inf")}:
             raise ValueError("evidence value contains a non-finite number")
         return
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         for item in value:
             _validate_value(item, depth=depth + 1)
         return
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         for key, item in value.items():
             if not isinstance(key, str):
                 raise ValueError("evidence object keys must be strings")
@@ -113,6 +136,7 @@ class EvidenceRecord:
         ):
             raise ValueError("kind must contain dot-separated alphanumeric identifiers")
         _validate_value(self.value)
+        object.__setattr__(self, "value", _freeze_value(self.value))
         object.__setattr__(self, "source_path", _normalize_source_path(self.source_path))
         if self.commit_sha and (
             len(self.commit_sha) != 40 or not all(c in "0123456789abcdef" for c in self.commit_sha)
@@ -124,7 +148,7 @@ class EvidenceRecord:
             raise ValueError("provenance must contain between 1 and 256 characters")
         identity = {
             "kind": self.kind,
-            "value": self.value,
+            "value": _thaw_value(self.value),
             "source_path": self.source_path,
             "ref": self.ref.value,
             "commit_sha": self.commit_sha,
@@ -144,7 +168,7 @@ class EvidenceRecord:
         return {
             "id": self.id,
             "kind": self.kind,
-            "value": self.value,
+            "value": _thaw_value(self.value),
             "source_path": self.source_path,
             "ref": self.ref.value,
             "commit_sha": self.commit_sha,
@@ -176,19 +200,35 @@ class EvidenceRecord:
             raise ValueError("evidence record is missing required fields")
         if not raw.keys() <= allowed:
             raise ValueError("evidence record contains unknown fields")
+        defaults = {
+            "component": "repository",
+            "provenance": "unknown",
+            "confidence": Confidence.EXACT.value,
+            "trust": TrustClass.DERIVED.value,
+            "sensitivity": Sensitivity.PUBLIC.value,
+        }
+        metadata: dict[str, str] = {}
+        for name in ("kind", "source_path", "ref", "commit_sha", *defaults):
+            candidate = raw.get(name, defaults.get(name))
+            if not isinstance(candidate, str):
+                raise ValueError(f"evidence record field {name!r} must be a string")
+            metadata[name] = candidate
+        staleness = raw.get("staleness")
+        if staleness is not None and not isinstance(staleness, str):
+            raise ValueError("evidence record field 'staleness' must be a string or null")
         value = cast(EvidenceValue, raw["value"])
         record = cls(
-            kind=str(raw["kind"]),
+            kind=metadata["kind"],
             value=value,
-            source_path=str(raw["source_path"]),
-            ref=RefRole(str(raw["ref"])),
-            commit_sha=str(raw["commit_sha"]),
-            component=str(raw.get("component", "repository")),
-            provenance=str(raw.get("provenance", "unknown")),
-            confidence=Confidence(str(raw.get("confidence", Confidence.EXACT.value))),
-            trust=TrustClass(str(raw.get("trust", TrustClass.DERIVED.value))),
-            sensitivity=Sensitivity(str(raw.get("sensitivity", Sensitivity.PUBLIC.value))),
-            staleness=None if raw.get("staleness") is None else str(raw["staleness"]),
+            source_path=metadata["source_path"],
+            ref=RefRole(metadata["ref"]),
+            commit_sha=metadata["commit_sha"],
+            component=metadata["component"],
+            provenance=metadata["provenance"],
+            confidence=Confidence(metadata["confidence"]),
+            trust=TrustClass(metadata["trust"]),
+            sensitivity=Sensitivity(metadata["sensitivity"]),
+            staleness=staleness,
         )
         if raw.get("id") not in {None, record.id}:
             raise ValueError("evidence record id does not match its canonical content")
@@ -214,6 +254,9 @@ class EvidenceSnapshot:
         for record in self.records:
             if record.ref is not self.ref or record.commit_sha != self.commit_sha:
                 raise ValueError("snapshot record ref and commit must match the snapshot")
+        if not all(isinstance(item, str) for item in self.diagnostics):
+            raise ValueError("snapshot diagnostics must be strings")
+        object.__setattr__(self, "diagnostics", tuple(self.diagnostics))
         # Record values may contain dicts or lists and therefore are intentionally
         # not hashable. Content-addressed IDs provide safe deduplication.
         unique = {record.id: record for record in self.records}
@@ -241,3 +284,5 @@ class EvidenceDelta:
             raise ValueError("unsupported evidence delta state")
         _validate_value(self.before)
         _validate_value(self.after)
+        object.__setattr__(self, "before", _freeze_value(self.before))
+        object.__setattr__(self, "after", _freeze_value(self.after))

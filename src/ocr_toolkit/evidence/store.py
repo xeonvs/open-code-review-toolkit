@@ -8,6 +8,7 @@ import re
 import stat
 import tempfile
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -69,6 +70,16 @@ class EvidenceStoreLimits:
     def __post_init__(self) -> None:
         """Reject unusable or unbounded limit configurations."""
 
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in (
+                self.max_records,
+                self.max_records_per_kind,
+                self.max_bytes,
+                self.max_value_chars,
+            )
+        ):
+            raise EvidenceStoreError("evidence store limits must be integers")
         if not 1 <= self.max_records <= 100_000:
             raise EvidenceStoreError("max_records must be between 1 and 100000")
         if not 1 <= self.max_records_per_kind <= self.max_records:
@@ -86,9 +97,9 @@ def _redact_value(value: EvidenceValue) -> EvidenceValue:
 
     if isinstance(value, str):
         return redact_env_secret_values(redact_sensitive(value))
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_redact_value(item) for item in value]
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {
             key: (
                 "[REDACTED]"
@@ -98,6 +109,23 @@ def _redact_value(value: EvidenceValue) -> EvidenceValue:
             for key, item in value.items()
         }
     return value
+
+
+def _safe_value(value: EvidenceValue, max_chars: int) -> EvidenceValue:
+    """Redact a nested value and enforce the schema's code-point budget."""
+
+    redacted = _redact_value(value)
+    if len(json.dumps(redacted, ensure_ascii=False)) > max_chars:
+        raise EvidenceStoreError(f"evidence value exceeds {max_chars} characters")
+    return redacted
+
+
+def _safe_diagnostic(message: object) -> str:
+    """Return one redacted diagnostic within the public schema limit."""
+
+    if not isinstance(message, str) or not message or len(message) > 1024:
+        raise EvidenceStoreError("evidence diagnostic must contain between 1 and 1024 characters")
+    return redact_env_secret_values(redact_sensitive(message))
 
 
 @dataclass(slots=True)
@@ -117,7 +145,11 @@ class EvidenceStore:
 
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
-        redacted_value = _redact_value(record.value)
+        try:
+            redacted_value = _safe_value(record.value, self.limits.max_value_chars)
+        except EvidenceStoreError:
+            self._diagnose_once(f"omitted oversized {record.kind} evidence value")
+            return False
         redacted = EvidenceRecord(
             kind=record.kind,
             value=redacted_value,
@@ -129,13 +161,12 @@ class EvidenceStore:
             confidence=record.confidence,
             trust=record.trust,
             sensitivity=(
-                record.sensitivity if redacted_value == record.value else Sensitivity.REDACTED
+                record.sensitivity
+                if redacted_value == record.to_dict()["value"]
+                else Sensitivity.REDACTED
             ),
             staleness=record.staleness,
         )
-        if len(json.dumps(redacted.value, ensure_ascii=False)) > self.limits.max_value_chars:
-            self._diagnose_once(f"omitted oversized {redacted.kind} evidence value")
-            return False
         if redacted.id in self._records:
             return True
         if len(self._records) >= self.limits.max_records:
@@ -157,11 +188,7 @@ class EvidenceStore:
     def add_diagnostic(self, message: str) -> None:
         """Record one bounded public coverage notice without repeated noise."""
 
-        if not message or len(message) > 1024:
-            raise EvidenceStoreError(
-                "evidence diagnostic must contain between 1 and 1024 characters"
-            )
-        self._diagnose_once(redact_env_secret_values(redact_sensitive(message)))
+        self._diagnose_once(_safe_diagnostic(message))
 
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
@@ -181,7 +208,7 @@ class EvidenceStore:
                     "ref": snapshot.ref.value,
                     "commit_sha": snapshot.commit_sha,
                     "record_ids": [record.id for record in snapshot.records],
-                    "diagnostics": list(snapshot.diagnostics),
+                    "diagnostics": [_safe_diagnostic(message) for message in snapshot.diagnostics],
                 }
         return {
             "schema_version": SCHEMA_VERSION,
@@ -193,12 +220,12 @@ class EvidenceStore:
                     "component": delta.component,
                     "identity": delta.identity,
                     "change": delta.change,
-                    "before": delta.before,
-                    "after": delta.after,
+                    "before": _safe_value(delta.before, self.limits.max_value_chars),
+                    "after": _safe_value(delta.after, self.limits.max_value_chars),
                 }
                 for delta in self.deltas
             ],
-            "diagnostics": sorted(self.diagnostics),
+            "diagnostics": sorted(_safe_diagnostic(item) for item in self.diagnostics),
             "limits": {
                 "max_records": self.limits.max_records,
                 "max_records_per_kind": self.limits.max_records_per_kind,
@@ -262,10 +289,10 @@ class EvidenceStore:
             raise EvidenceStoreError("evidence store limits must be an object")
         try:
             limits = EvidenceStoreLimits(
-                max_records=int(limits_raw["max_records"]),
-                max_records_per_kind=int(limits_raw["max_records_per_kind"]),
-                max_bytes=int(limits_raw["max_bytes"]),
-                max_value_chars=int(limits_raw["max_value_chars"]),
+                max_records=limits_raw["max_records"],
+                max_records_per_kind=limits_raw["max_records_per_kind"],
+                max_bytes=limits_raw["max_bytes"],
+                max_value_chars=limits_raw["max_value_chars"],
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise EvidenceStoreError("evidence store limits are invalid") from exc
@@ -286,7 +313,11 @@ class EvidenceStore:
             isinstance(item, str) for item in diagnostics
         ):
             raise EvidenceStoreError("evidence store diagnostics must be strings")
-        store.diagnostics = list(cast(list[str], diagnostics))
+        try:
+            for diagnostic in cast(list[str], diagnostics):
+                store.add_diagnostic(diagnostic)
+        except EvidenceStoreError as exc:
+            raise EvidenceStoreError("invalid evidence store diagnostic") from exc
         store._read_snapshots(raw.get("snapshots", {}))
         store._read_deltas(raw.get("deltas", []))
         return store
@@ -311,14 +342,19 @@ class EvidenceStore:
             ):
                 raise EvidenceStoreError(f"invalid {name} snapshot diagnostics")
             try:
-                records = tuple(self._records[str(record_id)] for record_id in ids)
+                commit_sha = item.get("commit_sha")
+                if not isinstance(commit_sha, str):
+                    raise ValueError("snapshot commit_sha must be a string")
+                records = tuple(self._records[record_id] for record_id in ids)
                 snapshot = EvidenceSnapshot(
                     ref=role,
-                    commit_sha=str(item["commit_sha"]),
+                    commit_sha=commit_sha,
                     records=records,
-                    diagnostics=tuple(cast(list[str], diagnostics)),
+                    diagnostics=tuple(
+                        _safe_diagnostic(message) for message in cast(list[str], diagnostics)
+                    ),
                 )
-            except (KeyError, TypeError, ValueError) as exc:
+            except (EvidenceStoreError, KeyError, TypeError, ValueError) as exc:
                 raise EvidenceStoreError(f"invalid {name} evidence snapshot") from exc
             setattr(self, name, snapshot)
 
@@ -332,16 +368,28 @@ class EvidenceStore:
             for item in raw:
                 if not isinstance(item, dict):
                     raise ValueError("evidence delta must be an object")
+                metadata: dict[str, str] = {}
+                for name in ("kind", "component", "identity", "change"):
+                    candidate = item.get(name)
+                    if not isinstance(candidate, str):
+                        raise ValueError(f"evidence delta field {name!r} must be a string")
+                    metadata[name] = candidate
                 deltas.append(
                     EvidenceDelta(
-                        kind=str(item["kind"]),
-                        component=str(item["component"]),
-                        identity=str(item["identity"]),
-                        change=str(item["change"]),
-                        before=cast(EvidenceValue, item.get("before")),
-                        after=cast(EvidenceValue, item.get("after")),
+                        kind=metadata["kind"],
+                        component=metadata["component"],
+                        identity=metadata["identity"],
+                        change=metadata["change"],
+                        before=_safe_value(
+                            cast(EvidenceValue, item.get("before")),
+                            self.limits.max_value_chars,
+                        ),
+                        after=_safe_value(
+                            cast(EvidenceValue, item.get("after")),
+                            self.limits.max_value_chars,
+                        ),
                     )
                 )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (EvidenceStoreError, TypeError, ValueError) as exc:
             raise EvidenceStoreError("invalid evidence delta") from exc
         self.deltas = tuple(deltas)

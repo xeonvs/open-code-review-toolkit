@@ -30,12 +30,19 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Keep provider-neutral behavior in the core and provider-specific behavior behind adapters.
 - Keep runtime dependencies at zero unless a documented package boundary requires one.
 - Treat repository content as untrusted input and preserve bounded reads, redaction, and safe rendering.
+- Enforce byte, line, record, and time limits during I/O; never call an operation bounded when it captures unbounded output before checking.
+- Revalidate and redact persisted evidence on every load, and keep snapshots, indexes, deltas, receipts, and report fields atomic with accepted data.
+- Isolate Git plumbing from caller-controlled Git environment and replacement refs; never import executable code from the analyzed repository.
+- Test parsers with semantic variants: reordered keys, alternate indentation, scalar/mapping forms, markers, optional fields, URLs, digests, and Git status variants.
+- Validate subprocess integrations from clean built artifacts with restricted `PATH`, a hostile repository shadow package, private permissions, and the real protocol client when practical.
+- Apply mandatory report metadata through one shared outcome matrix covering skipped, clean, warning, error, and finding states.
 - Give every new runtime module, class, and function a purpose-focused docstring. Add concise comments at non-obvious security, compatibility, and state-transition boundaries; explain why the constraint exists rather than narrating the code.
 - Use only synthetic names, hosts, repositories, and payloads in public tests, docs, and examples.
 - Do not add legacy namespace shims or historical integrations that are outside the public contract.
 - Prefer targeted validation while iterating; run the complete validation matrix before release or commit gates.
 - When qualifying an upstream release, classify every changelog item as a toolkit-owned contract change, a future-backlog impact, or release-note-only context. Do not create toolkit code or roadmap work for upstream capabilities the toolkit does not consume.
 - Use `scripts/quality.sh` for routine lint, type, coverage, and test runs so successful tool output stays in ignored `.quality-logs/`.
+- Use the boundary checklist in `docs/development.md` and the failure-mode corrections in `docs/codex/AGENT_EXECUTION_PITFALLS.md`; `docs/engineering/project_principles.md` is authoritative if shorthand wording differs.
 
 ## Change Closure
 

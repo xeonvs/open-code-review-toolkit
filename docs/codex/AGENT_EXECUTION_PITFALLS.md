@@ -58,3 +58,43 @@ This note records recurring execution mistake patterns discovered during real wo
 4. Keep independent foundations parallel and join them only at the first interface that consumes both.
 5. Select ecosystem and framework priorities from anonymized inventory, deterministic detection, synthetic fixtures, and expected review impact rather than parser familiarity.
 6. Review critical forbidden and required edges explicitly when the backlog changes. Do not encode mutable item counts, identifiers, wording, or temporary dependency edges into the permanent product test suite.
+
+## Treating post-hoc checks as bounded I/O
+
+**Failure mode:** Code captures an entire Git response or newline-delimited request and only then checks its size or item count. Character counts are also used where the contract is bytes.
+
+**Why it happens:** Ordinary fixtures make the final value look bounded, hiding the allocation and decoding that already happened. ASCII-only tests hide byte/code-point divergence.
+
+**Correction:** Bound the read itself, stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git output, and subprocess termination.
+
+## Trusting toolkit-created evidence on reload
+
+**Failure mode:** Collection validates records, but reload assigns snapshots, deltas, or diagnostics directly. A replaced private artifact bypasses the original redaction, size, or cross-reference checks.
+
+**Why it happens:** File ownership is confused with future content integrity. Persistence is not treated as a fresh deserialization boundary.
+
+**Correction:** Validate, bound, normalize, redact, and cross-check every persisted field on every read. Test missing references, oversized nested delta values, secrets, control characters, hard links, and schema/type mismatches.
+
+## Testing only the canonical parser spelling
+
+**Failure mode:** A parser accepts fixtures that mirror its implementation but rejects equivalent valid syntax: reordered keys, another indentation width, scalar sources containing colons, environment markers, alternate digests, malformed optional URLs, or additional Git status letters.
+
+**Why it happens:** Fixtures come from the happy-path algorithm rather than the external format's semantic grammar and degradation policy.
+
+**Correction:** Write a contract matrix before implementation. Cover equivalent forms, optional and unknown fields, malformed optional values, case variants, marker semantics, rename/copy/type changes, and bounded degradation that preserves unrelated facts.
+
+## Proving subprocess integration only with mocks
+
+**Failure mode:** A command works in unit tests but fails under the real caller because `PATH`, working directory, artifact contents, protocol revision, permissions, or import resolution differs.
+
+**Why it happens:** Function tests are mistaken for installation and lifecycle tests. Editable environments accidentally supply executables and modules absent from clean installs.
+
+**Correction:** Test built wheel and sdist artifacts in clean environments. Restrict `PATH`, add a hostile repository-local shadow package, verify private modes, use the exact protocol client when practical, and exercise the complete process lifecycle.
+
+## Letting outcome branches drift
+
+**Failure mode:** Normal and error reports include mandatory evidence or usage metadata, while a clean or skipped branch omits it.
+
+**Why it happens:** Outcomes are assembled independently and tests assert prose rather than shared invariants.
+
+**Correction:** Compose mandatory metadata once and apply it to every outcome. Test skipped, clean, warning, error, and finding states through one table, including zero-value omission and optional emoji behavior.
