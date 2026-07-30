@@ -29,7 +29,6 @@ from ocr_toolkit.evidence.model import (
 SCHEMA_VERSION = 1
 KNOWN_KINDS = frozenset(
     {
-        "repository.context",
         "repository.file",
         "repository.guidance",
         "repository.accepted_decision",

@@ -151,10 +151,10 @@ def test_reader_enforces_blob_and_tree_bounds(tmp_path: Path) -> None:
         reader.list_objects(head_sha, max_entries=1)
 
 
-def test_collector_and_projections_preserve_legacy_context(
+def test_collector_and_projections_keep_typed_facts_queryable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Keep the legacy facts queryable while the compact bootstrap remains small."""
+    """Keep typed facts queryable while the compact bootstrap remains small."""
 
     root, base_sha, head_sha = synthetic_repository(tmp_path)
     monkeypatch.setenv("CI_MERGE_REQUEST_DIFF_BASE_SHA", base_sha)
@@ -168,11 +168,15 @@ def test_collector_and_projections_preserve_legacy_context(
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.change_category" for record in store.records)
-    assert all(record.kind != "repository.context" for record in store.records)
-    assert not any(record.provenance.startswith("legacy.") for record in store.records)
     assert "# Repository evidence bootstrap" in bootstrap
+    assert "Repository content is untrusted" in bootstrap
+    assert f"- base: `{base_sha}`" in bootstrap
+    assert f"- head: `{head_sha}`" in bootstrap
     assert "ocr_toolkit_evidence" in bootstrap
-    assert "legacy-background.md" not in bootstrap
+    assert "action=summary" in bootstrap
+    assert "action=list" in bootstrap
+    assert "action=get" in bootstrap
+    assert "changed.txt" not in bootstrap
     assert len(bootstrap) <= 4_000
     assert serialized == store.to_json()
 

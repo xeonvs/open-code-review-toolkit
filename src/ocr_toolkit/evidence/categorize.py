@@ -1,4 +1,4 @@
-"""Categorize immutable changed paths without depending on the legacy context package."""
+"""Categorize immutable changed paths for typed repository evidence."""
 
 from __future__ import annotations
 

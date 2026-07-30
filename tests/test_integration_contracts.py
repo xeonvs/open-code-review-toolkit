@@ -1,0 +1,121 @@
+"""Stable integration contracts independent of the retired context renderer."""
+
+from __future__ import annotations
+
+import ast
+import json
+
+from tests.support import HELPER_DIR, PROJECT_ROOT
+
+
+def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
+    """Keep project additions narrow so OCR owns generic language guidance."""
+
+    rules = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))["rules"]
+    paths = [rule["path"] for rule in rules]
+
+    assert not {
+        "**/*.{py,pyi}",
+        "**/*",
+        "**/*.go",
+        "**/*.php",
+        "**/*.{js,jsx,ts,tsx,mjs,cjs}",
+        "**/*.{tf,tfvars,hcl}",
+    }.intersection(paths)
+    assert paths.count("**/*.sql") == 1
+    assert "Determine the SQL dialect" in rules[paths.index("**/*.sql")]["rule"]
+    assert (
+        "{requirements.yml,requirements.yaml,**/requirements.yml,**/requirements.yaml}"
+    ) in paths
+    assert "{pyproject.toml,uv.lock,**/pyproject.toml,**/uv.lock}" in paths
+
+
+def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
+    """Freeze the intentional lint prerequisite and manual diagnostic boundary."""
+
+    workflow = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
+    review_job, self_test = workflow.split("open_code_review_self_test:", 1)
+
+    assert workflow.index("  - lint") < workflow.index("  - ai_review")
+    assert 'OCR_LLM_VALIDATE_MODEL: "false"' in workflow
+    assert "lint:\n  stage: lint" in workflow
+    assert "open_code_review:" in review_job
+    assert "when: manual" not in review_job.split("open_code_review:", 1)[1]
+    assert "when: manual" in self_test
+    assert "env -u OCR_LLM_TOKEN ocr-ci preflight" in self_test
+
+
+def test_gitlab_docs_match_the_current_review_surface() -> None:
+    """Keep documented commands and ownership boundaries aligned with CI."""
+
+    docs = (PROJECT_ROOT / "docs" / "gitlab.md").read_text(encoding="utf-8")
+    configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    workflow = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
+
+    for command in ("ocr-ci review", "ocr-ci post"):
+        assert command in docs
+        assert command in workflow
+    for obsolete in ("git diff --name-only", "ocr review --commit", "ocr config set"):
+        assert obsolete not in docs
+        assert obsolete not in workflow
+    assert "OCR_LLM_VALIDATE_MODEL" in configuration
+    assert "OCR_LLM_VALIDATE_MODEL" in workflow
+    assert "OCR_TOOLKIT_VERSION" in workflow
+    assert "OCR_TOOLKIT_CHECKSUMS_URL" in workflow
+    assert ".opencodereview/accepted-decisions.md" in configuration
+    assert "ocr-accept: generated-client-timeout" in configuration
+    assert "not a source-code parser" in configuration
+    assert "Target/base guidance may describe policy" in security
+    assert "changed source/head guidance and accepted decisions cannot authorize" in security
+    assert 'OCR_VERSION: "v1.8.0"' in workflow
+    assert "v1.8.0" in docs
+    assert "v1.8.0" in security
+    assert (
+        'OCR_SHA256: "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94"' in workflow
+    )
+    assert "`Russian` is one example" in docs
+    assert "ocr-ci preflight" in workflow
+    assert "ocr-ci configure" in workflow
+    assert "uv run pytest tests" in workflow
+    assert "--background-file" not in workflow
+    assert 'set -- "$@" --background ' not in workflow
+    assert "review-background.md" not in workflow
+    assert '--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"' in workflow
+    assert '--to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"' in workflow
+    assert "Pin Open Code Review `v1.8.0` and verify its checksum" in security
+    assert "when: manual" in workflow
+    assert "env -u OCR_LLM_TOKEN" in workflow
+
+
+def test_gitlab_example_does_not_inline_python_helpers() -> None:
+    """Keep CI logic in the tested package rather than ad-hoc heredocs."""
+
+    workflow = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
+
+    assert "<<'PY'" not in workflow
+    assert "OCR review scope:" not in workflow
+
+
+def test_test_modules_have_no_duplicate_test_methods() -> None:
+    """Reject silent test replacement caused by duplicate class method names."""
+
+    duplicates: list[str] = []
+    for test_path in sorted((PROJECT_ROOT / "tests").glob("test_*.py")):
+        tree = ast.parse(test_path.read_text(encoding="utf-8"), filename=str(test_path))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            seen: dict[str, int] = {}
+            for child in node.body:
+                if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                previous = seen.get(child.name)
+                if previous is not None:
+                    duplicates.append(
+                        f"{test_path.name}:{node.name}.{child.name}: {previous} and {child.lineno}"
+                    )
+                else:
+                    seen[child.name] = child.lineno
+
+    assert duplicates == []

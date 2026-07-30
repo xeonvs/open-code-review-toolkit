@@ -36,3 +36,23 @@ def test_explicit_playbook_category_coexists_with_other_categories() -> None:
     )
 
     assert categories == {"ansible_playbooks": ("playbooks/deploy.yml",)}
+
+
+def test_categories_cover_ci_inventory_and_keep_declared_order() -> None:
+    """Preserve legacy review signals through the typed category registry."""
+
+    categories = categorize_paths(
+        [
+            "README.md",
+            ".gitlab-ci.yml",
+            "ops/inventory.ini",
+            "deploy/hosts.yml",
+            "roles/app/tasks/main.yml",
+        ]
+    )
+
+    assert list(categories) == ["ci", "ansible_roles", "ansible_inventory", "docs"]
+    assert categories["ansible_inventory"] == (
+        "deploy/hosts.yml",
+        "ops/inventory.ini",
+    )

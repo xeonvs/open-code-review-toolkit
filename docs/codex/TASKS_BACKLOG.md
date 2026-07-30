@@ -53,7 +53,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Dependencies:** BL-004 and BL-005.
 - **Activation trigger:** Current context output is characterized by regression fixtures.
 - **Goal:** Decompose `context/render.py` without changing trust or fail-closed behavior.
-- **Scoped deliverables:** Characterize current output with golden fixtures; move collectors behind evidence interfaces, add bounded storage, isolate bootstrap selection, and retain a renderer compatible with the current background contract during migration; remove each legacy collector only after parity or an explicitly approved behavior change is recorded.
+- **Scoped deliverables:** Characterize current output with regression fixtures; move collectors behind evidence interfaces, add bounded storage, isolate bootstrap selection, and retain the legacy renderer only as a migration oracle; remove it after non-empty semantic parity and the typed OCR/MCP lifecycle gates pass.
 - **Acceptance criteria:** Existing public context behavior remains covered; old/new paths cannot collect the same fact independently after migration; collectors are projection-independent; no bootstrap/MCP-specific duplicate collector path exists; rollout can compare projections deterministically before legacy removal.
 - **Exclusions:** New parser breadth, changing the hard output limit, or enabling built-in MCP.
 - **Validation:** Golden synthetic context fixtures, regression tests for truncation/redaction/guidance, and complete quality gate.
@@ -67,10 +67,10 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Dependencies:** Current OCR compatibility manifest, BL-004 through BL-006, and current MCP validation.
 - **Activation trigger:** Evidence collection and selection are projection-independent, and the supported OCR capability contract can validate MCP registration before review.
 - **Goal:** Replace large background inventories with a compact trusted overview while preserving on-demand access to every removed evidence class.
-- **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; retain `legacy_background` as compatibility and rollback mode; enable `compact_bootstrap` by default only after built-in MCP registration and capability validation succeed.
+- **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; remove the migration-only legacy background after semantic parity; enable the compact bootstrap only after built-in MCP registration and capability validation succeed.
 - **Acceptance criteria:** Bootstrap and MCP use the same evidence store and ship in one user-visible feature slice; compact mode never runs without a validated evidence server; registration failure fails closed or retains legacy mode according to the documented launch policy; detailed manifests remain available through MCP; omissions and degradation are explicit.
 - **Exclusions:** Raising the hard limit, copying full guidance, generic file reads, shell execution, GitLab access, external URL fetches, documentation storage, or a release that removes detailed background evidence before MCP access exists.
-- **Validation:** Budget and golden fixtures, protocol/root/traversal tests, registration/capability failures, legacy rollback, compact-mode gating, adversarial Markdown/redaction, and end-to-end synthetic OCR configuration.
+- **Validation:** Budget and golden fixtures, protocol/root/traversal tests, registration/capability failures, non-empty migration-oracle parity, compact-mode gating, adversarial Markdown/redaction, and end-to-end synthetic OCR configuration.
 - **Release classification expectation:** `release-required`.
 
 ## M2 Ecosystem and framework coverage

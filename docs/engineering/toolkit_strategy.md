@@ -73,7 +73,7 @@ Complete manifests, dependency inventories, guidance documents, and external iss
 
 The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. External MCP configuration is composed with this server rather than replacing it. The built-in server remains present even when replacement mode intentionally discards stale external OCR configuration. Reserved server and tool names prevent downstream configuration from shadowing built-in capabilities.
 
-Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. `legacy_background` remains the compatibility and rollback projection until the built-in server is registered and its OCR capability contract passes; `compact_bootstrap` must not become the default in an intermediate release that removes detailed facts without providing on-demand evidence.
+Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. The legacy background projection may be removed only after the built-in server is registered, its OCR capability contract passes, and semantic parity is proven on non-empty immutable ref evidence. `compact_bootstrap` must never remove detailed facts without providing the same facts on demand through the built-in MCP.
 
 ## Evidence domains
 

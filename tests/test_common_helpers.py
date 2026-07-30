@@ -18,7 +18,6 @@ from ocr_toolkit.common.redaction import (
     redact_url_userinfo,
     redact_url_userinfo_only,
 )
-from ocr_toolkit.context import settings as context_settings
 from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import settings
 from tests.support import (
@@ -143,28 +142,6 @@ class SettingsTests(unittest.TestCase):
 
         self.assertNotIn("secret-value", stderr.getvalue())
         self.assertIn("Invalid OCR_POST_MODE value", stderr.getvalue())
-
-    def test_context_int_settings_can_be_clamped(self) -> None:
-        with patched_env(OCR_BACKGROUND_MAX_BYTES="999999999"):
-            self.assertEqual(
-                context_settings.getenv_int(
-                    "OCR_BACKGROUND_MAX_BYTES",
-                    1,
-                    max_value=context_settings.MAX_BACKGROUND_MAX_BYTES,
-                ),
-                context_settings.MAX_BACKGROUND_MAX_BYTES,
-            )
-
-    def test_env_file_detection_is_case_insensitive(self) -> None:
-        self.assertTrue(context_settings.is_env_file(".ENV"))
-        self.assertTrue(context_settings.is_env_file(".Env.production"))
-        self.assertTrue(context_settings.is_env_file("APP.ENV"))
-        self.assertTrue(context_settings.is_env_file("service.env.yaml"))
-        self.assertTrue(context_settings.is_env_file("service.env-prod.json"))
-        self.assertFalse(context_settings.is_env_file("environment.yml"))
-        self.assertTrue(context_settings.is_env_file("service.env.yaml"))
-        self.assertTrue(context_settings.is_env_file("service.env-prod.json"))
-        self.assertFalse(context_settings.is_env_file("environment.yml"))
 
 
 class RedactionTests(unittest.TestCase):
