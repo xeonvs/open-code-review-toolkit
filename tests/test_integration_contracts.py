@@ -102,14 +102,21 @@ def test_security_workflow_pins_the_local_gitleaks_version() -> None:
 
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
     wrapper = (PROJECT_ROOT / "scripts" / "gitleaks.sh").read_text(encoding="utf-8")
+    assert "Load pinned Gitleaks version" in workflow
+    assert "./scripts/gitleaks.sh --version" in workflow
+    assert "GITLEAKS_VERSION:" not in workflow
+    assert wrapper.count("GITLEAKS_VERSION=") == 1
 
-    assert 'GITLEAKS_VERSION: "8.24.3"' in workflow
-    assert "GITLEAKS_VERSION=8.24.3" in wrapper
+
+def test_release_workflows_do_not_duplicate_the_security_gitleaks_job() -> None:
+    """Keep secret scanning local-before-push and in one hosted security job."""
+
     for workflow_name in ("testpypi.yml", "release.yml"):
         workflow = (PROJECT_ROOT / ".github" / "workflows" / workflow_name).read_text(
             encoding="utf-8"
         )
-        assert './scripts/install_gitleaks.sh "${RUNNER_TEMP}/gitleaks-bin"' in workflow
+        assert "gitleaks-action" not in workflow
+        assert "install_gitleaks" not in workflow
 
 
 def test_test_modules_have_no_duplicate_test_methods() -> None:

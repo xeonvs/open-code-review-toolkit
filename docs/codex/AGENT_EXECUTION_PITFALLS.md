@@ -38,7 +38,7 @@ This note records recurring execution mistake patterns discovered during real wo
 
 **Why it happens:** Secret scanning is treated as a remote workflow concern or as a working-tree scan. The local release gate therefore does not reproduce the CI action's pinned scanner version and first-parent commit range before history is published.
 
-**Required prevention:** Run the repository-owned Gitleaks wrapper before every push and before expensive closure validation. Keep its scanner version explicit and identical to CI, scan the complete first-parent feature range, fail closed if the base ref or exact tool version is unavailable, and rewrite unpublished feature history when the finding exists only in an intermediate commit. Do not hide provider-shaped fixtures behind an allowlist when an equally useful non-secret-shaped synthetic value proves the contract.
+**Required prevention:** Run `scripts/gitleaks.sh` before every push and before expensive closure validation. Keep its scanner version explicit, make CI read the same pin, scan the complete first-parent feature range, fail closed if the base ref or exact tool version is unavailable, and rewrite unpublished feature history when the finding exists only in an intermediate commit. Do not hide provider-shaped fixtures behind an allowlist when an equally useful non-secret-shaped synthetic value proves the contract.
 
 ## Tooling And Validation Hygiene
 

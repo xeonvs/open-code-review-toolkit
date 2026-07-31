@@ -1,15 +1,21 @@
 #!/bin/sh
 set -eu
 
-GITLEAKS_VERSION=8.24.3
-readonly GITLEAKS_VERSION
-
 usage() {
-  echo "usage: scripts/gitleaks.sh [<base-ref> [<head-ref>]]" >&2
+  echo "usage: scripts/gitleaks.sh [--version | <base-ref> [<head-ref>]]" >&2
   exit 2
 }
 
 [ "$#" -le 2 ] || usage
+
+GITLEAKS_VERSION=8.24.3
+readonly GITLEAKS_VERSION
+
+if [ "${1:-}" = --version ]; then
+  [ "$#" -eq 1 ] || usage
+  printf '%s\n' "$GITLEAKS_VERSION"
+  exit 0
+fi
 
 repository_root=$(git rev-parse --show-toplevel)
 head_ref=${2:-HEAD}

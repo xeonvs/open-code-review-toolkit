@@ -42,7 +42,7 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Give every new runtime module, class, and function a purpose-focused docstring. Add concise comments at non-obvious security, compatibility, and state-transition boundaries; explain why the constraint exists rather than narrating the code.
 - Use only synthetic names, hosts, repositories, and payloads in public tests, docs, and examples.
 - Do not add legacy namespace shims or historical integrations that are outside the public contract.
-- Prefer targeted validation while iterating; run the local history-aware Gitleaks gate before pushing rewritten or newly committed branch history, and run the complete validation matrix before release or commit gates.
+- Prefer targeted validation while iterating; run `scripts/gitleaks.sh` before pushing rewritten or newly committed branch history, and run the complete Python validation matrix before release or commit gates.
 - When qualifying an upstream release, classify every changelog item as a toolkit-owned contract change, a future-backlog impact, or release-note-only context. Do not create toolkit code or roadmap work for upstream capabilities the toolkit does not consume.
 - Use `scripts/quality.sh` for routine lint, type, coverage, and test runs so successful tool output stays in ignored `.quality-logs/`.
 - Use the boundary checklist in `docs/development.md` and the failure-mode corrections in `docs/codex/AGENT_EXECUTION_PITFALLS.md`; `docs/engineering/project_principles.md` is authoritative if shorthand wording differs.
