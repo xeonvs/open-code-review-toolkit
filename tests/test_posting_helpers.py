@@ -622,6 +622,74 @@ class PostingIdentityTests(unittest.TestCase):
         assert "No supported files changed." in notes[0]
         assert "did not complete cleanly" not in notes[0]
 
+    def test_budget_exceeded_without_comments_posts_partial_outcome(self) -> None:
+        notes: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow, "delete_previous_bot_comments_if_collected", lambda *_args: None
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "budget_exceeded",
+                    "summary": {"budget_exceeded": True, "total_tokens": 321},
+                    "comments": [],
+                    "warnings": [
+                        {
+                            "type": "token_budget_reached",
+                            "message": "Token budget reached; partial results returned.",
+                        }
+                    ],
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("partial result", notes[0])
+        self.assertIn("Token budget reached", notes[0])
+        self.assertIn("321 total", notes[0])
+        self.assertNotIn("No issues found", notes[0])
+
+    def test_budget_status_and_summary_must_agree(self) -> None:
+        calls: list[str] = []
+
+        with patched_attr(
+            workflow,
+            "invalid_ocr_schema_exit",
+            lambda _config, message, **_kwargs: calls.append(message) or 1,
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "budget_exceeded",
+                    "summary": {"budget_exceeded": False},
+                    "comments": [],
+                    "warnings": [],
+                },
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(calls, ["fields 'status' and 'summary.budget_exceeded' disagree"])
+
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
 
@@ -1168,6 +1236,28 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertIn("✅ No comments generated. Looks good to me.", summary)
         self.assertNotIn("tool calls", summary)
+
+    def test_budget_summary_and_guide_mark_findings_as_partial(self) -> None:
+        guide = posting_formatting.format_reviewer_guide(
+            [{"path": "example.py", "line": 7, "content": "Validate input."}],
+            0,
+            outcome_status="budget_exceeded",
+        )
+        summary = posting_formatting.summarize_result(
+            total=1,
+            inline_count=1,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="budget_exceeded",
+            reviewer_guide=guide,
+            token_usage_summary="- token usage: 321 total",
+            emoji=True,
+        )
+
+        self.assertIn("⚠️ Review stopped after reaching its token budget", summary)
+        self.assertIn("Review scope:", summary)
+        self.assertIn("partial review", summary)
+        self.assertIn("321 total", summary)
 
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(

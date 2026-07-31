@@ -84,7 +84,12 @@ def _mcp_usage_receipt(
     """Return bounded MCP usage tied to one validated review-time registry."""
 
     status = payload.get("status")
-    if status not in {"success", "completed_with_warnings", "completed_with_errors"}:
+    if status not in {
+        "success",
+        "completed_with_warnings",
+        "completed_with_errors",
+        "budget_exceeded",
+    }:
         if status == "skipped":
             tool_calls = payload.get("tool_calls")
             by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None

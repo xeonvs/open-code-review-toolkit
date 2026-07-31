@@ -226,6 +226,39 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
     }
 
 
+def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> None:
+    """Treat a budget stop as a partial completed review, not unsupported output."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "budget_exceeded",
+                "summary": {"budget_exceeded": True, "total_tokens": 321},
+                "comments": [{"path": "example.py", "line": 7}],
+                "tool_calls": {
+                    "total": 2,
+                    "by_tool": {"ocr_toolkit_evidence": 2},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+        "ocr_toolkit_evidence": 2
+    }
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert persisted["summary"] == {"budget_exceeded": True, "total_tokens": 321}
+    assert persisted["comments"] == [{"path": "example.py", "line": 7}]
+
+
 def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) -> None:
     """Do not replace a result name that aliases another filesystem entry."""
 

@@ -1,5 +1,5 @@
 {
-  "monitoring_floor": "1.8.0",
+  "monitoring_floor": "1.8.2",
   "releases": [
     {
       "assets": [
@@ -64,9 +64,101 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.0",
       "status": "tested",
       "version": "1.8.0"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "070b9fc4723f60e09ed04af328b5fa2b502cfb311b22d6b476d9d2069d4682c0",
+          "size": 46210960
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "62bcdf34266fdf6de36a0a9da428e01e049fbbc8cd9aba8d28c9218f294af5b6",
+          "size": 43933682
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "ba1267a7b54be82642971d5fc2b0bb4378f99609a339f85cdf9f660f14286c9b",
+          "size": 44720290
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "7e796f2de61580af6a041133551c40266ddbf79d3bfc6c9d561153818bc490b5",
+          "size": 42205346
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "e155faf79fed55ff63e0d4f91e21300fd772b38f10e5e745b51334ab47114270",
+          "size": 45924352
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "9280960e2b685398d22f3f77aa4abdb94b6ababdb83c6f2c41c0423d07b49a30",
+          "size": 42799104
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "779c60c9828d536654be19371aea2c2a56547eea8454fb9e5bf86984280271e8",
+          "size": 572
+        }
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.1.json",
+      "evidence_sha256": "3ff45f22396ca8e476e28aaf3ea2fd32175515017cb46887b0681d3db0e79732",
+      "human_conclusion": "Compatible after review in issue #35. The toolkit preserves budget-limited partial results, findings, warnings, and usage metadata; Go built-in rules and Prisma allowlist support extend the effective rules contract. GitHub Action, VS Code, and Pages changes are outside the toolkit contract; CLI help, URL, provider, and documentation fixes require no adaptation.",
+      "published_at": "2026-07-30T08:08:47Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.1",
+      "status": "tested",
+      "version": "1.8.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "ff197ebd2f2a00a26ffc517f3961e32b4fb206767b55db2cf9344450dacfccf7",
+          "size": 46239680
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "cf0298dcdaac1e7f2414ae40be34e2fbc95e0916756cd899d8238c8eba2b35c9",
+          "size": 43966754
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "2d1800c177c88efa2e42eecedaa3662349d116a6c6d806c1402e7e1868653c17",
+          "size": 44744866
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "e64ecc35a643e1cbf22cadb135d72d4a7f5ba5532d36373304a885bc0762b523",
+          "size": 42205346
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "61f0365254e15a54e35473f7e28e7dc4dbadbff31bf651067e0ded92c62ae00d",
+          "size": 45952512
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "b52a34fcf4b1bf8f37c96d8cff7a33918f9f447b54ff4ad74c34cb2c8ab79924",
+          "size": 42827264
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "118a0fbd443f6432d4bae8cb5a0d8a41634137667c2bb1120d28ad321e8fa522",
+          "size": 572
+        }
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.2.json",
+      "evidence_sha256": "4a81d18018177b5c24f87ccbfa37a72f67a2da2224279ae990eece3c7c4b08d5",
+      "human_conclusion": "Compatible after review in issue #35. PHP/Composer built-in rules and Protocol Buffers allowlist support extend the effective rules contract. Viewer and Pages changes are outside the toolkit contract; diff-header stripping and the active-provider warning are compatible with existing toolkit interfaces.",
+      "published_at": "2026-07-31T06:57:20Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.2",
+      "status": "tested",
+      "version": "1.8.2"
     }
   ],
-  "recommended_version": "1.8.0",
+  "recommended_version": "1.8.2",
   "schema_version": 1,
   "upstream_repository": "alibaba/open-code-review"
 }

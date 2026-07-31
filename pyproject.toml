@@ -124,12 +124,27 @@ underlines = ["", "", ""]
 
 [[tool.towncrier.type]]
 directory = "feature"
-name = "Features"
+name = "🚀 Features"
 showcontent = true
 
 [[tool.towncrier.type]]
 directory = "bugfix"
-name = "Bug fixes"
+name = "🐛 Bug Fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "refactor"
+name = "🔧 Refactoring"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "📖 Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "rules"
+name = "🧩 Rules"
 showcontent = true
 
 [[tool.towncrier.type]]
@@ -138,6 +153,11 @@ name = "Security"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "doc"
-name = "Documentation"
+directory = "deprecation"
+name = "Deprecations"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removal"
+name = "Removals"
 showcontent = true

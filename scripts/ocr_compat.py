@@ -219,12 +219,22 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
 
 
 def _request_json(url: str) -> dict[str, Any] | list[Any]:
+    """Read bounded GitHub release metadata with origin-scoped authentication."""
+
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname != "api.github.com":
         _fail(f"metadata URL is outside the allowed GitHub API origin: {url}")
-    request = urllib.request.Request(
-        url, headers={"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT}
-    )
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": USER_AGENT,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        # Authentication is scoped to this validated API origin. Asset downloads
+        # use a separate request path and must remain public and credential-free.
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     try:
         with METADATA_OPENER.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
             length = response.headers.get("Content-Length")

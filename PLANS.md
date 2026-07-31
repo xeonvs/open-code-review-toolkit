@@ -2,6 +2,50 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Qualify OCR 1.8.1/1.8.2 and release v0.4.1
+
+Status: active; implementation complete, validation in progress
+Owner: Codex
+Last Updated: 2026-07-31
+Release Classification: release-required
+Target Stable Version: 0.4.1
+Tracking Issue: #35
+
+### Goal
+
+Adopt OCR 1.8.1 and 1.8.2, make 1.8.2 the recommended version, preserve partial reviews when the upstream token budget is exhausted, and publish toolkit 0.4.1. Improve release notes with OCR-style emoji headings, an explicit `Rules` category for changes to the effective toolkit plus OCR rules/allowlist contract, and an exact full-changelog comparison link.
+
+### Release Decisions
+
+- The completed release-note and source review in this plan is the compatibility decision for both OCR releases. Do not create a separate compatibility issue or approval checkpoint; retain the conservative classifier for future unknown releases.
+- `Rules` covers changes to `examples/gitlab/rules.json`, recommended OCR built-in rules, or the recommended OCR allowlist. It is present in 0.4.1 for the Go, PHP/Composer, Prisma, and Protocol Buffers changes even though the toolkit-owned `rules.json` content is unchanged.
+- Keep BL-015 and BL-016. Refine BL-017/M5 to reuse OCR token, cost, and budget telemetry and limit toolkit-owned work to missing GitLab lifecycle, evidence/MCP, and posting signals.
+- Complete repository planning closure in the final release branch before publication. Do not require a post-release closure PR.
+
+### Work Queue
+
+0. [x] Create tracking issue #35 and open the implementation branch from current `main`.
+1. [x] Record qualification evidence for OCR 1.8.1 and 1.8.2; update the compatibility manifest and all recommended runtime, preflight, example, CI, and documentation pins to 1.8.2.
+2. [x] Support `budget_exceeded`, `summary.budget_exceeded`, and `token_budget_reached` as a partial warning outcome while preserving findings and usage metadata.
+3. [x] Authenticate compatibility metadata requests without forwarding credentials to release assets or diagnostics.
+4. [x] Add conditional emoji Towncrier categories, the 0.4.1 `Rules` entries, and an exact GitHub Release `Full Changelog` link.
+5. [x] Reconcile BL-017/M5 and document the upstream-impact classification; keep BL-015/BL-016 unchanged.
+6. [x] Run targeted tests, full quality, Gitleaks, diff checks, distribution checks, and Linux amd64 OCR contract probes.
+7. [ ] Merge the protected implementation PR and verify the resulting TestPyPI development publication.
+8. [ ] Prepare and merge `release/v0.4.1` with the final changelog, release authorization metadata, next development line, validation evidence, and repository planning closure.
+9. [ ] Verify stable TestPyPI/PyPI 0.4.1, exact tag and immutable GitHub Release, hashes, provenance, and supported-Python installs; then close issue #35 and complete the active goal without another repository PR.
+
+### Validation Evidence
+
+- Local Linux amd64 qualification probes completed for OCR 1.8.1 and 1.8.2: all release assets and `sha256sum.txt` matched, consumed CLI/preview/result contracts passed, and both candidates were compatible.
+- Upstream impact review: OCR 1.8.1 adds budget termination fields, Go built-in guidance, and Prisma allowlist support; OCR 1.8.2 adds PHP/Composer built-in guidance and Protocol Buffers allowlist support. GitHub Action, VS Code, viewer/Pages, and unrelated provider/URL/help fixes do not require toolkit runtime adaptation.
+- The scheduled compatibility run `30615923070` failed before qualification because anonymous GitHub metadata access returned HTTP 403 rate-limit exhaustion; authentication is therefore part of this correction.
+- Compatibility manifest validation accepts the reviewed 1.8.1 -> 1.8.2 sequence, exact evidence hashes/assets, 1.8.2 recommendation, and 1.8.2 monitoring floor while preserving the conservative machine classifier.
+- Targeted compatibility, release-note, review-runner, posting, integration, and evidence-MCP regressions pass. The 0.4.1 Towncrier draft contains non-empty `🚀 Features`, `🐛 Bug Fixes`, `📖 Documentation`, and five separate `🧩 Rules` entries; empty categories and conventional prefixes are absent.
+- BL-015 and BL-016 remain unchanged. BL-017 and M5 now explicitly reuse OCR token/cost/budget telemetry and restrict future toolkit telemetry to demonstrated GitLab lifecycle, evidence/MCP, posting, and review-value gaps.
+- `scripts/quality.sh check` passes with 494 tests and 35 subtests at 78.73% coverage, plus Ruff formatting/lint, strict mypy, and Bandit. Gitleaks and `git diff --check` pass; wheel and sdist pass Twine and clean Python 3.12 install/CLI smoke tests.
+- A disposable release build renders exact conditional emoji headings, five separate `🧩 Rules` entries without conventional prefixes, and `**Full Changelog**: https://github.com/xeonvs/open-code-review-toolkit/compare/v0.4.0...v0.4.1`.
+
 ## Completed Plan: Implement M1 evidence architecture for v0.4.0
 
 Status: completed; stable release and external reconciliation verified
