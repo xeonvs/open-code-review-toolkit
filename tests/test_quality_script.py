@@ -1,7 +1,9 @@
 """Contracts for the quiet quality-command wrapper."""
 
 import os
+import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "quality.sh"
@@ -97,3 +99,54 @@ def test_gitleaks_wrapper_scans_the_complete_feature_history(tmp_path: Path) -> 
     ).splitlines()[0]
     assert "detect" in arguments
     assert f"--no-merges --first-parent {first_feature_commit}^.." in arguments
+
+
+def test_gitleaks_installer_pins_the_ci_archive_checksum() -> None:
+    """Keep hosted release gates reproducible without trusting PATH state."""
+
+    installer = (SCRIPT.parent / "install_gitleaks.sh").read_text(encoding="utf-8")
+
+    assert "GITLEAKS_VERSION=8.24.3" in installer
+    assert "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c" in installer
+    assert "--proto '=https' --proto-redir '=https'" in installer
+    assert 'if [ "$actual_sha256" != "$expected_sha256" ]' in installer
+
+
+def test_gitleaks_installer_verifies_before_installing(tmp_path: Path) -> None:
+    """Exercise the hosted Linux installer with a synthetic local archive."""
+
+    binary_dir = tmp_path / "bin"
+    destination = tmp_path / "destination"
+    source = tmp_path / "source-gitleaks"
+    archive = tmp_path / "archive.tar.gz"
+    binary_dir.mkdir()
+    source.write_text("#!/bin/sh\necho synthetic\n", encoding="utf-8")
+    source.chmod(0o755)
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(source, arcname="gitleaks")
+
+    for name, body in {
+        "uname": '#!/bin/sh\n[ "$1" = -s ] && echo Linux || echo x86_64\n',
+        "curl": f'#!/bin/sh\nwhile [ "$1" != --output ]; do shift; done\nshift\ncp {archive} "$1"\n',
+        "sha256sum": "#!/bin/sh\nprintf '9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  %s\\n' \"$1\"\n",
+    }.items():
+        helper = binary_dir / name
+        helper.write_text(body, encoding="utf-8")
+        helper.chmod(0o755)
+    for name in ("cp", "cut", "gzip", "install", "mkdir", "mktemp", "rm", "tar"):
+        target = shutil.which(name)
+        assert target is not None
+        (binary_dir / name).symlink_to(target)
+
+    environment = dict(os.environ)
+    environment["PATH"] = str(binary_dir)
+    environment["TMPDIR"] = str(tmp_path)
+    subprocess.run(
+        [str(PROJECT_ROOT / "scripts" / "install_gitleaks.sh"), str(destination)],
+        env=environment,
+        check=True,
+    )
+
+    installed = destination / "gitleaks"
+    assert installed.read_bytes() == source.read_bytes()
+    assert installed.stat().st_mode & 0o777 == 0o755

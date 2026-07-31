@@ -105,6 +105,11 @@ def test_security_workflow_pins_the_local_gitleaks_version() -> None:
 
     assert 'GITLEAKS_VERSION: "8.24.3"' in workflow
     assert "GITLEAKS_VERSION=8.24.3" in wrapper
+    for workflow_name in ("testpypi.yml", "release.yml"):
+        workflow = (PROJECT_ROOT / ".github" / "workflows" / workflow_name).read_text(
+            encoding="utf-8"
+        )
+        assert './scripts/install_gitleaks.sh "${RUNNER_TEMP}/gitleaks-bin"' in workflow
 
 
 def test_test_modules_have_no_duplicate_test_methods() -> None:
