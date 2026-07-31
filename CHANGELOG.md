@@ -1,3 +1,43 @@
+## 0.4.0 - 2026-07-31
+
+### Features
+
+- Add the repository evidence architecture for OCR reviews:
+
+  - collect schema-versioned facts and immutable base/head deltas through bounded Git reads;
+  - prepare private evidence, compact bootstrap, and composed MCP configuration automatically in `ocr-ci review`;
+  - expose detailed context on demand through the built-in read-only evidence MCP instead of embedding legacy Markdown;
+  - preserve Ansible Galaxy role and collection declarations, optional sources and versions, and bounded requirement includes as typed immutable evidence with explicit degradation diagnostics;
+  - preserve Python declarations, runtime constraints, dependency groups, recursive requirements includes, and resolved uv, Poetry, Pipenv, and standardized lock facts as bounded typed evidence available through the built-in MCP;
+  - require Python 3.12 or newer for toolkit 0.4 while retaining tested support through Python 3.14;
+  - preserve JavaScript runtime and package-manager constraints, scoped package declarations, and resolved npm, Yarn, and pnpm lock facts as bounded typed evidence;
+  - preserve Go module identity, language and toolchain declarations, direct/indirect requirements, replacements, exclusions, and resolved `go.sum` checksums as bounded typed evidence;
+  - preserve Composer/PHP package identity, production/development links, virtual-platform constraints, safe repository-source classifications, resolution policy, and resolved lock metadata as bounded typed evidence;
+  - preserve application and infrastructure version pins, nested container images, and Ansible role vars as bounded typed evidence with safe exclusions and immutable deltas; and
+  - bind a safe review-time MCP-use receipt to the private OCR result and report independently configured servers that OCR actually used while omitting unused servers and sensitive connection details.
+
+  ([#30](https://github.com/xeonvs/open-code-review-toolkit/issues/30))
+
+### Bug fixes
+
+- Improve GitLab review summaries:
+
+  - distinguish skipped, clean, warning, error, and finding outcomes;
+  - omit zero-value counters that do not help the reviewer;
+  - add severity and category emoji that can be disabled through configuration;
+  - refresh the development toolchain and immutable GitHub Actions pins, and cover every supported Python minor in CI;
+  - negotiate the MCP 2025-11-25 revision used by Open Code Review 1.8.0 while retaining the older supported revisions;
+  - launch the built-in evidence MCP through the toolkit's current Python installation so reviews do not depend on the caller's executable search path;
+  - keep evidence records and deltas recursively immutable, and revalidate persisted values, metadata, diagnostics, and limits before serving them through MCP;
+  - preserve semantic dependency and infrastructure facts across supported Ansible, Python/Poetry, JavaScript, Go, Composer, lockfile, URL, variable, tag, and digest variants, with explicit bounded-traversal notices;
+  - harden evidence parsing and persistence against type-confused JSON, unusual Git paths, nested manifest variants, duplicate identities, descriptor reuse, and provider-controlled summary text;
+  - keep repository evidence snapshots, private artifacts, bootstrap diagnostics, MCP requests, immutable OCR refs, result reads, and fallback Markdown safe and atomic at their trust boundaries;
+  - bind evidence and GitLab remap reads to authenticated Git objects despite repository replacement refs or inherited Git configuration, and bound existing OCR configuration before parsing it; and
+  - add a pinned, history-aware local Gitleaks gate so secret-shaped content is rejected before branch publication as well as in CI.
+
+  ([#30](https://github.com/xeonvs/open-code-review-toolkit/issues/30))
+
+
 ## 0.3.1 - 2026-07-28
 
 ### Features
