@@ -1,3 +1,26 @@
+## 0.4.1 - 2026-07-31
+
+### 🚀 Features
+
+- Qualify OCR 1.8.1 and 1.8.2, recommend OCR 1.8.2 with exact checksums, and preserve findings and usage metadata when OCR returns a token-budget-limited partial review. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+
+### 🐛 Bug Fixes
+
+- Authenticate scheduled GitHub release-metadata checks without forwarding credentials to public asset downloads, preventing anonymous API rate limits from interrupting compatibility monitoring. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+
+### 📖 Documentation
+
+- Use conditional emoji headings in changelogs and append an exact comparison link to GitHub Release notes. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+
+### 🧩 Rules
+
+- **OCR allowlist:** Add Prisma schema review support from OCR 1.8.1. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+- **OCR built-in rules:** Add PHP and Composer review guidance from OCR 1.8.2. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+- **Toolkit rules:** `examples/gitlab/rules.json` is unchanged; integrations receive these additions by updating OCR rather than copying a new toolkit rules file. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+- **OCR built-in rules:** Add comprehensive Go review guidance from OCR 1.8.1. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+- **OCR allowlist:** Add Protocol Buffers (`.proto`) review support from OCR 1.8.2. ([#35](https://github.com/xeonvs/open-code-review-toolkit/issues/35))
+
+
 ## 0.4.0 - 2026-07-31
 
 ### Features

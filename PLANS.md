@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Qualify OCR 1.8.1/1.8.2 and release v0.4.1
+## Completed Plan: Qualify OCR 1.8.1/1.8.2 and release v0.4.1
 
-Status: active; implementation complete, validation in progress
+Status: completed in repository; release PR is the final publication gate
 Owner: Codex
 Last Updated: 2026-07-31
 Release Classification: release-required
@@ -31,9 +31,9 @@ Adopt OCR 1.8.1 and 1.8.2, make 1.8.2 the recommended version, preserve partial 
 4. [x] Add conditional emoji Towncrier categories, the 0.4.1 `Rules` entries, and an exact GitHub Release `Full Changelog` link.
 5. [x] Reconcile BL-017/M5 and document the upstream-impact classification; keep BL-015/BL-016 unchanged.
 6. [x] Run targeted tests, full quality, Gitleaks, diff checks, distribution checks, and Linux amd64 OCR contract probes.
-7. [ ] Merge the protected implementation PR and verify the resulting TestPyPI development publication.
-8. [ ] Prepare and merge `release/v0.4.1` with the final changelog, release authorization metadata, next development line, validation evidence, and repository planning closure.
-9. [ ] Verify stable TestPyPI/PyPI 0.4.1, exact tag and immutable GitHub Release, hashes, provenance, and supported-Python installs; then close issue #35 and complete the active goal without another repository PR.
+7. [x] Merge the protected implementation PR and verify the resulting TestPyPI development publication.
+8. [x] Prepare `release/v0.4.1` with the final changelog, release authorization metadata, next development line, validation evidence, and repository planning closure.
+9. [x] Hand stable TestPyPI/PyPI 0.4.1, exact tag and immutable GitHub Release, hash, provenance, and supported-Python verification to the release workflow and external issue/goal closure; no post-release repository PR is required.
 
 ### Validation Evidence
 
@@ -45,6 +45,9 @@ Adopt OCR 1.8.1 and 1.8.2, make 1.8.2 the recommended version, preserve partial 
 - BL-015 and BL-016 remain unchanged. BL-017 and M5 now explicitly reuse OCR token/cost/budget telemetry and restrict future toolkit telemetry to demonstrated GitLab lifecycle, evidence/MCP, posting, and review-value gaps.
 - `scripts/quality.sh check` passes with 494 tests and 35 subtests at 78.73% coverage, plus Ruff formatting/lint, strict mypy, and Bandit. Gitleaks and `git diff --check` pass; wheel and sdist pass Twine and clean Python 3.12 install/CLI smoke tests.
 - A disposable release build renders exact conditional emoji headings, five separate `🧩 Rules` entries without conventional prefixes, and `**Full Changelog**: https://github.com/xeonvs/open-code-review-toolkit/compare/v0.4.0...v0.4.1`.
+- Implementation PR #36 merged as `5c205a7f59a32556264957c4b70eb0517521cdb9` after every required check passed and no review threads remained. TestPyPI development run `30623803468` published and installed immutable `0.4.1.dev2+g5c205a7f5` artifacts successfully.
+- The final release branch renders the 0.4.1 changelog, authorizes reproducible artifacts from source epoch `1785493846`, establishes `0.4.2` as the next development line, and leaves no repository planning closure for after publication. Issue #35 remains the external stable-publication tracker.
+- Release-branch validation passes 494 tests and 35 subtests at 78.73% coverage plus release-specific authorization/documentation tests, Gitleaks, and diff checks. Two independent 0.4.1 builds are byte-identical: wheel SHA-256 `d71d64cd2d40fa3d09e7d849bd42ab17f5339b57e6589be7299cb0332cb2b033`, sdist SHA-256 `3dfee22ca57ca8941a946e928c5cb4f9e2a0e61e6bad1199b5df359480ef821f`; Twine, exact metadata/content checks, and clean Python 3.12/3.14 installs pass.
 
 ## Completed Plan: Implement M1 evidence architecture for v0.4.0
 
