@@ -2,6 +2,44 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Qualify OCR 1.8.3 and release v0.4.2
+
+Status: active; pin-only implementation complete, validation in progress
+Owner: Codex
+Last Updated: 2026-07-31
+Release Classification: release-required
+Target Stable Version: 0.4.2
+Tracking Issue: #38
+
+### Goal
+
+Qualify OCR 1.8.3 through the reduced patch-release path, recommend and pin it with exact checksums, adapt only consumed toolkit contracts proven to have changed, and publish stable toolkit 0.4.2. Preserve the protected implementation/release PR and external verification gates while avoiding unnecessary compatibility approval or post-release closure stages.
+
+### Initial Impact Classification
+
+- Per-file terminal-state handling is a possible result-contract interaction and must be covered by the normal JSON consumer probes before it can be declared compatible.
+- The Cobra CLI migration changes implementation and adds shell completion, but the toolkit consumes only the existing review/help/version/config commands and flags; exact help/version/preview probes determine whether adaptation is needed.
+- Viewer and VS Code changes are outside the toolkit contract. Configuration URL documentation and stale comments are release-note-only context unless the consumed rendered-config behavior changed.
+- Rules content and OCR allowlisted file types do not change in 1.8.3. The upstream rules change adds integrity tests only, so 0.4.2 must omit `🧩 Rules` unless qualification finds a real effective-contract delta.
+
+### Work Queue
+
+1. [x] Run Linux amd64 qualification for OCR 1.8.3, preserve canonical evidence, and classify every release item against the toolkit/backlog contract.
+2. [x] Add the reviewed manifest conclusion, recommend/pin OCR 1.8.3 everywhere, and update exact checksum regressions without weakening the future classifier.
+3. [x] Add ordinary changelog entries without `🧩 Rules`, run proportional targeted/full/security/package validation, and verify the exact release-body comparison URL.
+4. [ ] Merge the protected implementation PR and verify its exact TestPyPI development build.
+5. [ ] Complete repository closure in `release/v0.4.2`, publish through the protected release workflow, and create no post-release repository PR.
+6. [ ] Independently verify stable TestPyPI/PyPI artifacts, tag/immutable GitHub Release, hashes, provenance, and Python 3.12-3.14 installs; then close issue #38 and the active goal.
+
+### Initial Evidence
+
+- OCR 1.8.3 release notes contain viewer comments, per-file terminal-state handling, VS Code force-kill behavior, a Cobra CLI migration with shell completion, configuration URL documentation, documentation cleanup, and rules-integrity tests. No built-in rules or file allowlist content change is advertised.
+- Linux amd64 qualification passed all published asset and upstream checksum-file checks plus version, Cobra help/required-flag, preview, and additive result-consumer probes. Canonical evidence SHA-256: `4acc04e487834e367851c64b5cfa18316a09ae1c59f5c0c991eb69c712ef58bd`.
+- Source-diff review confirms the MCP SDK remains Go MCP SDK v1.6.1. Per-file terminal-state fixes preserve the consumed result contract; the CLI migration preserves toolkit commands and flags. Viewer, VS Code, documentation/comment, gitignore, and rules-integrity changes need no toolkit adaptation.
+- Targeted compatibility, integration, preflight, and evidence-MCP regressions pass with 109 tests and 15 subtests. The 0.4.2 Towncrier draft contains only `🚀 Features`; `🧩 Rules` is correctly omitted because toolkit `rules.json`, OCR built-ins, and OCR allowlist are unchanged.
+- `scripts/quality.sh check` passes with 494 tests and 35 subtests at 78.73% coverage plus Ruff formatting/lint, strict mypy, and Bandit. Gitleaks, `git diff --check`, build/Twine, and clean wheel/sdist CLI installs on Python 3.12/3.14 pass.
+- A disposable release build renders only the non-empty `🚀 Features` category and ends with `**Full Changelog**: https://github.com/xeonvs/open-code-review-toolkit/compare/v0.4.1...v0.4.2`; no `🧩 Rules` or conventional prefixes appear.
+
 ## Completed Plan: Qualify OCR 1.8.1/1.8.2 and release v0.4.1
 
 Status: completed in repository; release PR is the final publication gate

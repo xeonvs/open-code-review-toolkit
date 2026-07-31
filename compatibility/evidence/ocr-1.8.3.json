@@ -1,0 +1,79 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "a5f884bb9a04abb2068e8f9f3b3c567cb65f0847f61876c7c44deb42b8c2d61a",
+      "size": 46885456
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "ed12e4599a7d2ddf5ac09324193d9781bd0a4215e867631432bc04cf5918f324",
+      "size": 44592834
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "445c2c3d7528d6a642b2eb83dc76978d7a5558b838d0c385b0c841b094104c17",
+      "size": 45387938
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "4badb4b02fb9f7b4e91b5078fa78e88bfa8e3864f43bedd216b179494e9df4d7",
+      "size": 42860706
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "13366f4c06fdded86f0b43018c4516db6445677803c14eca97df967c7c17ff0c",
+      "size": 46608896
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "acc10c7f840aca9b20743e3dee1a2e76c91b7731a8cf8d215db26968b30a390e",
+      "size": 43431936
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "51c22d77815f841a28b0c5b52e13483938212bd659b96f0ca2ccd494475a3e22",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "contracts": {
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-07-31T09:33:56Z",
+  "release_notes_sha256": "538d1ecd2008f68894b43b13293950998d51ecf5c71332f7c4cf592b07d8552d",
+  "result": "compatible",
+  "schema_version": 1,
+  "tag": "v1.8.3",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.3"
+}
