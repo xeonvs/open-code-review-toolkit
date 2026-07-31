@@ -684,7 +684,12 @@ def guide_comment_snippet(comment: dict[str, Any]) -> str:
     return excerpt
 
 
-def format_reviewer_guide(comments: Sequence[dict[str, Any]], omitted_count: int) -> str:
+def format_reviewer_guide(
+    comments: Sequence[dict[str, Any]],
+    omitted_count: int,
+    *,
+    outcome_status: str = "success",
+) -> str:
     """Build a bounded reviewer guide from already published OCR findings."""
 
     if not comments and omitted_count <= 0:
@@ -710,6 +715,10 @@ def format_reviewer_guide(comments: Sequence[dict[str, Any]], omitted_count: int
             f"- Estimated effort to review: {effort}/5",
         ]
     )
+    if outcome_status == "budget_exceeded":
+        lines.append(
+            "- ⚠️ Review scope: OCR reached its token budget; treat all findings as a partial review."
+        )
 
     if not security_comments and omitted_count:
         lines.append(
@@ -772,13 +781,17 @@ def summarize_result(
         "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
         "completed_with_warnings": "⚠️",
         "completed_with_errors": "❌",
+        "budget_exceeded": "⚠️",
     }
     marker = f"{status_markers.get(outcome_status, '❌')} " if use_emoji else ""
     safe_message = neutralize_quick_actions(
         compact_control_text(redact_sensitive(outcome_message), max_chars=500)
     )
     if not safe_message:
-        safe_message = f"Found {total} issue(s)." if total else "No issues found."
+        if outcome_status == "budget_exceeded":
+            safe_message = "Review stopped after reaching its token budget; findings are partial."
+        else:
+            safe_message = f"Found {total} issue(s)." if total else "No issues found."
     lines = [
         "# Open Code Review summary",
         f"{marker}{safe_message}",

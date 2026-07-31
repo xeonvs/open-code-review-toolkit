@@ -44,7 +44,7 @@ from ocr_toolkit.posting.gitlab import (
     resolve_discussion,
 )
 from ocr_toolkit.posting.markers import annotate_comment_fingerprints
-from ocr_toolkit.posting.result import llm_billing_failure_warnings
+from ocr_toolkit.posting.result import llm_billing_failure_warnings, ocr_warning_text
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
     cleanup_drafts_created_by_this_run,
@@ -392,6 +392,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         "skipped",
         "completed_with_warnings",
         "completed_with_errors",
+        "budget_exceeded",
     }
     if status not in allowed_statuses:
         return invalid_ocr_schema_exit(config, "field 'status' is unsupported")
@@ -401,6 +402,14 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return invalid_ocr_schema_exit(config, "field 'comments' must be a list")
     if not isinstance(warnings_value, list):
         return invalid_ocr_schema_exit(config, "field 'warnings' must be a list")
+    summary_value = result.get("summary")
+    summary_budget_exceeded = (
+        isinstance(summary_value, dict) and summary_value.get("budget_exceeded") is True
+    )
+    if (status == "budget_exceeded") != summary_budget_exceeded:
+        return invalid_ocr_schema_exit(
+            config, "fields 'status' and 'summary.budget_exceeded' disagree"
+        )
 
     comments: list[dict[str, Any]] = []
     for index, comment in enumerate(comments_value):
@@ -455,7 +464,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments = comments[:publish_limit]
 
     emoji = post_emoji()
-    reviewer_guide = format_reviewer_guide(comments, omitted_count)
+    reviewer_guide = format_reviewer_guide(comments, omitted_count, outcome_status=status)
 
     if publishable_comment_count == 0:
         raw_message = clean_text(result.get("message"))
@@ -472,6 +481,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
             "completed_with_warnings": "⚠️",
             "completed_with_errors": "❌",
+            "budget_exceeded": "⚠️",
         }[status]
         fallback_message = (
             "No review comments generated. No issues found."
@@ -479,7 +489,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             else (
                 "No supported files changed."
                 if status == "skipped"
-                else "Review did not complete cleanly."
+                else (
+                    "Review stopped after reaching its token budget; this is a partial result."
+                    if status == "budget_exceeded"
+                    else "Review did not complete cleanly."
+                )
             )
         )
         body = "# Open Code Review summary\n\n"
@@ -487,7 +501,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         body += message or fallback_message
         if warnings:
             warning_lines = [
-                neutralize_quick_actions(redact_sensitive(clean_text(warning)))
+                neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning)))
                 for warning in warnings
             ]
             warning_lines = [warning for warning in warning_lines if warning]

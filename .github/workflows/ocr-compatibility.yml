@@ -36,6 +36,8 @@ jobs:
         run: PYTHONPATH=src python scripts/ocr_compat.py validate
       - name: Discover unseen stable releases
         if: inputs.tag == ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: PYTHONPATH=src python scripts/ocr_compat.py discover --output /tmp/ocr-releases.json
       - name: Use requested stable release
         if: inputs.tag != ''
@@ -94,6 +96,7 @@ jobs:
       - name: Qualify candidate
         env:
           CANDIDATE_TAG: ${{ matrix.tag }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           mkdir -p /tmp/ocr-compat
           PYTHONPATH=src python scripts/ocr_compat.py qualify \
