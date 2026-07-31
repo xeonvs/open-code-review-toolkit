@@ -13,66 +13,6 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Additional provider adapters | Retained, clarified, and reprioritized | BL-021 is explicitly about code-hosting and review-host adapters beyond GitLab, not repository ecosystem/framework evidence. |
 | File-based user configuration | Retained and redesigned | BL-020 waits for profile, MCP, and evidence schemas while preserving environment precedence and excluding secrets. |
 
-## M1 Evidence architecture
-
-BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the authorized feature PR, merge, and v0.4.0 release gates prove the milestone complete. The implementation, synthetic E2E, two real OCR loops, Codex Security correction, final Python 3.12/package gate, and signed local checkpoint are recorded in the active plan, while the complete release cycle authorized on 2026-07-30 is in progress.
-
-### BL-004: Define the common repository evidence model
-
-- **Status:** ready
-- **Priority:** high
-- **Roadmap theme:** M1 Evidence architecture
-- **Dependencies:** Existing bounded context and repository-ref contracts.
-- **Activation trigger:** M0 is established and its planning sources are reconciled.
-- **Goal:** Give all collectors and projections one deterministic representation of repository facts.
-- **Scoped deliverables:** Define dependency-free, schema-versioned evidence types for kind/typed value, source path, git ref, component scope, provenance, confidence, trust/sensitivity class, and optional staleness; specify stable identity, ordering, deduplication, redaction-before-storage, and global/per-kind bounds.
-- **Acceptance criteria:** Existing context facts can be represented without losing trust or origin; raw secrets cannot enter the evidence store or serialized projections; unknown kinds/versions and malformed or over-limit facts degrade explicitly; serialization is deterministic and backward-readable across the supported schema set.
-- **Exclusions:** OCR capability inspection, MCP transport, bootstrap prose, new ecosystem parsers, or network discovery.
-- **Validation:** Unit/property tests for normalization, ordering, bounds, provenance, and round trips using synthetic facts.
-- **Release classification expectation:** `release-deferred` until a user-visible projection ships.
-
-### BL-005: Build source/target snapshots and evidence deltas
-
-- **Status:** planned
-- **Priority:** high
-- **Roadmap theme:** M1 Evidence architecture
-- **Dependencies:** BL-004 and existing bounded git-ref handling.
-- **Activation trigger:** The common evidence model is merged.
-- **Goal:** Describe base and head repository state without conflating declarations, resolved versions, and changes.
-- **Scoped deliverables:** Collect target/base and source/head snapshots, map changed files to components, and compute typed dependency/runtime/container deltas while preserving absent and unknown states.
-- **Acceptance criteria:** Target content is read without checking it out or executing it; symlink, submodule, missing-object, shallow-clone, rename, and deleted-file behavior is explicit and repository-root constrained; source-only changes cannot self-authorize policy; added/removed/changed/unknown facts are reproducible.
-- **Exclusions:** Whole-history analysis, network package resolution, installed-environment probing outside configured evidence, or framework plugins.
-- **Validation:** Synthetic two-ref repositories covering additions, removals, renames, malformed manifests, missing refs, and bounded failure.
-- **Release classification expectation:** `release-deferred`.
-
-### BL-006: Separate collection, storage, planning, and rendering
-
-- **Status:** planned
-- **Priority:** high
-- **Roadmap theme:** M1 Evidence architecture
-- **Dependencies:** BL-004 and BL-005.
-- **Activation trigger:** Current context output is characterized by regression fixtures.
-- **Goal:** Decompose `context/render.py` without changing trust or fail-closed behavior.
-- **Scoped deliverables:** Characterize current output with regression fixtures; move collectors behind evidence interfaces, add bounded storage, isolate bootstrap selection, and retain the legacy renderer only as a migration oracle; remove it after non-empty semantic parity and the typed OCR/MCP lifecycle gates pass.
-- **Acceptance criteria:** Existing public context behavior remains covered; old/new paths cannot collect the same fact independently after migration; collectors are projection-independent; no bootstrap/MCP-specific duplicate collector path exists; rollout can compare projections deterministically before legacy removal.
-- **Exclusions:** New parser breadth, changing the hard output limit, or enabling built-in MCP.
-- **Validation:** Golden synthetic context fixtures, regression tests for truncation/redaction/guidance, and complete quality gate.
-- **Release classification expectation:** `release-deferred` unless output behavior changes.
-
-### BL-007: Deliver compact bootstrap and built-in evidence MCP atomically
-
-- **Status:** planned
-- **Priority:** high
-- **Roadmap theme:** M1 Evidence architecture
-- **Dependencies:** Current OCR compatibility manifest, BL-004 through BL-006, and current MCP validation.
-- **Activation trigger:** Evidence collection and selection are projection-independent, and the supported OCR capability contract can validate MCP registration before review.
-- **Goal:** Replace large background inventories with a compact trusted overview while preserving on-demand access to every removed evidence class.
-- **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; remove the migration-only legacy background after semantic parity; enable the compact bootstrap only after built-in MCP registration and capability validation succeed.
-- **Acceptance criteria:** Bootstrap and MCP use the same evidence store and ship in one user-visible feature slice; compact mode never runs without a validated evidence server; registration failure fails closed or retains legacy mode according to the documented launch policy; detailed manifests remain available through MCP; omissions and degradation are explicit.
-- **Exclusions:** Raising the hard limit, copying full guidance, generic file reads, shell execution, GitLab access, external URL fetches, documentation storage, or a release that removes detailed background evidence before MCP access exists.
-- **Validation:** Budget and golden fixtures, protocol/root/traversal tests, registration/capability failures, non-empty migration-oracle parity, compact-mode gating, adversarial Markdown/redaction, and end-to-end synthetic OCR configuration.
-- **Release classification expectation:** `release-required`.
-
 ## M2 Ecosystem and framework coverage
 
 ### BL-008: Resolve lockfile, runtime, and container evidence
@@ -80,7 +20,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Status:** planned
 - **Priority:** high
 - **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** BL-004 through BL-006.
+- **Dependencies:** Established M1 evidence, snapshot, and delta contracts.
 - **Activation trigger:** Snapshot and delta semantics are stable.
 - **Goal:** Distinguish declared constraints, locked, installed, runtime-detected, container-pinned, inferred, and unknown versions.
 - **Scoped deliverables:** Strengthen actual-use formats for Python, JavaScript/TypeScript, Go, PHP, Ansible, containers, and GitLab CI; define precedence without collapsing declared, locked, installed, runtime, image tag, and immutable digest evidence; implement source/target resolution and deltas with provenance.
@@ -94,7 +34,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** BL-004, BL-005, and BL-008.
+- **Dependencies:** Established M1 evidence/snapshot contracts and BL-008.
 - **Activation trigger:** An anonymized inventory of pilot repositories identifies at least two high-value framework candidates with safe synthetic fixtures.
 - **Goal:** Select and implement 2-3 framework plugins that improve review evidence without building code graphs.
 - **Scoped deliverables:** Inventory pilot repositories without recording private names or contents; score candidates by prevalence, version-sensitive API surface, deterministic detectability, synthetic-fixture feasibility, and expected review-quality impact; record the selection decision; define a bounded plugin protocol and implement the selected providers. Existing Ansible parser maturity may support, but cannot substitute for, the scored selection.
@@ -152,7 +92,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** BL-007, BL-011, and BL-012.
+- **Dependencies:** Established M1 built-in composition boundary, BL-011, and BL-012.
 - **Activation trigger:** The built-in evidence server and current external MCP documentation are stable.
 - **Goal:** Compose external knowledge tools with `ocr_toolkit_evidence` without replacement, shadowing, or permission broadening.
 - **Scoped deliverables:** Define reserved server/tool namespaces, collision behavior, deterministic merge order, combined capability instructions, and synthetic composition examples for generic, YouTrack, Confluence, and documentation MCP servers.
@@ -168,7 +108,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M4 Policy and project guidance
-- **Dependencies:** BL-004, BL-005, BL-007, and current target-branch self-whitelisting guard.
+- **Dependencies:** Established M1 evidence/MCP contracts and current target-branch self-whitelisting guard.
 - **Activation trigger:** Evidence model can preserve decision scope and provenance.
 - **Goal:** Add optional Scope, Category, Review after, and Owner metadata without breaking existing decision documents.
 - **Scoped deliverables:** Parse heading/rationale entries and optional bullet metadata; normalize unique decision IDs; define repository-relative glob semantics, Category as descriptive metadata, Owner as contact metadata, and `Review after` as an expiry signal rather than automatic deletion; tolerate unknown fields; filter by target branch and component scope; place summaries in bootstrap and full rationale in evidence MCP.
@@ -182,7 +122,7 @@ BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original 
 - **Status:** conditional
 - **Priority:** medium
 - **Roadmap theme:** M4 Policy and project guidance
-- **Dependencies:** BL-004, BL-005, BL-007, and documented/tested upstream OCR automatic guidance behavior.
+- **Dependencies:** Established M1 evidence/MCP contracts and documented/tested upstream OCR automatic guidance behavior.
 - **Activation trigger:** A supported OCR release proves in compatibility tests that its guidance mechanism can resolve the intended target-ref version rather than the source worktree path.
 - **Goal:** Replace large excerpts with target-branch paths and short non-authoritative hints while preserving fail-closed handling.
 - **Scoped deliverables:** Define root-to-file applicability and precedence for nested `AGENTS.md`/`CLAUDE.md`; discover applicable target-branch files without checkout or execution; exclude guidance changed, added, renamed, or deleted by the merge request; supply target-ref-aware paths/hints; permit OCR native tools to read only the intended target versions on demand.
@@ -200,7 +140,7 @@ Telemetry is intentionally outside M1. OCR already exposes provider-level review
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
-- **Dependencies:** Current OCR compatibility manifest and BL-007.
+- **Dependencies:** Current OCR compatibility manifest and the established M1 built-in MCP lifecycle.
 - **Activation trigger:** Profile model and limit differences can be documented without changing per-tool routing.
 - **Goal:** Offer `economy`, `standard`, and `strong` choices for one OCR review run.
 - **Scoped deliverables:** Define explicit profile configuration selecting a run-level model and a documented closed set of existing OCR limits; publish the effective profile without credentials; validate profile/model availability through the compatibility contract, environment precedence, and rendered effective configuration.
