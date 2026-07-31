@@ -97,6 +97,16 @@ def test_gitlab_example_does_not_inline_python_helpers() -> None:
     assert "OCR review scope:" not in workflow
 
 
+def test_security_workflow_pins_the_local_gitleaks_version() -> None:
+    """Keep CI and the repository-owned history scanner on one engine."""
+
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
+    wrapper = (PROJECT_ROOT / "scripts" / "gitleaks.sh").read_text(encoding="utf-8")
+
+    assert 'GITLEAKS_VERSION: "8.24.3"' in workflow
+    assert "GITLEAKS_VERSION=8.24.3" in wrapper
+
+
 def test_test_modules_have_no_duplicate_test_methods() -> None:
     """Reject silent test replacement caused by duplicate class method names."""
 

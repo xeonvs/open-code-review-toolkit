@@ -18,7 +18,7 @@ For routine agent and contributor checks, prefer `scripts/quality.sh check`. It 
 Runtime code must remain compatible with Python 3.12-3.14 and standard-library-only. Tests and examples must use synthetic data. User-visible changes require a fragment in `changelog.d/`.
 Repository-only qualification tools and evidence live under `scripts/` and `compatibility/`; they are excluded from both published distributions. Validate the manifest with `PYTHONPATH=src python scripts/ocr_compat.py validate`.
 
-For artifact smoke tests, install the wheel and sdist into separate temporary virtual environments and run `ocr-ci --help`. Generic secret scanning uses Gitleaks; dependency auditing uses `pip-audit`.
+For artifact smoke tests, install the wheel and sdist into separate temporary virtual environments and run `ocr-ci --help`. Generic secret scanning uses Gitleaks; dependency auditing uses `pip-audit`. Install the exact Gitleaks version declared by `scripts/gitleaks.sh`, then run `scripts/quality.sh secrets` before pushing. The complete `scripts/quality.sh check` gate runs that same first-parent branch-history scan before the more expensive Python checks and fails closed when the scanner version or base ref is unavailable.
 
 ## Boundary-focused test checklist
 

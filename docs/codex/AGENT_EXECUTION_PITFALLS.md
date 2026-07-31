@@ -32,6 +32,14 @@ This note records recurring execution mistake patterns discovered during real wo
 - Do not turn one-time private marker criteria into a tracked denylist or test fixture.
 - Do not use real provider payloads, hosts, repositories, or credentials in public fixtures.
 
+## Relying On The Remote Secret Scan As The First History Check
+
+**Failure mode:** Local file and package checks pass, but the ready pull request fails because a secret-shaped synthetic fixture exists in an intermediate commit. A tip-only correction cannot satisfy a CI scanner that inspects feature history.
+
+**Why it happens:** Secret scanning is treated as a remote workflow concern or as a working-tree scan. The local release gate therefore does not reproduce the CI action's pinned scanner version and first-parent commit range before history is published.
+
+**Required prevention:** Run the repository-owned Gitleaks wrapper before every push and before expensive closure validation. Keep its scanner version explicit and identical to CI, scan the complete first-parent feature range, fail closed if the base ref or exact tool version is unavailable, and rewrite unpublished feature history when the finding exists only in an intermediate commit. Do not hide provider-shaped fixtures behind an allowlist when an equally useful non-secret-shaped synthetic value proves the contract.
+
 ## Tooling And Validation Hygiene
 
 - Prefer the narrowest reproducer before broad reruns.

@@ -6,7 +6,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 Status: active; full v0.4.0 delivery authorized after local implementation closure
 Owner: Codex
-Last Updated: 2026-07-30
+Last Updated: 2026-07-31
 Release Classification: release-required
 Target Stable Version: 0.4.0
 Tracking Issue: #30
@@ -42,11 +42,12 @@ Replace the bounded legacy Markdown context generator with a schema-versioned re
 11. [x] Remove the legacy implementation, CLI, environment contract, and compatibility path after the new path passes all gates. Signed checkpoint `c2caa9d` removed the renderer, CLI/environment surface, compatibility assertions, and temporary parity code only after the migration matrix and non-empty history-backed oracle passed; the final integration suite asserts that the retired contract is absent.
 12. [x] Reconcile user, agent, engineering, security, configuration, roadmap, plan, and backlog documentation.
 13. [x] Run complete validation, review the full feature diff with OCR through the new local MCP, fix valid findings, create and verify the final signed checkpoint, and finish the local ready-PR audit.
-14. [ ] Push the signed feature branch, open a ready PR linked to issue #30, verify required review and Actions state, and merge through the protected `main` branch.
-15. [ ] Verify the resulting immutable TestPyPI development build and independently smoke-install its wheel and source distribution.
-16. [ ] Prepare a signed `release/v0.4.0` branch and exact-title release PR with the stable version marker, deterministic source epoch, generated Towncrier changelog, and next development line.
-17. [ ] Verify and merge the protected release PR, then monitor stable TestPyPI and PyPI publication, the annotated `v0.4.0` tag, immutable GitHub Release, attestations/provenance, and exact artifact hashes.
-18. [ ] Independently smoke-install the published wheel on Python 3.12 and source distribution on Python 3.14, close issue #30, reconcile M1 as established across the plan, roadmap table/diagram, and backlog, and verify the final external state.
+14. [x] Add and run a local pre-push Gitleaks gate that uses the same explicitly pinned scanner version, configuration, and first-parent branch-history scope as CI; make the complete local quality gate invoke it before expensive validation and record the missed-gate failure mode in contributor and agent guidance. The exact Gitleaks 8.24.3 binary was checksum-verified from its upstream release before installation; the wrapper and CI now pin 8.24.3, the local first-parent feature-history scan passes, and focused shell/contracts tests pass.
+15. [ ] Update the ready feature PR without prematurely closing issue #30, verify its exact current head, required review, resolved conversations, and Actions state, and merge through the protected `main` branch.
+16. [ ] Verify the resulting immutable TestPyPI development build and independently smoke-install its wheel and source distribution.
+17. [ ] Prepare a signed `release/v0.4.0` branch and exact-title release PR with the stable version marker, deterministic source epoch, generated Towncrier changelog, and next development line.
+18. [ ] Verify and merge the protected release PR, then monitor stable TestPyPI and PyPI publication, the annotated `v0.4.0` tag, immutable GitHub Release, attestations/provenance, and exact artifact hashes.
+19. [ ] Independently smoke-install the published wheel on Python 3.12 and source distribution on Python 3.14, close issue #30, reconcile M1 as established across the plan, roadmap table/diagram, and backlog, and verify the final external state.
 
    - Closure-documentation checkpoint: the history-backed parity/removal and public-invocation synthetic E2E gates are now reconciled across this plan, the roadmap completion signal, and the active BL-004 through BL-007 scope. User operations guidance now documents the H1 summary, distinct skipped/clean outcomes, positive clean report, zero-counter omission, used-MCP inventory, and the default-on emoji switch. The complete quality gate passes formatting, lint, strict typing, Bandit, 453 tests plus 35 subtests, and 78.31% coverage. Item 12 remains open until the final OCR/security results and ready-PR state can be recorded consistently.
    - The first completed full OCR review covered 42 files, made 423 core tool calls including 165 verified `ocr_toolkit_evidence` calls, and returned 31 findings (10 high, 20 medium, 1 low). Root-cause analysis grouped them into post-hoc rather than streaming bounds, byte/code-point confusion, incomplete hostile-environment isolation, validate-on-write without validate-on-read, canonical-only parser fixtures, non-atomic cross-references, mocked rather than installed subprocess contracts, and drift between report outcomes. Durable principles, agent defaults, failure-mode corrections, and the contributor boundary checklist are updated before fixes proceed. Every validated finding still requires a regression and the full OCR run must be repeated.

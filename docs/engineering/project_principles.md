@@ -19,6 +19,7 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 13. Keep implementation and release as one traceable objective whenever stable publication is requested or required. Feature validation proves readiness; registry and GitHub readback prove delivery.
 14. A deferral is a blocked or pending release state, not successful closure. Preserve the exact continuation point so a later agent does not infer that a development build satisfied a stable-release promise.
 15. Keep the toolkit release version single-sourced from VCS tags through `hatch-vcs`. Runtime code reads `ocr_toolkit.__version__`; it must not duplicate an upcoming or current release literal in servers, user agents, reports, or tests. Schema, wire-protocol, fixture, and qualified-upstream versions are separate compatibility contracts: use explicitly named constants and change them only with their own migration or qualification evidence.
+16. Treat secret scanning as a local publication gate, not only a hosted CI check. Pin one scanner version across the repository-owned wrapper and CI, scan feature history before it is pushed, and fail closed when the exact engine or authenticated base range is unavailable.
 
 ## Boundary Invariants
 
