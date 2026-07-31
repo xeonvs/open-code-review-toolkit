@@ -1,3 +1,10 @@
+## 0.4.2 - 2026-07-31
+
+### 🚀 Features
+
+- Qualify OCR 1.8.3 after its per-file terminal-state and Cobra CLI changes, recommend it with exact checksums, and retain the existing toolkit result, command, and rules contracts. ([#38](https://github.com/xeonvs/open-code-review-toolkit/issues/38))
+
+
 ## 0.4.1 - 2026-07-31
 
 ### 🚀 Features

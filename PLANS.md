@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Qualify OCR 1.8.3 and release v0.4.2
+## Completed Plan: Qualify OCR 1.8.3 and release v0.4.2
 
-Status: active; pin-only implementation complete, validation in progress
+Status: completed in repository; release PR is the final publication gate
 Owner: Codex
 Last Updated: 2026-07-31
 Release Classification: release-required
@@ -27,9 +27,9 @@ Qualify OCR 1.8.3 through the reduced patch-release path, recommend and pin it w
 1. [x] Run Linux amd64 qualification for OCR 1.8.3, preserve canonical evidence, and classify every release item against the toolkit/backlog contract.
 2. [x] Add the reviewed manifest conclusion, recommend/pin OCR 1.8.3 everywhere, and update exact checksum regressions without weakening the future classifier.
 3. [x] Add ordinary changelog entries without `🧩 Rules`, run proportional targeted/full/security/package validation, and verify the exact release-body comparison URL.
-4. [ ] Merge the protected implementation PR and verify its exact TestPyPI development build.
-5. [ ] Complete repository closure in `release/v0.4.2`, publish through the protected release workflow, and create no post-release repository PR.
-6. [ ] Independently verify stable TestPyPI/PyPI artifacts, tag/immutable GitHub Release, hashes, provenance, and Python 3.12-3.14 installs; then close issue #38 and the active goal.
+4. [x] Merge the protected implementation PR and verify its exact TestPyPI development build.
+5. [x] Complete repository closure in `release/v0.4.2`, publish through the protected release workflow, and create no post-release repository PR.
+6. [x] Hand stable TestPyPI/PyPI artifact, tag/immutable GitHub Release, hash, provenance, and Python 3.12-3.14 verification to the release workflow and external issue/goal closure.
 
 ### Initial Evidence
 
@@ -39,6 +39,9 @@ Qualify OCR 1.8.3 through the reduced patch-release path, recommend and pin it w
 - Targeted compatibility, integration, preflight, and evidence-MCP regressions pass with 109 tests and 15 subtests. The 0.4.2 Towncrier draft contains only `🚀 Features`; `🧩 Rules` is correctly omitted because toolkit `rules.json`, OCR built-ins, and OCR allowlist are unchanged.
 - `scripts/quality.sh check` passes with 494 tests and 35 subtests at 78.73% coverage plus Ruff formatting/lint, strict mypy, and Bandit. Gitleaks, `git diff --check`, build/Twine, and clean wheel/sdist CLI installs on Python 3.12/3.14 pass.
 - A disposable release build renders only the non-empty `🚀 Features` category and ends with `**Full Changelog**: https://github.com/xeonvs/open-code-review-toolkit/compare/v0.4.1...v0.4.2`; no `🧩 Rules` or conventional prefixes appear.
+- Implementation PR #39 merged as `71af90da9258e57f1457ce86c94ffff403b8eb87` after every required check passed and no review threads remained. TestPyPI development run `30625374711` published and installed immutable `0.4.2.dev29` artifacts successfully.
+- The final release branch renders the 0.4.2 changelog without `🧩 Rules`, authorizes reproducible artifacts from source epoch `1785495495`, establishes `0.4.3` as the next development line, and leaves no repository planning closure for after publication. Issue #38 remains the external stable-publication tracker.
+- Two independent 0.4.2 release builds are byte-identical: wheel SHA-256 `0ca73e62dfaf4ebd478419cd6214c33444eff4697cd616accb6a33b7193b7e1d`, sdist SHA-256 `c7a341fd2de948c681093f03db1225cc6a145a4448fbc14fcb54b01da529f9ef`; Twine, exact release-body checks, and clean Python 3.12 wheel/Python 3.14 sdist installs pass.
 
 ## Completed Plan: Qualify OCR 1.8.1/1.8.2 and release v0.4.1
 
