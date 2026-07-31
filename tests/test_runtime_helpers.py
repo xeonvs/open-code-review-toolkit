@@ -6,6 +6,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -24,6 +25,125 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def test_composition_readback_preserves_independent_registry_entries(self) -> None:
+        composition = mcp_config.MCPComposition(
+            payload={
+                mcp_config.BUILTIN_EVIDENCE_SERVER: {
+                    "type": "stdio",
+                    "tools": [mcp_config.TOOL_NAME],
+                },
+                "documentation": {"type": "remote", "tools": ["docs_read"]},
+            },
+            capabilities=(),
+            external_servers=(),
+            secret_values=(),
+        )
+        with patched_attr(
+            mcp_config, "read_ocr_config", lambda: {"mcp_servers": composition.payload}
+        ):
+            mcp_config.verify_mcp_composition(composition)
+
+        mismatched = {"mcp_servers": {mcp_config.BUILTIN_EVIDENCE_SERVER: {}}}
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: mismatched),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "does not match"),
+        ):
+            mcp_config.verify_mcp_composition(composition)
+
+    def test_composition_keeps_external_and_replaces_stale_builtin(self) -> None:
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_docs",
+            transport="stdio",
+            command="synthetic-docs",
+            url=None,
+            args=[],
+            tools=["docs_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        current = {
+            "mcp_servers": {
+                "existing": {"type": "stdio", "tools": ["existing_read"]},
+                mcp_config.BUILTIN_EVIDENCE_SERVER: {
+                    "type": "stdio",
+                    "command": "stale-command",
+                    "tools": [mcp_config.TOOL_NAME],
+                },
+            }
+        }
+        with patched_attr(mcp_config, "read_ocr_config", lambda: current):
+            composition = mcp_config.compose_mcp_servers([external], replace=False)
+
+        self.assertEqual(
+            set(composition.payload),
+            {"existing", "synthetic_docs", mcp_config.BUILTIN_EVIDENCE_SERVER},
+        )
+        builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
+        self.assertEqual(builtin["command"], sys.executable)
+        self.assertEqual(builtin["args"], ["-I", "-m", "ocr_toolkit.evidence"])
+        self.assertEqual(builtin["setup"], "")
+        self.assertIsNot(builtin, composition.payload["existing"])
+        self.assertIsNot(builtin, composition.payload["synthetic_docs"])
+        self.assertEqual(composition.payload["synthetic_docs"]["command"], "synthetic-docs")
+        self.assertEqual(
+            [capability.server for capability in composition.capabilities],
+            [mcp_config.BUILTIN_EVIDENCE_SERVER, "existing", "synthetic_docs"],
+        )
+
+    def test_composition_rejects_tool_names_shared_by_independent_servers(self) -> None:
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_docs",
+            transport="stdio",
+            command="synthetic-docs",
+            url=None,
+            args=[],
+            tools=["shared_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        current = {"mcp_servers": {"existing": {"type": "stdio", "tools": ["shared_read"]}}}
+
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: current),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "declared by both"),
+        ):
+            mcp_config.compose_mcp_servers([external], replace=False)
+
+    def test_replace_drops_external_state_but_keeps_builtin(self) -> None:
+        with patched_attr(
+            mcp_config,
+            "read_ocr_config",
+            lambda: (_ for _ in ()).throw(AssertionError("replace must not read state")),
+        ):
+            composition = mcp_config.compose_mcp_servers([], replace=True)
+
+        self.assertEqual(set(composition.payload), {mcp_config.BUILTIN_EVIDENCE_SERVER})
+
+    def test_external_server_cannot_claim_builtin_tool(self) -> None:
+        raw = json.dumps(
+            {
+                "servers": [
+                    {
+                        "name": "synthetic_docs",
+                        "command": "synthetic-docs",
+                        "tools": [mcp_config.TOOL_NAME],
+                    }
+                ]
+            }
+        )
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
+            mcp_config.parse_mcp_servers(raw)
+
+    def test_external_server_requires_explicit_tool_allowlist(self) -> None:
+        raw = json.dumps({"synthetic_docs": {"command": "synthetic-docs", "tools": []}})
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "explicitly allow"):
+            mcp_config.parse_mcp_servers(raw)
+
     def test_runtime_config_defaults_review_language_to_english(self) -> None:
         with (
             cleared_env("OCR_REVIEW_LANGUAGE"),
@@ -333,7 +453,11 @@ class MCPConfigTests(unittest.TestCase):
             },
         )
         for server in invalid_servers:
-            with self.subTest(server=server), self.assertRaises(mcp_config.MCPConfigError):
+            server["tools"] = ["docs_read"]
+            with (
+                self.subTest(server=server),
+                self.assertRaisesRegex(mcp_config.MCPConfigError, "url|field|command"),
+            ):
                 mcp_config.parse_mcp_servers(json.dumps({"servers": [server]}))
 
     def test_native_remote_server_rejects_unsafe_headers(self) -> None:
@@ -352,12 +476,16 @@ class MCPConfigTests(unittest.TestCase):
                             "name": "remote",
                             "type": "remote",
                             "url": "https://mcp.invalid/v1",
+                            "tools": ["docs_read"],
                             "headers": headers,
                         }
                     ]
                 }
             )
-            with self.subTest(headers=headers), self.assertRaises(mcp_config.MCPConfigError):
+            with (
+                self.subTest(headers=headers),
+                self.assertRaisesRegex(mcp_config.MCPConfigError, "headers"),
+            ):
                 mcp_config.parse_mcp_servers(raw)
 
     def test_native_remote_server_rejects_duplicate_and_missing_env_headers(self) -> None:
@@ -418,8 +546,9 @@ class MCPConfigTests(unittest.TestCase):
                 "documentation": {
                     "command": "bridge",
                     "args": ["https://docs.example.invalid/mcp"],
+                    "tools": ["docs_read"],
                 },
-                "source": {"command": "source-bridge"},
+                "source": {"command": "source-bridge", "tools": ["source_read"]},
             }
         )
 
@@ -441,6 +570,7 @@ class MCPConfigTests(unittest.TestCase):
                     {
                         "name": "remote",
                         "command": "bridge",
+                        "tools": ["docs_read"],
                         "env_from": {"TOKEN": "MISSING_MCP_TOKEN"},
                     }
                 ]
@@ -449,7 +579,7 @@ class MCPConfigTests(unittest.TestCase):
 
         old_value = os.environ.pop("MISSING_MCP_TOKEN", None)
         try:
-            with self.assertRaises(mcp_config.MCPConfigError):
+            with self.assertRaisesRegex(mcp_config.MCPConfigError, "MISSING_MCP_TOKEN"):
                 mcp_config.parse_mcp_servers(raw)
         finally:
             if old_value is not None:
@@ -466,6 +596,12 @@ class MCPConfigTests(unittest.TestCase):
         with self.assertRaises(mcp_config.MCPConfigError):
             mcp_config.parse_mcp_servers(raw)
 
+    def test_parse_rejects_the_reserved_builtin_server_name(self) -> None:
+        raw = json.dumps({mcp_config.BUILTIN_EVIDENCE_SERVER: {"command": "synthetic-override"}})
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
+            mcp_config.parse_mcp_servers(raw)
+
     def test_configure_mcp_servers_writes_config_without_subprocess(self) -> None:
         raw = json.dumps(
             {
@@ -476,6 +612,7 @@ class MCPConfigTests(unittest.TestCase):
                         "args": ["https://mcp.example/sse"],
                         "setup": "",
                         "env_from": {"AUTH": "OCR_MCP_REMOTE_TOKEN"},
+                        "tools": ["remote_read"],
                     }
                 ]
             }
@@ -503,6 +640,10 @@ class MCPConfigTests(unittest.TestCase):
         self.assertEqual(config["mcp_servers"]["remote"]["command"], "bridge")
         self.assertEqual(config["mcp_servers"]["remote"]["setup"], "")
         self.assertEqual(config["mcp_servers"]["remote"]["env"], ["AUTH=bridge-secret-value"])
+        self.assertEqual(
+            config["mcp_servers"][mcp_config.BUILTIN_EVIDENCE_SERVER]["tools"],
+            ["ocr_toolkit_evidence"],
+        )
 
     def test_configure_mcp_servers_replaces_stale_servers(self) -> None:
         raw = json.dumps(
@@ -511,6 +652,7 @@ class MCPConfigTests(unittest.TestCase):
                     {
                         "name": "fresh",
                         "command": "bridge",
+                        "tools": ["fresh_read"],
                     }
                 ]
             }
@@ -536,9 +678,9 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(set(config["mcp_servers"]), {"fresh"})
+        self.assertEqual(set(config["mcp_servers"]), {"fresh", mcp_config.BUILTIN_EVIDENCE_SERVER})
 
-    def test_configure_mcp_servers_clears_config_when_disabled(self) -> None:
+    def test_configure_mcp_servers_replaces_external_config_with_builtin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             old_home = os.environ.get("HOME")
             os.environ["HOME"] = tmp
@@ -559,16 +701,18 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(config["mcp_servers"], {})
+        self.assertEqual(set(config["mcp_servers"]), {mcp_config.BUILTIN_EVIDENCE_SERVER})
 
     def test_configure_mcp_servers_merges_existing_servers_by_default(self) -> None:
-        raw = json.dumps({"local": {"command": "new", "args": []}})
+        raw = json.dumps({"local": {"command": "new", "args": [], "tools": ["local_read"]}})
         with tempfile.TemporaryDirectory() as tmp:
             old_home = os.environ.get("HOME")
             os.environ["HOME"] = tmp
             config_path = Path(tmp) / ".opencodereview" / "config.json"
             try:
-                config_writer.update_ocr_config({"mcp_servers": {"stale": {"command": "old"}}})
+                config_writer.update_ocr_config(
+                    {"mcp_servers": {"stale": {"command": "old", "tools": ["stale_read"]}}}
+                )
                 with patched_env(OCR_MCP_SERVERS_JSON=raw), cleared_env("OCR_MCP_REPLACE"):
                     exit_code = mcp_config.configure_mcp_servers()
                 config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -579,7 +723,10 @@ class MCPConfigTests(unittest.TestCase):
                     os.environ["HOME"] = old_home
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(set(config["mcp_servers"]), {"local", "stale"})
+        self.assertEqual(
+            set(config["mcp_servers"]),
+            {"local", "stale", mcp_config.BUILTIN_EVIDENCE_SERVER},
+        )
 
     def test_configure_native_remote_server_does_not_print_url_or_secret(self) -> None:
         raw = json.dumps(
@@ -588,6 +735,7 @@ class MCPConfigTests(unittest.TestCase):
                     "type": "remote",
                     "url": "https://mcp.synthetic.invalid/v1?tenant=secret-query",
                     "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+                    "tools": ["remote_read"],
                 }
             }
         )
@@ -657,6 +805,21 @@ class MCPConfigTests(unittest.TestCase):
 
             with self.assertRaises(config_writer.OCRConfigError):
                 config_writer.read_ocr_config(config_path)
+
+    def test_config_writer_rejects_oversized_and_linked_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b"{" + b"x" * config_writer.MAX_OCR_CONFIG_BYTES)
+            with self.assertRaisesRegex(config_writer.OCRConfigError, "bounded byte limit"):
+                config_writer.read_ocr_config(oversized)
+
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            linked = root / "linked.json"
+            os.link(target, linked)
+            with self.assertRaisesRegex(config_writer.OCRConfigError, "one link"):
+                config_writer.read_ocr_config(linked)
 
     def test_invalid_json_error_does_not_echo_secret_payload(self) -> None:
         stderr = io.StringIO()

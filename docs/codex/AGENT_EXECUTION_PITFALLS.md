@@ -32,12 +32,23 @@ This note records recurring execution mistake patterns discovered during real wo
 - Do not turn one-time private marker criteria into a tracked denylist or test fixture.
 - Do not use real provider payloads, hosts, repositories, or credentials in public fixtures.
 
+## Relying On The Remote Secret Scan As The First History Check
+
+**Failure mode:** Local file and package checks pass, but the ready pull request fails because a secret-shaped synthetic fixture exists in an intermediate commit. A tip-only correction cannot satisfy a CI scanner that inspects feature history.
+
+**Why it happens:** Secret scanning is treated as a remote workflow concern or as a working-tree scan. The local release gate therefore does not reproduce the CI action's pinned scanner version and first-parent commit range before history is published.
+
+**Required prevention:** Run the repository-owned Gitleaks wrapper before every push and before expensive closure validation. Keep its scanner version explicit and identical to CI, scan the complete first-parent feature range, fail closed if the base ref or exact tool version is unavailable, and rewrite unpublished feature history when the finding exists only in an intermediate commit. Do not hide provider-shaped fixtures behind an allowlist when an equally useful non-secret-shaped synthetic value proves the contract.
+
 ## Tooling And Validation Hygiene
 
 - Prefer the narrowest reproducer before broad reruns.
 - Verify both UTF-8 byte limits and Python character limits when changing note formatting.
 - Treat tests, lint, typing, artifact checks, install smoke, privacy scans, and source-integrity checks as distinct gates.
 - Pin third-party Actions by full commit SHA and keep readable version comments beside the pin.
+- When a review finds one boundary defect, enumerate and inspect sibling boundaries before declaring the class fixed.
+- Give negative tests valid preconditions up to the exact branch they target, then assert the precise error contract. A fixture rejected earlier for an unrelated reason is missing coverage.
+- Use NUL-delimited Git records for paths, explicit descriptor-ownership transfer for `fdopen`, and recursive redaction for nested diagnostic configuration.
 
 ## Learning Loop
 
@@ -58,3 +69,51 @@ This note records recurring execution mistake patterns discovered during real wo
 4. Keep independent foundations parallel and join them only at the first interface that consumes both.
 5. Select ecosystem and framework priorities from anonymized inventory, deterministic detection, synthetic fixtures, and expected review impact rather than parser familiarity.
 6. Review critical forbidden and required edges explicitly when the backlog changes. Do not encode mutable item counts, identifiers, wording, or temporary dependency edges into the permanent product test suite.
+
+## Treating post-hoc checks as bounded I/O
+
+**Failure mode:** Code captures an entire Git response or newline-delimited request and only then checks its size or item count. Character counts are also used where the contract is bytes.
+
+**Why it happens:** Ordinary fixtures make the final value look bounded, hiding the allocation and decoding that already happened. ASCII-only tests hide byte/code-point divergence.
+
+**Correction:** Bound the read itself, including persisted configuration and sibling helper paths; stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git or config input, and subprocess termination.
+
+## Trusting toolkit-created evidence on reload
+
+**Failure mode:** Collection validates records, but reload assigns snapshots, deltas, or diagnostics directly. A replaced private artifact bypasses the original redaction, size, or cross-reference checks.
+
+**Why it happens:** File ownership is confused with future content integrity. Persistence is not treated as a fresh deserialization boundary.
+
+**Correction:** Validate, bound, normalize, redact, and cross-check every persisted field on every read. Test missing references, oversized nested delta values, secrets, control characters, hard links, and schema/type mismatches.
+
+## Clearing only process-level Git overrides
+
+**Failure mode:** A primary Git reader clears `GIT_DIR` and object-store variables, but repository replacement refs, global/system config, or a sibling posting helper still changes which objects a reviewed SHA names.
+
+**Why it happens:** Git isolation is treated as one environment-variable checklist or one module's concern instead of a shared object-identity invariant. Removing `GIT_REPLACE_REF_BASE` prevents a custom namespace but does not disable default `refs/replace`.
+
+**Correction:** Audit every Git plumbing caller together. Scrub process-level overrides, point global/system configuration to the null device, constrain repository configuration, set `GIT_NO_REPLACE_OBJECTS=1`, and verify with a real repository replacement-ref regression.
+
+## Testing only the canonical parser spelling
+
+**Failure mode:** A parser accepts fixtures that mirror its implementation but rejects equivalent valid syntax: reordered keys, another indentation width, scalar sources containing colons, environment markers, alternate digests, malformed optional URLs, or additional Git status letters.
+
+**Why it happens:** Fixtures come from the happy-path algorithm rather than the external format's semantic grammar and degradation policy.
+
+**Correction:** Write a contract matrix before implementation. Cover equivalent forms, optional and unknown fields, malformed optional values, case variants, marker semantics, rename/copy/type changes, and bounded degradation that preserves unrelated facts.
+
+## Proving subprocess integration only with mocks
+
+**Failure mode:** A command works in unit tests but fails under the real caller because `PATH`, working directory, artifact contents, protocol revision, permissions, or import resolution differs.
+
+**Why it happens:** Function tests are mistaken for installation and lifecycle tests. Editable environments accidentally supply executables and modules absent from clean installs.
+
+**Correction:** Test built wheel and sdist artifacts in clean environments. Restrict `PATH`, add a hostile repository-local shadow package, verify private modes, use the exact protocol client when practical, and exercise the complete process lifecycle.
+
+## Letting outcome branches drift
+
+**Failure mode:** Normal and error reports include mandatory evidence or usage metadata, while a clean or skipped branch omits it.
+
+**Why it happens:** Outcomes are assembled independently and tests assert prose rather than shared invariants.
+
+**Correction:** Compose mandatory metadata once and apply it to every outcome. Test skipped, clean, warning, error, and finding states through one table, including zero-value omission and optional emoji behavior.

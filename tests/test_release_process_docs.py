@@ -7,6 +7,7 @@ AGENT_GUIDANCE = PROJECT_ROOT / "AGENTS.md"
 PRINCIPLES = PROJECT_ROOT / "docs" / "engineering" / "project_principles.md"
 PITFALLS = PROJECT_ROOT / "docs" / "codex" / "AGENT_EXECUTION_PITFALLS.md"
 RELEASE_GUIDE = PROJECT_ROOT / "docs" / "release.md"
+DEVELOPMENT_GUIDE = PROJECT_ROOT / "docs" / "development.md"
 
 
 def test_agent_guidance_keeps_release_required_work_open_through_publication() -> None:
@@ -28,3 +29,23 @@ def test_durable_guidance_distinguishes_readiness_from_delivery() -> None:
     assert "production PyPI" in pitfalls
     assert "Do not mark the objective complete after step 1 or 2" in release
     assert "release/vX.Y.Z" in release
+
+
+def test_boundary_guidance_has_one_authoritative_instruction_stack() -> None:
+    """Keep concise actions, invariants, pitfalls, and tests connected."""
+
+    guidance = AGENT_GUIDANCE.read_text(encoding="utf-8")
+    principles = PRINCIPLES.read_text(encoding="utf-8")
+    pitfalls = PITFALLS.read_text(encoding="utf-8")
+    development = DEVELOPMENT_GUIDE.read_text(encoding="utf-8")
+
+    assert "docs/engineering/project_principles.md` is authoritative" in guidance
+    assert "docs/codex/AGENT_EXECUTION_PITFALLS.md" in guidance
+    assert "docs/development.md" in guidance
+    assert "## Boundary Invariants" in principles
+    assert "## Treating post-hoc checks as bounded I/O" in pitfalls
+    assert "## Trusting toolkit-created evidence on reload" in pitfalls
+    assert "## Testing only the canonical parser spelling" in pitfalls
+    assert "## Proving subprocess integration only with mocks" in pitfalls
+    assert "## Letting outcome branches drift" in pitfalls
+    assert "## Boundary-focused test checklist" in development

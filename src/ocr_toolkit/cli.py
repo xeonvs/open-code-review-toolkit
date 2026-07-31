@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ocr_toolkit import configure, mcp_config, preflight, review_runner
-from ocr_toolkit.context import render as context_render
 from ocr_toolkit.posting.workflow import main as posting_main
 
 
@@ -30,15 +29,6 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
     review_parser.add_argument(
         "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
-    )
-
-    context_parser = subparsers.add_parser(
-        "context", help="Generate bounded repository review context."
-    )
-    context_parser.add_argument(
-        "--output",
-        default=".review-context/dependencies.md",
-        help="Output markdown path.",
     )
 
     post_parser = subparsers.add_parser("post", help="Publish an OCR result artifact to GitLab.")
@@ -70,12 +60,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "review":
         ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
         try:
-            return review_runner.run_review(Path(args.result), Path(args.stderr), ocr_args)
+            return review_runner.run_evidence_review(Path(args.result), Path(args.stderr), ocr_args)
         except review_runner.ReviewRunnerError as exc:
             print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2
-    if args.command == "context":
-        return context_render.main(["--output", args.output])
     if args.command == "post":
         return posting_main([args.result, args.stderr])
     raise AssertionError(f"unhandled command: {args.command}")

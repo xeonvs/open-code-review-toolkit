@@ -1,9 +1,9 @@
 # Open Code Review Toolkit
 
-Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository context generation, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
+Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
 > [!NOTE]
-> The project is under active development. It currently targets Python 3.10-3.14 on Linux and macOS; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
+> The project is under active development; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
 
 ## Install
 
@@ -17,7 +17,7 @@ ocr-ci --help
 
 The current compatibility target is OCR `1.8.0`. CI should pin the release and verify its published checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
-Review output defaults to English. Set `OCR_REVIEW_LANGUAGE=Russian` to use Russian consistently in both OCR configuration and generated review context.
+Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
 
@@ -27,7 +27,7 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
-Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the context generator supplies them to OCR only when the current merge request is not changing that file. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
+Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the evidence collector supplies target-ref decisions to OCR and never lets a source change self-authorize its own review. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
 
 ## Project development
 
@@ -42,13 +42,11 @@ The project is evolving from bounded background generation toward a shared Repos
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
 2. Pin and checksum the OCR binary.
 3. Install this package.
-4. Run the five helper stages around `ocr review`:
+4. Run the four public helper stages around `ocr review`:
 
 ```console
 ocr-ci preflight
 ocr-ci configure
-ocr-ci mcp-config
-ocr-ci context --output .review-context/dependencies.md
 ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- ... --format json
 ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 ```

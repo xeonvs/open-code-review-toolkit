@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
+requires = ["hatchling>=1.31.0", "hatch-vcs>=0.5.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,7 +7,7 @@ name = "open-code-review-toolkit"
 dynamic = ["version"]
 description = "Unofficial GitLab CI integration layer for Open Code Review"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.12,<3.15"
 license = { file = "LICENSE" }
 authors = [{ name = "Open Code Review Toolkit contributors" }]
 keywords = ["code-review", "gitlab", "ci", "open-code-review"]
@@ -18,8 +18,6 @@ classifiers = [
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -39,16 +37,16 @@ ocr-ci = "ocr_toolkit.cli:main"
 [dependency-groups]
 dev = [
   "bandit==1.9.4",
-  "build>=1.2.2",
-  "coverage[toml]>=7.6",
-  "hatch-vcs>=0.4",
-  "mypy>=1.15",
-  "pip-audit>=2.7",
-  "pytest>=8.3",
-  "pytest-cov>=6.0",
-  "ruff>=0.11",
-  "towncrier>=24.8",
-  "twine>=6.1",
+  "build>=1.5.0",
+  "coverage[toml]>=7.15.2",
+  "hatch-vcs>=0.5.0",
+  "mypy>=2.3.0",
+  "pip-audit>=2.10.1",
+  "pytest>=9.1.1",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.16.0",
+  "towncrier>=25.8.0",
+  "twine>=7.0.0",
 ]
 
 [tool.hatch.version]
@@ -67,13 +65,15 @@ only-include = ["src", "README.md", "LICENSE", "pyproject.toml"]
 fallback_version = "0.3.0.dev0"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["E402", "E501", "E731", "B007", "B023", "B905", "SIM103", "SIM105", "SIM117", "RUF002", "RUF012", "UP022"]
+# These upgrade rules describe a separate future modernization of the existing
+# codebase; changing the minimum runtime must not silently rewrite public types.
+ignore = ["E402", "E501", "E731", "B007", "B023", "B905", "SIM103", "SIM105", "SIM117", "RUF002", "RUF012", "UP017", "UP022", "UP040", "UP042", "UP045", "UP047"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
@@ -83,7 +83,7 @@ ignore = ["E402", "E501", "E731", "B007", "B023", "B905", "SIM103", "SIM105", "S
 exclude = ["src/ocr_toolkit/_version.py"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 strict = true
 files = ["src/ocr_toolkit"]
 exclude = ["src/ocr_toolkit/_version.py"]

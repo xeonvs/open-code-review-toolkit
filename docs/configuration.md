@@ -1,6 +1,6 @@
 # Environment configuration
 
-Open Code Review Toolkit uses environment variables only in v0.1. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
+Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
 
 ## OCR and LLM
 
@@ -8,7 +8,7 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 | --- | --- |
 | `OCR_LLM_URL` | OpenAI-compatible chat or responses endpoint. |
 | `OCR_LLM_MODEL` | Exact model identifier passed to OCR. |
-| `OCR_REVIEW_LANGUAGE` | Single review language used by OCR config and generated context. Defaults to `English`; set `Russian` for Russian review output. |
+| `OCR_REVIEW_LANGUAGE` | Single review language used by OCR configuration. Defaults to `English`; another explicit language such as `Russian` is optional. |
 | `OCR_LLM_TOKEN` | LLM credential. Never written into generated context. |
 | `OCR_LLM_AUTH_HEADER` | Optional authorization header name; defaults to `Authorization`. |
 | `OCR_LLM_EXTRA_HEADERS` | Optional JSON object of additional string headers. |
@@ -27,7 +27,7 @@ Open Code Review Toolkit uses environment variables only in v0.1. Empty values a
 | `OCR_MCP_SERVERS_JSON` | JSON object mapping names to bounded stdio or native Streamable HTTP definitions. |
 | `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
 
-Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.0 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
+OCR receives every MCP as an independent named entry in its `mcp_servers` registry. The toolkit always installs `ocr_toolkit_evidence` as one mandatory entry; each configured local or remote MCP is a separate optional sibling entry and is started or contacted by OCR independently. Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. Every optional server requires a non-empty explicit `tools` allowlist so its discovered tool set cannot shadow the mandatory evidence tool. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.0 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
 
 ```json
 {
@@ -53,13 +53,21 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 ## Posting controls
 
-`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, and `OCR_POST_ERROR_DETAILS` control write behavior and bounded error reporting. Invalid numeric or boolean values fail closed or fall back to conservative defaults as documented in command output. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, and `OCR_POST_EMOJI` control write behavior and bounded error reporting. Invalid numeric or boolean values fail closed or fall back to conservative defaults as documented in command output. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
 
-`ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. `OCR_POST_ERROR_DETAILS=1` separately opts into including that same safe excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
+`OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab status summaries and structured severity/category tags. This does not rewrite emoji already contained in upstream OCR finding text.
 
-## Context controls
+`ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
 
-The `OCR_CONTEXT_*` family bounds files, bytes, changed paths, instructions, manifest content, dependency output, and generated background size. `OCR_BACKGROUND_MAX_CHARS` defaults to and is capped at `7950`; `OCR_BACKGROUND_MAX_BYTES` independently enforces the UTF-8 byte budget. The default output is `.review-context/dependencies.md`. The generator rejects symlink escapes and prunes common vendor/build directories.
+## Repository evidence
+
+`ocr-ci review` owns this lifecycle. Before OCR starts it collects the exact immutable `--from`/`--to` refs (or the parent/commit pair selected by `--commit`), writes bounded redacted schema-versioned evidence, builds OCR's MCP registry with the mandatory evidence entry plus each independently configured optional server, reads the registry back, self-queries the evidence summary/list/get contract, and supplies the matching compact bootstrap to OCR. Callers may add inline OCR `--background` text, but cannot replace the toolkit-owned background file. A completed OCR review is accepted only when structured `tool_calls.by_tool` proves at least one `ocr_toolkit_evidence` call; a legitimately skipped no-supported-files review remains exempt.
+
+The private `.review-context/evidence.json` store and `.review-context/bootstrap.md` projection are internal implementation artifacts, not public path configuration. Keep `.review-context/` ignored. The directory is mode `0700`, files are mode `0600`, and symlink or non-regular-file targets are rejected. The collector reads Git objects without checkout, does not follow repository symlinks or submodules, never executes repository content, and treats source-ref policy changes as untrusted.
+
+The compact bootstrap contains the same safe inventory of independent server/tool entries that was written to OCR configuration. The mandatory built-in server exposes `ocr_toolkit_evidence`, with `summary`, paginated/filterable `list`, and stable-ID `get` actions. It has no mutation action, network access, or shell execution. Optional MCP entries expose their own allowlisted tools; they can coexist with but cannot remove or shadow the mandatory entry.
+
+The review step maps OCR's structured `tool_calls.by_tool` counters onto the exact validated registry used for that invocation and stores only positive per-server counts in a schema-versioned `_ocr_toolkit` receipt inside the private result. The later GitLab posting step reads that receipt instead of rebuilding MCP configuration from a possibly changed environment. Its summary omits configured-but-unused servers and all zero counters; the receipt never stores server URLs, commands, arguments, headers, tool inputs, tool results, or repository contents.
 
 ### Accepted project decisions
 

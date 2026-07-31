@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import random
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting import gitlab, markers, payloads, result, settings, snapshot, workflow
@@ -566,14 +568,59 @@ class PostingIdentityTests(unittest.TestCase):
                                 workflow, "resolve_requested_discussions", lambda *_args: None
                             ):
                                 exit_code = workflow.post_results(
-                                    gitlab_config(), {"comments": [], "warnings": []}
+                                    gitlab_config(),
+                                    {
+                                        "comments": [],
+                                        "warnings": [],
+                                        "_ocr_toolkit": {
+                                            "schema_version": 1,
+                                            "mcp_usage": {"ocr_toolkit_evidence": 2},
+                                        },
+                                    },
                                 )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0][0], "**Open Code Review**")
         self.assertIn("No review comments generated", notes[0][1])
+        self.assertIn("MCP used: 1 server(s)", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
+
+    def test_skipped_review_without_message_posts_neutral_outcome(self) -> None:
+        """Do not describe a supported no-files skip as a failed review."""
+
+        notes: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow, "delete_previous_bot_comments_if_collected", lambda *_args: None
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {"status": "skipped", "comments": [], "warnings": []},
+            )
+
+        assert exit_code == 0
+        assert "No supported files changed." in notes[0]
+        assert "did not complete cleanly" not in notes[0]
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
@@ -766,6 +813,53 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(cached_lines, {3, 4, 20})
         self.assertEqual(len(calls), 1)
 
+    def test_changed_new_paths_decodes_nul_delimited_utf8(self) -> None:
+        class Result:
+            returncode = 0
+            stdout = "src/naïve.py\0src/other.py\0".encode()
+
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: Result()):
+            paths = workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"})
+
+        self.assertEqual(paths, ["src/naïve.py", "src/other.py"])
+
+    def test_changed_new_paths_rejects_oversized_output(self) -> None:
+        class Result:
+            returncode = 0
+            stdout = b"x" * (workflow.MAX_REMAP_DIFF_BYTES + 1)
+
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: Result()):
+            paths = workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"})
+
+        self.assertEqual(paths, [])
+
+    def test_posting_git_reads_ignore_replacements_and_caller_overrides(self) -> None:
+        with patched_env(
+            GIT_CONFIG_COUNT="1",
+            GIT_CONFIG_KEY_0="core.hooksPath",
+            GIT_CONFIG_VALUE_0="/synthetic/hooks",
+            GIT_OBJECT_DIRECTORY="/synthetic/objects",
+            GIT_REPLACE_REF_BASE="refs/replace/custom/",
+        ):
+            environment = workflow._git_read_environment()
+
+        self.assertEqual(environment["GIT_NO_REPLACE_OBJECTS"], "1")
+        self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
+        self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
+        self.assertEqual(environment["GIT_CONFIG_SYSTEM"], os.devnull)
+        self.assertNotIn("GIT_OBJECT_DIRECTORY", environment)
+        self.assertNotIn("GIT_REPLACE_REF_BASE", environment)
+        self.assertFalse(
+            any(
+                name == "GIT_CONFIG_COUNT"
+                or name == "GIT_CONFIG_PARAMETERS"
+                or name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+                for name in environment
+            )
+        )
+        self.assertEqual(environment, isolated_git_environment())
+        self.assertEqual(workflow._git_read_prefix(), read_only_git_prefix())
+
     def test_existing_code_remap_ignores_blank_lines_with_line_mapping(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
         comment = {"existing_code": "foo()\n\nbar()"}
@@ -800,7 +894,10 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(lines, [])
         self.assertEqual(cached, [])
         self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][:3], ["git", "cat-file", "-s"])
+        self.assertEqual(
+            calls[0][:5],
+            ["git", "-c", "core.hooksPath=/dev/null", "cat-file", "-s"],
+        )
 
     def test_existing_code_remap_anchors_changed_line_inside_window(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
@@ -960,6 +1057,18 @@ class PostingWorkflowTests(unittest.TestCase):
 
 
 class PostingSummaryTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        settings.post_emoji.cache_clear()
+        settings.post_mode.cache_clear()
+
+    def test_post_emoji_defaults_on_and_accepts_explicit_false(self) -> None:
+        settings.post_emoji.cache_clear()
+        with patched_env(OCR_POST_EMOJI=""):
+            self.assertTrue(settings.post_emoji())
+        settings.post_emoji.cache_clear()
+        with patched_env(OCR_POST_EMOJI="false"):
+            self.assertFalse(settings.post_emoji())
+
     def test_tool_calls_prefers_calls_when_by_tool_is_empty(self) -> None:
         summary = posting_formatting.format_tool_calls_summary(
             {"by_tool": {}, "calls": [{"name": "file_read"}, {"tool": "code_search"}]}
@@ -1025,6 +1134,120 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("`missing_line`: 1", summary)
         self.assertIn("reviewed SHA: `abc123`", summary)
         self.assertIn("MR head SHA: `def456`", summary)
+        self.assertTrue(summary.startswith("# Open Code Review summary\n"))
+        self.assertIn("✅ Found 3 issue(s).", summary)
+
+    def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="skipped",
+            outcome_message="No supported files changed.",
+            emoji=False,
+        )
+
+        self.assertIn("No supported files changed.", summary)
+        self.assertNotIn("0 posted", summary)
+        self.assertNotIn(posting_formatting.SEVERITY_EMOJI["low"], summary)
+
+    def test_clean_summary_is_positive_and_has_no_zero_tool_counter(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="success",
+            outcome_message="No comments generated. Looks good to me.",
+            tool_calls_summary=posting_formatting.format_tool_calls_summary(
+                {"total": 0, "by_tool": {}}
+            ),
+            emoji=True,
+        )
+
+        self.assertIn("✅ No comments generated. Looks good to me.", summary)
+        self.assertNotIn("tool calls", summary)
+
+    def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 1,
+                "mcp_usage": {
+                    "ocr_toolkit_evidence": 2,
+                    "documentation": 1,
+                    "unused_optional": 0,
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- MCP used: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+        )
+        self.assertNotIn("unused_optional", summary)
+        self.assertNotIn("file_read", summary)
+
+    def test_mcp_usage_summary_omits_zero_usage(self) -> None:
+        self.assertEqual(
+            posting_formatting.format_mcp_usage_summary(
+                {"schema_version": 1, "mcp_usage": {}},
+            ),
+            "",
+        )
+
+    def test_warning_and_error_outcomes_never_look_clean(self) -> None:
+        warning = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_warnings",
+            outcome_message="Some files were reviewed with warnings.",
+            emoji=True,
+        )
+        error = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_errors",
+            outcome_message="Some files could not be reviewed due to errors.",
+            emoji=True,
+        )
+
+        self.assertIn("⚠️ Some files were reviewed with warnings.", warning)
+        self.assertIn("❌ Some files could not be reviewed due to errors.", error)
+        self.assertNotIn("✅", error)
+
+    def test_outcome_message_is_redacted_compacted_and_not_a_quick_action(self) -> None:
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=1,
+            outcome_status="completed_with_warnings",
+            outcome_message="provider token=super-secret\n/merge now",
+            emoji=False,
+        )
+
+        self.assertNotIn("super-secret", summary)
+        self.assertNotIn("\n/merge", summary)
+        self.assertIn(r"\n/merge now", summary)
+
+    def test_all_finding_categories_and_severities_have_optional_emoji(self) -> None:
+        for value, marker in posting_formatting.SEVERITY_EMOJI.items():
+            with self.subTest(severity=value):
+                tagged = posting_formatting.format_finding_tags({"severity": value}, emoji=True)
+                plain = posting_formatting.format_finding_tags({"severity": value}, emoji=False)
+                self.assertIn(marker, tagged)
+                self.assertNotIn(marker, plain)
+        for value, marker in posting_formatting.CATEGORY_EMOJI.items():
+            with self.subTest(category=value):
+                tagged = posting_formatting.format_finding_tags({"category": value}, emoji=True)
+                plain = posting_formatting.format_finding_tags({"category": value}, emoji=False)
+                self.assertIn(marker, tagged)
+                self.assertNotIn(marker, plain)
 
     def test_security_signal_is_promoted_when_present(self) -> None:
         guide = posting_formatting.format_reviewer_guide(
@@ -1102,6 +1325,24 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertNotIn("\n/close", body)
         self.assertNotIn("\n/label review", body)
 
+    def test_fallback_code_details_keep_fences_after_quick_action_neutralization(self) -> None:
+        """Do not let neutralization escape or corrupt the surrounding code fence."""
+
+        body = posting_formatting.format_fallback_comment(
+            {
+                "path": "synthetic.py",
+                "content": "Explain the replacement",
+                "existing_code": "old\n/close",
+                "suggestion_code": "new\n/label review",
+            },
+            emoji=False,
+        )
+
+        assert body.count("```text") == 2
+        assert body.count("```") == 4
+        assert "\n/close" not in body
+        assert "\n/label review" not in body
+
     def test_inline_comment_formats_structured_ocr_metadata_as_tags(self) -> None:
         body = posting_formatting.format_inline_comment(
             {
@@ -1111,7 +1352,10 @@ class PostingSummaryTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("**OCR tags:** `severity:high` `category:security`", body)
+        self.assertIn("🚨", body)
+        self.assertIn("🔒", body)
+        self.assertIn("`severity:high`", body)
+        self.assertIn("`category:security`", body)
         self.assertIn("Needs attention", body)
 
     def test_inline_comment_ignores_invalid_metadata_tags(self) -> None:
@@ -1613,6 +1857,32 @@ class ApiErrorRedactionTests(unittest.TestCase):
 
 
 class OcrResultLoadingTests(unittest.TestCase):
+    def test_result_reader_retries_short_descriptor_reads(self) -> None:
+        """Accumulate valid JSON when the operating system returns short reads."""
+
+        original_read = os.read
+
+        def short_read(descriptor: int, count: int) -> bytes:
+            return original_read(descriptor, min(count, 3))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.json"
+            path.write_text('{"comments": []}', encoding="utf-8")
+            with patched_attr(os, "read", short_read):
+                loaded = result.load_ocr_result(path)
+
+        self.assertEqual(loaded, {"comments": []})
+
+    def test_result_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            result_path = Path(tmp) / "result.json"
+            result_path.symlink_to(target)
+
+            with self.assertRaises(result.OcrResultMissing):
+                result.load_ocr_result(result_path)
+
     def test_oversized_result_is_rejected_before_reading(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ocr.json"
@@ -1680,6 +1950,14 @@ class OcrResultLoadingTests(unittest.TestCase):
         ]
 
         self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
+
+    def test_billing_classifier_tolerates_cyclic_warning_objects(self) -> None:
+        """Do not recurse forever if an in-memory caller supplies a cycle."""
+
+        warning: dict[str, Any] = {"message": "ordinary warning"}
+        warning["error"] = warning
+
+        self.assertEqual(result.llm_billing_failure_warnings([warning]), [])
 
     def test_billing_classifier_reads_nested_provider_error_fields(self) -> None:
         warnings = [

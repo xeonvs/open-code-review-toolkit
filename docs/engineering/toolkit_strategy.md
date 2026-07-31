@@ -31,9 +31,9 @@ Repository-maintenance analyzers such as Bandit remain valid quality controls fo
 
 ## Current state
 
-The current context implementation is a bounded Markdown generator rather than an evidence engine. It already detects changed-file categories, reads selected manifests, extracts Python, JavaScript, Go, PHP, Ansible, container, and GitLab CI facts, and includes target-branch-safe project guidance and accepted decisions. It redacts sensitive values, limits reads and output, and degrades explicitly when evidence is incomplete.
+The M1 implementation provides a schema-versioned Repository Evidence Engine with bounded immutable base/head reads, typed dependency/runtime/image/guidance records and deltas, redaction-before-storage, a compact bootstrap, and the built-in read-only `ocr_toolkit_evidence` MCP server. MCP configuration registers that server alongside reviewed external stdio or remote servers with explicit tool allowlists.
 
-These capabilities are partial foundations: most facts are rendered directly, dependency versions primarily reflect declarations rather than resolved source/target state, and `context/render.py` still combines collection, prioritization, and presentation. MCP configuration currently validates and installs external stdio servers with explicit tool allowlists; the toolkit does not yet provide a built-in evidence MCP.
+The legacy bounded Markdown renderer remains temporarily isolated as a parity projection while characterization and end-to-end checks prove semantic retention. It is not a source for typed facts and is removed with its CLI/environment contract after those gates pass.
 
 GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
 
@@ -67,13 +67,13 @@ The evidence model is the main extension point. Ecosystem and framework plugins 
 
 ## Compact bootstrap and built-in evidence MCP
 
-The OCR background should become a compact bootstrap, normally around 1,500-2,500 characters and always below the existing toolkit/OCR hard limit. It contains only authoritative constraints and trust instructions, base/head identity, detected ecosystems and frameworks, material runtime or dependency changes, normalized external reference identifiers, available MCP capabilities, relevant accepted decisions, and short project-guidance hints.
+The OCR background should become a compact bootstrap, normally around 1,500-2,500 characters and always below the existing toolkit/OCR hard limit. It contains only authoritative constraints and trust instructions, base/head identity, detected ecosystems and frameworks, material runtime or dependency changes, normalized external reference identifiers, the validated composed MCP capability inventory, relevant accepted decisions, and short project-guidance hints. Bootstrap planning and OCR MCP configuration consume the same composition plan so the instructions cannot advertise unavailable tools or omit available allowlisted tools.
 
 Complete manifests, dependency inventories, guidance documents, and external issue/page contents do not belong in the bootstrap. Detailed repository facts are available on demand through a built-in server registered under a reserved namespace such as `ocr_toolkit_evidence`, with tools prefixed `ocr_toolkit_`. Candidate tools expose review environment, changed components, dependency state and deltas, framework state, version evidence, and accepted decisions.
 
-The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. External MCP configuration is composed with this server rather than replacing it. Reserved names prevent downstream configuration from shadowing built-in tools.
+The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. External MCP configuration is composed with this server rather than replacing it. The built-in server remains present even when replacement mode intentionally discards stale external OCR configuration. Reserved server and tool names prevent downstream configuration from shadowing built-in capabilities.
 
-Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. `legacy_background` remains the compatibility and rollback projection until the built-in server is registered and its OCR capability contract passes; `compact_bootstrap` must not become the default in an intermediate release that removes detailed facts without providing on-demand evidence.
+Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. The legacy background projection may be removed only after the built-in server is registered, its OCR capability contract passes, and semantic parity is proven on non-empty immutable ref evidence. `compact_bootstrap` must never remove detailed facts without providing the same facts on demand through the built-in MCP.
 
 ## Evidence domains
 

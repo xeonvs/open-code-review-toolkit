@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 from ocr_toolkit import cli
 from tests.support import patched_attr
@@ -15,16 +19,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["preflight"]).command, "preflight")
         self.assertEqual(parser.parse_args(["configure"]).command, "configure")
         self.assertEqual(parser.parse_args(["mcp-config"]).command, "mcp-config")
-        self.assertEqual(parser.parse_args(["context"]).command, "context")
         self.assertEqual(parser.parse_args(["post"]).command, "post")
-
-    def test_context_dispatch_forwards_output(self) -> None:
-        calls: list[list[str]] = []
-        with patched_attr(cli.context_render, "main", lambda args: calls.append(args) or 7):
-            result = cli.main(["context", "--output", "context.md"])
-
-        self.assertEqual(result, 7)
-        self.assertEqual(calls, [["--output", "context.md"]])
 
     def test_post_dispatch_forwards_artifact_paths(self) -> None:
         calls: list[list[str]] = []
@@ -33,6 +28,28 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result, 3)
         self.assertEqual(calls, [["result.json", "ocr.log"]])
+
+    def test_raw_source_checkout_import_has_no_duplicate_release_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / "ocr_toolkit"
+            package.mkdir()
+            source = Path(__file__).resolve().parents[1] / "src" / "ocr_toolkit" / "__init__.py"
+            (package / "__init__.py").write_text(
+                source.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            command = (
+                "import sys; "
+                f"sys.path.insert(0, {directory!r}); "
+                "import ocr_toolkit; print(ocr_toolkit.__version__)"
+            )
+            completed = subprocess.run(
+                [sys.executable, "-c", command],
+                capture_output=True,
+                check=True,
+                text=True,
+            )
+
+        self.assertEqual(completed.stdout.strip(), "0+unknown")
 
 
 if __name__ == "__main__":

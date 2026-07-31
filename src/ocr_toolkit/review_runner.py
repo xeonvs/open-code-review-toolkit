@@ -2,15 +2,36 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import subprocess
 import sys
 from contextlib import ExitStack
+from dataclasses import dataclass
 from io import BufferedWriter
 from pathlib import Path
 
+from ocr_toolkit import mcp_config
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.evidence.artifacts import (
+    prepare_artifact_directory,
+    repository_artifacts,
+    write_private_text,
+)
+from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.invocation import collect_invocation_evidence
+from ocr_toolkit.evidence.mcp import TOOL_NAME, call_tool, evidence_summary
+from ocr_toolkit.evidence.project import render_bootstrap
+from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.ocr_result import (
+    OcrResultMalformed,
+    OcrResultMissing,
+    OcrResultTooLarge,
+    attach_toolkit_metadata,
+)
+from ocr_toolkit.providers.gitlab import invocation_identifiers
 
 STDERR_PROBE_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
@@ -18,6 +39,265 @@ DEFAULT_DIAGNOSTIC_CHARS = 4_000
 
 class ReviewRunnerError(Exception):
     """The local OCR review process could not be started safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewRefs:
+    """Name the immutable base and head refs represented by one OCR review."""
+
+    base: str
+    head: str
+
+
+def _verify_evidence_mcp(store: EvidenceStore) -> None:
+    """Exercise summary, paginated list, and stable-ID get before starting OCR."""
+
+    summary = call_tool(store, {"action": "summary"})
+    if summary.get("isError") is True:
+        raise ReviewRunnerError("OCR evidence MCP summary self-query failed")
+    listed = call_tool(store, {"action": "list", "ref": "head", "page_size": 1})
+    if listed.get("isError") is True:
+        raise ReviewRunnerError("OCR evidence MCP list self-query failed")
+    content = listed.get("content")
+    if not isinstance(content, list) or not content or not isinstance(content[0], dict):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned an invalid envelope")
+    text = content[0].get("text")
+    if not isinstance(text, str):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid text")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid JSON") from exc
+    records = payload.get("records") if isinstance(payload, dict) else None
+    if not isinstance(records, list):
+        raise ReviewRunnerError("OCR evidence MCP list self-query returned invalid records")
+    if records:
+        record_id = records[0].get("id") if isinstance(records[0], dict) else None
+        fetched = call_tool(store, {"action": "get", "id": record_id})
+        if fetched.get("isError") is True:
+            raise ReviewRunnerError("OCR evidence MCP get self-query failed")
+
+
+def _mcp_usage_receipt(
+    payload: dict[str, object], composition: mcp_config.MCPComposition
+) -> dict[str, object]:
+    """Return bounded MCP usage tied to one validated review-time registry."""
+
+    status = payload.get("status")
+    if status not in {"success", "completed_with_warnings", "completed_with_errors"}:
+        if status == "skipped":
+            tool_calls = payload.get("tool_calls")
+            by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+            if (
+                payload.get("message") != "No supported files changed."
+                or payload.get("comments") != []
+                or not isinstance(tool_calls, dict)
+                or tool_calls.get("total") != 0
+                or by_tool != {}
+            ):
+                raise ReviewRunnerError(
+                    "OCR skipped result does not match the pinned no-supported-files contract"
+                )
+            return {"mcp_usage": {}}
+        raise ReviewRunnerError("OCR result has an unsupported status")
+    tool_calls = payload.get("tool_calls")
+    by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+    owners = {
+        tool: capability.server
+        for capability in composition.capabilities
+        for tool in capability.tools
+    }
+    usage: dict[str, int] = {}
+    if isinstance(by_tool, dict):
+        for tool, count in by_tool.items():
+            if (
+                isinstance(tool, str)
+                and isinstance(count, int)
+                and not isinstance(count, bool)
+                and count > 0
+                and tool in owners
+            ):
+                owner = owners[tool]
+                usage[owner] = usage.get(owner, 0) + count
+    if usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
+        raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+    return {"mcp_usage": dict(sorted(usage.items()))}
+
+
+def _record_ocr_result_mcp_usage(
+    result_path: Path, composition: mcp_config.MCPComposition
+) -> dict[str, int]:
+    """Verify MCP use and bind its safe review-time receipt to the OCR result."""
+
+    try:
+        _payload, metadata = attach_toolkit_metadata(
+            result_path, lambda payload: _mcp_usage_receipt(payload, composition)
+        )
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
+        raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
+    usage = metadata.get("mcp_usage")
+    return usage if isinstance(usage, dict) else {}
+
+
+def _option_values(args: list[str], name: str, short: str | None = None) -> list[str]:
+    """Return values for one bounded OCR option form."""
+
+    values: list[str] = []
+    index = 0
+    while index < len(args):
+        argument = args[index]
+        if argument == name or (short is not None and argument == short):
+            if index + 1 >= len(args) or args[index + 1].startswith("-"):
+                raise ReviewRunnerError(f"OCR option {argument} requires a value")
+            values.append(args[index + 1])
+            index += 2
+            continue
+        prefix = f"{name}="
+        if argument.startswith(prefix):
+            value = argument[len(prefix) :]
+            if not value:
+                raise ReviewRunnerError(f"OCR option {name} requires a value")
+            values.append(value)
+        index += 1
+    return values
+
+
+def _one_option(args: list[str], name: str, short: str | None = None) -> str | None:
+    """Return one unique OCR option value or reject ambiguous duplicates."""
+
+    values = _option_values(args, name, short)
+    if len(values) > 1:
+        raise ReviewRunnerError(f"OCR option {name} must be provided at most once")
+    return values[0] if values else None
+
+
+def _without_diff_options(args: list[str]) -> list[str]:
+    """Return OCR arguments without caller-supplied diff selectors."""
+
+    remaining: list[str] = []
+    index = 0
+    valued = {"--from", "--to", "--commit", "-c"}
+    while index < len(args):
+        item = args[index]
+        if item in valued:
+            index += 2
+            continue
+        if item.startswith(("--from=", "--to=", "--commit=")):
+            index += 1
+            continue
+        remaining.append(item)
+        index += 1
+    return remaining
+
+
+def _review_refs(args: list[str]) -> ReviewRefs:
+    """Derive immutable evidence refs from the exact OCR diff arguments."""
+
+    base = _one_option(args, "--from")
+    head = _one_option(args, "--to")
+    commit = _one_option(args, "--commit", "-c")
+    if commit is not None:
+        if base is not None or head is not None:
+            raise ReviewRunnerError("OCR --commit cannot be combined with --from or --to")
+        return ReviewRefs(f"{commit}^", commit)
+    if (base is None) != (head is None):
+        raise ReviewRunnerError("OCR evidence review requires both --from and --to")
+    if base is None or head is None:
+        raise ReviewRunnerError(
+            "OCR evidence review requires immutable --from/--to refs or --commit"
+        )
+    return ReviewRefs(base, head)
+
+
+def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
+    """Resolve both OCR and evidence collection to one immutable commit pair."""
+
+    reader = GitRepositoryReader(Path.cwd())
+    return ReviewRefs(reader.resolve_commit(refs.base), reader.resolve_commit(refs.head))
+
+
+def _reject_owned_background(args: list[str]) -> None:
+    """Reject caller attempts to replace the toolkit-owned bootstrap file."""
+
+    if _option_values(args, "--background-file"):
+        raise ReviewRunnerError(
+            "--background-file is managed by ocr-ci review; use --background for extra context"
+        )
+
+
+def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
+    """Prepare private evidence and run OCR through the composed MCP context."""
+
+    refs = _immutable_review_refs(_review_refs(ocr_args))
+    _reject_owned_background(ocr_args)
+    artifacts = repository_artifacts()
+    print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
+    try:
+        prepare_artifact_directory(artifacts)
+        store = collect_repository_evidence(base_ref=refs.base, head_ref=refs.head)
+        head_sha = store.head.commit_sha if store.head else ""
+        identifiers = invocation_identifiers(os.environ)
+        for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
+            if not store.add(record):
+                store.add_diagnostic("review invocation evidence was truncated by store limits")
+                break
+        store.write(artifacts.store)
+        composition = mcp_config.build_mcp_composition()
+        bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
+        write_private_text(artifacts.bootstrap, bootstrap)
+        mcp_config.apply_mcp_composition(composition)
+        mcp_config.verify_mcp_composition(composition)
+        summary = evidence_summary(store)
+        _verify_evidence_mcp(store)
+    except (
+        EvidenceStoreError,
+        OSError,
+        RepositoryEvidenceError,
+        ValueError,
+        mcp_config.MCPConfigError,
+    ) as exc:
+        raise ReviewRunnerError(
+            f"OCR evidence preflight failed: {redact_sensitive(str(exc))}"
+        ) from exc
+    records = summary.get("records")
+    if not isinstance(records, int) or isinstance(records, bool) or records < 0:
+        raise ReviewRunnerError("OCR evidence preflight returned an invalid MCP summary")
+    print(
+        "OCR evidence preflight: ready "
+        f"base={summary.get('base')} head={summary.get('head')} records={records} "
+        f"mcp_servers={len(composition.capabilities)} "
+        f"builtin_tool={TOOL_NAME}",
+        file=sys.stderr,
+    )
+    print(
+        "OCR MCP registry: ready "
+        f"servers={len(composition.capabilities)} mandatory={TOOL_NAME} self_query=summary",
+        file=sys.stderr,
+    )
+    exit_code = run_review(
+        result_path,
+        stderr_path,
+        [
+            "--from",
+            refs.base,
+            "--to",
+            refs.head,
+            *_without_diff_options(ocr_args),
+            "--background-file",
+            str(artifacts.bootstrap),
+        ],
+    )
+    if exit_code == 0:
+        usage = _record_ocr_result_mcp_usage(result_path, composition)
+        calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
+        if calls > 0:
+            print(
+                f"OCR evidence usage: verified tool={TOOL_NAME} calls={calls}",
+                file=sys.stderr,
+            )
+        else:
+            print("OCR evidence usage: skipped no-supported-files review", file=sys.stderr)
+    return exit_code
 
 
 def _open_private_artifact(path: Path, label: str) -> BufferedWriter:

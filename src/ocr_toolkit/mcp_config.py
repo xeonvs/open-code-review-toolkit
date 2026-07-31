@@ -12,6 +12,7 @@ from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, read_ocr_config, update_ocr_config
+from ocr_toolkit.evidence.mcp import TOOL_NAME
 
 MAX_MCP_CONFIG_BYTES = 64_000
 MAX_MCP_SERVERS = 16
@@ -33,6 +34,7 @@ SENSITIVE_HEADER_NAME_RE = re.compile(
 )
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off", ""}
+BUILTIN_EVIDENCE_SERVER = "ocr_toolkit_evidence"
 
 
 class MCPConfigError(Exception):
@@ -53,6 +55,25 @@ class MCPServerConfig:
     env: list[str]
     headers: dict[str, str]
     secret_values: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class MCPCapability:
+    """Describe one validated MCP server without transport credentials."""
+
+    server: str
+    tools: tuple[str, ...]
+    builtin: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MCPComposition:
+    """Hold one validated OCR MCP payload and its safe capability inventory."""
+
+    payload: dict[str, dict[str, Any]]
+    capabilities: tuple[MCPCapability, ...]
+    external_servers: tuple[MCPServerConfig, ...]
+    secret_values: tuple[str, ...]
 
 
 def _string_list(value: Any, field: str, *, limit: int) -> list[str]:
@@ -300,6 +321,10 @@ def parse_mcp_servers(raw: str | None = None) -> list[MCPServerConfig]:
             raise MCPConfigError(f"servers[{index}].name is invalid")
         if name in seen:
             raise MCPConfigError(f"duplicate MCP server name {name!r}")
+        if name == BUILTIN_EVIDENCE_SERVER:
+            raise MCPConfigError(
+                f"MCP server name {BUILTIN_EVIDENCE_SERVER!r} is reserved by the toolkit"
+            )
         seen.add(name)
         transport = server.get("type", "stdio")
         if transport not in {"stdio", "remote"}:
@@ -316,6 +341,10 @@ def parse_mcp_servers(raw: str | None = None) -> list[MCPServerConfig]:
             raise MCPConfigError(f"servers.{name} has unsupported fields for {transport}: {fields}")
 
         tools = _string_list(server.get("tools", []), f"servers.{name}.tools", limit=MAX_MCP_TOOLS)
+        if not tools:
+            raise MCPConfigError(f"servers.{name}.tools must explicitly allow at least one tool")
+        if TOOL_NAME in tools:
+            raise MCPConfigError(f"MCP tool name {TOOL_NAME!r} is reserved by the toolkit")
         setup = server.get("setup", "")
         if not isinstance(setup, str):
             raise MCPConfigError(f"servers.{name}.setup must be a string")
@@ -375,6 +404,124 @@ def _replace_configured_servers() -> bool:
     raise MCPConfigError("OCR_MCP_REPLACE must be a boolean (true/false, 1/0, yes/no, or on/off)")
 
 
+def _existing_capability(name: str, value: Any) -> MCPCapability:
+    """Validate the safe capability fields of one existing OCR MCP entry."""
+
+    if not isinstance(name, str) or not MCP_NAME_RE.fullmatch(name):
+        raise MCPConfigError("Existing OCR MCP server name is invalid")
+    if not isinstance(value, dict):
+        raise MCPConfigError(f"Existing OCR MCP server {name!r} is not a JSON object")
+    tools = _string_list(value.get("tools", []), f"existing.{name}.tools", limit=MAX_MCP_TOOLS)
+    if not tools:
+        raise MCPConfigError(
+            f"Existing OCR MCP server {name!r} must explicitly allow at least one tool"
+        )
+    if TOOL_NAME in tools:
+        raise MCPConfigError(f"Existing MCP tool name {TOOL_NAME!r} is reserved by the toolkit")
+    return MCPCapability(name, tuple(tools))
+
+
+def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCPComposition:
+    """Build OCR's registry from independent optional and mandatory MCP entries."""
+
+    payload: dict[str, dict[str, Any]] = {}
+    capabilities: list[MCPCapability] = []
+    if not replace:
+        try:
+            current = read_ocr_config().get("mcp_servers", {})
+        except OCRConfigError as exc:
+            raise MCPConfigError(str(exc)) from exc
+        if not isinstance(current, dict):
+            raise MCPConfigError("Existing OCR mcp_servers value is not a JSON object")
+        for name, value in current.items():
+            if name == BUILTIN_EVIDENCE_SERVER:
+                continue
+            capability = _existing_capability(name, value)
+            payload[name] = value
+            capabilities.append(capability)
+
+    secret_values: list[str] = []
+    for server in servers:
+        payload[server.name] = {
+            "type": server.transport,
+            "setup": server.setup,
+            "tools": server.tools,
+        }
+        if server.transport == "stdio":
+            payload[server.name].update(
+                {"command": server.command, "args": server.args, "env": server.env}
+            )
+        else:
+            payload[server.name].update({"url": server.url, "headers": server.headers})
+        secret_values.extend(server.secret_values)
+        capability = MCPCapability(server.name, tuple(server.tools))
+        capabilities = [item for item in capabilities if item.server != server.name]
+        capabilities.append(capability)
+
+    if not sys.executable or not os.path.isabs(sys.executable):
+        raise MCPConfigError(
+            "the running Python executable must be absolute for built-in MCP launch"
+        )
+    payload[BUILTIN_EVIDENCE_SERVER] = {
+        "type": "stdio",
+        # OCR starts MCP servers in the untrusted repository and may use a
+        # restricted PATH. Isolated mode prevents repository files from
+        # shadowing the toolkit while the venv path binds this exact install.
+        "command": sys.executable,
+        "args": ["-I", "-m", "ocr_toolkit.evidence"],
+        "env": [],
+        "tools": [TOOL_NAME],
+        # OCR executes setup through a shell in the analyzed repository root.
+        "setup": "",
+    }
+    capabilities.append(MCPCapability(BUILTIN_EVIDENCE_SERVER, (TOOL_NAME,), builtin=True))
+    capabilities.sort(key=lambda capability: (not capability.builtin, capability.server))
+    owners: dict[str, str] = {}
+    for capability in capabilities:
+        for tool in capability.tools:
+            owner = owners.setdefault(tool, capability.server)
+            if owner != capability.server:
+                raise MCPConfigError(
+                    f"MCP tool name {tool!r} is declared by both {owner!r} "
+                    f"and {capability.server!r}"
+                )
+    return MCPComposition(
+        payload=payload,
+        capabilities=tuple(capabilities),
+        external_servers=tuple(servers),
+        secret_values=tuple(secret_values),
+    )
+
+
+def build_mcp_composition() -> MCPComposition:
+    """Parse environment settings into the complete OCR MCP composition."""
+
+    return compose_mcp_servers(parse_mcp_servers(), replace=_replace_configured_servers())
+
+
+def apply_mcp_composition(composition: MCPComposition) -> None:
+    """Persist one validated MCP composition with redacted failures."""
+
+    try:
+        update_ocr_config({"mcp_servers": composition.payload})
+    except (OCRConfigError, OSError) as exc:
+        safe_error = _redact_extra_values(str(exc), list(composition.secret_values))
+        raise MCPConfigError(f"Failed to update OCR MCP configuration: {safe_error}") from exc
+
+
+def verify_mcp_composition(composition: MCPComposition) -> None:
+    """Confirm OCR configuration retained every independently composed MCP entry."""
+
+    try:
+        configured = read_ocr_config().get("mcp_servers")
+    except (OCRConfigError, OSError) as exc:
+        raise MCPConfigError("Failed to read back OCR MCP configuration") from exc
+    if not isinstance(configured, dict):
+        raise MCPConfigError("OCR MCP configuration readback is not an object")
+    if configured != composition.payload:
+        raise MCPConfigError("OCR MCP configuration readback does not match the composed registry")
+
+
 def _redact_extra_values(text: str, values: list[str]) -> str:
     """Redact raw and URL-encoded secret variants from an error string."""
 
@@ -392,77 +539,16 @@ def _redact_extra_values(text: str, values: list[str]) -> str:
 
 
 def configure_mcp_servers() -> int:
-    """Configure OCR MCP servers from CI and return a process exit code."""
+    """Configure the composed OCR MCP set and return a process exit code."""
 
     try:
-        servers = parse_mcp_servers()
-        replace = _replace_configured_servers()
+        composition = build_mcp_composition()
+        apply_mcp_composition(composition)
     except MCPConfigError as exc:
         print(f"Invalid OCR MCP configuration: {redact_sensitive(str(exc))}", file=sys.stderr)
         return 1
 
-    if not servers:
-        try:
-            if replace:
-                update_ocr_config({"mcp_servers": {}})
-        except OCRConfigError as exc:
-            print(
-                f"Failed to clear OCR MCP servers: {redact_sensitive(str(exc))}",
-                file=sys.stderr,
-            )
-            return 1
-        if replace:
-            print("OCR MCP servers: none configured; existing servers cleared")
-        else:
-            print("OCR MCP servers: none configured; existing servers preserved")
-        return 0
-
-    mcp_servers: dict[str, Any] = {}
-    secret_values: list[str] = []
-    for server in servers:
-        if server.transport == "stdio":
-            mcp_servers[server.name] = {
-                "type": "stdio",
-                "command": server.command,
-                "args": server.args,
-                "env": server.env,
-                "tools": server.tools,
-                "setup": server.setup,
-            }
-        else:
-            mcp_servers[server.name] = {
-                "type": "remote",
-                "url": server.url,
-                "headers": server.headers,
-                "tools": server.tools,
-                "setup": server.setup,
-            }
-        secret_values.extend(server.secret_values)
-        for assignment in server.env:
-            _env_name, _sep, env_value = assignment.partition("=")
-            if env_value:
-                secret_values.append(env_value)
-
-    try:
-        if not replace:
-            # update_ocr_config replaces the complete mcp_servers object. Preserve
-            # unrelated entries here, before its atomic private-permission write.
-            existing = read_ocr_config().get("mcp_servers", {})
-            if existing is None:
-                existing = {}
-            if not isinstance(existing, dict):
-                raise OCRConfigError("OCR config mcp_servers value is not an object")
-            mcp_servers = {**existing, **mcp_servers}
-        update_ocr_config({"mcp_servers": mcp_servers})
-    except OCRConfigError as exc:
-        print(
-            "Failed to configure OCR MCP servers: "
-            f"{redact_sensitive(_redact_extra_values(str(exc), secret_values))}",
-            file=sys.stderr,
-        )
-        return 1
-
-    for server in servers:
+    for server in composition.external_servers:
         if server.transport == "stdio":
             detail = f"args={len(server.args)} env={len(server.env)}"
         else:
@@ -471,6 +557,7 @@ def configure_mcp_servers() -> int:
             f"OCR MCP server configured: {server.name} type={server.transport} "
             f"{detail} tools={len(server.tools)}"
         )
+    print(f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} type=stdio args=3 env=0 tools=1")
 
     return 0
 

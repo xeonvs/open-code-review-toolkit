@@ -11,13 +11,22 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.ocr_result import (
+    TOOLKIT_RESULT_KEY,
+    OcrResultMalformed,
+    OcrResultMissing,
+    OcrResultTooLarge,
+    load_ocr_result,
+)
 from ocr_toolkit.posting import gitlab as gitlab_api
 from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, compact_escaped_text
 from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
     format_inline_comment,
+    format_mcp_usage_summary,
     format_omitted_comments_summary,
     format_reviewer_guide,
     format_token_usage_summary,
@@ -35,13 +44,7 @@ from ocr_toolkit.posting.gitlab import (
     resolve_discussion,
 )
 from ocr_toolkit.posting.markers import annotate_comment_fingerprints
-from ocr_toolkit.posting.result import (
-    OcrResultMalformed,
-    OcrResultMissing,
-    OcrResultTooLarge,
-    llm_billing_failure_warnings,
-    load_ocr_result,
-)
+from ocr_toolkit.posting.result import llm_billing_failure_warnings
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
     cleanup_drafts_created_by_this_run,
@@ -59,6 +62,7 @@ post_review_note = gitlab_api.post_review_note
 from ocr_toolkit.posting.settings import (
     max_post_comments,
     ocr_exit_code,
+    post_emoji,
     post_mode,
     strict_posting,
 )
@@ -103,6 +107,19 @@ FileLineCache = dict[tuple[str, str], list[tuple[int, str]]]
 ChangedPathCache = dict[tuple[str, str], list[str]]
 MAX_CROSS_FILE_REMAP_PATHS = 200
 MAX_REMAP_FILE_BYTES = 2_000_000
+MAX_REMAP_DIFF_BYTES = 8_000_000
+
+
+def _git_read_environment() -> dict[str, str]:
+    """Return an isolated environment for untrusted-repository Git reads."""
+
+    return isolated_git_environment()
+
+
+def _git_read_prefix() -> list[str]:
+    """Return Git arguments that disable repository-controlled hooks."""
+
+    return read_only_git_prefix()
 
 
 def changed_new_lines(
@@ -117,7 +134,7 @@ def changed_new_lines(
     try:
         result = subprocess.run(
             [
-                "git",
+                *_git_read_prefix(),
                 "diff",
                 "--unified=0",
                 refs["base_sha"],
@@ -128,6 +145,7 @@ def changed_new_lines(
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             text=True,
             timeout=15,
         )
@@ -138,6 +156,11 @@ def changed_new_lines(
         return lines
 
     if result.returncode != 0:
+        lines = set()
+        if cache is not None:
+            cache[cache_key] = lines
+        return lines
+    if len(result.stdout.encode("utf-8")) > MAX_REMAP_DIFF_BYTES:
         lines = set()
         if cache is not None:
             cache[cache_key] = lines
@@ -165,7 +188,7 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
     try:
         result = subprocess.run(
             [
-                "git",
+                *_git_read_prefix(),
                 "diff",
                 "--name-only",
                 "--diff-filter=ACMR",
@@ -176,7 +199,7 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            text=True,
+            env=_git_read_environment(),
             timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -190,7 +213,15 @@ def changed_new_paths(refs: dict[str, str], cache: ChangedPathCache | None = Non
             cache[cache_key] = paths
         return paths
 
-    paths = sorted(path for path in result.stdout.split("\0") if path)
+    if len(result.stdout) > MAX_REMAP_DIFF_BYTES:
+        paths = []
+        if cache is not None:
+            cache[cache_key] = paths
+        return paths
+    try:
+        paths = sorted(path.decode("utf-8") for path in result.stdout.split(b"\0") if path)
+    except UnicodeDecodeError:
+        paths = []
     if cache is not None:
         cache[cache_key] = paths
     return paths
@@ -207,10 +238,11 @@ def head_file_lines(
 
     try:
         size_result = subprocess.run(
-            ["git", "cat-file", "-s", f"{refs['head_sha']}:{path}"],
+            [*_git_read_prefix(), "cat-file", "-s", f"{refs['head_sha']}:{path}"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             text=True,
             timeout=15,
         )
@@ -223,10 +255,11 @@ def head_file_lines(
                 cache[cache_key] = lines
             return lines
         file_text = subprocess.run(
-            ["git", "show", f"{refs['head_sha']}:{path}"],
+            [*_git_read_prefix(), "show", f"{refs['head_sha']}:{path}"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
             timeout=15,
         )
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -351,7 +384,18 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
+    mcp_usage_summary = format_mcp_usage_summary(result.get(TOOLKIT_RESULT_KEY))
     token_usage_summary = format_token_usage_summary(result)
+    status = clean_text(result.get("status")) or "success"
+    allowed_statuses = {
+        "success",
+        "skipped",
+        "completed_with_warnings",
+        "completed_with_errors",
+    }
+    if status not in allowed_statuses:
+        return invalid_ocr_schema_exit(config, "field 'status' is unsupported")
+    outcome_message = clean_text(result.get("message"))
 
     if not isinstance(comments_value, list):
         return invalid_ocr_schema_exit(config, "field 'comments' must be a list")
@@ -375,6 +419,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             config,
             billing_warnings,
             tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
         )
 
@@ -409,6 +454,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
         comments = comments[:publish_limit]
 
+    emoji = post_emoji()
     reviewer_guide = format_reviewer_guide(comments, omitted_count)
 
     if publishable_comment_count == 0:
@@ -420,10 +466,25 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             raw_message = (
                 f"{raw_message} {suppressed_message}" if raw_message else suppressed_message
             )
-        message = neutralize_quick_actions(
-            redact_sensitive(raw_message) or "No review comments generated."
+        message = neutralize_quick_actions(redact_sensitive(raw_message))
+        marker = {
+            "success": "✅",
+            "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
+            "completed_with_warnings": "⚠️",
+            "completed_with_errors": "❌",
+        }[status]
+        fallback_message = (
+            "No review comments generated. No issues found."
+            if status == "success"
+            else (
+                "No supported files changed."
+                if status == "skipped"
+                else "Review did not complete cleanly."
+            )
         )
-        body = message
+        body = "# Open Code Review summary\n\n"
+        body += f"{marker} " if emoji else ""
+        body += message or fallback_message
         if warnings:
             warning_lines = [
                 neutralize_quick_actions(redact_sensitive(clean_text(warning)))
@@ -436,6 +497,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 )
         if tool_calls_summary:
             body += f"\n\n{tool_calls_summary}"
+        if mcp_usage_summary:
+            body += f"\n{mcp_usage_summary}"
         if token_usage_summary:
             body += f"\n{token_usage_summary}"
         if reviewer_guide:
@@ -506,7 +569,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             config=config,
             path=path,
             line=line,
-            body=format_inline_comment(raw_comment),
+            body=format_inline_comment(raw_comment, emoji=emoji),
             refs=refs,
             draft_note_ids=draft_note_ids,
             fingerprint=clean_text(raw_comment.get("_ocr_fingerprint")) or None,
@@ -534,7 +597,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             return 1
 
     if failed_comments:
-        fallback_chunks = format_fallback_comment_chunks(failed_comments)
+        fallback_chunks = format_fallback_comment_chunks(failed_comments, emoji=emoji)
 
         for index, fallback_chunk in enumerate(fallback_chunks, start=1):
             fallback_title = (
@@ -582,11 +645,15 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             comments=comments,
             omitted_count=omitted_count,
             tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_sha(),
             mr_head_sha=mr_head_sha(),
+            outcome_status=status,
+            outcome_message=outcome_message,
+            emoji=emoji,
         ),
         draft_note_ids,
     )
@@ -660,6 +727,7 @@ def post_llm_provider_failure(
     config: GitLabConfig,
     warnings: Sequence[str],
     tool_calls_summary: str = "",
+    mcp_usage_summary: str = "",
     token_usage_summary: str = "",
 ) -> int:
     """Post a visible OCR provider failure and preserve previous review notes."""
@@ -685,6 +753,8 @@ def post_llm_provider_failure(
         body_parts.extend(["", "**Provider warnings:**", *warning_items])
     if tool_calls_summary:
         body_parts.extend(["", tool_calls_summary])
+    if mcp_usage_summary:
+        body_parts.append(mcp_usage_summary)
     if token_usage_summary:
         body_parts.append(token_usage_summary)
 

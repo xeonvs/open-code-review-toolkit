@@ -8,6 +8,22 @@ log_file="$log_dir/${mode}.log"
 quality_environment=${OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv}
 export UV_PROJECT_ENVIRONMENT=$quality_environment
 
+# Secret scanning has no Python dependency. Run it before synchronizing the
+# disposable environment so the cheap history gate genuinely comes first.
+if [ "$mode" = secrets ] || [ "$mode" = check ]; then
+  if scripts/gitleaks.sh >"$log_file" 2>&1; then
+    if [ "$mode" = secrets ]; then
+      printf 'secrets passed; full output: %s\n' "$log_file"
+      exit 0
+    fi
+  else
+    status=$?
+    echo "secrets failed; last 80 lines follow" >&2
+    tail -n 80 "$log_file" >&2
+    exit "$status"
+  fi
+fi
+
 # An interrupted editable install can leave dist-info without RECORD. uv then
 # warns while trying an uninstall that cannot be complete. This environment is
 # private to the quality wrapper, so rebuild only that disposable environment
@@ -50,7 +66,6 @@ case "$mode" in
     set -- uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
     ;;
   check)
-    : >"$log_file"
     for command in "ruff format --check ." "ruff check ." "mypy src/ocr_toolkit" "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=70"; do
       if ! uv run --no-sync sh -c "$command" >>"$log_file" 2>&1; then
         echo "quality check failed: $command" >&2
@@ -62,7 +77,7 @@ case "$mode" in
     exit 0
     ;;
   *)
-    echo "usage: scripts/quality.sh [check|format|lint|test|coverage|types|security]" >&2
+    echo "usage: scripts/quality.sh [check|format|lint|test|coverage|types|security|secrets]" >&2
     exit 2
     ;;
 esac

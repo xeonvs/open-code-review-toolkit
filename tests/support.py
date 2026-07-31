@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from ocr_toolkit.context import repo as context_repo
 from ocr_toolkit.posting import gitlab
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -58,18 +57,6 @@ def cleared_env(*names: str) -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
-
-
-@contextmanager
-def patched_root(root: Path) -> Iterator[None]:
-    """Temporarily point repository helpers at a synthetic root."""
-
-    old_root = context_repo.ROOT
-    context_repo.ROOT = root
-    try:
-        yield
-    finally:
-        context_repo.ROOT = old_root
 
 
 def gitlab_config(current_user_id: int | None = 7) -> gitlab.GitLabConfig:

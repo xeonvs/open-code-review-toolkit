@@ -15,6 +15,8 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M1 Evidence architecture
 
+BL-004 through BL-007 are active under issue #30 and `PLANS.md`; their original acceptance criteria remain here until the authorized feature PR, merge, and v0.4.0 release gates prove the milestone complete. The implementation, synthetic E2E, two real OCR loops, Codex Security correction, final Python 3.12/package gate, and signed local checkpoint are recorded in the active plan, while the complete release cycle authorized on 2026-07-30 is in progress.
+
 ### BL-004: Define the common repository evidence model
 
 - **Status:** ready
@@ -51,7 +53,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Dependencies:** BL-004 and BL-005.
 - **Activation trigger:** Current context output is characterized by regression fixtures.
 - **Goal:** Decompose `context/render.py` without changing trust or fail-closed behavior.
-- **Scoped deliverables:** Characterize current output with golden fixtures; move collectors behind evidence interfaces, add bounded storage, isolate bootstrap selection, and retain a renderer compatible with the current background contract during migration; remove each legacy collector only after parity or an explicitly approved behavior change is recorded.
+- **Scoped deliverables:** Characterize current output with regression fixtures; move collectors behind evidence interfaces, add bounded storage, isolate bootstrap selection, and retain the legacy renderer only as a migration oracle; remove it after non-empty semantic parity and the typed OCR/MCP lifecycle gates pass.
 - **Acceptance criteria:** Existing public context behavior remains covered; old/new paths cannot collect the same fact independently after migration; collectors are projection-independent; no bootstrap/MCP-specific duplicate collector path exists; rollout can compare projections deterministically before legacy removal.
 - **Exclusions:** New parser breadth, changing the hard output limit, or enabling built-in MCP.
 - **Validation:** Golden synthetic context fixtures, regression tests for truncation/redaction/guidance, and complete quality gate.
@@ -65,10 +67,10 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Dependencies:** Current OCR compatibility manifest, BL-004 through BL-006, and current MCP validation.
 - **Activation trigger:** Evidence collection and selection are projection-independent, and the supported OCR capability contract can validate MCP registration before review.
 - **Goal:** Replace large background inventories with a compact trusted overview while preserving on-demand access to every removed evidence class.
-- **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; retain `legacy_background` as compatibility and rollback mode; enable `compact_bootstrap` by default only after built-in MCP registration and capability validation succeed.
+- **Scoped deliverables:** Implement prioritized bootstrap planning; register a reserved `ocr_toolkit_evidence` server with bounded `ocr_toolkit_*` read-only tools; update OCR instructions to use those tools; define per-tool response and total-session evidence budgets plus deterministic pagination or truncation markers; remove the migration-only legacy background after semantic parity; enable the compact bootstrap only after built-in MCP registration and capability validation succeed.
 - **Acceptance criteria:** Bootstrap and MCP use the same evidence store and ship in one user-visible feature slice; compact mode never runs without a validated evidence server; registration failure fails closed or retains legacy mode according to the documented launch policy; detailed manifests remain available through MCP; omissions and degradation are explicit.
 - **Exclusions:** Raising the hard limit, copying full guidance, generic file reads, shell execution, GitLab access, external URL fetches, documentation storage, or a release that removes detailed background evidence before MCP access exists.
-- **Validation:** Budget and golden fixtures, protocol/root/traversal tests, registration/capability failures, legacy rollback, compact-mode gating, adversarial Markdown/redaction, and end-to-end synthetic OCR configuration.
+- **Validation:** Budget and golden fixtures, protocol/root/traversal tests, registration/capability failures, non-empty migration-oracle parity, compact-mode gating, adversarial Markdown/redaction, and end-to-end synthetic OCR configuration.
 - **Release classification expectation:** `release-required`.
 
 ## M2 Ecosystem and framework coverage
@@ -191,6 +193,8 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M5 Review profiles and quality measurement
 
+Telemetry is intentionally outside M1. OCR already exposes provider-level review duration, LLM request/token, and per-tool call duration/count metrics, while the toolkit currently configures that upstream telemetry without adding a second runtime telemetry stack. M5 owns the decision whether a provider-neutral toolkit telemetry layer is needed after M1 E2E testing measures the actual upstream coverage gaps.
+
 ### BL-016: Add explicit run-level review profiles
 
 - **Status:** planned
@@ -211,10 +215,10 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
 - **Dependencies:** BL-016 and stable discussion/fingerprint lifecycle.
-- **Activation trigger:** Explicit profiles can label comparable runs.
+- **Activation trigger:** Explicit profiles can label comparable runs, and M1 E2E/operational evidence demonstrates material gaps that upstream OCR telemetry and structured result artifacts cannot cover reliably.
 - **Goal:** Produce privacy-safe evidence for profile tuning and any future routing decision.
-- **Scoped deliverables:** Define bounded low-cardinality metrics for latency, token use when available, evidence/MCP use, findings, repeats, suppression, resolution, and human ownership; define run/profile/schema-version identifiers, aggregation windows, retention, opt-in export, and local/no-export behavior.
-- **Acceptance criteria:** Metrics contain no source, prompts, finding text, paths, user identities, secrets, external contents, or unbounded project/MR labels; missing provider telemetry is explicit; failed/partial and repeated runs are distinguishable and comparable without changing review behavior; telemetry failure cannot fail review.
+- **Scoped deliverables:** Begin with a gap audit of upstream OCR telemetry and structured result artifacts. If gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate coverage includes run/profile latency and status; token availability; evidence/store bounds and degradation; bootstrap size; independent MCP readiness and usage; findings; posting/rollback; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from upstream telemetry or bounded result artifacts.
+- **Acceptance criteria:** The gap audit may conclude that upstream OCR telemetry plus bounded result-derived reporting is sufficient, in which case no toolkit telemetry runtime is added. If a layer is justified, metrics contain no source, prompts, tool arguments/results, finding text, paths, URLs, user identities, secrets, external contents, or unbounded project/MR labels; labels use closed vocabularies and bounded cardinality; built-in and optional MCP servers remain independently attributable; upstream OCR and toolkit metrics cannot double-count the same semantic event; missing provider telemetry is explicit; failed/partial/skipped and repeated runs are distinguishable without changing review behavior; telemetry failure cannot fail review.
 - **Exclusions:** User surveillance, ranking developers, automatic routing, or mandatory external telemetry.
 - **Validation:** Synthetic lifecycle aggregation, redaction/privacy tests, missing-data behavior, and deterministic export fixtures.
 - **Release classification expectation:** `release-required` if exposed publicly; otherwise `no-release`.
@@ -241,7 +245,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Priority:** medium
 - **Roadmap theme:** M6 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1.
-- **Activation trigger:** High-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.10-3.14 are agreed.
+- **Activation trigger:** High-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.12-3.14 are agreed.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, and registry-metadata boundaries.
 - **Scoped deliverables:** Use a bounded spike to choose Atheris, property-based testing, or both for named targets and supported Python versions; define synthetic seeds; fuzz selected parsers; minimize and retain regressions; version corpora with parser contracts; evaluate public service integration only after useful local results.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
