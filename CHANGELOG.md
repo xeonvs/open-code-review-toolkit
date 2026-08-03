@@ -1,3 +1,14 @@
+## 0.4.4 - 2026-08-03
+
+### 🚀 Features
+
+- Redesign GitLab summaries around independent review health, published findings, and bounded failed-file coverage diagnostics, with aggregate finding emoji and operational metadata under technical details. ([#42](https://github.com/xeonvs/open-code-review-toolkit/issues/42))
+
+### 🐛 Bug Fixes
+
+- Represent scoped evidence completeness explicitly, distinguish static, dynamic, and executable Ansible inventory sources, collect supported recursive role defaults and vars without execution, and omit exact no-op suggestions while retaining their findings. ([#41](https://github.com/xeonvs/open-code-review-toolkit/issues/41))
+
+
 ## 0.4.3 - 2026-08-03
 
 ### 🚀 Features
