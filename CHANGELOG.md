@@ -1,3 +1,14 @@
+## 0.4.3 - 2026-08-03
+
+### 🚀 Features
+
+- Target checksum-verified Open Code Review 1.8.6, support its versioned run manifest, keep one compatibility issue per upstream version with release-change context and bounded transient download retries, and bound GitHub Actions cache, artifact, and log retention. ([#49](https://github.com/xeonvs/open-code-review-toolkit/issues/49))
+
+### 🧩 Rules
+
+- Adopt OCR 1.8.6 default review exclusions for snapshots, testdata, fixtures, and generated files. ([#49](https://github.com/xeonvs/open-code-review-toolkit/issues/49))
+
+
 ## 0.4.2 - 2026-07-31
 
 ### 🚀 Features
