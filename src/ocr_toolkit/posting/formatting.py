@@ -26,6 +26,7 @@ from ocr_toolkit.posting.comments import (
     line_number,
 )
 from ocr_toolkit.posting.payloads import truncate_code_text, truncate_note_body
+from ocr_toolkit.posting.result import CoverageDiagnostics, ocr_warning_text
 from ocr_toolkit.posting.settings import (
     FALLBACK_NOTE_CHUNK_BUDGET,
     MAX_FALLBACK_CODE_DETAILS_CHARS,
@@ -128,21 +129,18 @@ def format_finding_tags(comment: dict[str, Any], *, emoji: bool | None = None) -
 
     severity, category = finding_metadata(comment)
     tags = []
-    use_emoji = post_emoji() if emoji is None else emoji
     if severity:
-        prefix = f"{SEVERITY_EMOJI[severity]} " if use_emoji else ""
-        tags.append(prefix + inline_code(f"severity:{severity}"))
+        tags.append(f"**Severity:** {inline_code(severity)}")
     if category:
-        prefix = f"{CATEGORY_EMOJI[category]} " if use_emoji else ""
-        tags.append(prefix + inline_code(f"category:{category}"))
-    return f"**OCR tags:** {' '.join(tags)}" if tags else ""
+        tags.append(f"**Category:** {inline_code(category)}")
+    return " · ".join(tags)
 
 
 def format_suggestion_block(comment: dict[str, Any]) -> str:
     """Return a GitLab suggestion block if OCR supplied replacement code."""
 
     suggestion = code_text(comment.get("suggestion_code"))
-    if not suggestion.strip():
+    if not suggestion.strip() or comment.get("_ocr_suggestion_noop") is True:
         return ""
 
     if "```" in suggestion:
@@ -207,7 +205,7 @@ def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = Non
     existing = code_text(comment.get("existing_code"))
     suggestion = code_text(comment.get("suggestion_code"))
 
-    if existing.strip() and suggestion.strip():
+    if existing.strip() and suggestion.strip() and comment.get("_ocr_suggestion_noop") is not True:
         body += "\n\n<details><summary>Suggested change details</summary>\n\n"
         body += "**Before:**\n"
         body += markdown_code_block(
@@ -718,7 +716,7 @@ def format_reviewer_guide(
     )
     if outcome_status in {"budget_exceeded", "partial"}:
         lines.append(
-            "- ⚠️ Review scope: OCR reported partial coverage; treat all findings as a partial review."
+            "- Review scope: OCR reported partial coverage; treat all findings as a partial review."
         )
     if coverage_summary:
         lines.append(f"- Review coverage: {coverage_summary}")
@@ -775,85 +773,142 @@ def summarize_result(
     outcome_status: str = "success",
     outcome_message: str = "",
     coverage_summary: str = "",
+    coverage_diagnostics: CoverageDiagnostics | None = None,
+    warnings: Sequence[Any] = (),
+    suppressed_count: int = 0,
     emoji: bool | None = None,
 ) -> str:
-    """Build a compact summary note for the MR."""
+    """Build one decision-first summary for every validated OCR outcome."""
 
     use_emoji = post_emoji() if emoji is None else emoji
-    status_markers = {
-        "success": "✅",
-        "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
-        "completed_with_warnings": "⚠️",
-        "completed_with_errors": "❌",
-        "budget_exceeded": "⚠️",
-        "clean": "✅",
-        "warning": "⚠️",
-        "partial": "⚠️",
-        "failed": "❌",
-    }
-    marker = f"{status_markers.get(outcome_status, '❌')} " if use_emoji else ""
-    safe_message = neutralize_quick_actions(
-        compact_control_text(redact_sensitive(outcome_message), max_chars=500)
+    diagnostics = coverage_diagnostics or CoverageDiagnostics((), 0, 0, 0, 0)
+    budget_stop = outcome_status == "budget_exceeded" or (
+        outcome_status == "partial" and "budget" in outcome_message.casefold()
     )
-    if not safe_message:
-        if outcome_status == "budget_exceeded":
-            safe_message = "Review stopped after reaching its token budget; findings are partial."
-        elif outcome_status == "partial":
-            safe_message = "Review completed with partial coverage; findings are incomplete."
-        else:
-            safe_message = f"Found {total} issue(s)." if total else "No issues found."
-    lines = [
-        "# Open Code Review summary",
-        f"{marker}{safe_message}",
-        "",
-        f"- posting mode: `{post_mode()}`",
-    ]
-    if inline_count:
-        lines.append(f"- {inline_count} posted as inline discussion(s)")
-    if fallback_count:
-        lines.append(f"- {fallback_count} posted as fallback summary item(s)")
+    if outcome_status == "skipped":
+        marker, status_text = "ℹ️", "Review skipped"  # noqa: RUF001
+    elif outcome_status == "failed":
+        marker, status_text = "❌", "Review failed"
+    elif budget_stop:
+        marker, status_text = "⚠️", "Review stopped at token budget"
+    elif outcome_status in {"partial", "completed_with_errors"}:
+        marker, status_text = "⚠️", "Review incomplete"
+    elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
+        marker, status_text = "⚠️", "Review complete with warnings"
+    elif total:
+        marker, status_text = "🔎", "Review complete"
+    else:
+        marker, status_text = "✅", "Review complete"
+    prefix = f"{marker} " if use_emoji else ""
+    lines = ["## Open Code Review", "", f"{prefix}**{status_text}**", ""]
 
-    if reviewed_sha:
-        lines.append(f"- reviewed SHA: {_inline_code(reviewed_sha)}")
-    if mr_head_sha and mr_head_sha != reviewed_sha:
-        lines.append(f"- MR head SHA: {_inline_code(mr_head_sha)}")
+    file_suffix = (
+        f" · {diagnostics.file_count} "
+        f"{'file' if diagnostics.file_count == 1 else 'files'} not reviewed"
+        if diagnostics.file_count is not None
+        else ""
+    )
+    finding_prefix = "🔎 " if use_emoji and total else ""
+    if outcome_status == "failed":
+        finding_line = "No reliable review result was produced"
+    elif outcome_status == "skipped":
+        finding_line = "No supported files changed"
+    elif total:
+        noun = "finding" if total == 1 else "findings"
+        partial_prefix = (
+            "Partial result · " if outcome_status in {"partial", "budget_exceeded"} else ""
+        )
+        finding_line = f"{partial_prefix}{finding_prefix}**{total} {noun} published**{file_suffix}"
+    elif suppressed_count:
+        noun = "finding" if suppressed_count == 1 else "findings"
+        finding_line = f"No new findings published · {suppressed_count} {noun} matched prior reviewer decisions{file_suffix}"
+    elif outcome_status in {"partial", "completed_with_errors", "budget_exceeded"}:
+        finding_line = f"No findings in reviewed files{file_suffix}"
+    else:
+        finding_line = "No findings"
+    lines.append(finding_line)
+    if outcome_status == "failed":
+        lines.extend(
+            [
+                "",
+                "Normal review comments were not published. Previous OCR review comments were preserved.",
+            ]
+        )
 
-    if coverage_summary and not reviewer_guide:
-        lines.append(f"- {coverage_summary}")
+    severity_counts: dict[str, int] = {}
+    category_counts: dict[str, int] = {}
+    for comment in comments:
+        severity, category = finding_metadata(comment)
+        if severity:
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        if category:
+            category_counts[category] = category_counts.get(category, 0) + 1
+    if severity_counts or category_counts:
+        lines.extend(["", "### Findings", ""])
+        for value in OCR_FINDING_SEVERITY_ORDER:
+            count = severity_counts.get(value, 0)
+            if count:
+                icon = f"{SEVERITY_EMOJI[value]} " if use_emoji else ""
+                lines.append(f"- {icon}{inline_code(value)}: {count}")
+        for value in OCR_FINDING_CATEGORY_ORDER:
+            count = category_counts.get(value, 0)
+            if count:
+                icon = f"{CATEGORY_EMOJI[value]} " if use_emoji else ""
+                lines.append(f"- {icon}{inline_code(value)}: {count}")
 
-    severity_counts = format_metadata_counts(comments, "severity", OCR_FINDING_SEVERITY_ORDER)
-    if severity_counts:
-        lines.append(f"- severity tags: {severity_counts}")
+    if diagnostics.records or diagnostics.invalid or diagnostics.omitted:
+        lines.extend(["", "### Incomplete coverage", ""])
+        for diagnostic in diagnostics.records:
+            detail = f" — {diagnostic.detail}" if diagnostic.detail else ""
+            lines.append(f"- {inline_code(diagnostic.path)} — {diagnostic.reason}{detail}")
+        if diagnostics.invalid:
+            lines.append(
+                f"- {diagnostics.invalid} failed item(s) had no safe repository-relative path"
+            )
+        if diagnostics.omitted:
+            lines.append(f"- ... and {diagnostics.omitted} more failed file record(s)")
 
-    category_counts = format_metadata_counts(comments, "category", OCR_FINDING_CATEGORY_ORDER)
-    if category_counts:
-        lines.append(f"- category tags: {category_counts}")
-
-    if fallback_reasons:
-        reason_parts = [
-            f"{_inline_code(reason)}: {count}"
-            for reason, count in sorted(fallback_reasons.items())
-            if count > 0
-        ]
-        if reason_parts:
-            lines.append(f"- fallback reasons: {', '.join(reason_parts)}")
-
-    if omitted_count:
-        lines.append(f"- {omitted_count} omitted by `OCR_MAX_POST_COMMENTS`")
-
-    if warning_count:
-        lines.append(f"- {warning_count} warning(s) reported by OCR")
-
-    if tool_calls_summary:
-        lines.append(tool_calls_summary)
-
-    if mcp_usage_summary:
-        lines.append(mcp_usage_summary)
-
-    if token_usage_summary:
-        lines.append(token_usage_summary)
+    safe_warnings = []
+    for warning in warnings[:10]:
+        safe = compact_escaped_text(
+            neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning))), 500
+        )
+        if safe:
+            safe_warnings.append(safe)
+    if safe_warnings and not diagnostics.records:
+        lines.extend(["", "### Review warnings", ""])
+        lines.extend(f"- {warning}" for warning in safe_warnings)
+        if len(warnings) > len(safe_warnings):
+            lines.append(f"- ... and {len(warnings) - len(safe_warnings)} more warning(s)")
 
     if reviewer_guide:
-        lines.append(reviewer_guide)
+        lines.extend(["", reviewer_guide.strip()])
 
+    technical: list[str] = []
+    if reviewed_sha:
+        technical.append(f"- Reviewed commit: {_inline_code(reviewed_sha)}")
+    if mr_head_sha and mr_head_sha != reviewed_sha:
+        technical.append(f"- MR head commit: {_inline_code(mr_head_sha)}")
+    technical.append(
+        f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} omitted"
+    )
+    if suppressed_count:
+        technical.append(f"- Reviewer suppression: {suppressed_count}")
+    if coverage_summary:
+        technical.append(f"- {coverage_summary}")
+    if fallback_reasons:
+        reasons = ", ".join(
+            f"{inline_code(reason)}: {count}"
+            for reason, count in sorted(fallback_reasons.items())
+            if count > 0
+        )
+        if reasons:
+            technical.append(f"- Fallback reasons: {reasons}")
+    for summary in (mcp_usage_summary, tool_calls_summary, token_usage_summary):
+        if summary:
+            technical.append(summary)
+    technical.append(f"- Review mode: `{post_mode()}`")
+    lines.extend(
+        ["", "<details>", "<summary>Technical details</summary>", "", *technical, "", "</details>"]
+    )
     return "\n".join(lines)

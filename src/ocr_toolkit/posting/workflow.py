@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections import Counter
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
@@ -22,7 +22,13 @@ from ocr_toolkit.ocr_result import (
     load_ocr_result,
 )
 from ocr_toolkit.posting import gitlab as gitlab_api
-from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, compact_escaped_text
+from ocr_toolkit.posting.comments import (
+    clean_text,
+    code_text,
+    comment_line,
+    compact_escaped_text,
+    line_number,
+)
 from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
     format_inline_comment,
@@ -44,7 +50,10 @@ from ocr_toolkit.posting.gitlab import (
     resolve_discussion,
 )
 from ocr_toolkit.posting.markers import annotate_comment_fingerprints
-from ocr_toolkit.posting.result import llm_billing_failure_warnings, ocr_warning_text
+from ocr_toolkit.posting.result import (
+    llm_billing_failure_warnings,
+    normalize_coverage_diagnostics,
+)
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
     cleanup_drafts_created_by_this_run,
@@ -106,9 +115,24 @@ def mr_head_sha() -> str:
 DiffLineCache = dict[tuple[str, str, str], set[int]]
 FileLineCache = dict[tuple[str, str], list[tuple[int, str]]]
 ChangedPathCache = dict[tuple[str, str], list[str]]
+FileTextCache = dict[tuple[str, str], str | None]
 MAX_CROSS_FILE_REMAP_PATHS = 200
 MAX_REMAP_FILE_BYTES = 2_000_000
 MAX_REMAP_DIFF_BYTES = 8_000_000
+
+
+def _safe_git_blob_path(path: str) -> bool:
+    """Return whether an OCR path is safe to bind after an immutable Git ref."""
+
+    parts = path.split("/")
+    pure = PurePosixPath(path)
+    return bool(
+        path
+        and not pure.is_absolute()
+        and "\\" not in path
+        and all(part not in {"", ".", ".."} for part in parts)
+        and not any(character == "\x7f" or ord(character) < 32 for character in path)
+    )
 
 
 def _git_read_environment() -> dict[str, str]:
@@ -286,6 +310,78 @@ def head_file_lines(
     return lines
 
 
+def head_file_text(
+    refs: dict[str, str], path: str, cache: FileTextCache | None = None
+) -> str | None:
+    """Return one bounded UTF-8 head blob without consulting the worktree."""
+
+    cache_key = (refs["head_sha"], path)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+    if not _safe_git_blob_path(path):
+        if cache is not None:
+            cache[cache_key] = None
+        return None
+    text: str | None = None
+    try:
+        size_result = subprocess.run(
+            [*_git_read_prefix(), "cat-file", "-s", f"{refs['head_sha']}:{path}"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=_git_read_environment(),
+            text=True,
+            timeout=15,
+        )
+        size = int(size_result.stdout.strip() or "0")
+        if size_result.returncode == 0 and 0 <= size <= MAX_REMAP_FILE_BYTES:
+            result = subprocess.run(
+                [*_git_read_prefix(), "show", f"{refs['head_sha']}:{path}"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=_git_read_environment(),
+                timeout=15,
+            )
+            if result.returncode == 0:
+                text = result.stdout.decode("utf-8")
+    except (OSError, UnicodeDecodeError, ValueError, subprocess.SubprocessError):
+        text = None
+    if cache is not None:
+        cache[cache_key] = text
+    return text
+
+
+def _normalized_replacement(value: str) -> str:
+    """Normalize transport line endings and one optional terminal newline."""
+
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    return normalized[:-1] if normalized.endswith("\n") else normalized
+
+
+def suggestion_matches_head_range(
+    refs: dict[str, str],
+    path: str,
+    comment: dict[str, Any],
+    cache: FileTextCache | None = None,
+) -> bool:
+    """Return true only when a suggestion exactly reproduces the reviewed range."""
+
+    suggestion = code_text(comment.get("suggestion_code"))
+    start = line_number(comment.get("start_line") or comment.get("line"))
+    end = line_number(comment.get("end_line") or comment.get("line"))
+    if not suggestion or not path or start <= 0 or end < start or end - start > 200:
+        return False
+    source = head_file_text(refs, path, cache)
+    if source is None:
+        return False
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if end > len(lines):
+        return False
+    selected = "\n".join(lines[start - 1 : end])
+    return _normalized_replacement(suggestion) == _normalized_replacement(selected)
+
+
 def unique_existing_code_line(
     refs: dict[str, str],
     path: str,
@@ -404,6 +500,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments.append(comment)
 
     warnings = warnings_value
+    coverage_diagnostics = normalize_coverage_diagnostics(outcome, warnings)
     if outcome.kind == "failed":
         return post_manifest_failure(
             config,
@@ -464,65 +561,34 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
-        outcome_status=outcome.kind,
+        outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
         coverage_summary=outcome.coverage_summary,
     )
 
     if publishable_comment_count == 0:
-        raw_message = clean_text(result.get("message"))
-        if suppressed_count:
-            suppressed_message = (
-                f"{suppressed_count} OCR comment(s) were suppressed by prior reviewer actions."
-            )
-            raw_message = (
-                f"{raw_message} {suppressed_message}" if raw_message else suppressed_message
-            )
-        message = neutralize_quick_actions(redact_sensitive(raw_message))
-        marker = {
-            "clean": "✅",
-            "warning": "⚠️",
-            "partial": "⚠️",
-            "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
-        }[outcome.kind]
-        fallback_message = (
-            "No review comments generated. No issues found."
-            if outcome.kind == "clean"
-            else (
-                "No supported files changed."
-                if outcome.kind == "skipped"
-                else (
-                    "Review stopped after reaching its token budget; this is a partial result."
-                    if outcome.budget_exceeded
-                    else "Review did not complete cleanly."
-                )
-            )
+        body = summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=len(warnings),
+            comments=(),
+            tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
+            token_usage_summary=token_usage_summary,
+            reviewer_guide=reviewer_guide,
+            reviewed_sha=reviewed_sha(),
+            mr_head_sha=mr_head_sha(),
+            outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
+            outcome_message=outcome_message,
+            coverage_summary=outcome.coverage_summary,
+            coverage_diagnostics=coverage_diagnostics,
+            warnings=warnings,
+            suppressed_count=suppressed_count,
+            emoji=emoji,
         )
-        body = "# Open Code Review summary\n\n"
-        body += f"{marker} " if emoji else ""
-        body += message or fallback_message
-        if warnings:
-            warning_lines = [
-                neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning)))
-                for warning in warnings
-            ]
-            warning_lines = [warning for warning in warning_lines if warning]
-            if warning_lines:
-                body += "\n\n**Warnings:**\n" + "\n".join(
-                    f"- {warning}" for warning in warning_lines
-                )
-        if tool_calls_summary:
-            body += f"\n\n{tool_calls_summary}"
-        if mcp_usage_summary:
-            body += f"\n{mcp_usage_summary}"
-        if token_usage_summary:
-            body += f"\n{token_usage_summary}"
-        if outcome.coverage_summary:
-            body += f"\n{outcome.coverage_summary}"
-        if reviewer_guide:
-            body += f"\n\n{reviewer_guide}"
         response = post_review_note_bounded(
             config,
-            "**Open Code Review**",
+            "",
             body,
             draft_note_ids,
         )
@@ -541,6 +607,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     diff_line_cache: DiffLineCache = {}
     file_line_cache: FileLineCache = {}
     changed_path_cache: ChangedPathCache = {}
+    file_text_cache: FileTextCache = {}
 
     for raw_comment in comments:
         if not isinstance(raw_comment, dict):
@@ -570,6 +637,15 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                     file=sys.stderr,
                 )
 
+        raw_comment["_ocr_suggestion_noop"] = bool(
+            refs
+            and suggestion_matches_head_range(
+                refs,
+                path,
+                raw_comment,
+                file_text_cache,
+            )
+        )
         if not refs or not path or line <= 0:
             reason = inline_skip_reason(refs, path, line)
             print(
@@ -652,9 +728,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
 
     summary_response = post_review_note_bounded(
         config,
-        "**Open Code Review summary**",
+        "",
         summarize_result(
-            total=publishable_comment_count,
+            total=len(comments),
             inline_count=inline_count,
             fallback_count=len(failed_comments),
             warning_count=len(warnings),
@@ -667,9 +743,12 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_sha(),
             mr_head_sha=mr_head_sha(),
-            outcome_status=outcome.kind,
+            outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
             outcome_message=outcome_message,
             coverage_summary=outcome.coverage_summary,
+            coverage_diagnostics=coverage_diagnostics,
+            warnings=warnings,
+            suppressed_count=suppressed_count,
             emoji=emoji,
         ),
         draft_note_ids,
@@ -766,42 +845,26 @@ def post_manifest_failure(
     """Post a manifest-declared run failure while preserving prior review notes."""
 
     draft_note_ids: list[int] = []
-    safe_message = compact_escaped_text(
-        neutralize_quick_actions(redact_sensitive(message)),
-        1_200,
+    body = summarize_result(
+        total=0,
+        inline_count=0,
+        fallback_count=0,
+        warning_count=len(warnings),
+        tool_calls_summary=tool_calls_summary,
+        mcp_usage_summary=mcp_usage_summary,
+        token_usage_summary=token_usage_summary,
+        outcome_status="failed",
+        outcome_message=message,
+        coverage_summary=outcome.coverage_summary,
+        coverage_diagnostics=normalize_coverage_diagnostics(outcome, warnings),
+        warnings=warnings,
+        emoji=post_emoji(),
     )
-    body_parts = [
-        "OCR reported that the review run failed before it could produce a complete result.",
-        "",
-        "- Normal review comments were not published.",
-        "- Previous OCR review comments were preserved.",
-    ]
-    if safe_message:
-        body_parts.append(f"- Outcome: {safe_message}")
-    if outcome.coverage_summary:
-        body_parts.append(f"- {outcome.coverage_summary}")
-
-    warning_items: list[str] = []
-    for warning in warnings[:10]:
-        safe_warning = compact_escaped_text(
-            neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning))),
-            1_200,
-        )
-        if safe_warning:
-            warning_items.append(f"- {safe_warning}")
-    if warning_items:
-        body_parts.extend(["", "**Warnings:**", *warning_items])
-    if tool_calls_summary:
-        body_parts.extend(["", tool_calls_summary])
-    if mcp_usage_summary:
-        body_parts.append(mcp_usage_summary)
-    if token_usage_summary:
-        body_parts.append(token_usage_summary)
 
     response = post_review_note_bounded(
         config,
-        "**Open Code Review failed result**",
-        "\n".join(body_parts),
+        "",
+        body,
         draft_note_ids,
     )
     if response is None:

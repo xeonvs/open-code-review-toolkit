@@ -2,6 +2,8 @@
 
 from ocr_toolkit.evidence.model import (
     Confidence,
+    CoverageRecord,
+    CoverageState,
     EvidenceDelta,
     EvidenceRecord,
     EvidenceSnapshot,
@@ -19,6 +21,8 @@ from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError, Eviden
 
 __all__ = [
     "Confidence",
+    "CoverageRecord",
+    "CoverageState",
     "EvidenceDelta",
     "EvidenceRecord",
     "EvidenceSnapshot",

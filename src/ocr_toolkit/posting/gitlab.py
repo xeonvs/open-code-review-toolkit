@@ -685,14 +685,15 @@ def post_review_note_bounded(
     """Post a bounded regular MR note using the configured posting mode."""
 
     body_budget = note_body_budget(MAX_NOTE_CHARS, fingerprint)
-    full_body = f"{title}\n\n{body}"
-    if len(full_body) <= body_budget:
+    full_body = f"{title}\n\n{body}" if title else body
+    if len(full_body) <= body_budget and len(full_body.encode("utf-8")) <= body_budget:
         return post_review_note(config, full_body, draft_note_ids, fingerprint=fingerprint)
 
-    content_budget = max(0, body_budget - len(title) - 2)
+    title_overhead = len(title.encode("utf-8")) + 2 if title else 0
+    content_budget = max(0, body_budget - title_overhead)
     bounded_body = truncate_note_body(body, max_chars=content_budget)
-    final_body = f"{title}\n\n{bounded_body}"
-    if len(final_body) > body_budget:
+    final_body = f"{title}\n\n{bounded_body}" if title else bounded_body
+    if len(final_body) > body_budget or len(final_body.encode("utf-8")) > body_budget:
         final_body = truncate_note_body(final_body, max_chars=body_budget)
 
     return post_review_note(

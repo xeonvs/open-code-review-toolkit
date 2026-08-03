@@ -11,7 +11,14 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit import __version__, mcp_config
-from ocr_toolkit.evidence import EvidenceRecord, EvidenceStore, RefRole, TrustClass
+from ocr_toolkit.evidence import (
+    CoverageRecord,
+    CoverageState,
+    EvidenceRecord,
+    EvidenceStore,
+    RefRole,
+    TrustClass,
+)
 from ocr_toolkit.evidence.mcp import (
     MAX_REQUEST_BYTES,
     PROTOCOL_VERSION,
@@ -85,6 +92,36 @@ def test_summary_list_get_and_cursor_binding() -> None:
                 "cursor": first["next_cursor"],
             },
         )
+
+
+def test_coverage_is_summarized_filtered_and_addressable() -> None:
+    """Expose completeness independently from positive facts through MCP."""
+
+    store = _store(0)
+    coverage = CoverageRecord(
+        component="ansible",
+        domain="inventory.groups",
+        scope="inventories/stage",
+        state=CoverageState.RUNTIME_DEPENDENT,
+        reasons=("dynamic-source",),
+        ref=RefRole.HEAD,
+        commit_sha=SHA,
+    )
+    assert store.add_coverage(coverage)
+
+    summary = _payload(call_tool(store, {"action": "summary"}))
+    listed = _payload(
+        call_tool(
+            store,
+            {"action": "list", "kind": "repository.evidence_coverage"},
+        )
+    )
+    fetched = _payload(call_tool(store, {"action": "get", "id": coverage.id}))
+
+    assert summary["coverage_contract"] == "repository.evidence-coverage/v1"
+    assert summary["coverage_states"] == {"runtime-dependent": 1}
+    assert listed["records"] == [coverage.to_dict()]
+    assert fetched["record"] == coverage.to_dict()
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit.evidence import (
+    CoverageRecord,
+    CoverageState,
     EvidenceDelta,
     EvidenceRecord,
     EvidenceSnapshot,
@@ -18,6 +20,7 @@ from ocr_toolkit.evidence import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
 
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
@@ -41,6 +44,25 @@ def record(
         component="api",
         provenance="python.requirements",
         trust=TrustClass.SOURCE_REPOSITORY,
+    )
+
+
+def coverage(
+    state: CoverageState = CoverageState.COMPLETE,
+    *,
+    ref: RefRole = RefRole.HEAD,
+    sha: str = HEAD_SHA,
+) -> CoverageRecord:
+    """Build one deterministic synthetic scoped-coverage record."""
+
+    return CoverageRecord(
+        component="synthetic",
+        domain="catalog.entries",
+        scope="catalog/primary",
+        state=state,
+        reasons=("bounded-static-source",),
+        ref=ref,
+        commit_sha=sha,
     )
 
 
@@ -120,6 +142,101 @@ def test_snapshot_deduplicates_orders_and_rejects_mixed_refs() -> None:
     )
     with pytest.raises(ValueError, match="match the snapshot"):
         EvidenceSnapshot(RefRole.BASE, BASE_SHA, (one,))
+
+
+def test_scoped_coverage_is_versioned_and_composes_monotonically() -> None:
+    """Allow negative inference only for an explicitly complete semantic scope."""
+
+    complete = compose_coverage(
+        component="synthetic",
+        domain="catalog.entries",
+        scope="catalog/primary",
+        observations=(CoverageObservation(CoverageState.COMPLETE, "bounded-static-source", True),),
+        ref=RefRole.HEAD,
+        commit_sha=HEAD_SHA,
+    )
+    mixed = compose_coverage(
+        component="synthetic",
+        domain="catalog.entries",
+        scope="catalog/primary",
+        observations=(
+            CoverageObservation(CoverageState.COMPLETE, "bounded-static-source", True),
+            CoverageObservation(CoverageState.UNAVAILABLE, "bounded-read-omission"),
+        ),
+        ref=RefRole.HEAD,
+        commit_sha=HEAD_SHA,
+    )
+
+    assert complete.state is CoverageState.COMPLETE
+    assert mixed.state is CoverageState.PARTIAL
+    assert CoverageRecord.from_dict(mixed.to_dict()) == mixed
+    assert mixed.id.startswith("cov1_")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"schema_version": "repository.evidence-coverage/v2"},
+        {"reasons": ("secret=value",)},
+        {"reasons": ("UPPERCASE",)},
+        {"state": "complete"},
+    ],
+)
+def test_coverage_rejects_open_or_secret_bearing_metadata(changes: dict[str, object]) -> None:
+    """Keep completeness metadata a closed machine-readable contract."""
+
+    values: dict[str, object] = {
+        "component": "synthetic",
+        "domain": "catalog.entries",
+        "scope": "catalog/primary",
+        "state": CoverageState.COMPLETE,
+        "reasons": ("bounded-static-source",),
+        "ref": RefRole.HEAD,
+        "commit_sha": HEAD_SHA,
+    }
+    values.update(changes)
+
+    with pytest.raises(ValueError, match="coverage"):
+        CoverageRecord(**values)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("field", ["kind", "schema_version"])
+def test_coverage_requires_its_versioned_persisted_contract(field: str) -> None:
+    """Do not infer the coverage schema from missing untrusted fields."""
+
+    payload = coverage().to_dict()
+    payload.pop(field)
+
+    with pytest.raises(ValueError, match="fields are invalid"):
+        CoverageRecord.from_dict(payload)
+
+
+def test_store_round_trips_coverage_and_legacy_v1_fails_closed(tmp_path: Path) -> None:
+    """Persist v2 coverage while treating a v1 store's missing metadata as unknown."""
+
+    store = EvidenceStore()
+    assert store.add_coverage(coverage())
+    path = tmp_path / "coverage.json"
+    store.write(path)
+    restored = EvidenceStore.read(path)
+
+    assert restored.coverage == (coverage(),)
+    assert restored.to_dict()["schema_version"] == 2
+
+    legacy = store.to_dict()
+    legacy["schema_version"] = 1
+    legacy.pop("coverage")
+    snapshots = legacy["snapshots"]
+    assert isinstance(snapshots, dict)
+    for snapshot in snapshots.values():
+        assert isinstance(snapshot, dict)
+        snapshot.pop("coverage_ids", None)
+    legacy_path = tmp_path / "legacy.json"
+    legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
+    loaded_legacy = EvidenceStore.read(legacy_path)
+
+    assert loaded_legacy.coverage == ()
+    assert any("missing facts are unknown" in item for item in loaded_legacy.diagnostics)
 
 
 def test_store_redacts_before_persistence_and_round_trips(
@@ -203,7 +320,7 @@ def test_store_rejects_unknown_kinds_and_schema_versions(tmp_path: Path) -> None
         store.add(record("x", kind="future.unknown"))
 
     path = tmp_path / "evidence.json"
-    path.write_text(json.dumps({"schema_version": 2}), encoding="utf-8")
+    path.write_text(json.dumps({"schema_version": 3}), encoding="utf-8")
     with pytest.raises(EvidenceStoreError, match="schema"):
         EvidenceStore.read(path)
 
@@ -268,9 +385,11 @@ def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:
 
     base_record = record("requests==2.31.0", ref=RefRole.BASE, sha=BASE_SHA)
     head_record = record("requests==2.32.0")
+    base_coverage = coverage(ref=RefRole.BASE, sha=BASE_SHA)
+    head_coverage = coverage(state=CoverageState.PARTIAL)
     store = EvidenceStore(
-        base=EvidenceSnapshot(RefRole.BASE, BASE_SHA, (base_record,)),
-        head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (head_record,)),
+        base=EvidenceSnapshot(RefRole.BASE, BASE_SHA, (base_record,), coverage=(base_coverage,)),
+        head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (head_record,), coverage=(head_coverage,)),
         deltas=(
             EvidenceDelta(
                 kind="dependency.declared",
@@ -284,6 +403,8 @@ def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:
     )
     store.add(base_record)
     store.add(head_record)
+    store.add_coverage(base_coverage)
+    store.add_coverage(head_coverage)
     path = tmp_path / "evidence.json"
     store.write(path)
 
@@ -291,6 +412,25 @@ def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:
     assert restored.base == store.base
     assert restored.head == store.head
     assert restored.deltas == store.deltas
+
+
+def test_store_rejects_tampered_snapshot_coverage_reference(tmp_path: Path) -> None:
+    """Keep snapshot coverage indexes atomic with accepted coverage records."""
+
+    item = coverage()
+    store = EvidenceStore(head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (), coverage=(item,)))
+    assert store.add_coverage(item)
+    payload = store.to_dict()
+    snapshots = payload["snapshots"]
+    assert isinstance(snapshots, dict)
+    head = snapshots["head"]
+    assert isinstance(head, dict)
+    head["coverage_ids"] = ["cov1_" + "0" * 64]
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvidenceStoreError, match="invalid head evidence snapshot"):
+        EvidenceStore.read(path)
 
 
 def test_store_redacts_and_detaches_delta_values_on_round_trip(tmp_path: Path) -> None:

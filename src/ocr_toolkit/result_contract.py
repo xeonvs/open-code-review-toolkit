@@ -50,6 +50,16 @@ class OcrResultContractError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class CoverageFailure:
+    """Carry one validated manifest failure into bounded result reporting."""
+
+    item_id: str
+    path: object
+    classification: str
+    reason: object
+
+
+@dataclass(frozen=True, slots=True)
 class ReviewOutcome:
     """Expose one validated OCR outcome without provider-specific branching."""
 
@@ -62,6 +72,7 @@ class ReviewOutcome:
     reused_count: int = 0
     failed_count: int = 0
     waived_count: int = 0
+    failed_items: tuple[CoverageFailure, ...] = ()
 
     @property
     def requires_evidence_mcp(self) -> bool:
@@ -241,6 +252,15 @@ def _manifest_outcome(
         reused_count=len(reused),
         failed_count=len(failed),
         waived_count=len(waived),
+        failed_items=tuple(
+            CoverageFailure(
+                item_id=str(record["item_id"]),
+                path=record.get("path"),
+                classification=str(record["classification"]),
+                reason=record.get("reason"),
+            )
+            for record in failed_records
+        ),
     )
 
 

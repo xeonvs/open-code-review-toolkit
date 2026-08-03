@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ocr_toolkit.evidence.categorize import categorize_paths
 from ocr_toolkit.evidence.collectors import collect_ref_facts, fact_deltas
-from ocr_toolkit.evidence.model import EvidenceRecord, RefRole, TrustClass
+from ocr_toolkit.evidence.coverage import coverage_deltas
+from ocr_toolkit.evidence.model import EvidenceRecord, EvidenceSnapshot, RefRole, TrustClass
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
@@ -54,17 +55,42 @@ def collect_repository_evidence(
     head = build_file_snapshot(reader, head_sha, RefRole.HEAD, paths=changed)
     base_paths = {record.source_path for record in base.records}
     head_paths = {record.source_path for record in head.records}
-    store = EvidenceStore(base=base, head=head, deltas=file_deltas(base, head))
+    base_coverage = []
+    head_coverage = []
     base_facts, base_fact_diagnostics = collect_ref_facts(
-        reader, base_sha, RefRole.BASE, changed_paths=changed
+        reader,
+        base_sha,
+        RefRole.BASE,
+        changed_paths=changed,
+        coverage_sink=base_coverage,
     )
     head_facts, head_fact_diagnostics = collect_ref_facts(
-        reader, head_sha, RefRole.HEAD, changed_paths=changed
+        reader,
+        head_sha,
+        RefRole.HEAD,
+        changed_paths=changed,
+        coverage_sink=head_coverage,
     )
+    base = EvidenceSnapshot(
+        base.ref,
+        base.commit_sha,
+        base.records,
+        diagnostics=base.diagnostics,
+        coverage=tuple(base_coverage),
+    )
+    head = EvidenceSnapshot(
+        head.ref,
+        head.commit_sha,
+        head.records,
+        diagnostics=head.diagnostics,
+        coverage=tuple(head_coverage),
+    )
+    all_coverage = tuple((*base.coverage, *head.coverage))
+    store = EvidenceStore(base=base, head=head, deltas=file_deltas(base, head))
     typed_facts = [*base_facts, *head_facts]
     store.deltas = tuple(
         sorted(
-            (*store.deltas, *fact_deltas(typed_facts)),
+            (*store.deltas, *fact_deltas(typed_facts), *coverage_deltas(all_coverage)),
             key=lambda item: (item.kind, item.component, item.identity),
         )
     )
@@ -77,8 +103,26 @@ def collect_repository_evidence(
         raise EvidenceStoreError(
             "repository snapshot records exceed the configured evidence store limits"
         )
-    for record in typed_facts:
+    for coverage in all_coverage:
+        if not store.add_coverage(coverage):
+            raise EvidenceStoreError(
+                "repository snapshot coverage exceeds the configured evidence store limits"
+            )
+    ordered_typed_facts = sorted(
+        typed_facts,
+        key=lambda record: (
+            0 if record.component == "ansible" and record.kind.startswith("ansible.") else 1,
+            record.kind,
+            record.source_path,
+            record.id,
+        ),
+    )
+    for record in ordered_typed_facts:
         if not store.add(record):
+            if record.component == "ansible" and record.kind.startswith("ansible."):
+                raise EvidenceStoreError(
+                    "Ansible topology facts exceed the atomic evidence store limits"
+                )
             store.add_diagnostic("typed evidence was truncated by store limits")
             break
     categories = categorize_paths(list(changed))

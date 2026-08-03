@@ -19,6 +19,7 @@ from ocr_toolkit.common.redaction import (
     redact_sensitive,
 )
 from ocr_toolkit.evidence.model import (
+    CoverageRecord,
     EvidenceDelta,
     EvidenceRecord,
     EvidenceSnapshot,
@@ -27,7 +28,8 @@ from ocr_toolkit.evidence.model import (
     Sensitivity,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = {1, SCHEMA_VERSION}
 MAX_SERIALIZED_BYTES = 20_000_000
 KNOWN_KINDS = frozenset(
     {
@@ -139,6 +141,7 @@ class EvidenceStore:
     deltas: tuple[EvidenceDelta, ...] = ()
     diagnostics: list[str] = field(default_factory=list)
     _records: dict[str, EvidenceRecord] = field(default_factory=dict, init=False, repr=False)
+    _coverage: dict[str, CoverageRecord] = field(default_factory=dict, init=False, repr=False)
     _kind_counts: Counter[str] = field(default_factory=Counter, init=False, repr=False)
 
     def add(self, record: EvidenceRecord) -> bool:
@@ -186,6 +189,17 @@ class EvidenceStore:
         if message not in self.diagnostics:
             self.diagnostics.append(message)
 
+    def add_coverage(self, record: CoverageRecord) -> bool:
+        """Add one scoped coverage record within the shared record budget."""
+
+        if record.id in self._coverage:
+            return True
+        if len(self._records) + len(self._coverage) >= self.limits.max_records:
+            self._diagnose_once("global evidence record limit reached")
+            return False
+        self._coverage[record.id] = record
+        return True
+
     def add_diagnostic(self, message: str) -> None:
         """Record one bounded public coverage notice without repeated noise."""
 
@@ -199,6 +213,17 @@ class EvidenceStore:
             sorted(self._records.values(), key=lambda item: (item.kind, item.source_path, item.id))
         )
 
+    @property
+    def coverage(self) -> tuple[CoverageRecord, ...]:
+        """Return scoped completeness records in deterministic ordering."""
+
+        return tuple(
+            sorted(
+                self._coverage.values(),
+                key=lambda item: (item.component, item.domain, item.scope, item.id),
+            )
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return the complete versioned store representation."""
 
@@ -209,11 +234,13 @@ class EvidenceStore:
                     "ref": snapshot.ref.value,
                     "commit_sha": snapshot.commit_sha,
                     "record_ids": [record.id for record in snapshot.records],
+                    "coverage_ids": [record.id for record in snapshot.coverage],
                     "diagnostics": [_safe_diagnostic(message) for message in snapshot.diagnostics],
                 }
         return {
             "schema_version": SCHEMA_VERSION,
             "records": [record.to_dict() for record in self.records],
+            "coverage": [record.to_dict() for record in self.coverage],
             "snapshots": snapshots,
             "deltas": [
                 {
@@ -285,8 +312,9 @@ class EvidenceStore:
             raw = json.loads(raw_bytes)
         except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise EvidenceStoreError("evidence store is not valid bounded JSON") from exc
-        if not isinstance(raw, dict) or raw.get("schema_version") != SCHEMA_VERSION:
+        if not isinstance(raw, dict) or raw.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
             raise EvidenceStoreError("unsupported evidence store schema version")
+        schema_version = cast(int, raw["schema_version"])
         limits_raw = raw.get("limits")
         if not isinstance(limits_raw, dict):
             raise EvidenceStoreError("evidence store limits must be an object")
@@ -311,6 +339,21 @@ class EvidenceStore:
                     raise EvidenceStoreError("evidence store records exceed declared limits")
         except (TypeError, ValueError) as exc:
             raise EvidenceStoreError(str(exc)) from exc
+        coverage_raw = raw.get("coverage", [])
+        if not isinstance(coverage_raw, list):
+            raise EvidenceStoreError("evidence coverage must be a list")
+        if schema_version == 1 and coverage_raw:
+            raise EvidenceStoreError("schema v1 evidence cannot contain coverage records")
+        try:
+            for item in coverage_raw:
+                if not store.add_coverage(CoverageRecord.from_dict(item)):
+                    raise EvidenceStoreError("evidence coverage exceeds declared limits")
+        except (TypeError, ValueError) as exc:
+            raise EvidenceStoreError(str(exc)) from exc
+        if schema_version == 1:
+            store.add_diagnostic(
+                "legacy evidence store has no completeness metadata; missing facts are unknown"
+            )
         diagnostics = raw.get("diagnostics", [])
         if not isinstance(diagnostics, list) or not all(
             isinstance(item, str) for item in diagnostics
@@ -337,9 +380,14 @@ class EvidenceStore:
             if not isinstance(item, dict) or item.get("ref") != role.value:
                 raise EvidenceStoreError(f"invalid {name} evidence snapshot")
             ids = item.get("record_ids", [])
+            coverage_ids = item.get("coverage_ids", [])
             diagnostics = item.get("diagnostics", [])
             if not isinstance(ids, list) or not all(isinstance(value, str) for value in ids):
                 raise EvidenceStoreError(f"invalid {name} snapshot record ids")
+            if not isinstance(coverage_ids, list) or not all(
+                isinstance(value, str) for value in coverage_ids
+            ):
+                raise EvidenceStoreError(f"invalid {name} snapshot coverage ids")
             if not isinstance(diagnostics, list) or not all(
                 isinstance(value, str) for value in diagnostics
             ):
@@ -349,6 +397,7 @@ class EvidenceStore:
                 if not isinstance(commit_sha, str):
                     raise ValueError("snapshot commit_sha must be a string")
                 records = tuple(self._records[record_id] for record_id in ids)
+                coverage = tuple(self._coverage[record_id] for record_id in coverage_ids)
                 snapshot = EvidenceSnapshot(
                     ref=role,
                     commit_sha=commit_sha,
@@ -356,6 +405,7 @@ class EvidenceStore:
                     diagnostics=tuple(
                         _safe_diagnostic(message) for message in cast(list[str], diagnostics)
                     ),
+                    coverage=coverage,
                 )
             except (EvidenceStoreError, KeyError, TypeError, ValueError) as exc:
                 raise EvidenceStoreError(f"invalid {name} evidence snapshot") from exc

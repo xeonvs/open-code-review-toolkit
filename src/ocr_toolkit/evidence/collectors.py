@@ -8,9 +8,17 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from ocr_toolkit.evidence.ansible import collect_topology, topology_candidate
+from ocr_toolkit.evidence.ansible import (
+    collect_topology,
+    inventory_scope,
+    role_coverage_scope,
+    selected_role_paths,
+    topology_candidate,
+    topology_coverage,
+)
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
 from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
+from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
 from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
 from ocr_toolkit.evidence.javascript_manifests import (
@@ -26,6 +34,8 @@ from ocr_toolkit.evidence.manifest_model import (
 )
 from ocr_toolkit.evidence.model import (
     Confidence,
+    CoverageRecord,
+    CoverageState,
     EvidenceDelta,
     EvidenceRecord,
     EvidenceValue,
@@ -50,6 +60,7 @@ MAX_MANIFEST_INCLUDE_FILES = 32
 MAX_MANIFEST_INCLUDE_DEPTH = 8
 MAX_MANIFEST_INCLUDE_DIAGNOSTICS = 64
 MAX_MANIFEST_INCLUDE_EDGES = 4_096
+MAX_TOPOLOGY_FACTS_PER_KIND = 256
 IMAGE_LINE_RE = re.compile(r"^\s*image\s*:\s*['\"]?([^'\"\s#]+)")
 GUIDANCE_PATHS = {
     "PR_REVIEW.md",
@@ -552,6 +563,7 @@ def collect_ref_facts(
     ref: RefRole,
     *,
     changed_paths: Iterable[str] = (),
+    coverage_sink: list[CoverageRecord] | None = None,
 ) -> tuple[list[EvidenceRecord], list[str]]:
     """Collect supported facts from one immutable tree with explicit diagnostics."""
 
@@ -561,6 +573,32 @@ def collect_ref_facts(
     changed = {path.casefold() for path in changed_paths}
     entries = reader.list_objects(commit_sha)
     entries_by_path = {entry.path: entry for entry in entries}
+    role_paths = selected_role_paths(tuple(entry.path for entry in entries))
+    topology_entries = tuple(
+        entry
+        for entry in entries
+        if (
+            topology_candidate(entry.path, executable=entry.mode == "100755")
+            and (role_coverage_scope(entry.path) is None or entry.path in role_paths)
+        )
+    )
+
+    def unavailable_topology(entry: RepositoryObject, reason: str) -> None:
+        """Record one recognized topology source whose static coverage is unavailable."""
+
+        role_scope = role_coverage_scope(entry.path)
+        domain, scope = (
+            role_scope
+            if role_scope is not None
+            else ("inventory.groups", inventory_scope(entry.path))
+        )
+        coverage_observations.setdefault((domain, scope), []).append(
+            CoverageObservation(CoverageState.UNAVAILABLE, reason)
+        )
+
+    coverage_observations: dict[tuple[str, str], list[CoverageObservation]] = {}
+    topology_kind_counts: dict[str, int] = {}
+    topology_truncation_scopes: set[tuple[str, str]] = set()
     candidates = tuple(
         entry
         for entry in entries
@@ -568,7 +606,7 @@ def collect_ref_facts(
             is_supported_manifest(entry.path)
             or PurePosixPath(entry.path).name.casefold().startswith(".gitlab-ci")
             or _is_context_yaml(entry.path, changed)
-            or topology_candidate(entry.path)
+            or entry in topology_entries
             or infrastructure_candidate(entry.path)
             or entry.path in GUIDANCE_PATHS
             or entry.path.casefold() == ACCEPTED_DECISIONS_PATH
@@ -581,6 +619,20 @@ def collect_ref_facts(
         read = reader.read_candidate_blobs(candidates)
     except RepositoryEvidenceError as exc:
         diagnostics.append(f"collector batch read failed: {exc}")
+        for entry in topology_entries:
+            unavailable_topology(entry, "bounded-read-omission")
+        if coverage_sink is not None:
+            for (domain, scope), observations in sorted(coverage_observations.items()):
+                coverage_sink.append(
+                    compose_coverage(
+                        component="ansible",
+                        domain=domain,
+                        scope=scope,
+                        observations=tuple(observations),
+                        ref=ref,
+                        commit_sha=commit_sha,
+                    )
+                )
         return records, diagnostics
     blobs = read.blobs
     diagnostics.extend(f"{ref.value}:{message}" for message in read.diagnostics)
@@ -616,6 +668,17 @@ def collect_ref_facts(
     )
     galaxy_paths = set(graph.galaxy_paths)
     python_requirement_paths = set(python_graph.requirement_paths)
+    for entry in topology_entries:
+        if entry.path in blobs:
+            continue
+        reason = (
+            "symlink-source"
+            if entry.is_symlink
+            else "submodule-source"
+            if entry.is_submodule
+            else "bounded-read-omission"
+        )
+        unavailable_topology(entry, reason)
     for path in paths:
         if path not in blobs:
             # Bounded candidate omissions are already represented by explicit
@@ -626,7 +689,11 @@ def collect_ref_facts(
             ".gitlab-ci"
         ) or _is_context_yaml(path, changed)
         guidance_source = path in GUIDANCE_PATHS or path_folded == ACCEPTED_DECISIONS_PATH
-        topology_source = topology_candidate(path)
+        entry = entries_by_path.get(path)
+        executable = entry is not None and entry.mode == "100755"
+        topology_source = topology_candidate(path, executable=executable) and (
+            role_coverage_scope(path) is None or path in role_paths
+        )
         infrastructure_source = infrastructure_candidate(path)
         if (
             not is_supported_manifest(path)
@@ -695,9 +762,13 @@ def collect_ref_facts(
                     *infrastructure.facts,
                     *(
                         ManifestFact(fact.kind, "ansible", fact.identity, fact.value)
-                        for fact in collect_topology(path, text)
+                        for fact in collect_topology(path, text, executable=executable)
                     ),
                 ]
+                observation = topology_coverage(path, text, executable=executable)
+                if observation is not None:
+                    domain, scope, value = observation
+                    coverage_observations.setdefault((domain, scope), []).append(value)
         except (
             RepositoryEvidenceError,
             UnicodeDecodeError,
@@ -708,8 +779,28 @@ def collect_ref_facts(
             diagnostics.append(
                 f"{ref.value}:{path}: typed collection unavailable ({type(exc).__name__})"
             )
+            if topology_source and entry is not None:
+                unavailable_topology(entry, "parse-unavailable")
             continue
         for fact in facts:
+            if fact.kind.startswith("ansible.") and fact.kind != "dependency.declared":
+                count = topology_kind_counts.get(fact.kind, 0)
+                if count >= MAX_TOPOLOGY_FACTS_PER_KIND:
+                    observation = topology_coverage(path, text, executable=executable)
+                    if observation is not None:
+                        domain, scope, _value = observation
+                        key = (domain, scope)
+                        if key not in topology_truncation_scopes:
+                            coverage_observations.setdefault(key, []).append(
+                                CoverageObservation(
+                                    CoverageState.PARTIAL,
+                                    "topology-fact-limit",
+                                    positive=True,
+                                )
+                            )
+                            topology_truncation_scopes.add(key)
+                    continue
+                topology_kind_counts[fact.kind] = count + 1
             identity = (
                 f"{path}:{fact.identity}"
                 if fact.kind.startswith(("dependency.", "runtime.", "ci.", "container."))
@@ -727,6 +818,18 @@ def collect_ref_facts(
                     provenance=f"typed parser:{PurePosixPath(path).name}",
                     confidence=Confidence.EXACT,
                     trust=trust,
+                )
+            )
+    if coverage_sink is not None:
+        for (domain, scope), observations in sorted(coverage_observations.items()):
+            coverage_sink.append(
+                compose_coverage(
+                    component="ansible",
+                    domain=domain,
+                    scope=scope,
+                    observations=tuple(observations),
+                    ref=ref,
+                    commit_sha=commit_sha,
                 )
             )
     return records, diagnostics

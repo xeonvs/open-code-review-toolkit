@@ -9,7 +9,6 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Previous item | Disposition | Result |
 | --- | --- | --- |
 | Native fuzzing campaign | Retained and revised | BL-019 connects fuzzing to the future evidence/MCP parser attack surface and keeps bounded CI and corpus ownership as activation requirements. |
-| OpenSSF Best Practices registration | Retained as owner action | BL-022 remains conditional on truthful owner attestations and is not a product-roadmap priority. |
 | Additional provider adapters | Retained, clarified, and reprioritized | BL-021 is explicitly about code-hosting and review-host adapters beyond GitLab, not repository ecosystem/framework evidence. |
 | File-based user configuration | Retained and redesigned | BL-020 waits for profile, MCP, and evidence schemas while preserving environment precedence and excluding secrets. |
 
@@ -24,7 +23,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Activation trigger:** Snapshot and delta semantics are stable.
 - **Goal:** Distinguish declared constraints, locked, installed, runtime-detected, container-pinned, inferred, and unknown versions.
 - **Scoped deliverables:** Strengthen actual-use formats for Python, JavaScript/TypeScript, Go, PHP, Ansible, containers, and GitLab CI; define precedence without collapsing declared, locked, installed, runtime, image tag, and immutable digest evidence; implement source/target resolution and deltas with provenance.
-- **Acceptance criteria:** Each supported format has deterministic semantics and fixtures; platform/marker/workspace variants and conflicting sources remain distinct; mutable image tags are never represented as immutable pins; malformed/oversized files degrade without network access.
+- **Acceptance criteria:** Each supported format has deterministic semantics and fixtures; platform/marker/workspace variants and conflicting sources remain distinct; mutable image tags are never represented as immutable pins; malformed/oversized files degrade without network access; every domain that can support negative inference publishes applicable scoped completeness through the established evidence-coverage contract.
 - **Exclusions:** Unused ecosystems, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
 - **Validation:** Per-format source/target fixtures, conflict and limit cases, and common evidence-model contract tests.
 - **Release classification expectation:** `release-required`.
@@ -38,7 +37,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Activation trigger:** An anonymized inventory of pilot repositories identifies at least two high-value framework candidates with safe synthetic fixtures.
 - **Goal:** Select and implement 2-3 framework plugins that improve review evidence without building code graphs.
 - **Scoped deliverables:** Inventory pilot repositories without recording private names or contents; score candidates by prevalence, version-sensitive API surface, deterministic detectability, synthetic-fixture feasibility, and expected review-quality impact; record the selection decision; define a bounded plugin protocol and implement the selected providers. Existing Ansible parser maturity may support, but cannot substitute for, the scored selection.
-- **Acceptance criteria:** The inventory and scoring justify each selected plugin; plugins expose framework identity, verified version, component scope, important configuration paths, and material deltas; they cannot run arbitrary commands or network requests and avoid whole-repository traversal when changed components are known.
+- **Acceptance criteria:** The inventory and scoring justify each selected plugin; plugins expose framework identity, verified version, component scope, important configuration paths, material deltas, and applicable scoped completeness; they cannot run arbitrary commands or network requests and avoid whole-repository traversal when changed components are known. Ansible's established coverage implementation is a reusable first adopter, not a substitute for selecting future plugins from demonstrated use.
 - **Exclusions:** Route/call/symbol graphs, framework-specific reviewers, or speculative detection without version evidence.
 - **Validation:** Positive/negative/multi-component fixtures, version-conflict and staleness cases, and plugin isolation tests.
 - **Release classification expectation:** `release-required`.
@@ -52,7 +51,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Activation trigger:** A real repository need identifies a missing ecosystem or framework and supplies safe synthetic fixtures and deterministic semantics.
 - **Goal:** Extend coverage without accumulating shallow detectors.
 - **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public synthetic examples.
-- **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit.
+- **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
 - **Exclusions:** Checkbox coverage, network resolution, runtime code execution, or bundles spanning unrelated ecosystems.
 - **Validation:** Pack-specific fixtures plus common evidence and bootstrap/MCP projection contracts.
 - **Release classification expectation:** `release-required`.
@@ -157,7 +156,7 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Dependencies:** BL-016 and stable discussion/fingerprint lifecycle.
 - **Activation trigger:** Explicit profiles can label comparable runs, and M1 E2E/operational evidence demonstrates material gaps that upstream OCR telemetry and structured result artifacts cannot cover reliably.
 - **Goal:** Produce privacy-safe evidence for profile tuning and any future routing decision.
-- **Scoped deliverables:** Reuse OCR token, cost, budget, latency, request, and tool-call telemetry, then audit structured result artifacts for the remaining gaps. If GitLab lifecycle, bounded evidence/MCP, posting, or review-value gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate toolkit-only coverage includes evidence/store bounds and degradation; bootstrap size; independently attributable MCP readiness and usage; findings; posting/rollback; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from OCR telemetry or bounded result artifacts.
+- **Scoped deliverables:** Reuse OCR token, cost, budget, latency, request, and tool-call telemetry plus the established review-health, failed-file, finding-publication, suppression, omission, and posting receipts, then audit structured result artifacts for the remaining gaps. If GitLab lifecycle, bounded evidence/MCP, posting, or review-value gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate toolkit-only coverage includes evidence/store bounds and degradation; bootstrap size; independently attributable MCP readiness and usage; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from OCR telemetry or bounded result artifacts.
 - **Acceptance criteria:** OCR remains the source for token, cost, and budget telemetry. The gap audit may conclude that OCR telemetry plus bounded result-derived reporting is sufficient, in which case no toolkit telemetry runtime is added. If a layer is justified, metrics contain no source, prompts, tool arguments/results, finding text, paths, URLs, user identities, secrets, external contents, or unbounded project/MR labels; labels use closed vocabularies and bounded cardinality; built-in and optional MCP servers remain independently attributable; OCR and toolkit metrics cannot double-count the same semantic event; missing upstream data is explicit; failed/partial/skipped and repeated runs are distinguishable without changing review behavior; telemetry failure cannot fail review.
 - **Exclusions:** User surveillance, ranking developers, automatic routing, or mandatory external telemetry.
 - **Validation:** Synthetic lifecycle aggregation, redaction/privacy tests, missing-data behavior, and deterministic export fixtures.
@@ -220,17 +219,3 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Exclusions:** Repository ecosystem/framework detection, partial adapters, legacy namespace shims, or multi-host abstractions without a real second provider.
 - **Validation:** Shared adapter contract suite, provider-specific synthetic integration tests, redaction/write-bound tests, and documentation validation.
 - **Release classification expectation:** `release-required`.
-
-### BL-022: Register for OpenSSF Best Practices
-
-- **Status:** owner action
-- **Priority:** low
-- **Roadmap theme:** M6 Later and conditional work
-- **Dependencies:** Public repository and owner access to `bestpractices.dev`.
-- **Activation trigger:** The owner is ready to authenticate and attest every passing-level criterion truthfully.
-- **Goal:** Create an evidence-backed public badge record without guessing governance or usage answers.
-- **Scoped deliverables:** Complete the questionnaire with current public evidence links, leave unsupported criteria unmet, add the badge only after readback confirms the record.
-- **Acceptance criteria:** Record and repository badge agree, every affirmative answer has current evidence, and owner-only statements are owner-confirmed.
-- **Exclusions:** Automated attestations, aspirational answers, or treating badge work as a product feature.
-- **Validation:** Public record readback, repository link check, and badge target verification.
-- **Release classification expectation:** `no-release`.

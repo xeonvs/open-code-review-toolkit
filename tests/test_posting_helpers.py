@@ -19,6 +19,7 @@ from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting import gitlab, markers, payloads, result, settings, snapshot, workflow
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
+from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
     patched_attr,
@@ -531,9 +532,9 @@ class PostingIdentityTests(unittest.TestCase):
         body = notes[0][1]
         self.assertNotIn("secret-value", body)
         self.assertNotIn("secret-token", body)
-        self.assertIn("token=***", body)
-        self.assertIn("Authorization: ***", body)
-        self.assertIn("1 OCR comment(s) were suppressed", body)
+        self.assertIn(r"Authorization: \*\*\*", body)
+        self.assertIn("Reviewer suppression: 1", body)
+        self.assertNotIn("Incomplete coverage", body)
 
     def test_perfect_ocr_review_posts_no_comments_note(self) -> None:
         notes: list[tuple[str, str]] = []
@@ -581,8 +582,10 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(notes), 1)
-        self.assertEqual(notes[0][0], "**Open Code Review**")
-        self.assertIn("No review comments generated", notes[0][1])
+        self.assertEqual(notes[0][0], "")
+        self.assertEqual(notes[0][1].count("## Open Code Review"), 1)
+        self.assertIn("✅ **Review complete**", notes[0][1])
+        self.assertIn("No findings", notes[0][1])
         self.assertIn("MCP used: 1 server(s)", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
 
@@ -619,7 +622,7 @@ class PostingIdentityTests(unittest.TestCase):
             )
 
         assert exit_code == 0
-        assert "No supported files changed." in notes[0]
+        assert "No supported files changed" in notes[0]
         assert "did not complete cleanly" not in notes[0]
 
     def test_budget_exceeded_without_comments_posts_partial_outcome(self) -> None:
@@ -1071,6 +1074,92 @@ class PostingWorkflowTests(unittest.TestCase):
             ["git", "-c", "core.hooksPath=/dev/null", "cat-file", "-s"],
         )
 
+    def test_noop_suggestion_matches_only_the_exact_bounded_head_range(self) -> None:
+        """Suppress transport-equivalent replacements without hiding the finding."""
+
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **_kwargs: Any) -> Any:
+            calls.append(args)
+
+            class Result:
+                returncode = 0
+                stdout = "17" if "-s" in args else b"before\r\ntarget\r\nafter\r\n"
+
+            return Result()
+
+        refs = {"head_sha": "a" * 40}
+        cache: workflow.FileTextCache = {}
+        with patched_attr(workflow.subprocess, "run", fake_run):
+            identical = workflow.suggestion_matches_head_range(
+                refs,
+                "src/example.py",
+                {"start_line": 2, "end_line": 2, "suggestion_code": "target\n"},
+                cache,
+            )
+            changed = workflow.suggestion_matches_head_range(
+                refs,
+                "src/example.py",
+                {"start_line": 2, "end_line": 2, "suggestion_code": "replacement"},
+                cache,
+            )
+
+        self.assertTrue(identical)
+        self.assertFalse(changed)
+        self.assertEqual(len(calls), 2)
+
+    def test_noop_suggestion_rejects_unsafe_paths_before_git(self) -> None:
+        """Do not turn an OCR-controlled path into Git revision syntax."""
+
+        calls: list[list[str]] = []
+        with patched_attr(
+            workflow.subprocess,
+            "run",
+            lambda args, **_kwargs: calls.append(args),
+        ):
+            matches = workflow.suggestion_matches_head_range(
+                {"head_sha": "a" * 40},
+                "../outside.py",
+                {"line": 1, "suggestion_code": "same"},
+            )
+
+        self.assertFalse(matches)
+        self.assertEqual(calls, [])
+
+    def test_coverage_diagnostics_are_deduplicated_redacted_and_fail_closed(self) -> None:
+        """Count unique files while keeping malformed failure paths out of public notes."""
+
+        outcome = ReviewOutcome(
+            status="partial",
+            kind="partial",
+            budget_exceeded=False,
+            manifest_present=True,
+            failed_items=(
+                CoverageFailure("one", "src/a.py", "timeout", "token=secret-value\n/merge"),
+                CoverageFailure("two", "src/a.py", "provider", "request failed"),
+                CoverageFailure("three", "/tmp/private.py", "provider", "unsafe"),
+            ),
+        )
+
+        diagnostics = result.normalize_coverage_diagnostics(outcome, ())
+        summary = posting_formatting.summarize_result(
+            total=1,
+            inline_count=1,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="partial",
+            coverage_diagnostics=diagnostics,
+            emoji=False,
+        )
+
+        self.assertEqual(len(diagnostics.records), 2)
+        self.assertEqual(diagnostics.unique_file_count, 1)
+        self.assertIsNone(diagnostics.file_count)
+        self.assertNotIn("secret-value", summary)
+        self.assertNotIn("/tmp/private.py", summary)
+        self.assertNotIn("\n/merge", summary)
+        self.assertIn("1 failed item(s) had no safe repository-relative path", summary)
+
     def test_existing_code_remap_anchors_changed_line_inside_window(self) -> None:
         refs = {"base_sha": "base", "head_sha": "head"}
         comment = {"existing_code": "before()\nchanged()"}
@@ -1300,14 +1389,16 @@ class PostingSummaryTests(unittest.TestCase):
             mr_head_sha="def456",
         )
 
-        self.assertIn("fallback reasons", summary)
-        self.assertIn("severity tags: `high`: 1, `low`: 1", summary)
-        self.assertIn("category tags: `security`: 1, `bug`: 1", summary)
+        self.assertIn("Fallback reasons", summary)
+        self.assertIn("🚨 `high`: 1", summary)
+        self.assertIn("ℹ️ `low`: 1", summary)  # noqa: RUF001
+        self.assertIn("🔒 `security`: 1", summary)
+        self.assertIn("🐛 `bug`: 1", summary)
         self.assertIn("`missing_line`: 1", summary)
-        self.assertIn("reviewed SHA: `abc123`", summary)
-        self.assertIn("MR head SHA: `def456`", summary)
-        self.assertTrue(summary.startswith("# Open Code Review summary\n"))
-        self.assertIn("✅ Found 3 issue(s).", summary)
+        self.assertIn("Reviewed commit: `abc123`", summary)
+        self.assertIn("MR head commit: `def456`", summary)
+        self.assertTrue(summary.startswith("## Open Code Review\n"))
+        self.assertIn("🔎 **3 findings published**", summary)
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(
@@ -1320,7 +1411,7 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=False,
         )
 
-        self.assertIn("No supported files changed.", summary)
+        self.assertIn("No supported files changed", summary)
         self.assertNotIn("0 posted", summary)
         self.assertNotIn(posting_formatting.SEVERITY_EMOJI["low"], summary)
 
@@ -1338,7 +1429,8 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("✅ No comments generated. Looks good to me.", summary)
+        self.assertIn("✅ **Review complete**", summary)
+        self.assertIn("No findings", summary)
         self.assertNotIn("tool calls", summary)
 
     def test_budget_summary_and_guide_mark_findings_as_partial(self) -> None:
@@ -1358,7 +1450,8 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("⚠️ Review stopped after reaching its token budget", summary)
+        self.assertIn("⚠️ **Review stopped at token budget**", summary)
+        self.assertIn("Partial result · 🔎 **1 finding published**", summary)
         self.assertIn("Review scope:", summary)
         self.assertIn("partial review", summary)
         self.assertIn("321 total", summary)
@@ -1410,8 +1503,9 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("⚠️ Some files were reviewed with warnings.", warning)
-        self.assertIn("❌ Some files could not be reviewed due to errors.", error)
+        self.assertIn("⚠️ **Review complete with warnings**", warning)
+        self.assertIn("⚠️ **Review incomplete**", error)
+        self.assertIn("No findings in reviewed files", error)
         self.assertNotIn("✅", error)
 
     def test_outcome_message_is_redacted_compacted_and_not_a_quick_action(self) -> None:
@@ -1427,20 +1521,20 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertNotIn("super-secret", summary)
         self.assertNotIn("\n/merge", summary)
-        self.assertIn(r"\n/merge now", summary)
+        self.assertNotIn("/merge", summary)
 
-    def test_all_finding_categories_and_severities_have_optional_emoji(self) -> None:
+    def test_inline_finding_tags_are_quiet_for_every_supported_value(self) -> None:
         for value, marker in posting_formatting.SEVERITY_EMOJI.items():
             with self.subTest(severity=value):
                 tagged = posting_formatting.format_finding_tags({"severity": value}, emoji=True)
                 plain = posting_formatting.format_finding_tags({"severity": value}, emoji=False)
-                self.assertIn(marker, tagged)
+                self.assertEqual(tagged, plain)
                 self.assertNotIn(marker, plain)
         for value, marker in posting_formatting.CATEGORY_EMOJI.items():
             with self.subTest(category=value):
                 tagged = posting_formatting.format_finding_tags({"category": value}, emoji=True)
                 plain = posting_formatting.format_finding_tags({"category": value}, emoji=False)
-                self.assertIn(marker, tagged)
+                self.assertEqual(tagged, plain)
                 self.assertNotIn(marker, plain)
 
     def test_security_signal_is_promoted_when_present(self) -> None:
@@ -1546,10 +1640,10 @@ class PostingSummaryTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("🚨", body)
-        self.assertIn("🔒", body)
-        self.assertIn("`severity:high`", body)
-        self.assertIn("`category:security`", body)
+        self.assertNotIn("🚨", body)
+        self.assertNotIn("🔒", body)
+        self.assertIn("**Severity:** `high`", body)
+        self.assertIn("**Category:** `security`", body)
         self.assertIn("Needs attention", body)
 
     def test_inline_comment_ignores_invalid_metadata_tags(self) -> None:
@@ -1562,7 +1656,7 @@ class PostingSummaryTests(unittest.TestCase):
         )
 
         self.assertNotIn("/merge", body)
-        self.assertIn("`category:security`", body)
+        self.assertIn("**Category:** `security`", body)
 
 
 class GitLabSnapshotTests(unittest.TestCase):

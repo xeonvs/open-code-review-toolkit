@@ -71,6 +71,15 @@ class Sensitivity(str, Enum):
     REDACTED = "redacted"
 
 
+class CoverageState(str, Enum):
+    """Describe whether missing evidence can support a negative conclusion."""
+
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    RUNTIME_DEPENDENT = "runtime-dependent"
+    UNAVAILABLE = "unavailable"
+
+
 def _canonical_json(value: object) -> str:
     """Serialize a validated evidence value for stable hashing and ordering."""
 
@@ -241,6 +250,150 @@ class EvidenceRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class CoverageRecord:
+    """Describe completeness for one evidence domain and semantic scope."""
+
+    component: str
+    domain: str
+    scope: str
+    state: CoverageState
+    reasons: tuple[str, ...]
+    ref: RefRole
+    commit_sha: str
+    schema_version: str = "repository.evidence-coverage/v1"
+    kind: str = field(init=False, default="repository.evidence_coverage")
+    id: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        """Validate the closed contract and derive a stable content identifier."""
+
+        if self.schema_version != "repository.evidence-coverage/v1":
+            raise ValueError("coverage schema version is unsupported")
+        if not isinstance(self.state, CoverageState) or not isinstance(self.ref, RefRole):
+            raise ValueError("coverage state and ref must use their closed enums")
+        for name, value in (
+            ("component", self.component),
+            ("domain", self.domain),
+            ("scope", self.scope),
+        ):
+            if (
+                not isinstance(value, str)
+                or not value
+                or len(value) > 256
+                or any(ord(character) < 32 for character in value)
+            ):
+                raise ValueError(f"coverage {name} must contain between 1 and 256 safe characters")
+        if self.ref is RefRole.SHARED:
+            raise ValueError("coverage ref must be base or head")
+        if len(self.commit_sha) != 40 or not all(
+            character in "0123456789abcdef" for character in self.commit_sha
+        ):
+            raise ValueError("coverage commit_sha must be a lowercase 40-character SHA-1")
+        if not isinstance(self.reasons, tuple) or not all(
+            isinstance(reason, str) for reason in self.reasons
+        ):
+            raise ValueError("coverage reasons must be a tuple of strings")
+        normalized_reasons = tuple(sorted(set(self.reasons)))
+        if not normalized_reasons or any(
+            not reason
+            or len(reason) > 64
+            or not all(
+                character.isascii() and (character.isalnum() or character in ".-")
+                for character in reason
+            )
+            or reason != reason.casefold()
+            for reason in normalized_reasons
+        ):
+            raise ValueError("coverage reasons must contain bounded machine labels")
+        object.__setattr__(self, "reasons", normalized_reasons)
+        identity = {
+            "schema_version": self.schema_version,
+            "component": self.component,
+            "domain": self.domain,
+            "scope": self.scope,
+            "state": self.state.value,
+            "reasons": list(self.reasons),
+            "ref": self.ref.value,
+            "commit_sha": self.commit_sha,
+        }
+        digest = hashlib.sha256(_canonical_json(identity).encode("utf-8")).hexdigest()
+        object.__setattr__(self, "id", f"cov1_{digest}")
+
+    @property
+    def semantic_identity(self) -> str:
+        """Return the applicability identity used for base-to-head deltas."""
+
+        return _canonical_json([self.component, self.domain, self.scope])
+
+    def to_dict(self) -> dict[str, EvidenceValue]:
+        """Return the versioned public JSON representation."""
+
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "schema_version": self.schema_version,
+            "component": self.component,
+            "domain": self.domain,
+            "scope": self.scope,
+            "state": self.state.value,
+            "reasons": list(self.reasons),
+            "ref": self.ref.value,
+            "commit_sha": self.commit_sha,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: object) -> CoverageRecord:
+        """Validate and construct coverage from an untrusted JSON object."""
+
+        if not isinstance(raw, dict):
+            raise ValueError("coverage record must be an object")
+        required = {
+            "kind",
+            "schema_version",
+            "component",
+            "domain",
+            "scope",
+            "state",
+            "reasons",
+            "ref",
+            "commit_sha",
+        }
+        allowed = required | {"id"}
+        if not required <= raw.keys() or not raw.keys() <= allowed:
+            raise ValueError("coverage record fields are invalid")
+        if raw.get("kind", "repository.evidence_coverage") != "repository.evidence_coverage":
+            raise ValueError("coverage kind is unsupported")
+        if raw.get("schema_version", "repository.evidence-coverage/v1") != (
+            "repository.evidence-coverage/v1"
+        ):
+            raise ValueError("coverage schema version is unsupported")
+        strings: dict[str, str] = {}
+        for name in ("component", "domain", "scope", "state", "ref", "commit_sha"):
+            value = raw.get(name)
+            if not isinstance(value, str):
+                raise ValueError(f"coverage field {name!r} must be a string")
+            strings[name] = value
+        reasons = raw.get("reasons")
+        if not isinstance(reasons, list) or not all(isinstance(item, str) for item in reasons):
+            raise ValueError("coverage reasons must be strings")
+        record = cls(
+            component=strings["component"],
+            domain=strings["domain"],
+            scope=strings["scope"],
+            state=CoverageState(strings["state"]),
+            reasons=tuple(cast(list[str], reasons)),
+            ref=RefRole(strings["ref"]),
+            commit_sha=strings["commit_sha"],
+        )
+        raw_id = raw.get("id")
+        if raw_id is not None and not isinstance(raw_id, str):
+            raise ValueError("coverage id must be a string")
+        if raw_id not in {None, record.id}:
+            raise ValueError("coverage id does not match its canonical content")
+        return record
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceSnapshot:
     """Collect deterministic evidence for one immutable repository ref."""
 
@@ -248,6 +401,7 @@ class EvidenceSnapshot:
     commit_sha: str
     records: tuple[EvidenceRecord, ...]
     diagnostics: tuple[str, ...] = ()
+    coverage: tuple[CoverageRecord, ...] = ()
 
     def __post_init__(self) -> None:
         """Ensure snapshot records match the declared ref and are ordered."""
@@ -259,6 +413,9 @@ class EvidenceSnapshot:
         for record in self.records:
             if record.ref is not self.ref or record.commit_sha != self.commit_sha:
                 raise ValueError("snapshot record ref and commit must match the snapshot")
+        for coverage in self.coverage:
+            if coverage.ref is not self.ref or coverage.commit_sha != self.commit_sha:
+                raise ValueError("snapshot coverage ref and commit must match the snapshot")
         if not all(isinstance(item, str) for item in self.diagnostics):
             raise ValueError("snapshot diagnostics must be strings")
         object.__setattr__(self, "diagnostics", tuple(self.diagnostics))
@@ -269,6 +426,17 @@ class EvidenceSnapshot:
             sorted(unique.values(), key=lambda item: (item.kind, item.source_path, item.id))
         )
         object.__setattr__(self, "records", ordered)
+        unique_coverage = {record.id: record for record in self.coverage}
+        object.__setattr__(
+            self,
+            "coverage",
+            tuple(
+                sorted(
+                    unique_coverage.values(),
+                    key=lambda item: (item.component, item.domain, item.scope, item.id),
+                )
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,6 +33,7 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 8. Compose mandatory report metadata once and apply it to skipped, clean, warning, error, and finding outcomes through one invariant matrix.
 9. Profile realistic bounded data by separating cold-start validation from steady-state requests; optimize the measured bottleneck rather than protocol dispatch by assumption.
 10. Before implementing a parser or trust boundary, record the grammar, normalization and degradation policies, budget units, inherited-process state, and adversarial fixtures in the active plan or tests.
+11. Missing evidence supports a negative conclusion only when the applicable component, domain, and scope explicitly report complete coverage; absent, partial, runtime-dependent, and unavailable coverage remain unknown.
 
 ## Documentation Ownership
 

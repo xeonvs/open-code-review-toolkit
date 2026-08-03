@@ -63,6 +63,11 @@ def render_bootstrap(
     changes: dict[str, int] = {}
     for delta in store.deltas:
         changes[delta.change] = changes.get(delta.change, 0) + 1
+    coverage_states: dict[str, int] = {}
+    for coverage_record in store.coverage:
+        coverage_states[coverage_record.state.value] = (
+            coverage_states.get(coverage_record.state.value, 0) + 1
+        )
     lines = [
         "# Repository evidence bootstrap",
         "",
@@ -77,6 +82,8 @@ def render_bootstrap(
         "",
         "## Evidence coverage",
         f"- records: {len(store.records)}",
+        f"- scoped coverage: {len(store.coverage)}",
+        f"- coverage states: {', '.join(f'{state}={count}' for state, count in sorted(coverage_states.items())) or 'absent (missing facts are unknown)'}",
         f"- components: {', '.join(components) if components else 'none'}",
         f"- kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(kind_counts.items())) or 'none'}",
         f"- deltas: {', '.join(f'{state}={count}' for state, count in sorted(changes.items())) or 'none'}",
@@ -103,6 +110,11 @@ def render_bootstrap(
     lines.append(
         "Use the built-in `ocr_toolkit_evidence` tool first: start with `action=summary`, "
         "narrow with `action=list`, and retrieve one stable record with `action=get`."
+    )
+    lines.append(
+        "A missing fact proves absence only when the applicable component/domain/scope coverage "
+        "record is `complete`; absent, `partial`, `runtime-dependent`, or `unavailable` "
+        "coverage means the result is unknown."
     )
     return _clip("\n".join(lines).rstrip() + "\n", max_chars=max_chars, max_bytes=max_bytes)
 
