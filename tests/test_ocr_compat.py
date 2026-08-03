@@ -385,6 +385,9 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     class Response:
         headers = {"Content-Length": "3"}
 
+        def __init__(self) -> None:
+            self.read_once = False
+
         def __enter__(self) -> Response:
             return self
 
@@ -428,6 +431,121 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     request = captured["request"]
     assert request.get_header("Authorization") is None
     assert request.get_header("User-agent") == module.USER_AGENT
+
+
+def test_asset_download_retries_timeout_and_resets_partial_file(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    class Response:
+        headers = {"Content-Length": "3"}
+
+        def __init__(self, *, fail_midstream: bool) -> None:
+            self.fail_midstream = fail_midstream
+            self.read_count = 0
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _size: int) -> bytes:
+            self.read_count += 1
+            if self.fail_midstream and self.read_count == 1:
+                return b"o"
+            if self.fail_midstream:
+                raise TimeoutError("synthetic midstream timeout")
+            if self.read_count > 1:
+                return b""
+            return b"ocr"
+
+        def geturl(self) -> str:
+            return "https://release-assets.githubusercontent.com/synthetic"
+
+    def flaky_urlopen(request: Any, *, timeout: int) -> Response:
+        nonlocal calls
+        calls += 1
+        return Response(fail_midstream=calls == 1)
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", flaky_urlopen),
+        patched_attr(module.time, "sleep", lambda _seconds: None),
+    ):
+        destination = module._download(asset, tmp_path)
+
+    assert destination.read_bytes() == b"ocr"
+    assert calls == 2
+
+
+def test_asset_download_bounds_transient_retries(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    def timed_out_urlopen(request: Any, *, timeout: int) -> None:
+        nonlocal calls
+        calls += 1
+        raise TimeoutError("synthetic timeout")
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", timed_out_urlopen),
+        patched_attr(module.time, "sleep", lambda _seconds: None),
+        pytest.raises(module.CompatibilityError, match="after 3 attempts"),
+    ):
+        module._download(asset, tmp_path)
+
+    assert calls == module.DOWNLOAD_ATTEMPTS
+
+
+def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    def not_found_urlopen(request: Any, *, timeout: int) -> None:
+        nonlocal calls
+        calls += 1
+        raise module.urllib.error.HTTPError(
+            request.full_url,
+            404,
+            "synthetic not found",
+            hdrs=None,
+            fp=None,
+        )
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", not_found_urlopen),
+        pytest.raises(module.CompatibilityError, match="cannot download"),
+    ):
+        module._download(asset, tmp_path)
+
+    assert calls == 1
 
 
 def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: Path) -> None:

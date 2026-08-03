@@ -6,6 +6,7 @@ import argparse
 import contextlib
 import hashlib
 import html
+import http.client
 import http.server
 import json
 import os
@@ -15,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,6 +46,7 @@ MAX_ISSUE_PAGES = 10
 MAX_ISSUE_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_RELEASE_CHANGES_CHARS = 4_000
 MAX_RELEASE_CHANGES_LINES = 50
+DOWNLOAD_ATTEMPTS = 3
 VERSION_RE = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -377,38 +380,73 @@ def release_assets(release: dict[str, Any]) -> list[Asset]:
 
 
 def _download(asset: Asset, directory: Path) -> Path:
+    """Download one verified asset with bounded retries for transient transport errors."""
+
     destination = directory / asset.name
     parsed = urllib.parse.urlsplit(asset.url)
     if parsed.scheme != "https" or parsed.hostname != "github.com":
         _fail(f"asset URL is outside the allowed GitHub release origin: {asset.url}")
     request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
-    digest = hashlib.sha256()
-    count = 0
-    try:
-        # The initial URL is an exact HTTPS github.com release asset; urllib follows
-        # GitHub's signed, credential-free release-asset redirect.
-        with urllib.request.urlopen(  # nosec B310
-            request, timeout=HTTP_TIMEOUT_SECONDS
-        ) as response:
-            final = urllib.parse.urlsplit(response.geturl())
-            if final.scheme != "https" or final.hostname not in {
-                "github.com",
-                "objects.githubusercontent.com",
-                "release-assets.githubusercontent.com",
-            }:
-                _fail(f"asset redirect ended at an untrusted origin: {response.geturl()}")
-            with destination.open("xb") as output:
-                while chunk := response.read(64 * 1024):
-                    count += len(chunk)
-                    if count > asset.size or count > MAX_ASSET_BYTES:
-                        _fail(f"download for {asset.name} exceeded its declared size")
-                    digest.update(chunk)
-                    output.write(chunk)
-    except (OSError, urllib.error.URLError) as exc:
-        raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
-    if count != asset.size or digest.hexdigest() != asset.sha256:
-        _fail(f"downloaded bytes do not match metadata for {asset.name}")
-    return destination
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        digest = hashlib.sha256()
+        count = 0
+        try:
+            # The initial URL is an exact HTTPS github.com release asset; urllib follows
+            # GitHub's signed, credential-free release-asset redirect.
+            with urllib.request.urlopen(  # nosec B310
+                request, timeout=HTTP_TIMEOUT_SECONDS
+            ) as response:
+                final = urllib.parse.urlsplit(response.geturl())
+                if final.scheme != "https" or final.hostname not in {
+                    "github.com",
+                    "objects.githubusercontent.com",
+                    "release-assets.githubusercontent.com",
+                }:
+                    _fail(f"asset redirect ended at an untrusted origin: {response.geturl()}")
+                with destination.open("xb") as output:
+                    while chunk := response.read(64 * 1024):
+                        count += len(chunk)
+                        if count > asset.size or count > MAX_ASSET_BYTES:
+                            _fail(f"download for {asset.name} exceeded its declared size")
+                        digest.update(chunk)
+                        output.write(chunk)
+        except (
+            TimeoutError,
+            ConnectionError,
+            http.client.IncompleteRead,
+            urllib.error.URLError,
+        ) as exc:
+            retryable = not isinstance(exc, urllib.error.HTTPError) or exc.code in {
+                408,
+                429,
+                500,
+                502,
+                503,
+                504,
+            }
+            if not retryable:
+                raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
+            last_error = exc
+            try:
+                destination.unlink(missing_ok=True)
+            except OSError as cleanup_exc:
+                raise CompatibilityError(
+                    f"cannot reset partial download for {asset.name}: {cleanup_exc}"
+                ) from cleanup_exc
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            break
+        except OSError as exc:
+            raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
+        if count != asset.size or digest.hexdigest() != asset.sha256:
+            _fail(f"downloaded bytes do not match metadata for {asset.name}")
+        return destination
+    assert last_error is not None
+    raise CompatibilityError(
+        f"cannot download {asset.name} after {DOWNLOAD_ATTEMPTS} attempts: {last_error}"
+    ) from last_error
 
 
 def parse_checksum_file(path: Path) -> dict[str, str]:

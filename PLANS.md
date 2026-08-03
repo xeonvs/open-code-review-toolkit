@@ -51,6 +51,13 @@ Repair the scheduled OCR compatibility workflow as a durable product boundary: c
 - Reviewed the complete local diff before any push across result normalization/publication, issue reconciliation/untrusted release rendering, and every destructive Actions selector/URL.
 - Corrected two review findings before publication: partial results now preserve the prior complete review, and log cleanup is idempotent with a bounded retry window instead of repeatedly traversing immutable run history.
 - `scripts/quality.sh check`, 180 focused tests plus 12 subtests, Ruff, mypy, workflow YAML parsing, `git diff --check`, and checksum-verified Gitleaks 8.24.3 worktree scanning pass locally. Supported-Python and hosted workflow results remain pending the protected PR.
+- A second review after hosted v1.8.5 qualification exposed a transport-only timeout while downloading `sha256sum.txt`. The correction retries only bounded transient timeout, connection, incomplete-read, and selected HTTP failures; resets partial files before each retry; preserves origin, byte, and digest checks; and still fails immediately on HTTP 404 and local I/O errors. Focused validation passes 27 tests plus Ruff, mypy, and `git diff --check`.
+
+### Execution Evidence
+
+- Issues #43 through #47 are closed with the `duplicate` label and a link to canonical issue #48. The passing v1.8.4 qualification run `30807114499` updated #48 in place with bounded upstream release changes and its current receipt.
+- The accumulated cleanup deleted 189 stale Actions objects while preserving workflow and check metadata. Direct post-cleanup listings contain three current caches totaling 79,827,436 bytes and 101 retained artifacts totaling 10,398,976 bytes; GitHub's aggregate cache-usage endpoint still reports its older delayed-accounting snapshot.
+- Hosted run `30807169920` reached v1.8.5 asset qualification but failed on a single read timeout, motivating the bounded transport retry correction above rather than weakening checksum or result-contract validation.
 
 ## Completed Plan: Qualify OCR 1.8.3 and release v0.4.2
 
