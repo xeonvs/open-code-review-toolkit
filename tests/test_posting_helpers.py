@@ -624,6 +624,7 @@ class PostingIdentityTests(unittest.TestCase):
 
     def test_budget_exceeded_without_comments_posts_partial_outcome(self) -> None:
         notes: list[str] = []
+        cleanup_calls: list[str] = []
 
         def capture_note(
             _config: gitlab.GitLabConfig,
@@ -643,7 +644,9 @@ class PostingIdentityTests(unittest.TestCase):
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
             patched_attr(
-                workflow, "delete_previous_bot_comments_if_collected", lambda *_args: None
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: cleanup_calls.append("delete"),
             ),
             patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
         ):
@@ -668,6 +671,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIn("Token budget reached", notes[0])
         self.assertIn("321 total", notes[0])
         self.assertNotIn("No issues found", notes[0])
+        self.assertEqual(cleanup_calls, [])
 
     def test_budget_status_and_summary_must_agree(self) -> None:
         calls: list[str] = []
@@ -689,6 +693,106 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, ["fields 'status' and 'summary.budget_exceeded' disagree"])
+
+    def test_manifest_partial_preserves_previous_review_and_reports_coverage(self) -> None:
+        notes: list[str] = []
+        cleanup_calls: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        result_data = {
+            "status": "partial",
+            "comments": [],
+            "warnings": [],
+            "manifest": {
+                "schema_version": "ocr.run-manifest/v1",
+                "operation": "review",
+                "terminal_state": "partial",
+                "coverage": {
+                    "selected": [{"item_id": "a"}, {"item_id": "b"}],
+                    "completed": [{"item_id": "a"}],
+                    "reused": [],
+                    "failed": [{"item_id": "b", "classification": "provider"}],
+                    "waived": [],
+                },
+            },
+        }
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: cleanup_calls.append("delete"),
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(cleanup_calls, [])
+        self.assertIn("Coverage: selected 2; completed 1", notes[0])
+        self.assertNotIn("No issues found", notes[0])
+
+    def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
+        notes: list[str] = []
+        collect_calls: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        result_data = {
+            "status": "failed",
+            "message": "Review failed safely.",
+            "comments": [],
+            "warnings": [],
+            "manifest": {
+                "schema_version": "ocr.run-manifest/v1",
+                "operation": "review",
+                "terminal_state": "failed",
+                "coverage": {
+                    "selected": [{"item_id": "a"}],
+                    "completed": [],
+                    "reused": [],
+                    "failed": [{"item_id": "a", "classification": "provider"}],
+                    "waived": [],
+                },
+            },
+        }
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: collect_calls.append("collect") or snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_env(OCR_STRICT_POSTING="true"),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(collect_calls, [])
+        self.assertIn("Previous OCR review comments were preserved", notes[0])
+        self.assertIn("Coverage: selected 1", notes[0])
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []

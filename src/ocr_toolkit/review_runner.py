@@ -32,6 +32,7 @@ from ocr_toolkit.ocr_result import (
     attach_toolkit_metadata,
 )
 from ocr_toolkit.providers.gitlab import invocation_identifiers
+from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
 STDERR_PROBE_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
@@ -83,28 +84,29 @@ def _mcp_usage_receipt(
 ) -> dict[str, object]:
     """Return bounded MCP usage tied to one validated review-time registry."""
 
-    status = payload.get("status")
-    if status not in {
-        "success",
-        "completed_with_warnings",
-        "completed_with_errors",
-        "budget_exceeded",
-    }:
-        if status == "skipped":
-            tool_calls = payload.get("tool_calls")
-            by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
-            if (
-                payload.get("message") != "No supported files changed."
-                or payload.get("comments") != []
-                or not isinstance(tool_calls, dict)
-                or tool_calls.get("total") != 0
-                or by_tool != {}
-            ):
-                raise ReviewRunnerError(
-                    "OCR skipped result does not match the pinned no-supported-files contract"
-                )
-            return {"mcp_usage": {}}
-        raise ReviewRunnerError("OCR result has an unsupported status")
+    try:
+        outcome = parse_result_outcome(payload)
+    except OcrResultContractError as exc:
+        raise ReviewRunnerError(f"OCR result has an unsupported outcome contract: {exc}") from exc
+
+    if outcome.kind == "skipped":
+        tool_calls = payload.get("tool_calls")
+        by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+        legacy_message_invalid = (
+            not outcome.manifest_present and payload.get("message") != "No supported files changed."
+        )
+        if (
+            legacy_message_invalid
+            or payload.get("comments") != []
+            or not isinstance(tool_calls, dict)
+            or tool_calls.get("total") != 0
+            or by_tool != {}
+        ):
+            raise ReviewRunnerError(
+                "OCR skipped result does not match the pinned no-supported-files contract"
+            )
+        return {"mcp_usage": {}}
+
     tool_calls = payload.get("tool_calls")
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     owners = {
@@ -124,7 +126,7 @@ def _mcp_usage_receipt(
             ):
                 owner = owners[tool]
                 usage[owner] = usage.get(owner, 0) + count
-    if usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
+    if outcome.requires_evidence_mcp and usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
     return {"mcp_usage": dict(sorted(usage.items()))}
 

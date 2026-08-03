@@ -89,10 +89,9 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "gh auth setup-git" in workflow
     assert "git switch -C" in workflow
     assert "git push --force-with-lease" in workflow
-    issue_create = workflow.split("issue_url=$(gh issue create", 1)[1].split(
-        "issue=${issue_url##*/}", 1
-    )[0]
-    assert "--json" not in issue_create
+    assert workflow.count("upsert-issue") == 1
+    assert "gh issue create" not in workflow
+    assert "--search" not in workflow
     assert "git push origin main" not in workflow
     assert "gh pr merge" not in workflow
     assert "automatic-safe" in workflow
@@ -102,3 +101,22 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "`2025-11-25`" in policy
     assert "initialized notification" in policy
     assert "absolute Python executable in isolated mode" in policy
+    assert "eventually consistent search index" in policy
+    assert "ocr.run-manifest/v1" in policy
+
+
+def test_actions_storage_maintenance_preserves_run_metadata() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "actions-maintenance.yml").read_text(
+        encoding="utf-8"
+    )
+    ci = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    codeql = (PROJECT_ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+
+    assert "actions: write" in workflow
+    assert "scripts/actions_cleanup.py" in workflow
+    assert "--execute" in workflow
+    assert "save-cache:" in ci
+    assert "refs/heads/main" in ci
+    assert "trap-caching: false" in codeql
+    assert "never workflow runs or check metadata" in development

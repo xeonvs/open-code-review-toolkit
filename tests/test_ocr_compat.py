@@ -187,21 +187,110 @@ def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
         module.parse_checksum_file(checksum)
 
 
-def test_issue_body_uses_stable_marker_and_no_release_notes() -> None:
+def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
     module = load_script()
     evidence = {
         "version": "1.7.18",
         "result": "compatible",
         "classification": "human-review-required",
         "classification_reasons": ["release notes contain a material signal"],
+        "baseline_version": "1.7.17",
+        "release_changes": module.release_changes_excerpt(
+            "fix parser output\n<script>alert(1)</script>\n```escape"
+        ),
     }
 
     body = module.render_issue(evidence)
 
     assert "<!-- ocr-compat-candidate:v1.7.18 -->" in body
     assert "Human checklist" in body
-    assert "upstream release notes" in body
+    assert "Upstream release changes" in body
+    assert "fix parser output" in body
     assert "<script" not in body
+    assert "```escape" not in body
+    assert "/compare/v1.7.17...v1.7.18" in body
+
+
+def test_release_changes_excerpt_is_bounded() -> None:
+    module = load_script()
+
+    excerpt = module.release_changes_excerpt("x" * (module.MAX_RELEASE_CHANGES_CHARS + 10))
+
+    assert len(excerpt) <= module.MAX_RELEASE_CHANGES_CHARS + 40
+    assert excerpt.endswith("[release notes excerpt truncated]")
+
+
+def test_exact_issue_lookup_uses_direct_bounded_listing() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+    requested: list[str] = []
+
+    def request(url: str, **_kwargs: Any) -> list[dict[str, Any]]:
+        requested.append(url)
+        return [
+            {"number": 47, "body": "other"},
+            {"number": 48, "body": marker},
+            {"number": 99, "body": marker, "pull_request": {}},
+        ]
+
+    with patched_attr(module, "_issue_api_request", request):
+        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+
+    assert requested == [
+        "https://api.github.com/repos/synthetic/repository/issues?state=all&per_page=100&page=1"
+    ]
+
+
+def test_exact_issue_lookup_fails_closed_on_existing_duplicates() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+
+    with (
+        patched_attr(
+            module,
+            "_issue_api_request",
+            lambda _url, **_kwargs: [
+                {"number": 47, "body": marker},
+                {"number": 48, "body": marker},
+            ],
+        ),
+        pytest.raises(module.CompatibilityError, match="#47, #48"),
+    ):
+        module.find_qualification_issue("synthetic/repository", marker)
+
+
+def test_issue_upsert_updates_the_canonical_issue() -> None:
+    module = load_script()
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+    evidence = {
+        "version": "1.8.4",
+        "result": "compatible",
+        "classification": "automatic-safe",
+        "classification_reasons": ["maintenance-only"],
+        "release_changes": "fix: synthetic parser correction",
+    }
+
+    def request(
+        url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        calls.append((url, method, payload))
+        return {"number": 48}
+
+    with (
+        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 48),
+        patched_attr(module, "_issue_api_request", request),
+    ):
+        number = module.upsert_qualification_issue(
+            repository="synthetic/repository",
+            evidence=evidence,
+            run_url="https://github.com/synthetic/repository/actions/runs/123",
+        )
+
+    assert number == 48
+    assert calls[0][1] == "PATCH"
+    assert calls[0][2] is not None
+    assert calls[0][2]["state"] == "open"
+    assert "fix: synthetic parser correction" in calls[0][2]["body"]
 
 
 def test_qualification_requires_exact_supported_asset_matrix() -> None:
