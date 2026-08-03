@@ -1000,6 +1000,20 @@ def find_qualification_issue(repository: str, marker: str) -> int | None:
                 and isinstance(body, str)
                 and marker in body
             ):
+                labels = issue.get("labels")
+                label_names = (
+                    {
+                        label.get("name")
+                        for label in labels
+                        if isinstance(label, dict) and isinstance(label.get("name"), str)
+                    }
+                    if isinstance(labels, list)
+                    else set()
+                )
+                # Closed issues explicitly archived as duplicates retain their
+                # incident evidence, but no longer compete for canonical identity.
+                if issue.get("state") == "closed" and "duplicate" in label_names:
+                    continue
                 matches.append(number)
         if len(value) < 100:
             break

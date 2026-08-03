@@ -259,6 +259,26 @@ def test_exact_issue_lookup_fails_closed_on_existing_duplicates() -> None:
         module.find_qualification_issue("synthetic/repository", marker)
 
 
+def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+
+    with patched_attr(
+        module,
+        "_issue_api_request",
+        lambda _url, **_kwargs: [
+            {
+                "number": 47,
+                "body": marker,
+                "state": "closed",
+                "labels": [{"name": "duplicate"}, {"name": "dependencies"}],
+            },
+            {"number": 48, "body": marker, "state": "open", "labels": []},
+        ],
+    ):
+        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+
+
 def test_issue_upsert_updates_the_canonical_issue() -> None:
     module = load_script()
     calls: list[tuple[str, str, dict[str, Any] | None]] = []
