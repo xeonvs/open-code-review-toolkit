@@ -1,0 +1,84 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "a9631da21d78b7296155e15b3cd5345c0672abf396c697278f539bda5ebf4c0b",
+      "size": 47002704
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "2f5712a51a86f89f2fdad15800cc9ae5581634cb847ee0ad92b027666cc69b52",
+      "size": 44677986
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "6ce08d410a662c71d26672cd13c358e760a62d7cd2e92b31e227f3a549d39c6d",
+      "size": 45498530
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "19e2430867889d15b5e66768f7726e42fdba28d49ef0e5d0149022aa4ac3f5b0",
+      "size": 42860706
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "1a06b366e7acb4d03131a19ae555ad7a80726fc5945ef073a313e3a4ce0ed225",
+      "size": 46727680
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "eabacbda716b026a04b48fd986735049ae19dbd45f1c93aef2ce9ed2252c1dc3",
+      "size": 43538944
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "28df699a015de7d78b061546c85f5df18ee9f9f7fb065e9972872f7b9d6f95d1",
+      "size": 572
+    }
+  ],
+  "baseline_version": "1.8.3",
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "contracts": {
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-02T14:19:24Z",
+  "release_changes": "## 🚀 Features\n\n- feat(manifest): run manifest coverage contract for review (#367) (#520)\n\n## 🐛 Bug Fixes\n\n- fix(telemetry): honour a base path in the OTLP HTTP endpoint (#667)\n- fix(vscode): use shell mode for spawn on Windows to detect npm correctly (#653)\n- fix(cli): refocus previous input on esc in manual provider form (#630)\n\n## 🔧 Refactoring\n\n- refactor(test): remove config migration comments (#665)\n- refactor(config): extract supported config keys into a single source of truth (#655)\n- refactor(test): unify config compat helpers to use cobra subcommand tree (#656)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.4...v1.8.5",
+  "release_notes_sha256": "613df4198df4c294d931bfb2d7f4c6dc3807eb0692eff881cdfc5f38fdd0a3dd",
+  "result": "compatible",
+  "schema_version": 1,
+  "tag": "v1.8.5",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.5"
+}

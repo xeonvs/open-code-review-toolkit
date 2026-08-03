@@ -56,6 +56,7 @@ from ocr_toolkit.posting.snapshot import (
     publish_failure_exit,
     rollback_current_run_comments,
 )
+from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -386,31 +387,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
     mcp_usage_summary = format_mcp_usage_summary(result.get(TOOLKIT_RESULT_KEY))
     token_usage_summary = format_token_usage_summary(result)
-    status = clean_text(result.get("status")) or "success"
-    allowed_statuses = {
-        "success",
-        "skipped",
-        "completed_with_warnings",
-        "completed_with_errors",
-        "budget_exceeded",
-    }
-    if status not in allowed_statuses:
-        return invalid_ocr_schema_exit(config, "field 'status' is unsupported")
+    try:
+        outcome = parse_result_outcome(result)
+    except OcrResultContractError as exc:
+        return invalid_ocr_schema_exit(config, str(exc))
     outcome_message = clean_text(result.get("message"))
 
     if not isinstance(comments_value, list):
         return invalid_ocr_schema_exit(config, "field 'comments' must be a list")
     if not isinstance(warnings_value, list):
         return invalid_ocr_schema_exit(config, "field 'warnings' must be a list")
-    summary_value = result.get("summary")
-    summary_budget_exceeded = (
-        isinstance(summary_value, dict) and summary_value.get("budget_exceeded") is True
-    )
-    if (status == "budget_exceeded") != summary_budget_exceeded:
-        return invalid_ocr_schema_exit(
-            config, "fields 'status' and 'summary.budget_exceeded' disagree"
-        )
-
     comments: list[dict[str, Any]] = []
     for index, comment in enumerate(comments_value):
         if not isinstance(comment, dict):
@@ -418,6 +404,17 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments.append(comment)
 
     warnings = warnings_value
+    if outcome.kind == "failed":
+        return post_manifest_failure(
+            config,
+            outcome,
+            outcome_message,
+            warnings,
+            tool_calls_summary=tool_calls_summary,
+            mcp_usage_summary=mcp_usage_summary,
+            token_usage_summary=token_usage_summary,
+        )
+
     billing_warnings = llm_billing_failure_warnings(warnings)
     if billing_warnings:
         print(
@@ -464,7 +461,12 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments = comments[:publish_limit]
 
     emoji = post_emoji()
-    reviewer_guide = format_reviewer_guide(comments, omitted_count, outcome_status=status)
+    reviewer_guide = format_reviewer_guide(
+        comments,
+        omitted_count,
+        outcome_status=outcome.kind,
+        coverage_summary=outcome.coverage_summary,
+    )
 
     if publishable_comment_count == 0:
         raw_message = clean_text(result.get("message"))
@@ -477,21 +479,20 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             )
         message = neutralize_quick_actions(redact_sensitive(raw_message))
         marker = {
-            "success": "✅",
+            "clean": "✅",
+            "warning": "⚠️",
+            "partial": "⚠️",
             "skipped": "ℹ️",  # noqa: RUF001 - intentional information emoji
-            "completed_with_warnings": "⚠️",
-            "completed_with_errors": "❌",
-            "budget_exceeded": "⚠️",
-        }[status]
+        }[outcome.kind]
         fallback_message = (
             "No review comments generated. No issues found."
-            if status == "success"
+            if outcome.kind == "clean"
             else (
                 "No supported files changed."
-                if status == "skipped"
+                if outcome.kind == "skipped"
                 else (
                     "Review stopped after reaching its token budget; this is a partial result."
-                    if status == "budget_exceeded"
+                    if outcome.budget_exceeded
                     else "Review did not complete cleanly."
                 )
             )
@@ -515,6 +516,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             body += f"\n{mcp_usage_summary}"
         if token_usage_summary:
             body += f"\n{token_usage_summary}"
+        if outcome.coverage_summary:
+            body += f"\n{outcome.coverage_summary}"
         if reviewer_guide:
             body += f"\n\n{reviewer_guide}"
         response = post_review_note_bounded(
@@ -528,8 +531,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
         if not finalize_posting(config, draft_note_ids):
             return publish_failure_exit(config, draft_note_ids)
-        delete_previous_bot_comments_if_collected(config, previous_bot_comment_refs)
-        resolve_requested_discussions(config, previous_bot_comment_refs)
+        finalize_previous_review_state(config, previous_bot_comment_refs, outcome)
         return 0
 
     refs = get_diff_refs(config)
@@ -665,8 +667,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_sha(),
             mr_head_sha=mr_head_sha(),
-            outcome_status=status,
+            outcome_status=outcome.kind,
             outcome_message=outcome_message,
+            coverage_summary=outcome.coverage_summary,
             emoji=emoji,
         ),
         draft_note_ids,
@@ -679,8 +682,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if not finalize_posting(config, draft_note_ids):
         return publish_failure_exit(config, draft_note_ids)
 
-    delete_previous_bot_comments_if_collected(config, previous_bot_comment_refs)
-    resolve_requested_discussions(config, previous_bot_comment_refs)
+    finalize_previous_review_state(config, previous_bot_comment_refs, outcome)
 
     print(
         f"Posted OCR comments: mode={post_mode()}, inline={inline_count}, "
@@ -688,6 +690,20 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         f"total={publishable_comment_count}"
     )
     return 0
+
+
+def finalize_previous_review_state(
+    config: GitLabConfig,
+    previous_refs: BotCommentRefs,
+    outcome: ReviewOutcome,
+) -> None:
+    """Replace prior notes only after a complete outcome; preserve them for partial coverage."""
+
+    if outcome.kind == "partial":
+        print("OCR coverage is partial; preserving previous review comments until a complete run.")
+    else:
+        delete_previous_bot_comments_if_collected(config, previous_refs)
+    resolve_requested_discussions(config, previous_refs)
 
 
 def resolve_requested_discussions(
@@ -734,6 +750,65 @@ def invalid_ocr_schema_exit(
     if not finalize_posting(config, draft_note_ids):
         return publish_failure_exit(config, draft_note_ids)
 
+    return 1 if strict_posting() else 0
+
+
+def post_manifest_failure(
+    config: GitLabConfig,
+    outcome: ReviewOutcome,
+    message: str,
+    warnings: Sequence[Any],
+    *,
+    tool_calls_summary: str = "",
+    mcp_usage_summary: str = "",
+    token_usage_summary: str = "",
+) -> int:
+    """Post a manifest-declared run failure while preserving prior review notes."""
+
+    draft_note_ids: list[int] = []
+    safe_message = compact_escaped_text(
+        neutralize_quick_actions(redact_sensitive(message)),
+        1_200,
+    )
+    body_parts = [
+        "OCR reported that the review run failed before it could produce a complete result.",
+        "",
+        "- Normal review comments were not published.",
+        "- Previous OCR review comments were preserved.",
+    ]
+    if safe_message:
+        body_parts.append(f"- Outcome: {safe_message}")
+    if outcome.coverage_summary:
+        body_parts.append(f"- {outcome.coverage_summary}")
+
+    warning_items: list[str] = []
+    for warning in warnings[:10]:
+        safe_warning = compact_escaped_text(
+            neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning))),
+            1_200,
+        )
+        if safe_warning:
+            warning_items.append(f"- {safe_warning}")
+    if warning_items:
+        body_parts.extend(["", "**Warnings:**", *warning_items])
+    if tool_calls_summary:
+        body_parts.extend(["", tool_calls_summary])
+    if mcp_usage_summary:
+        body_parts.append(mcp_usage_summary)
+    if token_usage_summary:
+        body_parts.append(token_usage_summary)
+
+    response = post_review_note_bounded(
+        config,
+        "**Open Code Review failed result**",
+        "\n".join(body_parts),
+        draft_note_ids,
+    )
+    if response is None:
+        print("Failed to create OCR manifest-failure note.", file=sys.stderr)
+        return posting_failure_exit(config, None, draft_note_ids)
+    if not finalize_posting(config, draft_note_ids):
+        return publish_failure_exit(config, draft_note_ids)
     return 1 if strict_posting() else 0
 
 

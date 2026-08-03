@@ -1,0 +1,83 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "a529e7536c9abf72379d8dd0a3b1c26e3ba8be817b5b20644ecab75f766b82d4",
+      "size": 46885456
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "484a232e017cee26dd489bd1a1caac1dd2e581ad2d1a45e9b2c37efcc4418b09",
+      "size": 44592834
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "83a440dda3bae929888cb15e3dddad7c9cc6617af4ca10a7424c89370e7d7e64",
+      "size": 45387938
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "c5f7c389687a591d0382dcc0be9b61809712624ee1a6d68dc1af437063677384",
+      "size": 42860706
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "c0d2c87f0a219c3efe6e633492bfa93f6112aa71002db5cee10301774dc10aeb",
+      "size": 46609920
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "a287b59128e7151ae70af7fe024cabaead07f89cafc4a613a25c7d219b477d2c",
+      "size": 43432960
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "7b9b7f136012e00f2d16418d015acd486d1b735608cc998f5e93be82e3c7ae03",
+      "size": 572
+    }
+  ],
+  "baseline_version": "1.8.3",
+  "classification": "automatic-safe",
+  "classification_reasons": [
+    "same-minor patch passed all probes with maintenance-only notes"
+  ],
+  "contracts": {
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "legacy",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-01T03:41:26Z",
+  "release_changes": "## 🐛 Bug Fixes\n\n- fix(llm): drop extra_body.stream from non-streaming requests (#647) (#657)\n- fix(diff): honor .gitignore negation patterns (#651)\n- fix(action): group 422 fallback inline comments into a single review (#661)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.3...v1.8.4",
+  "release_notes_sha256": "80c39611c4477e4dda905e605d76afd6a0feeea464a2e1f8eae68dd3f513d425",
+  "result": "compatible",
+  "schema_version": 1,
+  "tag": "v1.8.4",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.4"
+}

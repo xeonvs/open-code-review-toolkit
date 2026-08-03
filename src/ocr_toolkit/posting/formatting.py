@@ -689,6 +689,7 @@ def format_reviewer_guide(
     omitted_count: int,
     *,
     outcome_status: str = "success",
+    coverage_summary: str = "",
 ) -> str:
     """Build a bounded reviewer guide from already published OCR findings."""
 
@@ -715,10 +716,12 @@ def format_reviewer_guide(
             f"- Estimated effort to review: {effort}/5",
         ]
     )
-    if outcome_status == "budget_exceeded":
+    if outcome_status in {"budget_exceeded", "partial"}:
         lines.append(
-            "- ⚠️ Review scope: OCR reached its token budget; treat all findings as a partial review."
+            "- ⚠️ Review scope: OCR reported partial coverage; treat all findings as a partial review."
         )
+    if coverage_summary:
+        lines.append(f"- Review coverage: {coverage_summary}")
 
     if not security_comments and omitted_count:
         lines.append(
@@ -771,6 +774,7 @@ def summarize_result(
     mr_head_sha: str = "",
     outcome_status: str = "success",
     outcome_message: str = "",
+    coverage_summary: str = "",
     emoji: bool | None = None,
 ) -> str:
     """Build a compact summary note for the MR."""
@@ -782,6 +786,10 @@ def summarize_result(
         "completed_with_warnings": "⚠️",
         "completed_with_errors": "❌",
         "budget_exceeded": "⚠️",
+        "clean": "✅",
+        "warning": "⚠️",
+        "partial": "⚠️",
+        "failed": "❌",
     }
     marker = f"{status_markers.get(outcome_status, '❌')} " if use_emoji else ""
     safe_message = neutralize_quick_actions(
@@ -790,6 +798,8 @@ def summarize_result(
     if not safe_message:
         if outcome_status == "budget_exceeded":
             safe_message = "Review stopped after reaching its token budget; findings are partial."
+        elif outcome_status == "partial":
+            safe_message = "Review completed with partial coverage; findings are incomplete."
         else:
             safe_message = f"Found {total} issue(s)." if total else "No issues found."
     lines = [
@@ -807,6 +817,9 @@ def summarize_result(
         lines.append(f"- reviewed SHA: {_inline_code(reviewed_sha)}")
     if mr_head_sha and mr_head_sha != reviewed_sha:
         lines.append(f"- MR head SHA: {_inline_code(mr_head_sha)}")
+
+    if coverage_summary and not reviewer_guide:
+        lines.append(f"- {coverage_summary}")
 
     severity_counts = format_metadata_counts(comments, "severity", OCR_FINDING_SEVERITY_ORDER)
     if severity_counts:

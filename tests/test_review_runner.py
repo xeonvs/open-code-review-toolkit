@@ -127,6 +127,80 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
     assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
 
 
+def test_ocr_result_allows_manifest_skipped_message_without_tool_calls(tmp_path: Path) -> None:
+    """Use manifest coverage, not a legacy message literal, for versioned skips."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "skipped",
+                "message": "Review skipped because no items were selected.",
+                "comments": [],
+                "tool_calls": {"total": 0, "by_tool": {}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "skipped",
+                    "coverage": {
+                        "selected": [],
+                        "completed": [],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
+
+
+def test_ocr_result_manifest_complete_requires_builtin_mcp_usage(tmp_path: Path) -> None:
+    """Apply the existing evidence requirement to the new complete status."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "coverage": {
+                        "selected": [{"item_id": "synthetic-item"}],
+                        "completed": [{"item_id": "synthetic-item"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+        "ocr_toolkit_evidence": 1
+    }
+
+
 @pytest.mark.parametrize(
     "payload",
     [

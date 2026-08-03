@@ -43,14 +43,17 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.8.3"
-    assert manifest["monitoring_floor"] == "1.8.3"
+    assert manifest["recommended_version"] == "1.8.6"
+    assert manifest["monitoring_floor"] == "1.8.6"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
         ("1.8.1", "tested"),
         ("1.8.2", "tested"),
         ("1.8.3", "tested"),
+        ("1.8.4", "tested"),
+        ("1.8.5", "tested"),
+        ("1.8.6", "tested"),
     ]
 
 
@@ -113,9 +116,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.8.4")]
+    first_page = [release("1.8.7")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.8.3")]
+    second_page = [release("1.8.6")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -125,14 +128,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.8.4"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.7"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.8.4")]
+    page = [release("1.8.7")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -187,21 +190,130 @@ def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
         module.parse_checksum_file(checksum)
 
 
-def test_issue_body_uses_stable_marker_and_no_release_notes() -> None:
+def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
     module = load_script()
     evidence = {
         "version": "1.7.18",
         "result": "compatible",
         "classification": "human-review-required",
         "classification_reasons": ["release notes contain a material signal"],
+        "baseline_version": "1.7.17",
+        "release_changes": module.release_changes_excerpt(
+            "fix parser output\n<script>alert(1)</script>\n```escape"
+        ),
     }
 
     body = module.render_issue(evidence)
 
     assert "<!-- ocr-compat-candidate:v1.7.18 -->" in body
     assert "Human checklist" in body
-    assert "upstream release notes" in body
+    assert "Upstream release changes" in body
+    assert "fix parser output" in body
     assert "<script" not in body
+    assert "```escape" not in body
+    assert "/compare/v1.7.17...v1.7.18" in body
+
+
+def test_release_changes_excerpt_is_bounded() -> None:
+    module = load_script()
+
+    excerpt = module.release_changes_excerpt("x" * (module.MAX_RELEASE_CHANGES_CHARS + 10))
+
+    assert len(excerpt) <= module.MAX_RELEASE_CHANGES_CHARS + 40
+    assert excerpt.endswith("[release notes excerpt truncated]")
+
+
+def test_exact_issue_lookup_uses_direct_bounded_listing() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+    requested: list[str] = []
+
+    def request(url: str, **_kwargs: Any) -> list[dict[str, Any]]:
+        requested.append(url)
+        return [
+            {"number": 47, "body": "other"},
+            {"number": 48, "body": marker},
+            {"number": 99, "body": marker, "pull_request": {}},
+        ]
+
+    with patched_attr(module, "_issue_api_request", request):
+        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+
+    assert requested == [
+        "https://api.github.com/repos/synthetic/repository/issues?state=all&per_page=100&page=1"
+    ]
+
+
+def test_exact_issue_lookup_fails_closed_on_existing_duplicates() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+
+    with (
+        patched_attr(
+            module,
+            "_issue_api_request",
+            lambda _url, **_kwargs: [
+                {"number": 47, "body": marker},
+                {"number": 48, "body": marker},
+            ],
+        ),
+        pytest.raises(module.CompatibilityError, match="#47, #48"),
+    ):
+        module.find_qualification_issue("synthetic/repository", marker)
+
+
+def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
+    module = load_script()
+    marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
+
+    with patched_attr(
+        module,
+        "_issue_api_request",
+        lambda _url, **_kwargs: [
+            {
+                "number": 47,
+                "body": marker,
+                "state": "closed",
+                "labels": [{"name": "duplicate"}, {"name": "dependencies"}],
+            },
+            {"number": 48, "body": marker, "state": "open", "labels": []},
+        ],
+    ):
+        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+
+
+def test_issue_upsert_updates_the_canonical_issue() -> None:
+    module = load_script()
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+    evidence = {
+        "version": "1.8.4",
+        "result": "compatible",
+        "classification": "automatic-safe",
+        "classification_reasons": ["maintenance-only"],
+        "release_changes": "fix: synthetic parser correction",
+    }
+
+    def request(
+        url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        calls.append((url, method, payload))
+        return {"number": 48}
+
+    with (
+        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 48),
+        patched_attr(module, "_issue_api_request", request),
+    ):
+        number = module.upsert_qualification_issue(
+            repository="synthetic/repository",
+            evidence=evidence,
+            run_url="https://github.com/synthetic/repository/actions/runs/123",
+        )
+
+    assert number == 48
+    assert calls[0][1] == "PATCH"
+    assert calls[0][2] is not None
+    assert calls[0][2]["state"] == "open"
+    assert "fix: synthetic parser correction" in calls[0][2]["body"]
 
 
 def test_qualification_requires_exact_supported_asset_matrix() -> None:
@@ -276,6 +388,9 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     class Response:
         headers = {"Content-Length": "3"}
 
+        def __init__(self) -> None:
+            self.read_once = False
+
         def __enter__(self) -> Response:
             return self
 
@@ -321,6 +436,121 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     assert request.get_header("User-agent") == module.USER_AGENT
 
 
+def test_asset_download_retries_timeout_and_resets_partial_file(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    class Response:
+        headers = {"Content-Length": "3"}
+
+        def __init__(self, *, fail_midstream: bool) -> None:
+            self.fail_midstream = fail_midstream
+            self.read_count = 0
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _size: int) -> bytes:
+            self.read_count += 1
+            if self.fail_midstream and self.read_count == 1:
+                return b"o"
+            if self.fail_midstream:
+                raise TimeoutError("synthetic midstream timeout")
+            if self.read_count > 1:
+                return b""
+            return b"ocr"
+
+        def geturl(self) -> str:
+            return "https://release-assets.githubusercontent.com/synthetic"
+
+    def flaky_urlopen(request: Any, *, timeout: int) -> Response:
+        nonlocal calls
+        calls += 1
+        return Response(fail_midstream=calls == 1)
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", flaky_urlopen),
+        patched_attr(module.time, "sleep", lambda _seconds: None),
+    ):
+        destination = module._download(asset, tmp_path)
+
+    assert destination.read_bytes() == b"ocr"
+    assert calls == 2
+
+
+def test_asset_download_bounds_transient_retries(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    def timed_out_urlopen(request: Any, *, timeout: int) -> None:
+        nonlocal calls
+        calls += 1
+        raise TimeoutError("synthetic timeout")
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", timed_out_urlopen),
+        patched_attr(module.time, "sleep", lambda _seconds: None),
+        pytest.raises(module.CompatibilityError, match="after 3 attempts"),
+    ):
+        module._download(asset, tmp_path)
+
+    assert calls == module.DOWNLOAD_ATTEMPTS
+
+
+def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
+    module = load_script()
+    calls = 0
+
+    def not_found_urlopen(request: Any, *, timeout: int) -> None:
+        nonlocal calls
+        calls += 1
+        raise module.urllib.error.HTTPError(
+            request.full_url,
+            404,
+            "synthetic not found",
+            hdrs=None,
+            fp=None,
+        )
+
+    asset = module.Asset(
+        name="opencodereview-linux-amd64",
+        size=3,
+        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        url=(
+            "https://github.com/alibaba/open-code-review/releases/download/"
+            "v1.8.5/opencodereview-linux-amd64"
+        ),
+    )
+    with (
+        patched_attr(module.urllib.request, "urlopen", not_found_urlopen),
+        pytest.raises(module.CompatibilityError, match="cannot download"),
+    ):
+        module._download(asset, tmp_path)
+
+    assert calls == 1
+
+
 def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: Path) -> None:
     module = load_script()
     root = tmp_path
@@ -335,6 +565,9 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "ocr-1.8.1.json",
         "ocr-1.8.2.json",
         "ocr-1.8.3.json",
+        "ocr-1.8.4.json",
+        "ocr-1.8.5.json",
+        "ocr-1.8.6.json",
     ):
         baseline_evidence = PROJECT_ROOT / "compatibility" / "evidence" / evidence_name
         (root / "compatibility" / "evidence" / evidence_name).write_bytes(
@@ -343,16 +576,16 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     manifest_path = root / "compatibility" / "ocr-support.json"
     manifest_path.write_bytes(MANIFEST.read_bytes())
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
-    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.3"\n', encoding="utf-8")
+    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.6"\n', encoding="utf-8")
     example = root / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
     example.write_text(
-        'OCR_VERSION: "v1.8.3"\n'
-        'OCR_SHA256: "445c2c3d7528d6a642b2eb83dc76978d7a5558b838d0c385b0c841b094104c17"\n',
+        'OCR_VERSION: "v1.8.6"\n'
+        'OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"\n',
         encoding="utf-8",
     )
-    (root / "README.md").write_text("OCR 1.8.3 baseline\n", encoding="utf-8")
-    (root / "docs" / "gitlab.md").write_text("Pin v1.8.3 in GitLab.\n", encoding="utf-8")
-    (root / "docs" / "security.md").write_text("Verify OCR 1.8.3.\n", encoding="utf-8")
+    (root / "README.md").write_text("OCR 1.8.6 baseline\n", encoding="utf-8")
+    (root / "docs" / "gitlab.md").write_text("Pin v1.8.6 in GitLab.\n", encoding="utf-8")
+    (root / "docs" / "security.md").write_text("Verify OCR 1.8.6.\n", encoding="utf-8")
     assets = json.loads(baseline_evidence.read_text(encoding="utf-8"))["assets"]
     assets = [dict(asset) for asset in assets]
     for asset in assets:
@@ -360,8 +593,8 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     evidence = {
         "schema_version": 1,
         "upstream_repository": module.UPSTREAM_REPOSITORY,
-        "version": "1.8.4",
-        "tag": "v1.8.4",
+        "version": "1.8.7",
+        "tag": "v1.8.7",
         "published_at": "2026-07-28T00:00:00Z",
         "result": "compatible",
         "classification": "automatic-safe",
@@ -381,7 +614,7 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",
-        "compatibility/evidence/ocr-1.8.4.json",
+        "compatibility/evidence/ocr-1.8.7.json",
         "src/ocr_toolkit/preflight.py",
         "examples/gitlab/ocr-review.gitlab-ci.yml",
         "README.md",
@@ -390,13 +623,13 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "changelog.d/42.feature.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert updated["recommended_version"] == "1.8.4"
-    assert updated["monitoring_floor"] == "1.8.4"
-    assert 'EXPECTED_OCR_VERSION = "1.8.4"' in preflight.read_text(encoding="utf-8")
+    assert updated["recommended_version"] == "1.8.7"
+    assert updated["monitoring_floor"] == "1.8.7"
+    assert 'EXPECTED_OCR_VERSION = "1.8.7"' in preflight.read_text(encoding="utf-8")
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.8.4"' in example_text
+    assert 'OCR_VERSION: "v1.8.7"' in example_text
     assert f'OCR_SHA256: "{"a" * 64}"' in example_text
-    assert "1.8.4" in (root / "README.md").read_text(encoding="utf-8")
+    assert "1.8.7" in (root / "README.md").read_text(encoding="utf-8")
 
 
 def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:

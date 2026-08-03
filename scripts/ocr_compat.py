@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import html
+import http.client
 import http.server
 import json
 import os
@@ -14,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,8 +42,15 @@ MAX_ASSETS = 16
 MAX_TOTAL_ASSET_BYTES = 384 * 1024 * 1024
 MAX_RELEASES_PER_PAGE = 50
 MAX_RELEASE_PAGES = 4
+MAX_ISSUE_PAGES = 10
+MAX_ISSUE_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_RELEASE_CHANGES_CHARS = 4_000
+MAX_RELEASE_CHANGES_LINES = 50
+DOWNLOAD_ATTEMPTS = 3
 VERSION_RE = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+PUBLISHED_AT_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 SAFE_NOTES_RE = re.compile(
     r"\b(fix|bug|documentation|docs|test|chore|refactor|performance)\b", re.I
 )
@@ -254,6 +264,49 @@ def _request_json(url: str) -> dict[str, Any] | list[Any]:
     return value
 
 
+def _issue_api_request(
+    url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+) -> dict[str, Any] | list[Any]:
+    """Call a bounded GitHub issue endpoint with repository-scoped credentials."""
+
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname != "api.github.com":
+        _fail(f"issue URL is outside the allowed GitHub API origin: {url}")
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not token:
+        _fail("GITHUB_TOKEN is required to update qualification issues")
+    data = canonical_json(payload) if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with METADATA_OPENER.open(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+            length = response.headers.get("Content-Length")
+            if length and int(length) > MAX_ISSUE_RESPONSE_BYTES:
+                _fail("GitHub issue response exceeds the configured byte limit")
+            response_data = response.read(MAX_ISSUE_RESPONSE_BYTES + 1)
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        raise CompatibilityError(f"GitHub issue request failed for {url}: {exc}") from exc
+    if len(response_data) > MAX_ISSUE_RESPONSE_BYTES:
+        _fail("GitHub issue response exceeds the configured byte limit")
+    try:
+        value = json.loads(response_data)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("GitHub issue response is not JSON") from exc
+    if not isinstance(value, (dict, list)):
+        _fail("GitHub issue response has unsupported shape")
+    return value
+
+
 def discover_unseen(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     """Return bounded unseen stable upstream releases above the monitoring floor."""
 
@@ -327,38 +380,73 @@ def release_assets(release: dict[str, Any]) -> list[Asset]:
 
 
 def _download(asset: Asset, directory: Path) -> Path:
+    """Download one verified asset with bounded retries for transient transport errors."""
+
     destination = directory / asset.name
     parsed = urllib.parse.urlsplit(asset.url)
     if parsed.scheme != "https" or parsed.hostname != "github.com":
         _fail(f"asset URL is outside the allowed GitHub release origin: {asset.url}")
     request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
-    digest = hashlib.sha256()
-    count = 0
-    try:
-        # The initial URL is an exact HTTPS github.com release asset; urllib follows
-        # GitHub's signed, credential-free release-asset redirect.
-        with urllib.request.urlopen(  # nosec B310
-            request, timeout=HTTP_TIMEOUT_SECONDS
-        ) as response:
-            final = urllib.parse.urlsplit(response.geturl())
-            if final.scheme != "https" or final.hostname not in {
-                "github.com",
-                "objects.githubusercontent.com",
-                "release-assets.githubusercontent.com",
-            }:
-                _fail(f"asset redirect ended at an untrusted origin: {response.geturl()}")
-            with destination.open("xb") as output:
-                while chunk := response.read(64 * 1024):
-                    count += len(chunk)
-                    if count > asset.size or count > MAX_ASSET_BYTES:
-                        _fail(f"download for {asset.name} exceeded its declared size")
-                    digest.update(chunk)
-                    output.write(chunk)
-    except (OSError, urllib.error.URLError) as exc:
-        raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
-    if count != asset.size or digest.hexdigest() != asset.sha256:
-        _fail(f"downloaded bytes do not match metadata for {asset.name}")
-    return destination
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        digest = hashlib.sha256()
+        count = 0
+        try:
+            # The initial URL is an exact HTTPS github.com release asset; urllib follows
+            # GitHub's signed, credential-free release-asset redirect.
+            with urllib.request.urlopen(  # nosec B310
+                request, timeout=HTTP_TIMEOUT_SECONDS
+            ) as response:
+                final = urllib.parse.urlsplit(response.geturl())
+                if final.scheme != "https" or final.hostname not in {
+                    "github.com",
+                    "objects.githubusercontent.com",
+                    "release-assets.githubusercontent.com",
+                }:
+                    _fail(f"asset redirect ended at an untrusted origin: {response.geturl()}")
+                with destination.open("xb") as output:
+                    while chunk := response.read(64 * 1024):
+                        count += len(chunk)
+                        if count > asset.size or count > MAX_ASSET_BYTES:
+                            _fail(f"download for {asset.name} exceeded its declared size")
+                        digest.update(chunk)
+                        output.write(chunk)
+        except (
+            TimeoutError,
+            ConnectionError,
+            http.client.IncompleteRead,
+            urllib.error.URLError,
+        ) as exc:
+            retryable = not isinstance(exc, urllib.error.HTTPError) or exc.code in {
+                408,
+                429,
+                500,
+                502,
+                503,
+                504,
+            }
+            if not retryable:
+                raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
+            last_error = exc
+            try:
+                destination.unlink(missing_ok=True)
+            except OSError as cleanup_exc:
+                raise CompatibilityError(
+                    f"cannot reset partial download for {asset.name}: {cleanup_exc}"
+                ) from cleanup_exc
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            break
+        except OSError as exc:
+            raise CompatibilityError(f"cannot download {asset.name}: {exc}") from exc
+        if count != asset.size or digest.hexdigest() != asset.sha256:
+            _fail(f"downloaded bytes do not match metadata for {asset.name}")
+        return destination
+    assert last_error is not None
+    raise CompatibilityError(
+        f"cannot download {asset.name} after {DOWNLOAD_ATTEMPTS} attempts: {last_error}"
+    ) from last_error
 
 
 def parse_checksum_file(path: Path) -> dict[str, str]:
@@ -564,8 +652,18 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         sample = json.loads(result_output)
     except json.JSONDecodeError as exc:
         raise CompatibilityError("candidate full review did not emit JSON") from exc
-    if not isinstance(sample, dict) or sample.get("status") != "success":
+    if not isinstance(sample, dict):
         _fail("candidate full review emitted an unsupported result object")
+    from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+
+    try:
+        outcome = parse_result_outcome(sample)
+    except OcrResultContractError as exc:
+        raise CompatibilityError(
+            f"candidate full review emitted an unsupported result object: {exc}"
+        ) from exc
+    if outcome.kind != "clean":
+        _fail(f"candidate full review did not complete cleanly: {outcome.kind}")
     comments = sample.get("comments")
     if not isinstance(comments, list) or len(comments) != 1 or not isinstance(comments[0], dict):
         _fail("candidate full review did not emit the synthetic comment")
@@ -595,6 +693,8 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         "result_contract_probe": {
             "additive_fields_allowed": True,
             "comment_fields": sorted(comment),
+            "manifest_schema": ("ocr.run-manifest/v1" if outcome.manifest_present else "legacy"),
+            "normalized_outcome": outcome.kind,
             "result": "passed",
         },
     }
@@ -619,6 +719,45 @@ def classify_candidate(
     if reasons:
         return "human-review-required", reasons
     return "automatic-safe", ["same-minor patch passed all probes with maintenance-only notes"]
+
+
+def release_changes_excerpt(release_notes: str) -> str:
+    """Return a bounded control-free excerpt without Markdown fence delimiters."""
+
+    lines: list[str] = []
+    total = 0
+    truncated = False
+    for raw_line in release_notes.splitlines():
+        # The release body is untrusted Markdown. Render it as escaped plain text
+        # and break fence delimiters before placing it inside our own code fence.
+        line = "".join(character for character in raw_line if character >= " " or character == "\t")
+        line = line.replace("```", "'''").strip()
+        if not line and (not lines or not lines[-1]):
+            continue
+        remaining = MAX_RELEASE_CHANGES_CHARS - total
+        if remaining <= 0 or len(lines) >= MAX_RELEASE_CHANGES_LINES:
+            truncated = True
+            break
+        if len(line) > remaining:
+            line = line[:remaining].rstrip()
+            truncated = True
+        lines.append(line)
+        total += len(line) + 1
+        if truncated:
+            break
+    excerpt = "\n".join(lines).strip()
+    if truncated:
+        excerpt = f"{excerpt}\n[release notes excerpt truncated]".strip()
+    return excerpt
+
+
+def issue_plain_text(value: Any, field: str, max_chars: int = 500) -> str:
+    """Return one bounded single-line value safe for public issue Markdown."""
+
+    if not isinstance(value, str) or len(value) > max_chars:
+        _fail(f"field {field!r} must be a bounded string")
+    cleaned = "".join(character for character in value if ord(character) >= 32).strip()
+    return html.escape(cleaned, quote=False).replace("@", "@\u200b")
 
 
 def qualify_release(
@@ -658,10 +797,12 @@ def qualify_release(
         "result": "compatible",
         "classification": classification,
         "classification_reasons": reasons,
+        "baseline_version": str(manifest["recommended_version"]),
         "assets": [
             {"name": asset.name, "sha256": asset.sha256, "size": asset.size} for asset in assets
         ],
         "contracts": contracts,
+        "release_changes": release_changes_excerpt(notes),
         "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -809,10 +950,37 @@ def prepare_update(
 def render_issue(evidence: dict[str, Any]) -> str:
     """Render bounded, injection-resistant Markdown for a qualification issue."""
 
-    version = str(evidence["version"])
-    classification = str(evidence["classification"])
+    version = evidence.get("version")
+    if not isinstance(version, str) or VERSION_RE.fullmatch(version) is None:
+        _fail("qualification evidence version is invalid")
+    classification = evidence.get("classification")
+    if classification not in {"automatic-safe", "human-review-required"}:
+        _fail("qualification evidence classification is invalid")
+    if evidence.get("result") != "compatible":
+        _fail("qualification evidence result is not compatible")
     reasons = evidence.get("classification_reasons", [])
-    reason_lines = "\n".join(f"- {reason!s}" for reason in reasons)
+    if not isinstance(reasons, list) or len(reasons) > 20:
+        _fail("qualification evidence classification reasons are invalid")
+    reason_lines = "\n".join(
+        f"- {issue_plain_text(reason, 'classification reason')}" for reason in reasons
+    )
+    release_changes = evidence.get("release_changes")
+    if not isinstance(release_changes, str) or not release_changes:
+        release_changes = "No upstream release notes were provided."
+    release_changes = html.escape(release_changes_excerpt(release_changes), quote=False)
+    published_value = evidence.get("published_at")
+    published_at = (
+        published_value
+        if isinstance(published_value, str) and PUBLISHED_AT_RE.fullmatch(published_value)
+        else "unknown"
+    )
+    baseline = evidence.get("baseline_version")
+    compare_line = ""
+    if isinstance(baseline, str) and VERSION_RE.fullmatch(baseline) is not None:
+        compare_line = (
+            f"- compare: https://github.com/{UPSTREAM_REPOSITORY}/compare/"
+            f"v{baseline}...v{version}\n"
+        )
     return (
         f"<!-- ocr-compat-candidate:v{version} -->\n"
         f"## OCR v{version} compatibility evidence\n\n"
@@ -820,6 +988,11 @@ def render_issue(evidence: dict[str, Any]) -> str:
         f"- classification: **{classification}**\n"
         f"- all upstream asset digests and `sha256sum.txt`: verified\n"
         f"- Linux amd64 version/help/preview/result-consumer probes: passed\n\n"
+        "### Upstream release changes\n\n"
+        f"- release: https://github.com/{UPSTREAM_REPOSITORY}/releases/tag/v{version}\n"
+        f"{compare_line}"
+        f"- published: `{published_at}`\n\n"
+        f"```text\n{release_changes}\n```\n\n"
         f"### Classification reasons\n\n{reason_lines}\n\n"
         "### Human checklist\n\n"
         "- [ ] Review upstream release notes and relevant commits.\n"
@@ -827,6 +1000,110 @@ def render_issue(evidence: dict[str, Any]) -> str:
         "- [ ] Confirm tested support and recommended-version promotion.\n"
         "- [ ] Route any compatibility change through protected PR and stable release gates.\n"
     )
+
+
+def render_workflow_issue(evidence: dict[str, Any], run_url: str) -> str:
+    """Add deterministic workflow provenance to a qualification issue body."""
+
+    classification = str(evidence["classification"])
+    body = render_issue(evidence)
+    body += f"\n### Workflow evidence\n\n- run: {run_url}\n- classification: `{classification}`\n"
+    if classification == "automatic-safe":
+        body += (
+            "- after successful completion, the workflow artifact contains the exact mechanical compatibility patch\n"
+            "- opening a real PR requires the optional OCR update bot credential so protected checks run\n"
+        )
+    return body
+
+
+def find_qualification_issue(repository: str, marker: str) -> int | None:
+    """Find one exact marker through bounded direct issue listing, without search indexing."""
+
+    if REPOSITORY_RE.fullmatch(repository) is None:
+        _fail("repository must use the owner/name form")
+    matches: list[int] = []
+    for page in range(1, MAX_ISSUE_PAGES + 1):
+        url = f"https://api.github.com/repos/{repository}/issues?state=all&per_page=100&page={page}"
+        value = _issue_api_request(url)
+        if not isinstance(value, list) or len(value) > 100:
+            _fail("GitHub issue listing has unsupported shape or size")
+        for issue in value:
+            if not isinstance(issue, dict) or "pull_request" in issue:
+                continue
+            number = issue.get("number")
+            body = issue.get("body")
+            if (
+                isinstance(number, int)
+                and not isinstance(number, bool)
+                and isinstance(body, str)
+                and marker in body
+            ):
+                labels = issue.get("labels")
+                label_names = (
+                    {
+                        label.get("name")
+                        for label in labels
+                        if isinstance(label, dict) and isinstance(label.get("name"), str)
+                    }
+                    if isinstance(labels, list)
+                    else set()
+                )
+                # Closed issues explicitly archived as duplicates retain their
+                # incident evidence, but no longer compete for canonical identity.
+                if issue.get("state") == "closed" and "duplicate" in label_names:
+                    continue
+                matches.append(number)
+        if len(value) < 100:
+            break
+    else:
+        _fail(f"issue lookup exceeded {MAX_ISSUE_PAGES} pages")
+    matches = sorted(set(matches))
+    if len(matches) > 1:
+        _fail(
+            "multiple qualification issues contain the exact version marker: "
+            + ", ".join(f"#{number}" for number in matches)
+        )
+    return matches[0] if matches else None
+
+
+def upsert_qualification_issue(*, repository: str, evidence: dict[str, Any], run_url: str) -> int:
+    """Create or update the sole issue owned by one OCR version marker."""
+
+    version = evidence.get("version")
+    if not isinstance(version, str) or VERSION_RE.fullmatch(version) is None:
+        _fail("qualification evidence version is invalid")
+    expected_run_prefix = f"https://github.com/{repository}/actions/runs/"
+    if (
+        not run_url.startswith(expected_run_prefix)
+        or not run_url.removeprefix(expected_run_prefix).isdigit()
+    ):
+        _fail("workflow run URL is invalid for the target repository")
+    marker = f"<!-- ocr-compat-candidate:v{version} -->"
+    issue_number = find_qualification_issue(repository, marker)
+    payload: dict[str, Any] = {
+        "title": f"[OCR compatibility] Qualify v{version}",
+        "body": render_workflow_issue(evidence, run_url),
+    }
+    if issue_number is None:
+        payload["labels"] = ["dependencies"]
+        response = _issue_api_request(
+            f"https://api.github.com/repos/{repository}/issues",
+            method="POST",
+            payload=payload,
+        )
+    else:
+        payload["state"] = "open"
+        response = _issue_api_request(
+            f"https://api.github.com/repos/{repository}/issues/{issue_number}",
+            method="PATCH",
+            payload=payload,
+        )
+    returned_number = response.get("number") if isinstance(response, dict) else None
+    if not isinstance(returned_number, int) or isinstance(returned_number, bool):
+        _fail("GitHub issue write did not return a valid issue number")
+    if issue_number is not None and returned_number != issue_number:
+        _fail("GitHub issue update returned a different issue number")
+    return returned_number
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -843,6 +1120,11 @@ def main(argv: list[str] | None = None) -> int:
     prepare = subparsers.add_parser("prepare-update")
     prepare.add_argument("--evidence", type=Path, required=True)
     prepare.add_argument("--fragment-number", type=int, required=True)
+    upsert_issue = subparsers.add_parser("upsert-issue")
+    upsert_issue.add_argument("--evidence", type=Path, required=True)
+    upsert_issue.add_argument("--repository", required=True)
+    upsert_issue.add_argument("--run-url", required=True)
+    upsert_issue.add_argument("--output-number", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         manifest = load_json(args.manifest)
@@ -865,6 +1147,16 @@ def main(argv: list[str] | None = None) -> int:
             print("prepared OCR compatibility update:")
             for path in changed:
                 print(path.relative_to(ROOT))
+            return 0
+        if args.command == "upsert-issue":
+            evidence = load_json(args.evidence)
+            issue_number = upsert_qualification_issue(
+                repository=args.repository,
+                evidence=evidence,
+                run_url=args.run_url,
+            )
+            args.output_number.write_text(f"{issue_number}\n", encoding="utf-8")
+            print(f"qualification issue: #{issue_number}")
             return 0
         release = _request_json(f"{UPSTREAM_API}/releases/tags/{args.tag}")
         if not isinstance(release, dict):

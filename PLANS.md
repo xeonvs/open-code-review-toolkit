@@ -2,6 +2,66 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Harden OCR compatibility automation and release v0.4.3
+
+Status: in progress
+Owner: Codex
+Last Updated: 2026-08-03
+Release Classification: release-required
+Target Stable Version: 0.4.3
+Tracking Issue: #49
+
+### Goal
+
+Repair the scheduled OCR compatibility workflow as a durable product boundary: consume OCR's versioned run-manifest outcomes safely, keep exactly one enriched qualification issue per upstream version, qualify OCR 1.8.4 through 1.8.6, and publish stable toolkit 0.4.3. Reduce GitHub Actions storage without deleting audit metadata by constraining cache writers, adding bounded retention automation, and performing one verified cleanup of accumulated caches, logs, and artifacts.
+
+### Root Causes And Decisions
+
+- Run `30798939793` proved two independent defects. OCR 1.8.5 and 1.8.6 emit the new manifest-derived `complete` status, while both the qualification probe and runtime consumers still require the legacy `success` family. OCR 1.8.4 passed, but two workflow steps independently searched an eventually indexed HTML marker and each created an issue.
+- Keep one canonical issue per stable OCR version. For v1.8.4 preserve issue #48, copy current evidence into it, and close #43 through #47 with the `duplicate` label and an explicit link to #48.
+- Qualification issues include a bounded, neutralized upstream change summary plus official release/compare links, machine evidence, toolkit-impact classification, and the current workflow receipt. Raw upstream Markdown is never forwarded as trusted issue content.
+- Normalize legacy and manifest outcomes through one runtime contract. `success` and `complete` are clean; `completed_with_warnings` is complete with warnings; `completed_with_errors`, `budget_exceeded`, and `partial` are partial; `failed` is a failure; `skipped` is skipped. Manifest v1 status, coverage partition, failure classes, and bounds must agree before any result is accepted.
+- Cache writes become main-only for uv; pull requests may restore the main cache but cannot save branch-scoped copies. Disable CodeQL TRAP/overlay caching for this small repository. Keep run/check metadata, delete only aged logs/artifacts, and retain release logs longer than ordinary workflow logs.
+- GitHub's managed repository cache retention/storage-limit endpoints return HTTP 402 without a payment method. Repository-owned bounded maintenance is therefore the available policy mechanism.
+
+### Work Queue
+
+1. [x] Create tracking issue #49 and the implementation branch from synchronized protected `main`.
+2. [x] Add one provider-neutral OCR result contract used by review execution, GitLab posting, and compatibility qualification. Validate legacy outcomes plus `ocr.run-manifest/v1`, including record/field bounds, set partition, terminal-state derivation, failure classes, and budget consistency.
+3. [x] Render clean, warning, partial, failed, and skipped outcomes from one normalized matrix. Preserve partial findings with an explicit coverage warning; never publish normal comments for failed results; retain legacy OCR compatibility.
+4. [x] Replace full-text issue search with bounded exact-marker REST reconciliation. Pass one concrete issue number through issue upsert and patch preparation; ignore only closed issues explicitly labeled `duplicate`, fail closed on every other competing marker, and preserve fatal integrity/API failures.
+5. [x] Add safe upstream change summaries and official release/compare links to qualification issues. Classify every OCR 1.8.4-1.8.6 changelog item as toolkit-owned contract work, future-backlog impact, or release-note-only context.
+6. [x] Qualify checksum-pinned Linux amd64 OCR 1.8.4, 1.8.5, and 1.8.6; recommend 1.8.6; update the manifest, evidence, runtime/example/docs pins, exact checksums, tests, and Towncrier fragments.
+7. [x] Make uv cache saving main-only, disable CodeQL TRAP caching, set transient build artifact retention to seven days, and add a weekly/manual bounded Actions maintenance workflow with explicit dry-run/apply behavior.
+8. [x] Validate the retention selector against synthetic API fixtures, execute a live dry-run, then delete accumulated stale caches and policy-expired logs/artifacts. Preserve tags, Releases, attestations, registry artifacts, and workflow/check metadata; reread usage after GitHub's delayed accounting refresh.
+9. [ ] Run focused contract/workflow tests, the complete Python matrix, Gitleaks, diff checks, build/Twine, and clean wheel/sdist installs. Perform adversarial review of result parsing, GitHub API bounds, issue rendering, and destructive target selection.
+10. [ ] Merge the protected feature PR and verify its exact TestPyPI development build. Prepare `release/v0.4.3`, publish stable TestPyPI/PyPI artifacts, and independently verify tag/immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
+11. [ ] Record final receipts, close the tracking and qualification issues, and reconcile this plan plus every status-bearing roadmap/backlog representation affected by completed work.
+
+### Initial Evidence
+
+- The repository is clean and synchronized at stable release `ee769c3` (`v0.4.2`); `.next-version` is already `0.4.3`.
+- Run `30798939793` discovered v1.8.4-v1.8.6. v1.8.4 produced a valid automatic-safe patch, while v1.8.5 and v1.8.6 failed with `candidate full review emitted an unsupported result object`.
+- Upstream v1.8.5 introduces `ocr.run-manifest/v1` and derives top-level `status` from `terminal_state` (`complete`, `partial`, `failed`, `skipped`). v1.8.6 retains that contract.
+- Issues #43-#48 contain the same exact v1.8.4 marker. The workflow created #47 in the patch-preparation step and #48 seconds later in the final issue step because both relied on GitHub full-text search rather than a concrete issue identity.
+- Current Actions artifacts total about 16.6 MiB, while 37 active caches consume 494,925,898 bytes. Twenty-two CodeQL caches consume about 182.3 MiB and fourteen setup-uv caches about 284.2 MiB. Keeping the current two main uv caches plus Gitleaks and removing obsolete setup-uv/CodeQL entries should reclaim roughly 393 MiB before log/artifact cleanup.
+
+### Pre-push Review Checkpoint
+
+- Reviewed the complete local diff before any push across result normalization/publication, issue reconciliation/untrusted release rendering, and every destructive Actions selector/URL.
+- Corrected two review findings before publication: partial results now preserve the prior complete review, and log cleanup is idempotent with a bounded retry window instead of repeatedly traversing immutable run history.
+- `scripts/quality.sh check`, 180 focused tests plus 12 subtests, Ruff, mypy, workflow YAML parsing, `git diff --check`, and checksum-verified Gitleaks 8.24.3 worktree scanning pass locally. Supported-Python and hosted workflow results remain pending the protected PR.
+- A second review after hosted v1.8.5 qualification exposed a transport-only timeout while downloading `sha256sum.txt`. The correction retries only bounded transient timeout, connection, incomplete-read, and selected HTTP failures; resets partial files before each retry; preserves origin, byte, and digest checks; and still fails immediately on HTTP 404 and local I/O errors. Focused validation passes 27 tests plus Ruff, mypy, and `git diff --check`.
+- Promotion review confirms all three committed evidence files are byte-identical to hosted artifacts, every manifest evidence hash matches, all runtime/example/documentation pins select v1.8.6 with its qualified Linux checksum, and the unchanged upstream MCP SDK remains v1.6.1. The complete quality gate, 117 focused tests plus 15 subtests, manifest validation, Twine, and restricted-path wheel/sdist smokes on Python 3.12/3.14 pass. Fetching the repository's published tags corrected a local fallback-version-only build before the final artifact gate; the verified development artifacts derive from v0.4.2 as `0.4.3.dev3`.
+
+### Execution Evidence
+
+- Issues #43 through #47 are closed with the `duplicate` label and a link to canonical issue #48. The passing v1.8.4 qualification run `30807114499` updated #48 in place with bounded upstream release changes and its current receipt.
+- The accumulated cleanup deleted 189 stale Actions objects while preserving workflow and check metadata. GitHub's refreshed aggregate and direct cache listings now agree on three current caches totaling 79,827,436 bytes. After the feature-PR and qualification runs, 108 policy-retained artifacts total 10,922,669 bytes.
+- Hosted run `30807169920` reached v1.8.5 asset qualification but failed on a single read timeout, motivating the bounded transport retry correction above rather than weakening checksum or result-contract validation.
+- Runs `30807639061` and `30807718526` then qualified v1.8.5 and v1.8.6 respectively, producing byte-identical committed evidence and one canonical release-enriched issue each (#51 and #52). The manifest records v1.8.6 as the tested recommendation with its exact Linux amd64 checksum `1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6`.
+- Release classification found one toolkit-owned contract change: v1.8.5's `ocr.run-manifest/v1`, handled by the shared normalized parser. v1.8.4's LLM/gitignore fixes and GitHub Action fallback, plus v1.8.5's telemetry, VS Code, manual-provider, configuration, and test changes, require no further toolkit adaptation. v1.8.6's expanded default exclusions are an accepted effective review-scope change; its session-comment command, truncated-chat retry, and test refactor require no toolkit work. No future-backlog item is warranted, and OCR's Go MCP SDK remains v1.6.1.
+
 ## Completed Plan: Qualify OCR 1.8.3 and release v0.4.2
 
 Status: completed in repository; release PR is the final publication gate

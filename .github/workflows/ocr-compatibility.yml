@@ -103,27 +103,26 @@ jobs:
             --tag "${CANDIDATE_TAG}" \
             --output /tmp/ocr-compat/evidence.json \
             --issue-body /tmp/ocr-compat/issue.md
-      - name: Prepare automatic-safe compatibility patch
+      - name: Upsert qualification issue and prepare automatic-safe patch
         id: classify
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           CANDIDATE_TAG: ${{ matrix.tag }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-compat/evidence.json"))["classification"])')
           echo "classification=${classification}" >>"${GITHUB_OUTPUT}"
+          PYTHONPATH=src python scripts/ocr_compat.py upsert-issue \
+            --evidence /tmp/ocr-compat/evidence.json \
+            --repository "${REPOSITORY}" \
+            --run-url "${RUN_URL}" \
+            --output-number /tmp/ocr-compat/issue-number.txt
+          issue=$(tr -d '[:space:]' </tmp/ocr-compat/issue-number.txt)
+          case "${issue}" in
+            ''|*[!0-9]*) echo "invalid qualification issue number: ${issue}" >&2; exit 1 ;;
+          esac
           if [ "${classification}" = automatic-safe ]; then
-            marker="<!-- ocr-compat-candidate:${CANDIDATE_TAG} -->"
-            issue=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state all --search "${marker} in:body" --json number --jq '.[0].number // empty')
-            if [ -z "${issue}" ]; then
-              issue_url=$(gh issue create --repo "${GITHUB_REPOSITORY}" \
-                --title "[OCR compatibility] Qualify ${CANDIDATE_TAG}" \
-                --label dependencies \
-                --body-file /tmp/ocr-compat/issue.md)
-              issue=${issue_url##*/}
-              case "${issue}" in
-                ''|*[!0-9]*) echo "cannot parse created issue number from ${issue_url}" >&2; exit 1 ;;
-              esac
-            fi
             PYTHONPATH=src python scripts/ocr_compat.py prepare-update \
               --evidence /tmp/ocr-compat/evidence.json \
               --fragment-number "${issue}"
@@ -135,31 +134,7 @@ jobs:
           name: ocr-compatibility-${{ matrix.tag }}
           path: /tmp/ocr-compat/
           if-no-files-found: error
-          retention-days: 30
-      - name: Create or update qualification issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CANDIDATE_TAG: ${{ matrix.tag }}
-          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          marker="<!-- ocr-compat-candidate:${CANDIDATE_TAG} -->"
-          issue=$(gh issue list --repo "${REPOSITORY}" --state all --search "${marker} in:body" --json number --jq '.[0].number // empty')
-          cp /tmp/ocr-compat/issue.md /tmp/ocr-compat/final-issue.md
-          printf '\n### Workflow evidence\n\n- run: %s\n- classification: `%s`\n' "${RUN_URL}" "${CLASSIFICATION}" >>/tmp/ocr-compat/final-issue.md
-          if [ "${CLASSIFICATION}" = automatic-safe ]; then
-            printf '%s\n' '- a mechanical compatibility patch is attached to the workflow artifact' '- opening a real PR requires the optional OCR update bot credential so protected checks are triggered' >>/tmp/ocr-compat/final-issue.md
-          fi
-          if [ -n "${issue}" ]; then
-            gh issue edit "${issue}" --repo "${REPOSITORY}" --body-file /tmp/ocr-compat/final-issue.md
-            gh issue reopen "${issue}" --repo "${REPOSITORY}" || true
-          else
-            gh issue create --repo "${REPOSITORY}" \
-              --title "[OCR compatibility] Qualify ${CANDIDATE_TAG}" \
-              --label dependencies \
-              --body-file /tmp/ocr-compat/final-issue.md
-          fi
+          retention-days: 7
       - name: Open automatic-safe compatibility PR when bot credential is configured
         if: steps.classify.outputs.classification == 'automatic-safe'
         env:
