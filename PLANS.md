@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Harden OCR compatibility automation and release v0.4.3
+## Completed Plan: Harden OCR compatibility automation and release v0.4.3
 
-Status: in progress; stable 0.4.3 is published, post-release storage correction is pending
+Status: completed
 Owner: Codex
 Last Updated: 2026-08-03
 Release Classification: release-required
@@ -37,8 +37,8 @@ Repair the scheduled OCR compatibility workflow as a durable product boundary: c
 9. [x] Run focused contract/workflow tests, the complete Python matrix, Gitleaks, diff checks, build/Twine, and clean wheel/sdist installs. Perform adversarial review of result parsing, GitHub API bounds, issue rendering, and destructive target selection.
 10. [x] Merge protected feature PR #50 and independently verify its exact TestPyPI `0.4.3.dev31` wheel and sdist against the workflow artifact and PEP 691 index.
 11. [x] Prepare and merge `release/v0.4.3`, publish stable TestPyPI/PyPI artifacts, and independently verify tag/immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
-12. [ ] Correct the post-release CodeQL v4 overlay-cache gap through a protected no-release follow-up, delete the two newly written overlay caches, and prove through hosted CodeQL plus live cache readback that they do not return.
-13. [ ] Record final receipts, close the tracking issue, and reconcile this plan plus every status-bearing roadmap/backlog representation affected by completed work.
+12. [x] Correct the post-release CodeQL v4 overlay-cache gap through a protected no-release follow-up, delete the two newly written overlay caches, and prove through hosted CodeQL plus live cache readback that they do not return.
+13. [x] Record final receipts, close the tracking issue, and reconcile this plan plus every status-bearing roadmap/backlog representation affected by completed work.
 
 ### Initial Evidence
 
@@ -56,6 +56,7 @@ Repair the scheduled OCR compatibility workflow as a durable product boundary: c
 - A second review after hosted v1.8.5 qualification exposed a transport-only timeout while downloading `sha256sum.txt`. The correction retries only bounded transient timeout, connection, incomplete-read, and selected HTTP failures; resets partial files before each retry; preserves origin, byte, and digest checks; and still fails immediately on HTTP 404 and local I/O errors. Focused validation passes 27 tests plus Ruff, mypy, and `git diff --check`.
 - Promotion review confirms all three committed evidence files are byte-identical to hosted artifacts, every manifest evidence hash matches, all runtime/example/documentation pins select v1.8.6 with its qualified Linux checksum, and the unchanged upstream MCP SDK remains v1.6.1. The complete quality gate, 117 focused tests plus 15 subtests, manifest validation, Twine, and restricted-path wheel/sdist smokes on Python 3.12/3.14 pass. Fetching the repository's published tags corrected a local fallback-version-only preview before the final artifact gate and restored the intended 0.4.3 development line.
 - Release review caught that OCR v1.8.6's new default exclusions are an effective rules-contract change and therefore require the conditional `🧩 Rules` changelog section. The corrected release diff contains only the 0.4.3/0.4.4 version markers, deterministic epoch, generated changelog, consumed fragments, and current plan receipts; no unrelated roadmap or backlog status changes are implied.
+- The required post-release review caught that CodeQL v4 controls overlay-base database caching separately from the configured TRAP cache input. The follow-up selects full-database mode explicitly, preserving complete analysis while eliminating that cache writer; focused tests, workflow parsing, the complete quality gate, Gitleaks, signed-commit verification, hosted CodeQL, and live cache readbacks all pass before closure.
 
 ### Execution Evidence
 
@@ -71,8 +72,10 @@ Repair the scheduled OCR compatibility workflow as a durable product boundary: c
 - Release PR #53 passed all 13 protected checks with no review threads and merged as GitHub-signed commit `a9822bfcf28c9f38d3f3078c31550a76a520eea9`. Release workflow run `30809679849` completed authorization, deterministic build, GitHub provenance attestation, stable TestPyPI and PyPI publication and verification, and GitHub Release publication successfully.
 - Independent PEP 691 reads from TestPyPI and PyPI expose exactly the reviewed wheel and sdist hashes above, and the downloaded registry bytes, workflow artifact, and immutable GitHub Release assets are byte-identical. Both registries expose integrity attestations from their authorized `release.yml` environments, while `gh attestation verify` binds both distributions to the exact release merge and workflow run. Clean installs of the published wheel pass on Python 3.12 and 3.13; the published sdist install passes on Python 3.14.
 - Annotated tag `v0.4.3` resolves exactly to the release merge, and the GitHub Release is public, non-draft, non-prerelease, and reports `immutable: true`. The automation-created annotated tag is not separately cryptographically signed; authenticity is carried by the GitHub-signed target commit and Sigstore-backed artifact provenance.
-- Canonical qualification issues #48, #51, and #52 have checked human outcomes, preserve bounded upstream release changes, and are closed as completed; #43 through #47 remain closed and labeled as duplicates of #48. Tracking issue #49 was reopened after the required post-release review found the remaining CodeQL storage-policy gap.
-- The cleanup has removed 192 stale or expired Actions storage objects, including one artifact that expired after the first readback and the two new `codeql-overlay-base-database-*` entries totaling 20,848,354 bytes. The pinned CodeQL v4 action confirms that `trap-caching: false` does not control its separate overlay database cache. After deleting those exact cache IDs, the direct listing contains only the three intended caches totaling 79,827,436 bytes; GitHub's aggregate counter still reports the pre-deletion value during its documented accounting delay. Explicit full-database mode and a hosted readback are required before closure. Workflow/check metadata, tags, Releases, attestations, and registry artifacts remain preserved.
+- Canonical qualification issues #48, #51, and #52 have checked human outcomes, preserve bounded upstream release changes, and are closed as completed; #43 through #47 remain closed and labeled as duplicates of #48. Tracking issue #49 was reopened for the post-release review correction and closed as completed only after protected-main and live-storage verification passed.
+- No-release follow-up PR #54 passed all 13 protected checks with no review threads and merged as GitHub-signed commit `fdb5354d27c0a763ff14bfddb5a5d7e96e2dd72b`. PR CodeQL run `30810867531` and protected-main run `30811041908` both completed successfully in full-database mode without creating a CodeQL cache.
+- The cleanup removed 192 stale or expired Actions storage objects in total, including one artifact that expired after the first readback and the two post-release `codeql-overlay-base-database-*` entries totaling 20,848,354 bytes. The post-follow-up aggregate and direct API listings agree on exactly three intended caches totaling 79,827,436 bytes and zero CodeQL caches; at that receipt, 122 non-expired policy-retained artifacts total 12,727,750 bytes, with no expired artifacts. Workflow/check metadata, tags, Releases, attestations, and registry artifacts remain preserved.
+- Every protected-main follow-up workflow passed: CI run `30811041625`, Security `30811041628`, OpenSSF Scorecard `30811041871`, CodeQL `30811041908`, and TestPyPI development run `30811041769`. The latter published and installed immutable `0.4.4.dev33`; its workflow artifact and an independent PEP 691 query are byte-identical at wheel SHA-256 `7745ffe5cf084dbbe887c9663c7b236ca831156d770aacfc82c5451dbc994209` and sdist SHA-256 `c9eaeeaf96519da9c62ad422224927c72e4a267cc9fa1d90433bbaa2a08b9b29`.
 - No roadmap milestone or future-backlog status was coupled to this operational compatibility/release plan, so `ROADMAP.md` and `docs/codex/TASKS_BACKLOG.md` require no closure change. The post-release repository-infrastructure correction is `no-release`; stable product behavior remains the published 0.4.3 release.
 
 ## Completed Plan: Qualify OCR 1.8.3 and release v0.4.2
