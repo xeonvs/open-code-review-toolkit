@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from ocr_toolkit import __version__
+from ocr_toolkit.evidence.model import CoverageRecord, EvidenceRecord
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 TOOL_NAME = "ocr_toolkit_evidence"
@@ -73,11 +74,19 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         components[record.component] = components.get(record.component, 0) + 1
     for delta in store.deltas:
         changes[delta.change] = changes.get(delta.change, 0) + 1
+    coverage_states: dict[str, int] = {}
+    for coverage_record in store.coverage:
+        coverage_states[coverage_record.state.value] = (
+            coverage_states.get(coverage_record.state.value, 0) + 1
+        )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,
         "head": store.head.commit_sha if store.head else None,
         "records": len(store.records),
+        "coverage_records": len(store.coverage),
+        "coverage_states": dict(sorted(coverage_states.items())),
         "kinds": dict(sorted(kinds.items())),
         "components": dict(sorted(components.items())),
         "deltas": dict(sorted(changes.items())),
@@ -141,9 +150,13 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
     if not 1 <= page_size <= MAX_PAGE_SIZE:
         raise EvidenceMCPError(f"page_size must be between 1 and {MAX_PAGE_SIZE}")
     offset = _decode_cursor(arguments.get("cursor"), query)
+    all_records: tuple[EvidenceRecord | CoverageRecord, ...] = (
+        *store.records,
+        *store.coverage,
+    )
     records = [
         record
-        for record in store.records
+        for record in all_records
         if (query.kind is None or record.kind == query.kind)
         and (query.component is None or record.component == query.component)
         and (query.ref is None or record.ref.value == query.ref)
@@ -163,9 +176,17 @@ def _get_record(store: EvidenceStore, arguments: dict[str, object]) -> dict[str,
     """Return one record selected by its stable content-addressed ID."""
 
     record_id = arguments.get("id")
-    if not isinstance(record_id, str) or len(record_id) != 68 or not record_id.startswith("ev1_"):
-        raise EvidenceMCPError("id must be a stable ev1 evidence identifier")
-    record = next((item for item in store.records if item.id == record_id), None)
+    valid_id = isinstance(record_id, str) and (
+        (len(record_id) == 68 and record_id.startswith("ev1_"))
+        or (len(record_id) == 69 and record_id.startswith("cov1_"))
+    )
+    if not valid_id:
+        raise EvidenceMCPError("id must be a stable ev1 or cov1 evidence identifier")
+    all_records: tuple[EvidenceRecord | CoverageRecord, ...] = (
+        *store.records,
+        *store.coverage,
+    )
+    record = next((item for item in all_records if item.id == record_id), None)
     if record is None:
         raise EvidenceMCPError("evidence record was not found")
     return {"record": record.to_dict()}
@@ -202,7 +223,9 @@ def _tool_definition() -> dict[str, object]:
         "name": TOOL_NAME,
         "description": (
             "Read bounded, redacted repository evidence for immutable base/head refs. "
-            "Use summary first, list to narrow, and get for one stable record."
+            "Use summary first, list to narrow, and get for one stable record. Missing facts "
+            "support a negative conclusion only when applicable scoped coverage is complete; "
+            "absent, partial, runtime-dependent, or unavailable coverage means unknown."
         ),
         "inputSchema": {
             "type": "object",
@@ -215,7 +238,7 @@ def _tool_definition() -> dict[str, object]:
                 "ref": {"type": "string", "enum": ["base", "head", "shared"]},
                 "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
                 "cursor": {"type": "string", "maxLength": 256},
-                "id": {"type": "string", "pattern": "^ev1_[0-9a-f]{64}$"},
+                "id": {"type": "string", "pattern": "^(ev1|cov1)_[0-9a-f]{64}$"},
             },
         },
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},

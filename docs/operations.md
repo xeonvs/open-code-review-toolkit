@@ -8,11 +8,11 @@ The toolkit reads the previous OCR-owned notes and discussions before it writes 
 
 - inline GitLab discussions when a finding has a valid diff position;
 - bounded fallback notes when GitLab cannot accept a position, for example after relevant lines moved outside the current diff;
-- one `# Open Code Review summary` note with counts, warnings, omitted findings, review effort, reviewed commit identity, available token/tool usage, and every MCP server that OCR actually used.
+- one `## Open Code Review` note that separates review health, published findings, and incomplete coverage, with operational posting, commit, token/tool, and used-MCP metadata under a collapsed technical-details disclosure.
 
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
-The outcome wording distinguishes a skipped review with no supported changed files from a completed review with no findings. Clean reviews produce a positive report; warning and error outcomes remain explicit. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`.
+The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.6 manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.
 
 ## Discussion lifecycle
 

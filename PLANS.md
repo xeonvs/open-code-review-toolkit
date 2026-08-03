@@ -2,6 +2,55 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Complete evidence coverage and GitLab review health for v0.4.4
+
+Status: active
+Owner: Codex
+Last Updated: 2026-08-03
+Release Classification: release-required
+Target Stable Version: 0.4.4
+Tracking Issues: #41, #42
+
+### Goal
+
+Make bounded repository evidence explicit about when negative conclusions are safe, repair Ansible dynamic-inventory and recursive role topology coverage, suppress exact no-op suggestions, and redesign the GitLab summary around independent review health, findings, and incomplete coverage. Close BL-022 by publishing the already-earned OpenSSF Best Practices badge and reconcile affected future backlog without claiming unrelated milestones.
+
+### Decisions
+
+- Build from verified toolkit v0.4.3 and retain checksum-qualified OCR 1.8.6; a newer OCR release requires separate qualification.
+- Deliver #41, #42, and the OpenSSF documentation/backlog closure in one feature pull request, followed by the protected v0.4.4 release pull request.
+- Treat OCR 1.8.6 `ocr.run-manifest/v1` failed coverage records as the canonical per-file failure source. Legacy warnings remain a bounded compatibility fallback, and `summary.files_reviewed` never proves successful coverage.
+- Render a complete result with non-coverage warnings as `Review complete with warnings`; warnings do not demote validated complete coverage to incomplete.
+- The OpenSSF record at project 13906 is publicly passing. Badge publication and BL-022 closure are `no-release` work bundled into this release-required objective.
+
+### Work Queue
+
+1. [x] Add a reusable scoped evidence-coverage schema, persistence/MCP/bootstrap contract, v1-store fail-closed compatibility, and deterministic coverage deltas.
+2. [x] Classify static, dynamic, and executable inventory sources without execution; compose per-scope group coverage conservatively.
+3. [x] Model Ansible's bounded recursive `defaults/main/` and `vars/main/` surfaces with upstream-compatible ordering and exclusions.
+4. [x] Omit exact no-op suggestion blocks using the reviewed head blob while preserving findings and lifecycle identity.
+5. [x] Normalize manifest/legacy incomplete-coverage diagnostics and render every result through one review-health/findings/coverage summary model.
+6. [x] Add the OpenSSF badge, close BL-022 in planning truth, and reconcile BL-008/009/010/017 without changing their completion status or the roadmap.
+7. [x] Add Towncrier fragments and update public evidence, GitLab operations, configuration, and security documentation.
+8. [x] Run focused, complete, security, package, supported-Python, and GitLab Markdown contract validation. The optional live GitLab renderer requires authentication and is not a release gate.
+9. [ ] Merge the feature through protected main, verify its TestPyPI development artifacts, then publish and independently verify stable v0.4.4 across TestPyPI, PyPI, tag, immutable GitHub Release, provenance, hashes, and supported-Python installs.
+
+### Initial Evidence
+
+- `main` is clean and synchronized with `origin/main` at `ce48166`; the latest independently verified stable release is v0.4.3 and `.next-version` is 0.4.4.
+- The recommended/tested OCR baseline is 1.8.6. Its versioned manifest provides selected/completed/reused/failed/waived partitions plus bounded failed-item path, classification, and redacted reason fields.
+- OpenSSF project 13906 reports passing at 100% and publishes the exact requested badge Markdown, so BL-022 can close after the repository badge readback succeeds.
+- #41 touches the established M1 evidence boundary but does not complete BL-008, BL-009, or BL-010. #42 establishes result-derived reporting that BL-017 must reuse rather than duplicate; it does not implement telemetry.
+
+### Pre-push Review Checkpoint
+
+- The v2 store persists `repository.evidence-coverage/v1` atomically with snapshot indexes and deterministic semantic deltas. Legacy v1 stores remain readable but carry an explicit unknown-completeness diagnostic; missing facts support absence only for applicable `complete` coverage.
+- Ansible topology stays offline and read-only. Static supported inventory, plugin YAML, and executable sources compose per directory; malformed, templated, truncated, symlinked, unreadable, or over-limit topology degrades coverage. Recursive role-main precedence and exclusions follow the loader contract verified in ansible-core 2.17 through current 2.x/devel, without a 2.17-only version gate.
+- GitLab output now has one visible heading, independent health/findings/coverage states, bounded manifest-first failed-file diagnostics, quiet inline metadata, aggregate emoji, collapsed operational details, and exact reviewed-head no-op suppression. Existing discussion identity, suppression, rollback, and prior-review preservation remain intact.
+- `uv run pytest -q` passes 541 tests plus 35 subtests. Ruff format/lint, mypy, `scripts/quality.sh check` (coverage above 70%), manifest validation, `git diff --check`, and checksum-verified Gitleaks 8.24.3 all pass.
+- Two clean builds are byte-identical. Twine passes; the wheel smoke passes on Python 3.12 and the sdist smoke passes on Python 3.14. Current development hashes are wheel `13b6843dd4003115b8f93cd900b914170fef1ff292e6979ee592a01663f05029` and sdist `2115f60d35da864439b588ba9561f6d15c08db7c0aabfb47ae23c8f14c82dc5b`.
+- The exact OpenSSF badge and target both return HTTP 200, and the target resolves to the public passing record. BL-022 is therefore removed; BL-008/009/010/017 retain their future status with only overlap clarified. No roadmap milestone is completed.
+
 ## Completed Plan: Harden OCR compatibility automation and release v0.4.3
 
 Status: completed
