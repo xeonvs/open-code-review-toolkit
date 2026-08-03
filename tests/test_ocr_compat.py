@@ -43,14 +43,17 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.8.3"
-    assert manifest["monitoring_floor"] == "1.8.3"
+    assert manifest["recommended_version"] == "1.8.6"
+    assert manifest["monitoring_floor"] == "1.8.6"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
         ("1.8.1", "tested"),
         ("1.8.2", "tested"),
         ("1.8.3", "tested"),
+        ("1.8.4", "tested"),
+        ("1.8.5", "tested"),
+        ("1.8.6", "tested"),
     ]
 
 
@@ -113,9 +116,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.8.4")]
+    first_page = [release("1.8.7")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.8.3")]
+    second_page = [release("1.8.6")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -125,14 +128,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.8.4"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.7"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.8.4")]
+    page = [release("1.8.7")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -562,6 +565,9 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "ocr-1.8.1.json",
         "ocr-1.8.2.json",
         "ocr-1.8.3.json",
+        "ocr-1.8.4.json",
+        "ocr-1.8.5.json",
+        "ocr-1.8.6.json",
     ):
         baseline_evidence = PROJECT_ROOT / "compatibility" / "evidence" / evidence_name
         (root / "compatibility" / "evidence" / evidence_name).write_bytes(
@@ -570,16 +576,16 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     manifest_path = root / "compatibility" / "ocr-support.json"
     manifest_path.write_bytes(MANIFEST.read_bytes())
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
-    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.3"\n', encoding="utf-8")
+    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.6"\n', encoding="utf-8")
     example = root / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
     example.write_text(
-        'OCR_VERSION: "v1.8.3"\n'
-        'OCR_SHA256: "445c2c3d7528d6a642b2eb83dc76978d7a5558b838d0c385b0c841b094104c17"\n',
+        'OCR_VERSION: "v1.8.6"\n'
+        'OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"\n',
         encoding="utf-8",
     )
-    (root / "README.md").write_text("OCR 1.8.3 baseline\n", encoding="utf-8")
-    (root / "docs" / "gitlab.md").write_text("Pin v1.8.3 in GitLab.\n", encoding="utf-8")
-    (root / "docs" / "security.md").write_text("Verify OCR 1.8.3.\n", encoding="utf-8")
+    (root / "README.md").write_text("OCR 1.8.6 baseline\n", encoding="utf-8")
+    (root / "docs" / "gitlab.md").write_text("Pin v1.8.6 in GitLab.\n", encoding="utf-8")
+    (root / "docs" / "security.md").write_text("Verify OCR 1.8.6.\n", encoding="utf-8")
     assets = json.loads(baseline_evidence.read_text(encoding="utf-8"))["assets"]
     assets = [dict(asset) for asset in assets]
     for asset in assets:
@@ -587,8 +593,8 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     evidence = {
         "schema_version": 1,
         "upstream_repository": module.UPSTREAM_REPOSITORY,
-        "version": "1.8.4",
-        "tag": "v1.8.4",
+        "version": "1.8.7",
+        "tag": "v1.8.7",
         "published_at": "2026-07-28T00:00:00Z",
         "result": "compatible",
         "classification": "automatic-safe",
@@ -608,7 +614,7 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",
-        "compatibility/evidence/ocr-1.8.4.json",
+        "compatibility/evidence/ocr-1.8.7.json",
         "src/ocr_toolkit/preflight.py",
         "examples/gitlab/ocr-review.gitlab-ci.yml",
         "README.md",
@@ -617,13 +623,13 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "changelog.d/42.feature.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert updated["recommended_version"] == "1.8.4"
-    assert updated["monitoring_floor"] == "1.8.4"
-    assert 'EXPECTED_OCR_VERSION = "1.8.4"' in preflight.read_text(encoding="utf-8")
+    assert updated["recommended_version"] == "1.8.7"
+    assert updated["monitoring_floor"] == "1.8.7"
+    assert 'EXPECTED_OCR_VERSION = "1.8.7"' in preflight.read_text(encoding="utf-8")
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.8.4"' in example_text
+    assert 'OCR_VERSION: "v1.8.7"' in example_text
     assert f'OCR_SHA256: "{"a" * 64}"' in example_text
-    assert "1.8.4" in (root / "README.md").read_text(encoding="utf-8")
+    assert "1.8.7" in (root / "README.md").read_text(encoding="utf-8")
 
 
 def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:

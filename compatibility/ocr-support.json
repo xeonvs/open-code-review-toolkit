@@ -1,5 +1,6 @@
 {
-  "monitoring_floor": "1.8.3",
+  "monitoring_floor": "1.8.6",
+  "recommended_version": "1.8.6",
   "releases": [
     {
       "assets": [
@@ -49,13 +50,41 @@
     },
     {
       "assets": [
-        {"name": "opencodereview-darwin-amd64", "sha256": "8d16a5fd931d903d531ce9e0b1e9b276dc6e69efbe8e95928b24a82da627328d", "size": 46182128},
-        {"name": "opencodereview-darwin-arm64", "sha256": "997ceabbc276b9f5ef6f74933abd63d6ea3666f14eb6afed90dbb8e11c635c3b", "size": 43916994},
-        {"name": "opencodereview-linux-amd64", "sha256": "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94", "size": 44691618},
-        {"name": "opencodereview-linux-arm64", "sha256": "cebca8cfcdd5d62b2121654a9a4d9b025ef36c935578c2036b59b6a2cc2b269b", "size": 42139810},
-        {"name": "opencodereview-windows-amd64.exe", "sha256": "6146e9e5bfaef8e10a532ce252a0578e92c791a728ba501246901f16f3702b42", "size": 45896704},
-        {"name": "opencodereview-windows-arm64.exe", "sha256": "09065b259cfc057e839ef3bb8f599edccd8a9d8e9bf87667c6dfb5ffca0f221c", "size": 42772480},
-        {"name": "sha256sum.txt", "sha256": "b17db83d6c365dca9ba86f821324111decfe71a3354c4053d8f5eef9bf494cb5", "size": 572}
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "8d16a5fd931d903d531ce9e0b1e9b276dc6e69efbe8e95928b24a82da627328d",
+          "size": 46182128
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "997ceabbc276b9f5ef6f74933abd63d6ea3666f14eb6afed90dbb8e11c635c3b",
+          "size": 43916994
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "e3465a8f508c4ca1a2b0510e6714707ee852d0a659e04c53bde1d8e27f966a94",
+          "size": 44691618
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "cebca8cfcdd5d62b2121654a9a4d9b025ef36c935578c2036b59b6a2cc2b269b",
+          "size": 42139810
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "6146e9e5bfaef8e10a532ce252a0578e92c791a728ba501246901f16f3702b42",
+          "size": 45896704
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "09065b259cfc057e839ef3bb8f599edccd8a9d8e9bf87667c6dfb5ffca0f221c",
+          "size": 42772480
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "b17db83d6c365dca9ba86f821324111decfe71a3354c4053d8f5eef9bf494cb5",
+          "size": 572
+        }
       ],
       "evidence": "compatibility/evidence/ocr-1.8.0.json",
       "evidence_sha256": "207e4cd963f2f78a18e95621cae8a1043d55172be38bb496958aeb8fc9ca5229",
@@ -202,9 +231,146 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.3",
       "status": "tested",
       "version": "1.8.3"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "a529e7536c9abf72379d8dd0a3b1c26e3ba8be817b5b20644ecab75f766b82d4",
+          "size": 46885456
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "484a232e017cee26dd489bd1a1caac1dd2e581ad2d1a45e9b2c37efcc4418b09",
+          "size": 44592834
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "83a440dda3bae929888cb15e3dddad7c9cc6617af4ca10a7424c89370e7d7e64",
+          "size": 45387938
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "c5f7c389687a591d0382dcc0be9b61809712624ee1a6d68dc1af437063677384",
+          "size": 42860706
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "c0d2c87f0a219c3efe6e633492bfa93f6112aa71002db5cee10301774dc10aeb",
+          "size": 46609920
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "a287b59128e7151ae70af7fe024cabaead07f89cafc4a613a25c7d219b477d2c",
+          "size": 43432960
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "7b9b7f136012e00f2d16418d015acd486d1b735608cc998f5e93be82e3c7ae03",
+          "size": 572
+        }
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.4.json",
+      "evidence_sha256": "0e1c5b9257fc1d492334eace80e732cee00126158c53bd5c2ad9178753d45421",
+      "human_conclusion": "Compatible after review in issue #48 and workflow run 30807114499. Non-streaming LLM requests and gitignore negation handling improve upstream execution without changing toolkit interfaces; GitHub Action comment fallback is outside the GitLab toolkit contract.",
+      "published_at": "2026-08-01T03:41:26Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.4",
+      "status": "tested",
+      "version": "1.8.4"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "a9631da21d78b7296155e15b3cd5345c0672abf396c697278f539bda5ebf4c0b",
+          "size": 47002704
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "2f5712a51a86f89f2fdad15800cc9ae5581634cb847ee0ad92b027666cc69b52",
+          "size": 44677986
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "6ce08d410a662c71d26672cd13c358e760a62d7cd2e92b31e227f3a549d39c6d",
+          "size": 45498530
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "19e2430867889d15b5e66768f7726e42fdba28d49ef0e5d0149022aa4ac3f5b0",
+          "size": 42860706
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "1a06b366e7acb4d03131a19ae555ad7a80726fc5945ef073a313e3a4ce0ed225",
+          "size": 46727680
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "eabacbda716b026a04b48fd986735049ae19dbd45f1c93aef2ce9ed2252c1dc3",
+          "size": 43538944
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "28df699a015de7d78b061546c85f5df18ee9f9f7fb065e9972872f7b9d6f95d1",
+          "size": 572
+        }
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.5.json",
+      "evidence_sha256": "4d5513fbb30562e0ad62f10a48f2d360ae1e40b5c92e32a6bde5d0a10e12f77b",
+      "human_conclusion": "Compatible after review in issue #51 and workflow run 30807639061. The new ocr.run-manifest/v1 result and coverage contract is a toolkit-owned change handled by the shared normalized result parser; telemetry, VS Code, manual-provider UI, configuration, and test refactors do not alter consumed toolkit interfaces.",
+      "published_at": "2026-08-02T14:19:24Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.5",
+      "status": "tested",
+      "version": "1.8.5"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "46552c88cad7747e366b9517181f7998e41efd7a8b0e60a22ada1894b7259ef8",
+          "size": 47019376
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "1f977293beef63b499b4a6ca8e66a174bb983ad74290924ff2fc1df65744c2b2",
+          "size": 44711298
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6",
+          "size": 45514914
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "6ee465541aea8e674bc5a6c536709bb303388e34b9ebdbef700274c6538a87e7",
+          "size": 42860706
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "bcbdd5d455d3af78622f57248ca230ffb9c51622e0f483eeff6fa5afeacd5c5d",
+          "size": 46741504
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d90a95062300ab18c830282f97e54c79be058d5904052e8dc190a295cdd8c1d6",
+          "size": 43551232
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "c8108260294a6cf1f1ff7546684ac67be3279394911b44cacd3ce64298bad2c0",
+          "size": 572
+        }
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.6.json",
+      "evidence_sha256": "1b500c6b4298c38afffd31235d2f8f8041d94401e1bb3b3d837724e2b9f6643d",
+      "human_conclusion": "Compatible after review in issue #52 and workflow run 30807718526. The expanded default allowlist intentionally excludes snapshots, fixtures, testdata, and generated files from the effective review scope; session-comment CLI, truncated-chat retry, and test refactoring require no toolkit adaptation. The consumed Go MCP SDK remains v1.6.1.",
+      "published_at": "2026-08-03T06:51:36Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.6",
+      "status": "tested",
+      "version": "1.8.6"
     }
   ],
-  "recommended_version": "1.8.3",
   "schema_version": 1,
   "upstream_repository": "alibaba/open-code-review"
 }

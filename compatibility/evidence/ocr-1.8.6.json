@@ -1,0 +1,84 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "46552c88cad7747e366b9517181f7998e41efd7a8b0e60a22ada1894b7259ef8",
+      "size": 47019376
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "1f977293beef63b499b4a6ca8e66a174bb983ad74290924ff2fc1df65744c2b2",
+      "size": 44711298
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6",
+      "size": 45514914
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "6ee465541aea8e674bc5a6c536709bb303388e34b9ebdbef700274c6538a87e7",
+      "size": 42860706
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "bcbdd5d455d3af78622f57248ca230ffb9c51622e0f483eeff6fa5afeacd5c5d",
+      "size": 46741504
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "d90a95062300ab18c830282f97e54c79be058d5904052e8dc190a295cdd8c1d6",
+      "size": 43551232
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "c8108260294a6cf1f1ff7546684ac67be3279394911b44cacd3ce64298bad2c0",
+      "size": 572
+    }
+  ],
+  "baseline_version": "1.8.3",
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "contracts": {
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-03T06:51:36Z",
+  "release_changes": "## 🚀 Features\n\n- feat(cli): add 'ocr session comments' to display saved review comments (#505) (#646)\n- feat(allowlist): exclude snapshots, testdata, fixtures, and generated code from review (#683)\n\n## 🐛 Bug Fixes\n\n- fix(llm): retry once when a chat completion is truncated (#670)\n\n## 🔧 Refactoring\n\n- refactor(test): replace custom string helpers with strings.Contains in resume_test.go (#681)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.5...v1.8.6",
+  "release_notes_sha256": "10312a463ac339196a00bffc00b93abae8f5007e652f64f004a38a0bef6fe7f5",
+  "result": "compatible",
+  "schema_version": 1,
+  "tag": "v1.8.6",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.6"
+}
