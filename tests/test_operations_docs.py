@@ -119,4 +119,6 @@ def test_actions_storage_maintenance_preserves_run_metadata() -> None:
     assert "save-cache:" in ci
     assert "refs/heads/main" in ci
     assert "trap-caching: false" in codeql
+    assert "CODEQL_OVERLAY_DATABASE_MODE: none" in codeql
+    assert "separately controlled v4 overlay-database mode are disabled" in development
     assert "never workflow runs or check metadata" in development
