@@ -33,7 +33,9 @@ Make bounded repository evidence explicit about when negative conclusions are sa
 6. [x] Add the OpenSSF badge, close BL-022 in planning truth, and reconcile BL-008/009/010/017 without changing their completion status or the roadmap.
 7. [x] Add Towncrier fragments and update public evidence, GitLab operations, configuration, and security documentation.
 8. [x] Run focused, complete, security, package, supported-Python, and GitLab Markdown contract validation. The optional live GitLab renderer requires authentication and is not a release gate.
-9. [ ] Merge the feature through protected main, verify its TestPyPI development artifacts, then publish and independently verify stable v0.4.4 across TestPyPI, PyPI, tag, immutable GitHub Release, provenance, hashes, and supported-Python installs.
+9. [x] Merge the feature through protected main and independently verify its exact TestPyPI development artifacts against the workflow artifact and PEP 691 index.
+10. [ ] Prepare and merge `release/v0.4.4`, publish stable TestPyPI/PyPI artifacts, and independently verify tag/immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
+11. [ ] Record final receipts and reconcile this plan plus every status-bearing roadmap/backlog representation affected by completed work.
 
 ### Initial Evidence
 
@@ -50,6 +52,13 @@ Make bounded repository evidence explicit about when negative conclusions are sa
 - `uv run pytest -q` passes 541 tests plus 35 subtests. Ruff format/lint, mypy, `scripts/quality.sh check` (coverage above 70%), manifest validation, `git diff --check`, and checksum-verified Gitleaks 8.24.3 all pass.
 - Two clean builds are byte-identical. Twine passes; the wheel smoke passes on Python 3.12 and the sdist smoke passes on Python 3.14. Current development hashes are wheel `13b6843dd4003115b8f93cd900b914170fef1ff292e6979ee592a01663f05029` and sdist `2115f60d35da864439b588ba9561f6d15c08db7c0aabfb47ae23c8f14c82dc5b`.
 - The exact OpenSSF badge and target both return HTTP 200, and the target resolves to the public passing record. BL-022 is therefore removed; BL-008/009/010/017 retain their future status with only overlap clarified. No roadmap milestone is completed.
+
+### Execution Evidence
+
+- Feature PR #56 merged through the active ruleset as GitHub-verified squash commit `c0d5de640f4bbd59a4d419ca227a11379aa24e91` after all 13 hosted checks passed and no review threads remained. Issues #41 and #42 closed automatically with the merge.
+- TestPyPI development run `30817832682` published and installed immutable `0.4.4.dev35` artifacts. The downloaded workflow artifact, a cache-bypassed independent PEP 691 query, and freshly downloaded registry bytes are identical: wheel SHA-256 `854c2007aba98ec37abe74c315b818fac985e9033e25628afaa8ba480313adf7`; sdist SHA-256 `353a9666d2eea29417628c59fe4f0126684d93209ab1b097c5bfe7ddfbf28bb5`.
+- The v0.4.4 release branch consumes only the #41/#42 fragments, sets reproducible source epoch `1785763484` one second after the feature merge, and advances the next development line to 0.4.5. BL-022 remains no-release documentation work bundled into this release and does not add a changelog entry.
+- Release-focused validation passes the complete quality gate, manifest validation, Gitleaks, exact release-body rendering, and `git diff --check`. Two clean stable builds are byte-identical: wheel SHA-256 `c9fd35ea0a41984e804a750475cd2124530cb926b9d28f8fa50cfefb9abc0d98` and sdist SHA-256 `e9d3dd657ad00f7a54f9a87591667b119585547a6a0c639519b8e484ec1eb930`; Twine and restricted-path Python 3.12 wheel/Python 3.14 sdist installs pass with a hostile repository shadow package.
 
 ## Completed Plan: Harden OCR compatibility automation and release v0.4.3
 
