@@ -2,9 +2,9 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
-## Active Plan: Qualify OCR 1.8.7-1.8.8 and release toolkit 0.4.5
+## Completed Plan: Qualify OCR 1.8.7-1.8.8 and release toolkit 0.4.5
 
-Status: in progress
+Status: completed
 Owner: Codex
 Last Updated: 2026-08-05
 Release Classification: release-required
@@ -37,8 +37,8 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 8. [x] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
 9. [x] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
 10. [x] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
-11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
-12. [ ] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
+11. [x] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
+12. [x] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
 
 ### Qualification Process Review Checkpoint
 
@@ -76,6 +76,15 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 - Release-focused tests pass 40 cases. The complete quality gate passes 547 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit; manifest, lock, workflow YAML, dependency audit, and `git diff --check` validation also pass.
 - Two clean stable builds using version `0.4.5` and source epoch `1785938068` are byte-identical and pass Twine: wheel SHA-256 `15e70eff06f1c4a1f5f9e573b4bf55353938374404d01db1bba1ab920b5eda12`; sdist SHA-256 `d888a3a550836d175bf2520c024fa69d1f9ea5ca304459f0419b27076cdc0d4f`.
 - Restricted-path installs of the stable wheel pass on Python 3.12 and 3.13, and the stable sdist install passes on Python 3.14. All three run the installed CLI/import from a private hostile shadow-package directory and report exactly 0.4.5.
+
+### Stable Publication And Closure Evidence
+
+- Release PR #63 passed all 13 protected checks with no review comments or threads and merged as GitHub-verified squash commit `e05c40627c8dbaa14f299d1567a8107f01812c24`. Release workflow run `31013395527` authorized that exact merge, repeated quality, audit, deterministic build and attestation gates, published to TestPyPI and PyPI, verified both registries, and published the tag plus GitHub Release successfully.
+- Independent cache-bypassed PEP 691 reads expose exactly the reviewed hashes. Freshly downloaded TestPyPI, PyPI, workflow, and GitHub Release distributions are byte-identical: wheel SHA-256 `15e70eff06f1c4a1f5f9e573b4bf55353938374404d01db1bba1ab920b5eda12`; sdist SHA-256 `d888a3a550836d175bf2520c024fa69d1f9ea5ca304459f0419b27076cdc0d4f`.
+- Both registry provenance records identify `release.yml`, merge `e05c40627c8dbaa14f299d1567a8107f01812c24`, run `31013395527`, and their expected `testpypi-public-disclosure` or `pypi-production` environment. GitHub attestation verification binds both exact subjects to the same release merge and protected-main workflow.
+- Annotated tag `v0.4.5` resolves exactly to the release merge. The GitHub Release is public, non-draft, non-prerelease, and immutable; its four asset digests agree with the workflow artifact. Restricted-path installs of the published wheel pass on Python 3.12 and 3.13, and the published sdist passes on Python 3.14 from a private hostile shadow-package directory.
+- Human checklists and stable release receipts are recorded on #60 and #61. The stale #61 comparison and skipped-patch reason were corrected to adjacent predecessor 1.8.7 before both issues were closed as completed.
+- BL-016/BL-017 retain their documented future scope despite newly satisfied upstream prerequisites; BL-008/BL-009/BL-010 remain unfinished and BL-018 remains conditional. No roadmap milestone completed, so neither `ROADMAP.md` nor the backlog requires a closure status change. The final plan-only reconciliation is `no-release` and does not alter stable product behavior.
 
 ### Initial Evidence
 
