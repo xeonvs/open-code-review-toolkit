@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      count: ${{ steps.matrix.outputs.count }}
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,23 +63,16 @@ jobs:
       - id: matrix
         name: Build bounded qualification matrix
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          releases = json.loads(Path("/tmp/ocr-releases.json").read_text(encoding="utf-8"))["releases"]
-          if len(releases) > 10:
-              raise SystemExit("refusing to qualify more than 10 releases per run")
-          tags = [release["tag_name"] for release in releases]
-          with Path("/tmp/matrix-output").open("w", encoding="utf-8") as output:
-              output.write("matrix=" + json.dumps({"tag": tags}, separators=(",", ":")) + "\n")
-          PY
-          cat /tmp/matrix-output >>"${GITHUB_OUTPUT}"
+          PYTHONPATH=src python scripts/ocr_compat.py build-matrix \
+            --releases /tmp/ocr-releases.json \
+            --output /tmp/ocr-matrix.json
+          echo "matrix=$(tr -d '\n' </tmp/ocr-matrix.json)" >>"${GITHUB_OUTPUT}"
+          echo "count=$(python -c 'import json; print(len(json.load(open("/tmp/ocr-matrix.json"))["include"]))')" >>"${GITHUB_OUTPUT}"
 
   qualify:
     name: qualify-${{ matrix.tag }}
     needs: discover
-    if: fromJSON(needs.discover.outputs.matrix).tag[0] != null
+    if: needs.discover.outputs.count != '0'
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -96,23 +90,23 @@ jobs:
       - name: Qualify candidate
         env:
           CANDIDATE_TAG: ${{ matrix.tag }}
+          COMPARISON_VERSION: ${{ matrix.comparison_version }}
           GITHUB_TOKEN: ${{ github.token }}
+          TESTED_BASELINE_VERSION: ${{ matrix.tested_baseline_version }}
         run: |
           mkdir -p /tmp/ocr-compat
           PYTHONPATH=src python scripts/ocr_compat.py qualify \
             --tag "${CANDIDATE_TAG}" \
+            --comparison-version "${COMPARISON_VERSION}" \
+            --tested-baseline-version "${TESTED_BASELINE_VERSION}" \
             --output /tmp/ocr-compat/evidence.json \
             --issue-body /tmp/ocr-compat/issue.md
-      - name: Upsert qualification issue and prepare automatic-safe patch
-        id: classify
+      - name: Upsert qualification issue
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          CANDIDATE_TAG: ${{ matrix.tag }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-compat/evidence.json"))["classification"])')
-          echo "classification=${classification}" >>"${GITHUB_OUTPUT}"
           PYTHONPATH=src python scripts/ocr_compat.py upsert-issue \
             --evidence /tmp/ocr-compat/evidence.json \
             --repository "${REPOSITORY}" \
@@ -122,31 +116,90 @@ jobs:
           case "${issue}" in
             ''|*[!0-9]*) echo "invalid qualification issue number: ${issue}" >&2; exit 1 ;;
           esac
-          if [ "${classification}" = automatic-safe ]; then
-            PYTHONPATH=src python scripts/ocr_compat.py prepare-update \
-              --evidence /tmp/ocr-compat/evidence.json \
-              --fragment-number "${issue}"
-            git diff --binary >"/tmp/ocr-compat/${CANDIDATE_TAG}.patch"
-            test -s "/tmp/ocr-compat/${CANDIDATE_TAG}.patch"
-          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ocr-compatibility-${{ matrix.tag }}
           path: /tmp/ocr-compat/
           if-no-files-found: error
           retention-days: 7
+
+  aggregate:
+    name: assess-complete-chain
+    needs: [discover, qualify]
+    if: needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ocr-compatibility-v*
+          path: /tmp/ocr-chain
+      - name: Assess the complete observed release chain
+        id: chain
+        run: |
+          mapfile -d '' evidence_files < <(find /tmp/ocr-chain -name evidence.json -type f -print0)
+          test "${#evidence_files[@]}" -eq "${{ needs.discover.outputs.count }}"
+          args=()
+          for evidence in "${evidence_files[@]}"; do
+            args+=(--evidence "${evidence}")
+          done
+          PYTHONPATH=src python scripts/ocr_compat.py assess-chain \
+            "${args[@]}" \
+            --output /tmp/ocr-chain-assessment.json
+          classification=$(python -c 'import json; print(json.load(open("/tmp/ocr-chain-assessment.json"))["classification"])')
+          target=$(python -c 'import json; print(json.load(open("/tmp/ocr-chain-assessment.json"))["target_version"])')
+          echo "classification=${classification}" >>"${GITHUB_OUTPUT}"
+          echo "target=${target}" >>"${GITHUB_OUTPUT}"
+      - name: Prepare one cumulative automatic-safe patch
+        if: steps.chain.outputs.classification == 'automatic-safe'
+        env:
+          TARGET_VERSION: ${{ steps.chain.outputs.target }}
+        run: |
+          mapfile -d '' evidence_files < <(find /tmp/ocr-chain -name evidence.json -type f -print0)
+          args=()
+          latest_issue=''
+          for evidence in "${evidence_files[@]}"; do
+            args+=(--evidence "${evidence}")
+            version=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "${evidence}")
+            if [ "${version}" = "${TARGET_VERSION}" ]; then
+              latest_issue=$(tr -d '[:space:]' <"$(dirname "${evidence}")/issue-number.txt")
+            fi
+          done
+          case "${latest_issue}" in
+            ''|*[!0-9]*) echo "invalid target qualification issue number: ${latest_issue}" >&2; exit 1 ;;
+          esac
+          PYTHONPATH=src python scripts/ocr_compat.py prepare-update \
+            "${args[@]}" \
+            --fragment-number "${latest_issue}"
+          git diff --binary >"/tmp/ocr-chain-update.patch"
+          test -s /tmp/ocr-chain-update.patch
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ocr-compatibility-chain
+          path: |
+            /tmp/ocr-chain-assessment.json
+            /tmp/ocr-chain-update.patch
+          if-no-files-found: error
+          retention-days: 7
       - name: Open automatic-safe compatibility PR when bot credential is configured
-        if: steps.classify.outputs.classification == 'automatic-safe'
+        if: steps.chain.outputs.classification == 'automatic-safe'
         env:
           GH_TOKEN: ${{ secrets.OCR_UPDATE_BOT_TOKEN }}
-          CANDIDATE_TAG: ${{ matrix.tag }}
           REPOSITORY: ${{ github.repository }}
+          TARGET_VERSION: ${{ steps.chain.outputs.target }}
         run: |
           if [ -z "${GH_TOKEN}" ]; then
             echo "OCR_UPDATE_BOT_TOKEN is not configured; patch artifact and issue are the resume path."
             exit 0
           fi
-          version=${CANDIDATE_TAG#v}
+          version=${TARGET_VERSION}
           branch="automation/ocr-${version}"
           bot_login=$(gh api user --jq .login)
           if [ "${bot_login}" = "github-actions[bot]" ]; then

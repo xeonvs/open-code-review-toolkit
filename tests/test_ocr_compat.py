@@ -143,29 +143,59 @@ def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
             module.discover_unseen(manifest)
 
 
+def test_qualification_matrix_uses_adjacent_predecessors() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+
+    matrix = module.qualification_matrix(manifest, [release("1.8.8"), release("1.8.7")])
+
+    assert matrix == {
+        "include": [
+            {
+                "comparison_version": "1.8.6",
+                "tag": "v1.8.7",
+                "tested_baseline_version": "1.8.6",
+            },
+            {
+                "comparison_version": "1.8.7",
+                "tag": "v1.8.8",
+                "tested_baseline_version": "1.8.6",
+            },
+        ]
+    }
+
+
+def test_qualification_matrix_rejects_a_release_gap() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+
+    with pytest.raises(module.CompatibilityError, match="contiguous"):
+        module.qualification_matrix(manifest, [release("1.8.8")])
+
+
 def test_automatic_safe_policy_is_conservative() -> None:
     module = load_script()
 
     automatic, reasons = module.classify_candidate(
-        baseline="1.7.17",
+        comparison_version="1.7.17",
         version="1.7.18",
         release_notes="fix: correct comment normalization",
         contracts_passed=True,
     )
     breaking, breaking_reasons = module.classify_candidate(
-        baseline="1.7.17",
+        comparison_version="1.7.17",
         version="1.7.18",
         release_notes="fix: change JSON schema for comments",
         contracts_passed=True,
     )
     minor, minor_reasons = module.classify_candidate(
-        baseline="1.7.17",
+        comparison_version="1.7.17",
         version="1.8.0",
         release_notes="fix: update documentation",
         contracts_passed=True,
     )
     skipped, skipped_reasons = module.classify_candidate(
-        baseline="1.7.17",
+        comparison_version="1.7.17",
         version="1.7.19",
         release_notes="fix: update documentation",
         contracts_passed=True,
@@ -197,7 +227,8 @@ def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
         "result": "compatible",
         "classification": "human-review-required",
         "classification_reasons": ["release notes contain a material signal"],
-        "baseline_version": "1.7.17",
+        "comparison_version": "1.7.17",
+        "tested_baseline_version": "1.7.16",
         "release_changes": module.release_changes_excerpt(
             "fix parser output\n<script>alert(1)</script>\n```escape"
         ),
@@ -212,6 +243,58 @@ def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
     assert "<script" not in body
     assert "```escape" not in body
     assert "/compare/v1.7.17...v1.7.18" in body
+    assert "current tested baseline: `v1.7.16`" in body
+
+
+def test_optional_capabilities_validate_additive_llm_identity() -> None:
+    module = load_script()
+
+    capabilities = module.detect_optional_capabilities(
+        "review --model MODEL --provider PROVIDER",
+        {"llm": {"model": "synthetic-model", "provider": "synthetic-provider"}},
+    )
+
+    assert capabilities == [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+    ]
+    with pytest.raises(module.CompatibilityError, match="LLM model identity"):
+        module.detect_optional_capabilities("review", {"llm": {"model": ""}})
+
+
+def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+
+    def evidence(version: str, comparison: str, classification: str) -> dict[str, Any]:
+        return {
+            "schema_version": 2,
+            "version": version,
+            "result": "compatible",
+            "classification": classification,
+            "comparison_version": comparison,
+            "tested_baseline_version": "1.8.6",
+        }
+
+    automatic = module.assess_automatic_chain(
+        manifest,
+        [
+            evidence("1.8.8", "1.8.7", "automatic-safe"),
+            evidence("1.8.7", "1.8.6", "automatic-safe"),
+        ],
+    )
+    mixed = module.assess_automatic_chain(
+        manifest,
+        [
+            evidence("1.8.7", "1.8.6", "human-review-required"),
+            evidence("1.8.8", "1.8.7", "automatic-safe"),
+        ],
+    )
+
+    assert automatic["classification"] == "automatic-safe"
+    assert automatic["target_version"] == "1.8.8"
+    assert mixed["classification"] == "human-review-required"
 
 
 def test_release_changes_excerpt_is_bounded() -> None:
@@ -551,7 +634,7 @@ def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
     assert calls == 1
 
 
-def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: Path) -> None:
+def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> None:
     module = load_script()
     root = tmp_path
     (root / "compatibility" / "evidence").mkdir(parents=True)
@@ -590,31 +673,53 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
     assets = [dict(asset) for asset in assets]
     for asset in assets:
         asset["sha256"] = "a" * 64
-    evidence = {
-        "schema_version": 1,
+    evidence_187 = {
+        "schema_version": 2,
         "upstream_repository": module.UPSTREAM_REPOSITORY,
         "version": "1.8.7",
         "tag": "v1.8.7",
         "published_at": "2026-07-28T00:00:00Z",
         "result": "compatible",
-        "classification": "automatic-safe",
-        "classification_reasons": ["same-minor patch passed all probes"],
+        "classification": "human-review-required",
+        "classification_reasons": ["release notes contain a material signal"],
+        "comparison_version": "1.8.6",
+        "tested_baseline_version": "1.8.6",
         "assets": assets,
-        "contracts": {},
+        "contracts": {"optional_capabilities": ["per_run_model_override"]},
     }
-    evidence_path = root / "candidate.json"
-    evidence_path.write_bytes(module.canonical_json(evidence))
+    final_assets = [dict(asset) for asset in assets]
+    for asset in final_assets:
+        asset["sha256"] = "b" * 64
+    evidence_188 = {
+        **evidence_187,
+        "version": "1.8.8",
+        "tag": "v1.8.8",
+        "comparison_version": "1.8.7",
+        "assets": final_assets,
+        "contracts": {
+            "optional_capabilities": [
+                "llm_result_identity",
+                "per_run_model_override",
+                "per_run_provider_override",
+            ]
+        },
+    }
 
     changed = module.prepare_update(
         manifest_path=manifest_path,
-        evidence=evidence,
+        evidence=[evidence_188, evidence_187],
         fragment_number=42,
+        human_conclusions={
+            "1.8.7": "Reviewed provider and result additions; toolkit consumers remain additive.",
+            "1.8.8": "Reviewed language allowlist changes; toolkit does not consume them.",
+        },
         root=root,
     )
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",
         "compatibility/evidence/ocr-1.8.7.json",
+        "compatibility/evidence/ocr-1.8.8.json",
         "src/ocr_toolkit/preflight.py",
         "examples/gitlab/ocr-review.gitlab-ci.yml",
         "README.md",
@@ -623,20 +728,35 @@ def test_prepare_update_changes_only_the_mechanical_support_contract(tmp_path: P
         "changelog.d/42.feature.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert updated["recommended_version"] == "1.8.7"
-    assert updated["monitoring_floor"] == "1.8.7"
-    assert 'EXPECTED_OCR_VERSION = "1.8.7"' in preflight.read_text(encoding="utf-8")
+    assert updated["recommended_version"] == "1.8.8"
+    assert updated["monitoring_floor"] == "1.8.8"
+    assert 'EXPECTED_OCR_VERSION = "1.8.8"' in preflight.read_text(encoding="utf-8")
+    release_188 = next(item for item in updated["releases"] if item["version"] == "1.8.8")
+    assert release_188["capabilities"] == [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+    ]
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.8.7"' in example_text
-    assert f'OCR_SHA256: "{"a" * 64}"' in example_text
-    assert "1.8.7" in (root / "README.md").read_text(encoding="utf-8")
+    assert 'OCR_VERSION: "v1.8.8"' in example_text
+    assert f'OCR_SHA256: "{"b" * 64}"' in example_text
+    assert "1.8.8" in (root / "README.md").read_text(encoding="utf-8")
+    fragment = (root / "changelog.d" / "42.feature.md").read_text(encoding="utf-8")
+    assert "1.8.7 through 1.8.8" in fragment
 
 
 def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
-    evidence = {"classification": "human-review-required"}
+    evidence = {
+        "schema_version": 2,
+        "version": "1.8.7",
+        "result": "compatible",
+        "classification": "human-review-required",
+        "comparison_version": "1.8.6",
+        "tested_baseline_version": "1.8.6",
+    }
 
-    with pytest.raises(module.CompatibilityError, match="automatic-safe"):
+    with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
         module.prepare_update(
             manifest_path=MANIFEST,
             evidence=evidence,

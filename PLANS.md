@@ -27,10 +27,10 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 
 ### Work Queue
 
-1. [ ] Review and separately merge PR #59; verify protected checks, post-merge workflows, and its exact TestPyPI development artifact.
-2. [ ] Introduce backward-compatible chain-aware OCR evidence and workflow contracts with distinct tested-baseline and adjacent-comparison identities.
-3. [ ] Aggregate ordered qualification results so only a fully safe contiguous chain can prepare one cumulative update; preserve manual gates for any material member.
-4. [ ] Add regression coverage for ordering, gaps, duplicates, manual tags, mixed classifications, issue comparisons, cumulative promotion, additive LLM identity, and fail-closed workflow behavior.
+1. [ ] Review and separately merge PR #59; verify protected checks, post-merge workflows, and its exact TestPyPI development artifact. The review and merge are complete; post-merge and TestPyPI reconciliation remain pending.
+2. [x] Introduce backward-compatible chain-aware OCR evidence and workflow contracts with distinct tested-baseline and adjacent-comparison identities.
+3. [x] Aggregate ordered qualification results so only a fully safe contiguous chain can prepare one cumulative update; preserve manual gates for any material member.
+4. [x] Add regression coverage for ordering, gaps, duplicates, manual tags, mixed classifications, issue comparisons, cumulative promotion, additive LLM identity, and fail-closed workflow behavior.
 5. [ ] Record reviewed OCR 1.8.7 and 1.8.8 evidence and human conclusions, promote 1.8.8, and update every runtime, example, documentation, checksum, compatibility, and changelog contract.
 6. [ ] Reconcile BL-016/017 with upstream per-run LLM identity while preserving BL-008/009/010/018 status and roadmap truth.
 7. [ ] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result/MCP probes.
@@ -39,6 +39,13 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 10. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
 11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
 12. [ ] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
+
+### Qualification Process Review Checkpoint
+
+- PR #59 changed only the universal lock, retains `cryptography` through the Linux-only Twine/SecretStorage development and publication path, and does not expose cryptography APIs or add a toolkit runtime dependency. Its 13 protected checks passed before squash merge `98cb3b7c45484bb1025a240c56d5770a5ebc1b0e`.
+- The compatibility matrix now keeps the manifest recommendation as the tested baseline while comparing every unseen patch with its adjacent predecessor. Missing, duplicate, cross-minor, stale-baseline, incompatible, or mixed chains fail closed; only a wholly automatic-safe contiguous chain may create one cumulative patch and PR.
+- Review found and corrected a partial-write boundary in cumulative promotion: all evidence assets, capabilities, human conclusions, source replacements, and manifest payloads are now validated before the checkout changes. Qualification also rejects stale or pre-baseline comparison inputs.
+- Focused validation passes 31 tests plus Ruff lint and `git diff --check`. Tests cover 1.8.6 to 1.8.7 to 1.8.8 ordering, gaps, mixed classification, issue compare identity, additive LLM identity, cumulative reviewed promotion, and legacy single-evidence compatibility.
 
 ### Initial Evidence
 
