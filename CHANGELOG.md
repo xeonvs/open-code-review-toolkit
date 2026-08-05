@@ -1,3 +1,18 @@
+## 0.4.5 - 2026-08-05
+
+### 🚀 Features
+
+- Target checksum-verified Open Code Review 1.8.8 after reviewing the complete 1.8.7 through 1.8.8 compatibility chain and recording per-run provider/model and result-identity capabilities. ([#61](https://github.com/xeonvs/open-code-review-toolkit/issues/61))
+
+### 🔧 Refactoring
+
+- Qualify consecutive OCR patch releases as one ordered chain, keeping adjacent release comparisons separate from the currently tested baseline and preparing an automatic update only when every release is safe. ([#60](https://github.com/xeonvs/open-code-review-toolkit/issues/60))
+
+### 🧩 Rules
+
+- Accept OCR 1.8.8's Nix and Haskell allowlist and built-in rule support as an effective review-scope expansion; toolkit evidence-pack backlog items remain separate and unfinished. ([#61](https://github.com/xeonvs/open-code-review-toolkit/issues/61))
+
+
 ## 0.4.4 - 2026-08-03
 
 ### 🚀 Features
