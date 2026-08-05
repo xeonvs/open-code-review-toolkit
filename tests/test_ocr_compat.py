@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.8.6"
-    assert manifest["monitoring_floor"] == "1.8.6"
+    assert manifest["recommended_version"] == "1.8.8"
+    assert manifest["monitoring_floor"] == "1.8.8"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -54,6 +54,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.8.4", "tested"),
         ("1.8.5", "tested"),
         ("1.8.6", "tested"),
+        ("1.8.7", "tested"),
+        ("1.8.8", "tested"),
     ]
 
 
@@ -116,9 +118,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.8.7")]
+    first_page = [release("1.8.9")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.8.6")]
+    second_page = [release("1.8.8")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -128,14 +130,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.8.7"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.9"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.8.7")]
+    page = [release("1.8.9")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -146,6 +148,7 @@ def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
 def test_qualification_matrix_uses_adjacent_predecessors() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
+    manifest["recommended_version"] = "1.8.6"
 
     matrix = module.qualification_matrix(manifest, [release("1.8.8"), release("1.8.7")])
 
@@ -168,6 +171,7 @@ def test_qualification_matrix_uses_adjacent_predecessors() -> None:
 def test_qualification_matrix_rejects_a_release_gap() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
+    manifest["recommended_version"] = "1.8.6"
 
     with pytest.raises(module.CompatibilityError, match="contiguous"):
         module.qualification_matrix(manifest, [release("1.8.8")])
@@ -266,6 +270,7 @@ def test_optional_capabilities_validate_additive_llm_identity() -> None:
 def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
+    manifest["recommended_version"] = "1.8.6"
 
     def evidence(version: str, comparison: str, classification: str) -> dict[str, Any]:
         return {
@@ -657,7 +662,15 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
             baseline_evidence.read_bytes()
         )
     manifest_path = root / "compatibility" / "ocr-support.json"
-    manifest_path.write_bytes(MANIFEST.read_bytes())
+    synthetic_manifest = module.load_json(MANIFEST)
+    synthetic_manifest["monitoring_floor"] = "1.8.6"
+    synthetic_manifest["recommended_version"] = "1.8.6"
+    synthetic_manifest["releases"] = [
+        item
+        for item in synthetic_manifest["releases"]
+        if module._version(item["version"]) <= (1, 8, 6)
+    ]
+    manifest_path.write_bytes(module.canonical_json(synthetic_manifest))
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
     preflight.write_text('EXPECTED_OCR_VERSION = "1.8.6"\n', encoding="utf-8")
     example = root / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
@@ -749,11 +762,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.8.7",
+        "version": "1.8.9",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.8.6",
-        "tested_baseline_version": "1.8.6",
+        "comparison_version": "1.8.8",
+        "tested_baseline_version": "1.8.8",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):

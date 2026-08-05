@@ -1,0 +1,89 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "335f58f616629ad1272bc5c6832b778e476f5afc9cbb834aed5b6d34ffd87612",
+      "size": 47056752
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2",
+      "size": 44744834
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "68a9b8835f6e4e210531833657a3a4902841283c410322fc4342778d91959756",
+      "size": 45547682
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "33422e4856baa5b8640a2a0f7596d644948050e6547b087aeaa424e957b26019",
+      "size": 42991778
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "67825fc8a35cdf2af484cee6cb232ac53c4a4e83d4b6f13599a37d7f716f32d6",
+      "size": 46776832
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "044d16a38f4b115ff225816fd9cb384d002b8a3aaf788091f7a00cb074103b8b",
+      "size": 43580928
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "eaf1425958c85b7ae2dcd1b3f57fc8b0570beeb0b126a5d867760c38cde2a3ca",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.8.7",
+  "contracts": {
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-04T13:19:21Z",
+  "release_changes": "## 🚀 Features\n\n- feat(viewer): add repository search filter (#642)\n- feat(allowlist): add Nix support (#615)\n- feat(allowlist): add Haskell support (#672)\n\n## 🐛 Bug Fixes\n\n- fix(vscode): upgrade transitive deps to resolve security alerts (#713)\n\n## 🔧 Refactoring\n\n- refactor(session): use strings.Contains in resume_test.go (#708)\n\n## Other Changes\n\n- Create codeql.yml (#714)\n- ci: limit container CPU to 2 cores for stable multi-runner concurrency (#711)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.7...v1.8.8",
+  "release_notes_sha256": "ad3ae84e099599a119f9bd5429bea8d5d49ffd8aa80268aee7d10203237ad408",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.8.8",
+  "tested_baseline_version": "1.8.6",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.8"
+}

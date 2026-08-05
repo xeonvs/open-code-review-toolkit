@@ -1015,9 +1015,7 @@ def prepare_update(
     version = versions[-1]
     releases = manifest.get("releases")
     assert isinstance(releases, list)
-    existing_versions = {
-        str(item.get("version")) for item in releases if isinstance(item, dict)
-    }
+    existing_versions = {str(item.get("version")) for item in releases if isinstance(item, dict)}
     if any(candidate in existing_versions for candidate in versions):
         _fail("candidate evidence chain overlaps an existing manifest release")
     old_entry = next(
@@ -1202,9 +1200,7 @@ def render_issue(evidence: dict[str, Any]) -> str:
         else "unknown"
     )
     comparison = evidence.get("comparison_version", evidence.get("baseline_version"))
-    tested_baseline = evidence.get(
-        "tested_baseline_version", evidence.get("baseline_version")
-    )
+    tested_baseline = evidence.get("tested_baseline_version", evidence.get("baseline_version"))
     compare_line = ""
     if isinstance(comparison, str) and VERSION_RE.fullmatch(comparison) is not None:
         compare_line = (

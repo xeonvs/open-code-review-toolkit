@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.8.6",
-  "recommended_version": "1.8.6",
+  "monitoring_floor": "1.8.8",
+  "recommended_version": "1.8.8",
   "releases": [
     {
       "assets": [
@@ -369,6 +369,108 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.6",
       "status": "tested",
       "version": "1.8.6"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "8404b9a733b76482e46b68c9deb10d08dad2b75714ae5759e4bdfe92989a5fbf",
+          "size": 47044448
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "34b466b7d8c2889d7f9baad5bf2e2379f59759bc6912ab7eaa803d160ea2c3b9",
+          "size": 44728290
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "fe3af3867eecf96bf429721f6754b6ab2b783cde8ed1a24a1873c716d3fa7af4",
+          "size": 45535394
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "53380637a98385d8d8b6d3df3d1c93cde92d34e3c4a3c8015458779b4c2d1f47",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "2c20d8d45e7586399aa073877f87e3f104610cbaaf5b22b1b4e7a43063823815",
+          "size": 46764544
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "56a93a7b03fdbc5c939d53df72a973d4b4898422c724f7c49f198bc8e2e72c28",
+          "size": 43568128
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "0c714991bf832a40da44e77b9be3b961f43cfb768e06be35d6b4f64a0eaa17c2",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.7.json",
+      "evidence_sha256": "194c5697a0624ef917cfc59e939e4bcd95c30a6fde72f2cd99bc4d94c2c88ff7",
+      "human_conclusion": "Compatible after review in issue #60, workflow run 30987719228, and checksum-verified local probes. Per-run provider/model overrides and additive LLM result identity are accepted optional capabilities and advance BL-016/BL-017 prerequisites without completing either item. The upstream GitLab fail-open example, resumable full scan, model catalog, CLI validation, documentation, and CI changes do not alter consumed toolkit behavior.",
+      "published_at": "2026-08-04T10:09:08Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.7",
+      "status": "tested",
+      "version": "1.8.7"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "335f58f616629ad1272bc5c6832b778e476f5afc9cbb834aed5b6d34ffd87612",
+          "size": 47056752
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2",
+          "size": 44744834
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "68a9b8835f6e4e210531833657a3a4902841283c410322fc4342778d91959756",
+          "size": 45547682
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "33422e4856baa5b8640a2a0f7596d644948050e6547b087aeaa424e957b26019",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "67825fc8a35cdf2af484cee6cb232ac53c4a4e83d4b6f13599a37d7f716f32d6",
+          "size": 46776832
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "044d16a38f4b115ff225816fd9cb384d002b8a3aaf788091f7a00cb074103b8b",
+          "size": 43580928
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "eaf1425958c85b7ae2dcd1b3f57fc8b0570beeb0b126a5d867760c38cde2a3ca",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.8.json",
+      "evidence_sha256": "3a88bd3d46b378b2b02e8e5324058eecdc21efd451927a1a305f107d38409c47",
+      "human_conclusion": "Compatible after adjacent review against 1.8.7 plus workflow and checksum-verified local probes. Nix and Haskell allowlist and built-in rule support extend OCR's effective review-scope/rules contract and are accepted without toolkit adaptation or completion of BL-008/BL-009/BL-010. Viewer, VS Code, test, and CI changes are outside the consumed toolkit contract; the Go MCP SDK remains v1.6.1.",
+      "published_at": "2026-08-04T13:19:21Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.8",
+      "status": "tested",
+      "version": "1.8.8"
     }
   ],
   "schema_version": 1,

@@ -75,6 +75,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ocr-compatibility.yml").read_text(
         encoding="utf-8"
     )
+    qualifier = (PROJECT_ROOT / "scripts" / "ocr_compat.py").read_text(encoding="utf-8")
     policy = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     assert "schedule:" in workflow
@@ -84,7 +85,11 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "pull-requests: write" not in workflow
     assert "persist-credentials: false" in workflow
     assert "max-parallel: 2" in workflow
-    assert "refusing to qualify more than 10 releases" in workflow
+    assert "build-matrix" in workflow
+    assert "assess-chain" in workflow
+    assert "pattern: ocr-compatibility-v*" in workflow
+    assert workflow.count("prepare-update") == 1
+    assert "MAX_QUALIFICATION_CHAIN = 10" in qualifier
     assert "OCR_UPDATE_BOT_TOKEN" in workflow
     assert "gh auth setup-git" in workflow
     assert "git switch -C" in workflow

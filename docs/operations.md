@@ -12,7 +12,7 @@ The toolkit reads the previous OCR-owned notes and discussions before it writes 
 
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
-The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.6 manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.
+The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.
 
 ## Discussion lifecycle
 

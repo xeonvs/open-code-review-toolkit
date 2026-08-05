@@ -27,14 +27,14 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 
 ### Work Queue
 
-1. [ ] Review and separately merge PR #59; verify protected checks, post-merge workflows, and its exact TestPyPI development artifact. The review and merge are complete; post-merge and TestPyPI reconciliation remain pending.
+1. [x] Review and separately merge PR #59; verify protected checks, post-merge workflows, and its exact TestPyPI development artifact.
 2. [x] Introduce backward-compatible chain-aware OCR evidence and workflow contracts with distinct tested-baseline and adjacent-comparison identities.
 3. [x] Aggregate ordered qualification results so only a fully safe contiguous chain can prepare one cumulative update; preserve manual gates for any material member.
 4. [x] Add regression coverage for ordering, gaps, duplicates, manual tags, mixed classifications, issue comparisons, cumulative promotion, additive LLM identity, and fail-closed workflow behavior.
-5. [ ] Record reviewed OCR 1.8.7 and 1.8.8 evidence and human conclusions, promote 1.8.8, and update every runtime, example, documentation, checksum, compatibility, and changelog contract.
-6. [ ] Reconcile BL-016/017 with upstream per-run LLM identity while preserving BL-008/009/010/018 status and roadmap truth.
-7. [ ] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result/MCP probes.
-8. [ ] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
+5. [x] Record reviewed OCR 1.8.7 and 1.8.8 evidence and human conclusions, promote 1.8.8, and update every runtime, example, documentation, checksum, compatibility, and changelog contract.
+6. [x] Reconcile BL-016/017 with upstream per-run LLM identity while preserving BL-008/009/010/018 status and roadmap truth.
+7. [x] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result probes; exact MCP revision contracts remain covered by the repository suite because the OCR CLI has no standalone MCP probe command.
+8. [x] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
 9. [ ] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
 10. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
 11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
@@ -46,6 +46,16 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 - The compatibility matrix now keeps the manifest recommendation as the tested baseline while comparing every unseen patch with its adjacent predecessor. Missing, duplicate, cross-minor, stale-baseline, incompatible, or mixed chains fail closed; only a wholly automatic-safe contiguous chain may create one cumulative patch and PR.
 - Review found and corrected a partial-write boundary in cumulative promotion: all evidence assets, capabilities, human conclusions, source replacements, and manifest payloads are now validated before the checkout changes. Qualification also rejects stale or pre-baseline comparison inputs.
 - Focused validation passes 31 tests plus Ruff lint and `git diff --check`. Tests cover 1.8.6 to 1.8.7 to 1.8.8 ordering, gaps, mixed classification, issue compare identity, additive LLM identity, cumulative reviewed promotion, and legacy single-evidence compatibility.
+
+### Promotion, Documentation, And Backlog Review Checkpoint
+
+- Hosted run `30987719228` supplied checksum-verified Linux amd64 evidence for both releases. The committed v2 records retain its exact asset matrices and machine contract results, add adjacent comparison identity, and add capabilities proven by independent checksum-verified Darwin arm64 probes. Evidence SHA-256 is `194c5697a0624ef917cfc59e939e4bcd95c30a6fde72f2cd99bc4d94c2c88ff7` for 1.8.7 and `3a88bd3d46b378b2b02e8e5324058eecdc21efd451927a1a305f107d38409c47` for 1.8.8.
+- OCR 1.8.7's per-run provider/model flags and additive `llm` identity satisfy the upstream capability dependency for BL-016 and give BL-017 a bounded run identity to reuse. Neither backlog item is implemented: profiles still need an approved closed matrix/precedence contract, and telemetry still requires the planned gap audit.
+- OCR 1.8.8's Nix/Haskell allowlist and built-in rules expand the effective review scope but do not resolve versions, framework identity, provenance, deltas, or completeness. BL-008, BL-009, and BL-010 remain unfinished; BL-018 remains conditional. Viewer, VS Code, upstream GitLab example, scan, model-catalog, documentation, and CI changes do not require toolkit runtime work. The consumed Go MCP SDK remains v1.6.1.
+- Review found and corrected stale version-specific prose in MCP, operations, remote-header, security, and GitLab documents plus a duplicated security invariant. Runtime preflight, public example, Linux checksum, README, roadmap, strategy, backlog, tests, and Towncrier fragments now agree on OCR 1.8.8.
+- `/opt/homebrew/bin/ocr` is the official Darwin arm64 1.8.8 binary with SHA-256 `db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2`. Version/help/preview/synthetic JSON result and toolkit-consumer probes pass for both 1.8.7 and 1.8.8; 122 focused tests plus 15 MCP subtests pass and the manifest validates.
+- The complete quality gate passes 545 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit. Review also replaced a brittle workflow test that looked for an inline limit string with contracts for the centralized chain builder, ten-release bound, aggregate assessment, artifact fan-in, and single cumulative promotion step. Lock validation, Towncrier draft rendering, workflow YAML parsing, and `git diff --check` pass.
+- All post-merge workflows for PR #59 completed successfully. TestPyPI run `31009885896` published `0.4.5.dev38`; independently downloaded registry bytes match the workflow artifact: wheel SHA-256 `86587406a94b4f1ff585e113af67a017ac3d698b05cf6df93ad6eb61c6753cce`, sdist SHA-256 `ccb6f1716cd35912b921bf6d671f50b159012efe7ca19d20dd4f0dc6a7ca0ed2`. Both provenance records identify `testpypi.yml`, merge `98cb3b7c45484bb1025a240c56d5770a5ebc1b0e`, and the `testpypi-public-disclosure` environment.
 
 ### Initial Evidence
 

@@ -27,6 +27,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Unused ecosystems, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
 - **Validation:** Per-format source/target fixtures, conflict and limit cases, and common evidence-model contract tests.
 - **Release classification expectation:** `release-required`.
+- **Upstream overlap:** OCR 1.8.8 can now select Nix and Haskell files for review, but selection and generic rules do not resolve dependency/runtime versions or provide source/target evidence. BL-008 therefore remains planned with unchanged scope.
 
 ### BL-009: Select and establish framework evidence plugins
 
@@ -41,6 +42,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Route/call/symbol graphs, framework-specific reviewers, or speculative detection without version evidence.
 - **Validation:** Positive/negative/multi-component fixtures, version-conflict and staleness cases, and plugin isolation tests.
 - **Release classification expectation:** `release-required`.
+- **Upstream overlap:** OCR 1.8.8's built-in Nix/Haskell rules improve language review but do not identify frameworks, versions, component scope, provenance, or completeness. They do not satisfy the plugin selection trigger or any BL-009 acceptance criterion.
 
 ### BL-010: Add evidence packs from demonstrated use cases
 
@@ -55,6 +57,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Checkbox coverage, network resolution, runtime code execution, or bundles spanning unrelated ecosystems.
 - **Validation:** Pack-specific fixtures plus common evidence and bootstrap/MCP projection contracts.
 - **Release classification expectation:** `release-required`.
+- **Upstream overlap:** Built-in OCR language allowlists and rules are review-engine capabilities, not toolkit evidence packs. OCR 1.8.8 creates no demonstrated missing-evidence use case and does not activate BL-010.
 
 ## M3 External MCP hardening
 
@@ -139,10 +142,10 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
-- **Dependencies:** Current OCR compatibility manifest and the established M1 built-in MCP lifecycle.
-- **Activation trigger:** Profile model and limit differences can be documented without changing per-tool routing.
+- **Dependencies:** The established M1 built-in MCP lifecycle and an OCR compatibility entry advertising per-run model/provider override capability. OCR 1.8.7 satisfies the upstream capability dependency.
+- **Activation trigger:** Profile model and limit differences can be documented without changing per-tool routing; the remaining trigger is an owner-approved closed profile matrix and precedence contract.
 - **Goal:** Offer `economy`, `standard`, and `strong` choices for one OCR review run.
-- **Scoped deliverables:** Define explicit profile configuration selecting a run-level model and a documented closed set of existing OCR limits; publish the effective profile without credentials; validate profile/model availability through the compatibility contract, environment precedence, and rendered effective configuration.
+- **Scoped deliverables:** Define explicit profile configuration selecting a run-level model and a documented closed set of existing OCR limits; map the profile to OCR's per-run override rather than mutating persistent OCR configuration; publish the effective profile and observed additive result identity without credentials; validate profile/model availability through optional capabilities in the compatibility contract, environment precedence, and rendered effective configuration.
 - **Acceptance criteria:** One model remains active per run, `standard` preserves current behavior, explicit per-setting environment values override profile defaults, secrets remain environment-only, and unavailable model/capability combinations or unsupported profiles fail before OCR execution.
 - **Exclusions:** Per-file/per-tool model routing, hidden heuristics, multi-agent orchestration, or full-repository scan profiles.
 - **Validation:** Profile matrix, precedence, preflight, configuration-rendering, and compatibility tests.
@@ -156,7 +159,7 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Dependencies:** BL-016 and stable discussion/fingerprint lifecycle.
 - **Activation trigger:** Explicit profiles can label comparable runs, and M1 E2E/operational evidence demonstrates material gaps that upstream OCR telemetry and structured result artifacts cannot cover reliably.
 - **Goal:** Produce privacy-safe evidence for profile tuning and any future routing decision.
-- **Scoped deliverables:** Reuse OCR token, cost, budget, latency, request, and tool-call telemetry plus the established review-health, failed-file, finding-publication, suppression, omission, and posting receipts, then audit structured result artifacts for the remaining gaps. If GitLab lifecycle, bounded evidence/MCP, posting, or review-value gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate toolkit-only coverage includes evidence/store bounds and degradation; bootstrap size; independently attributable MCP readiness and usage; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from OCR telemetry or bounded result artifacts.
+- **Scoped deliverables:** Reuse OCR token, cost, budget, latency, request, and tool-call telemetry plus OCR 1.8.7's additive provider/model result identity and the established review-health, failed-file, finding-publication, suppression, omission, and posting receipts, then audit structured result artifacts for the remaining gaps. If GitLab lifecycle, bounded evidence/MCP, posting, or review-value gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate toolkit-only coverage includes evidence/store bounds and degradation; bootstrap size; independently attributable MCP readiness and usage; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from OCR telemetry or bounded result artifacts.
 - **Acceptance criteria:** OCR remains the source for token, cost, and budget telemetry. The gap audit may conclude that OCR telemetry plus bounded result-derived reporting is sufficient, in which case no toolkit telemetry runtime is added. If a layer is justified, metrics contain no source, prompts, tool arguments/results, finding text, paths, URLs, user identities, secrets, external contents, or unbounded project/MR labels; labels use closed vocabularies and bounded cardinality; built-in and optional MCP servers remain independently attributable; OCR and toolkit metrics cannot double-count the same semantic event; missing upstream data is explicit; failed/partial/skipped and repeated runs are distinguishable without changing review behavior; telemetry failure cannot fail review.
 - **Exclusions:** User surveillance, ranking developers, automatic routing, or mandatory external telemetry.
 - **Validation:** Synthetic lifecycle aggregation, redaction/privacy tests, missing-data behavior, and deterministic export fixtures.

@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.8.6"
+  OCR_VERSION: "v1.8.8"
   OCR_TOOLKIT_VERSION: "0.1.0"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v0.1.0/SHA256SUMS"
-  OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"
+  OCR_SHA256: "68a9b8835f6e4e210531833657a3a4902841283c410322fc4342778d91959756"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   OCR_LLM_VALIDATE_MODEL: "false"
