@@ -170,7 +170,7 @@ def test_json_rpc_initialize_lists_read_only_tool_and_returns_safe_errors() -> N
 
 
 def test_initialize_supports_exact_ocr_1_8_sdk_protocol_revisions() -> None:
-    """Negotiate every revision supported by OCR 1.8.6's Go MCP SDK."""
+    """Negotiate every revision supported by OCR 1.8.8's Go MCP SDK."""
 
     assert PROTOCOL_VERSION == "2025-11-25"
     assert {
@@ -189,7 +189,7 @@ def test_initialize_supports_exact_ocr_1_8_sdk_protocol_revisions() -> None:
                 "params": {
                     "protocolVersion": version,
                     "capabilities": {},
-                    "clientInfo": {"name": "ocr", "version": "1.8.6"},
+                    "clientInfo": {"name": "ocr", "version": "1.8.8"},
                 },
             },
         )

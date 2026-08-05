@@ -1,0 +1,89 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "8404b9a733b76482e46b68c9deb10d08dad2b75714ae5759e4bdfe92989a5fbf",
+      "size": 47044448
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "34b466b7d8c2889d7f9baad5bf2e2379f59759bc6912ab7eaa803d160ea2c3b9",
+      "size": 44728290
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "fe3af3867eecf96bf429721f6754b6ab2b783cde8ed1a24a1873c716d3fa7af4",
+      "size": 45535394
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "53380637a98385d8d8b6d3df3d1c93cde92d34e3c4a3c8015458779b4c2d1f47",
+      "size": 42991778
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "2c20d8d45e7586399aa073877f87e3f104610cbaaf5b22b1b4e7a43063823815",
+      "size": 46764544
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "56a93a7b03fdbc5c939d53df72a973d4b4898422c724f7c49f198bc8e2e72c28",
+      "size": 43568128
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "0c714991bf832a40da44e77b9be3b961f43cfb768e06be35d6b4f64a0eaa17c2",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.8.6",
+  "contracts": {
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-04T10:09:08Z",
+  "release_changes": "## 🚀 Features\n\n- feat(cli): support per-run LLM provider and model overrides (#687)\n- feat(examples/gitlab): add fail-open category/severity publication controls (#685)\n- feat(scan): add resumable full-file scans (#677)\n- feat(llm): add Claude Opus 5, Sonnet 5, Kimi K3, and Qwen 3.8 models (#693)\n- feat(llm): add GPT-5.6 models to OpenAI provider (#666)\n\n## 🐛 Bug Fixes\n\n- fix(cli): return error on unknown subcommands for parent commands (#660)\n\n## 🔧 Refactoring\n\n- refactor(cli): use Cobra validation for parent commands (#694)\n\n## 📖 Documentation\n\n- docs(ru): add Russian translation for contributing, FAQ, telemetry, and viewer pages (#701)\n- docs(ru): add Russian translation for integration guides (#698)\n- docs(ru): add Russian translation for core documentation pages (#696)\n\n## Other Changes\n\n- ci: pin govulncheck, narrow release permissions (#436)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.6...v1.8.7",
+  "release_notes_sha256": "14c17a47f50954ab0a005b1c206263ed89f5fcd9b313d50abbb6e85ca4afd404",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.8.7",
+  "tested_baseline_version": "1.8.6",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.7"
+}

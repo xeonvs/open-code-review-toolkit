@@ -2,6 +2,75 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Qualify OCR 1.8.7-1.8.8 and release toolkit 0.4.5
+
+Status: in progress
+Owner: Codex
+Last Updated: 2026-08-05
+Release Classification: release-required
+Target Stable Version: 0.4.5
+Tracking Issues: #60, #61
+Included Pull Request: #59
+
+### Goal
+
+Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, promote checksum-verified 1.8.8 as the tested and recommended toolkit baseline, and publish stable toolkit 0.4.5 together with the separately reviewed cryptography 50.0.0 development-toolchain update from PR #59. Correct the compatibility workflow so multiple unseen patch releases retain adjacent comparison context and can produce one safe cumulative promotion without weakening human review for material changes.
+
+### Decisions
+
+- Merge PR #59 separately after lockfile, reverse-dependency, API-exposure, and hosted-check review. It changes the Linux development/release chain through `twine -> keyring -> secretstorage`; the published toolkit runtime remains dependency-free.
+- Preserve one qualification issue and immutable evidence record per OCR release, but classify ordered candidates against their adjacent predecessor while retaining the current tested baseline separately.
+- Any failed, material, ambiguous, discontinuous, or mixed candidate chain requires human conclusions and prevents an automatic update PR. A wholly automatic-safe contiguous chain may prepare one cumulative patch targeting only its newest version.
+- Treat OCR 1.8.7 per-run provider/model selection and additive result identity as future BL-016/BL-017 inputs, not as completed toolkit profiles or telemetry. OCR 1.8.8 Nix/Haskell allowlist and built-in rules change the effective rules contract but do not implement toolkit evidence packs.
+- Install the verified Darwin arm64 OCR 1.8.8 binary locally and run only deterministic compatibility probes. Do not perform a full LLM review of the release diff.
+- Keep this plan active through feature merge, exact TestPyPI development verification, the release PR, stable TestPyPI/PyPI publication, annotated tag, immutable GitHub Release, provenance/hash reconciliation, supported-Python installs, and final issue closure.
+
+### Work Queue
+
+1. [x] Review and separately merge PR #59; verify protected checks, post-merge workflows, and its exact TestPyPI development artifact.
+2. [x] Introduce backward-compatible chain-aware OCR evidence and workflow contracts with distinct tested-baseline and adjacent-comparison identities.
+3. [x] Aggregate ordered qualification results so only a fully safe contiguous chain can prepare one cumulative update; preserve manual gates for any material member.
+4. [x] Add regression coverage for ordering, gaps, duplicates, manual tags, mixed classifications, issue comparisons, cumulative promotion, additive LLM identity, and fail-closed workflow behavior.
+5. [x] Record reviewed OCR 1.8.7 and 1.8.8 evidence and human conclusions, promote 1.8.8, and update every runtime, example, documentation, checksum, compatibility, and changelog contract.
+6. [x] Reconcile BL-016/017 with upstream per-run LLM identity while preserving BL-008/009/010/018 status and roadmap truth.
+7. [x] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result probes; exact MCP revision contracts remain covered by the repository suite because the OCR CLI has no standalone MCP probe command.
+8. [x] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
+9. [x] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
+10. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
+11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
+12. [ ] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
+
+### Qualification Process Review Checkpoint
+
+- PR #59 changed only the universal lock, retains `cryptography` through the Linux-only Twine/SecretStorage development and publication path, and does not expose cryptography APIs or add a toolkit runtime dependency. Its 13 protected checks passed before squash merge `98cb3b7c45484bb1025a240c56d5770a5ebc1b0e`.
+- The compatibility matrix now keeps the manifest recommendation as the tested baseline while comparing every unseen patch with its adjacent predecessor. Missing, duplicate, cross-minor, stale-baseline, incompatible, or mixed chains fail closed; only a wholly automatic-safe contiguous chain may create one cumulative patch and PR.
+- Review found and corrected a partial-write boundary in cumulative promotion: all evidence assets, capabilities, human conclusions, source replacements, and manifest payloads are now validated before the checkout changes. Qualification also rejects stale or pre-baseline comparison inputs.
+- Focused validation passes 31 tests plus Ruff lint and `git diff --check`. Tests cover 1.8.6 to 1.8.7 to 1.8.8 ordering, gaps, mixed classification, issue compare identity, additive LLM identity, cumulative reviewed promotion, and legacy single-evidence compatibility.
+
+### Promotion, Documentation, And Backlog Review Checkpoint
+
+- Hosted run `30987719228` supplied checksum-verified Linux amd64 evidence for both releases. The committed v2 records retain its exact asset matrices and machine contract results, add adjacent comparison identity, and add capabilities proven by independent checksum-verified Darwin arm64 probes. Evidence SHA-256 is `194c5697a0624ef917cfc59e939e4bcd95c30a6fde72f2cd99bc4d94c2c88ff7` for 1.8.7 and `3a88bd3d46b378b2b02e8e5324058eecdc21efd451927a1a305f107d38409c47` for 1.8.8.
+- OCR 1.8.7's per-run provider/model flags and additive `llm` identity satisfy the upstream capability dependency for BL-016 and give BL-017 a bounded run identity to reuse. Neither backlog item is implemented: profiles still need an approved closed matrix/precedence contract, and telemetry still requires the planned gap audit.
+- OCR 1.8.8's Nix/Haskell allowlist and built-in rules expand the effective review scope but do not resolve versions, framework identity, provenance, deltas, or completeness. BL-008, BL-009, and BL-010 remain unfinished; BL-018 remains conditional. Viewer, VS Code, upstream GitLab example, scan, model-catalog, documentation, and CI changes do not require toolkit runtime work. The consumed Go MCP SDK remains v1.6.1.
+- Review found and corrected stale version-specific prose in MCP, operations, remote-header, security, and GitLab documents plus a duplicated security invariant. Runtime preflight, public example, Linux checksum, README, roadmap, strategy, backlog, tests, and Towncrier fragments now agree on OCR 1.8.8.
+- `/opt/homebrew/bin/ocr` is the official Darwin arm64 1.8.8 binary with SHA-256 `db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2`. Version/help/preview/synthetic JSON result and toolkit-consumer probes pass for both 1.8.7 and 1.8.8; 122 focused tests plus 15 MCP subtests pass and the manifest validates.
+- The complete quality gate passes 545 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit. Review also replaced a brittle workflow test that looked for an inline limit string with contracts for the centralized chain builder, ten-release bound, aggregate assessment, artifact fan-in, and single cumulative promotion step. Lock validation, Towncrier draft rendering, workflow YAML parsing, and `git diff --check` pass.
+- All post-merge workflows for PR #59 completed successfully. TestPyPI run `31009885896` published `0.4.5.dev38`; independently downloaded registry bytes match the workflow artifact: wheel SHA-256 `86587406a94b4f1ff585e113af67a017ac3d698b05cf6df93ad6eb61c6753cce`, sdist SHA-256 `ccb6f1716cd35912b921bf6d671f50b159012efe7ca19d20dd4f0dc6a7ca0ed2`. Both provenance records identify `testpypi.yml`, merge `98cb3b7c45484bb1025a240c56d5770a5ebc1b0e`, and the `testpypi-public-disclosure` environment.
+
+### Final Pre-Push Review Checkpoint
+
+- Final scope reconciliation added direct regressions for duplicate discovery and the next manually requested patch. It also corrected one fail-closed design edge: a genuine skipped, minor, or major upstream sequence must still receive machine evidence and a human-review issue. The matrix therefore preserves adjacent observed comparisons, while aggregation labels any non-contiguous sequence `human-review-required` and never prepares a patch.
+- Checksum-pinned Gitleaks 8.24.3 passes the complete first-parent feature history. The locally installed 8.30.1 was deliberately not accepted as a substitute; the exact repository pin was downloaded and used for the gate.
+- Two source-date-epoch-controlled builds are byte-identical and pass Twine: development wheel SHA-256 `870635bec8cb284bdc94f3995d4b28099b1f34647e7f8be5e13bf5894685fb61`, sdist SHA-256 `c46b80c39ab0cc1f31944f53a16815cfac07baf91489efc6e1e55557ff9232e4`. Restricted-path wheel installs pass on Python 3.12 and 3.13, and the sdist install passes on Python 3.14, all from a hostile shadow-package directory with the published CLI/import intact.
+
+### Initial Evidence
+
+- `main` is clean and synchronized at `77317c9`; stable PyPI, TestPyPI, tag, and immutable GitHub Release all report toolkit 0.4.4, while `.next-version` is 0.4.5.
+- PR #59 is mergeable and all 13 hosted checks pass. Its only tracked change is `uv.lock`; `cryptography` is retained in the universal lock and installed through Twine's SecretStorage/keyring path on Linux, not as a toolkit runtime dependency.
+- Issues #60/#61 contain checksum-verified compatible Linux amd64 evidence for OCR 1.8.7/1.8.8. The workflow classified both from tested baseline 1.8.6, causing #61's false skipped-patch reason even though its adjacent predecessor is 1.8.7.
+- OCR 1.8.7 adds per-run provider/model flags and additive `llm` result identity, GitLab example routing, resumable full scans, model entries, and CLI handling changes. OCR 1.8.8 adds Nix/Haskell file/rule support plus Viewer, VS Code, documentation, and CI-only changes. The consumed Go MCP SDK remains v1.6.1.
+- No `ocr` executable is currently available in `PATH`. The official 1.8.8 Darwin arm64 digest is `db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2`; Linux amd64 is `68a9b8835f6e4e210531833657a3a4902841283c410322fc4342778d91959756`.
+
 ## Completed Plan: Complete evidence coverage and GitLab review health for v0.4.4
 
 Status: completed

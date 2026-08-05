@@ -68,11 +68,11 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "not a source-code parser" in configuration
     assert "Target/base guidance may describe policy" in security
     assert "changed source/head guidance and accepted decisions cannot authorize" in security
-    assert 'OCR_VERSION: "v1.8.6"' in workflow
-    assert "v1.8.6" in docs
-    assert "v1.8.6" in security
+    assert 'OCR_VERSION: "v1.8.8"' in workflow
+    assert "v1.8.8" in docs
+    assert "v1.8.8" in security
     assert (
-        'OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"' in workflow
+        'OCR_SHA256: "68a9b8835f6e4e210531833657a3a4902841283c410322fc4342778d91959756"' in workflow
     )
     assert "`Russian` is one example" in docs
     assert "ocr-ci preflight" in workflow
@@ -83,7 +83,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "review-background.md" not in workflow
     assert '--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"' in workflow
     assert '--to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"' in workflow
-    assert "Pin Open Code Review `v1.8.6` and verify its checksum" in security
+    assert "Pin Open Code Review `v1.8.8` and verify its checksum" in security
     assert "when: manual" in workflow
     assert "env -u OCR_LLM_TOKEN" in workflow
 

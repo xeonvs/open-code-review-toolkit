@@ -125,7 +125,7 @@ The existing bounded, fail-closed guidance handling remains until upstream OCR d
 
 ## Review profiles and quality measurement
 
-OCR uses one configured model per review run. A lightweight explicit profile abstraction may select that run-level model and existing OCR limits: `economy`, `standard`, or `strong`. Profiles do not dispatch individual files or tools to different models.
+OCR 1.8.7 and later expose explicit per-run provider/model overrides plus additive result identity. A lightweight explicit profile abstraction may select that one run-level model and existing OCR limits: `economy`, `standard`, or `strong`. Profiles do not dispatch individual files or tools to different models, and the compatibility manifest remains the source of capability availability.
 
 Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, and never routes a merge request to a full-repository scan.
 
@@ -133,7 +133,7 @@ Automatic routing is conditional on stable evidence, latency, token, and review-
 
 Fast-moving upstream compatibility is a product capability, not an ad hoc version string update. One machine-readable manifest should define recommended and tested OCR releases and known capabilities. Version and capability inspection is centralized, additive output fields are parsed tolerantly, and required contract removal fails closed.
 
-Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence. A conservative same-minor maintenance classifier may prepare a mechanical compatibility patch only when every consumed contract remains stable and release notes contain no material signal. Minor/major, ambiguous, changed, or failed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
+Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence. Ordered candidates retain the current tested baseline while each classification uses its adjacent predecessor. A conservative same-minor maintenance classifier may prepare one cumulative compatibility patch only when the sequence is contiguous, every consumed contract remains stable, and no release notes contain a material signal. Minor/major, ambiguous, changed, failed, or mixed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
 
 ## Architectural invariants
 
