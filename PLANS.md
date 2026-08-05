@@ -36,7 +36,7 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 7. [x] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result probes; exact MCP revision contracts remain covered by the repository suite because the OCR CLI has no standalone MCP probe command.
 8. [x] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
 9. [x] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
-10. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
+10. [x] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
 11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
 12. [ ] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
 
@@ -62,6 +62,20 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 - Final scope reconciliation added direct regressions for duplicate discovery and the next manually requested patch. It also corrected one fail-closed design edge: a genuine skipped, minor, or major upstream sequence must still receive machine evidence and a human-review issue. The matrix therefore preserves adjacent observed comparisons, while aggregation labels any non-contiguous sequence `human-review-required` and never prepares a patch.
 - Checksum-pinned Gitleaks 8.24.3 passes the complete first-parent feature history. The locally installed 8.30.1 was deliberately not accepted as a substitute; the exact repository pin was downloaded and used for the gate.
 - Two source-date-epoch-controlled builds are byte-identical and pass Twine: development wheel SHA-256 `870635bec8cb284bdc94f3995d4b28099b1f34647e7f8be5e13bf5894685fb61`, sdist SHA-256 `c46b80c39ab0cc1f31944f53a16815cfac07baf91489efc6e1e55557ff9232e4`. Restricted-path wheel installs pass on Python 3.12 and 3.13, and the sdist install passes on Python 3.14, all from a hostile shadow-package directory with the published CLI/import intact.
+
+### Feature Merge And Development Publication
+
+- Feature PR #62 passed all 13 protected checks with no review threads and merged as GitHub-verified squash commit `343fdf310708f67d732bf1ca9ecfffd9944e0a97`. All six protected-main workflow suites then passed.
+- TestPyPI run `31012492656` published and installed immutable `0.4.5.dev39`. Cache-bypassed PEP 691 reads, freshly downloaded registry bytes, and the workflow artifact are byte-identical: wheel SHA-256 `bcd81ba83388b33ae5466ba08cc38df425355cac71815a7e3b5586485ad233bd`; sdist SHA-256 `e84484cd3538827a56c2e48013f20ff2638d7c84c8c987c8b557304197fbe28b`.
+- TestPyPI provenance identifies `testpypi.yml`, merge `343fdf310708f67d732bf1ca9ecfffd9944e0a97`, and the `testpypi-public-disclosure` environment for both exact subjects. Restricted-path development installs passed from a hostile shadow-package directory across the supported wheel/sdist matrix.
+- The v0.4.5 release branch consumes only the #60/#61 fragments, sets reproducible source epoch `1785938068` one second after the feature merge, and advances the next development line to 0.4.6.
+
+### Release Preparation Review Checkpoint
+
+- The release diff contains only the stable and next-development version markers, deterministic epoch, generated 0.4.5 changelog, consumed #60/#61 fragments, and current plan receipts. The release notes render the exact `v0.4.4...v0.4.5` comparison URL; no roadmap milestone or future-backlog item is being closed by the release commit.
+- Release-focused tests pass 40 cases. The complete quality gate passes 547 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit; manifest, lock, workflow YAML, dependency audit, and `git diff --check` validation also pass.
+- Two clean stable builds using version `0.4.5` and source epoch `1785938068` are byte-identical and pass Twine: wheel SHA-256 `15e70eff06f1c4a1f5f9e573b4bf55353938374404d01db1bba1ab920b5eda12`; sdist SHA-256 `d888a3a550836d175bf2520c024fa69d1f9ea5ca304459f0419b27076cdc0d4f`.
+- Restricted-path installs of the stable wheel pass on Python 3.12 and 3.13, and the stable sdist install passes on Python 3.14. All three run the installed CLI/import from a private hostile shadow-package directory and report exactly 0.4.5.
 
 ### Initial Evidence
 
