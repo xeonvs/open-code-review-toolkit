@@ -35,7 +35,7 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 6. [x] Reconcile BL-016/017 with upstream per-run LLM identity while preserving BL-008/009/010/018 status and roadmap truth.
 7. [x] Atomically install checksum-verified OCR 1.8.8 Darwin arm64 in the active local `PATH` and run deterministic version/help/preview/result probes; exact MCP revision contracts remain covered by the repository suite because the OCR CLI has no standalone MCP probe command.
 8. [x] Perform separate review checkpoints after PR #59, qualification-process work, and promotion/docs/backlog work; correct every actionable finding before continuing.
-9. [ ] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
+9. [x] Run focused and complete Python validation, compatibility/workflow checks, Gitleaks, lock/manifest/Towncrier checks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
 10. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
 11. [ ] Prepare and merge `release/v0.4.5`; verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
 12. [ ] Add human and release receipts to #60/#61, close them only after stable verification, and reconcile this plan plus every affected status-bearing representation.
@@ -56,6 +56,12 @@ Qualify Open Code Review 1.8.7 and 1.8.8 as one ordered upstream release chain, 
 - `/opt/homebrew/bin/ocr` is the official Darwin arm64 1.8.8 binary with SHA-256 `db7da11ad1faa5ba3dca2d5add1ebe49ceedf37708e7044c92e9141721e50cd2`. Version/help/preview/synthetic JSON result and toolkit-consumer probes pass for both 1.8.7 and 1.8.8; 122 focused tests plus 15 MCP subtests pass and the manifest validates.
 - The complete quality gate passes 545 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit. Review also replaced a brittle workflow test that looked for an inline limit string with contracts for the centralized chain builder, ten-release bound, aggregate assessment, artifact fan-in, and single cumulative promotion step. Lock validation, Towncrier draft rendering, workflow YAML parsing, and `git diff --check` pass.
 - All post-merge workflows for PR #59 completed successfully. TestPyPI run `31009885896` published `0.4.5.dev38`; independently downloaded registry bytes match the workflow artifact: wheel SHA-256 `86587406a94b4f1ff585e113af67a017ac3d698b05cf6df93ad6eb61c6753cce`, sdist SHA-256 `ccb6f1716cd35912b921bf6d671f50b159012efe7ca19d20dd4f0dc6a7ca0ed2`. Both provenance records identify `testpypi.yml`, merge `98cb3b7c45484bb1025a240c56d5770a5ebc1b0e`, and the `testpypi-public-disclosure` environment.
+
+### Final Pre-Push Review Checkpoint
+
+- Final scope reconciliation added direct regressions for duplicate discovery and the next manually requested patch. It also corrected one fail-closed design edge: a genuine skipped, minor, or major upstream sequence must still receive machine evidence and a human-review issue. The matrix therefore preserves adjacent observed comparisons, while aggregation labels any non-contiguous sequence `human-review-required` and never prepares a patch.
+- Checksum-pinned Gitleaks 8.24.3 passes the complete first-parent feature history. The locally installed 8.30.1 was deliberately not accepted as a substitute; the exact repository pin was downloaded and used for the gate.
+- Two source-date-epoch-controlled builds are byte-identical and pass Twine: development wheel SHA-256 `870635bec8cb284bdc94f3995d4b28099b1f34647e7f8be5e13bf5894685fb61`, sdist SHA-256 `c46b80c39ab0cc1f31944f53a16815cfac07baf91489efc6e1e55557ff9232e4`. Restricted-path wheel installs pass on Python 3.12 and 3.13, and the sdist install passes on Python 3.14, all from a hostile shadow-package directory with the published CLI/import intact.
 
 ### Initial Evidence
 

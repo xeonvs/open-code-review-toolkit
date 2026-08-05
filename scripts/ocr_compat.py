@@ -378,10 +378,6 @@ def qualification_matrix(
         version = tag.removeprefix("v")
         if version in seen:
             _fail(f"qualification matrix contains duplicate version {version}")
-        candidate = _version(version)
-        predecessor = _version(comparison)
-        if candidate[:2] != predecessor[:2] or candidate[2] != predecessor[2] + 1:
-            _fail("qualification matrix is not a contiguous same-minor patch sequence")
         seen.add(version)
         entries.append(
             {
@@ -919,6 +915,7 @@ def assess_automatic_chain(
     comparison = tested_baseline
     versions: list[str] = []
     classifications: list[str] = []
+    contiguous = True
     for item in ordered:
         version = item.get("version")
         if not isinstance(version, str) or version in versions:
@@ -926,7 +923,7 @@ def assess_automatic_chain(
         candidate = _version(version)
         previous = _version(comparison)
         if candidate[:2] != previous[:2] or candidate[2] != previous[2] + 1:
-            _fail("candidate evidence chain is not a contiguous same-minor patch sequence")
+            contiguous = False
         if (
             item.get("schema_version") != 2
             or item.get("tested_baseline_version") != tested_baseline
@@ -940,8 +937,9 @@ def assess_automatic_chain(
         versions.append(version)
         classifications.append(classification)
         comparison = version
-    automatic = all(value == "automatic-safe" for value in classifications)
+    automatic = contiguous and all(value == "automatic-safe" for value in classifications)
     return {
+        "automatic_blockers": ([] if contiguous else ["non-contiguous release sequence"]),
         "classification": "automatic-safe" if automatic else "human-review-required",
         "target_version": versions[-1],
         "tested_baseline_version": tested_baseline,

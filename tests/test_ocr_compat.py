@@ -168,13 +168,39 @@ def test_qualification_matrix_uses_adjacent_predecessors() -> None:
     }
 
 
-def test_qualification_matrix_rejects_a_release_gap() -> None:
+def test_qualification_matrix_preserves_a_release_gap_for_human_review() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
     manifest["recommended_version"] = "1.8.6"
 
-    with pytest.raises(module.CompatibilityError, match="contiguous"):
-        module.qualification_matrix(manifest, [release("1.8.8")])
+    matrix = module.qualification_matrix(manifest, [release("1.8.8")])
+
+    assert matrix["include"][0]["comparison_version"] == "1.8.6"
+
+
+def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+
+    matrix = module.qualification_matrix(manifest, [release("1.8.9")])
+
+    assert matrix == {
+        "include": [
+            {
+                "comparison_version": "1.8.8",
+                "tag": "v1.8.9",
+                "tested_baseline_version": "1.8.8",
+            }
+        ]
+    }
+
+
+def test_qualification_matrix_rejects_duplicate_releases() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+
+    with pytest.raises(module.CompatibilityError, match="duplicate version"):
+        module.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
 
 
 def test_automatic_safe_policy_is_conservative() -> None:
@@ -296,10 +322,16 @@ def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
             evidence("1.8.8", "1.8.7", "automatic-safe"),
         ],
     )
+    gapped = module.assess_automatic_chain(
+        manifest,
+        [evidence("1.8.8", "1.8.6", "human-review-required")],
+    )
 
     assert automatic["classification"] == "automatic-safe"
     assert automatic["target_version"] == "1.8.8"
     assert mixed["classification"] == "human-review-required"
+    assert gapped["classification"] == "human-review-required"
+    assert gapped["automatic_blockers"] == ["non-contiguous release sequence"]
 
 
 def test_release_changes_excerpt_is_bounded() -> None:
