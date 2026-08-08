@@ -1,3 +1,10 @@
+## 0.4.6 - 2026-08-08
+
+### 🚀 Features
+
+- Target checksum-verified Open Code Review 1.8.10 after reviewing the complete 1.8.9 through 1.8.10 compatibility chain; valid toolkit CLI, result, MCP, configuration, and GitLab contracts remain compatible. ([#66](https://github.com/xeonvs/open-code-review-toolkit/issues/66))
+
+
 ## 0.4.5 - 2026-08-05
 
 ### 🚀 Features
