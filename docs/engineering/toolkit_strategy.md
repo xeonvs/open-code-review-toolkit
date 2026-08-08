@@ -29,17 +29,19 @@ The toolkit will not:
 
 Repository-maintenance analyzers such as Bandit remain valid quality controls for this codebase. They are not evidence providers or features offered to downstream repositories.
 
-## Current state
+## Implemented architecture
 
 The M1 implementation provides a schema-versioned Repository Evidence Engine with bounded immutable base/head reads, typed dependency/runtime/image/guidance records and deltas, redaction-before-storage, a compact bootstrap, and the built-in read-only `ocr_toolkit_evidence` MCP server. MCP configuration registers that server alongside reviewed external stdio or remote servers with explicit tool allowlists.
 
-The legacy bounded Markdown renderer remains temporarily isolated as a parity projection while characterization and end-to-end checks prove semantic retention. It is not a source for typed facts and is removed with its CLI/environment contract after those gates pass.
+The legacy `context/*` Markdown renderer, its CLI/environment contract, and its parity-only bridge have been removed. The evidence store and compact bootstrap are private artifacts owned by `ocr-ci review`, not separately configured workflows.
 
-GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
+The built-in evidence MCP is mandatory for ordinary evidence-backed reviews. External stdio and native HTTPS Streamable HTTP servers compose as independent optional entries; replacement mode may discard stale external entries but cannot remove or shadow the built-in server. The compact bootstrap is generated from the same validated capability composition that is written to OCR.
 
-## Repository Evidence Engine
+GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. Review health, published findings, failed-file coverage, and collapsed technical details are separate implemented concepts. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
 
-The target architecture is one Repository Evidence Engine that analyzes source/head and target/base repository states, detects components affected by changed files, and records structured facts. Bootstrap and MCP must project the same stored evidence; they must not grow separate collectors.
+## Implemented Repository Evidence Engine
+
+One Repository Evidence Engine analyzes source/head and target/base repository states, detects components affected by changed files, and records structured facts. Bootstrap and MCP project the same stored evidence; they must not grow separate collectors.
 
 ```mermaid
 flowchart LR
@@ -56,7 +58,7 @@ flowchart LR
 
 Every evidence record should preserve its kind and value together with source path, git ref, component scope, provenance, confidence, and staleness where meaningful. Collection is deterministic and network-independent. Storage has explicit bounds and stable ordering. Rendering never upgrades inferred or untrusted material into authoritative policy.
 
-The engine separates four responsibilities now concentrated in rendering code:
+The engine separates four implemented responsibilities:
 
 1. collectors parse repository material into structured evidence;
 2. bounded storage normalizes and indexes that evidence;
@@ -65,45 +67,45 @@ The engine separates four responsibilities now concentrated in rendering code:
 
 The evidence model is the main extension point. Ecosystem and framework plugins may contribute typed facts, but cannot run arbitrary commands, fetch the network, mutate the repository, or introduce a second review workflow.
 
-## Compact bootstrap and built-in evidence MCP
+## Implemented compact bootstrap and built-in evidence MCP
 
-The OCR background should become a compact bootstrap, normally around 1,500-2,500 characters and always below the existing toolkit/OCR hard limit. It contains only authoritative constraints and trust instructions, base/head identity, detected ecosystems and frameworks, material runtime or dependency changes, normalized external reference identifiers, the validated composed MCP capability inventory, relevant accepted decisions, and short project-guidance hints. Bootstrap planning and OCR MCP configuration consume the same composition plan so the instructions cannot advertise unavailable tools or omit available allowlisted tools.
+The OCR background is a compact bootstrap, normally around 1,500-2,500 characters and always below the toolkit/OCR hard limit. It contains authoritative constraints and trust instructions, base/head identity, detected ecosystems, material runtime or dependency changes, the validated composed MCP capability inventory, relevant accepted decisions, and short project-guidance hints. Bootstrap planning and OCR MCP configuration consume the same composition plan so the instructions cannot advertise unavailable tools or omit available allowlisted tools.
 
 Complete manifests, dependency inventories, guidance documents, and external issue/page contents do not belong in the bootstrap. Detailed repository facts are available on demand through a built-in server registered under a reserved namespace such as `ocr_toolkit_evidence`, with tools prefixed `ocr_toolkit_`. Candidate tools expose review environment, changed components, dependency state and deltas, framework state, version evidence, and accepted decisions.
 
-The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. External MCP configuration is composed with this server rather than replacing it. The built-in server remains present even when replacement mode intentionally discards stale external OCR configuration. Reserved server and tool names prevent downstream configuration from shadowing built-in capabilities.
+The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. Its summary, filtered/paginated list, and stable-ID get actions expose scoped evidence completeness: absence supports a negative conclusion only for an applicable complete scope. Reserved server and tool names plus global tool-collision checks prevent downstream configuration from shadowing built-in capabilities.
 
-Compact bootstrap and built-in evidence MCP form one user-visible rollout unit. The legacy background projection may be removed only after the built-in server is registered, its OCR capability contract passes, and semantic parity is proven on non-empty immutable ref evidence. `compact_bootstrap` must never remove detailed facts without providing the same facts on demand through the built-in MCP.
+Compact bootstrap and built-in evidence MCP are one established user-visible unit. Detailed facts removed from the bootstrap remain available on demand through the built-in MCP.
 
-## Evidence domains
+## Partially implemented evidence domains
 
 ### Dependencies, runtimes, and components
 
-Evidence distinguishes declared constraints, locked versions, installed versions, runtime-detected versions, container/image pins, and inferred or unknown values. Source and target snapshots produce explicit deltas rather than an unlabelled merged inventory.
+Evidence already distinguishes declared constraints, locked versions, runtime declarations, repository-provided checksums, container/image versions, and unknown or runtime-dependent coverage. Source and target snapshots produce explicit deltas rather than an unlabelled merged inventory. Repository-derived installed metadata, workspace/platform variants, precedence conflicts, explicit mutable-tag versus immutable-digest semantics, and broader component-scoped completeness remain planned only where demonstrated use justifies them. Mutable runner inspection and arbitrary repository execution are non-goals.
 
-Expansion follows demonstrated repository use. Initial work strengthens formats already represented in the current collectors: Python manifests, requirements and lockfiles; JavaScript package metadata and npm, pnpm, Yarn, or Bun locks; Go modules and toolchains; Composer manifests, locks, platform configuration and installed metadata; Ansible requirements, collections and execution environments; containers and GitLab CI images. Every format requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
+Implemented collectors cover Python declarations, requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata plus npm, Yarn, and pnpm locks; Go modules, toolchains, requirements, replacements, and checksums; Composer manifests, locks, and platform evidence; Ansible Galaxy requirements, role topology, inventories, and runtime-dependent coverage; and declarative container and GitLab CI images. Further expansion follows demonstrated repository use and requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
 
-### Framework evidence
+### Planned framework evidence
 
 Framework support is plugin-oriented structured extraction, not a code graph or framework-specific review engine. Useful facts are framework identity, verified version, component scope, important configuration paths, and material source/target changes. Initial plugins are selected from demonstrated repositories and testable fixtures; candidates include common Python, Go, PHP, JavaScript, test, and Ansible frameworks.
 
 The design borrows useful CodeGraph principles without adopting CodeGraph: deterministic extraction precedes rendering, work is component-scoped, facts retain provenance and staleness, and OCR retrieves surgical evidence on demand. Route, symbol, and call graphs remain out of scope.
 
-### Versioned documentation
+### Planned versioned documentation
 
 Version-specific library documentation belongs to a separate future documentation MCP. The evidence MCP establishes which package and version are present; the documentation MCP supplies matching documentation; OCR combines them. The toolkit does not mirror or store that documentation.
 
-## External MCP and references
+## Implemented external MCP and conditional references
 
-YouTrack, Confluence, documentation, and other external sources connect directly to OCR through narrowly scoped read-only MCP tools. The toolkit already configures external stdio servers with explicit tool allowlists and protected secret injection. While OCR lacks stable native remote MCP support, the toolkit may support the existing HTTP-to-stdio proxy pattern. Automatic candidate-reference detection in merge-request metadata is planned, not implemented; when introduced, it adds only normalized identifiers and usage instructions to the bootstrap and does not prefetch or duplicate external content.
+YouTrack, Confluence, documentation, and other external sources can connect directly to OCR through narrowly scoped read-only MCP tools. The toolkit configures external stdio servers and native HTTPS Streamable HTTP servers with explicit tool allowlists and protected secret injection. HTTP-to-stdio remains a fallback or adapter pattern for local tools and provider-owned authentication, not the only remote path. Automatic candidate-reference detection in merge-request metadata is planned, not implemented; if introduced, it adds only normalized identifiers and usage instructions to the bootstrap and does not prefetch or duplicate external content.
 
-All merge-request metadata and external MCP responses are untrusted evidence. A dedicated threat model must precede automatic reference detection and public provider-specific YouTrack or Confluence examples; it does not depend on the future built-in evidence MCP. Safe integration requires configured project-key patterns, allowed hosts or spaces, canonical parsing, bounded reference counts and link traversal, narrow tools instead of generic URL fetch, explicit prompt-injection guidance, and audit metadata for detected and retrieved references. External content cannot change review policy, suppress findings, authorize actions, modify tool permissions, or grant write access.
+All merge-request metadata and external MCP responses are untrusted evidence. A dedicated threat model must precede automatic reference detection and public provider-specific YouTrack or Confluence examples. Safe integration requires configured project-key patterns, allowed hosts or spaces, canonical parsing, bounded reference counts and link traversal, narrow tools instead of generic URL fetch, explicit prompt-injection guidance, and audit metadata for detected and retrieved references. External content cannot change review policy, suppress findings, authorize actions, modify tool permissions, or grant write access.
 
-Public examples use only synthetic services. Current-operation examples cover generic stdio MCP, HTTP-to-stdio proxying, read-only YouTrack, and read-only Confluence after the external-reference threat model is complete. Composition with the built-in evidence MCP is a later integration stage with reserved namespace and collision contracts. External-system writes remain outside the generic toolkit scope.
+Public examples use only synthetic services. Generic stdio, native remote, static-header, and OAuth-owning proxy composition are documented today. Provider-specific YouTrack, Confluence, and documentation examples remain planned after the external-reference threat model; managed browser OAuth is conditional on a named provider need. External-system writes remain outside the generic toolkit scope.
 
 ## Project policy and guidance
 
-### Accepted decisions
+### Planned accepted-decision metadata
 
 `.opencodereview/accepted-decisions.md` evolves into tolerant semi-structured Markdown while preserving the existing heading-and-rationale format:
 
@@ -119,13 +121,13 @@ The generated client retains its provider timeout so regeneration stays reproduc
 
 Metadata is optional and unknown fields do not invalidate the document. Only target-branch decisions may affect a review. Scoped summaries enter the bootstrap only when relevant; complete rationale may be exposed through evidence MCP. Decisions remain contextual evidence, not unconditional suppression or permission to ignore unrelated findings.
 
-### AGENTS.md and CLAUDE.md
+### Conditional AGENTS.md and CLAUDE.md simplification
 
 The existing bounded, fail-closed guidance handling remains until upstream OCR documents and tests an automatic project-guidance contract. The intended simplification discovers applicable files, uses target-branch versions, excludes guidance modified by the current merge request, and passes paths plus short hints. Guidance is non-authoritative repository evidence; OCR may read the full target-branch files with its native repository tools when needed.
 
-## Review profiles and quality measurement
+## Conditional review profiles and quality measurement
 
-OCR 1.8.7 and later expose explicit per-run provider/model overrides plus additive result identity. A lightweight explicit profile abstraction may select that one run-level model and existing OCR limits: `economy`, `standard`, or `strong`. Profiles do not dispatch individual files or tools to different models, and the compatibility manifest remains the source of capability availability.
+Qualified OCR releases expose explicit per-run provider/model overrides plus additive result identity. A lightweight explicit profile abstraction may select that one run-level model and existing OCR limits: `economy`, `standard`, or `strong`. Profiles do not dispatch individual files or tools to different models, and the compatibility manifest remains the source of capability availability.
 
 Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, and never routes a merge request to a full-repository scan.
 
@@ -134,6 +136,10 @@ Automatic routing is conditional on stable evidence, latency, token, and review-
 Fast-moving upstream compatibility is a product capability, not an ad hoc version string update. One machine-readable manifest should define recommended and tested OCR releases and known capabilities. Version and capability inspection is centralized, additive output fields are parsed tolerantly, and required contract removal fails closed.
 
 Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence. Ordered candidates retain the current tested baseline while each classification uses its adjacent predecessor. A conservative same-minor maintenance classifier may prepare one cumulative compatibility patch only when the sequence is contiguous, every consumed contract remains stable, and no release notes contain a material signal. Minor/major, ambiguous, changed, failed, or mixed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
+
+## Historical and migration-only evidence
+
+The [evidence migration matrix](evidence_migration_matrix.md) records the removal gates and parity evidence for the pre-0.4 `context/*` implementation. It is historical audit material, not a description of current runtime flow or an authority for future backlog scope.
 
 ## Architectural invariants
 

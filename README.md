@@ -31,9 +31,9 @@ Suppression uses both the GitLab diff position and a stable finding fingerprint,
 
 Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the evidence collector supplies target-ref decisions to OCR and never lets a source change self-authorize its own review. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
 
-## Project development
+## Project architecture
 
-The project is evolving from bounded background generation toward a shared Repository Evidence Engine: one deterministic evidence model will support both a compact OCR bootstrap and a built-in read-only MCP server. Development is ordered by outcomes and dependencies rather than speculative dates.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed evidence through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
@@ -57,7 +57,7 @@ See the fully synthetic [`examples/gitlab/ocr-review.gitlab-ci.yml`](examples/gi
 
 ## Configuration and safety
 
-Configuration is environment-only in v0.1. The [configuration reference](docs/configuration.md) documents supported `OCR_*`, `CI_*`, `GITLAB_*`, and MCP inputs. Posting requires `GITLAB_API_TOKEN`; job tokens and legacy aliases are deliberately unsupported.
+Configuration is environment-driven. The [configuration reference](docs/configuration.md) documents supported `OCR_*`, `CI_*`, `GITLAB_*`, and MCP inputs. Posting requires `GITLAB_API_TOKEN`; job tokens and legacy aliases are deliberately unsupported.
 
 Repository content, OCR output, and provider responses are untrusted inputs. The toolkit applies bounded reads and writes, secret redaction, Unicode normalization, Markdown/quick-action neutralization, fingerprinted comments, ownership boundaries for human replies, and rollback controls. Review the [security and trust model](docs/security.md) before enabling write access.
 

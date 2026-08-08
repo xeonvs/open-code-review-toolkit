@@ -14,6 +14,7 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 
 - `AGENTS.md` - short repository map and durable pointers.
 - `PLANS.md` - active, blocked, or recently completed execution registry.
+- `docs/engineering/execution_history/README.md` - release-tag index for archived completed plans and their audit evidence.
 - `docs/engineering/toolkit_strategy.md` - durable product and architecture strategy.
 - `ROADMAP.md` - outcome-oriented milestones and dependencies.
 - `docs/engineering/project_principles.md` - durable cross-cutting rules and ownership boundaries.
@@ -52,9 +53,10 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Add a Towncrier fragment for every user-visible change during the 0.x line.
 - At plan start, classify every user-visible change as `no-release`, `release-required`, or `release-deferred`; record the classification and target stable version in `PLANS.md`. Removed or incompatibly changed CLI, environment, schema, reviewer-command, or documented integration behavior is always `release-required`.
 - For `release-required` work, keep the plan active across feature PR, merge, TestPyPI development verification, release PR, stable TestPyPI/PyPI publication, tag/immutable GitHub Release, provenance/hash checks, and supported-Python smoke installs. A feature merge or `.devN` build is an intermediate checkpoint, not closure.
+- A release PR may prepare every repository-side release input, but it cannot also be the final lifecycle closure PR because external artifacts do not exist before it merges. After stable publication and independent readback, use one small documentation-only `no-release` closure PR to reconcile repository truth; it must not publish another package.
 - Publication can stop before a stable release only when the user explicitly defers it. Record the deferral reason, target version, completed checkpoints, and exact resume action in `PLANS.md`; do not mark the release objective completed.
 - Before handoff, reconcile the promised outcome against external state rather than local files alone: read PyPI/TestPyPI versions, GitHub tag/Release, Actions conclusions, and artifact attestations when those systems are in scope.
 - Before staging or committing, update `PLANS.md` and promoted backlog items to post-commit truth.
-- When a milestone or release closes, reconcile every status-bearing representation in the same closure change: `PLANS.md`, roadmap table and diagram, and backlog. Remove only work proven complete by the merged implementation and validation evidence, preserve unfinished work even when it was previously grouped into the closing plan, and ensure diagram labels and status colors agree.
+- When a milestone or release closes, inspect the current implementation before preserving backlog scope, then reconcile every status-bearing representation in the same closure change: `PLANS.md`, roadmap table and diagram, backlog, and narrative current-state documentation. Remove only work proven complete by the merged implementation and validation evidence, preserve unfinished work even when it was previously grouped into the closing plan, and ensure diagram labels and status colors agree.
 - Run `git diff --check` and the validation appropriate to the changed subsystem.
-- Compact or archive completed plan detail only after validation and handoff are recorded.
+- Compact or archive completed plan detail only after validation and handoff are recorded. Keep the most recent externally reconciled release cycle in `PLANS.md`; during the next post-release closure, move the previously retained cycle to `docs/engineering/execution_history/releases.md`, update its stable-tag entry in the archive index, verify the anchors, and preserve the original receipts.

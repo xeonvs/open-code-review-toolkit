@@ -26,6 +26,36 @@ This note records recurring execution mistake patterns discovered during real wo
 - Do not commit completed work while the active plan still says `planned` or `in_progress`.
 - Do not close a milestone by updating only its execution plan. Reconcile roadmap labels, diagram status colors, and the future backlog in the same closure change. Remove an entry only after its own deliverables and validation are proven complete; preserve unfinished adjacent work even if an earlier feature plan accidentally marked it complete.
 
+## Preserving the original backlog after implementation has moved on
+
+**Failure mode:** A future item keeps broad deliverables that current code and tests already satisfy, so completed behavior is planned again under its historical ID.
+
+**Correction:** Build a current capability matrix first. Retain only demonstrable gaps, mark deliberate non-goals explicitly, and preserve an old identifier only when its remaining scope is still coherent.
+
+## Letting conditional work block unconditional work
+
+**Failure mode:** A provider-specific or demand-triggered feature becomes a hard dependency for a generic capability that already works safely without it.
+
+**Correction:** Separate implementation, safety, and rollout edges. An unmet conditional trigger may block only the behavior that consumes it; it cannot block static-header, stdio, documentation, or other unconditional paths.
+
+## Calling the release PR the lifecycle closure
+
+**Failure mode:** Repository preparation and external publication are called complete in the same PR even though registry artifacts, provenance, tag, and immutable Release exist only after merge.
+
+**Correction:** Keep the release-required plan active through external readback, then use a small no-release closure PR to record receipts and reconcile repository truth without publishing again.
+
+## Updating status tables but not current-state prose
+
+**Failure mode:** The roadmap says a milestone is established while strategy and README still describe its implementation as a target or migration in progress.
+
+**Correction:** Search narrative documentation for the superseded architecture and update it in the same milestone closure. Classify migration evidence as historical rather than deleting it blindly.
+
+## Keeping completed plans indefinitely in the active registry
+
+**Failure mode:** `PLANS.md` becomes the permanent release database, obscuring active work and making resume state expensive to recover.
+
+**Correction:** Keep only active, blocked, recently completed work and the latest reconciled release. Move older completed cycles intact to the release-tag archive, update its index, validate anchors, and retain every decision and receipt needed to reconstruct context.
+
 ## Source And Privacy Boundaries
 
 - Inventory tracked source explicitly and avoid broad copy commands that could include ignored or untracked files.

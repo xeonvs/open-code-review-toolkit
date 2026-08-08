@@ -9,10 +9,10 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 3. Keep runtime dependencies at zero until a documented package boundary justifies one.
 4. Keep public examples and fixtures synthetic and free from local or private infrastructure details.
 5. Keep the Open Code Review binary external; preflight verifies it but the package does not install it.
-6. Keep user configuration environment-only during v0.1 and document every supported variable centrally.
+6. Keep current user configuration environment-driven and document every supported variable centrally. Any future non-secret file configuration requires an explicit trust, schema, and precedence design.
 7. Keep active work resumable from `PLANS.md`; keep inactive work in `docs/codex/TASKS_BACKLOG.md`.
 8. Use coherent production-quality slices when work must be decomposed; do not leave placeholder architecture as a milestone.
-9. Require changelog fragments for user-visible 0.1.x changes and SCM tags for versions.
+9. Require changelog fragments for user-visible 0.x changes and SCM tags for versions.
 10. Treat TestPyPI as public disclosure and preserve the manual privacy/license gate before publishing.
 11. Treat automated security scores as evidence to classify, not targets to game; remediate concrete repository-owned risk and document temporal or governance constraints truthfully.
 12. Version public behavior deliberately. An incompatible pre-1.0 contract change may select the next minor version, but it is not delivered to stable users until the versioned package and release artifacts are published and independently verified.
@@ -20,6 +20,11 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 14. A deferral is a blocked or pending release state, not successful closure. Preserve the exact continuation point so a later agent does not infer that a development build satisfied a stable-release promise.
 15. Keep the toolkit release version single-sourced from VCS tags through `hatch-vcs`. Runtime code reads `ocr_toolkit.__version__`; it must not duplicate an upcoming or current release literal in servers, user agents, reports, or tests. Schema, wire-protocol, fixture, and qualified-upstream versions are separate compatibility contracts: use explicitly named constants and change them only with their own migration or qualification evidence.
 16. Treat secret scanning as a local publication gate, not only a hosted CI check. Pin one scanner version in the repository-owned wrapper and make CI read that pin, scan feature history before it is pushed, and fail closed when the exact engine or authenticated base range is unavailable. Keep the external scanner lifecycle separate from the Python quality environment.
+17. Reconcile planning from current code, tests, and published behavior before retaining historical backlog wording. An original end-state description is evidence of intent, not proof that its scope or dependency graph remains current.
+18. Classify dependencies by purpose: implementation dependencies provide a consumed interface, safety dependencies guard a risk boundary, and rollout dependencies keep an intermediate release coherent. Conditional work never blocks unconditional work merely because both appear in the desired end state.
+19. Stable external publication creates repository work that a release PR cannot complete in advance. After independent registry, tag, Release, provenance, hash, and install readback, reconcile canonical repository truth in a small documentation-only no-release closure PR.
+20. When an architectural milestone becomes implemented, update narrative current-state documentation in the same closure as plan, roadmap, and backlog status. Strategy and README must not continue describing the shipped architecture as a transition or target.
+21. Archive older completed execution plans by stable release tag only after their receipts are complete. Maintain a validated index that lets future agents find the original decisions and evidence without turning `PLANS.md` into the permanent release-history database.
 
 ## Boundary Invariants
 

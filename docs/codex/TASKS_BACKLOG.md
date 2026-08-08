@@ -14,27 +14,28 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## M2 Ecosystem and framework coverage
 
-### BL-008: Resolve lockfile, runtime, and container evidence
+### BL-008: Close remaining evidence resolution and scoping gaps
 
 - **Status:** planned
 - **Priority:** high
 - **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** Established M1 evidence, snapshot, and delta contracts.
-- **Activation trigger:** Snapshot and delta semantics are stable.
-- **Goal:** Distinguish declared constraints, locked, installed, runtime-detected, container-pinned, inferred, and unknown versions.
-- **Scoped deliverables:** Strengthen actual-use formats for Python, JavaScript/TypeScript, Go, PHP, Ansible, containers, and GitLab CI; define precedence without collapsing declared, locked, installed, runtime, image tag, and immutable digest evidence; implement source/target resolution and deltas with provenance.
-- **Acceptance criteria:** Each supported format has deterministic semantics and fixtures; platform/marker/workspace variants and conflicting sources remain distinct; mutable image tags are never represented as immutable pins; malformed/oversized files degrade without network access; every domain that can support negative inference publishes applicable scoped completeness through the established evidence-coverage contract.
-- **Exclusions:** Unused ecosystems, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
+- **Dependencies:** Established M1 evidence, immutable snapshot/delta, MCP projection, and scoped-completeness contracts.
+- **Activation trigger:** A demonstrated repository supplies a remaining format, precedence, or component-scope gap with safe synthetic fixtures.
+- **Goal:** Complete only missing repository-derived resolution and scoping semantics without reimplementing established M1 collectors.
+- **Implemented baseline:** Python declarations, recursive requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata and npm v1-v3, Yarn Classic/Modern, and pnpm v5-v9 locks; Go module, language/toolchain/GODEBUG, requirement, replacement, exclusion, tool, retract/ignore, and checksum evidence; Composer declarations, locks, platform constraints/overrides, sources, and resolution policy; Ansible Galaxy requirements/includes, role topology, inventories, and runtime-dependent coverage; declarative container and GitLab CI images; immutable base/head deltas; built-in MCP visibility; and scoped evidence completeness.
+- **Remaining deliverables:** Add only applicable missing formats such as repository-provided installed metadata or demonstrated lock variants; preserve marker, platform, and workspace dimensions; define conflicts and precedence without collapsing declared and resolved facts; represent mutable image tags separately from immutable digests; and close proven component-scope or completeness gaps.
+- **Acceptance criteria:** Each newly supported format has deterministic semantics and fixtures; platform/marker/workspace variants and conflicting sources remain distinct; mutable image tags are never represented as immutable pins; malformed/oversized files degrade without network access; every domain that can support negative inference publishes applicable scoped completeness through the established evidence-coverage contract.
+- **Exclusions:** Reworking implemented collectors without a gap, unused ecosystems, mutable runner inspection, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
 - **Validation:** Per-format source/target fixtures, conflict and limit cases, and common evidence-model contract tests.
-- **Release classification expectation:** `release-required`.
-- **Upstream overlap:** OCR 1.8.8 can now select Nix and Haskell files for review, but selection and generic rules do not resolve dependency/runtime versions or provide source/target evidence. BL-008 therefore remains planned with unchanged scope.
+- **Release classification expectation:** `release-required` for new public evidence behavior; a format-selection audit alone is `no-release`.
+- **Upstream overlap:** OCR file selection and generic rules do not supply repository evidence, resolution semantics, provenance, deltas, or scoped completeness. Upstream language support neither completes nor broadens this narrowed item by itself.
 
 ### BL-009: Select and establish framework evidence plugins
 
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** Established M1 evidence/snapshot contracts and BL-008.
+- **Dependencies:** Established M1 evidence/snapshot/plugin boundaries. A selected plugin depends on BL-008 only when it consumes one of that item's specific remaining gaps.
 - **Activation trigger:** An anonymized inventory of pilot repositories identifies at least two high-value framework candidates with safe synthetic fixtures.
 - **Goal:** Select and implement 2-3 framework plugins that improve review evidence without building code graphs.
 - **Scoped deliverables:** Inventory pilot repositories without recording private names or contents; score candidates by prevalence, version-sensitive API surface, deterministic detectability, synthetic-fixture feasibility, and expected review-quality impact; record the selection decision; define a bounded plugin protocol and implement the selected providers. Existing Ansible parser maturity may support, but cannot substitute for, the scored selection.
@@ -49,7 +50,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Status:** conditional
 - **Priority:** medium
 - **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** BL-008 and BL-009.
+- **Dependencies:** Established M1 extension contracts and only the specific collector or plugin boundary used by the demonstrated pack; broad completion of BL-008 and BL-009 is not required.
 - **Activation trigger:** A real repository need identifies a missing ecosystem or framework and supplies safe synthetic fixtures and deterministic semantics.
 - **Goal:** Extend coverage without accumulating shallow detectors.
 - **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public synthetic examples.
@@ -77,10 +78,10 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ### BL-012: Define and validate managed OAuth for remote MCP
 
-- **Status:** ready
-- **Priority:** high
+- **Status:** conditional
+- **Priority:** low
 - **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** Native remote Streamable HTTP and stdio proxy fallback shipped with toolkit 0.3.1, plus BL-011 external-content constraints.
+- **Dependencies:** Established native remote Streamable HTTP and stdio proxy fallback, plus BL-011 only for provider examples that retrieve untrusted external content.
 - **Activation trigger:** A supported provider requires authorization-code OAuth rather than static environment-backed headers, and a reviewed stdio proxy is insufficient for pilot operations.
 - **Goal:** Add a provider-neutral authorization boundary without placing long-lived OAuth material in repository content or OCR config.
 - **Scoped deliverables:** Define authorization-code plus PKCE, browser callback ownership, refresh and revocation, secure token persistence, tenant/resource binding, dynamic-client-registration policy, sanitized audit events, and provider conformance fixtures before selecting an implementation boundary.
@@ -89,19 +90,20 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
 - **Release classification expectation:** `release-required` once public authorization behavior is selected.
 
-### BL-013: Compose external MCP with built-in evidence MCP
+### BL-013: Validate provider-specific read-only MCP composition examples
 
 - **Status:** planned
 - **Priority:** medium
 - **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** Established M1 built-in composition boundary, BL-011, and BL-012.
-- **Activation trigger:** The built-in evidence server and current external MCP documentation are stable.
-- **Goal:** Compose external knowledge tools with `ocr_toolkit_evidence` without replacement, shadowing, or permission broadening.
-- **Scoped deliverables:** Define reserved server/tool namespaces, collision behavior, deterministic merge order, combined capability instructions, and synthetic composition examples for generic, YouTrack, Confluence, and documentation MCP servers.
-- **Acceptance criteria:** External configuration cannot replace built-in evidence tools; collisions fail before OCR execution; combined examples preserve narrow read-only allowlists and protected secret injection.
+- **Dependencies:** BL-011 before provider-specific examples or automatic external-reference instructions. Managed OAuth is not a prerequisite for static-header, stdio, YouTrack, Confluence, or documentation MCP composition.
+- **Activation trigger:** The external-reference threat model is complete and a provider example has a supported narrow read-only tool contract.
+- **Goal:** Publish synthetic provider examples on top of the established generic composition boundary without broadening permissions or duplicating evidence.
+- **Implemented baseline:** Ordinary reviews always register the built-in evidence server; external stdio and native HTTPS servers remain independent entries; merge and replacement semantics preserve the built-in entry; reserved server/tool names, global tool collisions, deterministic capability inventory, protected environment/header injection, bootstrap composition, result receipts, and installed-artifact integration tests are complete.
+- **Scoped deliverables:** Add threat-model-aligned synthetic configuration and usage guidance for selected YouTrack, Confluence, and documentation MCP servers; validate their narrow read-only allowlists, protected secret injection, and combined bootstrap instructions through the existing composition contract.
+- **Acceptance criteria:** Each example uses only synthetic services, cannot replace or shadow built-in evidence tools, exposes no generic URL fetch or write tool, and passes provider-specific configuration, redaction, capability-rendering, and end-to-end synthetic validation.
 - **Exclusions:** New provider transports, external writes, generic URL fetch, content prefetch, or duplicate evidence collectors.
-- **Validation:** Composition order, reserved-name, collision, capability-rendering, redaction, and end-to-end synthetic configuration tests.
-- **Release classification expectation:** `release-required`.
+- **Validation:** Provider configuration, capability-rendering, redaction, and end-to-end synthetic example tests; do not duplicate the established core composition matrix.
+- **Release classification expectation:** `no-release` for threat-model and documentation examples; any new public runtime behavior is classified separately.
 
 ## M4 Policy and project guidance
 
@@ -152,20 +154,20 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Validation:** Profile matrix, precedence, preflight, configuration-rendering, and compatibility tests.
 - **Release classification expectation:** `release-required`.
 
-### BL-017: Measure review cost and quality signals
+### BL-017: Audit remaining review measurement gaps
 
-- **Status:** planned
+- **Status:** ready
 - **Priority:** medium
 - **Roadmap theme:** M5 Review profiles and quality measurement
-- **Dependencies:** BL-016 and stable discussion/fingerprint lifecycle.
-- **Activation trigger:** Explicit profiles can label comparable runs, and M1 E2E/operational evidence demonstrates material gaps that upstream OCR telemetry and structured result artifacts cannot cover reliably.
-- **Upstream overlap:** OCR 1.8.10's deterministic tool-parameter rendering reduces an upstream source of comparison noise. It adds no missing lifecycle, evidence, posting, or review-value measurement contract, so the planned gap audit and BL-017 status remain unchanged.
-- **Goal:** Produce privacy-safe evidence for profile tuning and any future routing decision.
-- **Scoped deliverables:** Reuse OCR token, cost, budget, latency, request, and tool-call telemetry plus OCR 1.8.7's additive provider/model result identity and the established review-health, failed-file, finding-publication, suppression, omission, and posting receipts, then audit structured result artifacts for the remaining gaps. If GitLab lifecycle, bounded evidence/MCP, posting, or review-value gaps justify a toolkit layer, define one provider-neutral, dependency-free event/metric model, bounded label vocabulary, no-op/local JSON exporters, optional upstream/OTLP bridge, failure isolation, and schema/version ownership. Candidate toolkit-only coverage includes evidence/store bounds and degradation; bootstrap size; independently attributable MCP readiness and usage; repeated discussion lifecycle; compatibility reasons; and cache/profile identifiers. Implement only signals that cannot be derived safely and reliably from OCR telemetry or bounded result artifacts.
-- **Acceptance criteria:** OCR remains the source for token, cost, and budget telemetry. The gap audit may conclude that OCR telemetry plus bounded result-derived reporting is sufficient, in which case no toolkit telemetry runtime is added. If a layer is justified, metrics contain no source, prompts, tool arguments/results, finding text, paths, URLs, user identities, secrets, external contents, or unbounded project/MR labels; labels use closed vocabularies and bounded cardinality; built-in and optional MCP servers remain independently attributable; OCR and toolkit metrics cannot double-count the same semantic event; missing upstream data is explicit; failed/partial/skipped and repeated runs are distinguishable without changing review behavior; telemetry failure cannot fail review.
+- **Dependencies:** Established discussion/fingerprint lifecycle, structured OCR result normalization, review-health reporting, failed-file coverage, finding/posting receipts, and MCP-use attribution. BL-016 is required only for later comparisons between named profiles, not for the gap audit.
+- **Activation trigger:** Met for the audit: current OCR telemetry and toolkit result-derived receipts are sufficient to inventory available signals before any new telemetry layer is proposed.
+- **Upstream overlap:** OCR 1.8.10's deterministic tool-parameter rendering reduces an upstream source of comparison noise. It adds no missing lifecycle, evidence, posting, or review-value measurement contract; the now-ready audit must first determine whether current upstream and result-derived signals already suffice.
+- **Goal:** Determine whether any privacy-safe toolkit telemetry is still necessary before implementing metrics or profile routing.
+- **Scoped deliverables:** Inventory OCR token, cost, budget, latency, request, tool-call, and provider/model identity alongside established review health, failed-file coverage, findings, suppression, omission, posting, and MCP-use receipts. Document only the remaining lifecycle, evidence degradation, repeated-discussion, compatibility, or review-value gaps. If no material gap remains, close the item without a runtime layer; any justified implementation becomes a separately scoped release-classified follow-up.
+- **Acceptance criteria:** The audit maps every available signal to its current authoritative source, distinguishes derived from genuinely missing data, records privacy/cardinality constraints for any gap, and reaches an explicit no-new-layer or separately scoped follow-up conclusion. OCR remains the source for token, cost, budget, request, latency, and tool-call telemetry; the audit itself adds no runtime, exporter, or public schema.
 - **Exclusions:** User surveillance, ranking developers, automatic routing, or mandatory external telemetry.
-- **Validation:** Synthetic lifecycle aggregation, redaction/privacy tests, missing-data behavior, and deterministic export fixtures.
-- **Release classification expectation:** `release-required` if exposed publicly; otherwise `no-release`.
+- **Validation:** Representative structured-result and repeated-discussion fixtures, privacy review, and a source-to-signal coverage matrix; exporter tests belong only to a later approved implementation.
+- **Release classification expectation:** `no-release` for the audit; a later public telemetry contract is classified separately.
 
 ### BL-018: Evaluate conservative automatic profile routing
 
@@ -188,8 +190,8 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Status:** parked
 - **Priority:** medium
 - **Roadmap theme:** M6 Later and conditional work
-- **Dependencies:** Stable evidence/MCP parser interfaces from M1.
-- **Activation trigger:** High-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.12-3.14 are agreed.
+- **Dependencies:** Stable evidence/MCP parser interfaces from M1; this technical prerequisite is complete.
+- **Activation trigger:** Not met: high-value parser targets, bounded CI resources, corpus ownership, and backend-selection criteria across Python 3.12-3.14 are not yet agreed.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, and registry-metadata boundaries.
 - **Scoped deliverables:** Use a bounded spike to choose Atheris, property-based testing, or both for named targets and supported Python versions; define synthetic seeds; fuzz selected parsers; minimize and retain regressions; version corpora with parser contracts; evaluate public service integration only after useful local results.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
@@ -202,7 +204,7 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Status:** parked
 - **Priority:** low
 - **Roadmap theme:** M6 Later and conditional work
-- **Dependencies:** Stable profile, MCP composition, and evidence configuration schemas.
+- **Dependencies:** MCP composition and evidence schemas are established. A profile schema is a dependency only if profiles are included in the proposed file contract.
 - **Activation trigger:** Environment-only configuration is a demonstrated operational constraint and one coherent schema can cover the affected non-secret settings.
 - **Goal:** Improve maintainability without weakening environment precedence, validation, or secret handling.
 - **Scoped deliverables:** Decide format/versioning, discovery location, target/source trust, explicit field-level environment precedence, migration, allowed non-secret fields, unknown/deprecated-key behavior, schema evolution, and redacted effective-config diagnostics before implementation.
