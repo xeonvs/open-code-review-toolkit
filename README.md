@@ -17,7 +17,7 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is OCR `1.8.8`. CI should pin the release and verify its published checksum before execution.
+The current compatibility target is OCR `1.8.10`. CI should pin the release and verify its published checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
 

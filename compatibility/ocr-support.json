@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.8.8",
-  "recommended_version": "1.8.8",
+  "monitoring_floor": "1.8.10",
+  "recommended_version": "1.8.10",
   "releases": [
     {
       "assets": [
@@ -471,6 +471,108 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.8",
       "status": "tested",
       "version": "1.8.8"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "fa224cc7a45573b7fee25a7992551c2d3725dff01b2d69ceefc89e30cd48e0cf",
+          "size": 47060912
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "abb70af93c0dae6785e6129e9bb9ab50432f9d6b3164fa1d8ffdcd972a3fdf1d",
+          "size": 44744882
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "43ea736e9e14501336db46a83e12f06f79eec690a019e2c186df98477c8b179c",
+          "size": 45547682
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "73c148e73ce66689f2a26fb13c18bfb047e11d6c92b8165813589996b31b7a62",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "830f762489115375ad45265deb26699a115ffbf2a729fcdd40f6296e34660b1e",
+          "size": 46778368
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "21a1302988e2da0f068094cd737647b1379dc90bc6abc78d0c65a3d8a5a7a4f6",
+          "size": 43582464
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "c726f9685da84d8af4c6c7cca87b51e56ca06257ce990d2778f0a4f3feb09146",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.9.json",
+      "evidence_sha256": "52fd53df881376d1ce487c561a0a79b9492443461a24356203ff03e1f4683098",
+      "human_conclusion": "Reviewed viewer, benchmark, plugin, Pages, code_search, documentation, SPDX, and CI changes. Native code_search option-like reference hardening improves upstream security; toolkit CLI, result, MCP, and configuration contracts remain compatible.",
+      "published_at": "2026-08-06T03:55:28Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.9",
+      "status": "tested",
+      "version": "1.8.9"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "8e09c21b51cbba0adfd8b75758d4cae348a385398061d53976d9f6323b61ff10",
+          "size": 47065248
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ee850ccd9ea69feb38b87dd4f789da7da5e96648c2747c52a01014eac2b87a23",
+          "size": 44745122
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "7161500791b8d27906ee8a29bf4429953b27048e90e33dd9a4ff6118932c9001",
+          "size": 45555874
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "279386eb5d1c30885fb24275daffe71f53ffe83e140e01fb1c2938e8d4a5c539",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "577cbb9b9c197080496afc8e0c8e362da0a30f8de9b9c746d5fe7bce8415e0f7",
+          "size": 46786048
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "46ad64fbbde292176293b6325b6d9477537ba7a7f9e90c694b73cf57fc143796",
+          "size": 43589120
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "6a4e5a070b18ff070ee7c457497f49011ffb4b55f3f1e19a9c0eaecc7504e8c6",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.8.10.json",
+      "evidence_sha256": "8c6949adcd3a2b153a9521d6762e81d74fe0c014ba87e6107504230d274364a9",
+      "human_conclusion": "Reviewed viewer, CLI, internal timeout, deterministic tool-parameter rendering, documentation, test, CI, and dependency changes. Valid toolkit invocations remain compatible; deterministic rendering improves reproducibility without completing toolkit profiles or telemetry.",
+      "published_at": "2026-08-07T03:10:32Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.10",
+      "status": "tested",
+      "version": "1.8.10"
     }
   ],
   "schema_version": 1,
