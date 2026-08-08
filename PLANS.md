@@ -2,6 +2,47 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
+
+Status: active
+Owner: Codex
+Last Updated: 2026-08-08
+Release Classification: no-release
+Target Stable Version: not applicable
+
+### Goal
+
+Close the externally completed toolkit 0.4.6 lifecycle in repository truth, document the established M1 architecture, re-audit every remaining backlog item against current code and published behavior, correct planning and release-process drift, and archive older execution plans without changing runtime or initiating package publication.
+
+### Decisions
+
+- Inspect current implementation before retaining backlog scope or dependencies; distinguish implemented, partial, planned, conditional, obsolete, and historical work.
+- Adopt the durable lifecycle `feature PR -> TestPyPI development verification -> release PR -> stable publication -> external reconciliation -> no-release closure PR` for future release-required work.
+- Keep `.release-version`, `.next-version`, `.release-source-date-epoch`, the recommended OCR baseline, dependencies, runtime behavior, and public contracts unchanged.
+- Open one documentation/process pull request and leave it unmerged in this task because a merge to `main` would initiate the automatic TestPyPI development publication that this no-release task explicitly excludes.
+- Preserve the complete audit trail by moving older completed plan detail to `docs/engineering/execution_history/2026.md`; keep the 0.4.6 cycle and this reconciliation in the compact active registry.
+
+### Work Queue
+
+1. [x] Read the canonical instructions, all current plans and durable documentation, the M1 implementation and tests, v0.4.0-v0.4.6 history, and live 0.4.6 release and issue receipts.
+2. [x] Run bounded OCR discovery and confirm that no unseen stable upstream release exists.
+3. [ ] Reconcile the 0.4.6 plan and future release-lifecycle instructions from independently verified external evidence.
+4. [ ] Archive older completed plans without losing decisions, validation, links, hashes, or receipts.
+5. [ ] Rewrite durable strategy and README current-state prose and classify historical migration material explicitly.
+6. [ ] Audit every backlog item, narrow BL-008 and BL-013 to remaining work, park BL-012 conditionally, and correct other status/dependency errors.
+7. [ ] Correct the evidence MCP cursor terminology without changing behavior and add the documentation Towncrier fragment.
+8. [ ] Review each substantial workstream, render changed Mermaid diagrams, validate Markdown, public-content privacy, quality, Gitleaks, Towncrier, marker immutability, and the final diff.
+9. [ ] Update this plan to handoff truth, push the exact branch, and open one protected documentation/process pull request without merging or publishing packages.
+
+### Initial Evidence
+
+- The clean synchronized `main` branch is at annotated tag `v0.4.6`; the tag targets release merge `c87952559ec7e6bed4c1b38fcb0b41d2d5fcecf6`.
+- Feature PR #67 merged as `2b0f8393ba86a6150a694180b10bae7d0907db09`; release PR #68 merged as `c87952559ec7e6bed4c1b38fcb0b41d2d5fcecf6`; release workflow `31250755741` completed successfully.
+- TestPyPI, PyPI, and the immutable GitHub Release expose wheel SHA-256 `7a944f5f1332728d857574d81cb484507eb3c5a6f5105d71a35dfbec0329307d` and sdist SHA-256 `dcde562699c759764eb3cba4654cce511871c2e3c26a1ab2c1d9726fe94c5cba`.
+- Registry provenance identifies `release.yml`, the release merge/run, and the `testpypi-public-disclosure` and `pypi-production` trusted-publishing environments. Published wheel installs passed on Python 3.12/3.13 and the sdist on Python 3.14.
+- Issues #65 and #66 have completed four-item human checklists, owner conclusions, release receipts, and `completed` closure reasons.
+- `scripts/ocr_compat.py discover` reports zero unseen stable OCR releases; no compatibility promotion belongs in this task.
+
 ## Active Plan: Qualify OCR 1.8.9-1.8.10 and release toolkit 0.4.6
 
 Status: active
