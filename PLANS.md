@@ -2,6 +2,73 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit.
 
+## Active Plan: Qualify OCR 1.8.9-1.8.10 and release toolkit 0.4.6
+
+Status: active
+Owner: Codex
+Last Updated: 2026-08-08
+Release Classification: release-required
+Target Stable Version: 0.4.6
+Tracking Issues: #65, #66
+
+### Goal
+
+Qualify Open Code Review 1.8.9 and 1.8.10 as one ordered upstream release chain, promote checksum-verified 1.8.10 as the tested and recommended toolkit baseline, update the local OCR installation and every affected test, example, documentation, and backlog contract, and publish stable toolkit 0.4.6. Reclaim GitHub Actions storage through the repository's bounded retention policy without deleting workflow run/check metadata, releases, tags, attestations, or registry artifacts.
+
+### Decisions
+
+- Treat OCR 1.8.9 and 1.8.10 as compatible human-reviewed candidates. Viewer, benchmark, Pages, OpenCode plugin, documentation, CI, and dependency changes are release-note-only context because the toolkit does not consume those surfaces.
+- OCR 1.8.9 native `code_search` option-like reference hardening improves the upstream security boundary without changing the toolkit CLI, result, MCP, or configuration contract.
+- OCR 1.8.10 rejects invalid extra positional CLI arguments, removes dead internal timeout fields, and renders tool parameters deterministically. Valid toolkit invocations remain compatible; deterministic rendering improves reproducibility but does not complete BL-016 or BL-017.
+- Preserve all future backlog statuses. Verify that BL-019 retains one activation sentence and update only version-specific context proven stale by the promoted baseline; no roadmap milestone is completed.
+- Install only the official checksum-verified Darwin arm64 OCR 1.8.10 binary locally and run deterministic compatibility probes. Do not perform an unbounded or paid LLM review.
+- Use the existing bounded Actions maintenance policy: delete eligible caches, expired/aged artifacts, and aged downloadable log archives while retaining workflow run/check metadata and longer release/TestPyPI audit windows. Re-read repository storage APIs and repeat the dry-run after execution.
+- Keep this plan active through feature merge, exact TestPyPI development verification, the combined release-and-closure PR, stable TestPyPI/PyPI publication, annotated tag, immutable GitHub Release, provenance/hash reconciliation, supported-Python smoke installs, and final issue closure.
+- Do not open a separate lifecycle-closure PR. Put all repository-side plan, backlog, roadmap, and release-note reconciliation into the release PR; after merge, only external publication verification and issue receipts/closure remain.
+
+### Work Queue
+
+1. [x] Repeat the Actions cleanup dry-run, execute the exact bounded policy through the maintenance workflow, and verify the resulting cache/artifact/log candidate state.
+2. [x] Independently verify hosted evidence and official binaries for OCR 1.8.9 and 1.8.10; run deterministic local probes and atomically update local OCR to 1.8.10.
+3. [x] Promote the cumulative reviewed baseline to 1.8.10 and update runtime, checksum, example, compatibility, configuration, security, and test contracts.
+4. [x] Reconcile upstream changes against the backlog and roadmap, preserve unfinished scope, verify the single BL-019 activation line, and add one Towncrier feature fragment for the full chain.
+5. [x] Review the cleanup, qualification/promotion, and documentation/backlog boundaries separately; correct every actionable finding before continuing.
+6. [x] Run focused and complete Python validation, manifest/workflow/Towncrier checks, pinned Gitleaks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
+7. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
+8. [ ] Prepare one combined `release/v0.4.6` release-and-closure PR with every repository-side lifecycle reconciliation; verify its checks and merge it through protected main.
+9. [ ] Verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
+10. [ ] Add human and stable-release receipts to #65/#66 and close them only after stable verification; finish the external plan evidence without opening another PR.
+
+### Initial Evidence
+
+- `main` is clean and synchronized at `b066140`; stable toolkit v0.4.5 is published and `.next-version` targets 0.4.6. The recommended and locally installed OCR baseline is 1.8.8.
+- Open issues #65 and #66 contain hosted schema-v2 qualification evidence for OCR 1.8.9 and 1.8.10. Both machine contracts are compatible and require the human conclusions recorded above; the observed chain is contiguous from tested baseline 1.8.8.
+- Official Darwin arm64 SHA-256 is `abb70af93c0dae6785e6129e9bb9ab50432f9d6b3164fa1d8ffdcd972a3fdf1d` for OCR 1.8.9 and `ee850ccd9ea69feb38b87dd4f789da7da5e96648c2747c52a01014eac2b87a23` for OCR 1.8.10. Official Linux amd64 SHA-256 is `43ea736e9e14501336db46a83e12f06f79eec690a019e2c186df98477c8b179c` and `7161500791b8d27906ee8a29bf4429953b27048e90e33dd9a4ff6118932c9001`, respectively.
+- Repository storage reads found 195,180,119 bytes across six caches and 17,889,889 bytes across 167 artifacts before cleanup. The dry-run selected 267 bounded objects: three caches, 95 artifacts, and 169 log archives; known cache/artifact bytes total 125,000,205, excluding log archives whose API does not expose size.
+
+### Actions Cleanup Review Checkpoint
+
+- The execution-time dry-run reproduced the original scope exactly: 267 objects and 125,000,205 known bytes. Maintenance run `31250057127` completed successfully and deleted all three caches, 95 artifacts, and 169 log archives with zero already-absent responses; workflow run and check metadata remained available.
+- Repository API readback reports 80,065,771 bytes across three active caches and 8,004,032 bytes across 72 active artifacts, about 84 MiB of known Actions storage. This is a 125,000,205-byte reduction in the API surfaces that expose sizes; GitHub's account billing meter can update later and is not available to the repository-scoped token.
+- A manual audit still lists the 169 old run identities because `--include-all-old` deliberately plans against immutable run metadata. Direct reads of representative log archives return HTTP 404, proving their downloadable bytes are gone. Scheduled cleanup already limits retry planning to two weekly opportunities and does not need a policy or test change.
+
+### Qualification, Promotion, And Backlog Review Checkpoint
+
+- Hosted schema-v2 evidence from run `31243828961` forms a contiguous 1.8.8 to 1.8.9 to 1.8.10 chain. Official `sha256sum.txt` files and independently downloaded Darwin arm64 binaries agree with the evidence digests; deterministic version, help, preview, JSON-result, and optional-capability probes pass for both candidates.
+- `/opt/homebrew/bin/ocr` was atomically replaced with the official Darwin arm64 1.8.10 binary. It reports `open-code-review v1.8.10`; SHA-256 is `ee850ccd9ea69feb38b87dd4f789da7da5e96648c2747c52a01014eac2b87a23`, and the installed-path compatibility probe passes.
+- Source and release-note review confirms that 1.8.9's `code_search` hardening is upstream defense in depth without a consumed interface change. OCR 1.8.10's invalid positional-argument rejection does not affect valid toolkit calls, its timeout-field removal is internal, and deterministic tool-parameter rendering is additive. Both tags retain Go MCP SDK v1.6.1 and the existing protocol revision set.
+- Runtime preflight, public GitLab example version and Linux checksum, README, compatibility/configuration/GitLab/security documentation, manifest, evidence, and current-baseline tests now agree on 1.8.10. One #66 Towncrier feature fragment covers the full reviewed chain; no rules fragment is justified because the consumed allowlist/rule surface did not change.
+- Backlog review adds deterministic-rendering context to BL-016 and BL-017 without changing their planned status. BL-008/009/010 retain historically accurate 1.8.8 overlap notes, BL-019 already contains exactly one activation sentence, and no roadmap status changes.
+- Review found four test cases whose semantics were "next patch after the current baseline" but whose fixtures remained pinned to 1.8.8/1.8.9. They now exercise 1.8.10 to 1.8.11. Focused validation passes 124 tests plus 15 MCP subtests, manifest validation, Ruff, and `git diff --check`.
+
+### Pre-Commit Validation Checkpoint
+
+- `scripts/quality.sh check` passes 547 tests plus 35 subtests at 79% coverage together with Ruff formatting/lint, mypy, and Bandit. Manifest validation, frozen-lock validation, workflow YAML parsing, Towncrier 0.4.6 draft rendering, dependency audit, and `git diff --check` pass.
+- Two source-date-epoch-controlled development builds are byte-identical and pass Twine: wheel SHA-256 `ab92dd17be8c4bfaebc2d140e322edc4d3b152f8c2f77bb66b0d5ee06cccad2e`; sdist SHA-256 `2ee0b2e72e839feb1cf379327d50ea52a32b862dd1d8e4cc8d71238285e730d0`.
+- Restricted-path installs pass from a private hostile shadow-package directory: the wheel on Python 3.12 and 3.13, and the sdist on Python 3.14. All three expose the installed CLI/import and exact development version without importing repository content.
+- Final scope review confirms that evidence hashes match the manifest, current pins agree on OCR 1.8.10, remaining 1.8.8 references are historical fixtures or capability provenance, and no roadmap, runtime dependency, CLI, environment, schema, or provider contract changed beyond the expected OCR version baseline.
+- Checksum-verified Gitleaks 8.24.3 passes the complete first-parent feature history. The locally installed 8.30.1 was not accepted as a substitute for the repository's exact security pin.
+
 ## Completed Plan: Qualify OCR 1.8.7-1.8.8 and release toolkit 0.4.5
 
 Status: completed

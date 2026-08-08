@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.8.8"
-    assert manifest["monitoring_floor"] == "1.8.8"
+    assert manifest["recommended_version"] == "1.8.10"
+    assert manifest["monitoring_floor"] == "1.8.10"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -56,6 +56,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.8.6", "tested"),
         ("1.8.7", "tested"),
         ("1.8.8", "tested"),
+        ("1.8.9", "tested"),
+        ("1.8.10", "tested"),
     ]
 
 
@@ -118,9 +120,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.8.9")]
+    first_page = [release("1.8.11")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.8.8")]
+    second_page = [release("1.8.10")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -130,14 +132,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.8.9"]
+    assert [item["tag_name"] for item in unseen] == ["v1.8.11"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.8.9")]
+    page = [release("1.8.11")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -182,14 +184,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.8.9")])
+    matrix = module.qualification_matrix(manifest, [release("1.8.11")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.8.8",
-                "tag": "v1.8.9",
-                "tested_baseline_version": "1.8.8",
+                "comparison_version": "1.8.10",
+                "tag": "v1.8.11",
+                "tested_baseline_version": "1.8.10",
             }
         ]
     }
@@ -794,11 +796,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.8.9",
+        "version": "1.8.11",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.8.8",
-        "tested_baseline_version": "1.8.8",
+        "comparison_version": "1.8.10",
+        "tested_baseline_version": "1.8.10",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):

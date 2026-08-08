@@ -1,0 +1,89 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "8e09c21b51cbba0adfd8b75758d4cae348a385398061d53976d9f6323b61ff10",
+      "size": 47065248
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "ee850ccd9ea69feb38b87dd4f789da7da5e96648c2747c52a01014eac2b87a23",
+      "size": 44745122
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "7161500791b8d27906ee8a29bf4429953b27048e90e33dd9a4ff6118932c9001",
+      "size": 45555874
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "279386eb5d1c30885fb24275daffe71f53ffe83e140e01fb1c2938e8d4a5c539",
+      "size": 42991778
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "577cbb9b9c197080496afc8e0c8e362da0a30f8de9b9c746d5fe7bce8415e0f7",
+      "size": 46786048
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "46ad64fbbde292176293b6325b6d9477537ba7a7f9e90c694b73cf57fc143796",
+      "size": 43589120
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "6a4e5a070b18ff070ee7c457497f49011ffb4b55f3f1e19a9c0eaecc7504e8c6",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.8.9",
+  "contracts": {
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "path": "example.py",
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-07T03:10:32Z",
+  "release_changes": "## 🚀 Features\n\n- feat(viewer): collapse secondary session sections (#738)\n\n## 🐛 Bug Fixes\n\n- fix: remove timeout fields and more (#756)\n- fix(cli): reject unexpected positional arguments (#749)\n- fix(viewer): restore session response formatting (#754)\n- fix(agent): render tool parameters deterministically (#721)\n\n## 📖 Documentation\n\n- docs(readme): update OpenSSF badge from Silver to Gold (#748)\n\n## Other Changes\n\n- ci(pages): add smoke test step to verify build output is servable (#741)\n- test: raise statement coverage to 90% and enforce it in CI (#747)\n- chore(deps): bump preact (#743)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.9...v1.8.10",
+  "release_notes_sha256": "02bc4e11bb4c6cb63a62ddee2644d344421fc699267082a21dcd58224b5dd7e0",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.8.10",
+  "tested_baseline_version": "1.8.8",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.8.10"
+}
