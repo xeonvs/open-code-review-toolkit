@@ -34,7 +34,7 @@ Qualify Open Code Review 1.8.9 and 1.8.10 as one ordered upstream release chain,
 4. [x] Reconcile upstream changes against the backlog and roadmap, preserve unfinished scope, verify the single BL-019 activation line, and add one Towncrier feature fragment for the full chain.
 5. [x] Review the cleanup, qualification/promotion, and documentation/backlog boundaries separately; correct every actionable finding before continuing.
 6. [x] Run focused and complete Python validation, manifest/workflow/Towncrier checks, pinned Gitleaks, reproducible build/Twine, restricted-path wheel/sdist installs, and a final full-diff review.
-7. [ ] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
+7. [x] Merge the protected feature PR and independently reconcile its exact TestPyPI development artifacts, hashes, provenance, and supported install smokes.
 8. [ ] Prepare one combined `release/v0.4.6` release-and-closure PR with every repository-side lifecycle reconciliation; verify its checks and merge it through protected main.
 9. [ ] Verify stable TestPyPI/PyPI artifacts, annotated tag, immutable GitHub Release, hashes, attestations, and Python 3.12-3.14 installs.
 10. [ ] Add human and stable-release receipts to #65/#66 and close them only after stable verification; finish the external plan evidence without opening another PR.
@@ -68,6 +68,21 @@ Qualify Open Code Review 1.8.9 and 1.8.10 as one ordered upstream release chain,
 - Restricted-path installs pass from a private hostile shadow-package directory: the wheel on Python 3.12 and 3.13, and the sdist on Python 3.14. All three expose the installed CLI/import and exact development version without importing repository content.
 - Final scope review confirms that evidence hashes match the manifest, current pins agree on OCR 1.8.10, remaining 1.8.8 references are historical fixtures or capability provenance, and no roadmap, runtime dependency, CLI, environment, schema, or provider contract changed beyond the expected OCR version baseline.
 - Checksum-verified Gitleaks 8.24.3 passes the complete first-parent feature history. The locally installed 8.30.1 was not accepted as a substitute for the repository's exact security pin.
+
+### Feature Merge And Development Publication
+
+- Feature PR #67 passed all 13 protected checks with no conversation comments, reviews, or review threads and merged as GitHub-verified squash commit `2b0f8393ba86a6150a694180b10bae7d0907db09`. All six post-main workflow suites completed successfully.
+- TestPyPI run `31250465780` published and installed immutable `0.4.6.dev42`. Cache-bypassed PEP 691 reads, freshly downloaded registry bytes, and the workflow artifact are byte-identical: wheel SHA-256 `c82121bd500afd808da784b9c2cdf2883ee979bec4e73578238e246bb3d526bb`; sdist SHA-256 `2372e29519a5a9bf6ec373de466451348eb4055e15479d8a4843c357dbf22b06`.
+- TestPyPI provenance subjects match both exact digests and identify `testpypi.yml`, merge `2b0f8393ba86a6150a694180b10bae7d0907db09`, run `31250465780`, and the `testpypi-public-disclosure` environment. Restricted-path installs of registry bytes pass for the wheel on Python 3.12/3.13 and the sdist on Python 3.14 from a private hostile shadow-package directory.
+- The release PR is also the repository-side closure PR as requested. It will consume the #66 fragment, reconcile the plan and unchanged roadmap/backlog statuses, and advance the next development line; stable publication evidence will be added only to #65/#66 after it exists, without a second repository PR.
+
+### Release Preparation Review Checkpoint
+
+- The combined release-and-closure diff contains only the stable/next version markers, deterministic source epoch, generated 0.4.6 changelog, consumed #66 fragment, and current plan receipts. The release notes render the exact `v0.4.5...v0.4.6` comparison; no roadmap milestone or future-backlog item is closed.
+- The complete quality gate passes 547 tests plus 35 subtests at 79% coverage, Ruff formatting/lint, mypy, and Bandit. Manifest, frozen lock, release-note extraction, dependency audit, and both staged/unstaged `git diff --check` validation pass.
+- Two clean stable builds with version `0.4.6` and source epoch `1786181004` are byte-identical and pass Twine: wheel SHA-256 `7a944f5f1332728d857574d81cb484507eb3c5a6f5105d71a35dfbec0329307d`; sdist SHA-256 `dcde562699c759764eb3cba4654cce511871c2e3c26a1ab2c1d9726fe94c5cba`.
+- Restricted-path installs of the stable wheel pass on Python 3.12 and 3.13, and the stable sdist passes on Python 3.14. All three run the installed CLI/import from a private hostile shadow-package directory and report exactly 0.4.6.
+- Checksum-verified Gitleaks 8.24.3 passes the release history from protected `main`; the final release commit remains signed and the combined diff is free of whitespace errors.
 
 ## Completed Plan: Qualify OCR 1.8.7-1.8.8 and release toolkit 0.4.5
 
