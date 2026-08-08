@@ -1,5 +1,6 @@
 """Contracts for release-requiring change closure guidance."""
 
+import re
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -27,8 +28,26 @@ def test_durable_guidance_distinguishes_readiness_from_delivery() -> None:
 
     assert "Feature validation proves readiness" in principles
     assert "production PyPI" in pitfalls
-    assert "Do not mark the objective complete after step 1 or 2" in release
-    assert "release/vX.Y.Z" in release
+    release_required = release.split("## Release-required changes", 1)[1].split(
+        "## Development builds", 1
+    )[0]
+    delivery_steps = re.findall(r"^\d+\. (.+)$", release_required, re.MULTILINE)
+
+    def step_with(*terms: str) -> int:
+        return next(
+            index
+            for index, step in enumerate(delivery_steps)
+            if all(term.casefold() in step.casefold() for term in terms)
+        )
+
+    ordered_boundaries = (
+        step_with("feature", "pull request"),
+        step_with(".devN", "TestPyPI"),
+        step_with("release/vX.Y.Z"),
+        step_with("stable", "PyPI"),
+        step_with("no-release", "closure"),
+    )
+    assert ordered_boundaries == tuple(sorted(ordered_boundaries))
 
 
 def test_boundary_guidance_has_one_authoritative_instruction_stack() -> None:

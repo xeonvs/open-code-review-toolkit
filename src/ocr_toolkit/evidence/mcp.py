@@ -106,7 +106,7 @@ def _optional_filter(arguments: dict[str, object], name: str) -> str | None:
 
 
 def _encode_cursor(offset: int, query: _Query) -> str:
-    """Encode an opaque, tamper-evident pagination position."""
+    """Encode an opaque, query-bound self-validating pagination position."""
 
     state = f"{offset}:{query.key()}"
     checksum = hashlib.sha256(f"ocr-evidence-v1:{state}".encode()).hexdigest()[:16]

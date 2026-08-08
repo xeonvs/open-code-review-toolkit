@@ -7,18 +7,21 @@ Towncrier renders `🚀 Features`, `🐛 Bug Fixes`, `🔧 Refactoring`, and `�
 
 ## Release-required changes
 
-A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one active plan through both development and release delivery. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
+A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one active plan through implementation, publication, and external reconciliation. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
 
 The delivery sequence is:
 
-1. merge the feature through protected `main`;
-2. verify the deterministic `.devN` wheel and sdist on TestPyPI;
-3. prepare a signed `release/vX.Y.Z` pull request containing the stable version marker, deterministic epoch, generated Towncrier changelog, and next development line;
-4. use release-PR merge as the human authorization gate;
-5. monitor TestPyPI stable publication, production PyPI publication, signed tag, provenance, and immutable GitHub Release;
-6. independently compare artifact hashes and smoke-install the wheel on Python 3.12 and the sdist on Python 3.14.
+1. implement and validate the feature;
+2. merge the protected feature pull request to `main`;
+3. verify the deterministic `.devN` wheel and sdist on TestPyPI;
+4. prepare and merge a protected signed `release/vX.Y.Z` pull request;
+5. monitor stable TestPyPI and PyPI publication, annotated tag, provenance, attestations, and immutable GitHub Release;
+6. independently compare artifact hashes and smoke-install every supported Python boundary;
+7. open one small documentation-only `no-release` closure pull request that records the external receipts and reconciles `PLANS.md`, the execution-history index, roadmap, backlog, strategy, and README where applicable.
 
-Do not mark the objective complete after step 1 or 2. If the owner explicitly defers stable publication, record the target version and exact resume point in `PLANS.md`.
+The release pull request owns repository-side preparation: stable and next version markers, deterministic source epoch, generated Towncrier changelog, release notes, and the exact locally reviewed artifact hashes. It may list the external checks that must follow, but it cannot claim that registry files, provenance, tag, or immutable Release already exist. Issue comments may retain detailed external receipts, but they supplement rather than replace reconciliation in `PLANS.md`.
+
+The closure pull request records only verified post-merge state and does not update release markers, create a release branch, or publish another package. Do not mark the release objective complete after feature merge, development publication, or release-PR preparation. If the owner explicitly defers stable publication, keep the release-required plan active or blocked and record the reason, target stable version, completed checkpoints, and exact resume action; a deferral is not a completed release and does not receive a closure PR.
 
 ## Development builds
 
@@ -50,3 +53,9 @@ Registry reruns are fail-closed. An absent release may be published and an exact
 - Public security features include secret scanning and push protection, private vulnerability reporting, Dependabot, CodeQL, Dependency Review, OpenSSF Scorecard, and immutable releases.
 
 After publication, independently compare TestPyPI, PyPI, the GitHub workflow artifact, and GitHub Release assets by SHA-256, then smoke-install the wheel on Python 3.12 and the sdist on Python 3.14.
+
+## Post-release reconciliation and plan archiving
+
+After external verification, the no-release closure PR updates the release plan with exact merge SHAs, workflow run, distribution hashes, provenance subjects and trusted-publishing environments, annotated-tag target, immutable Release state, supported-Python installs, and human issue conclusions. It also inspects current implementation before changing roadmap or backlog status and updates narrative documentation when shipped architecture invalidates target-state prose.
+
+`PLANS.md` keeps the just-reconciled release cycle so the latest receipts remain immediately visible. On the next post-release closure, move the previously retained cycle without rewriting it into `docs/engineering/execution_history/releases.md`, add or update the corresponding stable-tag row in the [execution-history index](engineering/execution_history/README.md), and validate every archive anchor. Preserve dates inside the archived plans; stable tags, not calendar years, are the archive lookup keys.
