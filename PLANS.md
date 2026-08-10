@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; issue #70 checkpoint complete
+Status: active; issues #70 and #71 checkpoints complete
 Owner: Codex
 Last Updated: 2026-08-10
 Release Classification: release-required
@@ -52,7 +52,7 @@ independently read back.
 1. [x] Implement typed contiguous-range suggestion validation, immutable-head
    proof, bounded omission reasons, documentation, complete regressions, review,
    and the #70 checkpoint commit.
-2. [ ] Implement typed auto-approval configuration and policy, exact-SHA GitLab
+2. [x] Implement typed auto-approval configuration and policy, exact-SHA GitLab
    synchronization/write/readback, managed own-user approval receipts,
    documentation, complete regressions, review, and the #71 checkpoint commit.
 3. [ ] Replace the redundant post-release closure-PR contract with exact-tree
@@ -117,6 +117,41 @@ independently read back.
   omission variants, diff prefixes, no-op behavior, typed invariants, unsafe
   paths, and workflow-level proof that only the apply fence is withheld.
   Towncrier 0.4.7 draft and `git diff --check` pass.
+
+### Issue #71 Checkpoint
+
+- `OCR_AUTO_APPROVE` is a typed default-on setting using the shared
+  true/false, 1/0, yes/no, and on/off vocabulary. Invalid values fail closed to
+  disabled without logging their contents. The fixed policy consumes the full
+  unsuppressed OCR finding set and requires a complete manifest, zero warnings,
+  failures, waivers, budget stop, or omitted findings, no more than three exact
+  `low` findings, and only style/documentation/maintainability categories.
+- Approval is a distinct post-publication transaction. The GitLab adapter reads
+  bounded MR and full paginated diff-version state, selects the highest valid
+  version ID, waits at most ten two-second intervals for merge/approval
+  synchronization and a non-null patch ID, verifies the open current head, and
+  submits only the reviewed 40-hex SHA. Approve, unapprove, and summary-update
+  writes are attempted once and followed by bounded readback.
+- Versioned managed-approval receipts are accepted only from the fixed prefix of
+  an owned plain toolkit summary. Conflicting, forged fallback, malformed, or
+  wrong-user receipts cannot authorize unapproval. A later complete
+  authoritative ineligible review can remove only the authenticated user's
+  proven managed approval; partial, skipped, legacy, disabled, and ambiguous
+  states preserve it. No runtime path calls GitLab `reset_approvals`.
+- The published summary contains one bounded approval state. Eligible runs first
+  publish a conservative failed-until-confirmed state, then update the uniquely
+  marked owned summary once after provider readback. Failure never rolls back the
+  advisory review; strict mode returns nonzero while advisory mode remains
+  nonfatal. Existing GitLab rules, groups, Code Owners, protected branches, and
+  reauthentication stay authoritative.
+- Self-review fixed receipt loss on partial reviews, version-order assumptions,
+  receipt parsing after cross-endpoint deduplication, stale receipt inheritance,
+  different-SHA approval claims, and provisional-summary truth. Ruff and strict
+  mypy pass; 148 posting/approval/suggestion tests and 15 public
+  documentation/integration contracts pass. Towncrier 0.4.7 draft includes the
+  default-on write and opt-out, and `git diff --check` passes. Roadmap and future
+  backlog statuses remain unchanged because neither issue completes an existing
+  outcome milestone or activation trigger.
 
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 

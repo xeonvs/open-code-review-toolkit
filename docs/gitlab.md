@@ -10,7 +10,7 @@ Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-c
 
 ## Required secrets
 
-- `GITLAB_API_TOKEN`: a dedicated bot token with only the project/API permissions required to read the merge request and create/update its comments.
+- `GITLAB_API_TOKEN`: a dedicated bot token with only the project/API permissions required to read the merge request, create/update its comments, and approve when `OCR_AUTO_APPROVE` is enabled.
 - `OCR_LLM_TOKEN`: the LLM gateway credential used by OCR.
 - `OCR_SHA256`: the trusted checksum for the pinned OCR binary asset.
 
@@ -21,6 +21,13 @@ Store secrets as masked, protected CI variables. Do not place them in YAML, comm
 ## Operating model
 
 `ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` resolves `OCR_REVIEW_LANGUAGE`. `ocr-ci review` owns evidence collection, private artifacts, compact bootstrap, and the complete MCP registry: the mandatory `ocr_toolkit_evidence` server and every optional configured MCP are independent entries. After OCR succeeds, `review` validates mandatory evidence use and atomically binds a safe schema-versioned per-server MCP-use receipt to the private result. `post` reads that review-time receipt instead of reconstructing configuration, then publishes bounded notes with rollback and ownership safeguards.
+
+`ocr-ci post` also manages conservative automatic approval by default. After all
+current notes publish, it waits for GitLab diff and approval synchronization,
+verifies the current MR head against the reviewed SHA, submits that exact SHA,
+and confirms only the authenticated toolkit user's approval through bounded
+readback. Set `OCR_AUTO_APPROVE=false` for a comment-only bot or before upgrading
+an integration whose approval rules have not granted the bot permission.
 
 Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
 

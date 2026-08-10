@@ -18,12 +18,14 @@ from ocr_toolkit.posting.gitlab import (
 )
 from ocr_toolkit.posting.markers import (
     OCR_REPLY_COMMAND_RE,
+    ManagedApprovalReceipt,
     author_id_from_note,
     comment_fingerprint,
     comment_fingerprint_candidates,
     fingerprint_from_marker,
     is_diff_note,
     is_own_bot_note,
+    managed_approval_receipt_from_body,
 )
 from ocr_toolkit.posting.settings import post_mode, strict_posting
 
@@ -50,6 +52,9 @@ class BotCommentRefs:
     suppressed_fingerprints: set[str] = field(default_factory=set)
     # Discussions that the bot should resolve after successful posting.
     discussions_to_resolve: list[str] = field(default_factory=list)
+    # Accepted only from an owned plain summary note. Ambiguous receipts are
+    # discarded so unapproval cannot be authorized by conflicting history.
+    managed_approval_receipt: ManagedApprovalReceipt | None = None
 
 
 def cleanup_drafts_created_by_this_run(config: GitLabConfig, draft_note_ids: list[int]) -> None:
@@ -278,6 +283,7 @@ def collect_previous_bot_comment_refs(
             preserve_human_touched=preserve_human_touched,
         )
 
+    managed_receipts: set[ManagedApprovalReceipt] = set()
     for note in plain_notes:
         if not isinstance(note, dict):
             continue
@@ -289,6 +295,15 @@ def collect_previous_bot_comment_refs(
         if not isinstance(note_id, int):
             continue
 
+        # Parse ownership before de-duplicating `/notes` against
+        # `/discussions`: GitLab may expose the same general note through both
+        # collections even though the approval receipt belongs to the plain
+        # toolkit summary rather than an inline position.
+        if not is_diff_note(note):
+            receipt = managed_approval_receipt_from_body(str(note.get("body") or ""))
+            if receipt is not None and receipt.user_id == config.current_user_id:
+                managed_receipts.add(receipt)
+
         # GET /notes can include diff notes that also appear in
         # /discussions. GitLab does not always expose enough shape in
         # /notes to classify them with is_diff_note(), so skip every own
@@ -299,6 +314,15 @@ def collect_previous_bot_comment_refs(
 
         refs.all_plain_note_ids.append(note_id)
         refs.plain_note_ids.append(note_id)
+
+    if len(managed_receipts) == 1:
+        refs.managed_approval_receipt = managed_receipts.pop()
+    elif len(managed_receipts) > 1:
+        print(
+            "Multiple toolkit-managed approval receipts were found; "
+            "automatic unapproval is disabled for this run.",
+            file=sys.stderr,
+        )
 
     draft_notes: list[Any] = []
     if post_mode() == "draft":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from dataclasses import dataclass
 from functools import cache
 
 from ocr_toolkit.ocr_result import (  # noqa: F401 -- retained import contract
@@ -76,6 +77,41 @@ TRUNCATION_NOTICE = (
 )
 
 
+TRUE_BOOLEAN_VALUES = frozenset({"1", "true", "yes", "on"})
+FALSE_BOOLEAN_VALUES = frozenset({"0", "false", "no", "off"})
+
+
+@dataclass(frozen=True, slots=True)
+class BooleanSetting:
+    """One typed environment boolean and whether its source was valid."""
+
+    enabled: bool
+    valid: bool = True
+
+
+def parse_boolean_setting(
+    name: str,
+    *,
+    default: bool,
+    invalid_default: bool,
+) -> BooleanSetting:
+    """Parse the shared boolean vocabulary without logging the raw value."""
+
+    raw = getenv(name).strip().lower()
+    if not raw:
+        return BooleanSetting(default)
+    if raw in TRUE_BOOLEAN_VALUES:
+        return BooleanSetting(True)
+    if raw in FALSE_BOOLEAN_VALUES:
+        return BooleanSetting(False)
+    print(
+        f"{name} must be one of true/false, 1/0, yes/no, or on/off; "
+        f"using {'enabled' if invalid_default else 'disabled'}.",
+        file=sys.stderr,
+    )
+    return BooleanSetting(invalid_default, valid=False)
+
+
 def getenv(name: str, default: str = "") -> str:
     """Return an environment variable or a default string."""
 
@@ -102,21 +138,20 @@ def post_mode() -> str:
 def post_emoji() -> bool:
     """Return whether toolkit-added status and finding emoji are enabled."""
 
-    value = getenv("OCR_POST_EMOJI", "true").strip().lower()
-    if not value:
-        value = "true"
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    print("OCR_POST_EMOJI must be boolean; using enabled by default.", file=sys.stderr)
-    return True
+    return parse_boolean_setting("OCR_POST_EMOJI", default=True, invalid_default=True).enabled
+
+
+@cache
+def auto_approve() -> BooleanSetting:
+    """Return fail-closed automatic approval configuration."""
+
+    return parse_boolean_setting("OCR_AUTO_APPROVE", default=True, invalid_default=False)
 
 
 def strict_posting() -> bool:
     """Return whether posting failures should make this script fail."""
 
-    return getenv("OCR_STRICT_POSTING", "false").strip().lower() in {"1", "true", "yes"}
+    return parse_boolean_setting("OCR_STRICT_POSTING", default=False, invalid_default=False).enabled
 
 
 def max_post_comments() -> int:

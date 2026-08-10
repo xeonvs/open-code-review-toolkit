@@ -17,6 +17,7 @@ from ocr_toolkit.common.markdown import (
 )
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
+from ocr_toolkit.posting.approval import ApprovalResult, approval_summary_line
 from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
@@ -775,6 +776,7 @@ def summarize_result(
     coverage_diagnostics: CoverageDiagnostics | None = None,
     warnings: Sequence[Any] = (),
     suppressed_count: int = 0,
+    approval_result: ApprovalResult | None = None,
     emoji: bool | None = None,
 ) -> str:
     """Build one decision-first summary for every validated OCR outcome."""
@@ -891,6 +893,8 @@ def summarize_result(
     technical.append(
         f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} omitted"
     )
+    if approval_result is not None:
+        technical.append(approval_summary_line(approval_result))
     if suppressed_count:
         technical.append(f"- Reviewer suppression: {suppressed_count}")
     if coverage_summary:

@@ -12,6 +12,8 @@ variables:
   OCR_SHA256: "7161500791b8d27906ee8a29bf4429953b27048e90e33dd9a4ff6118932c9001"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
+  # Default-on exact-SHA approval; set "false" for a comment-only bot.
+  OCR_AUTO_APPROVE: "true"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"

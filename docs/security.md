@@ -15,6 +15,10 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 - OCR result and provider response reads have byte limits.
 - GitLab notes enforce both UTF-8 byte limits and Python character limits.
 - Non-idempotent API writes are not blindly retried.
+- Automatic approval is bound to the exact reviewed MR head after GitLab diff
+  synchronization and bounded readback. Unapproval is limited to the current
+  toolkit user and requires an owned versioned receipt; human approvals are
+  never reset or removed.
 - Markers, fingerprints, snapshots, and rollback logic constrain repeated runs.
 - Human replies are ownership boundaries: automation must not rewrite or resolve a discussion after a human takes part.
 - Merge-request source SHA and merge-result SHA remain distinct.
@@ -26,6 +30,12 @@ Ansible Galaxy requirement includes use the same immutable-object boundary. Rela
 ## Deployment guidance
 
 Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.
+
+Toolkit 0.4.7 adds formal GitLab approval as a default-on write. Set
+`OCR_AUTO_APPROVE=false` before upgrading if the bot must remain comment-only or
+is not an eligible project approver. GitLab approval rules, Code Owners,
+protected branches, and reauthentication remain server-side controls; the
+toolkit does not bypass them.
 
 Pin Open Code Review `v1.8.10` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP stdio commands and remote endpoints are privileged configuration; allow only reviewed servers and tools.
 The [OCR compatibility policy](compatibility.md) requires double-source asset digest verification, bounded downloads, an executed Linux contract probe, and protected PR/release gates; qualification automation never writes directly to `main` or promotes an ambiguous release.

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,13 @@ from ocr_toolkit.ocr_result import (
     load_ocr_result,
 )
 from ocr_toolkit.posting import gitlab as gitlab_api
+from ocr_toolkit.posting.approval import (
+    ApprovalEligibility,
+    ApprovalResult,
+    ApprovalStatus,
+    evaluate_approval_policy,
+    provisional_approval_result,
+)
 from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
@@ -47,8 +55,17 @@ from ocr_toolkit.posting.gitlab import (
     post_review_note_bounded,
     publish_created_draft_notes,
     resolve_discussion,
+    update_plain_note,
 )
-from ocr_toolkit.posting.markers import annotate_comment_fingerprints
+from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
+from ocr_toolkit.posting.markers import (
+    ManagedApprovalReceipt,
+    annotate_comment_fingerprints,
+    build_managed_approval_receipt,
+    build_summary_run_marker,
+    is_own_bot_note,
+)
+from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.result import (
     llm_billing_failure_warnings,
     normalize_coverage_diagnostics,
@@ -74,6 +91,7 @@ from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, p
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
 from ocr_toolkit.posting.settings import (
+    auto_approve,
     max_post_comments,
     ocr_exit_code,
     post_emoji,
@@ -114,6 +132,122 @@ def mr_head_sha() -> str:
     """Return the MR source-branch head SHA when GitLab provides it."""
 
     return clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
+
+
+def summary_with_receipts(
+    body: str,
+    run_id: str,
+    receipt: ManagedApprovalReceipt | None,
+) -> str:
+    """Attach bounded hidden identity and approval ownership to one summary."""
+
+    markers = [build_summary_run_marker(run_id)]
+    if receipt is not None:
+        markers.append(build_managed_approval_receipt(receipt))
+    return "\n".join([*markers, body])
+
+
+def find_current_summary_note(config: GitLabConfig, run_id: str) -> int | None:
+    """Find exactly one owned published summary for this posting transaction."""
+
+    marker = build_summary_run_marker(run_id)
+    notes = gitlab_api.api_get_paginated(
+        config,
+        "/notes?sort=desc&order_by=created_at",
+        max_pages=50,
+    )
+    if notes is None:
+        return None
+    matches: list[int] = []
+    for note in notes:
+        if not isinstance(note, dict) or not is_own_bot_note(config, note, "body"):
+            continue
+        body = note.get("body")
+        note_id = note.get("id")
+        if isinstance(body, str) and marker in body and isinstance(note_id, int):
+            matches.append(note_id)
+    return matches[0] if len(matches) == 1 else None
+
+
+def replace_current_summary(
+    config: GitLabConfig,
+    run_id: str,
+    body: str,
+) -> bool:
+    """Update and read back one current summary without retrying the write."""
+
+    note_id = find_current_summary_note(config, run_id)
+    if note_id is None:
+        print(
+            "Cannot identify exactly one current OCR summary; "
+            "leaving the published advisory review unchanged.",
+            file=sys.stderr,
+        )
+        return False
+    write = update_plain_note(config, note_id, body)
+    if not write.posted:
+        return False
+    readback = gitlab_api.api_request(config, f"/notes/{note_id}", method="GET")
+    return bool(
+        isinstance(readback, dict)
+        and is_own_bot_note(config, readback, "body")
+        and readback.get("body") == build_marked_note_body(body)
+    )
+
+
+def finalize_review_approval(
+    config: GitLabConfig,
+    previous_refs: BotCommentRefs,
+    outcome: ReviewOutcome,
+    draft_note_ids: list[int],
+    eligibility: ApprovalEligibility,
+    reviewed_commit: str,
+    run_id: str,
+    render_summary: Callable[[ApprovalResult], str],
+) -> int:
+    """Publish notes, manage exact-SHA approval, update summary, then clean old state."""
+
+    if not finalize_posting(config, draft_note_ids):
+        return publish_failure_exit(config, draft_note_ids)
+
+    execution = execute_approval(
+        config,
+        eligibility,
+        reviewed_commit,
+        previous_refs.managed_approval_receipt,
+    )
+    final_body = summary_with_receipts(
+        render_summary(execution.result),
+        run_id,
+        execution.receipt,
+    )
+    provisional_body = summary_with_receipts(
+        render_summary(provisional_approval_result(eligibility)),
+        run_id,
+        previous_refs.managed_approval_receipt,
+    )
+    summary_updated = final_body == provisional_body or replace_current_summary(
+        config,
+        run_id,
+        final_body,
+    )
+    if not summary_updated:
+        execution = ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.FAILED,
+                "the published approval status could not be safely confirmed",
+            ),
+            execution.receipt or previous_refs.managed_approval_receipt,
+        )
+        print(
+            "Automatic approval summary update failed after review publication.",
+            file=sys.stderr,
+        )
+
+    finalize_previous_review_state(config, previous_refs, outcome)
+    if execution.result.status is ApprovalStatus.FAILED and strict_posting():
+        return 1
+    return 0
 
 
 DiffLineCache = dict[tuple[str, str, str], set[int]]
@@ -459,6 +593,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             return invalid_ocr_schema_exit(config, f"field 'comments[{index}]' must be an object")
         comments.append(comment)
 
+    # Approval policy consumes the complete authoritative OCR finding set,
+    # before reviewer suppression or the publication cap can hide a blocker.
+    approval_comments = list(comments)
+
     warnings = warnings_value
     coverage_diagnostics = normalize_coverage_diagnostics(outcome, warnings)
     if outcome.kind == "failed":
@@ -518,6 +656,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments = comments[:publish_limit]
 
     emoji = post_emoji()
+    approval_setting = auto_approve()
+    approval_eligibility = evaluate_approval_policy(
+        approval_setting,
+        outcome,
+        approval_comments,
+        warnings,
+        omitted_count,
+    )
+    summary_run_id = secrets.token_hex(16)
+    reviewed_commit = reviewed_sha()
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
@@ -526,25 +674,36 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     )
 
     if publishable_comment_count == 0:
-        body = summarize_result(
-            total=0,
-            inline_count=0,
-            fallback_count=0,
-            warning_count=len(warnings),
-            comments=(),
-            tool_calls_summary=tool_calls_summary,
-            mcp_usage_summary=mcp_usage_summary,
-            token_usage_summary=token_usage_summary,
-            reviewer_guide=reviewer_guide,
-            reviewed_sha=reviewed_sha(),
-            mr_head_sha=mr_head_sha(),
-            outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
-            outcome_message=outcome_message,
-            coverage_summary=outcome.coverage_summary,
-            coverage_diagnostics=coverage_diagnostics,
-            warnings=warnings,
-            suppressed_count=suppressed_count,
-            emoji=emoji,
+
+        def render_no_comments_summary(approval_result: ApprovalResult) -> str:
+            """Render the no-findings summary with one approval state."""
+
+            return summarize_result(
+                total=0,
+                inline_count=0,
+                fallback_count=0,
+                warning_count=len(warnings),
+                comments=(),
+                tool_calls_summary=tool_calls_summary,
+                mcp_usage_summary=mcp_usage_summary,
+                token_usage_summary=token_usage_summary,
+                reviewer_guide=reviewer_guide,
+                reviewed_sha=reviewed_commit,
+                mr_head_sha=mr_head_sha(),
+                outcome_status=("budget_exceeded" if outcome.budget_exceeded else outcome.kind),
+                outcome_message=outcome_message,
+                coverage_summary=outcome.coverage_summary,
+                coverage_diagnostics=coverage_diagnostics,
+                warnings=warnings,
+                suppressed_count=suppressed_count,
+                approval_result=approval_result,
+                emoji=emoji,
+            )
+
+        body = summary_with_receipts(
+            render_no_comments_summary(provisional_approval_result(approval_eligibility)),
+            summary_run_id,
+            previous_bot_comment_refs.managed_approval_receipt,
         )
         response = post_review_note_bounded(
             config,
@@ -555,10 +714,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if response is None:
             print("Failed to create OCR no-comments note.", file=sys.stderr)
             return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
-        if not finalize_posting(config, draft_note_ids):
-            return publish_failure_exit(config, draft_note_ids)
-        finalize_previous_review_state(config, previous_bot_comment_refs, outcome)
-        return 0
+        return finalize_review_approval(
+            config,
+            previous_bot_comment_refs,
+            outcome,
+            draft_note_ids,
+            approval_eligibility,
+            reviewed_commit,
+            summary_run_id,
+            render_no_comments_summary,
+        )
 
     refs = get_diff_refs(config)
     inline_count = 0
@@ -688,10 +853,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             print("Failed to create OCR omitted-comments note.", file=sys.stderr)
             return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
 
-    summary_response = post_review_note_bounded(
-        config,
-        "",
-        summarize_result(
+    def render_findings_summary(approval_result: ApprovalResult) -> str:
+        """Render the findings summary with one approval state."""
+
+        return summarize_result(
             total=len(comments),
             inline_count=inline_count,
             fallback_count=len(failed_comments),
@@ -703,7 +868,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             token_usage_summary=token_usage_summary,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
-            reviewed_sha=reviewed_sha(),
+            reviewed_sha=reviewed_commit,
             mr_head_sha=mr_head_sha(),
             outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
             outcome_message=outcome_message,
@@ -711,7 +876,17 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             coverage_diagnostics=coverage_diagnostics,
             warnings=warnings,
             suppressed_count=suppressed_count,
+            approval_result=approval_result,
             emoji=emoji,
+        )
+
+    summary_response = post_review_note_bounded(
+        config,
+        "",
+        summary_with_receipts(
+            render_findings_summary(provisional_approval_result(approval_eligibility)),
+            summary_run_id,
+            previous_bot_comment_refs.managed_approval_receipt,
         ),
         draft_note_ids,
     )
@@ -720,17 +895,23 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         print("Failed to create OCR summary note.", file=sys.stderr)
         return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
-
-    finalize_previous_review_state(config, previous_bot_comment_refs, outcome)
+    approval_exit = finalize_review_approval(
+        config,
+        previous_bot_comment_refs,
+        outcome,
+        draft_note_ids,
+        approval_eligibility,
+        reviewed_commit,
+        summary_run_id,
+        render_findings_summary,
+    )
 
     print(
         f"Posted OCR comments: mode={post_mode()}, inline={inline_count}, "
         f"fallback={len(failed_comments)}, omitted={omitted_count}, "
         f"total={publishable_comment_count}"
     )
-    return 0
+    return approval_exit
 
 
 def finalize_previous_review_state(
