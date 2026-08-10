@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; implementation not started
+Status: active; issue #70 checkpoint complete
 Owner: Codex
 Last Updated: 2026-08-10
 Release Classification: release-required
@@ -49,7 +49,7 @@ independently read back.
 
 ### Work Queue
 
-1. [ ] Implement typed contiguous-range suggestion validation, immutable-head
+1. [x] Implement typed contiguous-range suggestion validation, immutable-head
    proof, bounded omission reasons, documentation, complete regressions, review,
    and the #70 checkpoint commit.
 2. [ ] Implement typed auto-approval configuration and policy, exact-SHA GitLab
@@ -95,6 +95,28 @@ independently read back.
 - Current release guidance still requires a documentation-only closure PR and
   release authorization does not bind publication to the reviewed head tree and
   exact checks. Both are explicit scope of the lifecycle checkpoint.
+
+### Issue #70 Checkpoint
+
+- GitLab suggestion applicability is now a closed typed decision rather than a
+  hidden mutation on the untrusted OCR comment. The renderer accepts only an
+  already-proven replacement; impossible state/field combinations fail at the
+  typed boundary.
+- Validation binds a safe repository-relative path and inclusive range to one
+  bounded immutable head blob, normalizes CRLF/CR and one terminal newline, and
+  requires exact `existing_code` agreement before a changed replacement becomes
+  actionable. Existing exact no-op suppression remains available even for the
+  older no-`existing_code` result shape.
+- Synthetic omission bridges across common comment syntaxes, diff-prefixed
+  replacements, quick actions, unsafe fences, oversized values, stale source,
+  and invalid ranges retain the finding but produce only a closed non-sensitive
+  omission reason. Fallback notes never render an actionable suggestion fence.
+- Focused Ruff and strict mypy pass. The complete posting/suggestion regression
+  set passes 123 tests, including valid one-line and multiline replacements,
+  newline equivalence, missing/stale source, invalid/out-of-bounds ranges,
+  omission variants, diff prefixes, no-op behavior, typed invariants, unsafe
+  paths, and workflow-level proof that only the apply fence is withheld.
+  Towncrier 0.4.7 draft and `git diff --check` pass.
 
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 

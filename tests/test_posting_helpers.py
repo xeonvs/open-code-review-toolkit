@@ -19,6 +19,7 @@ from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting import gitlab, markers, payloads, result, settings, snapshot, workflow
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
+from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
@@ -418,6 +419,65 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIn("rollback-current", calls)
         self.assertNotIn("fallback", calls)
         self.assertNotIn("delete-old", calls)
+
+    def test_post_results_retains_finding_but_omits_unproven_suggestion(self) -> None:
+        inline_bodies: list[str] = []
+
+        def capture_discussion(*args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
+            inline_bodies.append(kwargs["body"])
+            return gitlab.GitLabWriteResult("posted")
+
+        with (
+            patched_attr(
+                workflow,
+                "get_diff_refs",
+                lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+            ),
+            patched_attr(
+                workflow,
+                "head_file_text",
+                lambda *_args: "route:\n  destination: 192.0.2.0/24\n",
+            ),
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_discussion", capture_discussion),
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda *_args: {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: None,
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "comments": [
+                        {
+                            "path": "config/service.yml",
+                            "start_line": 1,
+                            "end_line": 2,
+                            "content": "Use the documentation network.",
+                            "existing_code": "stale content",
+                            "suggestion_code": "route:\n  destination: 198.51.100.0/24",
+                        }
+                    ]
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(inline_bodies), 1)
+        self.assertIn("Use the documentation network.", inline_bodies[0])
+        self.assertIn("did not match the reviewed range", inline_bodies[0])
+        self.assertNotIn("```suggestion", inline_bodies[0])
 
     def test_invalid_inline_position_falls_back_without_rollback(self) -> None:
         calls: list[str] = []
@@ -832,7 +892,12 @@ class PostingIdentityTests(unittest.TestCase):
                 "content": "Prose\n```suggestion\nmalicious\n```",
                 "suggestion_code": "safe()",
                 "line": 10,
-            }
+            },
+            suggestion_decision=SuggestionDecision(
+                SuggestionState.ACTIONABLE,
+                replacement="safe()",
+                range_suffix="-0+0",
+            ),
         )
 
         self.assertIn("```text\nmalicious", body)
@@ -1073,58 +1138,6 @@ class PostingWorkflowTests(unittest.TestCase):
             calls[0][:5],
             ["git", "-c", "core.hooksPath=/dev/null", "cat-file", "-s"],
         )
-
-    def test_noop_suggestion_matches_only_the_exact_bounded_head_range(self) -> None:
-        """Suppress transport-equivalent replacements without hiding the finding."""
-
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **_kwargs: Any) -> Any:
-            calls.append(args)
-
-            class Result:
-                returncode = 0
-                stdout = "17" if "-s" in args else b"before\r\ntarget\r\nafter\r\n"
-
-            return Result()
-
-        refs = {"head_sha": "a" * 40}
-        cache: workflow.FileTextCache = {}
-        with patched_attr(workflow.subprocess, "run", fake_run):
-            identical = workflow.suggestion_matches_head_range(
-                refs,
-                "src/example.py",
-                {"start_line": 2, "end_line": 2, "suggestion_code": "target\n"},
-                cache,
-            )
-            changed = workflow.suggestion_matches_head_range(
-                refs,
-                "src/example.py",
-                {"start_line": 2, "end_line": 2, "suggestion_code": "replacement"},
-                cache,
-            )
-
-        self.assertTrue(identical)
-        self.assertFalse(changed)
-        self.assertEqual(len(calls), 2)
-
-    def test_noop_suggestion_rejects_unsafe_paths_before_git(self) -> None:
-        """Do not turn an OCR-controlled path into Git revision syntax."""
-
-        calls: list[list[str]] = []
-        with patched_attr(
-            workflow.subprocess,
-            "run",
-            lambda args, **_kwargs: calls.append(args),
-        ):
-            matches = workflow.suggestion_matches_head_range(
-                {"head_sha": "a" * 40},
-                "../outside.py",
-                {"line": 1, "suggestion_code": "same"},
-            )
-
-        self.assertFalse(matches)
-        self.assertEqual(calls, [])
 
     def test_coverage_diagnostics_are_deduplicated_redacted_and_fail_closed(self) -> None:
         """Count unique files while keeping malformed failure paths out of public notes."""

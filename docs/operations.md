@@ -10,6 +10,17 @@ The toolkit reads the previous OCR-owned notes and discussions before it writes 
 - bounded fallback notes when GitLab cannot accept a position, for example after relevant lines moved outside the current diff;
 - one `## Open Code Review` note that separates review health, published findings, and incomplete coverage, with operational posting, commit, token/tool, and used-MCP metadata under a collapsed technical-details disclosure.
 
+An actionable GitLab suggestion is stricter than an ordinary finding. The
+toolkit reads the exact reviewed head blob and requires `existing_code` to
+match the stated inclusive line range before it renders a replacement fence.
+For this comparison CRLF and CR are normalized to LF and one optional terminal
+newline is ignored. The replacement must describe one contiguous edit: a
+synthetic ellipsis bridge, unified-diff-prefixed text, unsafe Markdown fence,
+quick action, invalid range, or unavailable source suppresses only the
+actionable fence. The explanatory finding remains visible with a bounded reason
+that does not reproduce repository content. Exact no-op suggestions are also
+suppressed.
+
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
 The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.

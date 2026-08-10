@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections import Counter
 from collections.abc import Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
@@ -27,7 +27,6 @@ from ocr_toolkit.posting.comments import (
     code_text,
     comment_line,
     compact_escaped_text,
-    line_number,
 )
 from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
@@ -64,6 +63,11 @@ from ocr_toolkit.posting.snapshot import (
     print_posting_failure_banner,
     publish_failure_exit,
     rollback_current_run_comments,
+)
+from ocr_toolkit.posting.suggestions import (
+    SuggestionDecision,
+    evaluate_suggestion,
+    safe_repository_path,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
@@ -119,20 +123,6 @@ FileTextCache = dict[tuple[str, str], str | None]
 MAX_CROSS_FILE_REMAP_PATHS = 200
 MAX_REMAP_FILE_BYTES = 2_000_000
 MAX_REMAP_DIFF_BYTES = 8_000_000
-
-
-def _safe_git_blob_path(path: str) -> bool:
-    """Return whether an OCR path is safe to bind after an immutable Git ref."""
-
-    parts = path.split("/")
-    pure = PurePosixPath(path)
-    return bool(
-        path
-        and not pure.is_absolute()
-        and "\\" not in path
-        and all(part not in {"", ".", ".."} for part in parts)
-        and not any(character == "\x7f" or ord(character) < 32 for character in path)
-    )
 
 
 def _git_read_environment() -> dict[str, str]:
@@ -318,7 +308,7 @@ def head_file_text(
     cache_key = (refs["head_sha"], path)
     if cache is not None and cache_key in cache:
         return cache[cache_key]
-    if not _safe_git_blob_path(path):
+    if not safe_repository_path(path):
         if cache is not None:
             cache[cache_key] = None
         return None
@@ -350,36 +340,6 @@ def head_file_text(
     if cache is not None:
         cache[cache_key] = text
     return text
-
-
-def _normalized_replacement(value: str) -> str:
-    """Normalize transport line endings and one optional terminal newline."""
-
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-    return normalized[:-1] if normalized.endswith("\n") else normalized
-
-
-def suggestion_matches_head_range(
-    refs: dict[str, str],
-    path: str,
-    comment: dict[str, Any],
-    cache: FileTextCache | None = None,
-) -> bool:
-    """Return true only when a suggestion exactly reproduces the reviewed range."""
-
-    suggestion = code_text(comment.get("suggestion_code"))
-    start = line_number(comment.get("start_line") or comment.get("line"))
-    end = line_number(comment.get("end_line") or comment.get("line"))
-    if not suggestion or not path or start <= 0 or end < start or end - start > 200:
-        return False
-    source = head_file_text(refs, path, cache)
-    if source is None:
-        return False
-    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    if end > len(lines):
-        return False
-    selected = "\n".join(lines[start - 1 : end])
-    return _normalized_replacement(suggestion) == _normalized_replacement(selected)
 
 
 def unique_existing_code_line(
@@ -602,7 +562,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
 
     refs = get_diff_refs(config)
     inline_count = 0
-    failed_comments: list[dict[str, Any]] = []
+    failed_comments: list[tuple[dict[str, Any], SuggestionDecision]] = []
     fallback_reasons: Counter[str] = Counter()
     diff_line_cache: DiffLineCache = {}
     file_line_cache: FileLineCache = {}
@@ -637,14 +597,12 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                     file=sys.stderr,
                 )
 
-        raw_comment["_ocr_suggestion_noop"] = bool(
-            refs
-            and suggestion_matches_head_range(
-                refs,
-                path,
-                raw_comment,
-                file_text_cache,
-            )
+        suggestion_decision = evaluate_suggestion(
+            raw_comment,
+            path,
+            lambda candidate_path: (
+                head_file_text(refs, candidate_path, file_text_cache) if refs else None
+            ),
         )
         if not refs or not path or line <= 0:
             reason = inline_skip_reason(refs, path, line)
@@ -654,14 +612,18 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 file=sys.stderr,
             )
             fallback_reasons[reason] += 1
-            failed_comments.append(raw_comment)
+            failed_comments.append((raw_comment, suggestion_decision))
             continue
 
         inline_result = post_review_discussion(
             config=config,
             path=path,
             line=line,
-            body=format_inline_comment(raw_comment, emoji=emoji),
+            body=format_inline_comment(
+                raw_comment,
+                suggestion_decision=suggestion_decision,
+                emoji=emoji,
+            ),
             refs=refs,
             draft_note_ids=draft_note_ids,
             fingerprint=clean_text(raw_comment.get("_ocr_fingerprint")) or None,
@@ -677,7 +639,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 file=sys.stderr,
             )
             fallback_reasons["invalid_position"] += 1
-            failed_comments.append(raw_comment)
+            failed_comments.append((raw_comment, suggestion_decision))
         else:
             print(
                 f"Inline posting failed reason=post_failed, path={path!r}, line={line!r}; "
