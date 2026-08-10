@@ -2,6 +2,100 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit. Older completed plans are indexed in [the execution-history archive](docs/engineering/execution_history/README.md).
 
+## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
+
+Status: active; implementation not started
+Owner: Codex
+Last Updated: 2026-08-10
+Release Classification: release-required
+Target Stable Version: 0.4.7
+Tracking Issues: #70, #71
+
+### Goal
+
+Ship issues #70 and #71 as toolkit 0.4.7: publish actionable GitLab
+suggestions only when they are proven to replace one contiguous range in the
+reviewed immutable head, and add conservative default-on automatic approval
+that is bound to the exact reviewed merge-request SHA. Preserve a successfully
+published advisory review when approval management is ineligible, stale, or
+fails, and complete the release only after immutable external evidence has been
+independently read back.
+
+### Decisions
+
+- Use one feature branch and one protected feature pull request, with separate
+  signed implementation checkpoints for #70, #71, and release-lifecycle
+  hardening. Keep both issues open until stable external delivery is verified.
+- Keep provider-neutral decisions in typed core objects and GitLab HTTP/state
+  transitions behind the provider adapter. Add no runtime dependency, public
+  evidence command, permanent OCR harness, telemetry expansion, or tunable
+  approval-policy variables.
+- Make `OCR_AUTO_APPROVE` default on with the established boolean vocabulary.
+  An invalid value disables approval for that run. Encode the initial policy in
+  code and fail closed when authoritative completeness or typed finding
+  metadata cannot be proven.
+- After the complete feature implementation is committed, run exactly one real
+  local OCR 1.8.10 review through `uv run ocr-ci review` over
+  `origin/main..HEAD`. Require the built-in `ocr_toolkit_evidence` MCP receipt,
+  do not post to GitLab, fix actionable findings, and then use deterministic
+  validation and self-review rather than a second OCR run.
+- Do not run Codex Security. Existing repository CI security checks and the
+  checksum-pinned local Gitleaks gate remain required.
+- Redesign the durable release lifecycle so the release PR is the final
+  repository mutation without preclaiming external facts. Bind publication to
+  the exact reviewed tree and emit an immutable machine-readable release
+  receipt; close #70/#71 only after independent registry, provenance, tag,
+  Release, receipt, hash, and supported-Python readback succeeds.
+
+### Work Queue
+
+1. [ ] Implement typed contiguous-range suggestion validation, immutable-head
+   proof, bounded omission reasons, documentation, complete regressions, review,
+   and the #70 checkpoint commit.
+2. [ ] Implement typed auto-approval configuration and policy, exact-SHA GitLab
+   synchronization/write/readback, managed own-user approval receipts,
+   documentation, complete regressions, review, and the #71 checkpoint commit.
+3. [ ] Replace the redundant post-release closure-PR contract with exact-tree
+   release authorization and deterministic `ocr-toolkit.release-receipt/v1`
+   evidence; update durable rules, recovery behavior, tests, and the lifecycle
+   checkpoint commit.
+4. [ ] Reconcile this plan, roadmap table/diagram, backlog, and current-state
+   documentation against the implemented code. Run focused tests, the synthetic
+   GitLab E2E, Python 3.12 quality, Towncrier draft, workflow/document/privacy
+   checks, and `git diff --check`.
+5. [ ] Commit the complete feature tip and run one local toolkit-owned OCR review
+   with private result/stderr artifacts, no GitLab posting, and verified nonzero
+   built-in MCP use. Correct findings and complete final self-review without a
+   second OCR or Codex Security run.
+6. [ ] Run deterministic post-review validation and pinned local Gitleaks over
+   the unpublished history, push the exact reviewed branch, open one feature PR,
+   resolve every conversation, pass protected checks, and squash-merge.
+7. [ ] Independently verify the exact TestPyPI development artifacts, hashes,
+   provenance, and supported-Python installs before preparing `release/v0.4.7`.
+8. [ ] Prepare and validate the final release PR, consuming fragments 69, 70,
+   and 71 and reconciling repository-side planning truth without claiming
+   publication that has not happened.
+9. [ ] Merge the release PR only after exact-head protected checks. Verify stable
+   TestPyPI/PyPI artifacts, provenance/attestations, annotated tag, immutable
+   GitHub Release and release receipt, hashes, and Python 3.12-3.14 installs.
+   Record receipts and close #70/#71 without another repository PR.
+
+### Initial Evidence
+
+- Clean synchronized `main` is `bb8827148f13b17b209495788ac4f7b15573a168`;
+  stable toolkit 0.4.6 is published and `.next-version` targets 0.4.7.
+- Issues #70 and #71 are open. Current suggestion handling proves exact no-op
+  equality but does not prove changed `suggestion_code` applies to
+  `existing_code` at the reviewed range; the toolkit has no approval-management
+  transaction yet.
+- The effective local binary is Open Code Review 1.8.10 and the checkout's
+  `uv run ocr-ci review` path owns evidence collection, compact bootstrap,
+  mandatory `ocr_toolkit_evidence` composition, use verification, and the
+  private receipt.
+- Current release guidance still requires a documentation-only closure PR and
+  release authorization does not bind publication to the reviewed head tree and
+  exact checks. Both are explicit scope of the lifecycle checkpoint.
+
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 
 Status: completed; validated documentation/process PR handoff
