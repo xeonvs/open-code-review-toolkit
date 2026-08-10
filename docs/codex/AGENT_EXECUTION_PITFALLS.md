@@ -38,11 +38,11 @@ This note records recurring execution mistake patterns discovered during real wo
 
 **Correction:** Separate implementation, safety, and rollout edges. An unmet conditional trigger may block only the behavior that consumes it; it cannot block static-header, stdio, documentation, or other unconditional paths.
 
-## Calling the release PR the lifecycle closure
+## Making the release PR either preclaim delivery or require a redundant closure PR
 
-**Failure mode:** Repository preparation and external publication are called complete in the same PR even though registry artifacts, provenance, tag, and immutable Release exist only after merge.
+**Failure mode:** Repository preparation and external publication are called complete in the same PR even though external facts exist only after merge, or every release pays for another protected repository PR only to copy those facts back into prose.
 
-**Correction:** Keep the release-required plan active through external readback, then use a small no-release closure PR to record receipts and reconcile repository truth without publishing again.
+**Correction:** Make the release PR the final repository mutation while leaving external gates explicitly pending. Bind publication to the exact reviewed tree; create and independently read back an immutable machine-readable receipt after registry, provenance, tag, Release, hash, and install verification; close tracked issues only then. Recover partial publication from the original authorization and receipt without another commit or closure PR.
 
 ## Updating status tables but not current-state prose
 

@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; issues #70 and #71 checkpoints complete
+Status: active; issues #70/#71 and release-lifecycle checkpoints complete
 Owner: Codex
 Last Updated: 2026-08-10
 Release Classification: release-required
@@ -34,8 +34,13 @@ independently read back.
   An invalid value disables approval for that run. Encode the initial policy in
   code and fail closed when authoritative completeness or typed finding
   metadata cannot be proven.
+- After the release-lifecycle checkpoint, qualify Open Code Review 1.9.0 from
+  authoritative release/source evidence. Classify every upstream item as a
+  toolkit-consumed contract change, future-backlog impact, or explicit no
+  impact; adapt only demonstrated contracts and atomically replace the local
+  checksum-pinned OCR binary before full E2E.
 - After the complete feature implementation is committed, run exactly one real
-  local OCR 1.8.10 review through `uv run ocr-ci review` over
+  local OCR 1.9.0 review through `uv run ocr-ci review` over
   `origin/main..HEAD`. Require the built-in `ocr_toolkit_evidence` MCP receipt,
   do not post to GitLab, fix actionable findings, and then use deterministic
   validation and self-review rather than a second OCR run.
@@ -55,27 +60,31 @@ independently read back.
 2. [x] Implement typed auto-approval configuration and policy, exact-SHA GitLab
    synchronization/write/readback, managed own-user approval receipts,
    documentation, complete regressions, review, and the #71 checkpoint commit.
-3. [ ] Replace the redundant post-release closure-PR contract with exact-tree
+3. [x] Replace the redundant post-release closure-PR contract with exact-tree
    release authorization and deterministic `ocr-toolkit.release-receipt/v1`
    evidence; update durable rules, recovery behavior, tests, and the lifecycle
    checkpoint commit.
-4. [ ] Reconcile this plan, roadmap table/diagram, backlog, and current-state
+4. [ ] Inspect authoritative OCR 1.9.0 release notes and source changes, record
+   consumed-contract/backlog/no-impact classifications, update compatibility
+   records and local checksum-pinned OCR, and adapt the toolkit only where
+   evidence requires it.
+5. [ ] Reconcile this plan, roadmap table/diagram, backlog, and current-state
    documentation against the implemented code. Run focused tests, the synthetic
    GitLab E2E, Python 3.12 quality, Towncrier draft, workflow/document/privacy
    checks, and `git diff --check`.
-5. [ ] Commit the complete feature tip and run one local toolkit-owned OCR review
+6. [ ] Commit the complete feature tip and run one local toolkit-owned OCR review
    with private result/stderr artifacts, no GitLab posting, and verified nonzero
    built-in MCP use. Correct findings and complete final self-review without a
    second OCR or Codex Security run.
-6. [ ] Run deterministic post-review validation and pinned local Gitleaks over
+7. [ ] Run deterministic post-review validation and pinned local Gitleaks over
    the unpublished history, push the exact reviewed branch, open one feature PR,
    resolve every conversation, pass protected checks, and squash-merge.
-7. [ ] Independently verify the exact TestPyPI development artifacts, hashes,
+8. [ ] Independently verify the exact TestPyPI development artifacts, hashes,
    provenance, and supported-Python installs before preparing `release/v0.4.7`.
-8. [ ] Prepare and validate the final release PR, consuming fragments 69, 70,
+9. [ ] Prepare and validate the final release PR, consuming fragments 69, 70,
    and 71 and reconciling repository-side planning truth without claiming
    publication that has not happened.
-9. [ ] Merge the release PR only after exact-head protected checks. Verify stable
+10. [ ] Merge the release PR only after exact-head protected checks. Verify stable
    TestPyPI/PyPI artifacts, provenance/attestations, annotated tag, immutable
    GitHub Release and release receipt, hashes, and Python 3.12-3.14 installs.
    Record receipts and close #70/#71 without another repository PR.
@@ -152,6 +161,38 @@ independently read back.
   default-on write and opt-out, and `git diff --check` passes. Roadmap and future
   backlog statuses remain unchanged because neither issue completes an existing
   outcome milestone or activation trigger.
+
+### Release Lifecycle Checkpoint
+
+- The merged release PR is now the final repository mutation without claiming
+  future delivery. Authorization executes from that exact merge checkout,
+  validates tracked metadata from the same immutable ref, proves squash-tree
+  equivalence and parent identity, and requires every live strict `main` check
+  context from its exact GitHub App on the reviewed head SHA.
+- Registry verification covers Python 3.12-3.14 and exact PyPI Integrity
+  publisher/subject provenance. GitHub artifact attestations, annotated-tag
+  target, exact Release metadata/assets, immutable status, and a deterministic
+  `ocr-toolkit.release-receipt/v1` are verified before tracked issues close.
+- Recovery is non-destructive and exact: existing registry and draft Release
+  bytes must match, an existing receipt remains canonical across workflow
+  reruns, asset reads work through bounded authenticated API calls, and no path
+  replaces an existing tag, receipt, or Release asset.
+- Issue closure is bounded and idempotent. Every tracked item is preflighted
+  before publication; only an exact GitHub Actions-owned receipt marker is
+  trusted, conflicting user markers fail closed, and an already-completed issue
+  is accepted after final readback. Durable agent guidance, principles,
+  pitfalls, release documentation, and execution-history rules now agree that
+  no redundant post-release repository PR is required.
+- Self-review corrected timestamp semantics, arbitrary receipt artifact names,
+  incomplete check-run binding, unbounded API/asset/comment reads, draft asset
+  download behavior, destructive `--clobber` recovery, receipt regeneration on
+  reruns, metadata checkout drift, standalone provenance imports, and ambiguous
+  Release/issue state. The focused suite passes 53 tests; strict mypy, Ruff,
+  ShellCheck, workflow YAML parsing, OCR manifest validation, Towncrier 0.4.7
+  draft, and `git diff --check` pass. Full `scripts/quality.sh check` passes 608
+  tests plus 81 subtests at 79.62% coverage. Roadmap and backlog statuses remain
+  unchanged at this checkpoint because the lifecycle hardening changes process,
+  not an outcome milestone or future-work activation trigger.
 
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 

@@ -18,6 +18,10 @@ on:
         description: Exact full merge commit SHA
         required: true
         type: string
+      reviewed-head:
+        description: Exact reviewed release pull-request head SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -58,18 +62,24 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      issues: read # Validate every tracked issue before any registry publication.
       pull-requests: read # Resolve the authoritative merged release PR.
     outputs:
       approved: ${{ steps.authorize.outputs.approved }}
       branch: ${{ steps.authorize.outputs.branch }}
+      base: ${{ steps.authorize.outputs.base }}
       commit: ${{ steps.authorize.outputs.commit }}
+      head: ${{ steps.authorize.outputs.head }}
+      issues: ${{ steps.authorize.outputs.issues }}
+      merged-at: ${{ steps.authorize.outputs.merged-at }}
       pr-number: ${{ steps.authorize.outputs.pr-number }}
       title: ${{ steps.authorize.outputs.title }}
+      tree: ${{ steps.authorize.outputs.tree }}
       version: ${{ steps.authorize.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.merge_commit_sha || inputs['merge-commit'] }}
           persist-credentials: false
       - id: authorize
         env:
@@ -79,24 +89,82 @@ jobs:
           INPUT_PR_NUMBER: ${{ inputs['pull-request-number'] }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_COMMIT: ${{ inputs['merge-commit'] }}
+          INPUT_HEAD: ${{ inputs['reviewed-head'] }}
           REPOSITORY: ${{ github.repository }}
         run: |
           if [ "${EVENT_NAME}" = workflow_dispatch ]; then
             PR_NUMBER=${INPUT_PR_NUMBER}
             REQUESTED_VERSION=${INPUT_VERSION}
             REQUESTED_COMMIT=${INPUT_COMMIT}
+            REQUESTED_HEAD=${INPUT_HEAD}
           else
             PR_NUMBER=${EVENT_PR_NUMBER}
             REQUESTED_VERSION=
             REQUESTED_COMMIT=
+            REQUESTED_HEAD=
           fi
-          gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/release-pr.json
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/pulls/${PR_NUMBER}" /tmp/release-pr.json)" = 200
+          HEAD_SHA=$(jq -r .head.sha /tmp/release-pr.json)
+          MERGE_SHA=$(jq -r .merge_commit_sha /tmp/release-pr.json)
+          case "${HEAD_SHA}" in
+            *[!0-9a-f]*|'')
+              echo "pull request returned invalid commit identities" >&2
+              exit 1
+              ;;
+          esac
+          case "${MERGE_SHA}" in
+            *[!0-9a-f]*|'')
+              echo "pull request returned invalid commit identities" >&2
+              exit 1
+              ;;
+          esac
+          test "${#HEAD_SHA}" -eq 40
+          test "${#MERGE_SHA}" -eq 40
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/commits/${HEAD_SHA}" /tmp/release-head-commit.json)" = 200
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/commits/${MERGE_SHA}" /tmp/release-merge-commit.json)" = 200
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/contents/.release-metadata.json?ref=${MERGE_SHA}" \
+            /tmp/release-metadata-contents.json)" = 200
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
+            /tmp/release-check-runs.json)" = 200
+          # Effective rules are a public repository contract. Reading them
+          # anonymously avoids requiring repository-administration permission.
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${REPOSITORY}/rules/branches/main" \
+            /tmp/effective-main-rules.json anonymous)" = 200
+          jq '{rules: .}' /tmp/effective-main-rules.json > /tmp/main-ruleset.json
           python scripts/release_authorization.py \
             --pr-json /tmp/release-pr.json \
             --repository "${REPOSITORY}" \
+            --head-commit-json /tmp/release-head-commit.json \
+            --merge-commit-json /tmp/release-merge-commit.json \
+            --check-runs-json /tmp/release-check-runs.json \
+            --ruleset-json /tmp/main-ruleset.json \
+            --release-metadata-contents-json /tmp/release-metadata-contents.json \
             --requested-version "${REQUESTED_VERSION}" \
             --requested-commit "${REQUESTED_COMMIT}" \
+            --requested-head "${REQUESTED_HEAD}" \
             --github-output "${GITHUB_OUTPUT}"
+      - name: Validate tracked release issues before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUES: ${{ steps.authorize.outputs.issues }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          while IFS= read -r issue; do
+            test -n "${issue}" || continue
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${REPOSITORY}/issues/${issue}" "/tmp/release-issue-${issue}.json")" = 200
+            python scripts/release_issue_receipt.py \
+              --issue-json "/tmp/release-issue-${issue}.json" \
+              --issue "${issue}" --validate-issue-only >/dev/null
+          done <<EOF
+          $(printf '%s' "${ISSUES}" | tr ',' '\n')
+          EOF
 
   build:
     name: build-and-attest-release
@@ -128,10 +196,15 @@ jobs:
         name: Validate the authorized release merge
         env:
           EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
+          EXPECTED_HEAD: ${{ needs.authorize.outputs.head }}
+          EXPECTED_TREE: ${{ needs.authorize.outputs.tree }}
           RELEASE_BRANCH: ${{ needs.authorize.outputs.branch }}
           RELEASE_TITLE: ${{ needs.authorize.outputs.title }}
         run: |
           test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT}"
+          git fetch --no-tags origin "${EXPECTED_HEAD}"
+          test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"
+          test "$(git rev-parse FETCH_HEAD^{tree})" = "${EXPECTED_TREE}"
           test -f .release-version
           test -f .release-source-date-epoch
           VERSION=$(tr -d '\n' < .release-version)
@@ -195,7 +268,7 @@ jobs:
             output=$3
             if ! status=$(curl --location --silent --show-error \
               --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
+              --connect-timeout 10 --max-time 120 --max-filesize 10485760 \
               --proto '=https' --proto-redir '=https' \
               --header 'Accept: application/vnd.pypi.simple.v1+json' \
               --write-out '%{http_code}' \
@@ -260,6 +333,10 @@ jobs:
       (needs.publish-testpypi.result == 'success' || needs.publish-testpypi.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
     permissions:
       contents: read
     steps:
@@ -271,6 +348,9 @@ jobs:
         with:
           name: reviewed-release-distributions
           path: .
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
       - name: Verify and smoke exact TestPyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
@@ -303,6 +383,10 @@ jobs:
       (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
     permissions:
       contents: read
     steps:
@@ -314,6 +398,9 @@ jobs:
         with:
           name: reviewed-release-distributions
           path: .
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
       - name: Verify and smoke exact PyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
@@ -327,6 +414,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write # Create the authorized tag and immutable release.
+      attestations: read # Verify the exact GitHub provenance subjects before receipt creation.
+      issues: write # Close only the tracked release issues after immutable readback.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -340,53 +429,263 @@ jobs:
       - name: Publish tag and GitHub Release
         env:
           EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
+          EXPECTED_BASE: ${{ needs.authorize.outputs.base }}
+          EXPECTED_HEAD: ${{ needs.authorize.outputs.head }}
+          EXPECTED_TREE: ${{ needs.authorize.outputs.tree }}
+          AUTHORIZED_AT: ${{ needs.authorize.outputs.merged-at }}
           GH_TOKEN: ${{ github.token }}
+          ISSUES: ${{ needs.authorize.outputs.issues }}
+          RELEASE_PR: ${{ needs.authorize.outputs.pr-number }}
           TAG: ${{ needs.build.outputs.tag }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
+          bounded_release_download() {
+            name=$1
+            destination=$2
+            max_bytes=$3
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+              /tmp/github-release-asset-index.json)" = 200
+            asset_id=$(jq --arg name "${name}" \
+              '[.assets[] | select(.name == $name)] |
+               if length == 1 then .[0].id else empty end' \
+              /tmp/github-release-asset-index.json)
+            case "${asset_id}" in
+              *[!0-9]*|'') echo "missing or duplicate GitHub Release asset: ${name}" >&2; exit 1 ;;
+            esac
+            test "${asset_id}" -gt 0
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
+              "${destination}" authenticated 200 "${max_bytes}" application/octet-stream)" = 200
+          }
+          load_issue_comments() {
+            issue=$1
+            comments=$2
+            printf '[]\n' > "${comments}"
+            for page in 1 2 3 4 5; do
+              page_file="/tmp/issue-${issue}-comments-${page}.json"
+              test "$(scripts/bounded_github_api.sh \
+                "repos/${GITHUB_REPOSITORY}/issues/${issue}/comments?per_page=100&page=${page}" \
+                "${page_file}")" = 200
+              page_count=$(jq 'if type == "array" then length else -1 end' "${page_file}")
+              test "${page_count}" -ge 0 && test "${page_count}" -le 100
+              jq -s '.[0] + .[1]' "${comments}" "${page_file}" > "${comments}.next"
+              mv "${comments}.next" "${comments}"
+              if [ "${page_count}" -lt 100 ]; then
+                return
+              fi
+            done
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/issues/${issue}/comments?per_page=1&page=501" \
+              "/tmp/issue-${issue}-comments-overflow.json")" = 200
+            test "$(jq 'if type == "array" then length else -1 end' \
+              "/tmp/issue-${issue}-comments-overflow.json")" = 0 || {
+              echo "issue ${issue} has too many comments for bounded receipt lookup" >&2
+              exit 1
+            }
+          }
           python scripts/release_notes.py --version "${VERSION}" --output /tmp/release-notes.md
+          for artifact in dist/*; do
+            gh attestation verify "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+              --source-digest "${EXPECTED_COMMIT}" \
+              --deny-self-hosted-runners
+          done
           git config user.name "release automation"
           git config user.email "release-automation@users.noreply.github.com"
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
             git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+            test "$(git cat-file -t "${TAG}")" = tag
             test "$(git rev-parse "${TAG}^{commit}")" = "${EXPECTED_COMMIT}"
           else
             git tag -a "${TAG}" -m "${TAG}" "${EXPECTED_COMMIT}"
             git push origin "${TAG}"
           fi
-          release_exists=false
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            release_exists=true
-          else
-            gh release create "${TAG}" --draft --verify-tag --title "${TAG}" --notes-file /tmp/release-notes.md
-          fi
-          release_is_draft=$(gh release view "${TAG}" --json isDraft --jq .isDraft)
+          release_status=$(scripts/bounded_github_api.sh \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            /tmp/github-release-state.json authenticated 200,404)
+          case "${release_status}" in
+            200) release_exists=true ;;
+            404)
+              release_exists=false
+              gh release create "${TAG}" --draft --verify-tag \
+                --title "${TAG}" --notes-file /tmp/release-notes.md
+              test "$(scripts/bounded_github_api.sh \
+                "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+                /tmp/github-release-state.json)" = 200
+              ;;
+          esac
+          release_is_draft=$(jq -r .draft /tmp/github-release-state.json)
+          test "${release_is_draft}" = true || test "${release_is_draft}" = false
           if [ "${release_exists}" = false ] || [ "${release_is_draft}" = true ]; then
-            gh release upload "${TAG}" dist/* artifact-hashes.json SHA256SUMS --clobber
+            jq '{assets}' /tmp/github-release-state.json > /tmp/github-release-upload-assets.json
+            receipt_count=$(jq '[.assets[] | select(.name == "release-receipt.json")] | length' \
+              /tmp/github-release-upload-assets.json)
+            case "${receipt_count}" in
+              0)
+                python scripts/release_receipt.py \
+                  --version "${VERSION}" \
+                  --tag "${TAG}" \
+                  --release-pr "${RELEASE_PR}" \
+                  --issues "${ISSUES}" \
+                  --base "${EXPECTED_BASE}" \
+                  --head "${EXPECTED_HEAD}" \
+                  --merge "${EXPECTED_COMMIT}" \
+                  --tree "${EXPECTED_TREE}" \
+                  --run-id "${GITHUB_RUN_ID}" \
+                  --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+                  --authorized-at "${AUTHORIZED_AT}" \
+                  --hashes artifact-hashes.json \
+                  --output release-receipt.json
+                ;;
+              1)
+                bounded_release_download release-receipt.json release-receipt.json 1048576
+                python scripts/release_receipt.py \
+                  --version "${VERSION}" \
+                  --tag "${TAG}" \
+                  --release-pr "${RELEASE_PR}" \
+                  --issues "${ISSUES}" \
+                  --base "${EXPECTED_BASE}" \
+                  --head "${EXPECTED_HEAD}" \
+                  --merge "${EXPECTED_COMMIT}" \
+                  --tree "${EXPECTED_TREE}" \
+                  --authorized-at "${AUTHORIZED_AT}" \
+                  --hashes artifact-hashes.json \
+                  --validate-existing release-receipt.json
+                ;;
+              *) echo "duplicate GitHub Release receipt asset" >&2; exit 1 ;;
+            esac
+            for asset in dist/* artifact-hashes.json SHA256SUMS release-receipt.json; do
+              name=$(basename "${asset}")
+              asset_count=$(jq --arg name "${name}" '[.assets[] | select(.name == $name)] | length' \
+                /tmp/github-release-upload-assets.json)
+              case "${asset_count}" in
+                0) gh release upload "${TAG}" "${asset}" ;;
+                1)
+                  bounded_release_download "${name}" "/tmp/existing-${name}" 10485760
+                  cmp "${asset}" "/tmp/existing-${name}"
+                  ;;
+                *) echo "duplicate GitHub Release asset: ${name}" >&2; exit 1 ;;
+              esac
+            done
           fi
           release_dir=/tmp/github-release-assets
           mkdir -p "${release_dir}"
-          gh release download "${TAG}" --dir "${release_dir}"
+          for name in \
+            "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
+            "open_code_review_toolkit-${VERSION}.tar.gz" \
+            artifact-hashes.json SHA256SUMS release-receipt.json; do
+            bounded_release_download "${name}" "${release_dir}/${name}" 10485760
+          done
           expected=$(printf '%s\n' \
             "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
             "open_code_review_toolkit-${VERSION}.tar.gz" \
-            artifact-hashes.json SHA256SUMS | sort)
+            artifact-hashes.json SHA256SUMS release-receipt.json | sort)
           actual=$(find "${release_dir}" -type f -maxdepth 1 -exec basename {} \; | sort)
           test "${actual}" = "${expected}"
           (cd "${release_dir}" && sha256sum --check --strict SHA256SUMS)
           cmp artifact-hashes.json "${release_dir}/artifact-hashes.json"
           cmp SHA256SUMS "${release_dir}/SHA256SUMS"
-          gh release view "${TAG}" --json body,name > /tmp/github-release.json
+          if [ -f release-receipt.json ]; then
+            cmp release-receipt.json "${release_dir}/release-receipt.json"
+          else
+            python scripts/release_receipt.py \
+              --version "${VERSION}" \
+              --tag "${TAG}" \
+              --release-pr "${RELEASE_PR}" \
+              --issues "${ISSUES}" \
+              --base "${EXPECTED_BASE}" \
+              --head "${EXPECTED_HEAD}" \
+              --merge "${EXPECTED_COMMIT}" \
+              --tree "${EXPECTED_TREE}" \
+              --authorized-at "${AUTHORIZED_AT}" \
+              --hashes artifact-hashes.json \
+              --validate-existing "${release_dir}/release-receipt.json"
+          fi
+          test "$(scripts/bounded_github_api.sh \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            /tmp/github-release.json)" = 200
           python - <<'PY'
           import json
           from pathlib import Path
           import os
 
           release = json.loads(Path("/tmp/github-release.json").read_text(encoding="utf-8"))
+          actual = {"body": release.get("body"), "name": release.get("name")}
           expected_body = Path("/tmp/release-notes.md").read_text(encoding="utf-8")
-          if release != {"body": expected_body, "name": os.environ["TAG"]}:
+          if actual != {"body": expected_body, "name": os.environ["TAG"]}:
               raise SystemExit("existing GitHub Release metadata does not match")
           PY
           if [ "${release_is_draft}" = true ]; then
             gh release edit "${TAG}" --draft=false
           fi
+          export GITHUB_API_VERSION=2026-03-10
+          for attempt in 1 2 3 4 5; do
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+              /tmp/immutable-release.json)" = 200
+            if jq -e '.immutable == true and .draft == false and .prerelease == false' \
+              /tmp/immutable-release.json >/dev/null; then
+              break
+            fi
+            test "${attempt}" -lt 5 || {
+              echo "GitHub Release did not become immutable" >&2
+              exit 1
+            }
+            sleep 5
+          done
+          expected_assets=$(printf '%s\n' \
+            "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
+            "open_code_review_toolkit-${VERSION}.tar.gz" \
+            artifact-hashes.json SHA256SUMS release-receipt.json | sort)
+          actual_assets=$(jq -r '.assets[].name' /tmp/immutable-release.json | sort)
+          test "${actual_assets}" = "${expected_assets}"
+          receipt_sha=$(sha256sum "${release_dir}/release-receipt.json" | awk '{print $1}')
+          while IFS= read -r issue; do
+            test -n "${issue}" || continue
+            case "${issue}" in
+              *[!0-9]*|'') echo "invalid tracked release issue" >&2; exit 1 ;;
+            esac
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/issues/${issue}" \
+              "/tmp/issue-${issue}.json")" = 200
+            load_issue_comments "${issue}" "/tmp/issue-${issue}-comments.json"
+            issue_receipt_state=$(python scripts/release_issue_receipt.py \
+              --issue-json "/tmp/issue-${issue}.json" \
+              --comments-json "/tmp/issue-${issue}-comments.json" \
+              --issue "${issue}" --version "${VERSION}" --receipt-sha "${receipt_sha}" \
+              --body-output "/tmp/issue-${issue}-receipt.md")
+            issue_state=${issue_receipt_state% *}
+            comment_state=${issue_receipt_state#* }
+            case "${comment_state}" in
+              missing)
+                test "$(jq 'length < 500' "/tmp/issue-${issue}-comments.json")" = true || {
+                  echo "issue ${issue} cannot accept a receipt within the comment bound" >&2
+                  exit 1
+                }
+                gh issue comment "${issue}" --repo "${GITHUB_REPOSITORY}" \
+                  --body-file "/tmp/issue-${issue}-receipt.md"
+                load_issue_comments "${issue}" "/tmp/issue-${issue}-comments.json"
+                test "$(python scripts/release_issue_receipt.py \
+                  --issue-json "/tmp/issue-${issue}.json" \
+                  --comments-json "/tmp/issue-${issue}-comments.json" \
+                  --issue "${issue}" --version "${VERSION}" --receipt-sha "${receipt_sha}" \
+                  --require-comment)" = "${issue_state} matched"
+                ;;
+              matched) ;;
+            esac
+            if [ "${issue_state}" = open ]; then
+              gh issue close "${issue}" --repo "${GITHUB_REPOSITORY}" --reason completed
+            fi
+            test "$(scripts/bounded_github_api.sh \
+              "repos/${GITHUB_REPOSITORY}/issues/${issue}" \
+              "/tmp/issue-${issue}-closed.json")" = 200
+            python scripts/release_issue_receipt.py \
+              --issue-json "/tmp/issue-${issue}-closed.json" \
+              --comments-json "/tmp/issue-${issue}-comments.json" \
+              --issue "${issue}" --version "${VERSION}" --receipt-sha "${receipt_sha}" \
+              --require-comment --require-closed >/dev/null
+          done <<EOF
+          $(printf '%s' "${ISSUES}" | tr ',' '\n')
+          EOF
