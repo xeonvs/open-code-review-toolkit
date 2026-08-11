@@ -65,6 +65,8 @@ review without GitLab posting, before protected feature and stable delivery.
    signals and npm/Yarn/pnpm resolution.
 8. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
    documentation, strategy, roadmap, backlog, and milestone reconciliation.
+   Self-review hardening of provider semantics and bounds is complete; final
+   backlog/roadmap reconciliation remains pending until release-grade gates.
 9. [ ] Run complete Python 3.12-3.14, security, privacy, package, installed
    artifact, rules-preview, real-MCP-client, and synthetic no-post E2E gates.
 10. [ ] Run exactly one final local full OCR review, fix findings, then finish
@@ -117,12 +119,18 @@ review without GitLab posting, before protected feature and stable delivery.
   preview probes select root, nested, role, and Twig paths that were previously
   rejected as `unsupported_ext`.
 - Focused self-review confirmed lock/checksum-only packages do not activate a
-  framework, components come from manifest/role roots, plugin failures remain
-  isolated, excludes retain precedence, ordinary supported files remain
-  reviewable, and the MCP requires no new server or tool. The combined evidence
-  and integration suite passes 192 tests; focused Ruff and strict mypy pass.
-  Public configuration, GitLab, and strategy documentation now describe the
-  implemented boundaries and review-selection behavior.
+  framework, components follow the nearest manifest or conventional role root,
+  and the MCP requires no new server or tool. Follow-up hardening now records
+  exact supported-source states, treats direct/effectively replaced `go.mod`
+  versions correctly, isolates every package-owned provider failure, binds
+  nested plugin/framework/engine identities, and degrades declaration,
+  resolution, configuration, or template coverage on malformed/omitted inputs,
+  item/path/fact limits, local replacements, or unsafe object types. Excludes
+  retain precedence and ordinary supported files remain reviewable. The focused
+  cross-provider suite passes 75 tests; its dedicated plugin suite passes 10,
+  while focused Ruff and strict mypy pass. Public configuration, GitLab, and
+  strategy documentation describe the implemented boundaries, degradation, and
+  review-selection behavior.
 
 ### Initial Evidence
 

@@ -23,6 +23,7 @@ from ocr_toolkit.evidence.framework_plugins import (
     FrameworkPluginContext,
     PluginCoverage,
     PluginFact,
+    PluginSourceStatus,
     collect_framework_plugins,
     collect_template_files,
 )
@@ -89,9 +90,10 @@ CONTEXT_YAML_DIRECTORIES = (
 
 @dataclass(frozen=True, slots=True)
 class ManifestCollector:
-    """Bind manifest path matching, ecosystem metadata, and a bounded parser."""
+    """Bind manifest path matching, ecosystem metadata, role, and bounded parser."""
 
     ecosystem: str
+    source_roles: tuple[str, ...]
     matches: Callable[[str], bool]
     parse: Callable[[str], ManifestParseResult]
 
@@ -162,26 +164,28 @@ def _is_pylock(path: str) -> bool:
 
 
 MANIFEST_COLLECTORS = (
-    ManifestCollector("python", _name_is("pyproject.toml"), parse_pyproject),
-    ManifestCollector("python", _is_python_requirements, parse_requirements),
-    ManifestCollector("python", _name_is("uv.lock"), parse_uv_lock),
-    ManifestCollector("python", _name_is("poetry.lock"), parse_poetry_lock),
-    ManifestCollector("python", _name_is("Pipfile.lock"), parse_pipfile_lock),
-    ManifestCollector("python", _is_pylock, parse_pylock),
-    ManifestCollector("javascript", _name_is("package.json"), parse_package_json),
+    ManifestCollector("python", ("declaration",), _name_is("pyproject.toml"), parse_pyproject),
+    ManifestCollector("python", ("declaration",), _is_python_requirements, parse_requirements),
+    ManifestCollector("python", ("resolution",), _name_is("uv.lock"), parse_uv_lock),
+    ManifestCollector("python", ("resolution",), _name_is("poetry.lock"), parse_poetry_lock),
+    ManifestCollector("python", ("resolution",), _name_is("Pipfile.lock"), parse_pipfile_lock),
+    ManifestCollector("python", ("resolution",), _is_pylock, parse_pylock),
+    ManifestCollector("javascript", ("declaration",), _name_is("package.json"), parse_package_json),
     ManifestCollector(
         "javascript",
+        ("resolution",),
         _name_is("package-lock.json"),
         parse_package_lock,
     ),
-    ManifestCollector("javascript", _name_is("yarn.lock"), parse_yarn_lock),
-    ManifestCollector("javascript", _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
-    ManifestCollector("go", _name_is("go.mod"), parse_go_mod),
-    ManifestCollector("go", _name_is("go.sum"), parse_go_sum),
-    ManifestCollector("php", _name_is("composer.json"), parse_composer_json),
-    ManifestCollector("php", _name_is("composer.lock"), parse_composer_lock),
+    ManifestCollector("javascript", ("resolution",), _name_is("yarn.lock"), parse_yarn_lock),
+    ManifestCollector("javascript", ("resolution",), _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
+    ManifestCollector("go", ("declaration", "resolution"), _name_is("go.mod"), parse_go_mod),
+    ManifestCollector("go", ("checksum",), _name_is("go.sum"), parse_go_sum),
+    ManifestCollector("php", ("declaration",), _name_is("composer.json"), parse_composer_json),
+    ManifestCollector("php", ("resolution",), _name_is("composer.lock"), parse_composer_lock),
     ManifestCollector(
         "ansible",
+        ("declaration",),
         _name_is("requirements.yml", "requirements.yaml"),
         _parse_ansible_requirements,
     ),
@@ -668,6 +672,16 @@ def collect_ref_facts(
         and not entry.is_submodule
         and entry.object_type == "blob"
     )
+    source_statuses: dict[str, PluginSourceStatus] = {
+        entry.path: PluginSourceStatus(
+            entry.path,
+            collector.ecosystem,
+            collector.source_roles,
+            "pending",
+        )
+        for entry in candidates
+        if (collector := manifest_collector(entry.path)) is not None
+    }
     try:
         read = reader.read_candidate_blobs(candidates)
     except RepositoryEvidenceError as exc:
@@ -688,6 +702,13 @@ def collect_ref_facts(
                 )
         return records, diagnostics
     blobs = read.blobs
+    for path, status in tuple(source_statuses.items()):
+        source_statuses[path] = PluginSourceStatus(
+            status.path,
+            status.ecosystem,
+            status.roles,
+            "accepted" if path in blobs else "omitted",
+        )
     diagnostics.extend(f"{ref.value}:{message}" for message in read.diagnostics)
     galaxy_roots = tuple(
         entry.path
@@ -777,6 +798,22 @@ def collect_ref_facts(
                     raise ValueError("supported manifest has no collector")
                 parsed = collector.parse(text)
                 diagnostics.extend(f"{ref.value}:{path}: {notice}" for notice in parsed.notices)
+                source_status = source_statuses.get(path)
+                if any("truncated" in notice for notice in parsed.notices):
+                    if source_status is not None:
+                        source_statuses[path] = PluginSourceStatus(
+                            source_status.path,
+                            source_status.ecosystem,
+                            source_status.roles,
+                            "partial",
+                        )
+                elif source_status is not None:
+                    source_statuses[path] = PluginSourceStatus(
+                        source_status.path,
+                        source_status.ecosystem,
+                        source_status.roles,
+                        "complete",
+                    )
                 facts = [
                     ManifestFact(
                         "repository.manifest",
@@ -834,6 +871,14 @@ def collect_ref_facts(
             )
             if topology_source and entry is not None:
                 unavailable_topology(entry, "parse-unavailable")
+            source_status = source_statuses.get(path)
+            if source_status is not None:
+                source_statuses[path] = PluginSourceStatus(
+                    source_status.path,
+                    source_status.ecosystem,
+                    source_status.roles,
+                    "unavailable",
+                )
             continue
         for fact in facts:
             if fact.kind.startswith("ansible.") and fact.kind != "dependency.declared":
@@ -876,12 +921,12 @@ def collect_ref_facts(
     plugin_context = FrameworkPluginContext(
         records=tuple(records),
         entries=entries,
-        omitted_paths=tuple(entry.path for entry in candidates if entry.path not in blobs),
+        source_statuses=tuple(sorted(source_statuses.values(), key=lambda item: item.path)),
         ref=ref,
         commit_sha=commit_sha,
     )
     plugin_facts, plugin_observations, plugin_notices = collect_framework_plugins(plugin_context)
-    template_facts, template_observations = collect_template_files(entries)
+    template_facts, template_observations, template_notices = collect_template_files(plugin_context)
     records.extend(
         _plugin_records(
             (*plugin_facts, *template_facts),
@@ -890,7 +935,7 @@ def collect_ref_facts(
             trust=trust,
         )
     )
-    diagnostics.extend(f"{ref.value}:{notice}" for notice in plugin_notices)
+    diagnostics.extend(f"{ref.value}:{notice}" for notice in (*plugin_notices, *template_notices))
     if coverage_sink is not None:
         for (domain, scope), observations in sorted(coverage_observations.items()):
             coverage_sink.append(
