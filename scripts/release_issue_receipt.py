@@ -27,7 +27,7 @@ def receipt_body(version: str, issue: int, receipt_sha: str) -> str:
     marker = f"<!-- ocr-toolkit-release-receipt v={version} issue={issue} -->"
     return (
         f"{marker}\n\nStable v{version} delivery is verified by immutable release asset "
-        f"`release-receipt.json` in v{version} (SHA-256 `{receipt_sha}`)."
+        f"`release-receipt.json` in v{version} (SHA-256 `{receipt_sha}`).\n"
     )
 
 
@@ -119,7 +119,7 @@ def main() -> int:
         require_comment=args.require_comment,
     )
     if args.body_output is not None:
-        args.body_output.write_text(body + "\n", encoding="utf-8")
+        args.body_output.write_text(body, encoding="utf-8")
     print(state, comment)
     return 0
 

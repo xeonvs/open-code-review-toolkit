@@ -42,13 +42,17 @@ review without GitLab posting, before protected feature and stable delivery.
 - After complete E2E, run exactly one final local OCR 1.9.1 review over the M2
   change range, require real evidence-MCP use, fix actionable findings, and use
   only deterministic validation afterward.
+- Between completed checkpoints, query the public project for newly opened OCR
+  compatibility/release issues. If a newer stable OCR appears, qualify its
+  complete adjacent chain and include required contract/rules adaptations in
+  0.5.0 before E2E and the single final OCR review.
 
 ### Work Queue
 
 1. [x] Reconcile the externally completed 0.4.7 starting point, create the M2
    branch and draft feature PR #77, activate release-required 0.5.0 planning,
    and set the next development line to 0.5.0.
-2. [ ] Repair issue #76 draft-Release identity, canonical issue-comment
+2. [x] Repair issue #76 draft-Release identity, canonical issue-comment
    newline, and idempotent skipped-publisher recovery with synthetic tests.
 3. [ ] Implement the bounded static plugin protocol, manifest-root components,
    closed framework/template records, limits, coverage, and MCP/store contracts.
@@ -72,6 +76,27 @@ review without GitLab posting, before protected feature and stable delivery.
 12. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
     Release/receipt/Python-install readback and close #76 as completed without
     another repository PR.
+
+### Issue #76 Checkpoint
+
+- Stable delivery now retains a validated numeric GitHub Release ID from draft
+  creation/discovery through asset upload and publication. A bounded,
+  redirect-free helper uses closed GitHub API and upload endpoints, exact
+  metadata, unique asset names, regular-file/size checks, and fails closed for
+  duplicate, partial, mismatched, or published-but-incomplete states.
+- The final Release job uses an explicit `always()` success matrix over its
+  direct authorization, build, and registry-verification prerequisites, so
+  idempotently skipped registry publishers cannot suppress final immutable
+  Release and issue closure work while failed or cancelled verification still
+  blocks it.
+- Issue receipts now have one canonical representation ending in exactly one
+  newline. `--body-output` writes that exact representation and bot-comment
+  readback compares it byte-for-byte without accepting altered whitespace,
+  ownership, marker, version, issue, or hash.
+- Focused release authorization/receipt tests pass, including numeric identity,
+  duplicate/mismatched metadata, canonical comment-file bytes, bounded API
+  allowlists, exact recovery workflow structure, and completed issue closure.
+  Durable release documentation now records the numeric-draft boundary.
 
 ### Initial Evidence
 

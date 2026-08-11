@@ -14,6 +14,7 @@ ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "scripts" / "release_receipt.py"
 PROVENANCE_SCRIPT = ROOT / "scripts" / "verify_registry_provenance.py"
 ISSUE_RECEIPT_SCRIPT = ROOT / "scripts" / "release_issue_receipt.py"
+GITHUB_RELEASE_SCRIPT = ROOT / "scripts" / "github_release_api.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
@@ -30,6 +31,7 @@ def load_script(path: Path, name: str) -> ModuleType:
 receipt = load_script(SCRIPT, "release_receipt_script")
 provenance = load_script(PROVENANCE_SCRIPT, "verify_registry_provenance_script")
 issue_receipt = load_script(ISSUE_RECEIPT_SCRIPT, "release_issue_receipt_script")
+github_release = load_script(GITHUB_RELEASE_SCRIPT, "github_release_api_script")
 
 
 def build_receipt(**overrides: Any) -> dict[str, Any]:
@@ -277,6 +279,7 @@ def test_issue_receipt_accepts_only_exact_actions_owned_comment_and_closed_state
         )
         == "closed"
     )
+    assert body.endswith("\n") and not body.endswith("\n\n")
     assert issue_receipt.comment_state([comment], body, require_comment=True) == "matched"
 
     forged = {**comment, "user": {"login": "synthetic-user", "id": 7, "type": "User"}}
@@ -320,14 +323,19 @@ def test_release_workflow_builds_reads_back_and_recovers_the_receipt() -> None:
         ROOT / "scripts" / "verify_registry_artifacts.sh"
     ).read_text(encoding="utf-8")
     assert "python scripts/release_receipt.py" in workflow
-    assert 'release upload "${TAG}" "${asset}"' in workflow
+    assert "python scripts/github_release_api.py ensure" in workflow
+    assert "python scripts/github_release_api.py upload" in workflow
+    assert "python scripts/github_release_api.py publish" in workflow
+    assert '--release-id "${release_id}"' in workflow
     assert 'release upload "${TAG}" dist/*' not in workflow
-    assert "release upload" in workflow
     assert "--clobber" not in workflow
     assert "bounded_release_download" in workflow
     assert "releases/assets/${asset_id}" in workflow
     assert "application/octet-stream" in workflow
     assert "gh release download" not in workflow
+    assert "gh release create" not in workflow
+    assert "gh release upload" not in workflow
+    assert "gh release edit" not in workflow
     assert "duplicate GitHub Release asset" in workflow
     assert '--validate-existing "${release_dir}/release-receipt.json"' in workflow
     assert 'cmp release-receipt.json "${release_dir}/release-receipt.json"' in workflow
@@ -347,3 +355,84 @@ def test_release_workflow_builds_reads_back_and_recovers_the_receipt() -> None:
         encoding="utf-8"
     )
     assert "reset_approvals" not in workflow
+    assert "always() && needs.authorize.result == 'success'" in workflow
+    assert "needs.verify-pypi.result == 'success'" in workflow
+
+
+def test_numeric_release_identity_requires_exact_metadata_and_unique_assets() -> None:
+    notes = "## 0.5.0\n"
+    payload = {
+        "id": 91,
+        "tag_name": "v0.5.0",
+        "target_commitish": "a" * 40,
+        "name": "v0.5.0",
+        "body": notes,
+        "draft": True,
+        "prerelease": False,
+        "assets": [{"id": 7, "name": "package.whl", "size": 10}],
+    }
+    validated = github_release.validate_release(
+        payload,
+        repository="synthetic/toolkit",
+        tag="v0.5.0",
+        target="a" * 40,
+        title="v0.5.0",
+        notes=notes,
+        require_draft=True,
+    )
+    assert validated["id"] == 91
+
+    duplicate = {**payload, "assets": [payload["assets"][0], payload["assets"][0]]}
+    with pytest.raises(github_release.GitHubReleaseError, match="duplicate"):
+        github_release.validate_release(
+            duplicate,
+            repository="synthetic/toolkit",
+            tag="v0.5.0",
+            target="a" * 40,
+            title="v0.5.0",
+            notes=notes,
+        )
+
+    with pytest.raises(github_release.GitHubReleaseError, match="metadata"):
+        github_release.validate_release(
+            {**payload, "target_commitish": "b" * 40},
+            repository="synthetic/toolkit",
+            tag="v0.5.0",
+            target="a" * 40,
+            title="v0.5.0",
+            notes=notes,
+        )
+
+
+def test_issue_receipt_cli_writes_the_canonical_terminal_newline(tmp_path: Path) -> None:
+    issue = tmp_path / "issue.json"
+    comments = tmp_path / "comments.json"
+    output = tmp_path / "body.md"
+    issue.write_text(json.dumps({"number": 76, "state": "open", "state_reason": None}))
+    comments.write_text("[]")
+    import subprocess
+
+    completed = subprocess.run(
+        [
+            "python3",
+            str(ISSUE_RECEIPT_SCRIPT),
+            "--issue-json",
+            str(issue),
+            "--comments-json",
+            str(comments),
+            "--issue",
+            "76",
+            "--version",
+            "0.5.0",
+            "--receipt-sha",
+            "a" * 64,
+            "--body-output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert output.read_text() == issue_receipt.receipt_body("0.5.0", 76, "a" * 64)
+    assert output.read_bytes().endswith(b".\n")

@@ -26,6 +26,7 @@ patterns = (
     rf"repos/{repository}/issues/[1-9][0-9]*/comments\?per_page=100&page=[1-5]",
     rf"repos/{repository}/issues/[1-9][0-9]*/comments\?per_page=1&page=501",
     rf"repos/{repository}/releases/tags/v[0-9]+(?:\.[0-9]+)+",
+    rf"repos/{repository}/releases/[1-9][0-9]*",
     rf"repos/{repository}/releases/assets/[1-9][0-9]*",
 )
 if not any(re.fullmatch(pattern, endpoint) for pattern in patterns):
