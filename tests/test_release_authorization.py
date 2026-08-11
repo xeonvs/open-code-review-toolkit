@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 from types import ModuleType
@@ -126,6 +129,7 @@ def authorize(
     requested_version: str = "",
     requested_commit: str = "",
     requested_head: str = "",
+    requested_base: str = "",
 ) -> dict[str, str]:
     """Call authorization with fully valid synthetic GitHub evidence by default."""
 
@@ -140,6 +144,7 @@ def authorize(
         requested_version,
         requested_commit,
         requested_head,
+        requested_base,
     )
 
 
@@ -148,6 +153,7 @@ def test_authorizes_exact_same_repository_release_merge() -> None:
         requested_version="0.1.0",
         requested_commit="a" * 40,
         requested_head="c" * 40,
+        requested_base="b" * 40,
     )
 
     assert outputs == {
@@ -194,6 +200,8 @@ def test_recovery_inputs_must_match_the_merged_pr() -> None:
         authorize(requested_commit="b" * 40)
     with pytest.raises(release.AuthorizationError, match="requested head"):
         authorize(requested_head="b" * 40)
+    with pytest.raises(release.AuthorizationError, match="requested base"):
+        authorize(requested_base="c" * 40)
 
 
 def test_rejects_tree_parent_and_commit_identity_mismatches() -> None:
@@ -325,7 +333,8 @@ def test_release_workflow_keeps_strict_release_authorization() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "python scripts/release_authorization.py" in workflow
-    assert "github.event.pull_request.merge_commit_sha || inputs['merge-commit']" in workflow
+    assert "github.event.pull_request.base.sha || inputs['reviewed-base']" in workflow
+    assert "Candidate head and merge commits are inspected only as data" in workflow
     assert 'test "${RELEASE_BRANCH}" = "release/v${VERSION}"' in workflow
     assert "repos/${REPOSITORY}/rules/branches/main" in workflow
     assert "commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" in workflow
@@ -342,8 +351,68 @@ def test_release_workflow_keeps_strict_release_authorization() -> None:
     assert "contents/.release-metadata.json?ref=${MERGE_SHA}" in workflow
     assert "--release-metadata-contents-json /tmp/release-metadata-contents.json" in workflow
     assert "--requested-head" in workflow
+    assert "--requested-base" in workflow
     assert "Validate tracked release issues before publication" in workflow
     assert "--validate-issue-only" in workflow
     assert 'test "$(git rev-parse HEAD^{tree})" = "${EXPECTED_TREE}"' in workflow
     assert 'test "$(git rev-parse FETCH_HEAD^{tree})" = "${EXPECTED_TREE}"' in workflow
     assert "github.event.pull_request.merged == true" not in workflow
+
+
+def test_bounded_github_helper_rejects_unknown_endpoints_and_writes_atomically(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    curl = fake_bin / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "output=\n"
+        "previous=\n"
+        'for argument in "$@"; do\n'
+        '  if [ "${previous}" = --output ]; then output=${argument}; fi\n'
+        "  previous=${argument}\n"
+        "done\n"
+        "printf 'partial' > \"${output}\"\n"
+        "printf '500'\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o700)
+    output = tmp_path / "response.json"
+    output.write_text("original", encoding="utf-8")
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "PATH": f"{fake_bin}:{Path(sys.executable).parent}:/usr/bin:/bin",
+            "GH_TOKEN": "synthetic-token",
+        }
+    )
+
+    rejected = subprocess.run(
+        [str(BOUNDED_API), "repos/synthetic/project/unknown", str(output)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert rejected.returncode == 1
+    assert output.read_text(encoding="utf-8") == "original"
+
+    failed = subprocess.run(
+        [str(BOUNDED_API), "repos/synthetic/project/issues/7", str(output)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert failed.returncode == 1
+    assert output.read_text(encoding="utf-8") == "original"
+    assert not list(tmp_path.glob(".bounded-github-api.*"))
+
+
+def test_bounded_github_helper_uses_redirect_safe_bearer_auth(tmp_path: Path) -> None:
+    helper = BOUNDED_API.read_text(encoding="utf-8")
+    assert '--oauth2-bearer "${GH_TOKEN:?GH_TOKEN is required}"' in helper
+    assert 'header "Authorization:' not in helper
+    assert 'mktemp "${output_directory}/.bounded-github-api.XXXXXX"' in helper

@@ -202,6 +202,7 @@ def authorize_release(
     requested_version: str = "",
     requested_commit: str = "",
     requested_head: str = "",
+    requested_base: str = "",
 ) -> dict[str, str]:
     """Return safe workflow outputs for one exact repository-owned release merge."""
 
@@ -246,6 +247,8 @@ def authorize_release(
         raise AuthorizationError("requested commit does not match the release pull request")
     if requested_head and requested_head != head_sha:
         raise AuthorizationError("requested head does not match the release pull request")
+    if requested_base and requested_base != base_sha:
+        raise AuthorizationError("requested base does not match the release pull request")
 
     head_tree, _head_parents = _commit_metadata(head_commit_payload, head_sha, "head")
     merge_tree, merge_parents = _commit_metadata(merge_commit_payload, commit, "merge")
@@ -283,6 +286,7 @@ def main() -> int:
     parser.add_argument("--requested-version", default="")
     parser.add_argument("--requested-commit", default="")
     parser.add_argument("--requested-head", default="")
+    parser.add_argument("--requested-base", default="")
     parser.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -307,6 +311,7 @@ def main() -> int:
         args.requested_version,
         args.requested_commit,
         args.requested_head,
+        args.requested_base,
     )
     with args.github_output.open("a", encoding="utf-8") as output:
         for key, value in outputs.items():

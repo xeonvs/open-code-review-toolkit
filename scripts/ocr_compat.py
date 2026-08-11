@@ -1061,6 +1061,8 @@ def prepare_update(
         transition = _release_transition(comparison, candidate)
         if transition is None:
             _fail("candidate evidence chain is not a contiguous release sequence")
+        if transition != "patch" and item.get("schema_version") != 2:
+            _fail("minor and major promotions require chain-aware evidence schema 2")
         if item.get("result") != "compatible":
             _fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")

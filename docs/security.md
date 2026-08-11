@@ -16,9 +16,10 @@ The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP 
 - GitLab notes enforce both UTF-8 byte limits and Python character limits.
 - Non-idempotent API writes are not blindly retried.
 - Automatic approval is bound to the exact reviewed MR head after GitLab diff
-  synchronization and bounded readback. Unapproval is limited to the current
-  toolkit user and requires an owned versioned receipt; human approvals are
-  never reset or removed.
+  synchronization and bounded readback. The transaction is add-only: because
+  GitLab cannot bind unapproval to an immutable reviewed SHA, the toolkit never
+  removes an existing approval. Project-owned approval reset and invalidation
+  rules remain authoritative.
 - Markers, fingerprints, snapshots, and rollback logic constrain repeated runs.
 - Human replies are ownership boundaries: automation must not rewrite or resolve a discussion after a human takes part.
 - Merge-request source SHA and merge-result SHA remain distinct.
@@ -39,6 +40,13 @@ toolkit does not bypass them.
 
 Pin Open Code Review `v1.9.1` and verify its checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP stdio commands and remote endpoints are privileged configuration; allow only reviewed servers and tools.
 The [OCR compatibility policy](compatibility.md) requires double-source asset digest verification, bounded downloads, an executed Linux contract probe, and protected PR/release gates; qualification automation never writes directly to `main` or promotes an ambiguous release.
+
+Stable-release authorization executes from the protected base SHA that predates
+the release candidate. Candidate and merge commits are bounded data rather than
+the source of their own authorizer. GitHub API reads use a closed endpoint
+allowlist, HTTPS-only redirect policy, redirect-safe bearer authentication, and
+atomic replacement only after transfer and status validation. Persisted release
+receipts accept only their exact versioned top-level and nested schemas.
 
 Remote MCP is HTTPS-only, forbids URL userinfo and fragments, and never logs endpoint URLs or header values. Put credentials in protected/masked CI variables and reference them through `headers_from`; literal credential-like headers fail closed. OCR expands the resulting `$VARIABLE` at connection time. Full browser OAuth, PKCE, refresh-token persistence, tenant binding, and revocation remain conditional on a named supported-provider requirement; use a reviewed stdio OAuth proxy when those flows are required today.
 

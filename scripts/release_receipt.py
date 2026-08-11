@@ -164,6 +164,8 @@ def validate_receipt(
         artifacts=artifacts,
         python_minors=python_minors,
     )
+    if set(payload) != set(expected):
+        raise ReceiptError("existing release receipt has an unsupported schema shape")
     for key in (
         "schema_version",
         "version",
@@ -179,7 +181,7 @@ def validate_receipt(
         if payload.get(key) != expected[key]:
             raise ReceiptError(f"existing release receipt field {key!r} does not match")
     workflow = payload.get("workflow")
-    if not isinstance(workflow, dict):
+    if not isinstance(workflow, dict) or set(workflow) != {"run_id", "run_attempt"}:
         raise ReceiptError("existing release receipt workflow identity is invalid")
     run_id = workflow.get("run_id")
     run_attempt = workflow.get("run_attempt")

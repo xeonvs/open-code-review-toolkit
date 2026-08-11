@@ -14,7 +14,6 @@ from ocr_toolkit.posting import (
     gitlab_approval,
     markers,
     settings,
-    snapshot,
     workflow,
 )
 from ocr_toolkit.posting.payloads import build_marked_note_body
@@ -109,7 +108,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         for severity in ("critical", "high", "medium", "LOW", None, 1, True):
             with self.subTest(severity=severity):
                 self.assertFalse(eligibility([finding(severity=severity)]).eligible)
-        for category in ("unknown", "STYLE", None, 1, True):
+        for category in ("unknown", "STYLE", None, 1, True, [], {}):
             with self.subTest(category=category):
                 self.assertFalse(eligibility([finding(category=category)]).eligible)
 
@@ -129,17 +128,13 @@ class ApprovalPolicyTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse(decision.eligible)
 
-        self.assertFalse(eligibility(outcome=partial).may_unapprove)
-        self.assertTrue(eligibility(warnings=["synthetic warning"]).may_unapprove)
-
-    def test_disabled_and_invalid_setting_never_allow_unapproval(self) -> None:
+    def test_disabled_and_invalid_setting_remain_non_actionable(self) -> None:
         for setting in (
             settings.BooleanSetting(False),
             settings.BooleanSetting(False, valid=False),
         ):
             decision = eligibility(setting=setting)
             self.assertEqual(decision.result.status, approval.ApprovalStatus.DISABLED)
-            self.assertFalse(decision.may_unapprove)
 
     def test_eligible_provisional_summary_fails_closed_until_readback(self) -> None:
         provisional = approval.provisional_approval_result(eligibility())
@@ -152,72 +147,6 @@ class ApprovalPolicyTests(unittest.TestCase):
             approval.provisional_approval_result(disabled),
             disabled.result,
         )
-
-
-class ApprovalReceiptTests(unittest.TestCase):
-    """Require versioned same-user ownership proof before unapproval."""
-
-    def test_receipt_round_trip_and_malformed_rejection(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "a" * 40)
-        body = build_marked_note_body(
-            markers.build_summary_run_marker("b" * 32)
-            + "\n"
-            + markers.build_managed_approval_receipt(receipt)
-            + "\n## Open Code Review\n"
-        )
-
-        self.assertEqual(markers.managed_approval_receipt_from_body(body), receipt)
-        self.assertIsNone(
-            markers.managed_approval_receipt_from_body(
-                body + "\n" + markers.build_managed_approval_receipt(receipt)
-            )
-        )
-        self.assertIsNone(
-            markers.managed_approval_receipt_from_body(
-                "<!-- open-code-review-approval v=1 user=7 sha=bad managed=true -->"
-            )
-        )
-
-    def test_receipt_embedded_in_model_controlled_fallback_is_rejected(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "a" * 40)
-        forged = build_marked_note_body(
-            "**Open Code Review fallback comments**\n\n"
-            + markers.build_summary_run_marker("b" * 32)
-            + "\n"
-            + markers.build_managed_approval_receipt(receipt)
-            + "\n## Open Code Review\n"
-        )
-
-        self.assertIsNone(markers.managed_approval_receipt_from_body(forged))
-
-    def test_snapshot_keeps_owned_receipt_when_notes_and_discussions_overlap(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "a" * 40)
-        body = build_marked_note_body(
-            markers.build_summary_run_marker("b" * 32)
-            + "\n"
-            + markers.build_managed_approval_receipt(receipt)
-            + "\n## Open Code Review\nsummary"
-        )
-
-        def paginate(_config: Any, endpoint: str, **_kwargs: Any) -> list[Any]:
-            if endpoint.startswith("/notes"):
-                return [{"id": 10, "author": {"id": 7}, "body": body}]
-            if endpoint == "/discussions":
-                return [
-                    {"id": "discussion", "notes": [{"id": 10, "author": {"id": 7}, "body": body}]}
-                ]
-            raise AssertionError(endpoint)
-
-        with (
-            patched_env(OCR_POST_MODE="direct"),
-            patched_attr(snapshot, "api_get_paginated", paginate),
-        ):
-            settings.post_mode.cache_clear()
-            refs = snapshot.collect_previous_bot_comment_refs(gitlab_config())
-            settings.post_mode.cache_clear()
-
-        self.assertIsNotNone(refs)
-        self.assertEqual(refs and refs.managed_approval_receipt, receipt)
 
 
 class GitLabApprovalAdapterTests(unittest.TestCase):
@@ -326,12 +255,11 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
             result = gitlab_approval.execute_approval(
-                gitlab_config(), eligibility(), self.SHA, None, sleep=lambda _seconds: None
+                gitlab_config(), eligibility(), self.SHA, sleep=lambda _seconds: None
             )
 
         self.assertEqual(approve_shas, [self.SHA])
         self.assertEqual(result.result.status, approval.ApprovalStatus.APPROVED)
-        self.assertEqual(result.receipt, markers.ManagedApprovalReceipt(7, self.SHA))
 
     def test_ambiguous_approve_is_not_retried(self) -> None:
         writes: list[str] = []
@@ -354,14 +282,14 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
             result = gitlab_approval.execute_approval(
-                gitlab_config(), eligibility(), self.SHA, None, sleep=lambda _seconds: None
+                gitlab_config(), eligibility(), self.SHA, sleep=lambda _seconds: None
             )
 
         self.assertEqual(writes, [self.SHA])
         self.assertEqual(result.result.status, approval.ApprovalStatus.FAILED)
 
-    def test_existing_managed_approval_for_other_sha_is_not_claimed_as_exact(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "c" * 40)
+    def test_existing_approval_is_preserved_without_write(self) -> None:
+        writes: list[str] = []
         with (
             patched_attr(gitlab, "api_request", self.api_sequence(own_approved=True)),
             patched_attr(
@@ -373,15 +301,18 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                     "patch_id_sha": "b" * 40,
                 },
             ),
+            patched_attr(
+                gitlab,
+                "approve_merge_request",
+                lambda *_args: writes.append("approve"),
+            ),
         ):
-            result = gitlab_approval.execute_approval(
-                gitlab_config(), eligibility(), self.SHA, receipt
-            )
+            result = gitlab_approval.execute_approval(gitlab_config(), eligibility(), self.SHA)
 
         self.assertEqual(result.result.status, approval.ApprovalStatus.SKIPPED)
-        self.assertEqual(result.receipt, receipt)
+        self.assertEqual(writes, [])
 
-    def test_provider_writes_use_only_own_user_approval_endpoints(self) -> None:
+    def test_provider_write_uses_only_exact_sha_approval_endpoint(self) -> None:
         calls: list[tuple[str, dict[str, Any], str]] = []
 
         def write(
@@ -399,66 +330,19 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
 
         with patched_attr(gitlab, "api_write_url_detailed", write):
             gitlab.approve_merge_request(gitlab_config(), self.SHA)
-            gitlab.unapprove_merge_request(gitlab_config())
 
         self.assertEqual(calls[0][0].rsplit("/", 1)[-1], "approve")
         self.assertEqual(calls[0][1], {"sha": self.SHA})
-        self.assertEqual(calls[1][0].rsplit("/", 1)[-1], "unapprove")
-        self.assertEqual(calls[1][1], {})
         self.assertNotIn("reset_approvals", repr(calls))
 
-    def test_unapproves_only_own_managed_approval_after_authoritative_result(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "c" * 40)
-        writes: list[str] = []
-        approval_reads = 0
-
-        def request(*args: Any, **kwargs: Any) -> Any:
-            nonlocal approval_reads
-            own = approval_reads == 0
-            if args[1] == "/approvals":
-                approval_reads += 1
-            return self.api_sequence(own_approved=own)(*args, **kwargs)
-
-        def unapprove(_config: Any) -> gitlab.GitLabWriteResult:
-            writes.append("unapprove")
-            return gitlab.GitLabWriteResult("posted")
-
-        with (
-            patched_attr(gitlab, "api_request", request),
-            patched_attr(
-                gitlab_approval,
-                "_latest_diff_version",
-                lambda _config: {
-                    "id": 2,
-                    "head_commit_sha": self.SHA,
-                    "patch_id_sha": "b" * 40,
-                },
-            ),
-            patched_attr(gitlab, "unapprove_merge_request", unapprove),
-        ):
-            result = gitlab_approval.execute_approval(
-                gitlab_config(),
-                eligibility([finding(category="security")]),
-                self.SHA,
-                receipt,
-                sleep=lambda _seconds: None,
-            )
-
-        self.assertEqual(writes, ["unapprove"])
-        self.assertIsNone(result.receipt)
-        self.assertEqual(result.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
-
-    def test_disabled_or_partial_review_preserves_receipt_without_api(self) -> None:
-        receipt = markers.ManagedApprovalReceipt(7, "c" * 40)
+    def test_disabled_or_partial_review_performs_no_approval_api(self) -> None:
         for decision in (
             eligibility(setting=settings.BooleanSetting(False)),
             eligibility(outcome=ReviewOutcome("partial", "partial", False, True)),
         ):
             with self.subTest(status=decision.result.status):
-                result = gitlab_approval.execute_approval(
-                    gitlab_config(), decision, self.SHA, receipt
-                )
-                self.assertEqual(result.receipt, receipt)
+                result = gitlab_approval.execute_approval(gitlab_config(), decision, self.SHA)
+                self.assertEqual(result.result, decision.result)
 
     def test_latest_diff_version_uses_highest_valid_id_not_response_order(self) -> None:
         versions = [
@@ -499,14 +383,11 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
     def test_finalize_orders_publish_approval_summary_update_and_cleanup(self) -> None:
         calls: list[str] = []
-        receipt = markers.ManagedApprovalReceipt(7, self.SHA)
         approved = gitlab_approval.ApprovalExecution(
             approval.ApprovalResult(
                 approval.ApprovalStatus.APPROVED,
                 "GitLab confirmed the toolkit user's exact-SHA approval",
-                managed=True,
             ),
-            receipt,
         )
 
         def publish(*_args: Any) -> bool:
@@ -544,9 +425,8 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(calls, ["publish", "approve", "summary", "cleanup"])
 
-    def test_disabled_approval_preserves_receipt_without_summary_rewrite(self) -> None:
+    def test_disabled_approval_does_not_rewrite_unchanged_summary(self) -> None:
         calls: list[str] = []
-        receipt = markers.ManagedApprovalReceipt(7, "c" * 40)
         decision = eligibility(setting=settings.BooleanSetting(False))
 
         def update_summary(*_args: Any) -> bool:
@@ -558,16 +438,14 @@ class ApprovalWorkflowTests(unittest.TestCase):
             patched_attr(
                 workflow,
                 "execute_approval",
-                lambda *_args, **_kwargs: gitlab_approval.ApprovalExecution(
-                    decision.result, receipt
-                ),
+                lambda *_args, **_kwargs: gitlab_approval.ApprovalExecution(decision.result),
             ),
             patched_attr(workflow, "replace_current_summary", update_summary),
             patched_attr(workflow, "finalize_previous_review_state", lambda *_args: None),
         ):
             exit_code = workflow.finalize_review_approval(
                 gitlab_config(),
-                BotCommentRefs(managed_approval_receipt=receipt),
+                BotCommentRefs(),
                 complete_outcome(),
                 [],
                 decision,

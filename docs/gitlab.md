@@ -27,7 +27,10 @@ current notes publish, it waits for GitLab diff and approval synchronization,
 verifies the current MR head against the reviewed SHA, submits that exact SHA,
 and confirms only the authenticated toolkit user's approval through bounded
 readback. Set `OCR_AUTO_APPROVE=false` for a comment-only bot or before upgrading
-an integration whose approval rules have not granted the bot permission.
+an integration whose approval rules have not granted the bot permission. This
+transaction is add-only: an ineligible or disabled later run never removes an
+existing approval. Configure GitLab's own reset or invalidation policy if
+approvals must be withdrawn after the source branch changes.
 
 Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
 

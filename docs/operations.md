@@ -42,8 +42,8 @@ non-null `patch_id_sha`. It then passes that exact SHA to GitLab's approve API
 and confirms the authenticated user in approval readback. A moved head is a
 normal `skipped` result and is never retried against the new commit.
 
-Approve, unapprove, and summary-update writes are not retried after timeout,
-connection loss, 5xx, or another ambiguous response. GitLab remains
+Approve and summary-update writes are not retried after timeout, connection
+loss, 5xx, or another ambiguous response. GitLab remains
 authoritative for eligible approvers, required groups, Code Owners,
 protected-branch rules, and password or SAML reauthentication. A rejected or
 failed approval never rolls back the already published advisory review.
@@ -53,12 +53,14 @@ The summary records exactly one bounded state: `approved`, `not eligible`,
 approval-management failure leaves the published review successful but visibly
 failed; with `OCR_STRICT_POSTING=true`, it also returns a nonzero exit code.
 
-When a later complete authoritative review is no longer eligible, the toolkit
-may unapprove only the authenticated user and only when an owned versioned
-summary receipt proves that this toolkit managed the earlier approval. It never
-calls `reset_approvals` or removes a human approval. Partial, skipped, legacy,
-and disabled runs preserve an earlier managed approval. Human discussion replies
-remain ownership boundaries for notes but do not independently block approval.
+The transaction is deliberately add-only because GitLab's unapprove endpoint
+cannot bind removal to an immutable reviewed SHA at mutation time. The toolkit
+therefore never removes an existing approval, even when the authenticated bot
+user approved earlier. Ineligible, partial, skipped, legacy, and disabled runs
+do not make an approval write. Configure GitLab's project-owned reset or
+invalidation policy when approvals must be withdrawn after new commits. Human
+discussion replies remain ownership boundaries for notes but do not
+independently block approval.
 
 ## Discussion lifecycle
 

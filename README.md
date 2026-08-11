@@ -33,7 +33,8 @@ After every current review note publishes, the GitLab adapter can add a
 conservative approval bound to the exact reviewed source SHA. This write is
 enabled by default; set `OCR_AUTO_APPROVE=false` before upgrading when the bot
 must remain comment-only. GitLab approval rules and protected-branch policy
-remain authoritative.
+remain authoritative. The toolkit only adds an eligible approval; it never
+removes an existing approval when a later review is ineligible or disabled.
 
 Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the evidence collector supplies target-ref decisions to OCR and never lets a source change self-authorize its own review. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
 

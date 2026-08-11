@@ -44,6 +44,18 @@ This note records recurring execution mistake patterns discovered during real wo
 
 **Correction:** Make the release PR the final repository mutation while leaving external gates explicitly pending. Bind publication to the exact reviewed tree; create and independently read back an immutable machine-readable receipt after registry, provenance, tag, Release, hash, and install verification; close tracked issues only then. Recover partial publication from the original authorization and receipt without another commit or closure PR.
 
+## Letting a release candidate execute its own authorizer
+
+**Failure mode:** The post-merge workflow checks out the candidate or merge
+commit and runs its release-authorization helper from that tree. Exact tree,
+parent, metadata, and check validation then appear rigorous even though the
+candidate supplied the code deciding whether those checks pass.
+
+**Correction:** Run authorization code from the protected base SHA that
+predates the release PR. Fetch candidate head, merge, metadata, checks, and
+rules only as bounded data, bind recovery to the same reviewed base, and test
+that workflow checkout independently from candidate inspection.
+
 ## Updating status tables but not current-state prose
 
 **Failure mode:** The roadmap says a milestone is established while strategy and README still describe its implementation as a target or migration in progress.
@@ -108,6 +120,30 @@ This note records recurring execution mistake patterns discovered during real wo
 
 **Correction:** Bound the read itself, including persisted configuration and sibling helper paths; stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git or config input, and subprocess termination.
 
+## Trusting a bounded HTTP response before the complete read commits
+
+**Failure mode:** A helper limits bytes and time but accepts arbitrary endpoint
+paths, forwards a bearer header across redirects, or writes directly over a
+trusted destination before curl and status validation finish.
+
+**Correction:** Use a closed endpoint grammar, transport-native redirect-safe
+authentication, HTTPS-only redirect policy, and a private same-directory
+temporary file. Replace the destination atomically only after transfer success
+and an allowed status. Preserve the prior trusted file and remove partial output
+on every failure path.
+
+## Automating a destructive provider write without a mutation-time identity guard
+
+**Failure mode:** A preflight read confirms the reviewed SHA, then automation
+deletes, resets, or withdraws state through an endpoint that cannot receive that
+SHA. The provider may advance between the read and write, so later readback can
+detect but cannot undo a destructive TOCTOU mutation.
+
+**Correction:** Require the immutable reviewed identity in the mutation request
+itself. If the provider endpoint has no such guard, do not automate the
+destructive transition; preserve existing state and rely on explicit
+provider-owned reset or invalidation policy.
+
 ## Trusting toolkit-created evidence on reload
 
 **Failure mode:** Collection validates records, but reload assigns snapshots, deltas, or diagnostics directly. A replaced private artifact bypasses the original redaction, size, or cross-reference checks.
@@ -115,6 +151,16 @@ This note records recurring execution mistake patterns discovered during real wo
 **Why it happens:** File ownership is confused with future content integrity. Persistence is not treated as a fresh deserialization boundary.
 
 **Correction:** Validate, bound, normalize, redact, and cross-check every persisted field on every read. Test missing references, oversized nested delta values, secrets, control characters, hard links, and schema/type mismatches.
+
+## Accepting extension fields in a security receipt
+
+**Failure mode:** Recovery compares the known fields of a persisted release or
+security receipt but silently accepts extra top-level or nested keys. A future
+or attacker-controlled shape is then treated as the old authorization contract.
+
+**Correction:** Define and validate an exact key set at every receipt object
+level before comparing values. Add regressions for unknown top-level and nested
+fields, malformed optional values, and type-confused identities.
 
 ## Clearing only process-level Git overrides
 

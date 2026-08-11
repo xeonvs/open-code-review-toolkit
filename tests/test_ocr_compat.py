@@ -888,6 +888,28 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         )
 
 
+@pytest.mark.parametrize("version", ["1.10.0", "2.0.0"])
+def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: str) -> None:
+    """Legacy evidence cannot prove a chain across a semantic-version boundary."""
+
+    module = load_script()
+    evidence = {
+        "schema_version": 1,
+        "version": version,
+        "result": "compatible",
+        "classification": "human-review-required",
+    }
+
+    with pytest.raises(module.CompatibilityError, match="chain-aware evidence schema 2"):
+        module.prepare_update(
+            manifest_path=MANIFEST,
+            evidence=evidence,
+            fragment_number=73,
+            human_conclusions={version: "Synthetic reviewed conclusion."},
+            root=PROJECT_ROOT,
+        )
+
+
 def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
     module = load_script()
     evidence = {

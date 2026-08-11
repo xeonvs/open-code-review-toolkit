@@ -141,9 +141,9 @@ def artifact_manifest(
             raise PreviewError(f"{filename} has no download URL")
         if not isinstance(provenance_url, str):
             raise PreviewError(f"{filename} has no provenance URL")
-        parsed = urlsplit(url)
-        provenance = urlsplit(provenance_url)
         try:
+            parsed = urlsplit(url)
+            provenance = urlsplit(provenance_url)
             port = parsed.port
             provenance_port = provenance.port
         except ValueError as exc:

@@ -147,8 +147,13 @@ def _replacement_shape_omission(replacement: str) -> SuggestionOmission | None:
         return SuggestionOmission.QUICK_ACTION
 
     nonblank = [line for line in lines if line.strip()]
-    if nonblank and all(line.startswith(("+", "-")) for line in nonblank):
-        return SuggestionOmission.DIFF_PREFIXED
+    if nonblank:
+        diff_prefixed = all(line.startswith(("+", "-")) for line in nonblank)
+        unified_diff_markers = sum(
+            line.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@")) for line in nonblank
+        )
+        if diff_prefixed or unified_diff_markers >= 2:
+            return SuggestionOmission.DIFF_PREFIXED
     return None
 
 

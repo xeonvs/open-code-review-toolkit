@@ -97,9 +97,20 @@ class SuggestionValidationTests(unittest.TestCase):
         self.assertEqual(decision.state, suggestions.SuggestionState.ACTIONABLE)
 
     def test_diff_prefixed_replacement_is_omitted(self) -> None:
-        decision = evaluate(suggestion_code="+route:\n+  destination: 198.51.100.0/24")
+        replacements = (
+            "+route:\n+  destination: 198.51.100.0/24",
+            "diff --git a/config/service.yml b/config/service.yml\n"
+            "index 1234567..89abcde 100644\n"
+            "--- a/config/service.yml\n"
+            "+++ b/config/service.yml\n"
+            "@@ -2,2 +2,2 @@\n"
+            "-route:\n+endpoint:",
+        )
 
-        self.assertEqual(decision.omission, suggestions.SuggestionOmission.DIFF_PREFIXED)
+        for replacement in replacements:
+            with self.subTest(replacement=replacement):
+                decision = evaluate(suggestion_code=replacement)
+                self.assertEqual(decision.omission, suggestions.SuggestionOmission.DIFF_PREFIXED)
 
     def test_exact_noop_is_suppressed_without_existing_code(self) -> None:
         decision = evaluate(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ocr_toolkit.posting.comments import clean_text, code_text, comment_line, line_number
@@ -13,24 +12,6 @@ if TYPE_CHECKING:
     from ocr_toolkit.posting.gitlab import GitLabConfig
 
 MARKER = "<!-- open-code-review-bot -->"
-
-
-SUMMARY_RUN_MARKER_RE = re.compile(r"<!-- open-code-review-summary run=([0-9a-f]{32}) -->")
-
-
-MANAGED_APPROVAL_RE = re.compile(
-    r"<!-- open-code-review-approval v=1 user=([1-9][0-9]*) "
-    r"sha=([0-9a-f]{40}) managed=true -->"
-)
-
-
-MANAGED_APPROVAL_SUMMARY_RE = re.compile(
-    r"\A<!-- open-code-review-bot -->\r?\n"
-    r"<!-- open-code-review-summary run=[0-9a-f]{32} -->\r?\n"
-    r"<!-- open-code-review-approval v=1 user=([1-9][0-9]*) "
-    r"sha=([0-9a-f]{40}) managed=true -->\r?\n"
-    r"## Open Code Review(?:\r?\n|\Z)"
-)
 
 
 MARKER_WITH_FINGERPRINT_RE = re.compile(
@@ -46,41 +27,12 @@ OCR_REPLY_COMMAND_RE = re.compile(
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
 
 
-@dataclass(frozen=True, slots=True)
-class ManagedApprovalReceipt:
-    """Proof that this toolkit user managed approval for one reviewed SHA."""
-
-    user_id: int
-    reviewed_sha: str
-
-
 def build_summary_run_marker(run_id: str) -> str:
     """Render a unique bounded marker used to find the current summary note."""
 
     if not re.fullmatch(r"[0-9a-f]{32}", run_id):
         raise ValueError("summary run id must be 32 lowercase hexadecimal characters")
     return f"<!-- open-code-review-summary run={run_id} -->"
-
-
-def build_managed_approval_receipt(receipt: ManagedApprovalReceipt) -> str:
-    """Render a versioned marker proving toolkit-managed approval ownership."""
-
-    if receipt.user_id <= 0 or not re.fullmatch(r"[0-9a-f]{40}", receipt.reviewed_sha):
-        raise ValueError("managed approval receipt fields are invalid")
-    return (
-        "<!-- open-code-review-approval v=1 "
-        f"user={receipt.user_id} sha={receipt.reviewed_sha} managed=true -->"
-    )
-
-
-def managed_approval_receipt_from_body(body: str) -> ManagedApprovalReceipt | None:
-    """Parse one valid managed-approval receipt from an owned summary body."""
-
-    match = MANAGED_APPROVAL_SUMMARY_RE.match(body)
-    if match is None or len(MANAGED_APPROVAL_RE.findall(body)) != 1:
-        return None
-    raw_user_id, reviewed_sha = match.groups()
-    return ManagedApprovalReceipt(int(raw_user_id), reviewed_sha)
 
 
 def _digest_payload(parts: list[str], digest_size: int = FINGERPRINT_LEN // 2) -> str:

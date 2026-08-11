@@ -59,9 +59,7 @@ from ocr_toolkit.posting.gitlab import (
 )
 from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
 from ocr_toolkit.posting.markers import (
-    ManagedApprovalReceipt,
     annotate_comment_fingerprints,
-    build_managed_approval_receipt,
     build_summary_run_marker,
     is_own_bot_note,
 )
@@ -134,17 +132,10 @@ def mr_head_sha() -> str:
     return clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
 
 
-def summary_with_receipts(
-    body: str,
-    run_id: str,
-    receipt: ManagedApprovalReceipt | None,
-) -> str:
-    """Attach bounded hidden identity and approval ownership to one summary."""
+def summary_with_run_marker(body: str, run_id: str) -> str:
+    """Attach one bounded hidden transaction identity to the summary."""
 
-    markers = [build_summary_run_marker(run_id)]
-    if receipt is not None:
-        markers.append(build_managed_approval_receipt(receipt))
-    return "\n".join([*markers, body])
+    return "\n".join((build_summary_run_marker(run_id), body))
 
 
 def find_current_summary_note(config: GitLabConfig, run_id: str) -> int | None:
@@ -214,17 +205,14 @@ def finalize_review_approval(
         config,
         eligibility,
         reviewed_commit,
-        previous_refs.managed_approval_receipt,
     )
-    final_body = summary_with_receipts(
+    final_body = summary_with_run_marker(
         render_summary(execution.result),
         run_id,
-        execution.receipt,
     )
-    provisional_body = summary_with_receipts(
+    provisional_body = summary_with_run_marker(
         render_summary(provisional_approval_result(eligibility)),
         run_id,
-        previous_refs.managed_approval_receipt,
     )
     summary_updated = final_body == provisional_body or replace_current_summary(
         config,
@@ -237,7 +225,6 @@ def finalize_review_approval(
                 ApprovalStatus.FAILED,
                 "the published approval status could not be safely confirmed",
             ),
-            execution.receipt or previous_refs.managed_approval_receipt,
         )
         print(
             "Automatic approval summary update failed after review publication.",
@@ -700,10 +687,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 emoji=emoji,
             )
 
-        body = summary_with_receipts(
+        body = summary_with_run_marker(
             render_no_comments_summary(provisional_approval_result(approval_eligibility)),
             summary_run_id,
-            previous_bot_comment_refs.managed_approval_receipt,
         )
         response = post_review_note_bounded(
             config,
@@ -883,10 +869,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     summary_response = post_review_note_bounded(
         config,
         "",
-        summary_with_receipts(
+        summary_with_run_marker(
             render_findings_summary(provisional_approval_result(approval_eligibility)),
             summary_run_id,
-            previous_bot_comment_refs.managed_approval_receipt,
         ),
         draft_note_ids,
     )

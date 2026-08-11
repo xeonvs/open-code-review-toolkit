@@ -539,17 +539,6 @@ def approve_merge_request(config: GitLabConfig, sha: str) -> GitLabWriteResult:
     )
 
 
-def unapprove_merge_request(config: GitLabConfig) -> GitLabWriteResult:
-    """Remove only the authenticated user's approval without retrying."""
-
-    return api_write_url_detailed(
-        url=f"{config.api_base}/unapprove",
-        api_token=config.api_token,
-        auth_header=config.auth_header,
-        data={},
-    )
-
-
 def delete_discussion_note(config: GitLabConfig, discussion_id: str, note_id: int) -> bool:
     """Delete a note inside a merge request discussion thread."""
 

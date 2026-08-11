@@ -59,10 +59,12 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 `OCR_AUTO_APPROVE` defaults to `true` and adds a formal GitLab approval after a
 complete review publishes. It accepts `true`, `1`, `yes`, or `on`; set `false`,
-`0`, `no`, or `off` to disable all approval and unapproval management for that
-run. An empty value uses the enabled default. Any other value fails closed to
-disabled and emits a bounded diagnostic without printing the value. Disabled
-runs preserve an earlier toolkit-managed approval.
+`0`, `no`, or `off` to disable the approval attempt for that run. An empty value
+uses the enabled default. Any other value fails closed to disabled and emits a
+bounded diagnostic without printing the value. The toolkit never removes an
+existing approval. Ineligible, partial, skipped, legacy, and disabled runs make
+no approval write, so project-owned reset and invalidation rules remain the only
+mechanism for withdrawing an earlier approval.
 
 The initial policy is fixed: zero findings, or at most three findings whose
 severity is exactly `low` and category is exactly `style`, `documentation`, or

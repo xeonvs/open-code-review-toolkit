@@ -14,7 +14,6 @@ from ocr_toolkit.posting.approval import (
     ApprovalResult,
     ApprovalStatus,
 )
-from ocr_toolkit.posting.markers import ManagedApprovalReceipt
 
 SYNC_ATTEMPTS = 10
 SYNC_INTERVAL_SECONDS = 2.0
@@ -23,10 +22,9 @@ PENDING_MERGE_STATUSES = frozenset({"checking", "approvals_syncing"})
 
 @dataclass(frozen=True, slots=True)
 class ApprovalExecution:
-    """Final provider result and any ownership receipt that must survive."""
+    """Final provider result after exact-SHA synchronization and readback."""
 
     result: ApprovalResult
-    receipt: ManagedApprovalReceipt | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,20 +173,15 @@ def execute_approval(
     config: gitlab.GitLabConfig,
     eligibility: ApprovalEligibility,
     expected_sha: str,
-    prior_receipt: ManagedApprovalReceipt | None,
     *,
     attempts: int = SYNC_ATTEMPTS,
     interval_seconds: float = SYNC_INTERVAL_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
 ) -> ApprovalExecution:
-    """Apply the policy after publication while preserving human approvals."""
+    """Apply exact-SHA approval without ever removing an existing approval."""
 
-    if prior_receipt is not None and prior_receipt.user_id != config.current_user_id:
-        prior_receipt = None
-    if eligibility.result.status is ApprovalStatus.DISABLED:
-        return ApprovalExecution(eligibility.result, prior_receipt)
-    if not eligibility.eligible and (prior_receipt is None or not eligibility.may_unapprove):
-        return ApprovalExecution(eligibility.result, prior_receipt)
+    if not eligibility.eligible:
+        return ApprovalExecution(eligibility.result)
 
     state, synchronization_result = wait_for_synchronized_approval_state(
         config,
@@ -201,67 +194,19 @@ def execute_approval(
         return ApprovalExecution(
             synchronization_result
             or ApprovalResult(ApprovalStatus.FAILED, "GitLab synchronization failed"),
-            prior_receipt,
         )
 
-    if eligibility.eligible:
-        if state.own_approved:
-            if prior_receipt is None:
-                return ApprovalExecution(
-                    ApprovalResult(
-                        ApprovalStatus.SKIPPED,
-                        "the toolkit user already approved without a managed receipt",
-                    )
-                )
-            if prior_receipt.reviewed_sha != expected_sha:
-                return ApprovalExecution(
-                    ApprovalResult(
-                        ApprovalStatus.SKIPPED,
-                        "the existing managed approval was not bound to the reviewed commit",
-                    ),
-                    prior_receipt,
-                )
-            return ApprovalExecution(
-                ApprovalResult(
-                    ApprovalStatus.APPROVED,
-                    "the toolkit user's approval is confirmed for the reviewed commit",
-                    managed=True,
-                ),
-                ManagedApprovalReceipt(config.current_user_id or 0, expected_sha),
-            )
-
-        write = gitlab.approve_merge_request(config, expected_sha)
-        if not write.posted:
-            return ApprovalExecution(_write_rejection(write, "approve"))
-        confirmed, confirmation_error = wait_for_synchronized_approval_state(
-            config,
-            expected_sha,
-            attempts=1,
-            interval_seconds=0,
-            sleep=sleep,
-        )
-        if confirmed is None or not confirmed.own_approved:
-            return ApprovalExecution(
-                confirmation_error
-                or ApprovalResult(
-                    ApprovalStatus.FAILED,
-                    "GitLab approval readback did not confirm the toolkit user",
-                ),
-            )
+    if state.own_approved:
         return ApprovalExecution(
             ApprovalResult(
-                ApprovalStatus.APPROVED,
-                "GitLab confirmed the toolkit user's exact-SHA approval",
-                managed=True,
-            ),
-            ManagedApprovalReceipt(config.current_user_id or 0, expected_sha),
+                ApprovalStatus.SKIPPED,
+                "the toolkit user already approved; no approval state was changed",
+            )
         )
 
-    if not state.own_approved:
-        return ApprovalExecution(eligibility.result)
-    write = gitlab.unapprove_merge_request(config)
+    write = gitlab.approve_merge_request(config, expected_sha)
     if not write.posted:
-        return ApprovalExecution(_write_rejection(write, "unapprove"), prior_receipt)
+        return ApprovalExecution(_write_rejection(write, "approve"))
     confirmed, confirmation_error = wait_for_synchronized_approval_state(
         config,
         expected_sha,
@@ -269,13 +214,17 @@ def execute_approval(
         interval_seconds=0,
         sleep=sleep,
     )
-    if confirmed is None or confirmed.own_approved:
+    if confirmed is None or not confirmed.own_approved:
         return ApprovalExecution(
             confirmation_error
             or ApprovalResult(
                 ApprovalStatus.FAILED,
-                "GitLab unapproval readback did not confirm removal",
+                "GitLab approval readback did not confirm the toolkit user",
             ),
-            prior_receipt,
         )
-    return ApprovalExecution(eligibility.result)
+    return ApprovalExecution(
+        ApprovalResult(
+            ApprovalStatus.APPROVED,
+            "GitLab confirmed the toolkit user's exact-SHA approval",
+        )
+    )

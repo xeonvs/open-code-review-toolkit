@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; feature-tip implementation, validation/E2E, release-lifecycle, and OCR 1.9.1 qualification checkpoints complete
+Status: active; final OCR completed once, findings corrected, deterministic post-review validation complete; protected PR and release delivery pending
 Owner: Codex
 Last Updated: 2026-08-11
 Release Classification: release-required
@@ -33,7 +33,9 @@ independently read back.
 - Make `OCR_AUTO_APPROVE` default on with the established boolean vocabulary.
   An invalid value disables approval for that run. Encode the initial policy in
   code and fail closed when authoritative completeness or typed finding
-  metadata cannot be proven.
+  metadata cannot be proven. Keep the transaction add-only: GitLab cannot bind
+  unapproval to the reviewed SHA at mutation time, so ineligible or disabled
+  later reviews preserve every existing approval.
 - After the release-lifecycle checkpoint, qualify the contiguous Open Code
   Review 1.9.0 and 1.9.1 chain from authoritative release/source evidence.
   Preserve a separate checksum/contract record and human impact conclusion for
@@ -62,8 +64,10 @@ independently read back.
    proof, bounded omission reasons, documentation, complete regressions, review,
    and the #70 checkpoint commit.
 2. [x] Implement typed auto-approval configuration and policy, exact-SHA GitLab
-   synchronization/write/readback, managed own-user approval receipts,
-   documentation, complete regressions, review, and the #71 checkpoint commit.
+   synchronization/write/readback, add-only provider semantics, documentation,
+   complete regressions, review, and the #71 checkpoint commit. The original
+   managed-unapproval design was removed after final OCR found that GitLab
+   cannot provide the required mutation-time immutable guard.
 3. [x] Replace the redundant post-release closure-PR contract with exact-tree
    release authorization and deterministic `ocr-toolkit.release-receipt/v1`
    evidence; update durable rules, recovery behavior, tests, and the lifecycle
@@ -77,10 +81,10 @@ independently read back.
    documentation against the implemented code. Run focused tests, the synthetic
    GitLab E2E, Python 3.12 quality, Towncrier draft, workflow/document/privacy
    checks, and `git diff --check`.
-6. [ ] Commit the complete feature tip and run one local toolkit-owned OCR review
+6. [x] Commit the complete feature tip and run one local toolkit-owned OCR review
    with private result/stderr artifacts, no GitLab posting, and verified nonzero
-   built-in MCP use. Correct findings and complete final self-review without a
-   second OCR or Codex Security run.
+   built-in MCP use. Correct its findings, complete deterministic validation and
+   final self-review, and do not run a second OCR or Codex Security review.
 7. [ ] Run deterministic post-review validation and pinned local Gitleaks over
    the unpublished history, push the exact reviewed branch, open one feature PR,
    resolve every conversation, pass protected checks, and squash-merge.
@@ -145,24 +149,24 @@ independently read back.
   bounded MR and full paginated diff-version state, selects the highest valid
   version ID, waits at most ten two-second intervals for merge/approval
   synchronization and a non-null patch ID, verifies the open current head, and
-  submits only the reviewed 40-hex SHA. Approve, unapprove, and summary-update
-  writes are attempted once and followed by bounded readback.
-- Versioned managed-approval receipts are accepted only from the fixed prefix of
-  an owned plain toolkit summary. Conflicting, forged fallback, malformed, or
-  wrong-user receipts cannot authorize unapproval. A later complete
-  authoritative ineligible review can remove only the authenticated user's
-  proven managed approval; partial, skipped, legacy, disabled, and ambiguous
-  states preserve it. No runtime path calls GitLab `reset_approvals`.
+  submits only the reviewed 40-hex SHA. Approve and summary-update writes are
+  attempted once and followed by bounded readback.
+- Approval is add-only. An already approved toolkit user is reported as skipped
+  without a provider write; ineligible, partial, skipped, legacy, disabled, and
+  ambiguous runs also make no approval write. The adapter exposes no unapprove
+  operation or managed-approval receipt because GitLab cannot bind unapproval to
+  the immutable reviewed SHA at mutation time. Project-owned reset and
+  invalidation rules remain authoritative.
 - The published summary contains one bounded approval state. Eligible runs first
   publish a conservative failed-until-confirmed state, then update the uniquely
   marked owned summary once after provider readback. Failure never rolls back the
   advisory review; strict mode returns nonzero while advisory mode remains
   nonfatal. Existing GitLab rules, groups, Code Owners, protected branches, and
   reauthentication stay authoritative.
-- Self-review fixed receipt loss on partial reviews, version-order assumptions,
-  receipt parsing after cross-endpoint deduplication, stale receipt inheritance,
-  different-SHA approval claims, and provisional-summary truth. Ruff and strict
-  mypy pass; 148 posting/approval/suggestion tests and 15 public
+- Self-review fixed version-order assumptions, different-SHA approval claims,
+  and provisional-summary truth. The final OCR correction subsequently removed
+  the unsafe managed-unapproval design and its receipt surface entirely. Ruff
+  and strict mypy pass; 148 posting/approval/suggestion tests and 15 public
   documentation/integration contracts pass. Towncrier 0.4.7 draft includes the
   default-on write and opt-out, and `git diff --check` passes. Roadmap and future
   backlog statuses remain unchanged because neither issue completes an existing
@@ -171,10 +175,11 @@ independently read back.
 ### Release Lifecycle Checkpoint
 
 - The merged release PR is now the final repository mutation without claiming
-  future delivery. Authorization executes from that exact merge checkout,
-  validates tracked metadata from the same immutable ref, proves squash-tree
-  equivalence and parent identity, and requires every live strict `main` check
-  context from its exact GitHub App on the reviewed head SHA.
+  future delivery. Authorization executes from the protected reviewed base that
+  predates the release candidate, treats candidate head and merge commits as
+  bounded data, validates tracked metadata from the exact merge ref, proves
+  squash-tree equivalence and parent identity, and requires every live strict
+  `main` check context from its exact GitHub App on the reviewed head SHA.
 - Registry verification covers Python 3.12-3.14 and exact PyPI Integrity
   publisher/subject provenance. GitHub artifact attestations, annotated-tag
   target, exact Release metadata/assets, immutable status, and a deterministic
@@ -199,6 +204,61 @@ independently read back.
   tests plus 81 subtests at 79.62% coverage. Roadmap and backlog statuses remain
   unchanged at this checkpoint because the lifecycle hardening changes process,
   not an outcome milestone or future-work activation trigger.
+
+### Final OCR Review And Correction Checkpoint
+
+- The only final local OCR review covered
+  `bb8827148f13b17b209495788ac4f7b15573a168..fe88f8d78744847bc58b35129de5c9130cd46853`
+  with official OCR 1.9.1. It completed all 23 selected items in 39 minutes 5
+  seconds with zero failed or waived items, returned 16 findings, and made 68
+  mandatory `ocr_toolkit_evidence` calls. The private toolkit receipt records
+  the same 68 calls; result/stderr and `.review-context` artifacts retain owner-
+  only permissions, `.review-context` is absent from the reviewed diff, and no
+  GitLab posting command ran.
+- Thirteen findings exposed valid boundary defects or the same root-cause
+  classes. Release authorization now executes from the protected pre-candidate
+  base. The GitHub API helper has a closed endpoint grammar, redirect-safe
+  bearer authentication, private same-directory temporary output, allowed-
+  status validation, and atomic replacement. Minor/major OCR promotion requires
+  chain-aware schema 2. Stable receipts reject unknown top-level and nested
+  fields; malformed registry provenance URLs fail closed; unhashable finding
+  categories degrade to not eligible; complete unified-diff replacements are
+  rejected; and unused approval-receipt parsing was removed.
+- The two unapproval findings and the approval-without-durable-receipt finding
+  shared one architectural cause: GitLab's unapprove endpoint cannot receive the
+  reviewed SHA, so preflight and readback cannot close its destructive TOCTOU
+  gap. Automatic approval is therefore add-only. All unapproval and managed-
+  receipt runtime paths were removed instead of adding another compensating
+  state machine.
+- Three suggestions were rejected after source and regression review. Python's
+  `binascii.Error` is already a `ValueError`, so existing malformed-base64
+  handling covers both flagged decode sites. A user-authored exact issue-receipt
+  marker intentionally blocks closure as the documented anti-preemption,
+  fail-closed contract; it is not trusted as a successful receipt.
+- Root-cause sibling audits covered URL parsers, release/security receipt
+  loaders, bounded HTTP helpers, and destructive provider writes. Public
+  approval/release/security documentation and `AGENTS.md`, project principles,
+  and execution pitfalls now encode the corrected boundaries. A direct
+  regression proves that schema-1 evidence cannot cross minor or major OCR
+  boundaries. No second OCR review or Codex Security run will be performed.
+- The final post-correction gate runs from isolated Python 3.12.13 and passes
+  formatting, Ruff, strict mypy, Bandit with zero medium/high findings, 623
+  tests plus 85 subtests, and 79.09% coverage. OCR manifest validation,
+  Towncrier 0.4.7 draft, changed-shell ShellCheck, workflow YAML parsing,
+  changed-public-content privacy checks across 31 files, and `git diff --check`
+  pass. Fresh `0.4.7.dev7` wheel and sdist pass Twine, canonical composition,
+  centralized SCM-version, zero-runtime-dependency, and Python `>=3.12,<3.15`
+  metadata checks. Separate Python 3.12 installs pass `pip check` and execute
+  the installed CLI/import under restricted `PATH` from a hostile shadow-package
+  working directory. Wheel SHA-256 is
+  `0582f8b1ed7623cec55aaeef289bde7d9ccda9c1b9b856d30eacb95e57508ac6`;
+  sdist SHA-256 is
+  `4bdcfc1a302e1f7392623b2c651bf8d747e8228891b74f14257479e8ab93dee6`.
+- Final manual self-review removed the obsolete `ApprovalResult.managed` flag,
+  confirmed every workflow-used GitHub endpoint is represented by the closed
+  helper grammar, verified recovery binds the protected reviewed base, and
+  found no roadmap, backlog, or narrative status tail. Exactly one worktree is
+  present and all review/quality artifacts remain ignored and private.
 
 ### OCR 1.9.0-1.9.1 Qualification Checkpoint
 

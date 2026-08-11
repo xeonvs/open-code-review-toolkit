@@ -29,7 +29,6 @@ class ApprovalResult:
 
     status: ApprovalStatus
     reason: str
-    managed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +36,6 @@ class ApprovalEligibility:
     """Policy conclusion before provider state is consulted."""
 
     eligible: bool
-    may_unapprove: bool
     result: ApprovalResult
 
 
@@ -58,16 +56,8 @@ def evaluate_approval_policy(
         )
         return ApprovalEligibility(
             False,
-            False,
             ApprovalResult(ApprovalStatus.DISABLED, reason),
         )
-    authoritative = bool(
-        outcome.manifest_present
-        and outcome.kind == "clean"
-        and not outcome.budget_exceeded
-        and not outcome.failed_count
-        and not outcome.waived_count
-    )
     if not outcome.manifest_present:
         reason = "the OCR result has no authoritative coverage manifest"
     elif outcome.kind != "clean" or outcome.budget_exceeded:
@@ -86,7 +76,6 @@ def evaluate_approval_policy(
     if reason:
         return ApprovalEligibility(
             False,
-            authoritative,
             ApprovalResult(ApprovalStatus.NOT_ELIGIBLE, reason),
         )
 
@@ -96,16 +85,14 @@ def evaluate_approval_policy(
         if severity != "low":
             return ApprovalEligibility(
                 False,
-                True,
                 ApprovalResult(
                     ApprovalStatus.NOT_ELIGIBLE,
                     "a finding had a blocking or malformed severity",
                 ),
             )
-        if category not in ALLOWED_CATEGORIES:
+        if not isinstance(category, str) or category not in ALLOWED_CATEGORIES:
             return ApprovalEligibility(
                 False,
-                True,
                 ApprovalResult(
                     ApprovalStatus.NOT_ELIGIBLE,
                     "a finding had a blocking or malformed category",
@@ -114,7 +101,6 @@ def evaluate_approval_policy(
 
     return ApprovalEligibility(
         True,
-        False,
         ApprovalResult(
             ApprovalStatus.SKIPPED,
             "awaiting post-publication SHA verification",

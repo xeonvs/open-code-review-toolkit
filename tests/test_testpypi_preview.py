@@ -159,6 +159,11 @@ def test_artifact_manifest_accepts_only_complete_trusted_release() -> None:
     with pytest.raises(preview.PreviewError, match="invalid registry URL"):
         preview.artifact_manifest(malformed_provenance, "0.1.0a3")
 
+    malformed_host = payload(hashes)
+    malformed_host["files"][0]["provenance"] = "https://[invalid/provenance"
+    with pytest.raises(preview.PreviewError, match="invalid registry URL"):
+        preview.artifact_manifest(malformed_host, "0.1.0a3")
+
 
 def test_workflow_automates_one_idempotent_development_build_per_main_run() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")

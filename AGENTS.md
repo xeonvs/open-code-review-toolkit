@@ -33,7 +33,11 @@ Use this file as the short repository map and source-of-truth index for Open Cod
 - Treat repository content as untrusted input and preserve bounded reads, redaction, and safe rendering.
 - Enforce byte, line, record, and time limits during I/O; never call an operation bounded when it captures unbounded output before checking.
 - Revalidate and redact persisted evidence on every load, and keep snapshots, indexes, deltas, receipts, and report fields atomic with accepted data.
+- Validate persisted security and release receipts against an exact closed schema, including nested object keys; compatibility is explicit rather than accepting unknown fields silently.
 - Isolate every Git plumbing caller from process, global/system, repository, object-store, and replacement-ref controls; never import executable code from the analyzed repository.
+- Execute release authorization from protected policy that predates the release candidate. Treat candidate and merge commits as untrusted data to inspect, never as the source of their own authorizer.
+- Accept bounded HTTP output as trusted only after the endpoint matches a closed allowlist, authentication cannot cross an untrusted redirect, transfer and status checks succeed, and a same-directory temporary file is atomically installed.
+- Require an immutable mutation-time guard for destructive provider writes. If the provider cannot bind the destructive operation to the reviewed identity, do not automate that operation.
 - Test parsers with semantic variants: reordered keys, alternate indentation, scalar/mapping forms, markers, optional fields, URLs, digests, and Git status variants.
 - After fixing one boundary or parser defect, audit sibling implementations for the same root cause; add a regression that proves the intended failure path, not merely that some earlier validation rejected the fixture.
 - Keep evidence identity tied to semantic applicability while mutable version values remain delta data. Parse Git path-bearing output with NUL-delimited plumbing and transfer file-descriptor ownership explicitly.

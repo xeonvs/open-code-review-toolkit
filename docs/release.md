@@ -21,7 +21,22 @@ The delivery sequence is:
 
 The release pull request is the final repository mutation. It owns repository-side preparation: stable and next version markers, deterministic source epoch, tracked release authorization metadata, generated Towncrier changelog, release notes, and reconciliation of `PLANS.md`, the execution-history index, roadmap, backlog, strategy, and README where applicable. It lists external checks as pending and must not claim that registry files, provenance, tag, immutable Release, receipt, or installs already exist.
 
-The post-merge workflow binds the squash merge to the exact reviewed release-head tree and the live `main` ruleset's required checks. It publishes or exact-hash-verifies the stable artifacts, verifies registry and GitHub provenance plus supported-Python installs, and creates `ocr-toolkit.release-receipt/v1` before publishing the GitHub Release. The receipt deliberately marks Release asset self-readback as pending; the workflow then downloads the complete asset set, publishes the draft, requires GitHub's immutable state, and only afterward records idempotent issue receipts and closes the tracked issues. Do not mark the release objective complete after feature merge, development publication, or release-PR preparation. If the owner explicitly defers stable publication, keep the release-required plan active or blocked and record the reason, target stable version, completed checkpoints, and exact resume action.
+The post-merge workflow executes its authorizer from the protected base SHA that
+predates the release PR; candidate head and squash-merge commits are inspected
+only as bounded data and cannot supply the code that authorizes themselves.
+Authorization then binds the squash merge to the exact reviewed release-head
+tree, its exact protected base parent, and the live `main` ruleset's required
+checks. It publishes or exact-hash-verifies the stable artifacts, verifies
+registry and GitHub provenance plus supported-Python installs, and creates
+`ocr-toolkit.release-receipt/v1` before publishing the GitHub Release. The
+receipt deliberately marks Release asset self-readback as pending; the workflow
+then downloads the complete asset set, publishes the draft, requires GitHub's
+immutable state, and only afterward records idempotent issue receipts and closes
+the tracked issues. Do not mark the release objective complete after feature
+merge, development publication, or release-PR preparation. If the owner
+explicitly defers stable publication, keep the release-required plan active or
+blocked and record the reason, target stable version, completed checkpoints,
+and exact resume action.
 
 ## Development builds
 
@@ -62,4 +77,11 @@ The immutable receipt carries the release PR, reviewed base/head/merge/tree, ori
 
 `PLANS.md` keeps the just-prepared release cycle so its pending gates and later external receipt remain immediately discoverable from the tag and tracked issues. During the next release PR, move the previously retained externally reconciled cycle without rewriting it into `docs/engineering/execution_history/releases.md`, add or update the corresponding stable-tag row in the [execution-history index](engineering/execution_history/README.md), and validate every archive anchor. Preserve dates inside archived plans; stable tags, not calendar years, are the lookup keys.
 
-Recovery dispatch is bound to the original release PR, version, merge commit, and reviewed head. It accepts only exact registry bytes and the existing immutable receipt's release identity. If only issue commenting or closure failed, recovery reuses the exact GitHub Actions-owned receipt comment, accepts an already-completed issue, and does not change repository files, tag, or immutable Release assets. A user-authored marker cannot preempt that bot-owned receipt.
+Recovery dispatch is bound to the original release PR, version, merge commit,
+reviewed head, and protected reviewed base. It executes the same trusted-base
+authorizer, accepts only exact registry bytes and the existing immutable
+receipt's closed release identity, and rejects unknown receipt fields. If only
+issue commenting or closure failed, recovery reuses the exact GitHub
+Actions-owned receipt comment, accepts an already-completed issue, and does not
+change repository files, tag, or immutable Release assets. A user-authored
+marker cannot preempt that bot-owned receipt.

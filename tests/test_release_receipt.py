@@ -148,6 +148,34 @@ def test_existing_receipt_recovery_ignores_new_run_but_rejects_delivery_drift() 
         )
 
 
+def test_existing_receipt_rejects_unknown_top_level_and_workflow_fields() -> None:
+    common = {
+        "version": "0.4.7",
+        "tag": "v0.4.7",
+        "release_pr": 73,
+        "issues": [70, 71],
+        "base": "a" * 40,
+        "head": "b" * 40,
+        "merge": "c" * 40,
+        "tree": "d" * 40,
+        "authorized_at": "2026-08-10T10:00:00Z",
+        "artifacts": {
+            "open_code_review_toolkit-0.4.7.tar.gz": "e" * 64,
+            "open_code_review_toolkit-0.4.7-py3-none-any.whl": "f" * 64,
+        },
+        "python_minors": ["3.12", "3.13", "3.14"],
+    }
+    payload = build_receipt()
+    payload["future_claim"] = "verified"
+    with pytest.raises(receipt.ReceiptError, match="schema shape"):
+        receipt.validate_receipt(payload, **common)
+
+    payload = build_receipt()
+    payload["workflow"]["future_identity"] = 1
+    with pytest.raises(receipt.ReceiptError, match="workflow identity"):
+        receipt.validate_receipt(payload, **common)
+
+
 def encoded_statement(filename: str, digest: str) -> str:
     """Return one base64 PyPI publish-attestation statement."""
 
