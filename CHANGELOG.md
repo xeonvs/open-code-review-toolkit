@@ -1,3 +1,26 @@
+## 0.4.7 - 2026-08-11
+
+### 🚀 Features
+
+- Add default-on `OCR_AUTO_APPROVE` for conservative, exact-SHA GitLab approval after every current review note publishes, with an explicit fail-closed opt-out and bounded status readback.
+  Limit eligibility to complete manifest-backed reviews with at most three low-severity style, documentation, or maintainability findings, while preserving every existing approval when a later review is ineligible or disabled. ([#71](https://github.com/xeonvs/open-code-review-toolkit/issues/71))
+- Target checksum-verified Open Code Review 1.9.1 after qualifying 1.9.0 through 1.9.1. ([#72](https://github.com/xeonvs/open-code-review-toolkit/issues/72))
+
+### 🐛 Bug Fixes
+
+- Publish an actionable GitLab suggestion only when `existing_code` proves that the replacement applies to one contiguous range in the immutable reviewed head.
+  Retain the explanatory finding, with a bounded non-sensitive omission reason, when a replacement is stale, malformed, multi-region, diff-prefixed, or otherwise unverifiable. ([#70](https://github.com/xeonvs/open-code-review-toolkit/issues/70))
+
+### 📖 Documentation
+
+- Document the established evidence and MCP architecture, reconcile the completed 0.4.6 lifecycle and remaining backlog with current code, and index archived execution history by stable release tag.
+  Make the release pull request the final repository mutation while exact-tree authorization, registry and provenance verification, an immutable machine-readable receipt, and idempotent issue closure prove external delivery after merge. ([#69](https://github.com/xeonvs/open-code-review-toolkit/issues/69))
+
+### 🧩 Rules
+
+- The recommended OCR built-in rules and reviewable-file allowlist now include Nim source, script, and package files. ([#73](https://github.com/xeonvs/open-code-review-toolkit/issues/73))
+
+
 ## 0.4.6 - 2026-08-08
 
 ### 🚀 Features

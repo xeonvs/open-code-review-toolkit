@@ -6,7 +6,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
-| `v0.4.6` | [OCR 1.8.9-1.8.10 qualification and toolkit 0.4.6](../../../PLANS.md#completed-plan-qualify-ocr-189-1810-and-release-toolkit-046) | The latest externally reconciled cycle remains in the active registry until the next stable closure. |
+| `v0.4.6` | [OCR 1.8.9-1.8.10 qualification and toolkit 0.4.6](releases.md#plan-toolkit-0-4-6) | The subsequent [0.4.6 lifecycle and backlog reconciliation](releases.md#plan-toolkit-0-4-6-reconciliation) records the process correction carried into later releases. |
 | `v0.4.5` | [OCR 1.8.7-1.8.8 qualification and toolkit 0.4.5](releases.md#plan-toolkit-0-4-5) | Compatibility-chain automation and the toolchain update included in that release. |
 | `v0.4.4` | [Evidence coverage and GitLab review health](releases.md#plan-toolkit-0-4-4) | Scoped completeness, failed-file coverage, and summary separation. |
 | `v0.4.3` | [OCR compatibility automation hardening](releases.md#plan-toolkit-0-4-3) | Retention and compatibility issue lifecycle. |
