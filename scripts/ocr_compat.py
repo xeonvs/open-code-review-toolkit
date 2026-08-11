@@ -11,6 +11,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -125,6 +126,20 @@ def _version(value: str) -> tuple[int, int, int]:
     if match is None:
         _fail(f"invalid stable semantic version: {value!r}")
     return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
+
+
+def _release_transition(
+    previous: tuple[int, int, int], candidate: tuple[int, int, int]
+) -> str | None:
+    """Classify one adjacent SemVer transition accepted for reviewed promotion."""
+
+    if candidate[:2] == previous[:2] and candidate[2] == previous[2] + 1:
+        return "patch"
+    if candidate[0] == previous[0] and candidate[1] == previous[1] + 1 and candidate[2] == 0:
+        return "minor"
+    if candidate[0] == previous[0] + 1 and candidate[1:] == (0, 0):
+        return "major"
+    return None
 
 
 def canonical_json(value: Any) -> bytes:
@@ -533,21 +548,47 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
     return completed.stdout
 
 
-def _synthetic_repo(directory: Path) -> tuple[Path, str, str]:
+def _isolated_probe_environment(home: Path) -> dict[str, str]:
+    """Return a private OCR/Git environment independent of operator configuration."""
+
+    home.mkdir(mode=0o700)
+    temp = home / "tmp"
+    temp.mkdir(mode=0o700)
+    git = shutil.which("git")
+    if git is None or not Path(git).is_absolute():
+        _fail("qualification requires an absolute Git executable")
+    return {
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "HOME": str(home),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "NO_PROXY": "127.0.0.1,localhost",
+        "PATH": os.pathsep.join((str(Path(git).parent), os.defpath)),
+        "TMPDIR": str(temp),
+        "XDG_CACHE_HOME": str(home / ".cache"),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "XDG_DATA_HOME": str(home / ".local" / "share"),
+    }
+
+
+def _synthetic_repo(directory: Path, env: dict[str, str]) -> tuple[Path, str, str]:
+    """Create an immutable two-commit fixture under isolated Git configuration."""
+
     repo = directory / "synthetic-review"
     repo.mkdir()
-    _run(["git", "init", "--initial-branch=main"], cwd=repo)
-    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo)
-    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo)
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=env)
     target = repo / "example.py"
     target.write_text("def value():\n    return 1\n", encoding="utf-8")
-    _run(["git", "add", "example.py"], cwd=repo)
-    _run(["git", "commit", "-m", "baseline"], cwd=repo)
-    base = _run(["git", "rev-parse", "HEAD"], cwd=repo).strip()
+    _run(["git", "add", "example.py"], cwd=repo, env=env)
+    _run(["git", "commit", "-m", "baseline"], cwd=repo, env=env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=env).strip()
     target.write_text("def value():\n    return 2\n", encoding="utf-8")
-    _run(["git", "add", "example.py"], cwd=repo)
-    _run(["git", "commit", "-m", "change value"], cwd=repo)
-    head = _run(["git", "rev-parse", "HEAD"], cwd=repo).strip()
+    _run(["git", "add", "example.py"], cwd=repo, env=env)
+    _run(["git", "commit", "-m", "change value"], cwd=repo, env=env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=env).strip()
     return repo, base, head
 
 
@@ -580,6 +621,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                         {
                             "content": "Synthetic compatibility finding.",
                             "existing_code": "    return 2",
+                            "thinking": "Synthetic private compatibility reasoning.",
                             "category": "maintainability",
                             "severity": "low",
                         }
@@ -677,7 +719,8 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     """Run deterministic CLI and JSON-consumer probes against one OCR binary."""
 
     binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
-    repo, base, head = _synthetic_repo(directory)
+    git_env = _isolated_probe_environment(directory / "git-home")
+    repo, base, head = _synthetic_repo(directory, git_env)
     version_output = _run([str(binary), "--version"], cwd=repo)
     if re.search(rf"(?<![0-9.])v?{re.escape(version)}(?![0-9.])", version_output) is None:
         _fail(f"OCR binary did not report candidate version {version}")
@@ -685,11 +728,30 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     missing = sorted(flag for flag in REQUIRED_REVIEW_FLAGS if flag not in help_output)
     if missing:
         _fail(f"candidate review help is missing required flags: {', '.join(missing)}")
-    preview = _run([str(binary), "review", "--from", base, "--to", head, "--preview"], cwd=repo)
-    if "example.py" not in preview:
+    preview_home = directory / "preview-home"
+    preview_env = _isolated_probe_environment(preview_home)
+    preview_command = [str(binary), "review", "--from", base, "--to", head, "--preview"]
+    json_preview = _version(version) >= (1, 9, 0)
+    if json_preview:
+        preview_command.extend(["--format", "json"])
+    preview = _run(preview_command, cwd=repo, env=preview_env)
+    if json_preview:
+        try:
+            preview_payload = json.loads(preview)
+        except json.JSONDecodeError as exc:
+            raise CompatibilityError("candidate JSON preview did not emit JSON") from exc
+        preview_files = preview_payload.get("files") if isinstance(preview_payload, dict) else None
+        if not isinstance(preview_files, list) or not any(
+            isinstance(item, dict) and item.get("path") == "example.py" for item in preview_files
+        ):
+            _fail("candidate JSON preview did not select the synthetic changed file")
+    elif "example.py" not in preview:
         _fail("candidate preview did not select the synthetic changed file")
+    if os.path.lexists(preview_home / ".opencodereview" / "sessions"):
+        _fail("candidate preview created a review session store")
 
-    env = dict(os.environ)
+    review_home = directory / "review-home"
+    env = _isolated_probe_environment(review_home)
     with _stub_gateway() as gateway_url:
         env.update(
             {
@@ -756,12 +818,28 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         _fail("toolkit token summary rejected the candidate result contract")
     if "1 total" not in format_tool_calls_summary(sample.get("tool_calls")):
         _fail("toolkit tool-call summary rejected the candidate result contract")
+    thinking_probe: dict[str, Any] | None = None
+    if _version(version) >= (1, 9, 0):
+        if comment.get("thinking") != "Synthetic private compatibility reasoning.":
+            _fail("candidate did not preserve additive comment thinking")
+        if "Synthetic private compatibility reasoning." in rendered:
+            _fail("toolkit posting consumer exposed private comment thinking")
+        thinking_probe = {
+            "additive_field_preserved": True,
+            "posting_exposes_thinking": False,
+            "result": "passed",
+        }
 
-    return {
+    contracts: dict[str, Any] = {
         "optional_capabilities": optional_capabilities,
         "version_probe": "passed",
         "required_review_flags": sorted(REQUIRED_REVIEW_FLAGS),
-        "preview_probe": {"path": "example.py", "result": "passed"},
+        "preview_probe": {
+            "format": "json" if json_preview else "text",
+            "path": "example.py",
+            "result": "passed",
+            "session_store_created": False,
+        },
         "result_contract_probe": {
             "additive_fields_allowed": True,
             "comment_fields": sorted(comment),
@@ -770,6 +848,9 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             "result": "passed",
         },
     }
+    if thinking_probe is not None:
+        contracts["comment_thinking_probe"] = thinking_probe
+    return contracts
 
 
 def classify_candidate(
@@ -977,8 +1058,9 @@ def prepare_update(
             _fail(f"candidate evidence chain contains duplicate version {version}")
         candidate = _version(version)
         comparison = _version(expected_comparison)
-        if candidate[:2] != comparison[:2] or candidate[2] != comparison[2] + 1:
-            _fail("candidate evidence chain is not a contiguous same-minor patch sequence")
+        transition = _release_transition(comparison, candidate)
+        if transition is None:
+            _fail("candidate evidence chain is not a contiguous release sequence")
         if item.get("result") != "compatible":
             _fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")
@@ -990,25 +1072,26 @@ def prepare_update(
         elif schema_version != 1 or len(evidences) != 1:
             _fail("multi-release promotion requires chain-aware evidence schema 2")
         classification = item.get("classification")
+        conclusion = conclusions.get(version)
+        if conclusion is not None and (
+            not isinstance(conclusion, str)
+            or not conclusion.strip()
+            or len(conclusion) > 2_000
+            or any(ord(character) < 32 and character not in "\n\t" for character in conclusion)
+        ):
+            _fail(f"candidate {version} conclusion must be bounded plain text")
         if classification == "human-review-required":
-            conclusion = conclusions.get(version)
-            if (
-                not isinstance(conclusion, str)
-                or not conclusion.strip()
-                or len(conclusion) > 2_000
-                or any(ord(character) < 32 and character not in "\n\t" for character in conclusion)
-            ):
+            if conclusion is None:
                 _fail(f"human-reviewed candidate {version} requires a bounded conclusion")
         elif classification != "automatic-safe":
             _fail(f"candidate evidence {version} has an invalid classification")
+        if transition != "patch" and classification != "human-review-required":
+            _fail("minor and major promotions require explicit human review")
         versions.append(version)
         expected_comparison = version
-    if set(conclusions) != {
-        version
-        for version, item in zip(versions, evidences, strict=True)
-        if item.get("classification") == "human-review-required"
-    }:
-        _fail("human conclusions must match exactly the human-reviewed evidence versions")
+    unknown_conclusions = set(conclusions).difference(versions)
+    if unknown_conclusions:
+        _fail("human conclusions may reference only evidence versions in this promotion")
 
     version = versions[-1]
     releases = manifest.get("releases")

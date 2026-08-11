@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.8.10"
-    assert manifest["monitoring_floor"] == "1.8.10"
+    assert manifest["recommended_version"] == "1.9.1"
+    assert manifest["monitoring_floor"] == "1.9.1"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -58,6 +58,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.8.8", "tested"),
         ("1.8.9", "tested"),
         ("1.8.10", "tested"),
+        ("1.9.0", "tested"),
+        ("1.9.1", "tested"),
     ]
 
 
@@ -120,9 +122,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.8.11")]
+    first_page = [release("1.9.2")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.8.10")]
+    second_page = [release("1.9.1")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -132,14 +134,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.8.11"]
+    assert [item["tag_name"] for item in unseen] == ["v1.9.2"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.8.11")]
+    page = [release("1.9.2")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -184,14 +186,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.8.11")])
+    matrix = module.qualification_matrix(manifest, [release("1.9.2")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.8.10",
-                "tag": "v1.8.11",
-                "tested_baseline_version": "1.8.10",
+                "comparison_version": "1.9.1",
+                "tag": "v1.9.2",
+                "tested_baseline_version": "1.9.1",
             }
         ]
     }
@@ -243,6 +245,28 @@ def test_automatic_safe_policy_is_conservative() -> None:
     assert any("newer patch" in reason for reason in skipped_reasons)
 
 
+@pytest.mark.parametrize(
+    ("previous", "candidate", "expected"),
+    [
+        ((1, 8, 10), (1, 8, 11), "patch"),
+        ((1, 8, 10), (1, 9, 0), "minor"),
+        ((1, 9, 9), (2, 0, 0), "major"),
+        ((1, 8, 10), (1, 9, 1), None),
+        ((1, 8, 10), (1, 10, 0), None),
+        ((1, 8, 10), (2, 0, 1), None),
+        ((1, 8, 10), (1, 8, 10), None),
+    ],
+)
+def test_release_transition_accepts_only_adjacent_semver_steps(
+    previous: tuple[int, int, int],
+    candidate: tuple[int, int, int],
+    expected: str | None,
+) -> None:
+    module = load_script()
+
+    assert module._release_transition(previous, candidate) == expected
+
+
 def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
     module = load_script()
     checksum = tmp_path / "sha256sum.txt"
@@ -250,6 +274,38 @@ def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
 
     with pytest.raises(module.CompatibilityError, match="unsafe or duplicate"):
         module.parse_checksum_file(checksum)
+
+
+def test_probe_environment_ignores_operator_ocr_and_git_configuration(
+    tmp_path: Path,
+) -> None:
+    module = load_script()
+    home = tmp_path / "probe-home"
+
+    with patched_env(
+        GIT_DIR="/tmp/untrusted-git-dir",
+        GIT_CONFIG_COUNT="1",
+        OCR_CONFIG_PATH="/tmp/operator-config.json",
+        OCR_LLM_PROVIDER="operator-provider",
+    ):
+        env = module._isolated_probe_environment(home)
+
+    assert env["HOME"] == str(home)
+    assert env["XDG_CONFIG_HOME"] == str(home / ".config")
+    assert env["GIT_CONFIG_GLOBAL"] == module.os.devnull
+    assert env["GIT_CONFIG_SYSTEM"] == module.os.devnull
+    assert env["PATH"].split(module.os.pathsep)[0] == str(
+        Path(module.shutil.which("git") or "").parent
+    )
+    assert env["TMPDIR"] == str(home / "tmp")
+    assert not any(key.startswith("OCR_") for key in env)
+    assert not any(
+        key.startswith("GIT_")
+        for key in env
+        if key not in {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"}
+    )
+    assert home.stat().st_mode & 0o777 == 0o700
+    assert (home / "tmp").stat().st_mode & 0o777 == 0o700
 
 
 def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
@@ -796,11 +852,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.8.11",
+        "version": "1.9.2",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.8.10",
-        "tested_baseline_version": "1.8.10",
+        "comparison_version": "1.9.1",
+        "tested_baseline_version": "1.9.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -808,5 +864,91 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=42,
+            root=PROJECT_ROOT,
+        )
+
+
+def test_prepare_update_requires_human_review_for_minor_transition() -> None:
+    module = load_script()
+    evidence = {
+        "schema_version": 2,
+        "version": "1.10.0",
+        "result": "compatible",
+        "classification": "automatic-safe",
+        "comparison_version": "1.9.1",
+        "tested_baseline_version": "1.9.1",
+    }
+
+    with pytest.raises(module.CompatibilityError, match="explicit human review"):
+        module.prepare_update(
+            manifest_path=MANIFEST,
+            evidence=evidence,
+            fragment_number=73,
+            root=PROJECT_ROOT,
+        )
+
+
+def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
+    module = load_script()
+    evidence = {
+        "schema_version": 2,
+        "version": "1.11.0",
+        "result": "compatible",
+        "classification": "human-review-required",
+        "comparison_version": "1.9.1",
+        "tested_baseline_version": "1.9.1",
+    }
+
+    with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
+        module.prepare_update(
+            manifest_path=MANIFEST,
+            evidence=evidence,
+            fragment_number=73,
+            human_conclusions={"1.11.0": "Synthetic reviewed conclusion."},
+            root=PROJECT_ROOT,
+        )
+
+
+def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
+    module = load_script()
+    evidence = {
+        "schema_version": 2,
+        "version": "1.9.2",
+        "result": "compatible",
+        "classification": "automatic-safe",
+        "comparison_version": "1.9.1",
+        "tested_baseline_version": "1.9.1",
+    }
+
+    with pytest.raises(module.CompatibilityError, match="only evidence versions"):
+        module.prepare_update(
+            manifest_path=MANIFEST,
+            evidence=evidence,
+            fragment_number=72,
+            human_conclusions={"1.9.3": "Synthetic unrelated conclusion."},
+            root=PROJECT_ROOT,
+        )
+
+
+@pytest.mark.parametrize("conclusion", ["", "x" * 2_001, "unsafe\x00text"])
+def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
+    conclusion: str,
+) -> None:
+    module = load_script()
+    evidence = {
+        "schema_version": 2,
+        "version": "1.9.2",
+        "result": "compatible",
+        "classification": "automatic-safe",
+        "comparison_version": "1.9.1",
+        "tested_baseline_version": "1.9.1",
+    }
+
+    with pytest.raises(module.CompatibilityError, match="bounded plain text"):
+        module.prepare_update(
+            manifest_path=MANIFEST,
+            evidence=evidence,
+            fragment_number=72,
+            human_conclusions={"1.9.2": conclusion},
             root=PROJECT_ROOT,
         )

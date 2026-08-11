@@ -52,6 +52,18 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
     workflow = (HELPER_DIR / "ocr-review.gitlab-ci.yml").read_text(encoding="utf-8")
+    manifest = json.loads(
+        (PROJECT_ROOT / "compatibility" / "ocr-support.json").read_text(encoding="utf-8")
+    )
+    recommended = manifest["recommended_version"]
+    recommended_entry = next(
+        item for item in manifest["releases"] if item["version"] == recommended
+    )
+    linux_digest = next(
+        asset["sha256"]
+        for asset in recommended_entry["assets"]
+        if asset["name"] == "opencodereview-linux-amd64"
+    )
 
     for command in ("ocr-ci review", "ocr-ci post"):
         assert command in docs
@@ -68,12 +80,10 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "not a source-code parser" in configuration
     assert "Target/base guidance may describe policy" in security
     assert "changed source/head guidance and accepted decisions cannot authorize" in security
-    assert 'OCR_VERSION: "v1.8.10"' in workflow
-    assert "v1.8.10" in docs
-    assert "v1.8.10" in security
-    assert (
-        'OCR_SHA256: "7161500791b8d27906ee8a29bf4429953b27048e90e33dd9a4ff6118932c9001"' in workflow
-    )
+    assert f'OCR_VERSION: "v{recommended}"' in workflow
+    assert f"v{recommended}" in docs
+    assert f"v{recommended}" in security
+    assert f'OCR_SHA256: "{linux_digest}"' in workflow
     assert "`Russian` is one example" in docs
     assert "ocr-ci preflight" in workflow
     assert "ocr-ci configure" in workflow
@@ -83,7 +93,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "review-background.md" not in workflow
     assert '--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"' in workflow
     assert '--to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"' in workflow
-    assert "Pin Open Code Review `v1.8.10` and verify its checksum" in security
+    assert f"Pin Open Code Review `v{recommended}` and verify its checksum" in security
     assert "when: manual" in workflow
     assert "env -u OCR_LLM_TOKEN" in workflow
 

@@ -1,0 +1,98 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "9cf93a98b85ceb7aa1d66e50aec2ea52a90f245748bfc1c23dce30e69bf0dc8e",
+      "size": 47082448
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "7ca90c42b4ece4b7aa1f89890fc185e51e83b4548436cf4e8ef324e32eeaf56c",
+      "size": 44745954
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "4164682c1a6f1992f1f7271d7e1d42a98c2de37866483e4c1218bcc4f397f6e3",
+      "size": 45572258
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "278fecf6ea819ab56ff7ce0c23fd1a56684c8e32609693a4acdf78885c90ccb2",
+      "size": 42991778
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "a0c2467edb34a017ad4aeeba828601dbee131e298214990dfd55eb6e216abb45",
+      "size": 46803456
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "360cd250e9af9fd9d0eafce5b75e8306481c3dcfacf29abc9a6f24db9f931e68",
+      "size": 43597824
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "b165dc13d2e7c25f542a211d056d12878c9e20b26f5c776bdfebf38cc4feaf83",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.8.10",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-10T09:09:50Z",
+  "release_changes": "## 🚀 Features\n\n- feat(llm): support custom retry status codes via retry_codes config (#818)\n- feat(llmloop): backfill comment thinking from turn output (#773)\n- feat(pages): show live npm downloads in highlights stats (#794)\n- feat(allowlist): add Nim support (#798) (#799)\n- feat(llm): add built-in Mistral AI provider preset (#781)\n- feat(examples/gitlab): align GitLab CI review posting with the GitHub Action (#767)\n- feat: add QCA delegation integration (#762)\n- feat(config): make per-file token limit configurable (#716)\n\n## 🐛 Bug Fixes\n\n- fix: no pages deployment on forks (#793)\n- fix(cli): stop preview from creating a review session (#784)\n- fix(pages): keep previous page visible during lazy route transitions (#792)\n- fix(cli): honor --format json for review and scan preview (#783)\n- fix(llm): add MiniMax global provider (#760)\n- fix(viewer): externalize repos page inline script to comply with CSP (#758)\n\n## 📖 Documentation\n\n- docs: fix invalid subject (#795)\n- docs: remove stale `ocr session comments` from README and migrate to site docs (#774)\n- docs(blog): add trilingual OSS two-month retrospective post (#777)\n- docs(cli-reference): document ocr scan flags (#770)\n- docs: add instructions for macports (#769)\n- docs: clarify --from/--to merge-base semantics (#579) (#613)\n- docs(i18n): sync max_tokens configuration docs to ja, ru, zh (#766)\n- docs(installation): add Homebrew install method (#768)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.8.10...v1.9.0",
+  "release_notes_sha256": "2cf4c4f675747cd8cb1349d5a1bc0fdbc331837335a9f99e55f58a95b3f311b3",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.9.0",
+  "tested_baseline_version": "1.8.10",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.9.0"
+}

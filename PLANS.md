@@ -4,12 +4,12 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; issues #70/#71 and release-lifecycle checkpoints complete
+Status: active; implementation, release-lifecycle, and OCR 1.9.1 qualification checkpoints complete
 Owner: Codex
-Last Updated: 2026-08-10
+Last Updated: 2026-08-11
 Release Classification: release-required
 Target Stable Version: 0.4.7
-Tracking Issues: #70, #71
+Tracking Issues: #70, #71, #72 (OCR 1.9.1), #73 (OCR 1.9.0)
 
 ### Goal
 
@@ -34,13 +34,16 @@ independently read back.
   An invalid value disables approval for that run. Encode the initial policy in
   code and fail closed when authoritative completeness or typed finding
   metadata cannot be proven.
-- After the release-lifecycle checkpoint, qualify Open Code Review 1.9.0 from
-  authoritative release/source evidence. Classify every upstream item as a
-  toolkit-consumed contract change, future-backlog impact, or explicit no
-  impact; adapt only demonstrated contracts and atomically replace the local
-  checksum-pinned OCR binary before full E2E.
+- After the release-lifecycle checkpoint, qualify the contiguous Open Code
+  Review 1.9.0 and 1.9.1 chain from authoritative release/source evidence.
+  Preserve a separate checksum/contract record and human impact conclusion for
+  each release, with a separate qualification issue for each version. Classify
+  every upstream item as a toolkit-consumed contract change, future-backlog
+  impact, or explicit no impact; adapt only demonstrated contracts and
+  atomically replace the local checksum-pinned OCR binary with 1.9.1 before
+  full E2E.
 - After the complete feature implementation is committed, run exactly one real
-  local OCR 1.9.0 review through `uv run ocr-ci review` over
+  local OCR 1.9.1 review through `uv run ocr-ci review` over
   `origin/main..HEAD`. Require the built-in `ocr_toolkit_evidence` MCP receipt,
   do not post to GitLab, fix actionable findings, and then use deterministic
   validation and self-review rather than a second OCR run.
@@ -49,8 +52,9 @@ independently read back.
 - Redesign the durable release lifecycle so the release PR is the final
   repository mutation without preclaiming external facts. Bind publication to
   the exact reviewed tree and emit an immutable machine-readable release
-  receipt; close #70/#71 only after independent registry, provenance, tag,
-  Release, receipt, hash, and supported-Python readback succeeds.
+  receipt; close #70/#71 and both OCR qualification issues only after
+  independent registry, provenance, tag, Release, receipt, hash, and
+  supported-Python readback succeeds.
 
 ### Work Queue
 
@@ -64,9 +68,10 @@ independently read back.
    release authorization and deterministic `ocr-toolkit.release-receipt/v1`
    evidence; update durable rules, recovery behavior, tests, and the lifecycle
    checkpoint commit.
-4. [ ] Inspect authoritative OCR 1.9.0 release notes and source changes, record
-   consumed-contract/backlog/no-impact classifications, update compatibility
-   records and local checksum-pinned OCR, and adapt the toolkit only where
+4. [x] Inspect authoritative OCR 1.9.0 and 1.9.1 release notes and source
+   changes, record separate consumed-contract/backlog/no-impact
+   classifications and qualification issues, update compatibility records and
+   the local checksum-pinned OCR 1.9.1 binary, and adapt the toolkit only where
    evidence requires it.
 5. [ ] Reconcile this plan, roadmap table/diagram, backlog, and current-state
    documentation against the implemented code. Run focused tests, the synthetic
@@ -87,7 +92,8 @@ independently read back.
 10. [ ] Merge the release PR only after exact-head protected checks. Verify stable
    TestPyPI/PyPI artifacts, provenance/attestations, annotated tag, immutable
    GitHub Release and release receipt, hashes, and Python 3.12-3.14 installs.
-   Record receipts and close #70/#71 without another repository PR.
+   Record receipts and close #70/#71 plus both OCR qualification issues without
+   another repository PR.
 
 ### Initial Evidence
 
@@ -193,6 +199,60 @@ independently read back.
   tests plus 81 subtests at 79.62% coverage. Roadmap and backlog statuses remain
   unchanged at this checkpoint because the lifecycle hardening changes process,
   not an outcome milestone or future-work activation trigger.
+
+### OCR 1.9.0-1.9.1 Qualification Checkpoint
+
+- Canonical GitHub Actions run `31465539451` created separate open
+  qualification issues #73 for 1.9.0 and #72 for 1.9.1. Local Python 3.12
+  qualification independently downloaded all seven assets for each release,
+  proved GitHub digests equal the upstream `sha256sum.txt`, executed the Linux
+  amd64 version/help/JSON-preview/full-review/result/posting contracts, and
+  reproduced both evidence files byte-for-byte from checkpoint `5acbf15`.
+- OCR 1.9.0 is compatible after required human review. Toolkit-consumed changes
+  are JSON preview output, preview session-store isolation, additive private
+  comment `thinking`, merge-base range semantics, and the Nim rules/allowlist
+  expansion. The harness now proves JSON preview, no session-store creation,
+  additive `thinking` preservation, and non-publication of that private field;
+  source review confirms reasoning-content backfill and the documented range
+  semantics. The Nim change receives a separate `🧩 Rules` entry.
+- OCR 1.9.0 per-file token limits and retry status codes are future profile or
+  configuration inputs only and do not activate BL-016. Mistral and MiniMax
+  providers, QCA delegation, the upstream GitLab example, Pages/viewer/CSP,
+  scan and installation documentation, fork deployment, blog, package-manager,
+  and other documentation fixes are not toolkit-owned contracts. They require
+  no runtime, roadmap, or backlog activation.
+- OCR 1.9.1 is an adjacent automatic-safe patch whose source was still reviewed.
+  Viewer comment filters and suggestion-panel layout, CodeQL workflow
+  permissions, upstream contributor/retry documentation, and the Anthropic
+  dynamic cache breakpoint do not change toolkit CLI, result, posting,
+  configuration, or MCP contracts. The cache change is a future profile/quality
+  input only and does not complete BL-016 or BL-017.
+- Both releases retain Go MCP SDK v1.6.1 and protocol revision `2025-11-25`, so
+  the built-in MCP protocol matrix is unchanged. Both annotated upstream tags
+  carry signatures that GitHub reports as `unknown_key`; compatibility does not
+  misrepresent them as verified and instead relies on the double-source asset
+  digest contract plus executed binary probes.
+- Human-reviewed promotion now accepts only an adjacent patch, next minor `.0`,
+  or next major `.0.0`; every minor/major transition requires an explicit
+  bounded conclusion. The automatic lane remains patch-only. Self-review also
+  isolated Git initialization, preview, and full-review probes from operator
+  OCR/Git configuration and bounded optional automatic-safe conclusions.
+- Manifest, preflight, public examples, documentation, tests, and Linux digest
+  now target OCR 1.9.1. The PATH-effective Darwin arm64 binary is official OCR
+  1.9.1 with SHA-256
+  `5cffe45ef006b80dcbe95e6711807261850108d6390ce708cdac0e72cb261d1d`;
+  its isolated local contract probe passes. Focused validation passes 265 tests
+  plus 27 subtests, Ruff, strict mypy, manifest validation, Towncrier 0.4.7
+  draft, and `git diff --check`.
+- Backlog statuses, roadmap table/diagram, and strategy status remain unchanged.
+  Nim is review-engine scope rather than an evidence pack; upstream `AGENTS.md`
+  is contributor guidance rather than target-ref runtime guidance; token/cache
+  changes do not supply the missing profile or telemetry policy contracts.
+- The complete isolated Python 3.12.13 quality gate passes formatting, Ruff,
+  strict mypy, Bandit, 622 tests plus 81 subtests, and 79.61% coverage. A fresh
+  authenticated discovery after promotion reports zero unseen stable OCR
+  releases. The gate uses `.quality-logs/py312` and does not mutate the host
+  `.venv` or tracked checkout.
 
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 
