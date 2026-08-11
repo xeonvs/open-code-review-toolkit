@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 
-Status: active; implementation, release-lifecycle, and OCR 1.9.1 qualification checkpoints complete
+Status: active; feature-tip implementation, validation/E2E, release-lifecycle, and OCR 1.9.1 qualification checkpoints complete
 Owner: Codex
 Last Updated: 2026-08-11
 Release Classification: release-required
@@ -73,7 +73,7 @@ independently read back.
    classifications and qualification issues, update compatibility records and
    the local checksum-pinned OCR 1.9.1 binary, and adapt the toolkit only where
    evidence requires it.
-5. [ ] Reconcile this plan, roadmap table/diagram, backlog, and current-state
+5. [x] Reconcile this plan, roadmap table/diagram, backlog, and current-state
    documentation against the implemented code. Run focused tests, the synthetic
    GitLab E2E, Python 3.12 quality, Towncrier draft, workflow/document/privacy
    checks, and `git diff --check`.
@@ -87,8 +87,8 @@ independently read back.
 8. [ ] Independently verify the exact TestPyPI development artifacts, hashes,
    provenance, and supported-Python installs before preparing `release/v0.4.7`.
 9. [ ] Prepare and validate the final release PR, consuming fragments 69, 70,
-   and 71 and reconciling repository-side planning truth without claiming
-   publication that has not happened.
+   71, 72, and 73 and reconciling repository-side planning truth without
+   claiming publication that has not happened.
 10. [ ] Merge the release PR only after exact-head protected checks. Verify stable
    TestPyPI/PyPI artifacts, provenance/attestations, annotated tag, immutable
    GitHub Release and release receipt, hashes, and Python 3.12-3.14 installs.
@@ -253,6 +253,48 @@ independently read back.
   authenticated discovery after promotion reports zero unseen stable OCR
   releases. The gate uses `.quality-logs/py312` and does not mutate the host
   `.venv` or tracked checkout.
+
+### Feature-tip Validation And E2E Checkpoint
+
+- The signed `4f3dd29` tree builds on Python 3.12.13 as
+  `0.4.7.dev6+g4f3dd2994`. Twine accepts both distributions; the wheel SHA-256
+  is `295c0e9fa52492aa9e99c7dd11ae0b3a2b2c6339f3e4991ea3009e29812ed358`
+  and the sdist SHA-256 is
+  `c679d9490f8cb1fb58f37bac4eba24dcad52fb745814121523c2841a15096c55`.
+  Metadata derives the version from SCM, requires Python 3.12 through 3.14,
+  declares no runtime dependencies, and both archives contain only their
+  intended package/source surfaces.
+- Separate clean Python 3.12 wheel and hash-locked sdist installs pass
+  `pip check`, import the same centralized version, and run the installed
+  `ocr-ci --help` entry point under a restricted `PATH` from a repository that
+  contains a hostile local `ocr_toolkit` shadow package. The installed artifact,
+  rather than checkout code or the untrusted current directory, owns execution.
+- One ignored, one-off synthetic repository E2E uses the installed wheel and the
+  official local OCR 1.9.1 binary without adding a permanent harness. A local
+  deterministic gateway forces OCR to query `ocr_toolkit_evidence` before it
+  emits one synthetic finding. OCR finishes with `status=complete` and one
+  built-in evidence call; `_ocr_toolkit.mcp_usage` records the same count. The
+  exact base/head snapshots match the reviewed commits, `.review-context` is
+  absent from Git status and the reviewed diff, its directory is `0700`, all
+  store/bootstrap/result/stderr artifacts are `0600`, and no GitLab posting
+  command is invoked.
+- The complete posting/suggestion/approval/release/compatibility changed-surface
+  suite passes 347 tests plus 73 subtests. The full gate executed directly from
+  Python 3.12.13 passes 622 tests plus 81 subtests at 79.61% coverage; formatting,
+  Ruff, strict mypy, Bandit, changed-shell ShellCheck, workflow YAML parsing,
+  OCR manifest validation, Towncrier 0.4.7 draft, changed-public-content privacy,
+  and `git diff --check` pass.
+- Read-only validation against current public service payloads confirms that
+  PyPI Integrity v1 uses the publisher and in-toto subject shape enforced by the
+  release verifier, GitHub exposes strict effective `main` checks with exact App
+  integration IDs, and immutable Release state is available through the pinned
+  API version. No registry, Release, issue, or GitLab state was changed.
+- Final reconciliation found no roadmap table/diagram, strategy, or backlog
+  status transition: #70/#71 are release-scoped behavior rather than an outcome
+  milestone, while OCR 1.9.0/1.9.1 inputs leave BL-008/009/010/015/016/017 at
+  their documented triggers. Self-review corrected the release queue to consume
+  all five fragments 69-73; every tracked issue remains open until stable 0.4.7
+  delivery is proven by the immutable receipt and independent readback.
 
 ## Completed Plan: Reconcile 0.4.6 lifecycle, architecture, and backlog truth
 
