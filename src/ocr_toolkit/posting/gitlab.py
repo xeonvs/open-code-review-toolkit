@@ -58,6 +58,7 @@ class GitLabWriteResult:
 
     status: str
     response: Any | None = None
+    http_status: int | None = None
 
     @property
     def posted(self) -> bool:
@@ -282,7 +283,7 @@ def api_write_url_detailed(
         print(f"GitLab API error {exc.code} for {method} {url}: {safe_body}", file=sys.stderr)
         if _is_invalid_position_error(exc.code, raw_body):
             return GitLabWriteResult("invalid_position")
-        return GitLabWriteResult("write_failed")
+        return GitLabWriteResult("write_failed", http_status=exc.code)
     except GitLabResponseTooLarge as exc:
         print(f"GitLab API response too large for {method} {url}: {exc}", file=sys.stderr)
         return GitLabWriteResult("write_failed")
@@ -513,6 +514,29 @@ def delete_plain_note(config: GitLabConfig, note_id: int) -> bool:
 
     response = api_request(config, f"/notes/{note_id}", method="DELETE")
     return response is not None
+
+
+def update_plain_note(config: GitLabConfig, note_id: int, body: str) -> GitLabWriteResult:
+    """Update one known toolkit-owned summary without retrying the write."""
+
+    return api_write_url_detailed(
+        url=f"{config.api_base}/notes/{note_id}",
+        api_token=config.api_token,
+        auth_header=config.auth_header,
+        data={"body": build_marked_note_body(body)},
+        method="PUT",
+    )
+
+
+def approve_merge_request(config: GitLabConfig, sha: str) -> GitLabWriteResult:
+    """Approve exactly one merge-request head without retrying the write."""
+
+    return api_write_url_detailed(
+        url=f"{config.api_base}/approve",
+        api_token=config.api_token,
+        auth_header=config.auth_header,
+        data={"sha": sha},
+    )
 
 
 def delete_discussion_note(config: GitLabConfig, discussion_id: str, note_id: int) -> bool:

@@ -27,7 +27,7 @@ Open Code Review Toolkit uses environment variables for CI/runtime configuration
 | `OCR_MCP_SERVERS_JSON` | JSON object mapping names to bounded stdio or native Streamable HTTP definitions. |
 | `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
 
-OCR receives every MCP as an independent named entry in its `mcp_servers` registry. The toolkit always installs `ocr_toolkit_evidence` as one mandatory entry; each configured local or remote MCP is a separate optional sibling entry and is started or contacted by OCR independently. Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. Every optional server requires a non-empty explicit `tools` allowlist so its discovered tool set cannot shadow the mandatory evidence tool. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so OCR 1.8.10 resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
+OCR receives every MCP as an independent named entry in its `mcp_servers` registry. The toolkit always installs `ocr_toolkit_evidence` as one mandatory entry; each configured local or remote MCP is a separate optional sibling entry and is started or contacted by OCR independently. Omitting `type` selects backward-compatible `stdio`. Stdio accepts `command`, `args`, literal `env`, `env_from`, `tools`, and `setup`. A `remote` entry accepts an absolute HTTPS `url`, non-secret `headers`, secret `headers_from`, `tools`, and `setup`. Every optional server requires a non-empty explicit `tools` allowlist so its discovered tool set cannot shadow the mandatory evidence tool. `headers_from` maps a header name to a CI variable and writes `$VARIABLE` into OCR config, so the recommended OCR release resolves it only when connecting. Sensitive header families such as `Authorization`, cookies, API keys, and tokens are rejected in literal `headers`.
 
 ```json
 {
@@ -53,9 +53,26 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 ## Posting controls
 
-`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, and `OCR_POST_EMOJI` control write behavior and bounded error reporting. Invalid numeric or boolean values fail closed or fall back to conservative defaults as documented in command output. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
 
 `OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
+
+`OCR_AUTO_APPROVE` defaults to `true` and adds a formal GitLab approval after a
+complete review publishes. It accepts `true`, `1`, `yes`, or `on`; set `false`,
+`0`, `no`, or `off` to disable the approval attempt for that run. An empty value
+uses the enabled default. Any other value fails closed to disabled and emits a
+bounded diagnostic without printing the value. The toolkit never removes an
+existing approval. Ineligible, partial, skipped, legacy, and disabled runs make
+no approval write, so project-owned reset and invalidation rules remain the only
+mechanism for withdrawing an earlier approval.
+
+The initial policy is fixed: zero findings, or at most three findings whose
+severity is exactly `low` and category is exactly `style`, `documentation`, or
+`maintainability`, are eligible. Missing, unknown, differently cased, or
+non-string metadata blocks approval, as do warnings, failed or waived coverage,
+partial/budget outcomes, legacy results without a supported coverage manifest,
+and findings omitted by `OCR_MAX_POST_COMMENTS`. There are intentionally no
+environment variables for policy thresholds or category lists in this release.
 
 `ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
 

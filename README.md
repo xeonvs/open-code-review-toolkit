@@ -17,7 +17,7 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is OCR `1.8.10`. CI should pin the release and verify its published checksum before execution.
+The current compatibility target is OCR `1.9.1`. CI should pin the release and verify its published checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
 
@@ -28,6 +28,13 @@ Stable distributions are published to [PyPI](https://pypi.org/project/open-code-
 On a successful rerun, the toolkit replaces untouched OCR-only notes instead of accumulating stale reviews. A human reply transfers that discussion to the team: the conversation is preserved and a matching finding is suppressed. Reply with `/ocr suppress` to keep a discussion open without future repeats, or `/ocr resolve` to suppress it and resolve the discussion after the next successful posting transaction.
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
+
+After every current review note publishes, the GitLab adapter can add a
+conservative approval bound to the exact reviewed source SHA. This write is
+enabled by default; set `OCR_AUTO_APPROVE=false` before upgrading when the bot
+must remain comment-only. GitLab approval rules and protected-branch policy
+remain authoritative. The toolkit only adds an eligible approval; it never
+removes an existing approval when a later review is ineligible or disabled.
 
 Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/accepted-decisions.md`; the evidence collector supplies target-ref decisions to OCR and never lets a source change self-authorize its own review. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) for the entry format, inline marker convention, security boundary, and limitations.
 

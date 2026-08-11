@@ -45,9 +45,12 @@ def test_durable_guidance_distinguishes_readiness_from_delivery() -> None:
         step_with(".devN", "TestPyPI"),
         step_with("release/vX.Y.Z"),
         step_with("stable", "PyPI"),
-        step_with("no-release", "closure"),
+        step_with("release-receipt.json", "without another repository"),
     )
     assert ordered_boundaries == tuple(sorted(ordered_boundaries))
+    assert "final repository mutation" in release_required
+    assert "must not claim" in release_required
+    assert "no-release closure" not in release_required
 
 
 def test_boundary_guidance_has_one_authoritative_instruction_stack() -> None:

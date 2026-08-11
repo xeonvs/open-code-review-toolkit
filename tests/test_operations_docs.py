@@ -54,8 +54,39 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
 
     assert 'OCR_POST_MODE: "draft"' in example
     assert 'OCR_STRICT_POSTING: "true"' in example
+    assert 'OCR_AUTO_APPROVE: "true"' in example
     assert "OCR_POST_MODE=draft" in configuration
     assert "OCR_STRICT_POSTING=true" in configuration
+
+
+def test_auto_approval_contract_is_default_on_exact_sha_and_own_user_only() -> None:
+    """Keep the new GitLab write and its safety boundaries explicit."""
+
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    example = GITLAB_EXAMPLE.read_text(encoding="utf-8")
+    normalized_operations = " ".join(operations.split())
+    normalized_configuration = " ".join(configuration.split())
+
+    for phrase in (
+        "`OCR_AUTO_APPROVE=true` is the default",
+        "at most three findings",
+        "severity exactly `low`",
+        "category exactly `style`, `documentation`, or `maintainability`",
+        "`patch_id_sha`",
+        "never retried against the new commit",
+        "never removes an existing approval",
+        "Ineligible, partial, skipped, legacy, and disabled runs do not make an approval write",
+    ):
+        assert phrase in normalized_operations
+
+    assert "`OCR_AUTO_APPROVE` defaults to `true`" in configuration
+    assert "`false`,\n`0`, `no`, or `off`" in configuration
+    assert (
+        "There are intentionally no\nenvironment variables for policy thresholds" in configuration
+    )
+    assert "never removes an existing approval" in normalized_configuration
+    assert 'OCR_AUTO_APPROVE: "true"' in example
 
 
 def test_security_workflow_has_a_bounded_bandit_job() -> None:

@@ -17,6 +17,7 @@ from ocr_toolkit.common.markdown import (
 )
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
+from ocr_toolkit.posting.approval import ApprovalResult, approval_summary_line
 from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
@@ -34,14 +35,13 @@ from ocr_toolkit.posting.settings import (
     MAX_REVIEWER_GUIDE_LABEL_CHARS,
     MAX_REVIEWER_GUIDE_LOCATION_CHARS,
     MAX_REVIEWER_GUIDE_TEXT_CHARS,
-    MAX_SUGGESTION_CODE_CHARS,
-    MAX_SUGGESTION_SPAN_LINES,
     MAX_TOOL_CALL_NAME_CHARS,
     MAX_TOOL_CALL_SUMMARY_TOOLS,
     SUGGESTION_HEADER,
     post_emoji,
     post_mode,
 )
+from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 
 OCR_FINDING_CATEGORIES = {
     "bug",
@@ -85,22 +85,6 @@ CATEGORY_EMOJI = {
 }
 
 
-def suggestion_range_suffix(comment: dict[str, Any]) -> str:
-    """Return a GitLab suggestion range suffix."""
-
-    end_line = line_number(comment.get("end_line") or comment.get("line"))
-    start_line = line_number(comment.get("start_line") or comment.get("line") or end_line)
-
-    if start_line <= 0 or end_line <= 0 or start_line > end_line:
-        return ""
-
-    span = end_line - start_line
-    if span > MAX_SUGGESTION_SPAN_LINES:
-        return ""
-
-    return f"-0+{span}"
-
-
 def inline_code(value: str) -> str:
     """Return a Markdown inline-code representation safe for backticks."""
 
@@ -136,34 +120,33 @@ def format_finding_tags(comment: dict[str, Any], *, emoji: bool | None = None) -
     return " · ".join(tags)
 
 
-def format_suggestion_block(comment: dict[str, Any]) -> str:
-    """Return a GitLab suggestion block if OCR supplied replacement code."""
+def format_suggestion_block(decision: SuggestionDecision) -> str:
+    """Render one previously validated GitLab suggestion decision."""
 
-    suggestion = code_text(comment.get("suggestion_code"))
-    if not suggestion.strip() or comment.get("_ocr_suggestion_noop") is True:
+    if decision.state in {SuggestionState.ABSENT, SuggestionState.NO_OP}:
         return ""
+    if decision.state is SuggestionState.OMITTED:
+        return f"\n\nSuggestion block was omitted because {decision.omission_message}."
+    return (
+        f"\n\n{SUGGESTION_HEADER}\n```suggestion:{decision.range_suffix}\n"
+        f"{decision.replacement}\n```"
+    )
 
-    if "```" in suggestion:
+
+def format_suggestion_omission(decision: SuggestionDecision) -> str:
+    """Render a bounded explanation for a withheld actionable suggestion."""
+
+    if decision.state is not SuggestionState.OMITTED:
         return ""
-
-    if any(line.lstrip().startswith("/") for line in suggestion.splitlines()):
-        return ""
-
-    if len(suggestion) > MAX_SUGGESTION_CODE_CHARS:
-        return (
-            "\n\nSuggestion block was omitted because the generated replacement "
-            "was too large to publish safely."
-        )
-
-    range_suffix = suggestion_range_suffix(comment)
-    if not range_suffix:
-        return ""
-
-    return f"\n\n{SUGGESTION_HEADER}\n```suggestion:{range_suffix}\n{suggestion}\n```"
+    return f"\n\nSuggestion block was omitted because {decision.omission_message}."
 
 
 def format_inline_comment(
-    comment: dict[str, Any], include_suggestion: bool = True, *, emoji: bool | None = None
+    comment: dict[str, Any],
+    include_suggestion: bool = True,
+    *,
+    suggestion_decision: SuggestionDecision | None = None,
+    emoji: bool | None = None,
 ) -> str:
     """Format one OCR comment as Markdown for an inline GitLab discussion."""
 
@@ -173,12 +156,19 @@ def format_inline_comment(
     tags = format_finding_tags(comment, emoji=emoji)
     body = f"{tags}\n\n{content}" if tags else content
     if include_suggestion:
-        body += format_suggestion_block(comment)
+        body += format_suggestion_block(
+            suggestion_decision or SuggestionDecision(SuggestionState.ABSENT)
+        )
 
     return body
 
 
-def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = None) -> str:
+def format_fallback_comment(
+    comment: dict[str, Any],
+    *,
+    suggestion_decision: SuggestionDecision | None = None,
+    emoji: bool | None = None,
+) -> str:
     """Format an OCR comment for a fallback non-inline MR note."""
 
     path = clean_text(comment.get("path")) or "unknown"
@@ -202,10 +192,13 @@ def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = Non
         f"{format_inline_comment(comment, include_suggestion=False, emoji=emoji)}"
     )
 
+    decision = suggestion_decision or SuggestionDecision(SuggestionState.ABSENT)
+    body += format_suggestion_omission(decision)
+
     existing = code_text(comment.get("existing_code"))
     suggestion = code_text(comment.get("suggestion_code"))
 
-    if existing.strip() and suggestion.strip() and comment.get("_ocr_suggestion_noop") is not True:
+    if existing.strip() and suggestion.strip() and decision.state is not SuggestionState.NO_OP:
         body += "\n\n<details><summary>Suggested change details</summary>\n\n"
         body += "**Before:**\n"
         body += markdown_code_block(
@@ -228,16 +221,23 @@ def format_fallback_comment(comment: dict[str, Any], *, emoji: bool | None = Non
 
 
 def format_fallback_comment_chunks(
-    comments: Sequence[dict[str, Any]], *, emoji: bool | None = None
+    comments: Sequence[tuple[dict[str, Any], SuggestionDecision]],
+    *,
+    emoji: bool | None = None,
 ) -> list[str]:
     """Split fallback comments into safe chunks before publishing MR notes."""
 
     chunks: list[str] = []
     current = ""
 
-    for comment in comments:
+    for comment, suggestion_decision in comments:
         item = truncate_note_body(
-            format_fallback_comment(comment, emoji=emoji), max_chars=FALLBACK_NOTE_CHUNK_BUDGET
+            format_fallback_comment(
+                comment,
+                suggestion_decision=suggestion_decision,
+                emoji=emoji,
+            ),
+            max_chars=FALLBACK_NOTE_CHUNK_BUDGET,
         )
         separator = "\n\n---\n\n" if current else ""
 
@@ -776,6 +776,7 @@ def summarize_result(
     coverage_diagnostics: CoverageDiagnostics | None = None,
     warnings: Sequence[Any] = (),
     suppressed_count: int = 0,
+    approval_result: ApprovalResult | None = None,
     emoji: bool | None = None,
 ) -> str:
     """Build one decision-first summary for every validated OCR outcome."""
@@ -892,6 +893,8 @@ def summarize_result(
     technical.append(
         f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} omitted"
     )
+    if approval_result is not None:
+        technical.append(approval_summary_line(approval_result))
     if suppressed_count:
         technical.append(f"- Reviewer suppression: {suppressed_count}")
     if coverage_summary:

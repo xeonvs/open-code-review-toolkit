@@ -27,6 +27,14 @@ OCR_REPLY_COMMAND_RE = re.compile(
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
 
 
+def build_summary_run_marker(run_id: str) -> str:
+    """Render a unique bounded marker used to find the current summary note."""
+
+    if not re.fullmatch(r"[0-9a-f]{32}", run_id):
+        raise ValueError("summary run id must be 32 lowercase hexadecimal characters")
+    return f"<!-- open-code-review-summary run={run_id} -->"
+
+
 def _digest_payload(parts: list[str], digest_size: int = FINGERPRINT_LEN // 2) -> str:
     """Return a blake2b digest for normalized fingerprint fields."""
 

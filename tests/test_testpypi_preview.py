@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -36,13 +37,17 @@ def expected_hashes(version: str) -> dict[str, str]:
     }
 
 
-def payload(hashes: dict[str, str]) -> dict[str, object]:
+def payload(hashes: dict[str, str]) -> dict[str, Any]:
     return {
         "files": [
             {
                 "filename": filename,
                 "hashes": {"sha256": digest},
                 "url": f"https://test-files.pythonhosted.org/packages/synthetic/{filename}",
+                "provenance": (
+                    "https://test.pypi.org/integrity/open-code-review-toolkit/"
+                    f"0.1.0a3/{filename}/provenance"
+                ),
             }
             for filename, digest in hashes.items()
         ]
@@ -128,6 +133,7 @@ def test_artifact_manifest_accepts_only_complete_trusted_release() -> None:
     production = payload(hashes)
     for item in production["files"]:
         item["url"] = item["url"].replace("test-files.pythonhosted.org", "files.pythonhosted.org")
+        item["provenance"] = item["provenance"].replace("test.pypi.org", "pypi.org")
     assert (
         len(preview.artifact_manifest(production, "0.1.0a3", hashes, preview.PYPI_ARTIFACT_HOST))
         == 2
@@ -136,6 +142,27 @@ def test_artifact_manifest_accepts_only_complete_trusted_release() -> None:
     wrong_hashes[next(iter(wrong_hashes))] = "f" * 64
     with pytest.raises(preview.PreviewError):
         preview.artifact_manifest(production, "0.1.0a3", wrong_hashes, preview.PYPI_ARTIFACT_HOST)
+
+    forged_provenance = payload(hashes)
+    forged_provenance["files"][0]["provenance"] = (
+        "https://test.pypi.org/integrity/open-code-review-toolkit/0.1.0a30/"
+        "open_code_review_toolkit-0.1.0a3-py3-none-any.whl/provenance"
+    )
+    with pytest.raises(preview.PreviewError, match="provenance URL"):
+        preview.artifact_manifest(forged_provenance, "0.1.0a3")
+
+    malformed_provenance = payload(hashes)
+    malformed_provenance["files"][0]["provenance"] = (
+        "https://test.pypi.org:invalid/integrity/open-code-review-toolkit/"
+        "0.1.0a3/open_code_review_toolkit-0.1.0a3-py3-none-any.whl/provenance"
+    )
+    with pytest.raises(preview.PreviewError, match="invalid registry URL"):
+        preview.artifact_manifest(malformed_provenance, "0.1.0a3")
+
+    malformed_host = payload(hashes)
+    malformed_host["files"][0]["provenance"] = "https://[invalid/provenance"
+    with pytest.raises(preview.PreviewError, match="invalid registry URL"):
+        preview.artifact_manifest(malformed_host, "0.1.0a3")
 
 
 def test_workflow_automates_one_idempotent_development_build_per_main_run() -> None:
@@ -190,14 +217,21 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "SOURCE_DATE_EPOCH" in workflow
     assert "attestations: true" in workflow
     assert workflow.count("verify_registry_artifacts.sh") == 2
+    assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
     assert "release_exists=false" in workflow
-    assert "release_is_draft=$(gh release view" in workflow
+    assert "authenticated 200,404" in workflow
+    assert "release_is_draft=$(jq -r .draft" in workflow
     assert "existing GitHub Release metadata does not match" in workflow
     assert workflow.count("timeout-minutes:") == 8
+    assert workflow.count("--max-filesize 10485760") >= 1
     assert "--retry 3 --retry-delay 2 --retry-connrefused" in verifier
     assert "--connect-timeout 10 --max-time 120" in verifier
+    assert verifier.count("--max-filesize 10485760") == 2
+    assert "--max-filesize 1048576" in verifier
     assert "--proto '=https' --proto-redir '=https'" in verifier
     assert "sha256sum --check --strict" in verifier
+    assert "verify_registry_provenance.py" in verifier
+    assert "application/vnd.pypi.integrity.v1+json" in verifier
     assert '"${destination}"/*.whl' in verifier
     assert "scripts/install_local_artifact.py" in verifier
     assert "--require-hashes" in (PROJECT_ROOT / "scripts/install_local_artifact.py").read_text(

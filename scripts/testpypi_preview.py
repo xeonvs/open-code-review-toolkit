@@ -108,11 +108,17 @@ def artifact_manifest(
     version: str,
     expected_hashes: dict[str, str] | None = None,
     artifact_host: str = ARTIFACT_HOST,
+    provenance_host: str | None = None,
 ) -> list[dict[str, str]]:
     """Return validated immutable download metadata for one complete release."""
 
     if artifact_host not in ALLOWED_ARTIFACT_HOSTS:
         raise PreviewError(f"unsupported artifact host: {artifact_host}")
+    expected_provenance_host = provenance_host or (
+        "pypi.org" if artifact_host == PYPI_ARTIFACT_HOST else "test.pypi.org"
+    )
+    if expected_provenance_host not in {"pypi.org", "test.pypi.org"}:
+        raise PreviewError(f"unsupported provenance host: {expected_provenance_host}")
     if expected_hashes is not None:
         _validate_local_hashes(version, expected_hashes)
     names = expected_filenames(version)
@@ -128,15 +134,20 @@ def artifact_manifest(
         hashes = item.get("hashes")
         digest = hashes.get("sha256") if isinstance(hashes, dict) else None
         url = item.get("url")
+        provenance_url = item.get("provenance")
         if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
             raise PreviewError(f"{filename} has no valid SHA-256 digest")
         if not isinstance(url, str):
             raise PreviewError(f"{filename} has no download URL")
-        parsed = urlsplit(url)
+        if not isinstance(provenance_url, str):
+            raise PreviewError(f"{filename} has no provenance URL")
         try:
+            parsed = urlsplit(url)
+            provenance = urlsplit(provenance_url)
             port = parsed.port
+            provenance_port = provenance.port
         except ValueError as exc:
-            raise PreviewError(f"{filename} has an invalid download URL") from exc
+            raise PreviewError(f"{filename} has an invalid registry URL") from exc
         if (
             parsed.scheme != "https"
             or parsed.hostname != artifact_host
@@ -148,11 +159,29 @@ def artifact_manifest(
             or Path(parsed.path).name != filename
         ):
             raise PreviewError(f"{filename} has an untrusted download URL")
+        expected_provenance_path = f"/integrity/{PACKAGE}/{version}/{filename}/provenance"
+        if (
+            provenance.scheme != "https"
+            or provenance.hostname != expected_provenance_host
+            or provenance_port not in (None, 443)
+            or provenance.username is not None
+            or provenance.password is not None
+            or provenance.query
+            or provenance.fragment
+            or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in provenance_url)
+            or provenance.path != expected_provenance_path
+        ):
+            raise PreviewError(f"{filename} has an untrusted provenance URL")
         if expected_hashes is not None and digest != expected_hashes[filename]:
             raise PreviewError(f"published SHA-256 mismatch for {filename}")
         if filename in manifest:
             raise PreviewError(f"duplicate TestPyPI artifact: {filename}")
-        manifest[filename] = {"filename": filename, "sha256": digest, "url": url}
+        manifest[filename] = {
+            "filename": filename,
+            "sha256": digest,
+            "url": url,
+            "provenance": provenance_url,
+        }
 
     if set(manifest) != set(names):
         raise PreviewError(f"TestPyPI release {version} is incomplete")

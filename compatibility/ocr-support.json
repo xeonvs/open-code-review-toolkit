@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.8.10",
-  "recommended_version": "1.8.10",
+  "monitoring_floor": "1.9.1",
+  "recommended_version": "1.9.1",
   "releases": [
     {
       "assets": [
@@ -573,6 +573,108 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.8.10",
       "status": "tested",
       "version": "1.8.10"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "9cf93a98b85ceb7aa1d66e50aec2ea52a90f245748bfc1c23dce30e69bf0dc8e",
+          "size": 47082448
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "7ca90c42b4ece4b7aa1f89890fc185e51e83b4548436cf4e8ef324e32eeaf56c",
+          "size": 44745954
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "4164682c1a6f1992f1f7271d7e1d42a98c2de37866483e4c1218bcc4f397f6e3",
+          "size": 45572258
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "278fecf6ea819ab56ff7ce0c23fd1a56684c8e32609693a4acdf78885c90ccb2",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "a0c2467edb34a017ad4aeeba828601dbee131e298214990dfd55eb6e216abb45",
+          "size": 46803456
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "360cd250e9af9fd9d0eafce5b75e8306481c3dcfacf29abc9a6f24db9f931e68",
+          "size": 43597824
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "b165dc13d2e7c25f542a211d056d12878c9e20b26f5c776bdfebf38cc4feaf83",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.0.json",
+      "evidence_sha256": "c12368e80a0ad337c372c99a3dedc462838e11c13e15eb444e960bbc065885dd",
+      "human_conclusion": "Compatible after human review in issue #73 and workflow run 31465539451. JSON preview now honors --format json without creating a session store; additive comment thinking is preserved by OCR but remains private because toolkit posting does not render it. Nim built-in rules and .nim/.nims/.nimble allowlist entries extend the effective rules contract. Merge-base documentation confirms the toolkit range model. Per-file limits and retry codes are upstream configuration capabilities, while Mistral/MiniMax providers, QCA, upstream GitLab example, Pages/viewer, installation, scan documentation, and other documentation/CI changes are not toolkit-owned contracts. The Go MCP SDK remains v1.6.1.",
+      "published_at": "2026-08-10T09:09:50Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.0",
+      "status": "tested",
+      "version": "1.9.0"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "8ecf3e7c42ccd45e4f9c5eef6ccb84df9b718af734e122c221e6d1854616cac0",
+          "size": 47094912
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "5cffe45ef006b80dcbe95e6711807261850108d6390ce708cdac0e72cb261d1d",
+          "size": 44762642
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "9cb546e4f29389e3b7d768becc34a18cf2aaa6635610459fa65a7ea32a6c8bec",
+          "size": 45584546
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "ad949f5dcff8b6645c5c3d47d05b5812959bd10505c44ffe41c7d559a8fecaa3",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "911cd8ba3780218728feb211f2712a364fce47b184b8282a1ceabdde0690d3eb",
+          "size": 46815744
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "49b291b06fbcd66461343d1ce7cdb54c5e2e6da799ca2daba8a7862ab1185220",
+          "size": 43609600
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "4d5b642bef116885d9d5d35b3d59a67bb9c0e6e1825e7201a149abeaa472d33c",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.1.json",
+      "evidence_sha256": "9a72bacb850c216ea3ae0d519841856194cc64ce2032a6f3805af4c51f2bbe34",
+      "human_conclusion": "Compatible after adjacent qualification in issue #72 and workflow run 31465539451. Viewer filtering/layout, CodeQL workflow permissions, upstream agent/retry documentation, and Anthropic cache-breakpoint optimization do not change toolkit-owned CLI, result, posting, configuration, or MCP contracts. JSON preview, full review, additive thinking, and toolkit result/posting consumer probes pass; the Go MCP SDK remains v1.6.1.",
+      "published_at": "2026-08-11T05:22:58Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.1",
+      "status": "tested",
+      "version": "1.9.1"
     }
   ],
   "schema_version": 1,

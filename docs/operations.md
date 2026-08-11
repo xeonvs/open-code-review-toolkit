@@ -10,9 +10,57 @@ The toolkit reads the previous OCR-owned notes and discussions before it writes 
 - bounded fallback notes when GitLab cannot accept a position, for example after relevant lines moved outside the current diff;
 - one `## Open Code Review` note that separates review health, published findings, and incomplete coverage, with operational posting, commit, token/tool, and used-MCP metadata under a collapsed technical-details disclosure.
 
+An actionable GitLab suggestion is stricter than an ordinary finding. The
+toolkit reads the exact reviewed head blob and requires `existing_code` to
+match the stated inclusive line range before it renders a replacement fence.
+For this comparison CRLF and CR are normalized to LF and one optional terminal
+newline is ignored. The replacement must describe one contiguous edit: a
+synthetic ellipsis bridge, unified-diff-prefixed text, unsafe Markdown fence,
+quick action, invalid range, or unavailable source suppresses only the
+actionable fence. The explanatory finding remains visible with a bounded reason
+that does not reproduce repository content. Exact no-op suggestions are also
+suppressed.
+
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
 The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.
+
+## Automatic approval lifecycle
+
+`OCR_AUTO_APPROVE=true` is the default. Approval is a separate transaction only
+after every current review note publishes. A review is eligible only with a
+supported complete manifest, no warnings, failures, waivers, token-budget stop,
+or omitted findings, and at most three findings. Every finding must have
+severity exactly `low` and category exactly `style`, `documentation`, or
+`maintainability`. A complete zero-finding review is eligible. Four findings,
+malformed metadata, or any other severity/category are not eligible.
+
+Before writing, the toolkit repeatedly reads the MR and its bounded diff-version
+list. It requires an open MR, a current head equal to the reviewed 40-character
+SHA, `detailed_merge_status` outside `checking` and `approvals_syncing`, and a
+non-null `patch_id_sha`. It then passes that exact SHA to GitLab's approve API
+and confirms the authenticated user in approval readback. A moved head is a
+normal `skipped` result and is never retried against the new commit.
+
+Approve and summary-update writes are not retried after timeout, connection
+loss, 5xx, or another ambiguous response. GitLab remains
+authoritative for eligible approvers, required groups, Code Owners,
+protected-branch rules, and password or SAML reauthentication. A rejected or
+failed approval never rolls back the already published advisory review.
+
+The summary records exactly one bounded state: `approved`, `not eligible`,
+`disabled`, `skipped`, or `failed`. With advisory `OCR_STRICT_POSTING=false`, an
+approval-management failure leaves the published review successful but visibly
+failed; with `OCR_STRICT_POSTING=true`, it also returns a nonzero exit code.
+
+The transaction is deliberately add-only because GitLab's unapprove endpoint
+cannot bind removal to an immutable reviewed SHA at mutation time. The toolkit
+therefore never removes an existing approval, even when the authenticated bot
+user approved earlier. Ineligible, partial, skipped, legacy, and disabled runs
+do not make an approval write. Configure GitLab's project-owned reset or
+invalidation policy when approvals must be withdrawn after new commits. Human
+discussion replies remain ownership boundaries for notes but do not
+independently block approval.
 
 ## Discussion lifecycle
 
@@ -66,7 +114,7 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 `OCR_POST_MODE=direct` writes notes immediately. It exists as an emergency compatibility override. The toolkit still performs best-effort rollback, but an ambiguous network timeout can mean GitLab accepted a write that the runner cannot confirm. Prefer `draft` for normal CI.
 
-`OCR_STRICT_POSTING=false` is the advisory default: an OCR or posting error remains visible in the job log and, when possible, in an MR note, but the posting helper exits successfully. Set `OCR_STRICT_POSTING=true` when OCR review is a required merge gate so OCR failures, an unavailable GitLab API, an unsafe previous-state snapshot, an invalid OCR result, or failed publication make the job fail.
+`OCR_STRICT_POSTING=false` is the advisory default: an OCR, posting, or approval-management error remains visible in the job log and, when possible, in an MR note, but the posting helper exits successfully. Set `OCR_STRICT_POSTING=true` when OCR review is a required merge gate so OCR failures, an unavailable GitLab API, an unsafe previous-state snapshot, an invalid OCR result, failed publication, or failed approval management make the job fail.
 
 ## OCR diagnostics
 
@@ -74,7 +122,7 @@ Run OCR through `ocr-ci review --result PATH --stderr PATH -- ...`. This wrapper
 
 ## GitLab identity and permissions
 
-Use a dedicated project access token with `api` scope and at least the Developer role. Store it in `GITLAB_API_TOKEN`. The toolkit needs to read merge-request notes, discussions, diff refs, and the current token identity; create and delete its own notes or drafts; publish drafts; and resolve discussions requested by reviewers.
+Use a dedicated project access token with `api` scope and at least the Developer role. Store it in `GITLAB_API_TOKEN`. The toolkit needs to read merge-request notes, discussions, diff refs, approval state, and the current token identity; create and delete its own notes or drafts; publish drafts; resolve discussions requested by reviewers; and, unless opted out, approve as that dedicated identity. GitLab must separately consider the identity eligible under the project's approval rules.
 
 The toolkit calls `GET /user` before posting and refuses to write if it cannot identify the token owner. It treats a note as bot-owned only when both the invisible OCR marker and the actual GitLab author ID match. Text that merely imitates an OCR marker is not enough to claim or delete another user's note.
 

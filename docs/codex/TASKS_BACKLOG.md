@@ -28,7 +28,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Reworking implemented collectors without a gap, unused ecosystems, mutable runner inspection, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
 - **Validation:** Per-format source/target fixtures, conflict and limit cases, and common evidence-model contract tests.
 - **Release classification expectation:** `release-required` for new public evidence behavior; a format-selection audit alone is `no-release`.
-- **Upstream overlap:** OCR file selection and generic rules do not supply repository evidence, resolution semantics, provenance, deltas, or scoped completeness. Upstream language support neither completes nor broadens this narrowed item by itself.
+- **Upstream overlap:** OCR file selection and generic rules do not supply repository evidence, resolution semantics, provenance, deltas, or scoped completeness. OCR 1.9.0 adding Nim to its rules and file allowlist changes review-engine scope only; it neither completes nor broadens this narrowed item by itself.
 
 ### BL-009: Select and establish framework evidence plugins
 
@@ -43,7 +43,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Route/call/symbol graphs, framework-specific reviewers, or speculative detection without version evidence.
 - **Validation:** Positive/negative/multi-component fixtures, version-conflict and staleness cases, and plugin isolation tests.
 - **Release classification expectation:** `release-required`.
-- **Upstream overlap:** OCR 1.8.8's built-in Nix/Haskell rules improve language review but do not identify frameworks, versions, component scope, provenance, or completeness. They do not satisfy the plugin selection trigger or any BL-009 acceptance criterion.
+- **Upstream overlap:** OCR's built-in Nix, Haskell, and 1.9.0 Nim rules improve language review but do not identify frameworks, versions, component scope, provenance, or completeness. They do not satisfy the plugin selection trigger or any BL-009 acceptance criterion.
 
 ### BL-010: Add evidence packs from demonstrated use cases
 
@@ -58,7 +58,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Checkbox coverage, network resolution, runtime code execution, or bundles spanning unrelated ecosystems.
 - **Validation:** Pack-specific fixtures plus common evidence and bootstrap/MCP projection contracts.
 - **Release classification expectation:** `release-required`.
-- **Upstream overlap:** Built-in OCR language allowlists and rules are review-engine capabilities, not toolkit evidence packs. OCR 1.8.8 creates no demonstrated missing-evidence use case and does not activate BL-010.
+- **Upstream overlap:** Built-in OCR language allowlists and rules are review-engine capabilities, not toolkit evidence packs. OCR 1.8.8 Nix/Haskell and OCR 1.9.0 Nim support create no demonstrated missing-evidence use case and do not activate BL-010.
 
 ## M3 External MCP hardening
 
@@ -134,6 +134,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** Removing safeguards before the trigger, copying full guidance into bootstrap, or toolkit-specific instruction execution.
 - **Validation:** Multi-scope target/source fixtures, changed-guidance attacks, capability fallback tests, and bootstrap budget tests.
 - **Release classification expectation:** `release-required`.
+- **Upstream overlap:** OCR 1.9.1 adds repository-maintainer `AGENTS.md` guidance for upstream contributors, not a runtime target-ref-aware guidance discovery contract. The activation trigger remains unmet.
 
 ## M5 Review profiles and quality measurement
 
@@ -146,7 +147,7 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Roadmap theme:** M5 Review profiles and quality measurement
 - **Dependencies:** The established M1 built-in MCP lifecycle and an OCR compatibility entry advertising per-run model/provider override capability. OCR 1.8.7 satisfies the upstream capability dependency.
 - **Activation trigger:** Profile model and limit differences can be documented without changing per-tool routing; the remaining trigger is an owner-approved closed profile matrix and precedence contract.
-- **Upstream overlap:** OCR 1.8.10 makes tool-parameter rendering deterministic, which improves prompt and cache reproducibility for future profile comparisons. It does not define the toolkit's closed profile matrix, precedence, validation, or effective-configuration contract, so BL-016 remains planned.
+- **Upstream overlap:** OCR 1.8.10 makes tool-parameter rendering deterministic, OCR 1.9.0 exposes a per-file token limit, and OCR 1.9.1 improves Anthropic cache breakpoints. These are useful profile inputs but do not define the toolkit's closed profile matrix, precedence, validation, or effective-configuration contract, so BL-016 remains planned.
 - **Goal:** Offer `economy`, `standard`, and `strong` choices for one OCR review run.
 - **Scoped deliverables:** Define explicit profile configuration selecting a run-level model and a documented closed set of existing OCR limits; map the profile to OCR's per-run override rather than mutating persistent OCR configuration; publish the effective profile and observed additive result identity without credentials; validate profile/model availability through optional capabilities in the compatibility contract, environment precedence, and rendered effective configuration.
 - **Acceptance criteria:** One model remains active per run, `standard` preserves current behavior, explicit per-setting environment values override profile defaults, secrets remain environment-only, and unavailable model/capability combinations or unsupported profiles fail before OCR execution.
@@ -161,7 +162,7 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Roadmap theme:** M5 Review profiles and quality measurement
 - **Dependencies:** Established discussion/fingerprint lifecycle, structured OCR result normalization, review-health reporting, failed-file coverage, finding/posting receipts, and MCP-use attribution. BL-016 is required only for later comparisons between named profiles, not for the gap audit.
 - **Activation trigger:** Met for the audit: current OCR telemetry and toolkit result-derived receipts are sufficient to inventory available signals before any new telemetry layer is proposed.
-- **Upstream overlap:** OCR 1.8.10's deterministic tool-parameter rendering reduces an upstream source of comparison noise. It adds no missing lifecycle, evidence, posting, or review-value measurement contract; the now-ready audit must first determine whether current upstream and result-derived signals already suffice.
+- **Upstream overlap:** OCR 1.8.10's deterministic tool rendering and OCR 1.9.1's Anthropic cache optimization reduce upstream comparison or execution cost noise, but add no missing lifecycle, evidence, posting, or review-value measurement contract. The now-ready audit must first determine whether current upstream telemetry and result-derived signals already suffice.
 - **Goal:** Determine whether any privacy-safe toolkit telemetry is still necessary before implementing metrics or profile routing.
 - **Scoped deliverables:** Inventory OCR token, cost, budget, latency, request, tool-call, and provider/model identity alongside established review health, failed-file coverage, findings, suppression, omission, posting, and MCP-use receipts. Document only the remaining lifecycle, evidence degradation, repeated-discussion, compatibility, or review-value gaps. If no material gap remains, close the item without a runtime layer; any justified implementation becomes a separately scoped release-classified follow-up.
 - **Acceptance criteria:** The audit maps every available signal to its current authoritative source, distinguishes derived from genuinely missing data, records privacy/cardinality constraints for any gap, and reaches an explicit no-new-layer or separately scoped follow-up conclusion. OCR remains the source for token, cost, budget, request, latency, and tool-call telemetry; the audit itself adds no runtime, exporter, or public schema.

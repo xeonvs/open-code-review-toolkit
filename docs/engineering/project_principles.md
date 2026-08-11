@@ -22,9 +22,10 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 16. Treat secret scanning as a local publication gate, not only a hosted CI check. Pin one scanner version in the repository-owned wrapper and make CI read that pin, scan feature history before it is pushed, and fail closed when the exact engine or authenticated base range is unavailable. Keep the external scanner lifecycle separate from the Python quality environment.
 17. Reconcile planning from current code, tests, and published behavior before retaining historical backlog wording. An original end-state description is evidence of intent, not proof that its scope or dependency graph remains current.
 18. Classify dependencies by purpose: implementation dependencies provide a consumed interface, safety dependencies guard a risk boundary, and rollout dependencies keep an intermediate release coherent. Conditional work never blocks unconditional work merely because both appear in the desired end state.
-19. Stable external publication creates repository work that a release PR cannot complete in advance. After independent registry, tag, Release, provenance, hash, and install readback, reconcile canonical repository truth in a small documentation-only no-release closure PR.
+19. Separate repository authorization from external delivery without duplicating repository work. The release PR is the final repository mutation and records only reviewed repository truth plus pending external gates. Exact-tree authorization, an immutable machine-readable release receipt, independent registry/tag/Release/provenance/hash/install readback, and issue closure complete delivery after merge without a redundant closure PR.
 20. When an architectural milestone becomes implemented, update narrative current-state documentation in the same closure as plan, roadmap, and backlog status. Strategy and README must not continue describing the shipped architecture as a transition or target.
 21. Archive older completed execution plans by stable release tag only after their receipts are complete. Maintain a validated index that lets future agents find the original decisions and evidence without turning `PLANS.md` into the permanent release-history database.
+22. Execute security-sensitive release authorization from protected policy that predates the candidate. Candidate heads and merge commits are evidence to validate, not executable authority over their own publication.
 
 ## Boundary Invariants
 
@@ -39,6 +40,9 @@ This is the short index of stable cross-cutting engineering rules for Open Code 
 9. Profile realistic bounded data by separating cold-start validation from steady-state requests; optimize the measured bottleneck rather than protocol dispatch by assumption.
 10. Before implementing a parser or trust boundary, record the grammar, normalization and degradation policies, budget units, inherited-process state, and adversarial fixtures in the active plan or tests.
 11. Missing evidence supports a negative conclusion only when the applicable component, domain, and scope explicitly report complete coverage; absent, partial, runtime-dependent, and unavailable coverage remain unknown.
+12. Treat bounded HTTP output as untrusted until a closed endpoint allowlist, redirect-safe authentication, transfer result, allowed status, and same-directory atomic replacement all succeed. A size limit alone does not make a response trusted.
+13. Automate a destructive provider write only when the provider binds the mutation itself to the validated immutable identity. A preflight read or post-write readback cannot close a time-of-check/time-of-use gap; when no mutation-time guard exists, preserve state and leave withdrawal to provider-owned policy.
+14. Give persisted security and release receipts exact closed schemas at every object level. Reject unknown fields and malformed nested shapes before comparing identity or authorizing recovery.
 
 ## Documentation Ownership
 
