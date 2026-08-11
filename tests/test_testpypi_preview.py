@@ -218,10 +218,12 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "attestations: true" in workflow
     assert workflow.count("verify_registry_artifacts.sh") == 2
     assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
-    assert "release_exists=false" in workflow
-    assert "authenticated 200,404" in workflow
+    assert "python scripts/github_release_api.py ensure" in workflow
+    assert "python scripts/github_release_api.py upload" in workflow
+    assert "python scripts/github_release_api.py publish" in workflow
+    assert "release_id=$(jq -r .id" in workflow
     assert "release_is_draft=$(jq -r .draft" in workflow
-    assert "existing GitHub Release metadata does not match" in workflow
+    assert "invalid GitHub Release numeric identity" in workflow
     assert workflow.count("timeout-minutes:") == 8
     assert workflow.count("--max-filesize 10485760") >= 1
     assert "--retry 3 --retry-delay 2 --retry-connrefused" in verifier
