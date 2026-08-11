@@ -18,6 +18,7 @@ from ocr_toolkit.common.redaction import (
     redact_env_secret_values,
     redact_sensitive,
 )
+from ocr_toolkit.evidence.framework_schema import validate_plugin_record
 from ocr_toolkit.evidence.model import (
     CoverageRecord,
     EvidenceDelta,
@@ -53,6 +54,8 @@ KNOWN_KINDS = frozenset(
         "ci.image",
         "application.version",
         "diagnostic.coverage",
+        "framework.detected",
+        "template.file",
     }
 )
 
@@ -150,7 +153,11 @@ class EvidenceStore:
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
         try:
+            if record.kind in {"framework.detected", "template.file"}:
+                validate_plugin_record(record.kind, record.value)
             redacted_value = _safe_value(record.value, self.limits.max_value_chars)
+        except ValueError as exc:
+            raise EvidenceStoreError(f"invalid {record.kind} evidence value") from exc
         except EvidenceStoreError:
             self._diagnose_once(f"omitted oversized {record.kind} evidence value")
             return False

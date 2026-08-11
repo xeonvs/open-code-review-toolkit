@@ -11,7 +11,8 @@ from tests.support import HELPER_DIR, PROJECT_ROOT
 def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
     """Keep project additions narrow so OCR owns generic language guidance."""
 
-    rules = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))["rules"]
+    payload = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))
+    rules = payload["rules"]
     paths = [rule["path"] for rule in rules]
 
     assert not {
@@ -28,6 +29,18 @@ def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
         "{requirements.yml,requirements.yaml,**/requirements.yml,**/requirements.yaml}"
     ) in paths
     assert "{pyproject.toml,uv.lock,**/pyproject.toml,**/uv.lock}" in paths
+    assert payload["include"] == [
+        "{*.j2,*.jinja,*.jinja2,*.twig}",
+        "**/*.{j2,jinja,jinja2,twig}",
+        "roles/*/templates/**",
+        "**/roles/*/templates/**",
+    ]
+    assert paths[:3] == [
+        "{roles/*/templates/**,**/roles/*/templates/**}",
+        "{*.j2,*.jinja,*.jinja2,**/*.j2,**/*.jinja,**/*.jinja2}",
+        "{*.twig,**/*.twig}",
+    ]
+    assert all(rule["merge_system_rule"] is True for rule in rules[:3])
 
 
 def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:

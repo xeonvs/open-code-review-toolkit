@@ -54,14 +54,14 @@ review without GitLab posting, before protected feature and stable delivery.
    and set the next development line to 0.5.0.
 2. [x] Repair issue #76 draft-Release identity, canonical issue-comment
    newline, and idempotent skipped-publisher recovery with synthetic tests.
-3. [ ] Implement the bounded static plugin protocol, manifest-root components,
+3. [x] Implement the bounded static plugin protocol, manifest-root components,
    closed framework/template records, limits, coverage, and MCP/store contracts.
-4. [ ] Implement Jinja2 dependency and Jinja/Ansible-template evidence plus the
+4. [x] Implement Jinja2 dependency and Jinja/Ansible-template evidence plus the
    additive Jinja rules pack.
-5. [ ] Implement direct Echo/Fiber evidence and conservative related gRPC data.
-6. [ ] Implement Symfony/Twig dependency, configuration, template, and rules
+5. [x] Implement direct Echo/Fiber evidence and conservative related gRPC data.
+6. [x] Implement Symfony/Twig dependency, configuration, template, and rules
    evidence.
-7. [ ] Implement React/Next framework evidence with TypeScript/Vite related
+7. [x] Implement React/Next framework evidence with TypeScript/Vite related
    signals and npm/Yarn/pnpm resolution.
 8. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
    documentation, strategy, roadmap, backlog, and milestone reconciliation.
@@ -97,6 +97,32 @@ review without GitLab posting, before protected feature and stable delivery.
   duplicate/mismatched metadata, canonical comment-file bytes, bounded API
   allowlists, exact recovery workflow structure, and completed issue closure.
   Durable release documentation now records the numeric-draft boundary.
+
+### Framework Plugins And Template Review Checkpoint
+
+- A static package-owned plugin registry now interprets existing immutable
+  Python, Go, Composer, npm, Yarn, and pnpm evidence without giving plugins Git,
+  filesystem, subprocess, network, mutation, or MCP lifecycle capabilities.
+  Jinja2, Echo/Fiber, Symfony/Twig, and React/Next are direct-declaration
+  providers; gRPC, TypeScript, and Vite are bounded direct related signals.
+- New closed `framework.detected` and `template.file` records preserve semantic
+  component identity while versions, configuration paths, template object IDs,
+  and related signals remain delta values. Nested schemas are revalidated on
+  hostile store load; shared store limits, redaction, coverage, base/head
+  deltas, and existing MCP summary/list/get projection remain authoritative.
+- Jinja `.j2`/`.jinja`/`.jinja2`, extensionless conventional Ansible-role
+  templates, and Twig `.twig` files are inventoried without persisting or
+  rendering content. The public synthetic rules pack adds explicit additive
+  includes and ordered merged Jinja/Twig guidance; direct OCR 1.9.1 rules and
+  preview probes select root, nested, role, and Twig paths that were previously
+  rejected as `unsupported_ext`.
+- Focused self-review confirmed lock/checksum-only packages do not activate a
+  framework, components come from manifest/role roots, plugin failures remain
+  isolated, excludes retain precedence, ordinary supported files remain
+  reviewable, and the MCP requires no new server or tool. The combined evidence
+  and integration suite passes 192 tests; focused Ruff and strict mypy pass.
+  Public configuration, GitLab, and strategy documentation now describe the
+  implemented boundaries and review-selection behavior.
 
 ### Initial Evidence
 

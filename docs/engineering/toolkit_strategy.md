@@ -85,9 +85,11 @@ Evidence already distinguishes declared constraints, locked versions, runtime de
 
 Implemented collectors cover Python declarations, requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata plus npm, Yarn, and pnpm locks; Go modules, toolchains, requirements, replacements, and checksums; Composer manifests, locks, and platform evidence; Ansible Galaxy requirements, role topology, inventories, and runtime-dependent coverage; and declarative container and GitLab CI images. Further expansion follows demonstrated repository use and requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
 
-### Planned framework evidence
+### Framework and template evidence
 
-Framework support is plugin-oriented structured extraction, not a code graph or framework-specific review engine. Useful facts are framework identity, verified version, component scope, important configuration paths, and material source/target changes. Initial plugins are selected from demonstrated repositories and testable fixtures; candidates include common Python, Go, PHP, JavaScript, test, and Ansible frameworks.
+Framework support is package-owned static plugin extraction, not a code graph or framework-specific review engine. The established registry covers Jinja2 and Jinja/Ansible-style templates, Echo/Fiber with direct gRPC stack context, Symfony/Twig, and React/Next with TypeScript/Vite context. Plugins receive only immutable normalized dependency/tree evidence from the core collector, publish closed framework/template facts plus scoped completeness, and cannot read the repository independently, execute commands, fetch the network, mutate state, or create another MCP/review flow.
+
+OCR file selection remains a separate review-engine boundary. The public synthetic rules pack explicitly includes Jinja and Twig template paths that the recommended OCR does not allowlist by default, then supplies narrowly scoped merged rules. Framework identity, versions, component scope, configuration paths, and template deltas are stored once and served on demand by the existing built-in evidence MCP; rules neither duplicate those facts nor render templates.
 
 The design borrows useful CodeGraph principles without adopting CodeGraph: deterministic extraction precedes rendering, work is component-scoped, facts retain provenance and staleness, and OCR retrieves surgical evidence on demand. Route, symbol, and call graphs remain out of scope.
 

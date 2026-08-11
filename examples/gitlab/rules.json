@@ -1,6 +1,21 @@
 {
   "rules": [
     {
+      "path": "{roles/*/templates/**,**/roles/*/templates/**}",
+      "rule": "Review this Ansible-style Jinja template for variable, filter, and control-flow correctness; quoting, escaping, and whitespace; runtime-provided variables without assuming they must be declared locally; validity and safety of the rendered target configuration; secret exposure, permissions, idempotency, and deployment compatibility.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{*.j2,*.jinja,*.jinja2,**/*.j2,**/*.jinja,**/*.jinja2}",
+      "rule": "Review Jinja syntax, variable and filter correctness, context-appropriate escaping, unsafe safe-filter use, include/import boundaries, template injection, whitespace control, and validity of the rendered target identified by the file path and repository evidence.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{*.twig,**/*.twig}",
+      "rule": "Review Twig syntax, auto-escaping and raw-output boundaries, sandbox assumptions, include/import/inheritance behavior, undefined context, template injection, and validity and security of rendered HTML or configuration output.",
+      "merge_system_rule": true
+    },
+    {
       "path": "{pyproject.toml,uv.lock,**/pyproject.toml,**/uv.lock}",
       "rule": "Review dependency changes for credential exposure, runtime compatibility, lockfile consistency, and supply-chain risk.",
       "merge_system_rule": true
@@ -29,5 +44,11 @@
     ".venv/**",
     "__pycache__/**",
     "tests/**"
+  ],
+  "include": [
+    "{*.j2,*.jinja,*.jinja2,*.twig}",
+    "**/*.{j2,jinja,jinja2,twig}",
+    "roles/*/templates/**",
+    "**/roles/*/templates/**"
   ]
 }

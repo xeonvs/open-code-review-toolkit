@@ -19,6 +19,13 @@ from ocr_toolkit.evidence.ansible import (
 from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
 from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
 from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
+from ocr_toolkit.evidence.framework_plugins import (
+    FrameworkPluginContext,
+    PluginCoverage,
+    PluginFact,
+    collect_framework_plugins,
+    collect_template_files,
+)
 from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
 from ocr_toolkit.evidence.javascript_manifests import (
@@ -557,6 +564,52 @@ def _read_python_requirement_graph(
     )
 
 
+def _plugin_records(
+    facts: tuple[PluginFact, ...],
+    *,
+    ref: RefRole,
+    commit_sha: str,
+    trust: TrustClass,
+) -> list[EvidenceRecord]:
+    """Attach immutable ref provenance to validated static plugin facts."""
+
+    return [
+        EvidenceRecord(
+            kind=fact.kind,
+            value={"identity": fact.identity, "fact": fact.value},
+            source_path=fact.source_path,
+            ref=ref,
+            commit_sha=commit_sha,
+            component=fact.component,
+            provenance=f"framework plugin:{fact.value['plugin']}",
+            confidence=Confidence.EXACT,
+            trust=trust,
+        )
+        for fact in facts
+    ]
+
+
+def _plugin_coverage(
+    observations: tuple[PluginCoverage, ...], *, ref: RefRole, commit_sha: str
+) -> list[CoverageRecord]:
+    """Compose plugin coverage by semantic component/domain/scope identity."""
+
+    grouped: dict[tuple[str, str, str], list[CoverageObservation]] = {}
+    for item in observations:
+        grouped.setdefault((item.component, item.domain, item.scope), []).append(item.observation)
+    return [
+        compose_coverage(
+            component=component,
+            domain=domain,
+            scope=scope,
+            observations=tuple(values),
+            ref=ref,
+            commit_sha=commit_sha,
+        )
+        for (component, domain, scope), values in sorted(grouped.items())
+    ]
+
+
 def collect_ref_facts(
     reader: GitRepositoryReader,
     commit_sha: str,
@@ -820,6 +873,24 @@ def collect_ref_facts(
                     trust=trust,
                 )
             )
+    plugin_context = FrameworkPluginContext(
+        records=tuple(records),
+        entries=entries,
+        omitted_paths=tuple(entry.path for entry in candidates if entry.path not in blobs),
+        ref=ref,
+        commit_sha=commit_sha,
+    )
+    plugin_facts, plugin_observations, plugin_notices = collect_framework_plugins(plugin_context)
+    template_facts, template_observations = collect_template_files(entries)
+    records.extend(
+        _plugin_records(
+            (*plugin_facts, *template_facts),
+            ref=ref,
+            commit_sha=commit_sha,
+            trust=trust,
+        )
+    )
+    diagnostics.extend(f"{ref.value}:{notice}" for notice in plugin_notices)
     if coverage_sink is not None:
         for (domain, scope), observations in sorted(coverage_observations.items()):
             coverage_sink.append(
@@ -832,6 +903,13 @@ def collect_ref_facts(
                     commit_sha=commit_sha,
                 )
             )
+        coverage_sink.extend(
+            _plugin_coverage(
+                (*plugin_observations, *template_observations),
+                ref=ref,
+                commit_sha=commit_sha,
+            )
+        )
     return records, diagnostics
 
 
