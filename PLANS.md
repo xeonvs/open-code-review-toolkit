@@ -2,9 +2,97 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit. Older completed plans are indexed in [the execution-history archive](docs/engineering/execution_history/README.md).
 
-## Active Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
+## Active Plan: M2 ecosystem and framework coverage for 0.5.0
 
-Status: active; final release inputs locally validated; release PR and stable delivery pending
+Status: active; implementation checkpoints in progress
+Owner: Codex
+Last Updated: 2026-08-11
+Release Classification: release-required
+Target Stable Version: 0.5.0
+Tracking Issues: #76; feature PR #77
+
+### Goal
+
+Deliver M2 as stable toolkit 0.5.0 with bounded static framework plugins for
+Jinja2, Go web frameworks, Symfony/PHP, and React/TypeScript. Make Jinja and
+Twig template files actually reviewable by the recommended OCR through the
+public synthetic rules pack, expose framework/template state and deltas through
+the existing read-only evidence MCP, and repair issue #76 release recovery.
+Complete one synthetic installed-artifact E2E, then exactly one final local OCR
+review without GitLab posting, before protected feature and stable delivery.
+
+### Decisions
+
+- Release-required target is 0.5.0. Keep this plan active through feature PR,
+  TestPyPI development verification, final release PR, stable registries,
+  provenance, annotated tag, immutable Release, receipt, supported-Python
+  installs, and completed closure of issue #76.
+- Use only anonymized technology selection conclusions from the private
+  inventory. Never persist private host, project, namespace, path, payload, or
+  identifying aggregate data; all public fixtures and examples are synthetic.
+- Add a static package-owned plugin registry. Plugins consume immutable bounded
+  normalized evidence only and cannot load repository code, execute commands,
+  use network access, mutate repositories, or start a second MCP/review flow.
+- Preserve one built-in `ocr_toolkit_evidence` MCP with summary/list/get. Store
+  validated framework and template records before OCR starts; MCP performs no
+  plugin collection at request time.
+- Make `.j2`, `.jinja`, `.jinja2`, extensionless Ansible-role templates, and
+  `.twig` files reviewable through explicit additive `include` patterns plus
+  specific merged rules in `examples/gitlab/rules.json`.
+- After complete E2E, run exactly one final local OCR 1.9.1 review over the M2
+  change range, require real evidence-MCP use, fix actionable findings, and use
+  only deterministic validation afterward.
+
+### Work Queue
+
+1. [x] Reconcile the externally completed 0.4.7 starting point, create the M2
+   branch and draft feature PR #77, activate release-required 0.5.0 planning,
+   and set the next development line to 0.5.0.
+2. [ ] Repair issue #76 draft-Release identity, canonical issue-comment
+   newline, and idempotent skipped-publisher recovery with synthetic tests.
+3. [ ] Implement the bounded static plugin protocol, manifest-root components,
+   closed framework/template records, limits, coverage, and MCP/store contracts.
+4. [ ] Implement Jinja2 dependency and Jinja/Ansible-template evidence plus the
+   additive Jinja rules pack.
+5. [ ] Implement direct Echo/Fiber evidence and conservative related gRPC data.
+6. [ ] Implement Symfony/Twig dependency, configuration, template, and rules
+   evidence.
+7. [ ] Implement React/Next framework evidence with TypeScript/Vite related
+   signals and npm/Yarn/pnpm resolution.
+8. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
+   documentation, strategy, roadmap, backlog, and milestone reconciliation.
+9. [ ] Run complete Python 3.12-3.14, security, privacy, package, installed
+   artifact, rules-preview, real-MCP-client, and synthetic no-post E2E gates.
+10. [ ] Run exactly one final local full OCR review, fix findings, then finish
+    deterministic validation, Gitleaks, self-review, feature PR checks/threads,
+    merge, and TestPyPI development readback.
+11. [ ] Prepare the final release PR as the last repository mutation, archive
+    completed 0.4.7 history, consume fragments 76 and 77, and reconcile M2 to
+    implemented truth while leaving external publication pending.
+12. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
+    Release/receipt/Python-install readback and close #76 as completed without
+    another repository PR.
+
+### Initial Evidence
+
+- Clean synchronized `main` was exact annotated tag `v0.4.7` at
+  `3caa50b4fc5026da79c7f2ceae1deef31715f814`; stable 0.4.7 is externally
+  complete, while the retained plan below still records its former pending
+  pre-publication state.
+- OCR 1.9.1 resolves a custom Jinja rule but excludes `.j2` as
+  `unsupported_ext`; adding an explicit `include` pattern makes preview select
+  it. `.j2`, `.jinja`, `.jinja2`, and `.twig` are absent from OCR 1.9.1's
+  built-in extension allowlist.
+- Existing dependency parsers already expose direct declarations and lock facts
+  for Python, Go, Composer, npm, Yarn, and pnpm. M2 adds interpretation,
+  component scoping, template inventory, explicit completeness, and review
+  selection rather than duplicating those parsers.
+- Draft feature PR #77 supplies the real Towncrier identifier for M2 feature
+  and rules fragments. Issue #76 remains open until immutable stable delivery.
+
+## Recently Completed Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
+
+Status: completed; stable 0.4.7 externally delivered and independently read back
 Owner: Codex
 Last Updated: 2026-08-11
 Release Classification: release-required
