@@ -213,7 +213,7 @@ jobs:
           git switch -C "${branch}" "${GITHUB_SHA}"
           git add compatibility/ocr-support.json compatibility/evidence/ \
             src/ocr_toolkit/preflight.py examples/gitlab/ocr-review.gitlab-ci.yml \
-            README.md docs/gitlab.md docs/security.md changelog.d/
+            changelog.d/
           git commit -m "Target OCR ${version}"
           git push --force-with-lease="${branch}" origin "${branch}"
           existing=$(gh pr list --repo "${REPOSITORY}" --state open --head "${branch}" --json number --jq '.[0].number // empty')

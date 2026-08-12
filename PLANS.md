@@ -6,10 +6,10 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 Status: active; implementation checkpoints in progress
 Owner: Codex
-Last Updated: 2026-08-11
+Last Updated: 2026-08-12
 Release Classification: release-required
 Target Stable Version: 0.5.0
-Tracking Issues: #76; feature PR #77
+Tracking Issues: #76, #78 (OCR 1.9.2); feature PR #77
 
 ### Goal
 
@@ -17,16 +17,19 @@ Deliver M2 as stable toolkit 0.5.0 with bounded static framework plugins for
 Jinja2, Go web frameworks, Symfony/PHP, and React/TypeScript. Make Jinja and
 Twig template files actually reviewable by the recommended OCR through the
 public synthetic rules pack, expose framework/template state and deltas through
-the existing read-only evidence MCP, and repair issue #76 release recovery.
-Complete one synthetic installed-artifact E2E, then exactly one final local OCR
-review without GitLab posting, before protected feature and stable delivery.
+the existing read-only evidence MCP, repair issue #76 release recovery, and
+qualify checksum-pinned OCR 1.9.2 through issue #78 before final validation.
+Deliver completed slices as local checkpoint commits without intermediate
+pushes. Complete one synthetic installed-artifact E2E, then exactly one final
+local OCR review without GitLab posting, and push feature PR #77 only once
+after final local validation, before protected feature and stable delivery.
 
 ### Decisions
 
 - Release-required target is 0.5.0. Keep this plan active through feature PR,
   TestPyPI development verification, final release PR, stable registries,
   provenance, annotated tag, immutable Release, receipt, supported-Python
-  installs, and completed closure of issue #76.
+  installs, and completed closure of issues #76 and #78.
 - Use only anonymized technology selection conclusions from the private
   inventory. Never persist private host, project, namespace, path, payload, or
   identifying aggregate data; all public fixtures and examples are synthetic.
@@ -39,13 +42,22 @@ review without GitLab posting, before protected feature and stable delivery.
 - Make `.j2`, `.jinja`, `.jinja2`, extensionless Ansible-role templates, and
   `.twig` files reviewable through explicit additive `include` patterns plus
   specific merged rules in `examples/gitlab/rules.json`.
-- After complete E2E, run exactly one final local OCR 1.9.1 review over the M2
+- Qualify the full adjacent OCR 1.9.1 to 1.9.2 transition from published
+  checksums, source/tag history, release notes, and consumed-contract probes.
+  Classify every upstream item, adapt only demonstrated toolkit contracts, and
+  use qualified OCR 1.9.2 for installed-artifact E2E and the final review.
+- After complete E2E, run exactly one final local OCR 1.9.2 review over the M2
   change range, require real evidence-MCP use, fix actionable findings, and use
   only deterministic validation afterward.
 - Between completed checkpoints, query the public project for newly opened OCR
   compatibility/release issues. If a newer stable OCR appears, qualify its
   complete adjacent chain and include required contract/rules adaptations in
   0.5.0 before E2E and the single final OCR review.
+- Keep completed implementation slices as local checkpoint commits with tests,
+  self-review, documentation, and release-issue monitoring. Do not push each
+  checkpoint or retrigger PR checks; update feature PR #77 once, only after all
+  M2 implementation, installed-artifact E2E, the single final OCR review and
+  its deterministic corrections, and final local validation are complete.
 
 ### Work Queue
 
@@ -63,21 +75,24 @@ review without GitLab posting, before protected feature and stable delivery.
    evidence.
 7. [x] Implement React/Next framework evidence with TypeScript/Vite related
    signals and npm/Yarn/pnpm resolution.
-8. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
+8. [x] Qualify OCR 1.9.2 against 1.9.1 through canonical issue #78,
+   preserve checksum/source/probe evidence, classify every upstream change,
+   update tested/recommended pins and contracts, and use 1.9.2 thereafter.
+9. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
    documentation, strategy, roadmap, backlog, and milestone reconciliation.
    Self-review hardening of provider semantics and bounds is complete; final
    backlog/roadmap reconciliation remains pending until release-grade gates.
-9. [ ] Run complete Python 3.12-3.14, security, privacy, package, installed
-   artifact, rules-preview, real-MCP-client, and synthetic no-post E2E gates.
-10. [ ] Run exactly one final local full OCR review, fix findings, then finish
+10. [ ] Run complete Python 3.12-3.14, security, privacy, package, installed
+    artifact, rules-preview, real-MCP-client, and synthetic no-post E2E gates.
+11. [ ] Run exactly one final local full OCR review, fix findings, then finish
     deterministic validation, Gitleaks, self-review, feature PR checks/threads,
     merge, and TestPyPI development readback.
-11. [ ] Prepare the final release PR as the last repository mutation, archive
-    completed 0.4.7 history, consume fragments 76 and 77, and reconcile M2 to
-    implemented truth while leaving external publication pending.
-12. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
-    Release/receipt/Python-install readback and close #76 as completed without
-    another repository PR.
+12. [ ] Prepare the final release PR as the last repository mutation, archive
+    completed 0.4.7 history, consume fragments 76, 77, and 78, and reconcile M2
+    to implemented truth while leaving external publication pending.
+13. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
+    Release/receipt/Python-install readback and close #76 and #78 as completed
+    without another repository PR.
 
 ### Issue #76 Checkpoint
 
@@ -100,6 +115,35 @@ review without GitLab posting, before protected feature and stable delivery.
   allowlists, exact recovery workflow structure, and completed issue closure.
   Durable release documentation now records the numeric-draft boundary.
 
+### OCR 1.9.2 Qualification Checkpoint
+
+- Hosted workflow `31571999318` verified every published release asset against
+  GitHub digest metadata and `sha256sum.txt`, then passed Linux version, CLI,
+  JSON preview, full-review result, additive-thinking, and posting-consumer
+  probes. Canonical issue #78 records the human-review-required lane.
+- Adjacent source review found that the tags diverge only because the retry
+  documentation commit was reapplied on the 1.9.2 line; both commits have the
+  same stable patch ID, so no 1.9.1 runtime behavior was dropped. The effective
+  rules/file-extension set and Go MCP SDK remain unchanged.
+- The only toolkit-consumed source change corrects OCR directory-only gitignore
+  matching for ancestor, glob, and root-anchor semantics. It is a compatible
+  file-selection fix and requires no toolkit runtime adaptation. New built-in
+  LLM providers, Pages/viewer changes, Action pinning, skill/retry/agent
+  documentation, and upstream CI are release-note-only context for this
+  toolkit. No future backlog item is activated.
+- Compatibility evidence, recommended/tested manifest state, runtime preflight,
+  and the checksum-pinned synthetic CI example now target 1.9.2. General user
+  documentation refers to the compatibility manifest instead of duplicating a
+  patch number; promotion automation no longer rewrites those durable pages.
+- The official Darwin arm64 binary was installed atomically only after its
+  published size and SHA-256 matched both release metadata and the checksum
+  file. Installed-path readback and local deterministic contract probes pass.
+  Final focused validation passes 148 tests plus 15 subtests; full quality
+  passes 635 tests plus 85 subtests at 79.77% coverage with Ruff, mypy, and
+  Bandit. Workflow YAML, Towncrier draft, manifest linkage, changed-public-file
+  privacy scan, and `git diff --check` pass. Issue #78 remains open until
+  protected 0.5.0 delivery and immutable release readback, alongside issue #76.
+
 ### Framework Plugins And Template Review Checkpoint
 
 - A static package-owned plugin registry now interprets existing immutable
@@ -115,7 +159,7 @@ review without GitLab posting, before protected feature and stable delivery.
 - Jinja `.j2`/`.jinja`/`.jinja2`, extensionless conventional Ansible-role
   templates, and Twig `.twig` files are inventoried without persisting or
   rendering content. The public synthetic rules pack adds explicit additive
-  includes and ordered merged Jinja/Twig guidance; direct OCR 1.9.1 rules and
+  includes and ordered merged Jinja/Twig guidance; direct OCR rules and
   preview probes select root, nested, role, and Twig paths that were previously
   rejected as `unsupported_ext`.
 - Focused self-review confirmed lock/checksum-only packages do not activate a
@@ -138,16 +182,18 @@ review without GitLab posting, before protected feature and stable delivery.
   `3caa50b4fc5026da79c7f2ceae1deef31715f814`; stable 0.4.7 is externally
   complete, while the retained plan below still records its former pending
   pre-publication state.
-- OCR 1.9.1 resolves a custom Jinja rule but excludes `.j2` as
+- The recommended OCR resolves a custom Jinja rule but excludes `.j2` as
   `unsupported_ext`; adding an explicit `include` pattern makes preview select
-  it. `.j2`, `.jinja`, `.jinja2`, and `.twig` are absent from OCR 1.9.1's
-  built-in extension allowlist.
+  it. `.j2`, `.jinja`, `.jinja2`, and `.twig` are absent from its built-in
+  extension allowlist.
 - Existing dependency parsers already expose direct declarations and lock facts
   for Python, Go, Composer, npm, Yarn, and pnpm. M2 adds interpretation,
   component scoping, template inventory, explicit completeness, and review
   selection rather than duplicating those parsers.
 - Draft feature PR #77 supplies the real Towncrier identifier for M2 feature
-  and rules fragments. Issue #76 remains open until immutable stable delivery.
+  and rules fragments. Canonical OCR 1.9.2 qualification issue #78 is open and
+  already contains passing hosted checksum/contract evidence; issue #76 and #78
+  remain open until immutable stable delivery.
 
 ## Recently Completed Plan: Harden GitLab suggestions and add SHA-bound approval for 0.4.7
 

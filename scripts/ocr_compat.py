@@ -30,9 +30,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
 PREFLIGHT = ROOT / "src" / "ocr_toolkit" / "preflight.py"
 GITLAB_EXAMPLE = ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
-README = ROOT / "README.md"
-GITLAB_DOC = ROOT / "docs" / "gitlab.md"
-SECURITY_DOC = ROOT / "docs" / "security.md"
 UPSTREAM_REPOSITORY = "alibaba/open-code-review"
 UPSTREAM_API = f"https://api.github.com/repos/{UPSTREAM_REPOSITORY}"
 USER_AGENT = "open-code-review-toolkit-compatibility/1"
@@ -1223,16 +1220,6 @@ def prepare_update(
         f'OCR_SHA256: "{linux_asset["sha256"]}"',
         source="example checksum",
     )
-    docs: list[Path] = []
-    doc_payloads: list[str] = []
-    for source in (README, GITLAB_DOC, SECURITY_DOC):
-        path = root / source.relative_to(ROOT)
-        text = path.read_text(encoding="utf-8")
-        text = _replace_exact(
-            text, old_version, version, source=f"{path.relative_to(root)} version"
-        )
-        docs.append(path)
-        doc_payloads.append(text)
     changelog_dir = root / "changelog.d"
     fragment = changelog_dir / f"{fragment_number}.feature.md"
     qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
@@ -1249,10 +1236,8 @@ def prepare_update(
     manifest_path.write_bytes(manifest_payload)
     preflight_path.write_text(preflight, encoding="utf-8")
     example_path.write_text(example, encoding="utf-8")
-    for path, text in zip(docs, doc_payloads, strict=True):
-        path.write_text(text, encoding="utf-8")
     fragment.write_text(fragment_text, encoding="utf-8")
-    return [manifest_path, *destinations, preflight_path, example_path, *docs, fragment]
+    return [manifest_path, *destinations, preflight_path, example_path, fragment]
 
 
 def render_issue(evidence: dict[str, Any]) -> str:

@@ -1,0 +1,97 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "836d2bbeb4aec19ce420eba5feb26e203ab751daffda7c495f60dee587c6d64a",
+      "size": 47095072
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "9f58edafcc324af53fef54b3a5a451c38aea6a073381b499be74de4b81a10024",
+      "size": 44762786
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "15ed605305fc679604ed0f5fa8715db505af81c10ecb8a7846d5642bce4b834e",
+      "size": 45584546
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "70014bd1971682e1c702de4715fcd0a9a2d0066e106e1f20c3d89f10474f889f",
+      "size": 42991778
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "a5bc4ae5c634a27b6a066121133bce602489f7ef0c6fe948b0c784610045ebac",
+      "size": 46817792
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "59409fdf2ecba31a9491992711e14b2052fff411046768fc619cae49ef8ebdf9",
+      "size": 43611136
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "c5df11b6811799fea887b40207d00d41d6036672ab66ff6a52a2ddf1a1958704",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.9.1",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-12T06:51:06Z",
+  "release_changes": "## 🚀 Features\n\n- feat(pages): redesign hero with two-column layout and three install channels (#408)\n- feat(providers): add siliconflow (GLOBAL) to built-in providers (#772)\n- feat(providers): add siliconflow-cn as a built-in model provider (#775)\n- feat(llm): add novita api as a default provider (#829)\n- feat(viewer): add review comment tag filters (#779)\n- feat(llm): add dynamic cache breakpoint on last message for Anthropic (#828)\n\n## 🐛 Bug Fixes\n\n- fix(diff): match gitignore directory patterns (#853)\n- fix(action): pin nested action references to full commit SHAs (#836)\n- fix(codeql): Workflow does not contain permissions (#814)\n- fix(viewer): stack suggested code panels (#739)\n\n## 📖 Documentation\n\n- docs(skill): avoid output truncation in agent skill instructions (#809)\n- docs: add retry_codes configuration documentation (#827)\n- docs: add AGENTS.md and track CLAUDE.md for shared agent guidelines (#826)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.9.0...v1.9.2",
+  "release_notes_sha256": "79a26a0cd882cc52d42021d846a14ffb33acfa5f7e52c68d68da951e2b0cd1df",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.9.2",
+  "tested_baseline_version": "1.9.1",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.9.2"
+}

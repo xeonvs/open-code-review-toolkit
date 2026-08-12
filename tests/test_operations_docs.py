@@ -120,6 +120,11 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "assess-chain" in workflow
     assert "pattern: ocr-compatibility-v*" in workflow
     assert workflow.count("prepare-update") == 1
+    assert "README.md docs/gitlab.md docs/security.md" not in workflow
+    assert 'README = ROOT / "README.md"' not in qualifier
+    assert 'GITLAB_DOC = ROOT / "docs" / "gitlab.md"' not in qualifier
+    assert 'SECURITY_DOC = ROOT / "docs" / "security.md"' not in qualifier
+    assert "public version references" not in policy
     assert "MAX_QUALIFICATION_CHAIN = 10" in qualifier
     assert "OCR_UPDATE_BOT_TOKEN" in workflow
     assert "gh auth setup-git" in workflow
