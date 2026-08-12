@@ -13,7 +13,7 @@ def test_quality_script_uses_an_isolated_ignored_environment() -> None:
     script = SCRIPT.read_text(encoding="utf-8")
 
     assert "OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv" in script
-    assert "export UV_PROJECT_ENVIRONMENT=$quality_environment" in script
+    assert 'export UV_PROJECT_ENVIRONMENT="$quality_environment"' in script
     assert "open_code_review_toolkit-*.dist-info" in script
     assert '[ ! -f "$metadata/RECORD" ]' in script
     assert 'uv venv --clear "$quality_environment"' in script

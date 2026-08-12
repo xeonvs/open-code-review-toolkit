@@ -1,3 +1,19 @@
+## 0.5.0 - 2026-08-12
+
+### 🚀 Features
+
+- Add a bounded ecosystem-adapter layer plus framework and template evidence plugins for Jinja2, Go web frameworks, Symfony/PHP, and React/TypeScript, including unambiguous root components, applicability-aware Go replacements, include-graph completeness, fail-closed provider isolation, scoped coverage, and first-class redacted delta queries through the built-in evidence MCP. ([#77](https://github.com/xeonvs/open-code-review-toolkit/issues/77))
+- Target checksum-verified Open Code Review 1.9.2 after adjacent compatibility qualification. ([#78](https://github.com/xeonvs/open-code-review-toolkit/issues/78))
+
+### 🐛 Bug Fixes
+
+- Make stable release recovery idempotent across private draft Releases, already-published registry artifacts, and exact issue-receipt comment readback, while binding release notes, assets, and issue evidence to their validated file descriptors. ([#76](https://github.com/xeonvs/open-code-review-toolkit/issues/76))
+
+### 🧩 Rules
+
+- Make Jinja and Twig templates reviewable through explicit additive includes and template-specific rules in the synthetic GitLab rules pack. ([#77](https://github.com/xeonvs/open-code-review-toolkit/issues/77))
+
+
 ## 0.4.7 - 2026-08-11
 
 ### 🚀 Features

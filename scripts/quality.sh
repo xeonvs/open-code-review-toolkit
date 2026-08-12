@@ -6,7 +6,7 @@ log_dir=${OCR_TOOLKIT_LOG_DIR:-.quality-logs}
 mkdir -p "$log_dir"
 log_file="$log_dir/${mode}.log"
 quality_environment=${OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv}
-export UV_PROJECT_ENVIRONMENT=$quality_environment
+export UV_PROJECT_ENVIRONMENT="$quality_environment"
 
 # An interrupted editable install can leave dist-info without RECORD. uv then
 # warns while trying an uninstall that cannot be complete. This environment is
