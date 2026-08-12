@@ -242,3 +242,5 @@ def validate_plugin_record(kind: str, value: EvidenceValue) -> None:
     elif kind == "template.file":
         validate_template_value(fact)
         _path(identity, "template evidence identity")
+    else:
+        raise ValueError("plugin evidence kind is unsupported")

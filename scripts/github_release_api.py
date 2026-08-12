@@ -105,12 +105,71 @@ def _request(
         raise GitHubReleaseError("GitHub Release response is not valid bounded JSON") from exc
 
 
-def _metadata(notes_path: Path) -> str:
-    """Read exact release notes under the shared response-size ceiling."""
+def _read_regular_file(path: Path, *, max_bytes: int, require_nonempty: bool, label: str) -> bytes:
+    """Read one regular single-link file through its validated descriptor."""
 
-    if not notes_path.is_file() or notes_path.stat().st_size > MAX_JSON_BYTES:
-        raise GitHubReleaseError("release notes are missing or oversized")
-    return notes_path.read_text(encoding="utf-8")
+    flags = os.O_RDONLY
+    for name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK", "O_BINARY"):
+        flags |= getattr(os, name, 0)
+    descriptor = -1
+    try:
+        path_metadata = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(path_metadata.st_mode) or path_metadata.st_nlink != 1:
+            raise GitHubReleaseError(f"{label} is unsafe or oversized")
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        # Comparing the pathname identity to the opened descriptor also closes
+        # the lstat/open race on platforms without O_NOFOLLOW.
+        if (path_metadata.st_dev, path_metadata.st_ino) != (opened.st_dev, opened.st_ino):
+            raise GitHubReleaseError(f"{label} changed while being opened")
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or (require_nonempty and opened.st_size <= 0)
+            or opened.st_size > max_bytes
+        ):
+            raise GitHubReleaseError(f"{label} is unsafe or oversized")
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        final = os.fstat(descriptor)
+        stable_fields = ("st_dev", "st_ino", "st_mode", "st_size")
+        if (
+            len(payload) > max_bytes
+            or len(payload) != opened.st_size
+            or any(getattr(opened, name) != getattr(final, name) for name in stable_fields)
+            or getattr(opened, "st_mtime_ns", None) != getattr(final, "st_mtime_ns", None)
+        ):
+            raise GitHubReleaseError(f"{label} changed while being read")
+        return payload
+    except GitHubReleaseError:
+        raise
+    except OSError as exc:
+        raise GitHubReleaseError(f"{label} is unsafe or unavailable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _metadata(notes_path: Path) -> str:
+    """Read exact release notes from one bounded validated descriptor."""
+
+    payload = _read_regular_file(
+        notes_path,
+        max_bytes=MAX_JSON_BYTES,
+        require_nonempty=False,
+        label="release notes",
+    )
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GitHubReleaseError("release notes are not valid UTF-8") from exc
 
 
 def _validate_inputs(repository: str, tag: str, target: str, title: str) -> None:
@@ -329,18 +388,16 @@ def upload_asset(
     if release["draft"] is not True:
         raise GitHubReleaseError("cannot upload an asset to a published Release")
     name = asset.name
-    metadata = asset.stat(follow_symlinks=False)
-    if (
-        not ASSET_RE.fullmatch(name)
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or metadata.st_size <= 0
-        or metadata.st_size > MAX_ASSET_BYTES
-    ):
+    if not ASSET_RE.fullmatch(name):
         raise GitHubReleaseError("GitHub Release asset is unsafe or oversized")
     if any(item["name"] == name for item in release["assets"]):
         raise GitHubReleaseError("GitHub Release asset already exists")
-    body = asset.read_bytes()
+    body = _read_regular_file(
+        asset,
+        max_bytes=MAX_ASSET_BYTES,
+        require_nonempty=True,
+        label="GitHub Release asset",
+    )
     endpoint = f"/repos/{repository}/releases/{release_id}/assets?" + urllib.parse.urlencode(
         {"name": name}
     )
@@ -356,7 +413,7 @@ def upload_asset(
     if (
         not isinstance(uploaded, dict)
         or uploaded.get("name") != name
-        or uploaded.get("size") != metadata.st_size
+        or uploaded.get("size") != len(body)
         or isinstance(uploaded.get("id"), bool)
         or not isinstance(uploaded.get("id"), int)
         or uploaded["id"] <= 0

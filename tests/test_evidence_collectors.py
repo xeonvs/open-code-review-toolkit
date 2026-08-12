@@ -388,6 +388,84 @@ def test_python_requirements_includes_are_recursive_bounded_and_safe(tmp_path: P
     )
 
 
+def test_python_requirements_include_limit_degrades_framework_completeness(
+    tmp_path: Path,
+) -> None:
+    """Bind a truncated Python include graph to its owning declaration source."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    include_count = MAX_MANIFEST_INCLUDE_FILES + 1
+    (tmp_path / "requirements.txt").write_text(
+        "jinja2==3.1.6\n"
+        + "".join(f"-r requirements/item-{index}.txt\n" for index in range(include_count)),
+        encoding="utf-8",
+    )
+    requirements = tmp_path / "requirements"
+    requirements.mkdir()
+    for index in range(include_count):
+        (requirements / f"item-{index}.txt").write_text(
+            f"synthetic-package-{index}==1.0\n", encoding="utf-8"
+        )
+    _git(tmp_path, "add", "requirements.txt", "requirements")
+    _git(tmp_path, "commit", "-qm", "wide Python requirements")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    coverage = []
+
+    _records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path),
+        head,
+        RefRole.HEAD,
+        coverage_sink=coverage,
+    )
+
+    declaration = next(
+        item
+        for item in coverage
+        if item.component == "repository"
+        and item.domain == "framework.declaration"
+        and item.scope == "jinja2"
+    )
+    assert declaration.state.value == "partial"
+    assert declaration.reasons == ("include-graph-truncation",)
+    assert sum("Python requirements includes were truncated" in item for item in diagnostics) == 1
+
+
+def test_python_requirements_omitted_include_degrades_root_completeness(
+    tmp_path: Path,
+) -> None:
+    """Propagate a bounded included-blob omission to its owning Python root."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.txt").write_text("jinja2==3.1.6\n-r nested.txt\n", encoding="utf-8")
+    (tmp_path / "nested.txt").write_text("x" * 64, encoding="utf-8")
+    _git(tmp_path, "add", "requirements.txt", "nested.txt")
+    _git(tmp_path, "commit", "-qm", "oversized Python include")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    coverage = []
+
+    _records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path, max_file_bytes=32),
+        head,
+        RefRole.HEAD,
+        coverage_sink=coverage,
+    )
+
+    declaration = next(
+        item
+        for item in coverage
+        if item.component == "repository"
+        and item.domain == "framework.declaration"
+        and item.scope == "jinja2"
+    )
+    assert declaration.state.value == "partial"
+    assert declaration.reasons == ("bounded-source-omission",)
+    assert diagnostics == ["head:omitted nested.txt: blob exceeds 32 bytes"]
+
+
 def test_python_requirements_refuse_symlink_and_submodule_includes(tmp_path: Path) -> None:
     """Never dereference include targets that are not regular immutable blobs."""
 
@@ -978,6 +1056,87 @@ def test_ansible_requirement_include_file_limit_is_reported_once(tmp_path: Path)
         "head:requirements.yml: Ansible Galaxy includes were truncated after "
         f"{MAX_MANIFEST_INCLUDE_FILES} files"
     ]
+
+
+def test_ansible_include_limit_marks_only_its_root_source_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expose graph truncation as structured status on the affected Galaxy root."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    include_count = MAX_MANIFEST_INCLUDE_FILES + 1
+    (tmp_path / "requirements.yml").write_text(
+        "".join(f"- include: requirements/item-{index}.yml\n" for index in range(include_count)),
+        encoding="utf-8",
+    )
+    (tmp_path / "services").mkdir()
+    (tmp_path / "services/requirements.yml").write_text(
+        "- name: synthetic.unrelated\n", encoding="utf-8"
+    )
+    requirements = tmp_path / "requirements"
+    requirements.mkdir()
+    for index in range(include_count):
+        (requirements / f"item-{index}.yml").write_text(
+            f"- name: synthetic.role_{index}\n", encoding="utf-8"
+        )
+    _git(tmp_path, "add", "requirements.yml", "requirements", "services/requirements.yml")
+    _git(tmp_path, "commit", "-qm", "wide Galaxy graph")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    captured = []
+
+    def capture(context: object) -> tuple[tuple[()], tuple[()], tuple[()]]:
+        captured.append(context)
+        return (), (), ()
+
+    monkeypatch.setattr("ocr_toolkit.evidence.collectors.collect_framework_plugins", capture)
+
+    collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.HEAD)
+
+    assert len(captured) == 1
+    statuses = {item.path: item for item in captured[0].source_statuses}
+    assert statuses["requirements.yml"].state == "partial"
+    assert statuses["requirements.yml"].reason == "include-graph-truncation"
+    assert statuses["services/requirements.yml"].state == "complete"
+    assert statuses["services/requirements.yml"].reason is None
+
+
+def test_ansible_omitted_include_marks_only_its_owning_root_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Propagate one bounded Galaxy include omission without degrading siblings."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "requirements.yml").write_text("- include: nested.yml\n", encoding="utf-8")
+    (tmp_path / "nested.yml").write_text("#" + "x" * 64, encoding="utf-8")
+    (tmp_path / "services").mkdir()
+    (tmp_path / "services/requirements.yml").write_text(
+        "- name: synthetic.unrelated\n", encoding="utf-8"
+    )
+    _git(tmp_path, "add", "requirements.yml", "nested.yml", "services/requirements.yml")
+    _git(tmp_path, "commit", "-qm", "oversized Galaxy include")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    captured = []
+
+    def capture(context: object) -> tuple[tuple[()], tuple[()], tuple[()]]:
+        captured.append(context)
+        return (), (), ()
+
+    monkeypatch.setattr("ocr_toolkit.evidence.collectors.collect_framework_plugins", capture)
+
+    _records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path, max_file_bytes=32), head, RefRole.HEAD
+    )
+
+    statuses = {item.path: item for item in captured[0].source_statuses}
+    assert statuses["requirements.yml"].state == "partial"
+    assert statuses["requirements.yml"].reason == "bounded-source-omission"
+    assert statuses["services/requirements.yml"].state == "complete"
+    assert statuses["services/requirements.yml"].reason is None
+    assert diagnostics == ["head:omitted nested.yml: blob exceeds 32 bytes"]
 
 
 def test_ansible_requirement_include_depth_is_reported_once(tmp_path: Path) -> None:

@@ -21,6 +21,7 @@ from ocr_toolkit.evidence import (
     TrustClass,
 )
 from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
+from ocr_toolkit.evidence.frameworks.schema import validate_plugin_record
 
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
@@ -310,6 +311,26 @@ def test_store_deduplicates_and_reports_deterministic_limits() -> None:
         "per-kind evidence record limit reached for dependency.declared",
         "global evidence record limit reached",
     ]
+
+
+def test_plugin_schema_rejects_unknown_record_kinds() -> None:
+    """Keep the plugin validator closed when called outside the store registry."""
+
+    with pytest.raises(ValueError, match="unsupported"):
+        validate_plugin_record(
+            "synthetic.plugin",
+            {"identity": "synthetic", "fact": {}},
+        )
+
+
+def test_store_omits_an_oversized_ordinary_record_without_aborting() -> None:
+    """Treat the store value budget as bounded omission rather than invalid input."""
+
+    store = EvidenceStore(EvidenceStoreLimits(max_value_chars=8))
+
+    assert not store.add(record("x" * 9))
+    assert store.records == ()
+    assert store.diagnostics == ["omitted oversized dependency.declared evidence value"]
 
 
 def test_store_rejects_unknown_kinds_and_schema_versions(tmp_path: Path) -> None:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -404,6 +406,41 @@ def test_numeric_release_identity_requires_exact_metadata_and_unique_assets() ->
         )
 
 
+def test_issue_receipt_json_read_is_bound_to_one_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prevent a post-validation pathname swap from changing issue evidence."""
+
+    evidence = tmp_path / "issue.json"
+    replacement = tmp_path / "replacement.json"
+    original = {"number": 76, "state": "open", "state_reason": None}
+    changed = {"number": 99, "state": "closed", "state_reason": "completed"}
+    evidence.write_text(json.dumps(original), encoding="utf-8")
+    replacement.write_text(json.dumps(changed), encoding="utf-8")
+    real_fstat = os.fstat
+    swapped = False
+
+    def swap_path() -> None:
+        nonlocal swapped
+        if not swapped:
+            os.replace(replacement, evidence)
+            swapped = True
+
+    def racing_fstat(descriptor: int) -> os.stat_result:
+        metadata = real_fstat(descriptor)
+        swap_path()
+        return metadata
+
+    monkeypatch.setattr(issue_receipt.os, "fstat", racing_fstat)
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda *_args, **_kwargs: pytest.fail("issue evidence reopened by pathname"),
+    )
+
+    assert issue_receipt.load_json(evidence, max_bytes=1024) == original
+
+
 def test_issue_receipt_cli_writes_the_canonical_terminal_newline(tmp_path: Path) -> None:
     issue = tmp_path / "issue.json"
     comments = tmp_path / "comments.json"
@@ -414,7 +451,7 @@ def test_issue_receipt_cli_writes_the_canonical_terminal_newline(tmp_path: Path)
 
     completed = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(ISSUE_RECEIPT_SCRIPT),
             "--issue-json",
             str(issue),
@@ -436,3 +473,148 @@ def test_issue_receipt_cli_writes_the_canonical_terminal_newline(tmp_path: Path)
     assert completed.returncode == 0, completed.stderr
     assert output.read_text() == issue_receipt.receipt_body("0.5.0", 76, "a" * 64)
     assert output.read_bytes().endswith(b".\n")
+
+
+def test_release_notes_are_read_from_one_open_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep validated release-note bytes bound to the descriptor opened first."""
+
+    notes = tmp_path / "notes.md"
+    replacement = tmp_path / "replacement.md"
+    original = b"synthetic release notes\n"
+    changed = b"substituted release notes\n"
+    notes.write_bytes(original)
+    replacement.write_bytes(changed)
+    real_fstat = os.fstat
+    swapped = False
+
+    def swap_path() -> None:
+        nonlocal swapped
+        if not swapped:
+            os.replace(replacement, notes)
+            swapped = True
+
+    def racing_fstat(descriptor: int) -> os.stat_result:
+        metadata = real_fstat(descriptor)
+        swap_path()
+        return metadata
+
+    monkeypatch.setattr(github_release.os, "fstat", racing_fstat)
+    monkeypatch.setattr(
+        Path,
+        "read_text",
+        lambda *_args, **_kwargs: pytest.fail("release notes reopened by pathname"),
+    )
+
+    assert github_release._metadata(notes) == original.decode("utf-8")
+
+
+def test_release_notes_reject_growth_during_the_descriptor_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject notes whose byte identity changes after descriptor validation."""
+
+    notes = tmp_path / "notes.md"
+    notes.write_bytes(b"bounded notes\n")
+    real_fstat = os.fstat
+    grown = False
+
+    def grow_file() -> None:
+        nonlocal grown
+        if not grown:
+            with notes.open("ab") as handle:
+                handle.write(b"late bytes\n")
+            grown = True
+
+    def racing_fstat(descriptor: int) -> os.stat_result:
+        metadata = real_fstat(descriptor)
+        grow_file()
+        return metadata
+
+    monkeypatch.setattr(github_release.os, "fstat", racing_fstat)
+    monkeypatch.setattr(
+        Path,
+        "read_text",
+        lambda *_args, **_kwargs: pytest.fail("release notes reopened by pathname"),
+    )
+
+    with pytest.raises(github_release.GitHubReleaseError, match="changed while being read"):
+        github_release._metadata(notes)
+
+
+def test_release_notes_reject_symbolic_links(tmp_path: Path) -> None:
+    """Do not follow a release-note pathname outside its validated file identity."""
+
+    target = tmp_path / "actual-notes.md"
+    target.write_text("synthetic notes\n", encoding="utf-8")
+    link = tmp_path / "notes.md"
+    link.symlink_to(target.name)
+
+    with pytest.raises(github_release.GitHubReleaseError, match="unsafe"):
+        github_release._metadata(link)
+
+
+def test_release_asset_upload_uses_bytes_from_the_validated_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prevent a pathname swap from changing bytes sent to the upload endpoint."""
+
+    asset = tmp_path / "package.whl"
+    replacement = tmp_path / "replacement.whl"
+    original = b"original-asset"
+    changed = b"replaced-asset"
+    assert len(original) == len(changed)
+    asset.write_bytes(original)
+    replacement.write_bytes(changed)
+    release = {
+        "id": 91,
+        "tag_name": "v0.5.0",
+        "target_commitish": "a" * 40,
+        "name": "v0.5.0",
+        "body": "notes\n",
+        "draft": True,
+        "prerelease": False,
+        "assets": [],
+    }
+    monkeypatch.setattr(github_release, "_read_release", lambda **_kwargs: release)
+    real_fstat = os.fstat
+    swapped = False
+    uploaded_body = b""
+
+    def swap_path() -> None:
+        nonlocal swapped
+        if not swapped:
+            os.replace(replacement, asset)
+            swapped = True
+
+    def racing_fstat(descriptor: int) -> os.stat_result:
+        metadata = real_fstat(descriptor)
+        swap_path()
+        return metadata
+
+    def fake_request(**kwargs: Any) -> tuple[int, dict[str, Any]]:
+        nonlocal uploaded_body
+        uploaded_body = kwargs["body"]
+        return 201, {"id": 7, "name": asset.name, "size": len(original)}
+
+    monkeypatch.setattr(github_release.os, "fstat", racing_fstat)
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda *_args, **_kwargs: pytest.fail("release asset reopened by pathname"),
+    )
+    monkeypatch.setattr(github_release, "_request", fake_request)
+
+    github_release.upload_asset(
+        repository="synthetic/toolkit",
+        release_id=91,
+        tag="v0.5.0",
+        target="a" * 40,
+        title="v0.5.0",
+        notes="notes\n",
+        asset=asset,
+        token="synthetic-token",
+    )
+
+    assert uploaded_body == original

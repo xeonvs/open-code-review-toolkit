@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
 from ocr_toolkit.evidence.collect import collect_repository_evidence
-from ocr_toolkit.evidence.framework_plugins import (
+from ocr_toolkit.evidence.frameworks import (
     BUILTIN_FRAMEWORK_PLUGINS,
     MAX_CONFIGURATION_PATHS,
     MAX_PLUGIN_FACTS,
@@ -18,6 +20,13 @@ from ocr_toolkit.evidence.framework_plugins import (
     FrameworkPluginResult,
     collect_framework_plugins,
 )
+from ocr_toolkit.evidence.frameworks.providers import (
+    GO_WEB_PLUGIN,
+    JINJA2_PLUGIN,
+    REACT_PLUGIN,
+    SYMFONY_PLUGIN,
+)
+from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.mcp import call_tool
 from ocr_toolkit.evidence.model import Confidence, EvidenceRecord, RefRole, TrustClass
 from ocr_toolkit.evidence.project import render_bootstrap
@@ -63,6 +72,42 @@ def initialize(root: Path) -> None:
     git(root, "init", "-q")
     git(root, "config", "user.name", "Synthetic")
     git(root, "config", "user.email", "synthetic@example.invalid")
+
+
+def test_framework_package_keeps_one_static_immutable_plugin_boundary() -> None:
+    """Lock provider order, immutable input, and the package's no-I/O boundary."""
+
+    assert BUILTIN_FRAMEWORK_PLUGINS == (
+        JINJA2_PLUGIN,
+        GO_WEB_PLUGIN,
+        SYMFONY_PLUGIN,
+        REACT_PLUGIN,
+    )
+    assert tuple(field.name for field in fields(FrameworkPluginContext)) == (
+        "records",
+        "entries",
+        "source_statuses",
+        "ref",
+        "commit_sha",
+    )
+    context = FrameworkPluginContext((), (), (), RefRole.HEAD, "a" * 40)
+    with pytest.raises(FrozenInstanceError):
+        context.commit_sha = "b" * 40  # type: ignore[misc]
+
+    package_root = Path(__file__).parents[1] / "src/ocr_toolkit/evidence/frameworks"
+    forbidden_imports = {"http", "importlib", "os", "requests", "socket", "subprocess", "urllib"}
+    forbidden_calls = {"__import__", "eval", "exec", "open"}
+    for source_path in sorted(package_root.rglob("*.py")):
+        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert not {alias.name.split(".", 1)[0] for alias in node.names} & forbidden_imports
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                assert node.module.split(".", 1)[0] not in forbidden_imports
+                if node.module == "pathlib":
+                    assert {alias.name for alias in node.names} == {"PurePosixPath"}
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                assert node.func.id not in forbidden_calls
 
 
 def test_jinja_framework_and_templates_are_component_scoped_and_visible_in_mcp(
@@ -621,6 +666,78 @@ replace github.com/labstack/echo/v4 => ./local-echo
     assert resolution.reasons == ("local-replacement",)
 
 
+def test_version_scoped_go_replacement_applies_only_to_its_declared_version(
+    tmp_path: Path,
+) -> None:
+    """Ignore a Go replacement scoped to a version that is not required."""
+
+    initialize(tmp_path)
+    (tmp_path / "go.mod").write_text(
+        """module synthetic.invalid/api
+
+go 1.24
+
+require github.com/labstack/echo/v4 v4.13.4
+replace github.com/labstack/echo/v4 v4.12.0 => ./legacy-echo
+""",
+        encoding="utf-8",
+    )
+    base = commit(tmp_path, "version-scoped replacement")
+    (tmp_path / "README.md").write_text("head\n", encoding="utf-8")
+    head = commit(tmp_path, "head")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    echo = next(
+        record for record in framework_records(store) if record.value["fact"]["framework"] == "echo"
+    )
+
+    assert echo.value["fact"]["version_state"] == "resolved"
+    assert echo.value["fact"]["replacement"] is None
+    assert echo.value["fact"]["resolutions"] == (
+        {
+            "package": "github.com/labstack/echo/v4",
+            "version": "v4.13.4",
+            "source": "go.mod",
+            "source_path": "go.mod",
+        },
+    )
+
+
+def test_exact_go_replacement_wins_over_package_wide_replacement(
+    tmp_path: Path,
+) -> None:
+    """Prefer the exact source-version replacement regardless of declaration order."""
+
+    initialize(tmp_path)
+    (tmp_path / "go.mod").write_text(
+        """module synthetic.invalid/api
+
+go 1.24
+
+require github.com/labstack/echo/v4 v4.13.4
+replace (
+    github.com/labstack/echo/v4 => synthetic.invalid/echo/v4 v4.13.5
+    github.com/labstack/echo/v4 v4.13.4 => synthetic.invalid/echo/v4 v4.13.6
+)
+""",
+        encoding="utf-8",
+    )
+    base = commit(tmp_path, "ordered replacements")
+    (tmp_path / "README.md").write_text("head\n", encoding="utf-8")
+    head = commit(tmp_path, "head")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    echo = next(
+        record for record in framework_records(store) if record.value["fact"]["framework"] == "echo"
+    )
+
+    assert echo.value["fact"]["replacement"] == {
+        "target": "synthetic.invalid/echo/v4",
+        "type": "module",
+        "version": "v4.13.6",
+    }
+
+
 def test_template_components_follow_nearest_manifest_root_and_configuration_isolated(
     tmp_path: Path,
 ) -> None:
@@ -740,7 +857,7 @@ def test_plugin_failure_isolated_from_sibling_provider(monkeypatch: pytest.Monke
         trust=TrustClass.SOURCE_REPOSITORY,
     )
     monkeypatch.setattr(
-        "ocr_toolkit.evidence.framework_plugins.BUILTIN_FRAMEWORK_PLUGINS",
+        "ocr_toolkit.evidence.frameworks.registry.BUILTIN_FRAMEWORK_PLUGINS",
         (BrokenPlugin(), BUILTIN_FRAMEWORK_PLUGINS[0]),
     )
     facts, _coverage, notices = collect_framework_plugins(
@@ -786,7 +903,7 @@ def test_malformed_and_truncated_manifests_degrade_applicable_coverage(tmp_path:
 
     initialize(tmp_path)
     (tmp_path / "pyproject.toml").write_text("not = [valid\n", encoding="utf-8")
-    packages = {f"synthetic-{index}": "1.0.0" for index in range(512)}
+    packages = {f"aaa-synthetic-{index:04}": "1.0.0" for index in range(MAX_MANIFEST_ITEMS)}
     packages["react"] = "19.0.0"
     (tmp_path / "package.json").write_text(json.dumps({"dependencies": packages}), encoding="utf-8")
     base = commit(tmp_path, "sources")

@@ -1,4 +1,4 @@
-"""Derive bounded framework and template facts through static built-in plugins."""
+"""Generic bounded package-backed framework detection without repository I/O."""
 
 from __future__ import annotations
 
@@ -6,78 +6,22 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Protocol
+from typing import TYPE_CHECKING
 
 from ocr_toolkit.evidence.coverage import CoverageObservation
-from ocr_toolkit.evidence.model import CoverageState, EvidenceRecord, EvidenceValue, RefRole
-from ocr_toolkit.evidence.repository import RepositoryObject
+from ocr_toolkit.evidence.frameworks.contracts import (
+    MAX_CONFIGURATION_PATHS,
+    MAX_PLUGIN_FACTS,
+    FrameworkPluginContext,
+    FrameworkPluginResult,
+    PluginCoverage,
+    PluginFact,
+)
+from ocr_toolkit.evidence.frameworks.schema import FRAMEWORK_SCHEMA
+from ocr_toolkit.evidence.model import CoverageState, EvidenceRecord, EvidenceValue
 
-# Each evidence kind shares a 512-record store limit across base and head. Capping
-# each immutable side at half keeps accepted records, deltas, and coverage atomic.
-MAX_PLUGIN_FACTS = 256
-MAX_CONFIGURATION_PATHS = 128
-_FRAMEWORK_SCHEMA = "repository.framework-evidence/v1"
-_TEMPLATE_SCHEMA = "repository.template-evidence/v1"
-
-
-@dataclass(frozen=True, slots=True)
-class PluginFact:
-    """Describe one validated plugin fact before ref provenance is attached."""
-
-    kind: str
-    component: str
-    identity: str
-    source_path: str
-    value: Mapping[str, EvidenceValue]
-
-
-@dataclass(frozen=True, slots=True)
-class PluginCoverage:
-    """Describe one plugin-owned scoped coverage observation."""
-
-    component: str
-    domain: str
-    scope: str
-    observation: CoverageObservation
-
-
-@dataclass(frozen=True, slots=True)
-class PluginSourceStatus:
-    """Describe one supported manifest source and its bounded collection state."""
-
-    path: str
-    ecosystem: str
-    roles: tuple[str, ...]
-    state: str
-
-
-@dataclass(frozen=True, slots=True)
-class FrameworkPluginContext:
-    """Expose immutable normalized facts and bounded tree metadata to one plugin."""
-
-    records: tuple[EvidenceRecord, ...]
-    entries: tuple[RepositoryObject, ...]
-    source_statuses: tuple[PluginSourceStatus, ...]
-    ref: RefRole
-    commit_sha: str
-
-
-@dataclass(frozen=True, slots=True)
-class FrameworkPluginResult:
-    """Return bounded plugin facts, coverage, and safe machine notices."""
-
-    facts: tuple[PluginFact, ...]
-    coverage: tuple[PluginCoverage, ...]
-    notices: tuple[str, ...] = ()
-
-
-class FrameworkPlugin(Protocol):
-    """Define the package-owned static framework plugin boundary."""
-
-    plugin_id: str
-
-    def collect(self, context: FrameworkPluginContext) -> FrameworkPluginResult:
-        """Derive facts without I/O, execution, network access, or mutation."""
+if TYPE_CHECKING:
+    from ocr_toolkit.evidence.repository import RepositoryObject
 
 
 def component_root(path: str) -> str:
@@ -96,7 +40,7 @@ def _fact_value(record: EvidenceRecord | None) -> Mapping[str, EvidenceValue] | 
     return fact if isinstance(fact, Mapping) else None
 
 
-def _package(record: EvidenceRecord) -> str | None:
+def package_name(record: EvidenceRecord) -> str | None:
     """Return the normalized package name carried by one dependency record."""
 
     fact = _fact_value(record)
@@ -133,7 +77,7 @@ def _scope(record: EvidenceRecord) -> str:
     return value if isinstance(value, str) and value else "unknown"
 
 
-def _is_direct(record: EvidenceRecord, ecosystem: str) -> bool:
+def is_direct_declaration(record: EvidenceRecord, ecosystem: str) -> bool:
     """Return whether a declaration directly establishes plugin applicability."""
 
     scope = _scope(record)
@@ -148,7 +92,7 @@ def _path_is_within(path: str, component: str) -> bool:
     return component == "repository" or path == component or path.startswith(component + "/")
 
 
-def _owning_component(path: str, components: tuple[str, ...]) -> str | None:
+def owning_component(path: str, components: tuple[str, ...]) -> str | None:
     """Return the nearest manifest-root component that owns one repository path."""
 
     matches = tuple(component for component in components if _path_is_within(path, component))
@@ -175,7 +119,7 @@ def _configuration_paths(
             entry.object_type != "blob"
             or entry.is_symlink
             or entry.is_submodule
-            or _owning_component(entry.path, components) != component
+            or owning_component(entry.path, components) != component
             or not any(pattern.search(entry.path) for pattern in patterns)
         ):
             continue
@@ -204,6 +148,23 @@ def _related(
     )
     value["source_paths"] = sorted({record.source_path for record in (*declarations, *resolutions)})
     return value
+
+
+def _replacement_applies(
+    replacement: EvidenceRecord, declarations: tuple[EvidenceRecord, ...]
+) -> bool:
+    """Return whether one Go replacement applies to a direct required version."""
+
+    package = package_name(replacement)
+    source_version = _version(replacement)
+    if package is None:
+        return False
+    if source_version is None:
+        return any(package_name(record) == package for record in declarations)
+    return any(
+        package_name(record) == package and _version(record) == source_version
+        for record in declarations
+    )
 
 
 def _replacement_value(record: EvidenceRecord | None) -> dict[str, EvidenceValue] | None:
@@ -236,7 +197,7 @@ def _resolution_values(
     replacement_value = _replacement_value(replacement)
     if replacement_value is not None:
         version = replacement_value["version"]
-        package = _package(replacement) if replacement is not None else None
+        package = package_name(replacement) if replacement is not None else None
         if replacement_value["type"] == "module" and isinstance(version, str) and package:
             return [
                 {
@@ -257,7 +218,8 @@ def _resolution_values(
             record.source_path,
         )
         for record in records
-        if (package := _package(record)) is not None and (version := _version(record)) is not None
+        if (package := package_name(record)) is not None
+        and (version := _version(record)) is not None
     }
     return [
         {"package": package, "version": version, "source": source, "source_path": path}
@@ -301,7 +263,7 @@ def _framework_fact(
     )
     declaration_values: list[dict[str, EvidenceValue]] = []
     for record in declarations:
-        package = _package(record)
+        package = package_name(record)
         if package is None:
             continue
         declaration_values.append(
@@ -314,7 +276,7 @@ def _framework_fact(
         )
     source_path = min(record.source_path for record in declarations)
     value: dict[str, EvidenceValue] = {
-        "schema_version": _FRAMEWORK_SCHEMA,
+        "schema_version": FRAMEWORK_SCHEMA,
         "plugin": plugin,
         "framework": framework,
         "ecosystem": ecosystem,
@@ -343,7 +305,7 @@ def _framework_fact(
     )
 
 
-def _coverage(
+def coverage_observation(
     *,
     component: str,
     plugin: str,
@@ -367,7 +329,7 @@ def _coverage(
     )
 
 
-def _components(context: FrameworkPluginContext, ecosystem: str) -> tuple[str, ...]:
+def plugin_components(context: FrameworkPluginContext, ecosystem: str) -> tuple[str, ...]:
     """Return components with parsed or recognized declaration sources."""
 
     parsed = {
@@ -420,20 +382,28 @@ def _source_observation(
 ) -> CoverageObservation | None:
     """Return the strongest degradation from exact supported source statuses."""
 
-    states = {
-        source.state
-        for source in context.source_statuses
-        if source.ecosystem == ecosystem
-        and role in source.roles
-        and component_root(source.path) == component
-    }
     for state, reason in (
         ("unavailable", "parse-unavailable"),
         ("omitted", "bounded-source-omission"),
         ("partial", "source-item-limit"),
     ):
-        if state in states:
-            return CoverageObservation(CoverageState.PARTIAL, reason, positive=True)
+        matching = tuple(
+            source
+            for source in context.source_statuses
+            if source.ecosystem == ecosystem
+            and role in source.roles
+            and component_root(source.path) == component
+            and source.state == state
+        )
+        if matching:
+            selected_reason = next(
+                (source.reason for source in matching if source.reason is not None), reason
+            )
+            return CoverageObservation(
+                CoverageState.PARTIAL,
+                selected_reason,
+                positive=state == "partial",
+            )
     return None
 
 
@@ -471,13 +441,15 @@ class PackageFrameworkPlugin:
         facts: list[PluginFact] = []
         coverage: list[PluginCoverage] = []
         notices: list[str] = []
-        components = _components(context, self.ecosystem)
+        components = plugin_components(context, self.ecosystem)
         for component in components:
             component_declarations = _component_declarations(
                 context.records, component, self.ecosystem
             )
             declarations = tuple(
-                record for record in component_declarations if _is_direct(record, self.ecosystem)
+                record
+                for record in component_declarations
+                if is_direct_declaration(record, self.ecosystem)
             )
             locked = _component_resolutions(context.records, component, self.ecosystem)
             replacements = tuple(
@@ -494,12 +466,12 @@ class PackageFrameworkPlugin:
             related_values: list[dict[str, EvidenceValue]] = []
             for item in self.related:
                 item_declarations = tuple(
-                    record for record in declarations if _package(record) in item.packages
+                    record for record in declarations if package_name(record) in item.packages
                 )
                 if not item_declarations:
                     continue
                 item_locked = tuple(
-                    record for record in locked if _package(record) in item.packages
+                    record for record in locked if package_name(record) in item.packages
                 )
                 related_values.append(
                     _related(
@@ -515,22 +487,36 @@ class PackageFrameworkPlugin:
             component_fact_limit = False
             for spec in self.frameworks:
                 direct = tuple(
-                    record for record in declarations if _package(record) in spec.packages
+                    record for record in declarations if package_name(record) in spec.packages
                 )
                 if not direct:
                     continue
                 component_positive = True
-                resolved = tuple(record for record in locked if _package(record) in spec.packages)
-                replacement = next(
-                    (record for record in replacements if _package(record) in spec.packages),
-                    None,
+                resolved = tuple(
+                    record for record in locked if package_name(record) in spec.packages
+                )
+                applicable_replacements = tuple(
+                    record
+                    for record in replacements
+                    if package_name(record) in spec.packages
+                    and _replacement_applies(record, direct)
+                )
+                replacement = min(
+                    applicable_replacements,
+                    key=lambda record: (
+                        _version(record) is None,
+                        _version(record) or "",
+                        str(_replacement_value(record)),
+                        record.source_path,
+                    ),
+                    default=None,
                 )
                 replacement_value = _replacement_value(replacement)
                 declarations_resolve = self.ecosystem == "go" and replacement is None
                 if len(facts) >= MAX_PLUGIN_FACTS:
                     component_fact_limit = True
                     coverage.append(
-                        _coverage(
+                        coverage_observation(
                             component=component,
                             plugin=self.plugin_id,
                             framework=spec.framework,
@@ -584,7 +570,7 @@ class PackageFrameworkPlugin:
                     state = CoverageState.PARTIAL
                     reason = "lock-version-missing"
                 coverage.append(
-                    _coverage(
+                    coverage_observation(
                         component=component,
                         plugin=self.plugin_id,
                         framework=spec.framework,
@@ -594,7 +580,7 @@ class PackageFrameworkPlugin:
                     )
                 )
                 coverage.append(
-                    _coverage(
+                    coverage_observation(
                         component=component,
                         plugin=self.plugin_id,
                         framework=spec.framework,
@@ -630,256 +616,18 @@ class PackageFrameworkPlugin:
                 else "direct-manifest-complete"
             )
             coverage.append(
-                _coverage(
+                coverage_observation(
                     component=component,
                     plugin=self.plugin_id,
                     framework=None,
                     state=declaration_state,
                     reason=declaration_reason,
-                    positive=component_positive,
+                    positive=(
+                        component_positive
+                        or (declaration_source is not None and declaration_source.positive)
+                    ),
                 )
             )
         if len(facts) >= MAX_PLUGIN_FACTS:
             notices.append(f"framework plugin fact limit reached: {self.plugin_id}")
         return FrameworkPluginResult(tuple(facts), tuple(coverage), tuple(notices))
-
-
-_PYTHON_DECLARATIONS = (re.compile(r"(^|/)(pyproject\.toml|requirements[^/]*\.(txt|in))$", re.I),)
-_PYTHON_RESOLUTIONS = (
-    re.compile(r"(^|/)(uv\.lock|poetry\.lock|pipfile\.lock|pylock(?:\.[^/]+)?\.toml)$", re.I),
-)
-_JAVASCRIPT_DECLARATIONS = (re.compile(r"(^|/)package\.json$", re.I),)
-_JAVASCRIPT_RESOLUTIONS = (
-    re.compile(r"(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$", re.I),
-)
-_COMPOSER_DECLARATIONS = (re.compile(r"(^|/)composer\.json$", re.I),)
-_COMPOSER_RESOLUTIONS = (re.compile(r"(^|/)composer\.lock$", re.I),)
-_GO_MOD = (re.compile(r"(^|/)go\.mod$", re.I),)
-
-JINJA2_PLUGIN = PackageFrameworkPlugin(
-    "jinja2",
-    "python",
-    (PackageFrameworkSpec("jinja2", ("jinja2",), "template-engine"),),
-    configuration_patterns=(*_PYTHON_DECLARATIONS, *_PYTHON_RESOLUTIONS),
-)
-GO_WEB_PLUGIN = PackageFrameworkPlugin(
-    "go-web",
-    "go",
-    (
-        PackageFrameworkSpec("echo", ("github.com/labstack/echo/v4",)),
-        PackageFrameworkSpec("fiber", ("github.com/gofiber/fiber/v2",)),
-    ),
-    related=(RelatedSpec("grpc", "rpc-stack", ("google.golang.org/grpc",)),),
-    configuration_patterns=(re.compile(r"(^|/)go\.(mod|sum)$", re.I),),
-)
-SYMFONY_PLUGIN = PackageFrameworkPlugin(
-    "symfony-php",
-    "php",
-    (
-        PackageFrameworkSpec("symfony", ("symfony/framework-bundle", "symfony/symfony")),
-        PackageFrameworkSpec("twig", ("twig/twig", "symfony/twig-bundle"), "template-engine"),
-    ),
-    configuration_patterns=(
-        *_COMPOSER_DECLARATIONS,
-        *_COMPOSER_RESOLUTIONS,
-        re.compile(r"(^|/)config/(bundles\.php|packages/|routes(?:\.|/|$))", re.I),
-        re.compile(r"\.twig$", re.I),
-    ),
-)
-REACT_PLUGIN = PackageFrameworkPlugin(
-    "react-typescript",
-    "javascript",
-    (
-        PackageFrameworkSpec("react", ("react",)),
-        PackageFrameworkSpec("next", ("next",)),
-    ),
-    related=(
-        RelatedSpec("typescript", "language-toolchain", ("typescript",)),
-        RelatedSpec("vite", "build-tool", ("vite",)),
-    ),
-    configuration_patterns=(
-        *_JAVASCRIPT_DECLARATIONS,
-        *_JAVASCRIPT_RESOLUTIONS,
-        re.compile(r"(^|/)tsconfig[^/]*\.json$", re.I),
-        re.compile(r"(^|/)(vite|next)\.config\.[^.]+$", re.I),
-    ),
-)
-
-BUILTIN_FRAMEWORK_PLUGINS: tuple[FrameworkPlugin, ...] = (
-    JINJA2_PLUGIN,
-    GO_WEB_PLUGIN,
-    SYMFONY_PLUGIN,
-    REACT_PLUGIN,
-)
-
-
-def collect_framework_plugins(
-    context: FrameworkPluginContext,
-) -> tuple[tuple[PluginFact, ...], tuple[PluginCoverage, ...], tuple[str, ...]]:
-    """Run every static plugin independently and return deterministic bounded output."""
-
-    facts: list[PluginFact] = []
-    coverage: list[PluginCoverage] = []
-    notices: list[str] = []
-    for plugin in BUILTIN_FRAMEWORK_PLUGINS:
-        try:
-            result = plugin.collect(context)
-        # A package-owned provider is isolated so one defect cannot suppress siblings.
-        except Exception:
-            notices.append(f"framework plugin unavailable: {plugin.plugin_id}")
-            continue
-        ordered = sorted(result.facts, key=lambda item: (item.component, item.identity))
-        remaining = max(0, MAX_PLUGIN_FACTS - len(facts))
-        facts.extend(ordered[:remaining])
-        coverage.extend(result.coverage)
-        notices.extend(result.notices)
-        omitted = ordered[remaining:]
-        for fact in omitted:
-            framework = fact.value.get("framework")
-            if isinstance(framework, str):
-                coverage.extend(
-                    (
-                        _coverage(
-                            component=fact.component,
-                            plugin=plugin.plugin_id,
-                            framework=framework,
-                            state=CoverageState.PARTIAL,
-                            reason="plugin-fact-limit",
-                            positive=True,
-                        ),
-                        _coverage(
-                            component=fact.component,
-                            plugin=plugin.plugin_id,
-                            framework=None,
-                            state=CoverageState.PARTIAL,
-                            reason="plugin-fact-limit",
-                            positive=True,
-                        ),
-                    )
-                )
-        if omitted:
-            notices.append(f"framework plugin fact limit reached: {plugin.plugin_id}")
-    return (
-        tuple(sorted(facts, key=lambda item: (item.kind, item.component, item.identity))),
-        tuple(sorted(coverage, key=lambda item: (item.component, item.domain, item.scope))),
-        tuple(dict.fromkeys(notices)),
-    )
-
-
-def framework_schema_versions() -> tuple[str, str]:
-    """Expose the closed plugin schemas for storage validation."""
-
-    return _FRAMEWORK_SCHEMA, _TEMPLATE_SCHEMA
-
-
-def _rendered_extension(path: str) -> str | None:
-    """Return the target extension before a Jinja marker when one is present."""
-
-    suffixes = PurePosixPath(path).suffixes
-    if len(suffixes) >= 2 and suffixes[-1].casefold() in {".j2", ".jinja", ".jinja2"}:
-        return suffixes[-2].casefold()
-    return None
-
-
-def _ansible_template_component(path: str) -> str | None:
-    """Return a role-root component for conventional nested Ansible templates."""
-
-    parts = PurePosixPath(path).parts
-    folded = tuple(part.casefold() for part in parts)
-    for index, part in enumerate(folded):
-        if part == "roles" and index + 3 <= len(parts) and folded[index + 2] == "templates":
-            return "/".join(parts[: index + 2])
-    return None
-
-
-def _template_description(
-    path: str, context: FrameworkPluginContext
-) -> tuple[str, str, str, str] | None:
-    """Return plugin, engine, detection, and nearest component for one template path."""
-
-    folded = path.casefold()
-    role_component = _ansible_template_component(path)
-    if folded.endswith((".j2", ".jinja", ".jinja2")):
-        roots = _components(context, "python")
-        component = role_component or _owning_component(path, roots) or component_root(path)
-        return "jinja2", "jinja2", "jinja-extension", component
-    if role_component is not None:
-        return "jinja2", "jinja2", "ansible-role-template", role_component
-    if folded.endswith(".twig"):
-        roots = _components(context, "php")
-        component = _owning_component(path, roots) or component_root(path)
-        return "symfony-php", "twig", "twig-extension", component
-    return None
-
-
-def _applicable_template_components(
-    records: tuple[EvidenceRecord, ...],
-) -> tuple[tuple[str, str], ...]:
-    """Return components with direct Jinja or Twig template-engine declarations."""
-
-    applicable: set[tuple[str, str]] = set()
-    for record in records:
-        if record.kind != "dependency.declared":
-            continue
-        package = _package(record)
-        if package == "jinja2" and _is_direct(record, "python"):
-            applicable.add((component_root(record.source_path), "jinja2"))
-        elif package in {"twig/twig", "symfony/twig-bundle"} and _is_direct(record, "php"):
-            applicable.add((component_root(record.source_path), "symfony-php"))
-    return tuple(sorted(applicable))
-
-
-def collect_template_files(
-    context: FrameworkPluginContext,
-) -> tuple[tuple[PluginFact, ...], tuple[PluginCoverage, ...], tuple[str, ...]]:
-    """Inventory Jinja/Twig blobs without reading or persisting template content."""
-
-    facts: list[PluginFact] = []
-    observations: dict[tuple[str, str], list[CoverageObservation]] = {
-        key: [CoverageObservation(CoverageState.COMPLETE, "bounded-tree-complete")]
-        for key in _applicable_template_components(context.records)
-    }
-    truncated = False
-    for entry in sorted(context.entries, key=lambda item: item.path):
-        description = _template_description(entry.path, context)
-        if description is None:
-            continue
-        plugin, engine, detection, component = description
-        key = (component, plugin)
-        if entry.object_type != "blob" or entry.is_symlink or entry.is_submodule:
-            observations.setdefault(key, []).append(
-                CoverageObservation(CoverageState.PARTIAL, "unsafe-template-source", positive=True)
-            )
-            continue
-        if len(facts) >= MAX_PLUGIN_FACTS:
-            truncated = True
-            observations.setdefault(key, []).append(
-                CoverageObservation(CoverageState.PARTIAL, "template-fact-limit", positive=True)
-            )
-            continue
-        facts.append(
-            PluginFact(
-                "template.file",
-                component,
-                entry.path,
-                entry.path,
-                {
-                    "schema_version": _TEMPLATE_SCHEMA,
-                    "plugin": plugin,
-                    "engine": engine,
-                    "detection": detection,
-                    "rendered_extension": _rendered_extension(entry.path),
-                    "object_sha": entry.object_sha,
-                },
-            )
-        )
-        observations.setdefault(key, []).append(
-            CoverageObservation(CoverageState.COMPLETE, "bounded-tree-complete", positive=True)
-        )
-    coverage = tuple(
-        PluginCoverage(component, "template.inventory", plugin, observation)
-        for (component, plugin), values in sorted(observations.items())
-        for observation in values
-    )
-    notices = ("template plugin fact limit reached",) if truncated else ()
-    return tuple(facts), coverage, notices
