@@ -14,6 +14,7 @@ from ocr_toolkit import __version__, mcp_config
 from ocr_toolkit.evidence import (
     CoverageRecord,
     CoverageState,
+    EvidenceDelta,
     EvidenceRecord,
     EvidenceStore,
     RefRole,
@@ -92,6 +93,146 @@ def test_summary_list_get_and_cursor_binding() -> None:
                 "cursor": first["next_cursor"],
             },
         )
+
+
+def test_deltas_are_explicitly_filtered_and_addressable_without_changing_default_list() -> None:
+    """Expose typed base/head changes only through the explicit delta projection."""
+
+    store = _store(1)
+    store.deltas = (
+        EvidenceDelta(
+            kind="framework.detected",
+            component="services/api",
+            identity="go-web:echo",
+            change="changed",
+            before={"version": "old"},
+            after={"version": "new"},
+        ),
+        EvidenceDelta(
+            kind="template.file",
+            component="services/api",
+            identity="templates/service.conf.j2",
+            change="added",
+            before=None,
+            after={"object_sha": "b" * 40},
+        ),
+    )
+
+    ordinary = _payload(call_tool(store, {"action": "list"}))
+    listed = _payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_delta",
+                "delta_kind": "framework.detected",
+                "component": "services/api",
+            },
+        )
+    )
+    records = listed["records"]
+    assert isinstance(records, list)
+    assert len(records) == 1
+    delta = records[0]
+    assert isinstance(delta, dict)
+    fetched = _payload(call_tool(store, {"action": "get", "id": delta["id"]}))
+
+    summary = _payload(call_tool(store, {"action": "summary"}))
+    assert summary["delta_kinds"] == {"framework.detected": 1, "template.file": 1}
+    assert ordinary["returned"] == 1
+    assert all(record["kind"] != "repository.evidence_delta" for record in ordinary["records"])
+    assert delta == {
+        "id": store.deltas[0].id,
+        "kind": "repository.evidence_delta",
+        "schema_version": "repository.evidence-delta/v1",
+        "delta_kind": "framework.detected",
+        "component": "services/api",
+        "identity": "go-web:echo",
+        "change": "changed",
+        "before": {"version": "old"},
+        "after": {"version": "new"},
+    }
+    assert fetched["record"] == delta
+
+    first_delta_page = _payload(
+        call_tool(
+            store,
+            {"action": "list", "kind": "repository.evidence_delta", "page_size": 1},
+        )
+    )
+    with pytest.raises(ValueError, match="cursor"):
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_delta",
+                "delta_kind": "template.file",
+                "cursor": first_delta_page["next_cursor"],
+            },
+        )
+    with pytest.raises(ValueError, match="delta_kind requires"):
+        call_tool(store, {"action": "list", "delta_kind": "framework.detected"})
+    with pytest.raises(ValueError, match="span base and head"):
+        call_tool(
+            store,
+            {"action": "list", "kind": "repository.evidence_delta", "ref": "head"},
+        )
+
+
+def test_delta_projection_redacts_in_memory_values_before_list_and_get() -> None:
+    """Never expose raw collector delta values before persistence normalizes them."""
+
+    store = _store(0)
+    store.deltas = (
+        EvidenceDelta(
+            kind="framework.detected",
+            component="services/token=synthetic-sensitive-value",
+            identity="go-web:echo?token=synthetic-sensitive-value",
+            change="changed",
+            before={"token": "synthetic-sensitive-value"},
+            after={"token": "safe"},
+        ),
+    )
+
+    listed = _payload(call_tool(store, {"action": "list", "kind": "repository.evidence_delta"}))
+    records = listed["records"]
+    assert isinstance(records, list) and isinstance(records[0], dict)
+    delta = records[0]
+    fetched = _payload(call_tool(store, {"action": "get", "id": delta["id"]}))
+
+    assert delta["component"] == "services/token=***"
+    assert delta["identity"] == "go-web:echo?token=***"
+    assert delta["before"] == {"token": "[REDACTED]"}
+    assert delta["after"] == {"token": "[REDACTED]"}
+    assert fetched["record"] == delta
+    assert delta["id"] == store.safe_deltas[0].id
+    assert delta["id"] != store.deltas[0].id
+
+
+def test_delta_projection_deduplicates_values_that_redact_to_one_stable_id() -> None:
+    """Return one addressable result when distinct secrets normalize identically."""
+
+    store = _store(0)
+    store.deltas = tuple(
+        EvidenceDelta(
+            kind="framework.detected",
+            component="services/api",
+            identity="go-web:echo",
+            change="changed",
+            before={"token": value},
+            after=None,
+        )
+        for value in ("first-sensitive-value", "second-sensitive-value")
+    )
+
+    listed = _payload(call_tool(store, {"action": "list", "kind": "repository.evidence_delta"}))
+    records = listed["records"]
+    assert isinstance(records, list) and len(records) == 1
+    assert listed["returned"] == 1
+    assert (
+        _payload(call_tool(store, {"action": "get", "id": records[0]["id"]}))["record"]
+        == records[0]
+    )
 
 
 def test_coverage_is_summarized_filtered_and_addressable() -> None:

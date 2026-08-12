@@ -78,11 +78,12 @@ after final local validation, before protected feature and stable delivery.
 8. [x] Qualify OCR 1.9.2 against 1.9.1 through canonical issue #78,
    preserve checksum/source/probe evidence, classify every upstream change,
    update tested/recommended pins and contracts, and use 1.9.2 thereafter.
-9. [ ] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
-   documentation, strategy, roadmap, backlog, and milestone reconciliation.
-   Self-review hardening of provider semantics and bounds is complete; final
-   backlog/roadmap reconciliation remains pending until release-grade gates.
-10. [ ] Run complete Python 3.12-3.14, security, privacy, package, installed
+9. [x] Complete cross-provider deltas, coverage, bootstrap/MCP projections,
+   documentation, strategy, roadmap, backlog, and current milestone
+   reconciliation. The roadmap remains honestly in progress until installed
+   E2E, final review, and stable delivery; conditional future packs no longer
+   block M2 closure.
+10. [x] Run complete Python 3.12-3.14, security, privacy, package, installed
     artifact, rules-preview, real-MCP-client, and synthetic no-post E2E gates.
 11. [ ] Run exactly one final local full OCR review, fix findings, then finish
     deterministic validation, Gitleaks, self-review, feature PR checks/threads,
@@ -175,6 +176,77 @@ after final local validation, before protected feature and stable delivery.
   while focused Ruff and strict mypy pass. Public configuration, GitLab, and
   strategy documentation describe the implemented boundaries, degradation, and
   review-selection behavior.
+
+### Cross-provider Delta And MCP Projection Checkpoint
+
+- The shared evidence MCP now exposes already-collected base/head changes as a
+  first-class `repository.evidence_delta` projection. `delta_kind` narrows the
+  original fact domain, ordinary unfiltered lists remain backward compatible,
+  and stable delta IDs support the existing `get` action without adding a tool,
+  server, plugin-owned lifecycle, filesystem access, or network access.
+- Delta values and metadata are recursively re-redacted, re-bounded, validated
+  against the closed evidence-kind vocabulary, deduplicated after normalization,
+  and only then assigned content-addressed IDs. Persisted delta objects reject
+  unknown fields and over-limit collections. The collector derives typed deltas
+  from canonical records actually accepted by the store, so rejected, omitted,
+  deduplicated, or redaction-equivalent facts cannot leave dangling changes.
+- A synthetic multi-ecosystem contract exercises Jinja2 templates, Go web
+  providers, Symfony/Twig, and React/Next together. It proves framework and
+  template additions, removals, and changes; scoped-completeness transitions;
+  summary and filtered list/get projection for facts, coverage, and deltas; and
+  compact-bootstrap orientation without embedding detailed paths or versions.
+- Durable architecture, configuration, security, roadmap, and backlog text now
+  describes the implemented shared projection. Completed BL-008 and BL-009
+  scope is removed from future work; demand-triggered evidence packs remain a
+  separate conditional item and do not keep M2 permanently open. The roadmap
+  keeps M2 in progress until installed-artifact E2E, the single final OCR
+  review, and independently verified stable delivery complete its signal.
+- Focused evidence, MCP, model, repository, documentation, and integration
+  validation passes. The complete routine quality gate passes 651 tests plus 85
+  subtests at 79.96% coverage with formatting, Ruff, strict mypy, and the
+  medium-confidence/medium-severity Bandit gate clean. Towncrier draft,
+  changed-public-file privacy scan, issue monitoring, and `git diff --check`
+  pass. Full release-grade installed-artifact validation remains next.
+
+### Release-grade Installed-artifact E2E Checkpoint
+
+- Full tests pass independently on every supported Python interpreter. Gitleaks
+  over the unpublished feature range, dependency audit, OCR compatibility
+  manifest validation, changed-shell ShellCheck, and the existing privacy gate
+  pass without relying on hosted PR checks.
+- Two target-version builds are byte-identical. Twine and closed archive-content
+  inspection confirm a runtime-only wheel, the intentionally minimal sdist,
+  zero runtime dependencies, and the supported-Python contract. The wheel
+  SHA-256 is `b713676d47b4c9b8615e6bb81216b4ab1e2133ccd750e793401417b92e565056`;
+  the sdist SHA-256 is
+  `baab422d378caaaa17487ab7bb5d31b3478144bfadf4212b7f71d6baf918eded`.
+- Hash-locked wheel installs pass on the lower and intermediate supported
+  interpreters, and a hash-locked sdist build/install passes on the upper
+  interpreter. Each clean environment passes `pip check`, imports the exact
+  target development version from site-packages under isolated mode despite a
+  hostile repository-local shadow package, and runs the installed `ocr-ci`
+  entry point with a restricted `PATH`.
+- A real installed subprocess follows the generated mandatory MCP command and
+  completes initialize, initialized notification, ping, tool discovery,
+  summary, fact list/get, coverage list, and framework-delta list/get. Stable
+  fact and delta IDs, read-only annotations, exact installed server version,
+  private artifact modes, and the public page-size boundary are verified.
+- OCR rules preview with the qualified binary selects root and nested Jinja,
+  Twig, and extensionless conventional Ansible-role templates without an
+  unsupported-extension result or a preview session side effect.
+- The installed-wheel synthetic OCR E2E runs in a read-only Linux container
+  with no network, using only loopback HTTPS, a process-local CA, the
+  checksum-qualified OCR binary, public rules, and synthetic multi-ecosystem
+  history. The review completes with two real `ocr_toolkit_evidence` calls:
+  summary followed by a filtered framework-delta query. The toolkit receipt
+  matches OCR counters; Jinja2, Echo/Fiber, Symfony/Twig, React/Next,
+  TypeScript/Vite, templates, scoped completeness, and semantic deltas are
+  present; private modes and a clean Git status are preserved; no posting path
+  is invoked.
+- Read-only checkpoint monitoring still finds only issues #76 and #78 open, and
+  the latest upstream stable OCR remains the already qualified 1.9.2. No push
+  was made. The next irreversible model action remains the single final local
+  repository OCR review after this checkpoint is committed.
 
 ### Initial Evidence
 

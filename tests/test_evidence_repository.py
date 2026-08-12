@@ -257,6 +257,89 @@ def test_collection_keeps_snapshots_atomic_when_store_rejects_records(
         collect_repository_evidence(root, base_ref=base, head_ref=head)
 
 
+def test_collection_never_keeps_deltas_for_rejected_typed_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Build typed deltas only from facts accepted into the common store."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    manifest = root / "requirements.txt"
+    manifest.write_text("demo==1\n", encoding="utf-8")
+    git(root, "add", "requirements.txt")
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+    manifest.write_text("demo==2\n", encoding="utf-8")
+    git(root, "commit", "-qam", "head")
+    head = git(root, "rev-parse", "HEAD")
+    original_add = EvidenceStore.add
+
+    def reject_dependency(store: EvidenceStore, item: EvidenceRecord) -> bool:
+        if item.kind == "dependency.declared":
+            return False
+        return original_add(store, item)
+
+    monkeypatch.setattr(EvidenceStore, "add", reject_dependency)
+    store = collect_repository_evidence(root, base_ref=base, head_ref=head)
+
+    assert not any(record.kind == "dependency.declared" for record in store.records)
+    assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
+    assert "typed evidence was truncated by store limits" in store.diagnostics
+
+
+def test_collection_builds_deltas_from_canonical_redacted_store_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Do not retain a typed change that differs only by redacted secret values."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    (root / "README.md").write_text("base\n", encoding="utf-8")
+    git(root, "add", "README.md")
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+    (root / "README.md").write_text("head\n", encoding="utf-8")
+    git(root, "commit", "-qam", "head")
+    head = git(root, "rev-parse", "HEAD")
+
+    def synthetic_facts(
+        _reader: object, commit_sha: str, ref: RefRole, **_kwargs: object
+    ) -> tuple[list[EvidenceRecord], list[str]]:
+        secret = "first-sensitive-value" if ref is RefRole.BASE else "second-sensitive-value"
+        return (
+            [
+                EvidenceRecord(
+                    kind="dependency.declared",
+                    value={
+                        "identity": "requirements.txt:requirements:demo",
+                        "fact": {"name": "demo", "token": secret},
+                    },
+                    source_path="requirements.txt",
+                    ref=ref,
+                    commit_sha=commit_sha,
+                    component="python",
+                    provenance="synthetic parser",
+                    trust=(
+                        TrustClass.TARGET_REPOSITORY
+                        if ref is RefRole.BASE
+                        else TrustClass.SOURCE_REPOSITORY
+                    ),
+                )
+            ],
+            [],
+        )
+
+    monkeypatch.setattr("ocr_toolkit.evidence.collect.collect_ref_facts", synthetic_facts)
+    store = collect_repository_evidence(root, base_ref=base, head_ref=head)
+
+    facts = [record for record in store.records if record.kind == "dependency.declared"]
+    assert len(facts) == 2
+    assert all(record.value["fact"]["token"] == "[REDACTED]" for record in facts)
+    assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
+
+
 def test_deleted_path_keeps_a_base_trust_change_category(tmp_path: Path) -> None:
     """Represent deleted-path categories without inventing a head-tree source."""
 

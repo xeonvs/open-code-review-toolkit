@@ -380,6 +380,61 @@ def test_store_byte_budget_includes_serialized_trailing_newline(tmp_path: Path) 
         constrained.write(tmp_path / "evidence.json")
 
 
+def test_delta_id_and_mcp_projection_are_canonical_and_detached() -> None:
+    """Bind the stable delta ID to semantic content without sharing mutable output."""
+
+    first = EvidenceDelta(
+        kind="framework.detected",
+        component="services/api",
+        identity="go-web:echo",
+        change="changed",
+        before={"version": "old", "paths": ["go.mod"]},
+        after={"version": "new"},
+    )
+    reordered = EvidenceDelta(
+        kind="framework.detected",
+        component="services/api",
+        identity="go-web:echo",
+        change="changed",
+        before={"paths": ["go.mod"], "version": "old"},
+        after={"version": "new"},
+    )
+
+    projection = first.to_mcp_dict()
+    assert first.id == reordered.id
+    assert first.id.startswith("del1_")
+    assert projection["schema_version"] == "repository.evidence-delta/v1"
+    before = projection["before"]
+    assert isinstance(before, dict)
+    before["version"] = "mutated"
+    assert first.to_mcp_dict()["before"] == {"paths": ["go.mod"], "version": "old"}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("kind", "invalid kind"),
+        ("component", "x" * 257),
+        ("identity", "line\nbreak"),
+        ("change", 1),
+    ],
+)
+def test_delta_rejects_unsafe_or_unbounded_metadata(field: str, value: object) -> None:
+    """Keep delta metadata bounded before it can reach persistence or MCP."""
+
+    arguments = {
+        "kind": "framework.detected",
+        "component": "services/api",
+        "identity": "go-web:echo",
+        "change": "added",
+        "before": None,
+        "after": {},
+    }
+    arguments[field] = value
+    with pytest.raises(ValueError, match="delta"):
+        EvidenceDelta(**arguments)  # type: ignore[arg-type]
+
+
 def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:
     """Persist immutable refs and explicit typed changes with the evidence records."""
 
@@ -505,6 +560,100 @@ def test_store_rejects_non_string_delta_metadata(tmp_path: Path, field: str, val
         EvidenceStore.read(path)
 
 
+def test_store_rejects_unregistered_in_memory_delta_kind() -> None:
+    """Apply the closed delta vocabulary before serialization or MCP projection."""
+
+    store = EvidenceStore(
+        deltas=(
+            EvidenceDelta(
+                kind="synthetic.unregistered",
+                component="services/api",
+                identity="synthetic",
+                change="added",
+                before=None,
+                after={},
+            ),
+        )
+    )
+
+    with pytest.raises(EvidenceStoreError, match="delta kind is unregistered"):
+        _ = store.safe_deltas
+
+
+def test_store_rejects_unregistered_persisted_delta_kind(tmp_path: Path) -> None:
+    """Keep delta queries inside the registered evidence-domain vocabulary."""
+
+    payload = EvidenceStore(
+        deltas=(
+            EvidenceDelta(
+                kind="framework.detected",
+                component="services/api",
+                identity="go-web:echo",
+                change="added",
+                before=None,
+                after={},
+            ),
+        )
+    ).to_dict()
+    deltas = payload["deltas"]
+    assert isinstance(deltas, list) and isinstance(deltas[0], dict)
+    deltas[0]["kind"] = "synthetic.unregistered"
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvidenceStoreError, match="invalid evidence delta"):
+        EvidenceStore.read(path)
+
+
+def test_store_redacts_persisted_delta_metadata_during_load(tmp_path: Path) -> None:
+    """Normalize hostile persisted metadata before it enters the in-memory store."""
+
+    payload = EvidenceStore().to_dict()
+    payload["deltas"] = [
+        {
+            "kind": "framework.detected",
+            "component": "services/token=first-sensitive-value",
+            "identity": "go-web:echo?token=second-sensitive-value",
+            "change": "added",
+            "before": None,
+            "after": {},
+        }
+    ]
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    restored = EvidenceStore.read(path)
+
+    assert restored.deltas[0].component == "services/token=***"
+    assert restored.deltas[0].identity == "go-web:echo?token=***"
+    assert restored.safe_deltas == restored.deltas
+
+
+def test_store_rejects_unknown_persisted_delta_fields(tmp_path: Path) -> None:
+    """Keep the persisted delta object closed before MCP projection."""
+
+    payload = EvidenceStore(
+        deltas=(
+            EvidenceDelta(
+                kind="framework.detected",
+                component="services/api",
+                identity="go-web:echo",
+                change="added",
+                before=None,
+                after={},
+            ),
+        )
+    ).to_dict()
+    deltas = payload["deltas"]
+    assert isinstance(deltas, list) and isinstance(deltas[0], dict)
+    deltas[0]["unknown"] = True
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvidenceStoreError, match="invalid evidence delta"):
+        EvidenceStore.read(path)
+
+
 def test_store_rejects_oversized_delta_values_on_write_and_read(tmp_path: Path) -> None:
     """Apply the configured value budget before any delta is emitted or accepted."""
 
@@ -542,6 +691,43 @@ def test_store_rejects_oversized_delta_values_on_write_and_read(tmp_path: Path) 
     ]
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(EvidenceStoreError, match="invalid evidence delta"):
+        EvidenceStore.read(path)
+
+
+def test_store_rejects_deltas_beyond_the_declared_record_budget(tmp_path: Path) -> None:
+    """Bound delta iteration separately from the serialized byte budget."""
+
+    limits = EvidenceStoreLimits(max_records=1, max_records_per_kind=1)
+    deltas = tuple(
+        EvidenceDelta(
+            kind="framework.detected",
+            component="services/api",
+            identity=f"go-web:framework-{index}",
+            change="added",
+            before=None,
+            after={},
+        )
+        for index in range(2)
+    )
+    store = EvidenceStore(limits=limits, deltas=deltas)
+    with pytest.raises(EvidenceStoreError, match="record budget"):
+        store.to_json()
+
+    payload = EvidenceStore(limits=limits).to_dict()
+    payload["deltas"] = [
+        {
+            "kind": delta.kind,
+            "component": delta.component,
+            "identity": delta.identity,
+            "change": delta.change,
+            "before": None,
+            "after": {},
+        }
+        for delta in deltas
+    ]
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(EvidenceStoreError, match="deltas exceed declared limits"):
         EvidenceStore.read(path)
 
 

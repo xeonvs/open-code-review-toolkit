@@ -40,7 +40,7 @@ Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/a
 
 ## Project architecture
 
-The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed evidence through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, scoped completeness, and base/head changes through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.

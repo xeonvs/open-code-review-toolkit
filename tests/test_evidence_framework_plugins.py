@@ -20,6 +20,7 @@ from ocr_toolkit.evidence.framework_plugins import (
 )
 from ocr_toolkit.evidence.mcp import call_tool
 from ocr_toolkit.evidence.model import Confidence, EvidenceRecord, RefRole, TrustClass
+from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import RepositoryObject
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
@@ -241,6 +242,283 @@ require (
     )
     twig_fact = cast(dict[str, Any], twig.to_dict()["value"])["fact"]
     assert twig_fact["engine"] == "twig"
+
+
+def test_cross_provider_evidence_projects_through_deltas_bootstrap_and_one_mcp(
+    tmp_path: Path,
+) -> None:
+    """Project framework, template, and coverage changes through shared contracts."""
+
+    initialize(tmp_path)
+    renderer = tmp_path / "services" / "renderer"
+    api = tmp_path / "services" / "api"
+    web = tmp_path / "services" / "web"
+    ui = tmp_path / "apps" / "portal"
+    for component in (renderer, api, web, ui):
+        component.mkdir(parents=True)
+
+    (renderer / "pyproject.toml").write_text(
+        '[project]\nname="renderer"\nversion="1"\ndependencies=["jinja2>=3.1"]\n',
+        encoding="utf-8",
+    )
+    (renderer / "pylock.toml").write_text(
+        'lock-version = "1.0"\n[[packages]]\nname = "jinja2"\nversion = "3.1.5"\n',
+        encoding="utf-8",
+    )
+    (renderer / "templates").mkdir()
+    (renderer / "templates" / "service.conf.j2").write_text("port={{ port }}\n", encoding="utf-8")
+    (api / "go.mod").write_text(
+        """module example.invalid/api
+
+go 1.24
+
+require github.com/labstack/echo/v4 v4.13.4
+""",
+        encoding="utf-8",
+    )
+    (web / "composer.json").write_text(
+        json.dumps(
+            {
+                "require": {
+                    "php": "^8.3",
+                    "symfony/framework-bundle": "^7.2",
+                    "twig/twig": "^3.0",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (web / "composer.lock").write_text(
+        json.dumps(
+            {
+                "packages": [
+                    {"name": "symfony/framework-bundle", "version": "v7.2.4"},
+                    {"name": "twig/twig", "version": "v3.19.0"},
+                ],
+                "packages-dev": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (web / "templates").mkdir()
+    (web / "templates" / "page.twig").write_text("{{ title }}\n", encoding="utf-8")
+    (ui / "package.json").write_text(
+        json.dumps(
+            {
+                "dependencies": {"react": "^18.3.0"},
+                "devDependencies": {"typescript": "^5.8", "vite": "^6.2"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (ui / "package-lock.json").write_text(
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "node_modules/react": {"version": "18.3.1"},
+                    "node_modules/typescript": {"version": "5.8.3"},
+                    "node_modules/vite": {"version": "6.2.0"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    base = commit(tmp_path, "base ecosystems")
+
+    # Exercise semantic change, removal, and addition without requiring checkout
+    # or provider-specific projection code after the immutable refs are committed.
+    (renderer / "pylock.toml").unlink()
+    (renderer / "templates" / "service.conf.j2").write_text(
+        "port={{ port }}\ntls={{ tls }}\n", encoding="utf-8"
+    )
+    (api / "go.mod").write_text(
+        """module example.invalid/api
+
+go 1.24
+
+require github.com/gofiber/fiber/v2 v2.52.6
+""",
+        encoding="utf-8",
+    )
+    (web / "composer.lock").write_text(
+        json.dumps(
+            {
+                "packages": [
+                    {"name": "symfony/framework-bundle", "version": "v7.2.5"},
+                    {"name": "twig/twig", "version": "v3.19.0"},
+                ],
+                "packages-dev": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (web / "templates" / "page.twig").unlink()
+    (ui / "package.json").write_text(
+        json.dumps(
+            {
+                "dependencies": {"next": "^15.2.0", "react": "^19.0.0"},
+                "devDependencies": {"typescript": "^5.8", "vite": "^6.2"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (ui / "package-lock.json").write_text(
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "node_modules/next": {"version": "15.2.4"},
+                    "node_modules/react": {"version": "19.0.0"},
+                    "node_modules/typescript": {"version": "5.8.3"},
+                    "node_modules/vite": {"version": "6.2.0"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (ui / "tsconfig.json").write_text("{}\n", encoding="utf-8")
+    role_templates = tmp_path / "automation" / "roles" / "worker" / "templates"
+    role_templates.mkdir(parents=True)
+    (role_templates / "worker.service").write_text("User={{ worker_user }}\n", encoding="utf-8")
+    head = commit(tmp_path, "head ecosystems")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    framework_deltas = {
+        (delta.component, delta.identity): delta.change
+        for delta in store.deltas
+        if delta.kind == "framework.detected"
+    }
+    assert framework_deltas == {
+        ("apps/portal", "react-typescript:next"): "added",
+        ("apps/portal", "react-typescript:react"): "changed",
+        ("services/api", "go-web:echo"): "removed",
+        ("services/api", "go-web:fiber"): "added",
+        ("services/renderer", "jinja2:jinja2"): "changed",
+        ("services/web", "symfony-php:symfony"): "changed",
+        ("services/web", "symfony-php:twig"): "changed",
+    }
+    template_deltas = {
+        delta.identity: delta.change for delta in store.deltas if delta.kind == "template.file"
+    }
+    assert template_deltas == {
+        "automation/roles/worker/templates/worker.service": "added",
+        "services/renderer/templates/service.conf.j2": "changed",
+        "services/web/templates/page.twig": "removed",
+    }
+    coverage_deltas = [
+        delta for delta in store.deltas if delta.kind == "repository.evidence_coverage"
+    ]
+    assert any(
+        delta.component == "services/renderer"
+        and '"framework.resolution","jinja2:jinja2"' in delta.identity
+        and delta.change == "changed"
+        and delta.before == {"state": "complete", "reasons": ("lock-version-present",)}
+        and delta.after == {"state": "partial", "reasons": ("lock-version-missing",)}
+        for delta in coverage_deltas
+    )
+    assert any(
+        delta.component == "automation/roles/worker"
+        and '"template.inventory","jinja2"' in delta.identity
+        and delta.change == "added"
+        for delta in coverage_deltas
+    )
+
+    framework_count = sum(record.kind == "framework.detected" for record in store.records)
+    template_count = sum(record.kind == "template.file" for record in store.records)
+    summary = mcp_payload(call_tool(store, {"action": "summary"}))
+    kinds = cast(dict[str, int], summary["kinds"])
+    assert kinds["framework.detected"] == framework_count
+    assert kinds["template.file"] == template_count
+    assert cast(dict[str, int], summary["delta_kinds"])["framework.detected"] == len(
+        framework_deltas
+    )
+    assert cast(dict[str, int], summary["delta_kinds"])["template.file"] == len(template_deltas)
+    assert cast(dict[str, int], summary["coverage_states"])["partial"] >= 1
+    assert all(summary[key] for key in ("records", "coverage_records", "deltas"))
+
+    listed_frameworks = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "framework.detected",
+                "component": "apps/portal",
+                "ref": "head",
+            },
+        )
+    )
+    framework_rows = cast(list[dict[str, Any]], listed_frameworks["records"])
+    assert {
+        cast(dict[str, Any], cast(dict[str, Any], row["value"])["fact"])["framework"]
+        for row in framework_rows
+    } == {"next", "react"}
+    fetched_framework = mcp_payload(
+        call_tool(store, {"action": "get", "id": framework_rows[0]["id"]})
+    )
+    assert fetched_framework["record"] == framework_rows[0]
+
+    listed_coverage = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_coverage",
+                "component": "services/renderer",
+                "ref": "head",
+            },
+        )
+    )
+    coverage_rows = cast(list[dict[str, Any]], listed_coverage["records"])
+    assert {row["domain"] for row in coverage_rows} >= {
+        "framework.configuration",
+        "framework.declaration",
+        "framework.resolution",
+        "template.inventory",
+    }
+    resolution_coverage = next(
+        row
+        for row in coverage_rows
+        if row["domain"] == "framework.resolution" and row["scope"] == "jinja2:jinja2"
+    )
+    fetched_coverage = mcp_payload(
+        call_tool(store, {"action": "get", "id": resolution_coverage["id"]})
+    )
+    assert fetched_coverage["record"] == resolution_coverage
+
+    listed_deltas = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_delta",
+                "delta_kind": "framework.detected",
+                "component": "services/api",
+            },
+        )
+    )
+    delta_rows = cast(list[dict[str, Any]], listed_deltas["records"])
+    assert {(row["identity"], row["change"]) for row in delta_rows} == {
+        ("go-web:echo", "removed"),
+        ("go-web:fiber", "added"),
+    }
+    fetched_delta = mcp_payload(call_tool(store, {"action": "get", "id": delta_rows[0]["id"]}))
+    assert fetched_delta["record"] == delta_rows[0]
+
+    bootstrap = render_bootstrap(store)
+    assert f"framework.detected={framework_count}" in bootstrap
+    assert f"template.file={template_count}" in bootstrap
+    assert f"framework.detected={len(framework_deltas)}" in bootstrap
+    assert f"template.file={len(template_deltas)}" in bootstrap
+    assert "kind=repository.evidence_delta" in bootstrap
+    assert "delta_kind" in bootstrap
+    assert "automation/roles/worker" in bootstrap
+    assert "action=summary" in bootstrap
+    assert "action=list" in bootstrap
+    assert "action=get" in bootstrap
+    assert "service.conf.j2" not in bootstrap
+    assert "page.twig" not in bootstrap
+    assert "v7.2.5" not in bootstrap
 
 
 def test_plugin_nested_schema_is_revalidated_on_store_load(tmp_path: Path) -> None:

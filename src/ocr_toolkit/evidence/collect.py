@@ -86,14 +86,9 @@ def collect_repository_evidence(
         coverage=tuple(head_coverage),
     )
     all_coverage = tuple((*base.coverage, *head.coverage))
-    store = EvidenceStore(base=base, head=head, deltas=file_deltas(base, head))
+    snapshot_deltas = file_deltas(base, head)
+    store = EvidenceStore(base=base, head=head)
     typed_facts = [*base_facts, *head_facts]
-    store.deltas = tuple(
-        sorted(
-            (*store.deltas, *fact_deltas(typed_facts), *coverage_deltas(all_coverage)),
-            key=lambda item: (item.kind, item.component, item.identity),
-        )
-    )
     rejected_snapshot_records = [
         record for record in (*base.records, *head.records) if not store.add(record)
     ]
@@ -125,6 +120,18 @@ def collect_repository_evidence(
                 )
             store.add_diagnostic("typed evidence was truncated by store limits")
             break
+    # Deltas are projections of canonical accepted store records, never raw facts
+    # or references to values that redaction, deduplication, or a budget omitted.
+    store.deltas = tuple(
+        sorted(
+            (
+                *snapshot_deltas,
+                *fact_deltas(store.records),
+                *coverage_deltas(all_coverage),
+            ),
+            key=lambda item: (item.kind, item.component, item.identity),
+        )
+    )
     categories = categorize_paths(list(changed))
     categories_truncated = False
     for category, paths in sorted(categories.items()):

@@ -449,13 +449,62 @@ class EvidenceDelta:
     change: str
     before: EvidenceValue
     after: EvidenceValue
+    id: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """Validate the closed delta-state contract."""
+        """Validate the closed delta-state contract and derive its stable identifier."""
 
-        if self.change not in {"added", "removed", "changed", "unknown"}:
+        if (
+            not isinstance(self.kind, str)
+            or not self.kind
+            or len(self.kind) > 256
+            or not all(part.replace("_", "").isalnum() for part in self.kind.split("."))
+        ):
+            raise ValueError("delta kind must be a bounded dotted identifier")
+        for name, value, limit in (
+            ("component", self.component, 256),
+            ("identity", self.identity, 4096),
+        ):
+            if (
+                not isinstance(value, str)
+                or not value
+                or len(value) > limit
+                or any(character == "\x7f" or ord(character) < 32 for character in value)
+            ):
+                raise ValueError(f"delta {name} must contain bounded safe text")
+        if not isinstance(self.change, str) or self.change not in {
+            "added",
+            "removed",
+            "changed",
+            "unknown",
+        }:
             raise ValueError("unsupported evidence delta state")
         _validate_value(self.before)
         _validate_value(self.after)
         object.__setattr__(self, "before", _freeze_value(self.before))
         object.__setattr__(self, "after", _freeze_value(self.after))
+        identity = {
+            "kind": self.kind,
+            "component": self.component,
+            "identity": self.identity,
+            "change": self.change,
+            "before": _thaw_value(self.before),
+            "after": _thaw_value(self.after),
+        }
+        digest = hashlib.sha256(_canonical_json(identity).encode("utf-8")).hexdigest()
+        object.__setattr__(self, "id", f"del1_{digest}")
+
+    def to_mcp_dict(self) -> dict[str, EvidenceValue]:
+        """Return the closed first-class delta projection exposed by the evidence MCP."""
+
+        return {
+            "id": self.id,
+            "kind": "repository.evidence_delta",
+            "schema_version": "repository.evidence-delta/v1",
+            "delta_kind": self.kind,
+            "component": self.component,
+            "identity": self.identity,
+            "change": self.change,
+            "before": _thaw_value(self.before),
+            "after": _thaw_value(self.after),
+        }
