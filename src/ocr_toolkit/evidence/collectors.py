@@ -8,7 +8,9 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from ocr_toolkit.evidence.ansible import (
+from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
+from ocr_toolkit.evidence.ecosystems.ansible.requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.ecosystems.ansible.topology import (
     collect_topology,
     inventory_scope,
     role_coverage_scope,
@@ -16,22 +18,36 @@ from ocr_toolkit.evidence.ansible import (
     topology_candidate,
     topology_coverage,
 )
-from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
-from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
-from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
-from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
-from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
-from ocr_toolkit.evidence.javascript_manifests import (
+from ocr_toolkit.evidence.ecosystems.contracts import (
+    MAX_MANIFEST_ITEMS,
+    ManifestFact,
+    ManifestParseResult,
+)
+from ocr_toolkit.evidence.ecosystems.go import parse_go_mod, parse_go_sum
+from ocr_toolkit.evidence.ecosystems.javascript import (
     parse_package_json,
     parse_package_lock,
     parse_pnpm_lock,
     parse_yarn_lock,
 )
-from ocr_toolkit.evidence.manifest_model import (
-    MAX_MANIFEST_ITEMS,
-    ManifestFact,
-    ManifestParseResult,
+from ocr_toolkit.evidence.ecosystems.php import parse_composer_json, parse_composer_lock
+from ocr_toolkit.evidence.ecosystems.python import (
+    parse_pipfile_lock,
+    parse_poetry_lock,
+    parse_pylock,
+    parse_pyproject,
+    parse_requirements,
+    parse_uv_lock,
 )
+from ocr_toolkit.evidence.frameworks import (
+    FrameworkPluginContext,
+    PluginCoverage,
+    PluginFact,
+    PluginSourceStatus,
+    collect_framework_plugins,
+    collect_template_files,
+)
+from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
 from ocr_toolkit.evidence.model import (
     Confidence,
     CoverageRecord,
@@ -41,14 +57,6 @@ from ocr_toolkit.evidence.model import (
     EvidenceValue,
     RefRole,
     TrustClass,
-)
-from ocr_toolkit.evidence.python_manifests import (
-    parse_pipfile_lock,
-    parse_poetry_lock,
-    parse_pylock,
-    parse_pyproject,
-    parse_requirements,
-    parse_uv_lock,
 )
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
@@ -82,29 +90,32 @@ CONTEXT_YAML_DIRECTORIES = (
 
 @dataclass(frozen=True, slots=True)
 class ManifestCollector:
-    """Bind manifest path matching, ecosystem metadata, and a bounded parser."""
+    """Bind manifest path matching, ecosystem metadata, role, and bounded parser."""
 
     ecosystem: str
+    source_roles: tuple[str, ...]
     matches: Callable[[str], bool]
     parse: Callable[[str], ManifestParseResult]
 
 
 @dataclass(frozen=True, slots=True)
 class ManifestBlobSet:
-    """Return immutable Galaxy blobs and explicit graph-read diagnostics."""
+    """Return immutable Galaxy blobs, diagnostics, and affected graph roots."""
 
     blobs: dict[str, bytes]
     galaxy_paths: tuple[str, ...]
     diagnostics: tuple[str, ...]
+    degraded_roots: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class PythonRequirementBlobSet:
-    """Return immutable requirements blobs and graph-read diagnostics."""
+    """Return immutable requirements blobs, diagnostics, and affected roots."""
 
     blobs: dict[str, bytes]
     requirement_paths: tuple[str, ...]
     diagnostics: tuple[str, ...]
+    degraded_roots: tuple[tuple[str, str], ...] = ()
 
 
 def _parse_ansible_requirements(text: str) -> ManifestParseResult:
@@ -155,26 +166,28 @@ def _is_pylock(path: str) -> bool:
 
 
 MANIFEST_COLLECTORS = (
-    ManifestCollector("python", _name_is("pyproject.toml"), parse_pyproject),
-    ManifestCollector("python", _is_python_requirements, parse_requirements),
-    ManifestCollector("python", _name_is("uv.lock"), parse_uv_lock),
-    ManifestCollector("python", _name_is("poetry.lock"), parse_poetry_lock),
-    ManifestCollector("python", _name_is("Pipfile.lock"), parse_pipfile_lock),
-    ManifestCollector("python", _is_pylock, parse_pylock),
-    ManifestCollector("javascript", _name_is("package.json"), parse_package_json),
+    ManifestCollector("python", ("declaration",), _name_is("pyproject.toml"), parse_pyproject),
+    ManifestCollector("python", ("declaration",), _is_python_requirements, parse_requirements),
+    ManifestCollector("python", ("resolution",), _name_is("uv.lock"), parse_uv_lock),
+    ManifestCollector("python", ("resolution",), _name_is("poetry.lock"), parse_poetry_lock),
+    ManifestCollector("python", ("resolution",), _name_is("Pipfile.lock"), parse_pipfile_lock),
+    ManifestCollector("python", ("resolution",), _is_pylock, parse_pylock),
+    ManifestCollector("javascript", ("declaration",), _name_is("package.json"), parse_package_json),
     ManifestCollector(
         "javascript",
+        ("resolution",),
         _name_is("package-lock.json"),
         parse_package_lock,
     ),
-    ManifestCollector("javascript", _name_is("yarn.lock"), parse_yarn_lock),
-    ManifestCollector("javascript", _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
-    ManifestCollector("go", _name_is("go.mod"), parse_go_mod),
-    ManifestCollector("go", _name_is("go.sum"), parse_go_sum),
-    ManifestCollector("php", _name_is("composer.json"), parse_composer_json),
-    ManifestCollector("php", _name_is("composer.lock"), parse_composer_lock),
+    ManifestCollector("javascript", ("resolution",), _name_is("yarn.lock"), parse_yarn_lock),
+    ManifestCollector("javascript", ("resolution",), _name_is("pnpm-lock.yaml"), parse_pnpm_lock),
+    ManifestCollector("go", ("declaration", "resolution"), _name_is("go.mod"), parse_go_mod),
+    ManifestCollector("go", ("checksum",), _name_is("go.sum"), parse_go_sum),
+    ManifestCollector("php", ("declaration",), _name_is("composer.json"), parse_composer_json),
+    ManifestCollector("php", ("resolution",), _name_is("composer.lock"), parse_composer_lock),
     ManifestCollector(
         "ansible",
+        ("declaration",),
         _name_is("requirements.yml", "requirements.yaml"),
         _parse_ansible_requirements,
     ),
@@ -366,6 +379,42 @@ def _bound_include_diagnostics(
     )
 
 
+def _roots_reaching_graph_degradation(
+    roots: tuple[str, ...],
+    edges: Mapping[str, tuple[str, ...]],
+    degraded_paths: Mapping[str, str],
+) -> tuple[tuple[str, str], ...]:
+    """Return roots whose accepted graph reaches a bounded degraded source."""
+
+    supported_reasons = {"bounded-source-omission", "include-graph-truncation"}
+    if any(reason not in supported_reasons for reason in degraded_paths.values()):
+        raise ValueError("include graph has an unsupported degradation reason")
+    affected: list[tuple[str, str]] = []
+    for root in sorted(set(roots)):
+        pending = [root]
+        visited: set[str] = set()
+        reasons: set[str] = set()
+        while pending:
+            path = pending.pop()
+            if path in visited:
+                continue
+            visited.add(path)
+            reason = degraded_paths.get(path)
+            if reason is not None:
+                reasons.add(reason)
+            pending.extend(reversed(edges.get(path, ())))
+        if reasons:
+            # A bounded omission is stronger than a traversal/item limit because
+            # the source itself was never parsed.
+            reason = (
+                "bounded-source-omission"
+                if "bounded-source-omission" in reasons
+                else "include-graph-truncation"
+            )
+            affected.append((root, reason))
+    return tuple(affected)
+
+
 def _read_manifest_graph(
     reader: GitRepositoryReader,
     entries_by_path: Mapping[str, RepositoryObject],
@@ -380,6 +429,7 @@ def _read_manifest_graph(
     admitted = set(initial_paths)
     root_paths = set(initial_paths)
     edges: dict[str, list[str]] = {}
+    degraded_paths: dict[str, str] = {}
     pending = [(path, "") for path in initial_paths]
     included_files = 0
     file_limit_reported = False
@@ -415,6 +465,7 @@ def _read_manifest_graph(
                             f"{MAX_MANIFEST_INCLUDE_FILES} files"
                         )
                         file_limit_reported = True
+                    degraded_paths[path] = "include-graph-truncation"
                     continue
                 admitted.add(path)
                 included_files += 1
@@ -425,6 +476,8 @@ def _read_manifest_graph(
             read = reader.read_candidate_blobs(tuple(to_read))
             blobs.update(read.blobs)
             diagnostics.extend(read.diagnostics)
+            for path in (entry.path for entry in to_read if entry.path not in read.blobs):
+                degraded_paths[path] = "bounded-source-omission"
         for path in process_paths:
             visited.add(path)
             blob = blobs.get(path)
@@ -432,6 +485,8 @@ def _read_manifest_graph(
                 continue
             try:
                 parsed = parse_galaxy_requirements(blob.decode("utf-8"))
+                if any("truncated" in notice for notice in parsed.notices):
+                    degraded_paths[path] = "include-graph-truncation"
             except UnicodeDecodeError:
                 diagnostics.append(f"{path}: Ansible Galaxy include is not UTF-8")
                 continue
@@ -447,6 +502,7 @@ def _read_manifest_graph(
                             f"{MAX_MANIFEST_INCLUDE_EDGES} edges"
                         )
                         edge_limit_reported = True
+                    degraded_paths[path] = "include-graph-truncation"
                     continue
                 included_edges += 1
                 edges.setdefault(path, []).append(resolved)
@@ -454,12 +510,18 @@ def _read_manifest_graph(
                     diagnostics.append(
                         f"{path}: Ansible Galaxy include depth exceeded at {resolved}"
                     )
+                    degraded_paths[path] = "include-graph-truncation"
                 else:
                     pending.append((resolved, path))
     normalized_edges = {path: tuple(dict.fromkeys(targets)) for path, targets in edges.items()}
     diagnostics.extend(_include_cycle_diagnostics(normalized_edges))
     galaxy_paths = tuple(sorted(path for path in visited if path in blobs))
-    return ManifestBlobSet(blobs, galaxy_paths, _bound_include_diagnostics(diagnostics))
+    return ManifestBlobSet(
+        blobs,
+        galaxy_paths,
+        _bound_include_diagnostics(diagnostics),
+        _roots_reaching_graph_degradation(initial_paths, normalized_edges, degraded_paths),
+    )
 
 
 def _read_python_requirement_graph(
@@ -474,6 +536,8 @@ def _read_python_requirement_graph(
     diagnostics: list[str] = []
     visited: set[str] = set()
     admitted = set(initial_paths)
+    edges: dict[str, list[str]] = {}
+    degraded_paths: dict[str, str] = {}
     pending = [(path, "") for path in initial_paths]
     included_files = 0
     included_edges = 0
@@ -506,6 +570,7 @@ def _read_python_requirement_graph(
                             f"{MAX_MANIFEST_INCLUDE_FILES} files"
                         )
                         file_limit_reported = True
+                    degraded_paths[path] = "include-graph-truncation"
                     continue
                 admitted.add(path)
                 included_files += 1
@@ -515,12 +580,16 @@ def _read_python_requirement_graph(
             read = reader.read_candidate_blobs(tuple(sorted(to_read, key=lambda item: item.path)))
             blobs.update(read.blobs)
             diagnostics.extend(read.diagnostics)
+            for path in (entry.path for entry in to_read if entry.path not in read.blobs):
+                degraded_paths[path] = "bounded-source-omission"
         for path in process_paths:
             visited.add(path)
             if path not in blobs:
                 continue
             try:
                 parsed = parse_requirements(blobs[path].decode("utf-8"))
+                if any("truncated" in notice for notice in parsed.notices):
+                    degraded_paths[path] = "include-graph-truncation"
             except UnicodeDecodeError:
                 diagnostics.append(f"{path}: Python requirements include is not UTF-8")
                 continue
@@ -538,15 +607,19 @@ def _read_python_requirement_graph(
                             f"{MAX_MANIFEST_INCLUDE_EDGES} edges"
                         )
                         edge_limit_reported = True
+                    degraded_paths[path] = "include-graph-truncation"
                     continue
                 included_edges += 1
+                edges.setdefault(path, []).append(resolved)
                 if depth == MAX_MANIFEST_INCLUDE_DEPTH:
                     diagnostics.append(
                         f"{path}: Python requirements include depth exceeded at {resolved}"
                     )
+                    degraded_paths[path] = "include-graph-truncation"
                 else:
                     pending.append((resolved, path))
     requirement_paths = tuple(sorted(path for path in visited if path in blobs))
+    normalized_edges = {path: tuple(dict.fromkeys(targets)) for path, targets in edges.items()}
     return PythonRequirementBlobSet(
         blobs,
         requirement_paths,
@@ -554,7 +627,54 @@ def _read_python_requirement_graph(
             diagnostics,
             truncation_notice="Python requirements include diagnostics were truncated",
         ),
+        _roots_reaching_graph_degradation(initial_paths, normalized_edges, degraded_paths),
     )
+
+
+def _plugin_records(
+    facts: tuple[PluginFact, ...],
+    *,
+    ref: RefRole,
+    commit_sha: str,
+    trust: TrustClass,
+) -> list[EvidenceRecord]:
+    """Attach immutable ref provenance to validated static plugin facts."""
+
+    return [
+        EvidenceRecord(
+            kind=fact.kind,
+            value={"identity": fact.identity, "fact": fact.value},
+            source_path=fact.source_path,
+            ref=ref,
+            commit_sha=commit_sha,
+            component=fact.component,
+            provenance=f"framework plugin:{fact.value['plugin']}",
+            confidence=Confidence.EXACT,
+            trust=trust,
+        )
+        for fact in facts
+    ]
+
+
+def _plugin_coverage(
+    observations: tuple[PluginCoverage, ...], *, ref: RefRole, commit_sha: str
+) -> list[CoverageRecord]:
+    """Compose plugin coverage by semantic component/domain/scope identity."""
+
+    grouped: dict[tuple[str, str, str], list[CoverageObservation]] = {}
+    for item in observations:
+        grouped.setdefault((item.component, item.domain, item.scope), []).append(item.observation)
+    return [
+        compose_coverage(
+            component=component,
+            domain=domain,
+            scope=scope,
+            observations=tuple(values),
+            ref=ref,
+            commit_sha=commit_sha,
+        )
+        for (component, domain, scope), values in sorted(grouped.items())
+    ]
 
 
 def collect_ref_facts(
@@ -615,6 +735,16 @@ def collect_ref_facts(
         and not entry.is_submodule
         and entry.object_type == "blob"
     )
+    source_statuses: dict[str, PluginSourceStatus] = {
+        entry.path: PluginSourceStatus(
+            entry.path,
+            collector.ecosystem,
+            collector.source_roles,
+            "pending",
+        )
+        for entry in candidates
+        if (collector := manifest_collector(entry.path)) is not None
+    }
     try:
         read = reader.read_candidate_blobs(candidates)
     except RepositoryEvidenceError as exc:
@@ -635,6 +765,13 @@ def collect_ref_facts(
                 )
         return records, diagnostics
     blobs = read.blobs
+    for path, status in tuple(source_statuses.items()):
+        source_statuses[path] = PluginSourceStatus(
+            status.path,
+            status.ecosystem,
+            status.roles,
+            "accepted" if path in blobs else "omitted",
+        )
     diagnostics.extend(f"{ref.value}:{message}" for message in read.diagnostics)
     galaxy_roots = tuple(
         entry.path
@@ -656,9 +793,39 @@ def collect_ref_facts(
     except RepositoryEvidenceError as exc:
         diagnostics.append(f"Python requirements include batch read failed: {exc}")
         python_graph = PythonRequirementBlobSet(graph.blobs, python_roots, ())
+    # Included requirements may use arbitrary .txt/.in names that the initial
+    # manifest registry intentionally does not match. They still feed framework
+    # declarations, so register their exact source state before graph/parser
+    # degradation is projected into completeness.
+    python_declaration = manifest_collector("requirements.txt")
+    if python_declaration is None:  # pragma: no cover - static registry invariant
+        raise ValueError("Python requirements collector is unavailable")
+    for path in python_graph.requirement_paths:
+        source_statuses.setdefault(
+            path,
+            PluginSourceStatus(
+                path,
+                python_declaration.ecosystem,
+                python_declaration.source_roles,
+                "accepted",
+            ),
+        )
+    degraded_roots = dict((*graph.degraded_roots, *python_graph.degraded_roots))
+    for path, reason in sorted(degraded_roots.items()):
+        status = source_statuses.get(path)
+        if status is not None and status.state not in {"omitted", "unavailable"}:
+            source_statuses[path] = PluginSourceStatus(
+                status.path,
+                status.ecosystem,
+                status.roles,
+                "partial",
+                reason,
+            )
     blobs = python_graph.blobs
-    diagnostics.extend(f"{ref.value}:{message}" for message in graph.diagnostics)
-    diagnostics.extend(f"{ref.value}:{message}" for message in python_graph.diagnostics)
+    for message in (*graph.diagnostics, *python_graph.diagnostics):
+        qualified = f"{ref.value}:{message}"
+        if qualified not in diagnostics:
+            diagnostics.append(qualified)
     paths = dict.fromkeys(
         (
             *tuple(entry.path for entry in candidates),
@@ -724,6 +891,23 @@ def collect_ref_facts(
                     raise ValueError("supported manifest has no collector")
                 parsed = collector.parse(text)
                 diagnostics.extend(f"{ref.value}:{path}: {notice}" for notice in parsed.notices)
+                source_status = source_statuses.get(path)
+                if any("truncated" in notice for notice in parsed.notices):
+                    if source_status is not None and source_status.state != "partial":
+                        source_statuses[path] = PluginSourceStatus(
+                            source_status.path,
+                            source_status.ecosystem,
+                            source_status.roles,
+                            "partial",
+                            "source-item-limit",
+                        )
+                elif source_status is not None and source_status.state != "partial":
+                    source_statuses[path] = PluginSourceStatus(
+                        source_status.path,
+                        source_status.ecosystem,
+                        source_status.roles,
+                        "complete",
+                    )
                 facts = [
                     ManifestFact(
                         "repository.manifest",
@@ -781,6 +965,14 @@ def collect_ref_facts(
             )
             if topology_source and entry is not None:
                 unavailable_topology(entry, "parse-unavailable")
+            source_status = source_statuses.get(path)
+            if source_status is not None:
+                source_statuses[path] = PluginSourceStatus(
+                    source_status.path,
+                    source_status.ecosystem,
+                    source_status.roles,
+                    "unavailable",
+                )
             continue
         for fact in facts:
             if fact.kind.startswith("ansible.") and fact.kind != "dependency.declared":
@@ -820,6 +1012,24 @@ def collect_ref_facts(
                     trust=trust,
                 )
             )
+    plugin_context = FrameworkPluginContext(
+        records=tuple(records),
+        entries=entries,
+        source_statuses=tuple(sorted(source_statuses.values(), key=lambda item: item.path)),
+        ref=ref,
+        commit_sha=commit_sha,
+    )
+    plugin_facts, plugin_observations, plugin_notices = collect_framework_plugins(plugin_context)
+    template_facts, template_observations, template_notices = collect_template_files(plugin_context)
+    records.extend(
+        _plugin_records(
+            (*plugin_facts, *template_facts),
+            ref=ref,
+            commit_sha=commit_sha,
+            trust=trust,
+        )
+    )
+    diagnostics.extend(f"{ref.value}:{notice}" for notice in (*plugin_notices, *template_notices))
     if coverage_sink is not None:
         for (domain, scope), observations in sorted(coverage_observations.items()):
             coverage_sink.append(
@@ -832,6 +1042,13 @@ def collect_ref_facts(
                     commit_sha=commit_sha,
                 )
             )
+        coverage_sink.extend(
+            _plugin_coverage(
+                (*plugin_observations, *template_observations),
+                ref=ref,
+                commit_sha=commit_sha,
+            )
+        )
     return records, diagnostics
 
 

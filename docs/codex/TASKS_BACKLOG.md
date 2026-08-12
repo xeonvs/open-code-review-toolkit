@@ -11,54 +11,8 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Native fuzzing campaign | Retained and revised | BL-019 connects fuzzing to the future evidence/MCP parser attack surface and keeps bounded CI and corpus ownership as activation requirements. |
 | Additional provider adapters | Retained, clarified, and reprioritized | BL-021 is explicitly about code-hosting and review-host adapters beyond GitLab, not repository ecosystem/framework evidence. |
 | File-based user configuration | Retained and redesigned | BL-020 waits for profile, MCP, and evidence schemas while preserving environment precedence and excluding secrets. |
-
-## M2 Ecosystem and framework coverage
-
-### BL-008: Close remaining evidence resolution and scoping gaps
-
-- **Status:** planned
-- **Priority:** high
-- **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** Established M1 evidence, immutable snapshot/delta, MCP projection, and scoped-completeness contracts.
-- **Activation trigger:** A demonstrated repository supplies a remaining format, precedence, or component-scope gap with safe synthetic fixtures.
-- **Goal:** Complete only missing repository-derived resolution and scoping semantics without reimplementing established M1 collectors.
-- **Implemented baseline:** Python declarations, recursive requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata and npm v1-v3, Yarn Classic/Modern, and pnpm v5-v9 locks; Go module, language/toolchain/GODEBUG, requirement, replacement, exclusion, tool, retract/ignore, and checksum evidence; Composer declarations, locks, platform constraints/overrides, sources, and resolution policy; Ansible Galaxy requirements/includes, role topology, inventories, and runtime-dependent coverage; declarative container and GitLab CI images; immutable base/head deltas; built-in MCP visibility; and scoped evidence completeness.
-- **Remaining deliverables:** Add only applicable missing formats such as repository-provided installed metadata or demonstrated lock variants; preserve marker, platform, and workspace dimensions; define conflicts and precedence without collapsing declared and resolved facts; represent mutable image tags separately from immutable digests; and close proven component-scope or completeness gaps.
-- **Acceptance criteria:** Each newly supported format has deterministic semantics and fixtures; platform/marker/workspace variants and conflicting sources remain distinct; mutable image tags are never represented as immutable pins; malformed/oversized files degrade without network access; every domain that can support negative inference publishes applicable scoped completeness through the established evidence-coverage contract.
-- **Exclusions:** Reworking implemented collectors without a gap, unused ecosystems, mutable runner inspection, package-registry queries, arbitrary build execution, or treating declarations as resolved versions.
-- **Validation:** Per-format source/target fixtures, conflict and limit cases, and common evidence-model contract tests.
-- **Release classification expectation:** `release-required` for new public evidence behavior; a format-selection audit alone is `no-release`.
-- **Upstream overlap:** OCR file selection and generic rules do not supply repository evidence, resolution semantics, provenance, deltas, or scoped completeness. OCR 1.9.0 adding Nim to its rules and file allowlist changes review-engine scope only; it neither completes nor broadens this narrowed item by itself.
-
-### BL-009: Select and establish framework evidence plugins
-
-- **Status:** planned
-- **Priority:** medium
-- **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** Established M1 evidence/snapshot/plugin boundaries. A selected plugin depends on BL-008 only when it consumes one of that item's specific remaining gaps.
-- **Activation trigger:** An anonymized inventory of pilot repositories identifies at least two high-value framework candidates with safe synthetic fixtures.
-- **Goal:** Select and implement 2-3 framework plugins that improve review evidence without building code graphs.
-- **Scoped deliverables:** Inventory pilot repositories without recording private names or contents; score candidates by prevalence, version-sensitive API surface, deterministic detectability, synthetic-fixture feasibility, and expected review-quality impact; record the selection decision; define a bounded plugin protocol and implement the selected providers. Existing Ansible parser maturity may support, but cannot substitute for, the scored selection.
-- **Acceptance criteria:** The inventory and scoring justify each selected plugin; plugins expose framework identity, verified version, component scope, important configuration paths, material deltas, and applicable scoped completeness; they cannot run arbitrary commands or network requests and avoid whole-repository traversal when changed components are known. Ansible's established coverage implementation is a reusable first adopter, not a substitute for selecting future plugins from demonstrated use.
-- **Exclusions:** Route/call/symbol graphs, framework-specific reviewers, or speculative detection without version evidence.
-- **Validation:** Positive/negative/multi-component fixtures, version-conflict and staleness cases, and plugin isolation tests.
-- **Release classification expectation:** `release-required`.
-- **Upstream overlap:** OCR's built-in Nix, Haskell, and 1.9.0 Nim rules improve language review but do not identify frameworks, versions, component scope, provenance, or completeness. They do not satisfy the plugin selection trigger or any BL-009 acceptance criterion.
-
-### BL-010: Add evidence packs from demonstrated use cases
-
-- **Status:** conditional
-- **Priority:** medium
-- **Roadmap theme:** M2 Ecosystem and framework coverage
-- **Dependencies:** Established M1 extension contracts and only the specific collector or plugin boundary used by the demonstrated pack; broad completion of BL-008 and BL-009 is not required.
-- **Activation trigger:** A real repository need identifies a missing ecosystem or framework and supplies safe synthetic fixtures and deterministic semantics.
-- **Goal:** Extend coverage without accumulating shallow detectors.
-- **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public synthetic examples.
-- **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
-- **Exclusions:** Checkbox coverage, network resolution, runtime code execution, or bundles spanning unrelated ecosystems.
-- **Validation:** Pack-specific fixtures plus common evidence and bootstrap/MCP projection contracts.
-- **Release classification expectation:** `release-required`.
-- **Upstream overlap:** Built-in OCR language allowlists and rules are review-engine capabilities, not toolkit evidence packs. OCR 1.8.8 Nix/Haskell and OCR 1.9.0 Nim support create no demonstrated missing-evidence use case and do not activate BL-010.
+| M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through the shared evidence contracts; unproven formats are not retained as mandatory work. |
+| M2 framework selection (BL-009) | Completed and removed | The anonymized selection produced bounded static Jinja2, Go web, Symfony/Twig, and React/Next providers with synthetic cross-provider validation and no second MCP. |
 
 ## M3 External MCP hardening
 
@@ -185,6 +139,21 @@ Telemetry is intentionally outside M1. OCR owns token, cost, budget, provider-le
 - **Release classification expectation:** `release-required`.
 
 ## M6 Later and conditional work
+
+### BL-010: Add evidence packs from demonstrated use cases
+
+- **Status:** conditional
+- **Priority:** medium
+- **Roadmap theme:** M6 Later and conditional work
+- **Dependencies:** Established evidence, snapshot/delta, scoped-completeness, static-plugin, and built-in MCP projection contracts; only the boundary consumed by the demonstrated pack is required.
+- **Activation trigger:** A real repository need identifies a missing ecosystem or framework and supplies safe synthetic fixtures and deterministic semantics.
+- **Goal:** Extend coverage without accumulating shallow detectors.
+- **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public synthetic examples.
+- **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
+- **Exclusions:** Checkbox coverage, network resolution, runtime code execution, or bundles spanning unrelated ecosystems.
+- **Validation:** Pack-specific fixtures plus common evidence and bootstrap/MCP projection contracts.
+- **Release classification expectation:** `release-required`.
+- **Upstream overlap:** Built-in OCR language allowlists and rules are review-engine capabilities, not toolkit evidence packs. A new reviewable language alone creates no demonstrated missing-evidence use case and does not activate BL-010.
 
 ### BL-019: Run a native fuzzing campaign
 

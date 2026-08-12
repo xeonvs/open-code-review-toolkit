@@ -11,8 +11,8 @@ import pytest
 
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import collect_ref_facts, manifest_collector
-from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
-from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS, ManifestParseResult
+from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS, ManifestParseResult
+from ocr_toolkit.evidence.ecosystems.php import parse_composer_json, parse_composer_lock
 from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.model import RefRole
 from ocr_toolkit.evidence.repository import GitRepositoryReader

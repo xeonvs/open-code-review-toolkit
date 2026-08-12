@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 from ocr_toolkit.common.redaction import redact_url_userinfo
-from ocr_toolkit.evidence.manifest_model import (
+from ocr_toolkit.evidence.ecosystems.contracts import (
     MAX_MANIFEST_ITEMS,
     ManifestFact,
     ManifestParseResult,

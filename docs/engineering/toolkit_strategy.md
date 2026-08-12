@@ -58,26 +58,26 @@ flowchart LR
 
 Every evidence record should preserve its kind and value together with source path, git ref, component scope, provenance, confidence, and staleness where meaningful. Collection is deterministic and network-independent. Storage has explicit bounds and stable ordering. Rendering never upgrades inferred or untrusted material into authoritative policy.
 
-The engine separates four implemented responsibilities:
+The engine keeps implemented responsibilities separate:
 
-1. collectors parse repository material into structured evidence;
-2. bounded storage normalizes and indexes that evidence;
-3. bootstrap planning selects the smallest useful trusted overview;
-4. renderers produce stable text or read-only MCP responses.
+- collectors parse repository material into structured evidence;
+- bounded storage normalizes and indexes that evidence;
+- bootstrap planning selects the smallest useful trusted overview;
+- renderers produce stable text or read-only MCP responses.
 
 The evidence model is the main extension point. Ecosystem and framework plugins may contribute typed facts, but cannot run arbitrary commands, fetch the network, mutate the repository, or introduce a second review workflow.
 
 ## Implemented compact bootstrap and built-in evidence MCP
 
-The OCR background is a compact bootstrap, normally around 1,500-2,500 characters and always below the toolkit/OCR hard limit. It contains authoritative constraints and trust instructions, base/head identity, detected ecosystems, material runtime or dependency changes, the validated composed MCP capability inventory, relevant accepted decisions, and short project-guidance hints. Bootstrap planning and OCR MCP configuration consume the same composition plan so the instructions cannot advertise unavailable tools or omit available allowlisted tools.
+The OCR background is a compact bootstrap bounded below the toolkit/OCR hard limit. It contains authoritative constraints and trust instructions, base/head identity, evidence and delta-kind counts, the validated composed MCP capability inventory, relevant accepted decisions, and short project-guidance hints. Bootstrap planning and OCR MCP configuration consume the same composition plan so the instructions cannot advertise unavailable tools or omit available allowlisted tools.
 
 Complete manifests, dependency inventories, guidance documents, and external issue/page contents do not belong in the bootstrap. Detailed repository facts are available on demand through a built-in server registered under a reserved namespace such as `ocr_toolkit_evidence`, with tools prefixed `ocr_toolkit_`. Candidate tools expose review environment, changed components, dependency state and deltas, framework state, version evidence, and accepted decisions.
 
-The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. Its summary, filtered/paginated list, and stable-ID get actions expose scoped evidence completeness: absence supports a negative conclusion only for an applicable complete scope. Reserved server and tool names plus global tool-collision checks prevent downstream configuration from shadowing built-in capabilities.
+The server is read-only, repository-root constrained, bounded, deterministic, network-independent, and incapable of arbitrary command execution. Its summary, filtered/paginated list, and stable-ID get actions expose facts, scoped completeness, and an explicit first-class base/head delta projection. Delta values and metadata are re-redacted and re-bounded before their content-addressed IDs are derived or any list/get response is rendered. Absence supports a negative conclusion only for an applicable complete scope. Reserved server and tool names plus global tool-collision checks prevent downstream configuration from shadowing built-in capabilities.
 
 Compact bootstrap and built-in evidence MCP are one established user-visible unit. Detailed facts removed from the bootstrap remain available on demand through the built-in MCP.
 
-## Partially implemented evidence domains
+## Established evidence domains and conditional extensions
 
 ### Dependencies, runtimes, and components
 
@@ -85,9 +85,15 @@ Evidence already distinguishes declared constraints, locked versions, runtime de
 
 Implemented collectors cover Python declarations, requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata plus npm, Yarn, and pnpm locks; Go modules, toolchains, requirements, replacements, and checksums; Composer manifests, locks, and platform evidence; Ansible Galaxy requirements, role topology, inventories, and runtime-dependent coverage; and declarative container and GitLab CI images. Further expansion follows demonstrated repository use and requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
 
-### Planned framework evidence
+The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` layer below framework derivation. Shared fact/result contracts plus Python, JavaScript, Go, and PHP adapters live directly in that package; Ansible Galaxy and topology/inventory adapters live under `ecosystems.ansible` because they are distinct inputs from one automation ecosystem, not framework plugins. `collectors.py` retains immutable Git/tree orchestration and source-status ownership, while cross-ecosystem container/CI extraction, storage, and MCP serving remain outside the adapter package. The package has no old flat-module shims, dynamic discovery, repository I/O, or upward dependency on frameworks or lifecycle services.
 
-Framework support is plugin-oriented structured extraction, not a code graph or framework-specific review engine. Useful facts are framework identity, verified version, component scope, important configuration paths, and material source/target changes. Initial plugins are selected from demonstrated repositories and testable fixtures; candidates include common Python, Go, PHP, JavaScript, test, and Ansible frameworks.
+### Framework and template evidence
+
+Framework support is package-owned static plugin extraction, not a code graph or framework-specific review engine. The established registry covers Jinja2 and Jinja/Ansible-style templates, Echo/Fiber with direct gRPC stack context, Symfony/Twig, and React/Next with TypeScript/Vite context. Plugins receive only immutable normalized dependency/tree evidence and exact core-owned source-status records from the collector, publish closed framework/template facts plus scoped completeness, and cannot read the repository independently, execute commands, fetch the network, mutate state, or create another MCP/review flow. Components follow the nearest declaration manifest (or conventional Ansible role); `.` is the unambiguous repository-root component and every other value is a real path. Go uses effective `go.mod` requirement/replacement semantics, and every read, parse, configuration, template, or provider limit degrades its exact scope instead of turning missing facts into proof.
+
+The implementation boundary is the internal `ocr_toolkit.evidence.frameworks` package. It owns immutable plugin contracts, closed framework/template schemas, generic package detection, template inventory, a static ordered registry, and package-owned declarations under `frameworks.providers`. The core collector remains responsible for Git/tree/manifest reads and passes only bounded immutable inputs; the evidence store and built-in MCP remain outside the package. Provider results are bounded and committed atomically so malformed facts, coverage, or notices from one provider cannot leak partial state or suppress its siblings. There are no runtime discovery hooks, legacy import shims, plugin-owned I/O, or framework-specific MCP services. A new demonstrated provider extends this one registry and the shared schemas instead of adding another collection or serving path.
+
+OCR file selection remains a separate review-engine boundary. The public synthetic rules pack explicitly includes Jinja and Twig template paths that the recommended OCR does not allowlist by default, then supplies narrowly scoped merged rules. Framework identity, versions, component scope, configuration paths, template inventory, scoped completeness, and their base/head deltas are stored once and served on demand by the existing built-in evidence MCP; rules neither duplicate those facts nor render templates.
 
 The design borrows useful CodeGraph principles without adopting CodeGraph: deterministic extraction precedes rendering, work is component-scoped, facts retain provenance and staleness, and OCR retrieves surgical evidence on demand. Route, symbol, and call graphs remain out of scope.
 

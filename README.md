@@ -17,7 +17,7 @@ ocr --version
 ocr-ci --help
 ```
 
-The current compatibility target is OCR `1.9.1`. CI should pin the release and verify its published checksum before execution.
+The exact recommended OCR release and its verified asset checksums live in the [versioned compatibility manifest](compatibility/ocr-support.json). CI should pin that release and checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
 
@@ -40,7 +40,7 @@ Project-wide accepted tradeoffs can be recorded separately in `.opencodereview/a
 
 ## Project architecture
 
-The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed evidence through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, scoped completeness, and base/head changes through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.

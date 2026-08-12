@@ -61,8 +61,10 @@ def render_bootstrap(
     for record in store.records:
         kind_counts[record.kind] = kind_counts.get(record.kind, 0) + 1
     changes: dict[str, int] = {}
-    for delta in store.deltas:
+    delta_kinds: dict[str, int] = {}
+    for delta in store.safe_deltas:
         changes[delta.change] = changes.get(delta.change, 0) + 1
+        delta_kinds[delta.kind] = delta_kinds.get(delta.kind, 0) + 1
     coverage_states: dict[str, int] = {}
     for coverage_record in store.coverage:
         coverage_states[coverage_record.state.value] = (
@@ -87,6 +89,7 @@ def render_bootstrap(
         f"- components: {', '.join(components) if components else 'none'}",
         f"- kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(kind_counts.items())) or 'none'}",
         f"- deltas: {', '.join(f'{state}={count}' for state, count in sorted(changes.items())) or 'none'}",
+        f"- delta kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(delta_kinds.items())) or 'none'}",
     ]
     if store.diagnostics:
         lines.extend(
@@ -110,6 +113,10 @@ def render_bootstrap(
     lines.append(
         "Use the built-in `ocr_toolkit_evidence` tool first: start with `action=summary`, "
         "narrow with `action=list`, and retrieve one stable record with `action=get`."
+    )
+    lines.append(
+        "Query base/head changes with `action=list, kind=repository.evidence_delta`; "
+        "optionally narrow the original fact kind with `delta_kind`."
     )
     lines.append(
         "A missing fact proves absence only when the applicable component/domain/scope coverage "

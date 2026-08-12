@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +29,7 @@ def receipt_body(version: str, issue: int, receipt_sha: str) -> str:
     marker = f"<!-- ocr-toolkit-release-receipt v={version} issue={issue} -->"
     return (
         f"{marker}\n\nStable v{version} delivery is verified by immutable release asset "
-        f"`release-receipt.json` in v{version} (SHA-256 `{receipt_sha}`)."
+        f"`release-receipt.json` in v{version} (SHA-256 `{receipt_sha}`).\n"
     )
 
 
@@ -75,12 +77,49 @@ def comment_state(comments: list[Any], expected_body: str, *, require_comment: b
 
 
 def load_json(path: Path, *, max_bytes: int) -> Any:
-    """Load one already network-bounded JSON file under a local size ceiling."""
+    """Load one bounded regular JSON file through its validated descriptor."""
 
-    if path.stat().st_size > max_bytes:
-        raise IssueReceiptError("release issue evidence exceeds its byte limit")
+    flags = os.O_RDONLY
+    for name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK", "O_BINARY"):
+        flags |= getattr(os, name, 0)
+    descriptor = -1
     try:
-        return json.loads(path.read_bytes())
+        path_metadata = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(path_metadata.st_mode) or path_metadata.st_nlink != 1:
+            raise IssueReceiptError("release issue evidence is unsafe")
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if (path_metadata.st_dev, path_metadata.st_ino) != (opened.st_dev, opened.st_ino):
+            raise IssueReceiptError("release issue evidence changed while being opened")
+        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1 or opened.st_size > max_bytes:
+            raise IssueReceiptError("release issue evidence exceeds its byte limit")
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        final = os.fstat(descriptor)
+        if (
+            len(payload) > max_bytes
+            or len(payload) != opened.st_size
+            or (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_size)
+            != (final.st_dev, final.st_ino, final.st_mode, final.st_size)
+            or getattr(opened, "st_mtime_ns", None) != getattr(final, "st_mtime_ns", None)
+        ):
+            raise IssueReceiptError("release issue evidence changed while being read")
+    except IssueReceiptError:
+        raise
+    except OSError as exc:
+        raise IssueReceiptError("release issue evidence is unsafe or unavailable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    try:
+        return json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise IssueReceiptError("release issue evidence is not valid JSON") from exc
 
@@ -119,7 +158,7 @@ def main() -> int:
         require_comment=args.require_comment,
     )
     if args.body_output is not None:
-        args.body_output.write_text(body + "\n", encoding="utf-8")
+        args.body_output.write_text(body, encoding="utf-8")
     print(state, comment)
     return 0
 

@@ -420,7 +420,9 @@ jobs:
   github-release:
     name: publish-github-release
     needs: [authorize, build, verify-pypi]
-    if: needs.verify-pypi.result == 'success'
+    if: >-
+      always() && needs.authorize.result == 'success' && needs.build.result == 'success' &&
+      needs.verify-pypi.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -455,7 +457,7 @@ jobs:
             destination=$2
             max_bytes=$3
             test "$(scripts/bounded_github_api.sh \
-              "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+              "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
               /tmp/github-release-asset-index.json)" = 200
             asset_id=$(jq --arg name "${name}" \
               '[.assets[] | select(.name == $name)] |
@@ -513,74 +515,88 @@ jobs:
             git tag -a "${TAG}" -m "${TAG}" "${EXPECTED_COMMIT}"
             git push origin "${TAG}"
           fi
-          release_status=$(scripts/bounded_github_api.sh \
-            "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            /tmp/github-release-state.json authenticated 200,404)
-          case "${release_status}" in
-            200) release_exists=true ;;
-            404)
-              release_exists=false
-              gh release create "${TAG}" --draft --verify-tag \
-                --title "${TAG}" --notes-file /tmp/release-notes.md
-              test "$(scripts/bounded_github_api.sh \
-                "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-                /tmp/github-release-state.json)" = 200
-              ;;
+          python scripts/github_release_api.py ensure \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" \
+            --target "${EXPECTED_COMMIT}" --title "${TAG}" \
+            --notes-file /tmp/release-notes.md --output /tmp/github-release-state.json
+          release_id=$(jq -r .id /tmp/github-release-state.json)
+          case "${release_id}" in
+            *[!0-9]*|'') echo "invalid GitHub Release numeric identity" >&2; exit 1 ;;
           esac
+          test "${release_id}" -gt 0
           release_is_draft=$(jq -r .draft /tmp/github-release-state.json)
           test "${release_is_draft}" = true || test "${release_is_draft}" = false
-          if [ "${release_exists}" = false ] || [ "${release_is_draft}" = true ]; then
-            jq '{assets}' /tmp/github-release-state.json > /tmp/github-release-upload-assets.json
-            receipt_count=$(jq '[.assets[] | select(.name == "release-receipt.json")] | length' \
+          jq '{assets}' /tmp/github-release-state.json > /tmp/github-release-upload-assets.json
+          receipt_count=$(jq '[.assets[] | select(.name == "release-receipt.json")] | length' \
+            /tmp/github-release-upload-assets.json)
+          case "${receipt_count}" in
+            0)
+              test "${release_is_draft}" = true || {
+                echo "published GitHub Release is missing its receipt" >&2
+                exit 1
+              }
+              python scripts/release_receipt.py \
+                --version "${VERSION}" \
+                --tag "${TAG}" \
+                --release-pr "${RELEASE_PR}" \
+                --issues "${ISSUES}" \
+                --base "${EXPECTED_BASE}" \
+                --head "${EXPECTED_HEAD}" \
+                --merge "${EXPECTED_COMMIT}" \
+                --tree "${EXPECTED_TREE}" \
+                --run-id "${GITHUB_RUN_ID}" \
+                --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+                --authorized-at "${AUTHORIZED_AT}" \
+                --hashes artifact-hashes.json \
+                --output release-receipt.json
+              ;;
+            1)
+              bounded_release_download release-receipt.json release-receipt.json 1048576
+              python scripts/release_receipt.py \
+                --version "${VERSION}" \
+                --tag "${TAG}" \
+                --release-pr "${RELEASE_PR}" \
+                --issues "${ISSUES}" \
+                --base "${EXPECTED_BASE}" \
+                --head "${EXPECTED_HEAD}" \
+                --merge "${EXPECTED_COMMIT}" \
+                --tree "${EXPECTED_TREE}" \
+                --authorized-at "${AUTHORIZED_AT}" \
+                --hashes artifact-hashes.json \
+                --validate-existing release-receipt.json
+              ;;
+            *) echo "duplicate GitHub Release receipt asset" >&2; exit 1 ;;
+          esac
+          for asset in dist/* artifact-hashes.json SHA256SUMS release-receipt.json; do
+            name=$(basename "${asset}")
+            asset_count=$(jq --arg name "${name}" '[.assets[] | select(.name == $name)] | length' \
               /tmp/github-release-upload-assets.json)
-            case "${receipt_count}" in
+            case "${asset_count}" in
               0)
-                python scripts/release_receipt.py \
-                  --version "${VERSION}" \
-                  --tag "${TAG}" \
-                  --release-pr "${RELEASE_PR}" \
-                  --issues "${ISSUES}" \
-                  --base "${EXPECTED_BASE}" \
-                  --head "${EXPECTED_HEAD}" \
-                  --merge "${EXPECTED_COMMIT}" \
-                  --tree "${EXPECTED_TREE}" \
-                  --run-id "${GITHUB_RUN_ID}" \
-                  --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-                  --authorized-at "${AUTHORIZED_AT}" \
-                  --hashes artifact-hashes.json \
-                  --output release-receipt.json
+                test "${release_is_draft}" = true || {
+                  echo "published GitHub Release is missing asset: ${name}" >&2
+                  exit 1
+                }
+                python scripts/github_release_api.py upload \
+                  --repository "${GITHUB_REPOSITORY}" --release-id "${release_id}" \
+                  --tag "${TAG}" --target "${EXPECTED_COMMIT}" --title "${TAG}" \
+                  --notes-file /tmp/release-notes.md --asset "${asset}"
                 ;;
               1)
-                bounded_release_download release-receipt.json release-receipt.json 1048576
-                python scripts/release_receipt.py \
-                  --version "${VERSION}" \
-                  --tag "${TAG}" \
-                  --release-pr "${RELEASE_PR}" \
-                  --issues "${ISSUES}" \
-                  --base "${EXPECTED_BASE}" \
-                  --head "${EXPECTED_HEAD}" \
-                  --merge "${EXPECTED_COMMIT}" \
-                  --tree "${EXPECTED_TREE}" \
-                  --authorized-at "${AUTHORIZED_AT}" \
-                  --hashes artifact-hashes.json \
-                  --validate-existing release-receipt.json
+                bounded_release_download "${name}" "/tmp/existing-${name}" 10485760
+                cmp "${asset}" "/tmp/existing-${name}"
                 ;;
-              *) echo "duplicate GitHub Release receipt asset" >&2; exit 1 ;;
+              *) echo "duplicate GitHub Release asset: ${name}" >&2; exit 1 ;;
             esac
-            for asset in dist/* artifact-hashes.json SHA256SUMS release-receipt.json; do
-              name=$(basename "${asset}")
-              asset_count=$(jq --arg name "${name}" '[.assets[] | select(.name == $name)] | length' \
-                /tmp/github-release-upload-assets.json)
-              case "${asset_count}" in
-                0) gh release upload "${TAG}" "${asset}" ;;
-                1)
-                  bounded_release_download "${name}" "/tmp/existing-${name}" 10485760
-                  cmp "${asset}" "/tmp/existing-${name}"
-                  ;;
-                *) echo "duplicate GitHub Release asset: ${name}" >&2; exit 1 ;;
-              esac
-            done
-          fi
+          done
+          python scripts/github_release_api.py publish \
+            --repository "${GITHUB_REPOSITORY}" --release-id "${release_id}" \
+            --tag "${TAG}" --target "${EXPECTED_COMMIT}" --title "${TAG}" \
+            --notes-file /tmp/release-notes.md \
+            --asset-name "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
+            --asset-name "open_code_review_toolkit-${VERSION}.tar.gz" \
+            --asset-name artifact-hashes.json --asset-name SHA256SUMS \
+            --asset-name release-receipt.json --output /tmp/github-release.json
           release_dir=/tmp/github-release-assets
           mkdir -p "${release_dir}"
           for name in \
@@ -613,23 +629,6 @@ jobs:
               --authorized-at "${AUTHORIZED_AT}" \
               --hashes artifact-hashes.json \
               --validate-existing "${release_dir}/release-receipt.json"
-          fi
-          test "$(scripts/bounded_github_api.sh \
-            "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            /tmp/github-release.json)" = 200
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          import os
-
-          release = json.loads(Path("/tmp/github-release.json").read_text(encoding="utf-8"))
-          actual = {"body": release.get("body"), "name": release.get("name")}
-          expected_body = Path("/tmp/release-notes.md").read_text(encoding="utf-8")
-          if actual != {"body": expected_body, "name": os.environ["TAG"]}:
-              raise SystemExit("existing GitHub Release metadata does not match")
-          PY
-          if [ "${release_is_draft}" = true ]; then
-            gh release edit "${TAG}" --draft=false
           fi
           export GITHUB_API_VERSION=2026-03-10
           for attempt in 1 2 3 4 5; do

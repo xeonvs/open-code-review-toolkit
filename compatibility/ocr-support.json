@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.1",
-  "recommended_version": "1.9.1",
+  "monitoring_floor": "1.9.2",
+  "recommended_version": "1.9.2",
   "releases": [
     {
       "assets": [
@@ -675,6 +675,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.1",
       "status": "tested",
       "version": "1.9.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "836d2bbeb4aec19ce420eba5feb26e203ab751daffda7c495f60dee587c6d64a",
+          "size": 47095072
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "9f58edafcc324af53fef54b3a5a451c38aea6a073381b499be74de4b81a10024",
+          "size": 44762786
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "15ed605305fc679604ed0f5fa8715db505af81c10ecb8a7846d5642bce4b834e",
+          "size": 45584546
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "70014bd1971682e1c702de4715fcd0a9a2d0066e106e1f20c3d89f10474f889f",
+          "size": 42991778
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "a5bc4ae5c634a27b6a066121133bce602489f7ef0c6fe948b0c784610045ebac",
+          "size": 46817792
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "59409fdf2ecba31a9491992711e14b2052fff411046768fc619cae49ef8ebdf9",
+          "size": 43611136
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "c5df11b6811799fea887b40207d00d41d6036672ab66ff6a52a2ddf1a1958704",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.2.json",
+      "evidence_sha256": "1351352fa0ceafddb6bdb9104642374241eeeadd9806727332aaf6a6d60e6d2b",
+      "human_conclusion": "Compatible after human adjacent source review in issue #78 and hosted workflow run 31571999318. The release tags diverge only because the retry documentation commit was reapplied with the same stable patch-id; no 1.9.1 runtime behavior is lost. OCR directory-only gitignore matching now follows ancestor, glob, and root-anchor semantics and compatibly improves the toolkit-consumed review-selection boundary. New built-in providers, Pages/viewer, Action pinning, skill/retry/agent documentation, and upstream CI changes require no toolkit adaptation. CLI, preview, result/posting, rules/allowlist, and MCP contracts remain compatible; the Go MCP SDK remains v1.6.1.",
+      "published_at": "2026-08-12T06:51:06Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.2",
+      "status": "tested",
+      "version": "1.9.2"
     }
   ],
   "schema_version": 1,

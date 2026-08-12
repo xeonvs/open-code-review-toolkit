@@ -80,7 +80,11 @@ The immutable receipt carries the release PR, reviewed base/head/merge/tree, ori
 Recovery dispatch is bound to the original release PR, version, merge commit,
 reviewed head, and protected reviewed base. It executes the same trusted-base
 authorizer, accepts only exact registry bytes and the existing immutable
-receipt's closed release identity, and rejects unknown receipt fields. If only
+receipt's closed release identity, and rejects unknown receipt fields. Draft
+GitHub Releases are retained and addressed by their numeric release ID until
+publication because tag lookup does not expose private drafts reliably. Every
+numeric-ID read, asset upload, and publication step revalidates the expected
+tag, target commit, title, notes, draft state, unique asset names, and bytes. If only
 issue commenting or closure failed, recovery reuses the exact GitHub
 Actions-owned receipt comment, accepts an already-completed issue, and does not
 change repository files, tag, or immutable Release assets. A user-authored

@@ -5,15 +5,15 @@ import os
 import subprocess
 from pathlib import Path
 
-from ocr_toolkit.evidence.ansible import (
+from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.collectors import MAX_TOPOLOGY_FACTS_PER_KIND
+from ocr_toolkit.evidence.ecosystems.ansible.requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.ecosystems.ansible.topology import (
     collect_topology,
     selected_role_paths,
     topology_candidate,
     topology_coverage,
 )
-from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
-from ocr_toolkit.evidence.collect import collect_repository_evidence
-from ocr_toolkit.evidence.collectors import MAX_TOPOLOGY_FACTS_PER_KIND
 from ocr_toolkit.evidence.mcp import call_tool
 from ocr_toolkit.evidence.model import CoverageState
 

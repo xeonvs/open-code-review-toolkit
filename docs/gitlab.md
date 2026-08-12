@@ -4,9 +4,9 @@ The toolkit's first provider adapter posts review results to GitLab merge reques
 
 ## Installation
 
-Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and pin `v1.9.1`; verify the release checksum before making the binary executable. The package never downloads OCR.
+Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and use the exact recommended version and asset checksum from the [compatibility manifest](../compatibility/ocr-support.json); the synthetic CI example carries the corresponding executable pin. The package never downloads OCR.
 
-Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates a private evidence store plus one compact bootstrap, and passes the bootstrap once with `--background-file`.
+Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Its rules pack explicitly includes Jinja (`.j2`, `.jinja`, `.jinja2`), extensionless conventional Ansible-role templates, and Twig (`.twig`) because the recommended OCR does not select those extensions by default; project `exclude` entries still take precedence. Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates a private evidence store plus one compact bootstrap, and passes the bootstrap once with `--background-file`.
 
 ## Required secrets
 

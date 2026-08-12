@@ -11,7 +11,8 @@ from tests.support import HELPER_DIR, PROJECT_ROOT
 def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
     """Keep project additions narrow so OCR owns generic language guidance."""
 
-    rules = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))["rules"]
+    payload = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))
+    rules = payload["rules"]
     paths = [rule["path"] for rule in rules]
 
     assert not {
@@ -28,6 +29,18 @@ def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
         "{requirements.yml,requirements.yaml,**/requirements.yml,**/requirements.yaml}"
     ) in paths
     assert "{pyproject.toml,uv.lock,**/pyproject.toml,**/uv.lock}" in paths
+    assert payload["include"] == [
+        "{*.j2,*.jinja,*.jinja2,*.twig}",
+        "**/*.{j2,jinja,jinja2,twig}",
+        "roles/*/templates/**",
+        "**/roles/*/templates/**",
+    ]
+    assert paths[:3] == [
+        "{roles/*/templates/**,**/roles/*/templates/**}",
+        "{*.j2,*.jinja,*.jinja2,**/*.j2,**/*.jinja,**/*.jinja2}",
+        "{*.twig,**/*.twig}",
+    ]
+    assert all(rule["merge_system_rule"] is True for rule in rules[:3])
 
 
 def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
@@ -48,6 +61,7 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
 def test_gitlab_docs_match_the_current_review_surface() -> None:
     """Keep documented commands and ownership boundaries aligned with CI."""
 
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     docs = (PROJECT_ROOT / "docs" / "gitlab.md").read_text(encoding="utf-8")
     configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
@@ -81,8 +95,11 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "Target/base guidance may describe policy" in security
     assert "changed source/head guidance and accepted decisions cannot authorize" in security
     assert f'OCR_VERSION: "v{recommended}"' in workflow
-    assert f"v{recommended}" in docs
-    assert f"v{recommended}" in security
+    assert "compatibility/ocr-support.json" in readme
+    assert "../compatibility/ocr-support.json" in docs
+    assert "../compatibility/ocr-support.json" in security
+    assert f"v{recommended}" not in docs
+    assert f"v{recommended}" not in security
     assert f'OCR_SHA256: "{linux_digest}"' in workflow
     assert "`Russian` is one example" in docs
     assert "ocr-ci preflight" in workflow
@@ -93,7 +110,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "review-background.md" not in workflow
     assert '--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"' in workflow
     assert '--to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"' in workflow
-    assert f"Pin Open Code Review `v{recommended}` and verify its checksum" in security
+    assert "Pin the exact recommended Open Code Review release" in security
     assert "when: manual" in workflow
     assert "env -u OCR_LLM_TOKEN" in workflow
 

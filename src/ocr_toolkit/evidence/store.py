@@ -18,6 +18,7 @@ from ocr_toolkit.common.redaction import (
     redact_env_secret_values,
     redact_sensitive,
 )
+from ocr_toolkit.evidence.frameworks.schema import validate_plugin_record
 from ocr_toolkit.evidence.model import (
     CoverageRecord,
     EvidenceDelta,
@@ -53,6 +54,8 @@ KNOWN_KINDS = frozenset(
         "ci.image",
         "application.version",
         "diagnostic.coverage",
+        "framework.detected",
+        "template.file",
     }
 )
 
@@ -131,6 +134,15 @@ def _safe_diagnostic(message: object) -> str:
     return redact_env_secret_values(redact_sensitive(message))
 
 
+def _safe_delta_metadata(value: str, *, name: str, max_chars: int) -> str:
+    """Redact and bound one repository-derived delta metadata field."""
+
+    redacted = redact_env_secret_values(redact_sensitive(value))
+    if not redacted or len(redacted) > max_chars:
+        raise EvidenceStoreError(f"evidence delta {name} exceeds its metadata budget")
+    return redacted
+
+
 @dataclass(slots=True)
 class EvidenceStore:
     """Own bounded snapshots, typed deltas, and explicit coverage diagnostics."""
@@ -151,9 +163,13 @@ class EvidenceStore:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
         try:
             redacted_value = _safe_value(record.value, self.limits.max_value_chars)
+            if record.kind in {"framework.detected", "template.file"}:
+                validate_plugin_record(record.kind, redacted_value)
         except EvidenceStoreError:
             self._diagnose_once(f"omitted oversized {record.kind} evidence value")
             return False
+        except ValueError as exc:
+            raise EvidenceStoreError(f"invalid {record.kind} evidence value") from exc
         redacted = EvidenceRecord(
             kind=record.kind,
             value=redacted_value,
@@ -206,6 +222,42 @@ class EvidenceStore:
         self._diagnose_once(_safe_diagnostic(message))
 
     @property
+    def safe_deltas(self) -> tuple[EvidenceDelta, ...]:
+        """Return redacted, bounded deltas in deterministic public ordering."""
+
+        if len(self.deltas) > self.limits.max_records:
+            raise EvidenceStoreError("evidence deltas exceed the configured record budget")
+        if any(
+            delta.kind not in KNOWN_KINDS | {"repository.evidence_coverage"}
+            for delta in self.deltas
+        ):
+            raise EvidenceStoreError("evidence delta kind is unregistered")
+        normalized = (
+            EvidenceDelta(
+                kind=delta.kind,
+                component=_safe_delta_metadata(delta.component, name="component", max_chars=256),
+                identity=_safe_delta_metadata(delta.identity, name="identity", max_chars=4096),
+                change=delta.change,
+                before=_safe_value(delta.before, self.limits.max_value_chars),
+                after=_safe_value(delta.after, self.limits.max_value_chars),
+            )
+            for delta in self.deltas
+        )
+        unique = {delta.id: delta for delta in normalized}
+        return tuple(
+            sorted(
+                unique.values(),
+                key=lambda item: (
+                    item.kind,
+                    item.component,
+                    item.identity,
+                    item.change,
+                    item.id,
+                ),
+            )
+        )
+
+    @property
     def records(self) -> tuple[EvidenceRecord, ...]:
         """Return all records in deterministic public ordering."""
 
@@ -248,10 +300,10 @@ class EvidenceStore:
                     "component": delta.component,
                     "identity": delta.identity,
                     "change": delta.change,
-                    "before": _safe_value(delta.before, self.limits.max_value_chars),
-                    "after": _safe_value(delta.after, self.limits.max_value_chars),
+                    "before": delta.to_mcp_dict()["before"],
+                    "after": delta.to_mcp_dict()["after"],
                 }
-                for delta in self.deltas
+                for delta in self.safe_deltas
             ],
             "diagnostics": sorted(_safe_diagnostic(item) for item in self.diagnostics),
             "limits": {
@@ -416,22 +468,33 @@ class EvidenceStore:
 
         if not isinstance(raw, list):
             raise EvidenceStoreError("evidence deltas must be a list")
+        if len(raw) > self.limits.max_records:
+            raise EvidenceStoreError("evidence deltas exceed declared limits")
         deltas = []
         try:
             for item in raw:
                 if not isinstance(item, dict):
                     raise ValueError("evidence delta must be an object")
+                fields = {"kind", "component", "identity", "change", "before", "after"}
+                if set(item) != fields:
+                    raise ValueError("evidence delta fields are invalid")
                 metadata: dict[str, str] = {}
                 for name in ("kind", "component", "identity", "change"):
                     candidate = item.get(name)
                     if not isinstance(candidate, str):
                         raise ValueError(f"evidence delta field {name!r} must be a string")
                     metadata[name] = candidate
+                if metadata["kind"] not in KNOWN_KINDS | {"repository.evidence_coverage"}:
+                    raise ValueError("evidence delta kind is unregistered")
                 deltas.append(
                     EvidenceDelta(
                         kind=metadata["kind"],
-                        component=metadata["component"],
-                        identity=metadata["identity"],
+                        component=_safe_delta_metadata(
+                            metadata["component"], name="component", max_chars=256
+                        ),
+                        identity=_safe_delta_metadata(
+                            metadata["identity"], name="identity", max_chars=4096
+                        ),
                         change=metadata["change"],
                         before=_safe_value(
                             cast(EvidenceValue, item.get("before")),

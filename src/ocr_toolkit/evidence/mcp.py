@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from ocr_toolkit import __version__
-from ocr_toolkit.evidence.model import CoverageRecord, EvidenceRecord
+from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 TOOL_NAME = "ocr_toolkit_evidence"
@@ -40,6 +40,7 @@ class _Query:
     """Hold normalized list filters used to bind an opaque cursor."""
 
     kind: str | None
+    delta_kind: str | None
     component: str | None
     ref: str | None
 
@@ -47,7 +48,12 @@ class _Query:
         """Return a stable fingerprint for cursor/query binding."""
 
         value = json.dumps(
-            {"component": self.component, "kind": self.kind, "ref": self.ref},
+            {
+                "component": self.component,
+                "delta_kind": self.delta_kind,
+                "kind": self.kind,
+                "ref": self.ref,
+            },
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -69,11 +75,13 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
     kinds: dict[str, int] = {}
     components: dict[str, int] = {}
     changes: dict[str, int] = {}
+    delta_kinds: dict[str, int] = {}
     for record in store.records:
         kinds[record.kind] = kinds.get(record.kind, 0) + 1
         components[record.component] = components.get(record.component, 0) + 1
-    for delta in store.deltas:
+    for delta in store.safe_deltas:
         changes[delta.change] = changes.get(delta.change, 0) + 1
+        delta_kinds[delta.kind] = delta_kinds.get(delta.kind, 0) + 1
     coverage_states: dict[str, int] = {}
     for coverage_record in store.coverage:
         coverage_states[coverage_record.state.value] = (
@@ -90,6 +98,7 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         "kinds": dict(sorted(kinds.items())),
         "components": dict(sorted(components.items())),
         "deltas": dict(sorted(changes.items())),
+        "delta_kinds": dict(sorted(delta_kinds.items())),
         "diagnostics": sorted(store.diagnostics),
     }
 
@@ -139,9 +148,14 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
 
     query = _Query(
         kind=_optional_filter(arguments, "kind"),
+        delta_kind=_optional_filter(arguments, "delta_kind"),
         component=_optional_filter(arguments, "component"),
         ref=_optional_filter(arguments, "ref"),
     )
+    if query.delta_kind is not None and query.kind != "repository.evidence_delta":
+        raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
+    if query.kind == "repository.evidence_delta" and query.ref is not None:
+        raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
     if query.ref not in {None, "base", "head", "shared"}:
         raise EvidenceMCPError("ref must be base, head, or shared")
     page_size = arguments.get("page_size", DEFAULT_PAGE_SIZE)
@@ -150,23 +164,33 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
     if not 1 <= page_size <= MAX_PAGE_SIZE:
         raise EvidenceMCPError(f"page_size must be between 1 and {MAX_PAGE_SIZE}")
     offset = _decode_cursor(arguments.get("cursor"), query)
-    all_records: tuple[EvidenceRecord | CoverageRecord, ...] = (
-        *store.records,
-        *store.coverage,
-    )
+    if query.kind == "repository.evidence_delta":
+        candidates: tuple[EvidenceRecord | CoverageRecord | EvidenceDelta, ...] = store.safe_deltas
+    else:
+        candidates = (*store.records, *store.coverage)
     records = [
         record
-        for record in all_records
-        if (query.kind is None or record.kind == query.kind)
+        for record in candidates
+        if (query.kind is None or (isinstance(record, EvidenceDelta) or record.kind == query.kind))
+        and (
+            query.delta_kind is None
+            or (isinstance(record, EvidenceDelta) and record.kind == query.delta_kind)
+        )
         and (query.component is None or record.component == query.component)
-        and (query.ref is None or record.ref.value == query.ref)
+        and (
+            query.ref is None
+            or (not isinstance(record, EvidenceDelta) and record.ref.value == query.ref)
+        )
     ]
     if offset > len(records):
         raise EvidenceMCPError("cursor points beyond the available evidence")
     page = records[offset : offset + page_size]
     next_offset = offset + len(page)
     return {
-        "records": [record.to_dict() for record in page],
+        "records": [
+            record.to_mcp_dict() if isinstance(record, EvidenceDelta) else record.to_dict()
+            for record in page
+        ],
         "next_cursor": _encode_cursor(next_offset, query) if next_offset < len(records) else None,
         "returned": len(page),
     }
@@ -178,18 +202,21 @@ def _get_record(store: EvidenceStore, arguments: dict[str, object]) -> dict[str,
     record_id = arguments.get("id")
     valid_id = isinstance(record_id, str) and (
         (len(record_id) == 68 and record_id.startswith("ev1_"))
-        or (len(record_id) == 69 and record_id.startswith("cov1_"))
+        or (len(record_id) == 69 and record_id.startswith(("cov1_", "del1_")))
     )
     if not valid_id:
-        raise EvidenceMCPError("id must be a stable ev1 or cov1 evidence identifier")
-    all_records: tuple[EvidenceRecord | CoverageRecord, ...] = (
+        raise EvidenceMCPError("id must be a stable ev1, cov1, or del1 evidence identifier")
+    all_records: tuple[EvidenceRecord | CoverageRecord | EvidenceDelta, ...] = (
         *store.records,
         *store.coverage,
+        *store.safe_deltas,
     )
     record = next((item for item in all_records if item.id == record_id), None)
     if record is None:
         raise EvidenceMCPError("evidence record was not found")
-    return {"record": record.to_dict()}
+    return {
+        "record": (record.to_mcp_dict() if isinstance(record, EvidenceDelta) else record.to_dict())
+    }
 
 
 def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
@@ -203,7 +230,15 @@ def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
         allowed = {"action"}
         payload = evidence_summary(store)
     elif action == "list":
-        allowed = {"action", "kind", "component", "ref", "page_size", "cursor"}
+        allowed = {
+            "action",
+            "kind",
+            "delta_kind",
+            "component",
+            "ref",
+            "page_size",
+            "cursor",
+        }
         payload = _list_records(store, typed)
     elif action == "get":
         allowed = {"action", "id"}
@@ -223,8 +258,9 @@ def _tool_definition() -> dict[str, object]:
         "name": TOOL_NAME,
         "description": (
             "Read bounded, redacted repository evidence for immutable base/head refs. "
-            "Use summary first, list to narrow, and get for one stable record. Missing facts "
-            "support a negative conclusion only when applicable scoped coverage is complete; "
+            "Use summary first, list to narrow, and get for one stable record. Query "
+            "kind=repository.evidence_delta with optional delta_kind for base/head changes. "
+            "Missing facts support a negative conclusion only when applicable scoped coverage is complete; "
             "absent, partial, runtime-dependent, or unavailable coverage means unknown."
         ),
         "inputSchema": {
@@ -234,11 +270,12 @@ def _tool_definition() -> dict[str, object]:
             "properties": {
                 "action": {"type": "string", "enum": ["summary", "list", "get"]},
                 "kind": {"type": "string", "maxLength": 256},
+                "delta_kind": {"type": "string", "maxLength": 256},
                 "component": {"type": "string", "maxLength": 256},
                 "ref": {"type": "string", "enum": ["base", "head", "shared"]},
                 "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
                 "cursor": {"type": "string", "maxLength": 256},
-                "id": {"type": "string", "pattern": "^(ev1|cov1)_[0-9a-f]{64}$"},
+                "id": {"type": "string", "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$"},
             },
         },
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
