@@ -36,6 +36,9 @@ TEMPLATE_ENGINE_DETECTIONS = {
     "jinja2": {"jinja-extension", "ansible-role-template"},
     "twig": {"twig-extension"},
 }
+MAX_IDENTIFIER_CHARS = 512
+MAX_REPOSITORY_PATH_CHARS = 4_096
+MAX_MANIFEST_SCALAR_CHARS = 64_000
 
 
 def _exact_mapping(value: object, keys: set[str], label: str) -> Mapping[str, EvidenceValue]:
@@ -46,13 +49,19 @@ def _exact_mapping(value: object, keys: set[str], label: str) -> Mapping[str, Ev
     return cast(Mapping[str, EvidenceValue], value)
 
 
-def _string(value: object, label: str, *, choices: set[str] | None = None) -> str:
+def _string(
+    value: object,
+    label: str,
+    *,
+    choices: set[str] | None = None,
+    max_length: int = MAX_IDENTIFIER_CHARS,
+) -> str:
     """Require one bounded safe string and optional closed enum membership."""
 
     if (
         not isinstance(value, str)
         or not value
-        or len(value) > 512
+        or len(value) > max_length
         or any(ord(character) < 32 for character in value)
         or (choices is not None and value not in choices)
     ):
@@ -63,7 +72,7 @@ def _string(value: object, label: str, *, choices: set[str] | None = None) -> st
 def _path(value: object, label: str) -> str:
     """Require one normalized repository-relative POSIX path."""
 
-    path = _string(value, label)
+    path = _string(value, label, max_length=MAX_REPOSITORY_PATH_CHARS)
     pure = PurePosixPath(path)
     if pure.is_absolute() or any(part in {"", ".", ".."} for part in path.split("/")):
         raise ValueError(f"{label} is invalid")
@@ -127,7 +136,11 @@ def validate_framework_value(value: EvidenceValue) -> tuple[str, str]:
     for item in declarations:
         _string(item["package"], "framework package")
         _string(item["scope"], "framework scope")
-        _string(item["declared_value"], "framework declared value")
+        _string(
+            item["declared_value"],
+            "framework declared value",
+            max_length=MAX_MANIFEST_SCALAR_CHARS,
+        )
         _path(item["source_path"], "framework declaration source")
     resolutions = _objects(
         root["resolutions"],
@@ -136,7 +149,11 @@ def validate_framework_value(value: EvidenceValue) -> tuple[str, str]:
     )
     for item in resolutions:
         _string(item["package"], "framework package")
-        _string(item["version"], "framework version")
+        _string(
+            item["version"],
+            "framework version",
+            max_length=MAX_MANIFEST_SCALAR_CHARS,
+        )
         _string(item["source"], "framework resolution source")
         _path(item["source_path"], "framework resolution source path")
     replacement = root["replacement"]
@@ -144,7 +161,11 @@ def validate_framework_value(value: EvidenceValue) -> tuple[str, str]:
         replacement_value = _exact_mapping(
             replacement, {"target", "type", "version"}, "framework replacement"
         )
-        _string(replacement_value["target"], "framework replacement target")
+        _string(
+            replacement_value["target"],
+            "framework replacement target",
+            max_length=MAX_MANIFEST_SCALAR_CHARS,
+        )
         replacement_type = _string(
             replacement_value["type"],
             "framework replacement type",
@@ -152,7 +173,11 @@ def validate_framework_value(value: EvidenceValue) -> tuple[str, str]:
         )
         replacement_version = replacement_value["version"]
         if replacement_version is not None:
-            _string(replacement_version, "framework replacement version")
+            _string(
+                replacement_version,
+                "framework replacement version",
+                max_length=MAX_MANIFEST_SCALAR_CHARS,
+            )
         if plugin != "go-web" or (replacement_type == "local") != (
             version_state == "local-override"
         ):
@@ -185,7 +210,11 @@ def validate_framework_value(value: EvidenceValue) -> tuple[str, str]:
             if not isinstance(values, (list, tuple)) or len(values) > 128:
                 raise ValueError("related framework versions are invalid")
             for entry in values:
-                _string(entry, "related framework value")
+                _string(
+                    entry,
+                    "related framework value",
+                    max_length=MAX_MANIFEST_SCALAR_CHARS,
+                )
         sources = item["source_paths"]
         if not isinstance(sources, (list, tuple)) or len(sources) > 128:
             raise ValueError("related framework source paths are invalid")

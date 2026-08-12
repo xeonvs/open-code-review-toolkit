@@ -406,6 +406,66 @@ def test_numeric_release_identity_requires_exact_metadata_and_unique_assets() ->
         )
 
 
+def test_release_ensure_validates_identity_before_any_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject malformed protected identity before release discovery or mutation."""
+
+    requests: list[dict[str, Any]] = []
+
+    def record_request(**kwargs: Any) -> tuple[int, object]:
+        requests.append(kwargs)
+        return 404, None
+
+    monkeypatch.setattr(github_release, "_request", record_request)
+
+    with pytest.raises(github_release.GitHubReleaseError, match="identity"):
+        github_release.ensure_release(
+            repository="synthetic/toolkit",
+            tag="not-a-release-tag",
+            target="a" * 40,
+            title="not-a-release-tag",
+            notes="synthetic notes\n",
+            token="synthetic-token",
+        )
+
+    assert requests == []
+
+
+def test_release_ensure_checks_the_first_page_beyond_its_listing_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail closed on page six after five full bounded release pages."""
+
+    endpoints: list[str] = []
+
+    def fake_request(**kwargs: Any) -> tuple[int, object]:
+        endpoint = kwargs["endpoint"]
+        endpoints.append(endpoint)
+        if "/releases/tags/" in endpoint:
+            return 404, None
+        if endpoint.endswith("/releases?per_page=100&page=6"):
+            return 200, [{"tag_name": "v0.4.9"}]
+        if "per_page=100" in endpoint:
+            return 200, [{"tag_name": f"v0.0.{index}"} for index in range(100)]
+        pytest.fail(f"unexpected release request: {endpoint}")
+
+    monkeypatch.setattr(github_release, "_request", fake_request)
+
+    with pytest.raises(github_release.GitHubReleaseError, match="page bound"):
+        github_release.ensure_release(
+            repository="synthetic/toolkit",
+            tag="v0.5.0",
+            target="a" * 40,
+            title="v0.5.0",
+            notes="synthetic notes\n",
+            token="synthetic-token",
+        )
+
+    assert endpoints[-1] == "/repos/synthetic/toolkit/releases?per_page=100&page=6"
+    assert not any(endpoint == "/repos/synthetic/toolkit/releases" for endpoint in endpoints)
+
+
 def test_issue_receipt_json_read_is_bound_to_one_descriptor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

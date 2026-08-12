@@ -323,6 +323,41 @@ def test_plugin_schema_rejects_unknown_record_kinds() -> None:
         )
 
 
+def test_store_validates_plugin_schema_after_redaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Never persist a plugin value whose schema-significant field was redacted."""
+
+    secret_sha = "a" * 40
+    monkeypatch.setenv("OCR_LLM_TOKEN", secret_sha)
+    template = EvidenceRecord(
+        kind="template.file",
+        value={
+            "identity": "templates/service.conf.j2",
+            "fact": {
+                "schema_version": "repository.template-evidence/v1",
+                "plugin": "jinja2",
+                "engine": "jinja2",
+                "detection": "jinja-extension",
+                "rendered_extension": ".conf",
+                "object_sha": secret_sha,
+            },
+        },
+        source_path="templates/service.conf.j2",
+        ref=RefRole.HEAD,
+        commit_sha=HEAD_SHA,
+        component="templates",
+        provenance="framework plugin:jinja2",
+        trust=TrustClass.SOURCE_REPOSITORY,
+    )
+    store = EvidenceStore()
+
+    with pytest.raises(EvidenceStoreError, match=r"invalid template\.file"):
+        store.add(template)
+
+    assert store.records == ()
+
+
 def test_store_omits_an_oversized_ordinary_record_without_aborting() -> None:
     """Treat the store value budget as bounded omission rather than invalid input."""
 

@@ -77,6 +77,23 @@ validation, before protected feature and stable delivery.
   without compatibility shims. Do not create competing `frameworks/` and
   `plugins/` trees, move core Git/tree/manifest collection or MCP lifecycle into
   the package, or change evidence schemas and public behavior in that slice.
+- M2 component scoping may make a clean 0.5.0 schema-semantic change without
+  preserving branch-only legacy behavior. Use `.` as the canonical repository-root
+  component and treat `repository` as an ordinary real top-level directory; update
+  facts, coverage, deltas, MCP filters, tests, and durable documentation atomically.
+  Raise any affected closed schema version when its serialized meaning changes, and
+  do not add aliases, projections, or compatibility shims.
+- After remediating the additional OCR findings, make normalized source parsers
+  one separate behavior-preserving structural slice under
+  `ocr_toolkit.evidence.ecosystems`. Keep common manifest contracts plus Python,
+  JavaScript, Go, and PHP adapters there; place Ansible Galaxy requirements and
+  topology/inventory analysis under `ecosystems.ansible`. This package remains
+  below `frameworks`: it parses bounded immutable blobs into normalized facts
+  and source coverage, while framework plugins derive higher-level evidence.
+  Keep Git/tree orchestration in `collectors.py`, cross-ecosystem container/CI
+  extraction in `infrastructure.py`, and store/MCP lifecycle outside both
+  packages. Remove old flat parser modules without compatibility shims and make
+  no schema or behavior change in the structural slice.
 
 ### Work Queue
 
@@ -107,11 +124,11 @@ validation, before protected feature and stable delivery.
 11. [x] Finish deterministic remediation of the first full OCR review, complete
     and prove the behavior-preserving framework package reorganization, then run
     the complete deterministic package/E2E/privacy validation without OCR.
-12. [ ] Run the owner-authorized additional full local OCR review with concurrency
-    2, real built-in evidence-MCP use, private artifacts, and no posting. Fix its
-    actionable findings, audit sibling boundaries, repeat deterministic validation
-    without another OCR run, then finish Gitleaks, self-review, feature PR
-    checks/threads, merge, and TestPyPI development readback.
+12. [ ] Remediate the completed owner-authorized additional OCR review, audit
+    sibling boundaries, and complete the separate `evidence.ecosystems` source-
+    adapter reorganization. Repeat deterministic validation without another OCR
+    run, then finish Gitleaks, self-review, feature PR checks/threads, merge, and
+    TestPyPI development readback.
 13. [ ] Prepare the final release PR as the last repository mutation, archive
     completed 0.4.7 history, consume fragments 76, 77, and 78, and reconcile M2
     to implemented truth while leaving external publication pending.
@@ -272,6 +289,43 @@ validation, before protected feature and stable delivery.
   was made. The first full local review described below has since run; the next
   authorized OCR action is the additional concurrency-2 review only after the
   current remediation and complete deterministic validation finish.
+
+### Additional OCR Review Remediation Checkpoint
+
+- The owner-authorized additional full OCR review completed successfully over
+  exact range `3caa50b4fc5026da79c7f2ceae1deef31715f814..4fe85549d66acd9fba57fb2ad39cf173b4d91053`
+  with checksum-qualified OCR 1.9.2, configured concurrency 2, the public rules
+  pack, and exact-HEAD installed wheel version `0.5.0.dev0+g4fe85549`.
+- All selected items completed with no failed or waived coverage. The result has
+  terminal state `complete`, contains eight findings, and records 113 mandatory
+  `ocr_toolkit_evidence` calls; the toolkit receipt matches the OCR counter.
+  Evidence base/head refs and the result manifest both match the requested exact
+  range. No further OCR rerun is authorized.
+- The review used an isolated owner-only HOME, only the built-in evidence MCP,
+  and an environment with GitLab token variables removed. No posting command was
+  invoked. Result, stderr, bootstrap, store, config, and receipts are ignored,
+  owner-only private artifacts; private-marker and posting scans are clean, and
+  the tracked worktree remained unchanged.
+- All review findings now have focused regressions that first failed at the
+  reported boundary and pass after deterministic correction. Release creation
+  validates protected identity before discovery or mutation and checks the first
+  page outside its bounded scan. Arbitrary Python requirement includes receive
+  exact source status. Framework scoping uses `.` for the root and ordinary paths
+  for every named directory, including MCP fact/delta filters. Provider output is
+  bounded and admitted atomically; template-limit coverage is emitted once per
+  scope; manifest scalars use field-specific bounds; persisted plugin schemas are
+  validated after redaction and total-value bounding.
+- Sibling audits covered other bounded GitHub pagination, all framework component
+  consumers, provider facts/coverage/notices, path versus manifest-scalar limits,
+  and every store reload path. The focused release/evidence suites pass. The root
+  semantic is a clean unreleased 0.5.0 contract change, not a compatibility shim;
+  nested fact schema versions remain unchanged because component lives in the
+  common evidence envelope and its closed shape did not change.
+- After this remediation checkpoint, complete the separately bounded
+  `evidence.ecosystems` structural slice described in Decisions. It is not part
+  of `frameworks`: manifest and Ansible source adapters feed normalized evidence
+  into the higher framework layer. Deterministic validation follows both slices
+  and OCR will not be run again.
 
 ### Pre-additional-review Deterministic Validation Checkpoint
 

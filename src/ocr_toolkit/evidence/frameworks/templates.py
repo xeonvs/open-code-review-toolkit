@@ -91,6 +91,7 @@ def collect_template_files(
         key: [CoverageObservation(CoverageState.COMPLETE, "bounded-tree-complete")]
         for key in _applicable_template_components(context.records)
     }
+    limited_components: set[tuple[str, str]] = set()
     truncated = False
     for entry in sorted(context.entries, key=lambda item: item.path):
         description = _template_description(entry.path, context)
@@ -105,9 +106,15 @@ def collect_template_files(
             continue
         if len(facts) >= MAX_PLUGIN_FACTS:
             truncated = True
-            observations.setdefault(key, []).append(
-                CoverageObservation(CoverageState.PARTIAL, "template-fact-limit", positive=True)
-            )
+            if key not in limited_components:
+                limited_components.add(key)
+                observations.setdefault(key, []).append(
+                    CoverageObservation(
+                        CoverageState.PARTIAL,
+                        "template-fact-limit",
+                        positive=True,
+                    )
+                )
             continue
         facts.append(
             PluginFact(

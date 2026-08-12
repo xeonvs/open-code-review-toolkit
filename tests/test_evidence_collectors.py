@@ -25,6 +25,7 @@ from ocr_toolkit.evidence.collectors import (
     manifest_collector,
     parse_manifest,
 )
+from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.python_manifests import parse_requirements
 from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
@@ -388,6 +389,46 @@ def test_python_requirements_includes_are_recursive_bounded_and_safe(tmp_path: P
     )
 
 
+def test_graph_discovered_python_source_degrades_its_framework_component(
+    tmp_path: Path,
+) -> None:
+    """Track arbitrary included requirement paths through parser truncation."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    constraints = tmp_path / "constraints"
+    constraints.mkdir()
+    (tmp_path / "requirements.txt").write_text("-r constraints/base.in\n", encoding="utf-8")
+    declarations = ["jinja2==3.1.6"]
+    declarations.extend(f"synthetic-package-{index}==1.0" for index in range(MAX_MANIFEST_ITEMS))
+    (constraints / "base.in").write_text("\n".join(declarations) + "\n", encoding="utf-8")
+    _git(tmp_path, "add", "requirements.txt", "constraints/base.in")
+    _git(tmp_path, "commit", "-qm", "truncated arbitrary include")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    coverage = []
+
+    _records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path),
+        head,
+        RefRole.HEAD,
+        coverage_sink=coverage,
+    )
+
+    declaration = next(
+        item
+        for item in coverage
+        if item.component == "constraints"
+        and item.domain == "framework.declaration"
+        and item.scope == "jinja2"
+    )
+    assert declaration.state.value == "partial"
+    assert declaration.reasons == ("source-item-limit",)
+    assert any(
+        "constraints/base.in: Python requirements were truncated" in item for item in diagnostics
+    )
+
+
 def test_python_requirements_include_limit_degrades_framework_completeness(
     tmp_path: Path,
 ) -> None:
@@ -423,7 +464,7 @@ def test_python_requirements_include_limit_degrades_framework_completeness(
     declaration = next(
         item
         for item in coverage
-        if item.component == "repository"
+        if item.component == "."
         and item.domain == "framework.declaration"
         and item.scope == "jinja2"
     )
@@ -457,7 +498,7 @@ def test_python_requirements_omitted_include_degrades_root_completeness(
     declaration = next(
         item
         for item in coverage
-        if item.component == "repository"
+        if item.component == "."
         and item.domain == "framework.declaration"
         and item.scope == "jinja2"
     )

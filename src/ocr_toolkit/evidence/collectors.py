@@ -793,6 +793,23 @@ def collect_ref_facts(
     except RepositoryEvidenceError as exc:
         diagnostics.append(f"Python requirements include batch read failed: {exc}")
         python_graph = PythonRequirementBlobSet(graph.blobs, python_roots, ())
+    # Included requirements may use arbitrary .txt/.in names that the initial
+    # manifest registry intentionally does not match. They still feed framework
+    # declarations, so register their exact source state before graph/parser
+    # degradation is projected into completeness.
+    python_declaration = manifest_collector("requirements.txt")
+    if python_declaration is None:  # pragma: no cover - static registry invariant
+        raise ValueError("Python requirements collector is unavailable")
+    for path in python_graph.requirement_paths:
+        source_statuses.setdefault(
+            path,
+            PluginSourceStatus(
+                path,
+                python_declaration.ecosystem,
+                python_declaration.source_roles,
+                "accepted",
+            ),
+        )
     degraded_roots = dict((*graph.degraded_roots, *python_graph.degraded_roots))
     for path, reason in sorted(degraded_roots.items()):
         status = source_statuses.get(path)

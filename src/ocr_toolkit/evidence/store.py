@@ -162,9 +162,9 @@ class EvidenceStore:
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
         try:
-            if record.kind in {"framework.detected", "template.file"}:
-                validate_plugin_record(record.kind, record.value)
             redacted_value = _safe_value(record.value, self.limits.max_value_chars)
+            if record.kind in {"framework.detected", "template.file"}:
+                validate_plugin_record(record.kind, redacted_value)
         except EvidenceStoreError:
             self._diagnose_once(f"omitted oversized {record.kind} evidence value")
             return False

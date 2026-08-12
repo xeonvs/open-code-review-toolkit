@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 # Each evidence kind shares a 512-record store limit across base and head. Capping
 # each immutable side at half keeps accepted records, deltas, and coverage atomic.
 MAX_PLUGIN_FACTS = 256
+MAX_PLUGIN_COVERAGE = 1_024
+MAX_PLUGIN_NOTICES = 64
 MAX_CONFIGURATION_PATHS = 128
 
 

@@ -28,6 +28,8 @@ Framework support lives under `src/ocr_toolkit/evidence/frameworks/`. Add an eco
 
 Every provider change needs synthetic tests for direct activation, lock-only non-activation, component ownership, malformed and bounded source degradation, fact/configuration limits, schema reload, base/head deltas, and the existing MCP projection as applicable. Template engines also need explicit OCR include/rule fixtures because evidence collection does not alter OCR file selection. Update the strategy and changelog when the supported public behavior changes.
 
+Provider results are admitted atomically: facts, coverage observations, and notices must all satisfy their package limits and immutable contracts before any of them reach shared registry output. Use `.` for a declaration manifest at the repository root; never overload a valid path such as `repository` as a root sentinel. Keep identifier/path bounds separate from longer manifest-derived scalar bounds, and validate plugin records only after the store applies its persistence redaction and total-value budget.
+
 ## Boundary-focused test checklist
 
 Before closing a parser, repository reader, persisted schema, subprocess, or report-rendering change, add the applicable boundary tests:

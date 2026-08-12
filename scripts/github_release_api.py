@@ -20,6 +20,8 @@ UPLOAD_ORIGIN = "https://uploads.github.com"
 API_VERSION = "2026-03-10"
 MAX_JSON_BYTES = 1_048_576
 MAX_ASSET_BYTES = 10_485_760
+MAX_RELEASE_LIST_PAGES = 5
+RELEASES_PER_PAGE = 100
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 TAG_RE = re.compile(r"^v[0-9]+(?:\.[0-9]+)+$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -261,6 +263,9 @@ def ensure_release(
 ) -> dict[str, Any]:
     """Discover one release by tag or numeric draft listing, creating it if absent."""
 
+    # Protected workflow identity must be closed before even a discovery request:
+    # the same function can later create the Release when discovery finds none.
+    _validate_inputs(repository, tag, target, title)
     encoded_tag = urllib.parse.quote(tag, safe="")
     status, payload = _request(
         origin=API_ORIGIN,
@@ -279,24 +284,27 @@ def ensure_release(
         )
 
     releases: list[object] = []
-    for page in range(1, 6):
+    for page in range(1, MAX_RELEASE_LIST_PAGES + 1):
         _status, page_payload = _request(
             origin=API_ORIGIN,
-            endpoint=f"/repos/{repository}/releases?per_page=100&page={page}",
+            endpoint=(f"/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}&page={page}"),
             token=token,
         )
-        if not isinstance(page_payload, list) or len(page_payload) > 100:
+        if not isinstance(page_payload, list) or len(page_payload) > RELEASES_PER_PAGE:
             raise GitHubReleaseError("GitHub Release listing is malformed")
         releases.extend(page_payload)
-        if len(page_payload) < 100:
+        if len(page_payload) < RELEASES_PER_PAGE:
             break
     else:
         _status, overflow = _request(
             origin=API_ORIGIN,
-            endpoint=f"/repos/{repository}/releases?per_page=1&page=501",
+            endpoint=(
+                f"/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}"
+                f"&page={MAX_RELEASE_LIST_PAGES + 1}"
+            ),
             token=token,
         )
-        if not isinstance(overflow, list) or overflow:
+        if not isinstance(overflow, list) or len(overflow) > RELEASES_PER_PAGE or overflow:
             raise GitHubReleaseError("GitHub Release listing exceeds its page bound")
 
     matches = [item for item in releases if isinstance(item, dict) and item.get("tag_name") == tag]

@@ -2,7 +2,9 @@
 
 from ocr_toolkit.evidence.frameworks.contracts import (
     MAX_CONFIGURATION_PATHS,
+    MAX_PLUGIN_COVERAGE,
     MAX_PLUGIN_FACTS,
+    MAX_PLUGIN_NOTICES,
     FrameworkPluginContext,
     FrameworkPluginResult,
     PluginCoverage,
@@ -26,7 +28,9 @@ def framework_schema_versions() -> tuple[str, str]:
 __all__ = [
     "BUILTIN_FRAMEWORK_PLUGINS",
     "MAX_CONFIGURATION_PATHS",
+    "MAX_PLUGIN_COVERAGE",
     "MAX_PLUGIN_FACTS",
+    "MAX_PLUGIN_NOTICES",
     "FrameworkPluginContext",
     "FrameworkPluginResult",
     "PluginCoverage",

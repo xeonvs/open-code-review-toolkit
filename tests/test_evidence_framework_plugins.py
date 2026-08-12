@@ -19,6 +19,7 @@ from ocr_toolkit.evidence.frameworks import (
     FrameworkPluginContext,
     FrameworkPluginResult,
     collect_framework_plugins,
+    collect_template_files,
 )
 from ocr_toolkit.evidence.frameworks.providers import (
     GO_WEB_PLUGIN,
@@ -658,7 +659,7 @@ replace github.com/labstack/echo/v4 => ./local-echo
     }
     resolution = coverage_record(
         store,
-        component="repository",
+        component=".",
         domain="framework.resolution",
         scope="go-web:echo",
     )
@@ -767,14 +768,146 @@ def test_template_components_follow_nearest_manifest_root_and_configuration_isol
         if record.kind == "template.file" and record.ref is RefRole.HEAD
     }
     assert templates == {
-        "root.conf.j2": "repository",
+        "root.conf.j2": ".",
         "services/renderer/templates/service.conf.j2": "services/renderer",
     }
     frameworks = {record.component: record.value["fact"] for record in framework_records(store)}
-    assert "services/renderer/pyproject.toml" not in frameworks["repository"]["configuration_paths"]
+    assert "services/renderer/pyproject.toml" not in frameworks["."]["configuration_paths"]
     assert (
         "services/renderer/pyproject.toml" in frameworks["services/renderer"]["configuration_paths"]
     )
+
+
+def test_repository_root_and_named_repository_directory_are_distinct_components(
+    tmp_path: Path,
+) -> None:
+    """Use a non-path root component without merging a real repository directory."""
+
+    initialize(tmp_path)
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "19.0.0"}}), encoding="utf-8"
+    )
+    nested = tmp_path / "repository"
+    nested.mkdir()
+    (nested / "package.json").write_text(
+        json.dumps({"dependencies": {"next": "15.2.0"}}), encoding="utf-8"
+    )
+    base = commit(tmp_path, "distinct component roots")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "19.1.0"}}), encoding="utf-8"
+    )
+    (nested / "package.json").write_text(
+        json.dumps({"dependencies": {"next": "15.3.0"}}), encoding="utf-8"
+    )
+    head = commit(tmp_path, "change both component declarations")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    facts = {
+        (record.component, record.value["fact"]["framework"]): record.value["fact"]
+        for record in framework_records(store)
+    }
+
+    assert set(facts) == {(".", "react"), ("repository", "next")}
+    assert [item["source_path"] for item in facts[(".", "react")]["declarations"]] == [
+        "package.json"
+    ]
+    assert [item["source_path"] for item in facts[("repository", "next")]["declarations"]] == [
+        "repository/package.json"
+    ]
+
+    root_list = mcp_payload(
+        call_tool(
+            store,
+            {"action": "list", "kind": "framework.detected", "component": ".", "ref": "head"},
+        )
+    )
+    named_list = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "framework.detected",
+                "component": "repository",
+                "ref": "head",
+            },
+        )
+    )
+    assert [item["value"]["fact"]["framework"] for item in root_list["records"]] == ["react"]
+    assert [item["value"]["fact"]["framework"] for item in named_list["records"]] == ["next"]
+
+    root_deltas = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_delta",
+                "delta_kind": "framework.detected",
+                "component": ".",
+            },
+        )
+    )
+    named_deltas = mcp_payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                "kind": "repository.evidence_delta",
+                "delta_kind": "framework.detected",
+                "component": "repository",
+            },
+        )
+    )
+    assert [(item["identity"], item["change"]) for item in root_deltas["records"]] == [
+        ("react-typescript:react", "changed")
+    ]
+    assert [(item["identity"], item["change"]) for item in named_deltas["records"]] == [
+        ("react-typescript:next", "changed")
+    ]
+
+
+def test_template_fact_limit_emits_one_observation_per_component() -> None:
+    """Bound post-limit template coverage work by semantic component scope."""
+
+    entries = tuple(
+        RepositoryObject(
+            f"templates/page-{index:04}.j2",
+            "100644",
+            "blob",
+            f"{index:040x}",
+        )
+        for index in range(MAX_PLUGIN_FACTS + 32)
+    )
+
+    facts, coverage, notices = collect_template_files(
+        FrameworkPluginContext((), entries, (), RefRole.HEAD, "a" * 40)
+    )
+
+    limited = [
+        item
+        for item in coverage
+        if item.component == "templates"
+        and item.scope == "jinja2"
+        and item.observation.reason == "template-fact-limit"
+    ]
+    assert len(facts) == MAX_PLUGIN_FACTS
+    assert len(limited) == 1
+    assert notices == ("template plugin fact limit reached",)
+
+
+def test_long_manifest_requirement_remains_valid_framework_evidence(tmp_path: Path) -> None:
+    """Allow bounded manifest scalars to exceed identifier-oriented limits."""
+
+    initialize(tmp_path)
+    requirement = "jinja2 @ https://packages.example.invalid/" + "a" * 768 + ".whl"
+    (tmp_path / "requirements.txt").write_text(requirement + "\n", encoding="utf-8")
+    base = commit(tmp_path, "long direct requirement")
+    (tmp_path / "README.md").write_text("head\n", encoding="utf-8")
+    head = commit(tmp_path, "head")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    jinja = next(record for record in framework_records(store) if record.component == ".")
+
+    assert jinja.value["fact"]["declarations"][0]["declared_value"] == requirement
 
 
 def test_configuration_and_template_limits_degrade_exact_coverage(tmp_path: Path) -> None:
@@ -805,7 +938,7 @@ def test_configuration_and_template_limits_degrade_exact_coverage(tmp_path: Path
     assert len(react.value["fact"]["configuration_paths"]) == MAX_CONFIGURATION_PATHS
     config_coverage = coverage_record(
         store,
-        component="repository",
+        component=".",
         domain="framework.configuration",
         scope="react-typescript:react",
     )
@@ -873,6 +1006,69 @@ def test_plugin_failure_isolated_from_sibling_provider(monkeypatch: pytest.Monke
     assert notices == ("framework plugin unavailable: broken",)
 
 
+def test_malformed_provider_result_isolated_from_sibling_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Discard malformed post-processing output without suppressing siblings."""
+
+    class MalformedResult:
+        facts: tuple[()] = ()
+        notices: tuple[()] = ()
+
+        @property
+        def coverage(self) -> tuple[()]:
+            raise RuntimeError("synthetic malformed coverage")
+
+    class MalformedPlugin:
+        plugin_id = "malformed"
+
+        def collect(self, context: FrameworkPluginContext) -> FrameworkPluginResult:
+            return cast(FrameworkPluginResult, MalformedResult())
+
+    declaration = EvidenceRecord(
+        kind="dependency.declared",
+        value={
+            "identity": "pyproject.toml:project:jinja2",
+            "fact": {"name": "jinja2", "version": "3.1.6", "scope": "project"},
+        },
+        source_path="pyproject.toml",
+        ref=RefRole.HEAD,
+        commit_sha="a" * 40,
+        component="python",
+        provenance="synthetic",
+        confidence=Confidence.EXACT,
+        trust=TrustClass.SOURCE_REPOSITORY,
+    )
+    manifest = EvidenceRecord(
+        kind="repository.manifest",
+        value={"identity": "pyproject.toml", "fact": {"path": "pyproject.toml"}},
+        source_path="pyproject.toml",
+        ref=RefRole.HEAD,
+        commit_sha="a" * 40,
+        component="python",
+        provenance="synthetic",
+        confidence=Confidence.EXACT,
+        trust=TrustClass.SOURCE_REPOSITORY,
+    )
+    monkeypatch.setattr(
+        "ocr_toolkit.evidence.frameworks.registry.BUILTIN_FRAMEWORK_PLUGINS",
+        (MalformedPlugin(), JINJA2_PLUGIN),
+    )
+
+    facts, _coverage, notices = collect_framework_plugins(
+        FrameworkPluginContext(
+            (manifest, declaration),
+            (RepositoryObject("pyproject.toml", "100644", "blob", "b" * 40),),
+            (),
+            RefRole.HEAD,
+            "a" * 40,
+        )
+    )
+
+    assert [fact.identity for fact in facts] == ["jinja2:jinja2"]
+    assert notices == ("framework plugin unavailable: malformed",)
+
+
 def test_nested_schema_rejects_identity_and_plugin_relationship_mismatches(tmp_path: Path) -> None:
     """Bind persisted framework identity, plugin, framework, and ecosystem fields."""
 
@@ -913,7 +1109,7 @@ def test_malformed_and_truncated_manifests_degrade_applicable_coverage(tmp_path:
     store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
     jinja_declarations = coverage_record(
         store,
-        component="repository",
+        component=".",
         domain="framework.declaration",
         scope="jinja2",
     )
@@ -921,7 +1117,7 @@ def test_malformed_and_truncated_manifests_degrade_applicable_coverage(tmp_path:
     assert jinja_declarations.reasons == ("parse-unavailable",)
     react_declarations = coverage_record(
         store,
-        component="repository",
+        component=".",
         domain="framework.declaration",
         scope="react-typescript",
     )

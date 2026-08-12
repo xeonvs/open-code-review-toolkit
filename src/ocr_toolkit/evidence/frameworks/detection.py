@@ -23,12 +23,14 @@ from ocr_toolkit.evidence.model import CoverageState, EvidenceRecord, EvidenceVa
 if TYPE_CHECKING:
     from ocr_toolkit.evidence.repository import RepositoryObject
 
+ROOT_COMPONENT = "."
+
 
 def component_root(path: str) -> str:
     """Return the canonical manifest directory component or repository root."""
 
     parent = PurePosixPath(path).parent.as_posix()
-    return "repository" if parent == "." else parent
+    return ROOT_COMPONENT if parent == "." else parent
 
 
 def _fact_value(record: EvidenceRecord | None) -> Mapping[str, EvidenceValue] | None:
@@ -89,7 +91,7 @@ def is_direct_declaration(record: EvidenceRecord, ecosystem: str) -> bool:
 def _path_is_within(path: str, component: str) -> bool:
     """Return whether one repository path is inside a canonical component."""
 
-    return component == "repository" or path == component or path.startswith(component + "/")
+    return component == ROOT_COMPONENT or path == component or path.startswith(component + "/")
 
 
 def owning_component(path: str, components: tuple[str, ...]) -> str | None:
@@ -97,7 +99,7 @@ def owning_component(path: str, components: tuple[str, ...]) -> str | None:
 
     matches = tuple(component for component in components if _path_is_within(path, component))
     return (
-        max(matches, key=lambda item: 0 if item == "repository" else item.count("/") + 1)
+        max(matches, key=lambda item: 0 if item == ROOT_COMPONENT else item.count("/") + 1)
         if matches
         else None
     )
