@@ -12,6 +12,7 @@ from typing import Any, cast
 import pytest
 
 from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.frameworks import (
     BUILTIN_FRAMEWORK_PLUGINS,
     MAX_CONFIGURATION_PATHS,
@@ -27,7 +28,6 @@ from ocr_toolkit.evidence.frameworks.providers import (
     REACT_PLUGIN,
     SYMFONY_PLUGIN,
 )
-from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.mcp import call_tool
 from ocr_toolkit.evidence.model import Confidence, EvidenceRecord, RefRole, TrustClass
 from ocr_toolkit.evidence.project import render_bootstrap

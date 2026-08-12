@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: M2 ecosystem and framework coverage for 0.5.0
 
-Status: active; implementation checkpoints in progress
+Status: active; implementation and local validation complete; history and external delivery pending
 Owner: Codex
 Last Updated: 2026-08-12
 Release Classification: release-required
@@ -19,12 +19,11 @@ Twig template files actually reviewable by the recommended OCR through the
 public synthetic rules pack, expose framework/template state and deltas through
 the existing read-only evidence MCP, repair issue #76 release recovery, and
 qualify checksum-pinned OCR 1.9.2 through issue #78 before final validation.
-Deliver completed slices as local checkpoint commits without intermediate
-pushes. Complete the synthetic installed-artifact E2E and the already-run local
-review, remediate it, finish the framework-package slice and full deterministic
-validation, then run one additional full local OCR review with concurrency 2.
-Remediate that review and push feature PR #77 only once after final local
-validation, before protected feature and stable delivery.
+The implementation, installed-artifact E2E, both owner-authorized local OCR
+review cycles, deterministic remediation, package reorganizations, and final
+local validation are complete in signed local checkpoints without intermediate
+pushes. Preserve that validated tree while consolidating unpublished history,
+then update feature PR #77 once before protected feature and stable delivery.
 
 ### Decisions
 
@@ -55,9 +54,10 @@ validation, before protected feature and stable delivery.
   keep posting disabled and artifacts private, then fix actionable findings and
   return to deterministic validation without another OCR rerun.
 - Between completed checkpoints, query the public project for newly opened OCR
-  compatibility/release issues. If a newer stable OCR appears, qualify its
-  complete adjacent chain and include required contract/rules adaptations in
-  0.5.0 before the next pending full OCR review.
+  compatibility/release issues. If a newer stable OCR appears before 0.5.0
+  delivery, qualify its complete adjacent chain and include required
+  contract/rules adaptations in this release. Do not repeat a full local OCR
+  review without separate owner authorization.
 - Keep completed implementation slices as local checkpoint commits with tests,
   self-review, documentation, and release-issue monitoring. Do not push each
   checkpoint or retrigger PR checks; update feature PR #77 once, only after all
@@ -124,15 +124,25 @@ validation, before protected feature and stable delivery.
 11. [x] Finish deterministic remediation of the first full OCR review, complete
     and prove the behavior-preserving framework package reorganization, then run
     the complete deterministic package/E2E/privacy validation without OCR.
-12. [ ] Remediate the completed owner-authorized additional OCR review, audit
-    sibling boundaries, and complete the separate `evidence.ecosystems` source-
-    adapter reorganization. Repeat deterministic validation without another OCR
-    run, then finish Gitleaks, self-review, feature PR checks/threads, merge, and
-    TestPyPI development readback.
-13. [ ] Prepare the final release PR as the last repository mutation, archive
+12. [x] Remediate the completed owner-authorized additional OCR review, audit
+    sibling boundaries, complete the separate `evidence.ecosystems` source-
+    adapter reorganization, and repeat deterministic package/E2E/privacy
+    validation without another OCR run.
+13. [x] Partially rewrite unpublished history into logical signed slices, absorb
+    plan-only checkpoints into their owning functionality, verify every
+    signature, and prove exact final-tree plus complete base-diff equivalence
+    before recording the rewritten identities below.
+14. [x] Rerun complete-history signature, Gitleaks, privacy, full quality and
+    supported-Python gates; reproduce the target-version artifacts; verify
+    hash-locked installs, installed MCP, template rules preview, and static
+    workflow boundaries; then recheck public OCR release and issue/PR state.
+15. [ ] Update feature PR #77 once with `--force-with-lease`, read back its exact
+    head, finish checks and review threads, merge it, and independently verify
+    TestPyPI development delivery.
+16. [ ] Prepare the final release PR as the last repository mutation, archive
     completed 0.4.7 history, consume fragments 76, 77, and 78, and reconcile M2
     to implemented truth while leaving external publication pending.
-14. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
+17. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
     Release/receipt/Python-install readback and close #76 and #78 as completed
     without another repository PR.
 
@@ -284,18 +294,19 @@ validation, before protected feature and stable delivery.
   TypeScript/Vite, templates, scoped completeness, and semantic deltas are
   present; private modes and a clean Git status are preserved; no posting path
   is invoked.
-- Read-only checkpoint monitoring still finds only issues #76 and #78 open, and
-  the latest upstream stable OCR remains the already qualified 1.9.2. No push
-  was made. The first full local review described below has since run; the next
-  authorized OCR action is the additional concurrency-2 review only after the
-  current remediation and complete deterministic validation finish.
+- Read-only checkpoint monitoring found only issues #76 and #78 open, and the
+  latest upstream stable OCR remained the already qualified 1.9.2. No push was
+  made. The first and additional owner-authorized local review cycles described
+  below subsequently completed; no further OCR review is authorized.
 
 ### Additional OCR Review Remediation Checkpoint
 
 - The owner-authorized additional full OCR review completed successfully over
   exact range `3caa50b4fc5026da79c7f2ceae1deef31715f814..4fe85549d66acd9fba57fb2ad39cf173b4d91053`
   with checksum-qualified OCR 1.9.2, configured concurrency 2, the public rules
-  pack, and exact-HEAD installed wheel version `0.5.0.dev0+g4fe85549`.
+  pack, and exact-HEAD installed wheel version `0.5.0.dev0+g4fe85549`. That
+  pre-rewrite head remains the immutable review-receipt identity; rewritten
+  signed checkpoint `a05399fd02916493bd516caae313b618becda221` has its exact tree.
 - All selected items completed with no failed or waived coverage. The result has
   terminal state `complete`, contains eight findings, and records 113 mandatory
   `ocr_toolkit_evidence` calls; the toolkit receipt matches the OCR counter.
@@ -317,21 +328,115 @@ validation, before protected feature and stable delivery.
   validated after redaction and total-value bounding.
 - Sibling audits covered other bounded GitHub pagination, all framework component
   consumers, provider facts/coverage/notices, path versus manifest-scalar limits,
-  and every store reload path. The focused release/evidence suites pass. The root
-  semantic is a clean unreleased 0.5.0 contract change, not a compatibility shim;
-  nested fact schema versions remain unchanged because component lives in the
-  common evidence envelope and its closed shape did not change.
-- After this remediation checkpoint, complete the separately bounded
-  `evidence.ecosystems` structural slice described in Decisions. It is not part
-  of `frameworks`: manifest and Ansible source adapters feed normalized evidence
-  into the higher framework layer. Deterministic validation follows both slices
-  and OCR will not be run again.
+  and every store reload path. The focused release/evidence suites and complete
+  routine quality/security gate pass. Rewritten signed checkpoint
+  `b35bb286938d923a29e8c51d87b152e6595e6825` contains the remediation with the
+  exact pre-rewrite checkpoint tree and remains unpushed. The root semantic is
+  a clean unreleased 0.5.0 contract change, not a compatibility shim; nested fact
+  schema versions remain unchanged because component lives in the common evidence
+  envelope and its closed shape did not change.
+- The separately bounded `evidence.ecosystems` structural slice described in
+  Decisions subsequently completed. It remains below `frameworks`: manifest and
+  Ansible source adapters feed normalized evidence into the higher framework
+  layer. Final deterministic validation covers both slices, and OCR was not run
+  again.
+
+### Ecosystem Adapter Package Checkpoint
+
+- Normalized source adapters now form one lower-level
+  `ocr_toolkit.evidence.ecosystems` package: shared contracts plus Python,
+  JavaScript, Go, and PHP modules, with Galaxy requirements and
+  topology/inventory split under `ecosystems.ansible`. Ansible remains an
+  automation ecosystem feeding normalized evidence, not a framework provider.
+- Git/tree reads, include-graph orchestration, source statuses, and parser
+  registration remain in `collectors.py`; cross-ecosystem container/CI facts
+  remain in `infrastructure.py`; framework derivation, store, and MCP remain
+  higher independent layers. The old flat parser modules are absent without
+  aliases or compatibility shims.
+- An architecture contract locks the exact package layout and rejects adapter
+  I/O, dynamic imports, and upward dependencies on collectors, frameworks,
+  repository plumbing, store, or MCP. Parser, collector, framework, repository,
+  model, and MCP suites pass, and a clean wheel-content test proves the package
+  layout and absence of old modules. No evidence schema or parser behavior
+  changed in this structural slice.
+
+### Unpublished History Consolidation Checkpoint
+
+- The unpublished range after the existing remote feature tip was consolidated
+  into several coherent signed functional slices. Plan-only installed-E2E,
+  pre-review, and final-validation commits were absorbed into the MCP,
+  framework-remediation, and ecosystem slices they describe; the OCR
+  qualification and additional-remediation slices remain distinct.
+- A private owner-only pre-rewrite receipt and backup ref preserve the old tip.
+  Before this metadata reconciliation, the rewritten tip had the same exact Git
+  tree and binary diff from the remote tip as the validated pre-rewrite tip; a
+  fixed-mtime archive of that tree was byte-identical. Every rewritten commit
+  verifies with the configured signing identity, and the worktree was clean.
+- OCR review ranges continue to name the commits actually reviewed. The plan
+  records signed rewritten commits with identical corresponding trees rather
+  than pretending the historical review executed against new commit objects.
+  The next gate scans and builds the complete rewritten range before its single
+  `--force-with-lease` branch update.
+
+### Rewritten-range Validation And Handoff Checkpoint
+
+- Every commit from stable 0.4.7 through the consolidated tip verifies with the
+  configured signing identity. The complete rewritten range passes Gitleaks,
+  owner-private marker and tracked-artifact scans, `git diff --check`, routine
+  quality/security, and independent tests on each supported Python version.
+- Two explicit 0.5.0 target-development builds are byte-identical and pass
+  Twine, closed wheel/sdist inspection, zero-runtime-dependency, ecosystem and
+  framework layout, and removed-module checks. Hash-locked wheel installs on
+  the lower and intermediate supported versions plus an sdist install on the
+  upper version pass isolated import, hostile shadow, `pip check`, restricted
+  `PATH`, and module-layout probes.
+- The installed artifact completes the real stdio MCP protocol with the one
+  read-only `ocr_toolkit_evidence` tool. Synthetic summary, fact, coverage, and
+  delta list/get calls preserve root and named-directory components and expose
+  Jinja2/Twig template evidence. The checksum-qualified OCR binary only runs a
+  JSON rules preview: ordinary source, Jinja/Twig files, and an extensionless
+  conventional role template are selected with no session artifact or LLM run.
+- Static shell/YAML checks, lock and compatibility manifests, dependency audit,
+  Towncrier draft, and clean worktree checks pass. Read-only public readback
+  still reports OCR 1.9.2 as latest, issues #76 and #78 open, and draft feature
+  PR #77 at the old clean remote tip. The single branch update, hosted checks,
+  merge, and development publication remain pending; no further OCR review is
+  authorized.
+
+### Final Local Deterministic Validation Checkpoint
+
+- Package, install, MCP, and privacy receipts remain bound to signed
+  pre-rewrite implementation checkpoint `14b074aab85f92a883b46a3994c4ae46a5e54598`.
+  The rewritten ecosystem/validation slice preserves all non-plan content and
+  absorbs only the final plan reconciliation; stable 0.4.7 ancestry and its
+  signatures are verified, and the branch remains unpushed after the owner's
+  push-policy correction.
+- Routine formatting, Ruff, strict mypy, Bandit, coverage, and the complete test
+  suite pass. Independent full tests also pass on each supported Python version;
+  the lockfile, dependency audit, OCR compatibility manifest, changed shell and
+  YAML files, and complete-range Gitleaks scan are clean.
+- Two target-version builds are byte-identical and pass Twine plus closed archive
+  inspection. The wheel and sdist retain zero runtime dependencies, contain the
+  ecosystem/framework package layout, and omit removed flat modules. Hash-locked
+  wheel and sdist installs pass supported-Python, hostile-shadow, isolated-import,
+  `pip check`, and restricted-`PATH` command checks.
+- An installed artifact completes the real stdio MCP protocol flow with the one
+  read-only `ocr_toolkit_evidence` tool. Synthetic fact, coverage, and delta
+  list/get checks preserve `.` as root and `repository` as an ordinary path;
+  Jinja2 and Twig template evidence is present and private modes remain intact.
+- Checksum-qualified OCR 1.9.2 preview selects ordinary source plus Jinja, Twig,
+  and extensionless conventional role templates without an unsupported-extension
+  result or session artifacts. This is a rules-selection probe, not another OCR
+  review. Towncrier draft, source-integrity/privacy checks, and `git diff --check`
+  pass. M2 implementation is locally complete; the roadmap remains in progress
+  until feature and stable 0.5.0 delivery are independently read back.
 
 ### Pre-additional-review Deterministic Validation Checkpoint
 
-- Signed local checkpoint `1f64c8a112c54df289649fcbc0d06ef9f91dbe84`
-  is the exact validated tree; its signature, clean worktree, and ancestry from
-  stable 0.4.7 are verified. No branch push occurred.
+- Rewritten signed checkpoint `a05399fd02916493bd516caae313b618becda221`
+  has the exact pre-additional-review tree after absorbing its plan-only receipt;
+  its signature, clean-tree evidence, and ancestry from stable 0.4.7 are verified.
+  No branch push occurred.
 - Routine formatting, Ruff, strict mypy, Bandit, branch coverage, and the full
   test suite pass. Independent full test runs pass on each supported Python
   interpreter. Complete first-parent Gitleaks and dependency audit are clean.
@@ -353,18 +458,20 @@ validation, before protected feature and stable delivery.
   extension, and creates no session store.
 - Towncrier draft, OCR compatibility manifest, lockfile, complete-range source
   integrity, changed-public-content privacy, tracked-artifact exclusion,
-  `git diff --check`, and private receipt modes pass. Work Queue item 12 and the
-  owner-authorized additional full OCR review with concurrency 2 are now the
-  only next review-stage actions.
+  `git diff --check`, and private receipt modes pass. At this checkpoint, the
+  additional concurrency-2 review and its bounded remediation remained; both
+  subsequently completed as recorded above.
 
 ### First Full OCR Review And Remediation Checkpoint
 
 - The first full local OCR review ran once over exact range
   `3caa50b4fc5026da79c7f2ceae1deef31715f814..69a44f7efb053ff11cfc28da1ae910e8f34a8d0b`
   with the checksum-qualified OCR 1.9.2 binary through an exact-HEAD installed
-  wheel. No GitLab posting command or credential was used. Private result,
-  stderr, bootstrap, and evidence artifacts retain owner-only permissions and
-  the ignored review context is absent from the tracked range.
+  wheel. That pre-rewrite head remains the immutable review-receipt identity;
+  rewritten signed checkpoint `2ebc198c66217a49e5fd2aa92ab40d70c6a6d709`
+  has its exact tree. No GitLab posting command or credential was used. Private
+  result, stderr, bootstrap, and evidence artifacts retain owner-only permissions,
+  and the ignored review context is absent from the tracked range.
 - OCR completed most selected items and stopped two evidence modules at its
   tool-round budget. The accepted partial result contains eight findings and
   records 261 mandatory `ocr_toolkit_evidence` calls; the toolkit-authored

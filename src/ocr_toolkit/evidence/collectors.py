@@ -8,7 +8,9 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from ocr_toolkit.evidence.ansible import (
+from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
+from ocr_toolkit.evidence.ecosystems.ansible.requirements import parse_galaxy_requirements
+from ocr_toolkit.evidence.ecosystems.ansible.topology import (
     collect_topology,
     inventory_scope,
     role_coverage_scope,
@@ -16,9 +18,27 @@ from ocr_toolkit.evidence.ansible import (
     topology_candidate,
     topology_coverage,
 )
-from ocr_toolkit.evidence.ansible_requirements import parse_galaxy_requirements
-from ocr_toolkit.evidence.composer_manifests import parse_composer_json, parse_composer_lock
-from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
+from ocr_toolkit.evidence.ecosystems.contracts import (
+    MAX_MANIFEST_ITEMS,
+    ManifestFact,
+    ManifestParseResult,
+)
+from ocr_toolkit.evidence.ecosystems.go import parse_go_mod, parse_go_sum
+from ocr_toolkit.evidence.ecosystems.javascript import (
+    parse_package_json,
+    parse_package_lock,
+    parse_pnpm_lock,
+    parse_yarn_lock,
+)
+from ocr_toolkit.evidence.ecosystems.php import parse_composer_json, parse_composer_lock
+from ocr_toolkit.evidence.ecosystems.python import (
+    parse_pipfile_lock,
+    parse_poetry_lock,
+    parse_pylock,
+    parse_pyproject,
+    parse_requirements,
+    parse_uv_lock,
+)
 from ocr_toolkit.evidence.frameworks import (
     FrameworkPluginContext,
     PluginCoverage,
@@ -27,19 +47,7 @@ from ocr_toolkit.evidence.frameworks import (
     collect_framework_plugins,
     collect_template_files,
 )
-from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.infrastructure import infrastructure_candidate, parse_infrastructure_pins
-from ocr_toolkit.evidence.javascript_manifests import (
-    parse_package_json,
-    parse_package_lock,
-    parse_pnpm_lock,
-    parse_yarn_lock,
-)
-from ocr_toolkit.evidence.manifest_model import (
-    MAX_MANIFEST_ITEMS,
-    ManifestFact,
-    ManifestParseResult,
-)
 from ocr_toolkit.evidence.model import (
     Confidence,
     CoverageRecord,
@@ -49,14 +57,6 @@ from ocr_toolkit.evidence.model import (
     EvidenceValue,
     RefRole,
     TrustClass,
-)
-from ocr_toolkit.evidence.python_manifests import (
-    parse_pipfile_lock,
-    parse_poetry_lock,
-    parse_pylock,
-    parse_pyproject,
-    parse_requirements,
-    parse_uv_lock,
 )
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,

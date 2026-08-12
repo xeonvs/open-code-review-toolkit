@@ -9,7 +9,7 @@ import shlex
 import tomllib  # type: ignore[import-untyped]
 
 from ocr_toolkit.common.redaction import redact_url_userinfo
-from ocr_toolkit.evidence.manifest_model import (
+from ocr_toolkit.evidence.ecosystems.contracts import (
     MAX_MANIFEST_ITEMS,
     ManifestFact,
     ManifestParseResult,

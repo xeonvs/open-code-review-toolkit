@@ -10,10 +10,6 @@ from typing import cast
 import pytest
 
 from ocr_toolkit.evidence import GitRepositoryReader, RefRole
-from ocr_toolkit.evidence.ansible_requirements import (
-    MAX_GALAXY_REQUIREMENTS,
-    parse_galaxy_requirements,
-)
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import (
     MAX_MANIFEST_INCLUDE_DIAGNOSTICS,
@@ -25,9 +21,13 @@ from ocr_toolkit.evidence.collectors import (
     manifest_collector,
     parse_manifest,
 )
-from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
+from ocr_toolkit.evidence.ecosystems.ansible.requirements import (
+    MAX_GALAXY_REQUIREMENTS,
+    parse_galaxy_requirements,
+)
+from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS
+from ocr_toolkit.evidence.ecosystems.python import parse_requirements
 from ocr_toolkit.evidence.mcp import handle_request
-from ocr_toolkit.evidence.python_manifests import parse_requirements
 from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
 
 

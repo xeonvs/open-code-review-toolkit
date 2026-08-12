@@ -1,5 +1,6 @@
 """Contracts for the intentionally small published distribution contents."""
 
+import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -46,3 +47,47 @@ def test_review_runner_is_inside_the_wheel_runtime_package() -> None:
 
     assert (PROJECT_ROOT / "src/ocr_toolkit/review_runner.py").is_file()
     assert '[tool.hatch.build.targets.wheel]\npackages = ["src/ocr_toolkit"]' in pyproject
+
+
+def test_built_wheel_contains_ecosystem_packages_without_flat_parser_shims(
+    tmp_path: Path,
+) -> None:
+    """Lock the installed source-adapter layout rather than source imports alone."""
+
+    import subprocess
+    import sys
+
+    output = tmp_path / "dist"
+    subprocess.run(
+        [sys.executable, "-m", "build", "--wheel", "--outdir", str(output)],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    wheel = next(output.glob("*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+
+    expected = {
+        "ocr_toolkit/evidence/ecosystems/__init__.py",
+        "ocr_toolkit/evidence/ecosystems/ansible/__init__.py",
+        "ocr_toolkit/evidence/ecosystems/ansible/requirements.py",
+        "ocr_toolkit/evidence/ecosystems/ansible/topology.py",
+        "ocr_toolkit/evidence/ecosystems/contracts.py",
+        "ocr_toolkit/evidence/ecosystems/go.py",
+        "ocr_toolkit/evidence/ecosystems/javascript.py",
+        "ocr_toolkit/evidence/ecosystems/php.py",
+        "ocr_toolkit/evidence/ecosystems/python.py",
+    }
+    removed = {
+        "ocr_toolkit/evidence/ansible.py",
+        "ocr_toolkit/evidence/ansible_requirements.py",
+        "ocr_toolkit/evidence/composer_manifests.py",
+        "ocr_toolkit/evidence/go_manifests.py",
+        "ocr_toolkit/evidence/javascript_manifests.py",
+        "ocr_toolkit/evidence/manifest_model.py",
+        "ocr_toolkit/evidence/python_manifests.py",
+    }
+    assert expected <= names
+    assert not removed & names

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import collect_ref_facts, manifest_collector
-from ocr_toolkit.evidence.go_manifests import parse_go_mod, parse_go_sum
-from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
+from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS
+from ocr_toolkit.evidence.ecosystems.go import parse_go_mod, parse_go_sum
 from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.model import RefRole
 from ocr_toolkit.evidence.repository import GitRepositoryReader

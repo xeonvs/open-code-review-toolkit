@@ -11,13 +11,13 @@ import pytest
 
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.collectors import collect_ref_facts, parse_manifest
-from ocr_toolkit.evidence.javascript_manifests import (
+from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS
+from ocr_toolkit.evidence.ecosystems.javascript import (
     parse_package_json,
     parse_package_lock,
     parse_pnpm_lock,
     parse_yarn_lock,
 )
-from ocr_toolkit.evidence.manifest_model import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.model import RefRole
 from ocr_toolkit.evidence.repository import GitRepositoryReader

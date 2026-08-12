@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ocr_toolkit.evidence.manifest_model import (
+from ocr_toolkit.evidence.ecosystems.contracts import (
     MAX_MANIFEST_ITEMS,
     ManifestFact,
     ManifestParseResult,
