@@ -2,14 +2,16 @@
 
 Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit. Older completed plans are indexed in [the execution-history archive](docs/engineering/execution_history/README.md).
 
-## Active Plan: M2 ecosystem and framework coverage for 0.5.0
+## Recently Completed Plan: M2 ecosystem and framework coverage for 0.5.0
 
-Status: active; release candidate locally validated; release PR and stable external delivery pending
+Status: completed; stable 0.5.0 delivery and external reconciliation verified
 Owner: Codex
-Last Updated: 2026-08-12
+Last Updated: 2026-08-13
 Release Classification: release-required
 Target Stable Version: 0.5.0
-Tracking Issues: #76, #78 (OCR 1.9.2); feature PR #77
+Closure Reconciliation: no-release
+Closure Target Stable Version: N/A
+Tracking Issues: #76, #78 (OCR 1.9.2); feature PR #77; release PR #79
 
 ### Goal
 
@@ -21,21 +23,21 @@ the existing read-only evidence MCP, repair issue #76 release recovery, and
 qualify checksum-pinned OCR 1.9.2 through issue #78 before final validation.
 The implementation, installed-artifact E2E, both owner-authorized local OCR
 review cycles, deterministic remediation, package reorganizations, protected
-feature merge, and TestPyPI development readback are complete. The final
-repository mutation for stable 0.5.0 is locally prepared and validated; complete
-its protected release PR, publication, immutable evidence, issue closure, and M2
-external reconciliation without another repository pull request.
+feature and release merges, stable publication, immutable evidence, issue
+closure, and M2 external reconciliation are complete. This documentation-only
+reconciliation records that externally verified outcome without changing the
+package or publishing another artifact.
 
 ### Decisions
 
-- Release-required target is 0.5.0. Keep this plan active through feature PR,
-  TestPyPI development verification, final release PR, stable registries,
-  provenance, annotated tag, immutable Release, receipt, supported-Python
-  installs, and completed closure of issues #76 and #78.
-- The release PR records M2 and external publication as pending because those
-  facts do not exist before merge. After its immutable receipt and independent
-  readback prove stable delivery, close the issues and active objective without
-  another repository mutation; the release receipt is the final status evidence.
+- The M2 lifecycle was release-required with target 0.5.0 and remained active
+  through feature and release PRs, registry publication, provenance, annotated
+  tag, immutable Release, receipt, supported-Python installs, and completed
+  closure of issues #76 and #78.
+- Release PR #79 correctly recorded external publication as pending before its
+  merge. The immutable receipt and independent readback now prove stable
+  delivery. The present status reconciliation is a no-release documentation
+  correction and does not alter the completed release lifecycle.
 - Use only anonymized technology selection conclusions from the private
   inventory. Never persist private host, project, namespace, path, payload, or
   identifying aggregate data; all public fixtures and examples are synthetic.
@@ -147,12 +149,33 @@ external reconciliation without another repository pull request.
 16. [x] Prepare and locally validate the final release candidate as the last
     repository mutation, archive completed 0.4.7 history, consume fragments 76,
     77, and 78, and reconcile M2 while leaving external publication pending.
-17. [ ] Push the release branch once, open the exact final release PR, read back
+17. [x] Push the release branch once, open the exact final release PR, read back
     its head, required checks, and review threads, then squash-merge only after
     every protected gate passes.
-18. [ ] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
+18. [x] Complete stable 0.5.0 TestPyPI/PyPI, provenance/hash/tag/immutable
     Release/receipt/Python-install readback and close #76 and #78 as completed
     without another repository PR.
+
+### Stable Delivery And External Reconciliation Checkpoint
+
+- Release PR #79 was read back at reviewed head
+  `e3ceda38b28c056a3391492e542c7daf8bfbfc78` and merged as signed commit
+  `008f99d8e8b745c19cc7064832890e31d7d8a555`; the merge and reviewed head
+  have the same tree. Release workflow `31604133351` completed every
+  authorization, build, registry, supported-Python verification, and immutable
+  GitHub Release job successfully.
+- Stable TestPyPI and PyPI artifacts, provenance, hashes, annotated tag
+  `v0.5.0`, and the immutable GitHub Release were independently read back. The
+  release receipt SHA-256 is
+  `f375762bbac6659d296918b35a2f61155882311659add04310744921feaa293c`.
+- Issues #76 and #78 contain the canonical receipt comment and are closed as
+  completed. The next scheduled compatibility discovery completed successfully
+  with OCR 1.9.2 still current and no newly opened release issue. BL-008 and
+  BL-009 are complete; conditional BL-010 remains M6 work and does not block M2.
+- M2 is therefore established. This no-release documentation reconciliation
+  updates status-bearing sources only; it does not run OCR again, change the
+  package version, or publish artifacts. The full 0.5.0 cycle remains here until
+  the next release PR archives it under the documented lifecycle rule.
 
 ### Feature Merge And Development Publication Checkpoint
 
