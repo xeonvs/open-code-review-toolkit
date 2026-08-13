@@ -4,7 +4,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; instruction-governance checkpoint complete, production integration next
+Status: active; production integration checkpoint complete, deterministic validation next
 Owner: Codex
 Last Updated: 2026-08-13
 Release Classification: release-required
@@ -339,6 +339,34 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
   them after feature/release delivery and close only with objective external
   evidence, otherwise preserve them open with an explicit no-change result.
 
+### Production Integration Checkpoint
+
+- A permanent installed-artifact E2E now builds one direct wheel and one sdist,
+  rebuilds the sdist through its own package boundary, installs both without
+  runtime dependencies, and verifies `pip check`, exact isolated import, and the
+  installed `ocr-ci` entry point under a restricted `PATH`.
+- Each installed artifact runs from a synthetic repository containing a hostile
+  `ocr_toolkit` shadow package. It collects immutable target decisions and root/
+  nested guidance, excludes a source-modified guidance file and source-only
+  decision replacement, preserves complete changed-path applicability, writes
+  owner-only artifacts, and exposes full target text only through a real
+  read-only stdio MCP `summary`, filtered `list`, and stable-ID `get` lifecycle.
+- The maintenance workflow now keeps `contents: read` at workflow scope and
+  grants `actions: write` only to the cleanup job that owns bounded cache,
+  artifact, and log deletion. Alert #15 remains open until a post-merge hosted
+  Scorecard run reads the new workflow; its current main-branch instance still
+  identifies the former top-level permission.
+- Alert #17 is a documented no-change result: the final release job alone has
+  `contents: write` and `issues: write` because it creates the authorized tag and
+  immutable Release, uploads exact assets, writes receipt comments, and closes
+  tracked issues only after readback. Removing, hiding, or splitting those
+  required rights solely to change a score would weaken the release boundary.
+- Sequential validation on one tree passes the installed E2E, routine quality
+  gate, focused evidence/release/workflow suites, OCR manifest, workflow YAML,
+  target 0.6.0 Towncrier rendering, privacy scan, and `git diff --check`. Live
+  readback still reports OCR 1.9.2 as latest, issue #81 as the only open project
+  issue, and no secret-scanning or Dependabot alerts.
+
 ### Feature, Release, And Stable Closure
 
 - Open the feature PR only after the one complete push. Read back exact head,
@@ -370,7 +398,7 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
 4. [x] Complete logical commit 3: nested target guidance.
 5. [x] Complete logical commit 4: canonical instruction ownership, recurring-
    incident catalogue cleanup, focused subsystem controls, and validation.
-6. [ ] Complete logical commit 5: production E2E, documentation, fragments, and
+6. [x] Complete logical commit 5: production E2E, documentation, fragments, and
    demonstrated Code scanning workflow improvements.
 7. [ ] Complete deterministic Python/package/security/privacy validation.
 8. [ ] Complete Codex Security diff scan, remediation, sibling audit, and

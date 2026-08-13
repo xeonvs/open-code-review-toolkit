@@ -12,7 +12,6 @@ on:
         type: boolean
 
 permissions:
-  actions: write
   contents: read
 
 concurrency:
@@ -24,6 +23,9 @@ jobs:
     name: cleanup-actions-storage
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      actions: write # Delete only the bounded cache, artifact, and log plan.
+      contents: read # Check out the reviewed cleanup implementation.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

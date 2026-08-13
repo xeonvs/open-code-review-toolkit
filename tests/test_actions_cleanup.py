@@ -13,6 +13,7 @@ import pytest
 from tests.support import PROJECT_ROOT, patched_attr
 
 SCRIPT = PROJECT_ROOT / "scripts" / "actions_cleanup.py"
+WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "actions-maintenance.yml"
 
 
 def load_script() -> ModuleType:
@@ -160,3 +161,16 @@ def test_cleanup_rejects_control_characters_before_logging_or_deletion() -> None
 
     with pytest.raises(module.CleanupError, match="control-free"):
         module.plan_cache_cleanup([cache(1, "setup-uv-main\x1b[2J")])
+
+
+def test_workflow_scopes_actions_write_to_the_cleanup_job() -> None:
+    """Keep destructive Actions permission out of the workflow-wide default."""
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    top_level, jobs = workflow.split("jobs:\n", 1)
+    cleanup_header = jobs.split("    steps:\n", 1)[0]
+
+    assert "permissions:\n  contents: read" in top_level
+    assert "actions: write" not in top_level
+    assert "permissions:\n      actions: write" in cleanup_header
+    assert "contents: read" in cleanup_header
