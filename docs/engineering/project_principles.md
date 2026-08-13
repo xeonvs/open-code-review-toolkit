@@ -1,55 +1,72 @@
 # Project Principles
 
-This is the short index of stable cross-cutting engineering rules for Open Code Review Toolkit.
+This document owns durable cross-cutting engineering invariants for Open Code Review Toolkit. Contributor and release procedures link to these invariants instead of restating them. Public product behavior remains owned by the user-facing documents listed under [Documentation ownership](#documentation-ownership).
 
-## Core Principles
+## Product And Architecture
 
-1. Keep the package provider-neutral; isolate GitLab behavior behind its adapter boundary.
-2. Preserve safety properties before compatibility: bounded input, redaction, rendering safety, write limits, and ownership boundaries are part of the product contract.
-3. Keep runtime dependencies at zero until a documented package boundary justifies one.
-4. Keep public examples and fixtures synthetic and free from local or private infrastructure details.
-5. Keep the Open Code Review binary external; preflight verifies it but the package does not install it.
-6. Keep current user configuration environment-driven and document every supported variable centrally. Any future non-secret file configuration requires an explicit trust, schema, and precedence design.
-7. Keep active work resumable from `PLANS.md`; keep inactive work in `docs/codex/TASKS_BACKLOG.md`.
-8. Use coherent production-quality slices when work must be decomposed; do not leave placeholder architecture as a milestone.
-9. Require changelog fragments for user-visible 0.x changes and SCM tags for versions.
-10. Treat TestPyPI as public disclosure and preserve the manual privacy/license gate before publishing.
-11. Treat automated security scores as evidence to classify, not targets to game; remediate concrete repository-owned risk and document temporal or governance constraints truthfully.
-12. Version public behavior deliberately. An incompatible pre-1.0 contract change may select the next minor version, but it is not delivered to stable users until the versioned package and release artifacts are published and independently verified.
-13. Keep implementation and release as one traceable objective whenever stable publication is requested or required. Feature validation proves readiness; registry and GitHub readback prove delivery.
-14. A deferral is a blocked or pending release state, not successful closure. Preserve the exact continuation point so a later agent does not infer that a development build satisfied a stable-release promise.
-15. Keep the toolkit release version single-sourced from VCS tags through `hatch-vcs`. Runtime code reads `ocr_toolkit.__version__`; it must not duplicate an upcoming or current release literal in servers, user agents, reports, or tests. Schema, wire-protocol, fixture, and qualified-upstream versions are separate compatibility contracts: use explicitly named constants and change them only with their own migration or qualification evidence.
-16. Treat secret scanning as a local publication gate, not only a hosted CI check. Pin one scanner version in the repository-owned wrapper and make CI read that pin, scan feature history before it is pushed, and fail closed when the exact engine or authenticated base range is unavailable. Keep the external scanner lifecycle separate from the Python quality environment.
-17. Reconcile planning from current code, tests, and published behavior before retaining historical backlog wording. An original end-state description is evidence of intent, not proof that its scope or dependency graph remains current.
-18. Classify dependencies by purpose: implementation dependencies provide a consumed interface, safety dependencies guard a risk boundary, and rollout dependencies keep an intermediate release coherent. Conditional work never blocks unconditional work merely because both appear in the desired end state.
-19. Separate repository authorization from external delivery without duplicating repository work. The release PR is the final repository mutation and records only reviewed repository truth plus pending external gates. Exact-tree authorization, an immutable machine-readable release receipt, independent registry/tag/Release/provenance/hash/install readback, and issue closure complete delivery after merge without a redundant closure PR.
-20. When an architectural milestone becomes implemented, update narrative current-state documentation in the same closure as plan, roadmap, and backlog status. Strategy and README must not continue describing the shipped architecture as a transition or target.
-21. Archive older completed execution plans by stable release tag only after their receipts are complete. Maintain a validated index that lets future agents find the original decisions and evidence without turning `PLANS.md` into the permanent release-history database.
-22. Execute security-sensitive release authorization from protected policy that predates the candidate. Candidate heads and merge commits are evidence to validate, not executable authority over their own publication.
+1. Keep provider-neutral behavior in the core and provider-specific behavior behind explicit adapters.
+2. Keep runtime dependencies at zero until a documented package boundary justifies one.
+3. Keep the Open Code Review binary external; the toolkit verifies but does not install it.
+4. Keep supported user configuration environment-driven and documented in one public contract. A future non-secret file format requires an explicit schema, trust source, and precedence design.
+5. Deliver large changes as coherent production-quality slices with explicit module and service boundaries rather than placeholder architecture.
+6. Version public behavior deliberately. Readiness and delivery are different states; `docs/release.md` owns their lifecycle.
+7. Treat automated security scores as evidence to classify, not targets to game. Repository-owned risks receive evidence-backed fixes; temporal and governance limits remain explicit.
+8. Derive active scope and dependencies from current implementation, tests, and published behavior. Historical plans and backlog wording are intent evidence, not current-state authority.
+9. Keep stable evidence identity tied to semantic applicability and source scope. Mutable versions and constraints remain values; alternatives that can coexist retain distinct identities.
+10. Permit a missing fact to support absence only when the applicable component, domain, and scope report complete coverage. Partial, runtime-dependent, unavailable, and absent coverage remain unknown.
 
-## Boundary Invariants
+## Trust Boundary Invariants
 
-1. Enforce limits while consuming or producing data, not after an unbounded operation completes. Every limit names and tests its unit: bytes, code points, lines, records, or elapsed time.
-2. Treat repository content, persisted evidence, subprocess output, inherited environment, and working-directory imports as untrusted at every boundary. Revalidate and redact on load even when the toolkit created the artifact.
-3. Bind every Git plumbing caller to the validated repository and immutable refs. Remove process-level repository/object-store overrides, ignore global/system configuration, constrain repository configuration, and disable replace-object behavior.
-4. Test semantic parsers against the external format, including key reordering, indentation width, scalar/mapping alternatives, markers, optional fields, status variants, digests, URLs, and bounded malformed-input degradation.
-5. Treat one validated defect as a risk class: audit sibling trust boundaries and parsers, and make negative tests reach and assert the intended rejection or degradation path. Evidence identities describe stable applicability and source scope, while mutable constraints and versions remain values; alternatives that can coexist require distinct identities.
-6. Keep related state transitions atomic: snapshots, indexes, deltas, receipts, and reports must not reference records or mandatory fields that were rejected, truncated, or omitted. Use NUL-delimited Git path records, explicit raw-descriptor ownership transfer, and recursive nested-configuration redaction at their trust boundaries.
-7. Prove executable integrations from installed artifacts with restricted environments, hostile working-directory shadow modules, private permissions, and the real protocol client when available.
-8. Compose mandatory report metadata once and apply it to skipped, clean, warning, error, and finding outcomes through one invariant matrix.
-9. Profile realistic bounded data by separating cold-start validation from steady-state requests; optimize the measured bottleneck rather than protocol dispatch by assumption.
-10. Before implementing a parser or trust boundary, record the grammar, normalization and degradation policies, budget units, inherited-process state, and adversarial fixtures in the active plan or tests.
-11. Missing evidence supports a negative conclusion only when the applicable component, domain, and scope explicitly report complete coverage; absent, partial, runtime-dependent, and unavailable coverage remain unknown.
-12. Treat bounded HTTP output as untrusted until a closed endpoint allowlist, redirect-safe authentication, transfer result, allowed status, and same-directory atomic replacement all succeed. A size limit alone does not make a response trusted.
-13. Automate a destructive provider write only when the provider binds the mutation itself to the validated immutable identity. A preflight read or post-write readback cannot close a time-of-check/time-of-use gap; when no mutation-time guard exists, preserve state and leave withdrawal to provider-owned policy.
-14. Give persisted security and release receipts exact closed schemas at every object level. Reject unknown fields and malformed nested shapes before comparing identity or authorizing recovery.
+### Repository content remains data
+
+Treat analyzed repository content, inherited process state, subprocess output, and working-directory imports as untrusted. Do not import or execute code from the analyzed repository; inspect immutable objects and bounded text instead. Bounded diagnostic Git and toolkit subprocesses remain permitted when they preserve the same isolation boundary.
+
+### Bounded data lifecycle
+
+Enforce byte, code-point, line, record, and time limits while data is consumed or produced, with the unit named in the contract and exercised at its boundary. A post-hoc check cannot make an unbounded capture bounded. Bounded, redacted read-only diagnostics remain valid; the prohibited mechanism is unbounded acquisition or unsafe adoption of its result.
+
+### Persisted and atomic state
+
+Treat persisted evidence, configuration, security receipts, and release receipts as hostile on every load, including artifacts created by the toolkit. Revalidate exact closed schemas at every object level, apply bounds and recursive redaction again, and accept related snapshots, indexes, deltas, diagnostics, receipts, and report fields atomically.
+
+### Immutable Git identity
+
+Bind Git plumbing to the validated repository and immutable refs. Isolate object identity from process, global, system, repository, object-store, and replacement-ref controls; parse path-bearing records through NUL-delimited plumbing and transfer raw descriptor ownership exactly once. Read-only Git diagnosis remains valid when it uses the same isolated boundary.
+
+### External format parsing
+
+Define semantic grammar, normalization, optional-field handling, and bounded degradation before implementing a parser. Equivalent key order, indentation, scalar or mapping forms, markers, URLs, digests, and status variants must not acquire accidental semantics from one canonical fixture spelling.
+
+### Network acquisition
+
+Bounded HTTP reads are diagnostic evidence until a closed endpoint allowlist, redirect-safe authentication, transfer result, allowed status, and private same-directory atomic replacement all succeed. Read-only probes are permitted; a size limit alone does not authorize a response as trusted state.
+
+### Provider mutation identity
+
+A destructive provider mutation is automated only when the mutation request itself binds the validated immutable identity. Preflight and post-write reads may diagnose state but cannot close a mutation-time race. If the provider offers no guard, existing state is preserved for explicit provider-owned policy or operator action.
+
+### Installed integration proof
+
+Executable integration claims require clean built artifacts, restricted environments, hostile working-directory shadow packages, private permissions, and the real protocol client where practical. Unit mocks establish local behavior but not installation, import, process, or protocol correctness.
+
+### Public source and disclosure
+
+Tracked public source, fixtures, examples, diagnostics intended for publication, and release artifacts contain only synthetic names, hosts, repositories, and payloads. TestPyPI is public disclosure. Local secret scanning covers unpublished feature history before its first push; private audit inputs and artifacts remain outside tracked content.
+
+### Outcome consistency
+
+Mandatory evidence and usage metadata are composed once and applied across skipped, clean, warning, error, and finding outcomes. Independent outcome branches must not redefine whether the same run is complete, partial, clean, or failed.
 
 ## Documentation Ownership
 
 - `README.md` owns the concise public introduction and quick start.
-- `docs/configuration.md` owns the environment contract.
-- `docs/gitlab.md` owns GitLab installation and operating guidance.
-- `docs/security.md` owns the runtime trust model; `SECURITY.md` owns vulnerability reporting.
-- `docs/development.md` owns local contributor commands.
-- `docs/release.md` owns release classification, delivery, and disclosure.
-- `AGENTS.md`, `PLANS.md`, and `docs/codex/` own agent workflow rather than product behavior.
+- `docs/configuration.md` owns the environment and generated-configuration contract.
+- `docs/operations.md` owns the public review state machine; `docs/gitlab.md` owns GitLab setup and operator procedure.
+- `docs/security.md` owns runtime trust guarantees; `SECURITY.md` owns vulnerability reporting.
+- `docs/development.md` owns contributor workflow, implementation conventions, and validation selection.
+- `docs/release.md` owns release classification, authorization, publication, recovery, and plan archival.
+- `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` own durable direction and outcome state; `PLANS.md` owns active or blocked repository work; `docs/codex/TASKS_BACKLOG.md` owns inactive work.
+- `docs/codex/AGENT_EXECUTION_PITFALLS.md` is a diagnostic incident catalogue. It owns no engineering invariant or procedure.
+- `docs/engineering/execution_history/` preserves historical plans and receipts without turning historical wording into current instruction.
+
+An invariant or public behavior has one canonical owner. Secondary documents may link to it, describe applicability, or record historical evidence, but they do not create a competing imperative copy. Tests protect runtime behavior and concrete lifecycle gates rather than duplicated wording across instruction files.

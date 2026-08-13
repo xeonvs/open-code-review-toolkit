@@ -1,10 +1,10 @@
 # Execution Plans
 
-Use this file for active, blocked, or recently completed execution work. Update it before implementation and before handoff or commit. Older completed plans are indexed in [the execution-history archive](docs/engineering/execution_history/README.md).
+Use this file for active or blocked repository work. Update it before implementation and before handoff or commit. Completed stable plans are indexed in [the execution-history archive](docs/engineering/execution_history/README.md).
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; nested target guidance ready for third checkpoint commit
+Status: active; instruction-governance checkpoint complete, production integration next
 Owner: Codex
 Last Updated: 2026-08-13
 Release Classification: release-required
@@ -16,14 +16,14 @@ Qualified OCR Baseline At Activation: 1.9.2
 
 ### Goal And Closure Boundary
 
-Deliver all of M4 as stable toolkit 0.6.0: BL-014 structured accepted
- decisions and BL-015 safe nested target-branch project guidance through the
- established read-only evidence MCP. Keep the lifecycle active through focused
- implementation commits, complete validation, Codex Security before OCR, one
- full local OCR review at concurrency 2, feature and release PRs, stable
- TestPyPI/PyPI publication, provenance, annotated tag, immutable Release,
- supported-Python installs, immutable receipt readback, and closure of issue
- #81. Feature merge and development publication are intermediate receipts.
+Deliver all of M4 as stable toolkit 0.6.0: BL-014 structured accepted decisions
+and BL-015 safe nested target-branch project guidance through the established
+read-only evidence MCP. Keep the lifecycle active through focused implementation
+commits, complete validation, Codex Security before OCR, one full local OCR
+review at concurrency 2, feature and release PRs, stable TestPyPI/PyPI
+publication, provenance, annotated tag, immutable Release, supported-Python
+installs, immutable receipt readback, and closure of issue #81. Feature merge
+and development publication are intermediate receipts.
 
 The active Codex goal carries the same full closure boundary and explicitly
 forbids pushing local commits one by one. The first feature push occurs only
@@ -128,7 +128,16 @@ validation, self-review, and local history consolidation are complete.
 3. **Nested target guidance.** Add immutable discovery, applicability,
    precedence, changed/renamed exclusion, object-type attacks, bootstrap/MCP
    integration, multi-component tests, and documentation.
-4. **Production integration and security hygiene.** Add synthetic installed
+4. **Instruction ownership and recurring-incident cleanup.** Apply the completed
+   audit once: replace the duplicated instruction stack with a short loader,
+   canonical rule owners, a non-normative incident catalogue, and focused
+   controls at the actual subsystem boundaries. This is repository-development
+   governance within the already release-required 0.6.0 lifecycle; it does not
+   add a registry, policy engine, runtime dependency, or separate publication
+   objective. This internal maintenance slice is `no-release` on its own and is
+   included in the already release-required M4 lifecycle without a separate
+   Towncrier entry.
+5. **Production integration and security hygiene.** Add synthetic installed
    wheel/sdist and real stdio MCP E2E, security/user docs, remaining Towncrier
    fragments, and only demonstrated least-privilege fixes for actionable GitHub
    Code scanning alerts.
@@ -203,8 +212,76 @@ diff; audit sibling implementations and module/service boundaries; verify
   and after extraction is
   `dd699e63f81faa3d3baf2cc302864ecc1514de874cbcb88d8ff37ffec43a9f79`.
   The archive index resolves every unique anchor. `PLANS.md` now contains only
-  this active M4 lifecycle and will return to its template state after 0.6.0
-  immutable receipt reconciliation.
+  this active M4 lifecycle; the 0.6.0 release PR will archive the complete
+  current plan and return this file to its empty template before publication.
+
+### Instruction-Governance Remediation
+
+The audit after checkpoint 3 found an unmodelled instruction lifecycle rather
+than one missing prohibition. Incident corrections had been copied into
+`AGENTS.md`, engineering principles, contributor/release procedures, pitfalls,
+and phrase-presence tests without a unique owner and, where the requirement was
+mechanically checkable, a subsystem-owned control. That made secondary guidance
+easy not to load, let contradictory plan-archive rules survive, and tested
+wording rather than behavior.
+
+This self-reviewed logical checkpoint after `3a09194`:
+
+- keep `AGENTS.md` as the short always-loaded repository map and workflow
+  loader; it selects applicable canonical owners and procedures but does not
+  restate their technical invariants;
+- keep durable architecture/trust invariants in project principles, contributor
+  procedure in `docs/development.md`, release lifecycle in `docs/release.md`,
+  public operator/environment behavior in operational/provider/configuration
+  docs, and runtime semantics in code plus contract tests;
+- reduce `AGENT_EXECUTION_PITFALLS.md` to incident records with an allowed root
+  cause (`missing-rule`, `conflicting-rule`, `not-loaded`, or `unenforced`), one
+  canonical owner, one current control, and historical evidence. Remove generic
+  imperative lists and one-off implementation detail; merge incidents that have
+  the same cause and correction;
+- map each mechanically checkable invariant directly to an existing focused
+  test, script, or workflow gate owned by the affected subsystem. Remove tests
+  that freeze copied instruction prose; ordinary documentation review owns
+  non-mechanical organization such as plan archiving;
+- correct the release/archive contradiction: the release PR archives the
+  repository-complete cycle with external delivery pending and returns
+  `PLANS.md` to its template; immutable receipt reconciliation then closes
+  delivery without a repository mutation.
+
+Acceptance scenarios: release tests and receipt gates stop 0.2.0-style closure
+after a feature/development build; the trusted-base workflow test stops a
+candidate from executing its authorizer; boundary tests stop bounded-after-
+capture I/O; the local full-range Gitleaks gate stops secret-shaped history
+before push; release preparation moves the completed repository plan without
+making its Markdown layout an authorization input; and a typical parser/provider
+change resolves to its canonical boundary owner and focused tests before routine
+quality validation. HTTP, subprocess, provider, and cleanup rules permit bounded
+read-only diagnosis and guarded reversible operations; they forbid only the
+unsafe trust or mutation mechanism.
+
+### Instruction-Governance Checkpoint
+
+- `AGENTS.md` is now a short startup map. Project principles own durable
+  architecture and trust invariants, development guidance owns contributor
+  procedure and validation selection, release guidance owns delivery, and
+  public operational documents retain product-contract ownership.
+- The pitfalls document is a diagnostic incident catalogue with symptom, root
+  cause, canonical owner, current control, and historical evidence. It no
+  longer restates an imperative workflow or treats historical detail as current
+  policy.
+- Phrase-presence tests were removed. Existing parser, trust-boundary, release
+  authorization, receipt, publication, and issue-closure suites remain the
+  controls for mechanically checkable behavior. No runtime, workflow,
+  authorization, dependency, or public product contract changed in this slice.
+- Plan archiving remains ordinary release-PR documentation review, not a
+  schema, helper, verifier, or publication gate. The release PR records external
+  delivery as pending; the immutable receipt and independent readback close it
+  without another repository mutation.
+- Full quality, focused release and evidence suites, workflow YAML parsing,
+  compatibility validation, Towncrier draft rendering, privacy inspection, and
+  `git diff --check` pass. Self-review mapped every removed durable requirement
+  to one canonical owner and retained bounded read-only diagnostics and guarded
+  reversible operations.
 
 ### Validation, Codex Security, And OCR Gates
 
@@ -231,7 +308,7 @@ diff; audit sibling implementations and module/service boundaries; verify
    A later OCR qualification that changes executable contracts or the reviewed
    tree invalidates the gate and requires a new final concurrency-2 review.
    Runtime/trust-boundary OCR fixes require a final Codex Security verification.
-4. Consolidate unpublished history into the four logical commits, prove exact
+4. Consolidate unpublished history into the five logical commits, prove exact
    final-tree equivalence, verify signatures, and rerun Gitleaks over the full
    first-parent range. Only then make one initial push of the complete branch.
 
@@ -271,8 +348,9 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
   exact merged tree.
 - The release PR is the final repository mutation. Preserve the already archived
   M2 receipts, consume Towncrier fragments into 0.6.0 notes, set the following
-  line to 0.6.1, and reconcile `PLANS.md`, roadmap table/diagram, backlog,
-  strategy, and narrative docs to repository-complete/publication-pending truth.
+  line to 0.6.1, archive this plan as repository-complete/external-delivery-
+  pending, return `PLANS.md` to its template, and reconcile the roadmap table/
+  diagram, backlog, strategy, and narrative docs to the same truth.
   Remove BL-014/BL-015 only after implementation evidence proves completion;
   retain a native target-ref OCR optimization only as a conditional follow-up
   if qualification does not establish it.
@@ -290,18 +368,20 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
 2. [x] Complete logical commit 1: policy core and accepted-decision parser.
 3. [x] Complete logical commit 2: scope, schema v3, and decision projections.
 4. [x] Complete logical commit 3: nested target guidance.
-5. [ ] Complete logical commit 4: production E2E, documentation, fragments, and
+5. [x] Complete logical commit 4: canonical instruction ownership, recurring-
+   incident catalogue cleanup, focused subsystem controls, and validation.
+6. [ ] Complete logical commit 5: production E2E, documentation, fragments, and
    demonstrated Code scanning workflow improvements.
-6. [ ] Complete deterministic Python/package/security/privacy validation.
-7. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
+7. [ ] Complete deterministic Python/package/security/privacy validation.
+8. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
    required security revalidation before OCR.
-8. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,
+9. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,
    remediation, deterministic revalidation, and final self-review.
-9. [ ] Consolidate and verify unpublished history, run full-range Gitleaks, and
+10. [ ] Consolidate and verify unpublished history, run full-range Gitleaks, and
    push the complete feature branch once.
-10. [ ] Complete feature PR and independent TestPyPI development readback.
-11. [ ] Prepare the final repository mutation in the release PR and reconcile
+11. [ ] Complete feature PR and independent TestPyPI development readback.
+12. [ ] Prepare the final repository mutation in the release PR and reconcile
     backlog, roadmap, strategy, and release metadata honestly.
-12. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
-    the immutable release receipt; archive this M4 cycle and return `PLANS.md`
-    to its template state as part of externally reconciled closure.
+13. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
+    the immutable release receipt; use the release-PR archive and template state
+    as repository evidence without another closure mutation.

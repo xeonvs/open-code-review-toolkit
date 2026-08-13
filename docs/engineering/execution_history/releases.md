@@ -1,6 +1,6 @@
 # Release Execution History
 
-This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active, blocked, and recently completed work; historical receipts here remain part of the audit trail.
+This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
 <a id="plan-toolkit-0-5-0"></a>
 

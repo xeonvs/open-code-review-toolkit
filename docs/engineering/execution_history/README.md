@@ -1,6 +1,6 @@
 # Execution History Index
 
-`PLANS.md` owns active, blocked, and recently completed execution. This archive preserves older completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version.
+`PLANS.md` owns active or blocked repository work. This archive preserves completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version.
 
 ## Release index
 
@@ -21,4 +21,4 @@
 | `v0.2.0` | [Stable 0.2.0 publication](releases.md#plan-toolkit-0-2-0) | [GitLab discussion lifecycle](releases.md#plan-gitlab-discussions) and [non-release workflow no-op](releases.md#plan-release-no-op). |
 | `v0.1.0` | [Stable 0.1.0 release and security remediation](releases.md#plan-toolkit-0-1-0-release) | [Release preparation](releases.md#plan-toolkit-0-1-0-preparation), [initial extraction](releases.md#plan-initial-extraction), [private TestPyPI preview](releases.md#plan-private-testpypi-preview), [OCR 1.7.12 hardening](releases.md#plan-ocr-1-7-12), and [language/TestPyPI alpha work](releases.md#plan-language-testpypi-alpha). |
 
-`PLANS.md` contains only active, blocked, or handoff-relevant execution. Move a completed stable cycle into `releases.md` without rewriting its receipts, add or update its tag row here, and verify every anchor. After immutable delivery and independent readback close the active release, return `PLANS.md` to its template state rather than retaining the completed cycle there; no separate repository closure PR is required.
+`PLANS.md` contains only active, blocked, or handoff-relevant execution. In the release PR, move the repository-complete cycle into `releases.md` with external delivery pending, link it from its stable-tag row here, and return `PLANS.md` to its template state. This is ordinary documentation maintenance, not a release-authorization gate. Immutable receipt and independent readback then close delivery without a separate repository mutation.

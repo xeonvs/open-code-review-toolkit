@@ -22,6 +22,30 @@ For artifact smoke tests, install the wheel and sdist into separate temporary vi
 
 GitHub Actions storage is repository-owned infrastructure. CI restores setup-uv caches on pull requests but saves them only from `main`; CodeQL TRAP caching and the separately controlled v4 overlay-database mode are disabled, so the small repository receives a full analysis without per-run CodeQL cache writes. Workflow artifacts use a seven-day handoff window. The weekly **Actions storage maintenance** workflow deletes all CodeQL caches, non-main or superseded setup-uv caches, superseded Gitleaks caches, artifacts older than seven days, ordinary logs older than 14 days, and release/TestPyPI logs older than 30 days. It deletes only log archives, never workflow runs or check metadata. Scheduled log cleanup uses a bounded 14-day retry window so immutable run history does not get scanned and retried forever. Manual dispatch is a dry run unless `execute` is selected; the same plan is available locally with `python scripts/actions_cleanup.py`, requires `--execute` for deletion, and accepts `--include-all-old-logs` for a deliberate one-time historical cleanup.
 
+## Planning and documentation lifecycle
+
+`PLANS.md` contains complete active or blocked repository work, including release classification, target version, service boundaries, validation, and exact resume state. Before a logical commit, update the plan and every directly affected status-bearing document to describe post-commit truth. A milestone closes only after current implementation and tests prove its own outcome; reconcile the roadmap table and diagram, backlog, strategy, and README without deleting unfinished adjacent scope.
+
+Historical wording is evidence, not a specification. Rebuild a capability matrix from current code, tests, and published behavior before retaining backlog work or dependency edges. Keep implementation, safety, and rollout dependencies distinct so conditional future work does not block an independently safe capability. Completed stable plans follow the archive lifecycle owned by [the release guide](release.md#external-reconciliation-and-plan-archiving).
+
+When a failure recurs, classify its cause before changing guidance: add or repair the canonical requirement when it is missing or conflicting, correct startup selection when it was not loaded, and otherwise add or repair the concrete subsystem control. Add a pitfalls entry only for a distinct reusable incident class with historical evidence; the catalogue itself does not own the correction.
+
+## Local validation
+
+Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
+
+- parser changes exercise the semantic grammar and bounded degradation;
+- repository, persistence, subprocess, network, provider-write, and report changes use the [cross-cutting trust invariants](engineering/project_principles.md#trust-boundary-invariants) and the checklist below;
+- package or executable-integration changes include clean wheel and sdist validation rather than mocks alone;
+- public-source changes keep private audit material untracked and run the pinned complete-range Gitleaks wrapper before push; and
+- release changes run the release authorization, receipt, workflow, artifact, and documentation suites owned by `docs/release.md`.
+
+Safe bounded read-only diagnostics are allowed. A boundary rule prohibits the unsafe acquisition, trust transition, or mutation mechanism, not HTTP, subprocesses, provider APIs, file cleanup, or debugging as whole categories.
+
+Treat one confirmed boundary or parser defect as a risk class: inspect sibling implementations, make negative tests reach the intended rejection or degradation branch, and assert that contract rather than an unrelated earlier failure. Before implementing a new parser or trust boundary, record its grammar, normalization, degradation, budget units, inherited-process state, and adversarial fixtures in the active plan or focused tests.
+
+New runtime modules, classes, and functions need purpose-focused docstrings. Comments at non-obvious security, compatibility, ownership, and state-transition boundaries explain why the constraint exists rather than narrating the code. Do not add legacy namespace shims or historical integrations outside the public contract.
+
 ## Extending ecosystem evidence
 
 Normalized source adapters live under `src/ocr_toolkit/evidence/ecosystems/`. Shared parser result contracts belong in `ecosystems/contracts.py`; Python, JavaScript, Go, and PHP package metadata each have one adapter module. Ansible keeps Galaxy requirements and topology/inventory analysis as separate modules under `ecosystems/ansible/`. These adapters consume text or already bounded metadata and return normalized facts: they do not own Git or filesystem reads, subprocesses, network access, framework derivation, persistence, or MCP lifecycle. Register path matching and immutable blob orchestration in `evidence/collectors.py`; keep cross-ecosystem container and CI extraction in `evidence/infrastructure.py`.
@@ -44,12 +68,13 @@ Provider results are admitted atomically: facts, coverage observations, and noti
 
 ## Boundary-focused test checklist
 
-Before closing a parser, repository reader, persisted schema, subprocess, or report-rendering change, add the applicable boundary tests:
+Before closing a parser, repository reader, persisted schema, network helper, provider mutation, subprocess, or report-rendering change, apply the canonical [trust-boundary invariants](engineering/project_principles.md#trust-boundary-invariants) and add the applicable tests:
 
 - exercise byte limits with multibyte input and prove reading or writing stops at the boundary instead of checking only after full capture;
 - reload persisted artifacts as hostile input and verify schema, size, redaction, control-character, and cross-reference invariants again;
 - vary valid parser syntax, including key order, indentation, scalar versus mapping forms, optional fields, markers, URLs, digests, and Git status letters;
 - clear Git process, global/system, repository, object-store, and replacement-ref controls in subprocess tests, then verify immutable refs remain bound to the validated work tree;
+- parse Git path-bearing output with NUL-delimited records and transfer raw file-descriptor ownership exactly once;
 - run installed wheel and sdist entrypoints with a restricted environment and a repository-local shadow package; and
 - assert mandatory fields for skipped, clean, warning, error, and finding summaries through one shared outcome matrix.
 
