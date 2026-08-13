@@ -58,6 +58,7 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.policy import parse_accepted_decisions
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
@@ -690,7 +691,8 @@ def collect_ref_facts(
     records = []
     diagnostics = []
     trust = TrustClass.TARGET_REPOSITORY if ref == RefRole.BASE else TrustClass.SOURCE_REPOSITORY
-    changed = {path.casefold() for path in changed_paths}
+    changed_exact = tuple(sorted(set(changed_paths)))
+    changed = {path.casefold() for path in changed_exact}
     entries = reader.list_objects(commit_sha)
     entries_by_path = {entry.path: entry for entry in entries}
     role_paths = selected_role_paths(tuple(entry.path for entry in entries))
@@ -729,7 +731,7 @@ def collect_ref_facts(
             or entry in topology_entries
             or infrastructure_candidate(entry.path)
             or entry.path in GUIDANCE_PATHS
-            or entry.path.casefold() == ACCEPTED_DECISIONS_PATH
+            or entry.path == ACCEPTED_DECISIONS_PATH
         )
         and not entry.is_symlink
         and not entry.is_submodule
@@ -851,11 +853,10 @@ def collect_ref_facts(
             # Bounded candidate omissions are already represented by explicit
             # coverage diagnostics; they must not abort the remaining facts.
             continue
-        path_folded = path.casefold()
         image_source = PurePosixPath(path).name.casefold().startswith(
             ".gitlab-ci"
         ) or _is_context_yaml(path, changed)
-        guidance_source = path in GUIDANCE_PATHS or path_folded == ACCEPTED_DECISIONS_PATH
+        guidance_source = path in GUIDANCE_PATHS or path == ACCEPTED_DECISIONS_PATH
         entry = entries_by_path.get(path)
         executable = entry is not None and entry.mode == "100755"
         topology_source = topology_candidate(path, executable=executable) and (
@@ -917,17 +918,33 @@ def collect_ref_facts(
                     ),
                     *parsed.facts,
                 ]
+            elif path == ACCEPTED_DECISIONS_PATH:
+                facts = []
+                if ref == RefRole.BASE:
+                    parsed_decisions = parse_accepted_decisions(text, changed_paths=changed_exact)
+                    diagnostics.extend(
+                        f"{ref.value}:{path}: {notice}" for notice in parsed_decisions.diagnostics
+                    )
+                    facts = [
+                        ManifestFact(
+                            "repository.accepted_decision",
+                            "repository",
+                            decision.decision_id,
+                            decision.evidence_value()["fact"],
+                        )
+                        for decision in parsed_decisions.decisions
+                    ]
             elif guidance_source:
+                # The schema-v2 text-only guidance path remains explicit until
+                # nested target-only guidance is integrated in the next slice.
                 facts = (
                     []
-                    if ref == RefRole.HEAD and path_folded in changed
+                    if ref == RefRole.HEAD and path.casefold() in changed
                     else [
                         ManifestFact(
-                            "repository.accepted_decision"
-                            if path_folded == ACCEPTED_DECISIONS_PATH
-                            else "repository.guidance",
+                            "repository.guidance",
                             "repository",
-                            path_folded,
+                            path.casefold(),
                             {"text": text},
                         )
                     ]
@@ -999,6 +1016,10 @@ def collect_ref_facts(
                 and not fact.identity.startswith(f"{path}:")
                 else fact.identity
             )
+            policy_provenance = {
+                "repository.accepted_decision": "policy:accepted-decisions",
+                "repository.guidance": "policy:project-guidance",
+            }.get(fact.kind)
             records.append(
                 EvidenceRecord(
                     kind=fact.kind,
@@ -1007,7 +1028,7 @@ def collect_ref_facts(
                     ref=ref,
                     commit_sha=commit_sha,
                     component=fact.component,
-                    provenance=f"typed parser:{PurePosixPath(path).name}",
+                    provenance=policy_provenance or f"typed parser:{PurePosixPath(path).name}",
                     confidence=Confidence.EXACT,
                     trust=trust,
                 )
@@ -1058,6 +1079,8 @@ def fact_deltas(records: Iterable[EvidenceRecord]) -> tuple[EvidenceDelta, ...]:
     base: dict[tuple[str, str, str], EvidenceRecord] = {}
     head: dict[tuple[str, str, str], EvidenceRecord] = {}
     for record in records:
+        if record.kind in {"repository.accepted_decision", "repository.guidance"}:
+            continue
         if not isinstance(record.value, Mapping) or not isinstance(
             record.value.get("identity"), str
         ):

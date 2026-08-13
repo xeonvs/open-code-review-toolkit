@@ -156,3 +156,18 @@ def test_guidance_applicability_and_precedence_are_toolkit_generated() -> None:
     assert nested_agents.matched_paths == ("services/api/main.py",)
     assert (nested_agents.depth, nested_agents.document_order) == (2, 0)
     assert (nested_claude.depth, nested_claude.document_order) == (2, 1)
+
+
+def test_scope_limit_fails_closed_without_widening_decision() -> None:
+    """Never turn truncated scope metadata into broad applicability."""
+
+    scopes = "\n".join(f"- Scope: services/service-{index}/**" for index in range(65))
+    result = parse_accepted_decisions(
+        f"## Bounded\nReason.\n{scopes}\n",
+        changed_paths=("services/service-0/main.py",),
+        today=date(2026, 8, 13),
+    )
+
+    assert result.decisions[0].applicability == "invalid"
+    assert result.decisions[0].matched_paths == ()
+    assert result.diagnostics == ("bounded: scope limit exceeded",)

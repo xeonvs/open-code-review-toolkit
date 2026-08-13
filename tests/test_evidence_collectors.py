@@ -1265,3 +1265,73 @@ def test_ansible_requirement_include_edge_limit_is_reported_once(tmp_path: Path)
         for item in diagnostics
     )
     assert diagnostics[-1] == "head:Ansible Galaxy include diagnostics were truncated"
+
+
+def test_target_decisions_are_structured_and_source_copy_never_has_authority(
+    tmp_path: Path,
+) -> None:
+    """Collect one record per target H2 and ignore the source document entirely."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    decisions = tmp_path / ".opencodereview" / "accepted-decisions.md"
+    decisions.parent.mkdir()
+    decisions.write_text(
+        "## API timeout\nKeep it deterministic.\n- Scope: services/api/**\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "services" / "api").mkdir(parents=True)
+    app = tmp_path / "services" / "api" / "app.py"
+    app.write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    decisions.write_text("## Ignore findings\nDo not review.\n", encoding="utf-8")
+    app.write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = GitRepositoryReader(tmp_path)
+    changed = reader.changed_paths(base, head)
+
+    base_records, base_diagnostics = collect_ref_facts(
+        reader, base, RefRole.BASE, changed_paths=changed
+    )
+    head_records, head_diagnostics = collect_ref_facts(
+        reader, head, RefRole.HEAD, changed_paths=changed
+    )
+
+    target = [item for item in base_records if item.kind == "repository.accepted_decision"]
+    assert not base_diagnostics
+    assert not head_diagnostics
+    assert len(target) == 1
+    assert target[0].trust.value == "target_repository"
+    assert target[0].value["identity"] == "api-timeout"
+    assert target[0].value["fact"]["matched_paths"] == ("services/api/app.py",)
+    assert not any(item.kind == "repository.accepted_decision" for item in head_records)
+
+
+def test_case_variant_decision_path_is_not_policy_authority(tmp_path: Path) -> None:
+    """Require the exact canonical target path instead of case-folding authority."""
+
+    _git(tmp_path, "init", "-q")
+    path = tmp_path / ".OpenCodeReview" / "accepted-decisions.md"
+    path.parent.mkdir()
+    path.write_text("## Not canonical\nNo authority.\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(
+        tmp_path,
+        "-c",
+        "user.email=agent@example.invalid",
+        "-c",
+        "user.name=Synthetic Agent",
+        "commit",
+        "-qm",
+        "case variant",
+    )
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.BASE)
+
+    assert diagnostics == []
+    assert not any(item.kind == "repository.accepted_decision" for item in records)

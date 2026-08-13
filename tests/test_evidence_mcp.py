@@ -507,3 +507,17 @@ def test_composed_server_launches_without_path_lookup() -> None:
     assert completed.returncode == 0, completed.stderr
     assert completed.stderr == ""
     assert json.loads(completed.stdout)["result"] == {}
+
+
+def test_summary_describes_schema_v3_target_policy_without_authority() -> None:
+    """Keep MCP actions stable while making the policy trust boundary explicit."""
+
+    summary = _payload(call_tool(_store(1), {"action": "summary"}))
+
+    assert summary["schema_version"] == 3
+    assert summary["policy"] == {
+        "accepted_decisions": 0,
+        "guidance_documents": 0,
+        "target_only": True,
+        "authoritative_for_actions": False,
+    }

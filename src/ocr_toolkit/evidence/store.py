@@ -28,9 +28,11 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     Sensitivity,
 )
+from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value, validate_policy_record
 
-SCHEMA_VERSION = 2
-SUPPORTED_SCHEMA_VERSIONS = {1, SCHEMA_VERSION}
+SCHEMA_VERSION = 3
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, SCHEMA_VERSION}
+POLICY_KINDS = frozenset({"repository.accepted_decision", "repository.guidance"})
 MAX_SERIALIZED_BYTES = 20_000_000
 KNOWN_KINDS = frozenset(
     {
@@ -157,7 +159,18 @@ class EvidenceStore:
     _kind_counts: Counter[str] = field(default_factory=Counter, init=False, repr=False)
 
     def add(self, record: EvidenceRecord) -> bool:
-        """Redact and add one record, returning false when a deterministic bound omits it."""
+        """Redact and add one schema-v3 record within deterministic bounds."""
+
+        return self._add(record, structured_policy=True)
+
+    def _add(
+        self,
+        record: EvidenceRecord,
+        *,
+        structured_policy: bool,
+        allow_legacy_policy: bool = False,
+    ) -> bool:
+        """Admit a record while preserving explicit legacy read semantics."""
 
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
@@ -165,6 +178,13 @@ class EvidenceStore:
             redacted_value = _safe_value(record.value, self.limits.max_value_chars)
             if record.kind in {"framework.detected", "template.file"}:
                 validate_plugin_record(record.kind, redacted_value)
+            if record.kind in POLICY_KINDS:
+                if structured_policy and not (
+                    allow_legacy_policy and is_legacy_policy_value(redacted_value)
+                ):
+                    validate_policy_record(record.kind, redacted_value)
+                elif not structured_policy and not is_legacy_policy_value(redacted_value):
+                    raise ValueError("legacy policy evidence must contain text only")
         except EvidenceStoreError:
             self._diagnose_once(f"omitted oversized {record.kind} evidence value")
             return False
@@ -367,9 +387,26 @@ class EvidenceStore:
         if not isinstance(raw, dict) or raw.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
             raise EvidenceStoreError("unsupported evidence store schema version")
         schema_version = cast(int, raw["schema_version"])
+        expected_top_level = {
+            "schema_version",
+            "records",
+            "snapshots",
+            "deltas",
+            "diagnostics",
+            "limits",
+        }
+        if schema_version >= 2:
+            expected_top_level.add("coverage")
+        if set(raw) != expected_top_level:
+            raise EvidenceStoreError("evidence store fields are invalid for its schema version")
         limits_raw = raw.get("limits")
-        if not isinstance(limits_raw, dict):
-            raise EvidenceStoreError("evidence store limits must be an object")
+        if not isinstance(limits_raw, dict) or set(limits_raw) != {
+            "max_records",
+            "max_records_per_kind",
+            "max_bytes",
+            "max_value_chars",
+        }:
+            raise EvidenceStoreError("evidence store limits must be an exact object")
         try:
             limits = EvidenceStoreLimits(
                 max_records=limits_raw["max_records"],
@@ -387,7 +424,11 @@ class EvidenceStore:
             raise EvidenceStoreError("evidence store records must be a list")
         try:
             for item in records_raw:
-                if not store.add(EvidenceRecord.from_dict(item)):
+                if not store._add(
+                    EvidenceRecord.from_dict(item),
+                    structured_policy=schema_version >= 3,
+                    allow_legacy_policy=True,
+                ):
                     raise EvidenceStoreError("evidence store records exceed declared limits")
         except (TypeError, ValueError) as exc:
             raise EvidenceStoreError(str(exc)) from exc
@@ -416,20 +457,27 @@ class EvidenceStore:
                 store.add_diagnostic(diagnostic)
         except EvidenceStoreError as exc:
             raise EvidenceStoreError("invalid evidence store diagnostic") from exc
-        store._read_snapshots(raw.get("snapshots", {}))
+        store._read_snapshots(raw.get("snapshots", {}), schema_version=schema_version)
         store._read_deltas(raw.get("deltas", []))
         return store
 
-    def _read_snapshots(self, raw: object) -> None:
-        """Validate snapshot references against already validated records."""
+    def _read_snapshots(self, raw: object, *, schema_version: int) -> None:
+        """Validate exact historical snapshot shapes and accepted references."""
 
-        if not isinstance(raw, dict):
-            raise EvidenceStoreError("evidence snapshots must be an object")
+        if not isinstance(raw, dict) or not set(raw) <= {"base", "head"}:
+            raise EvidenceStoreError("evidence snapshots must be a closed object")
         for name, role in (("base", RefRole.BASE), ("head", RefRole.HEAD)):
             item = raw.get(name)
             if item is None:
                 continue
-            if not isinstance(item, dict) or item.get("ref") != role.value:
+            expected_snapshot_fields = {"ref", "commit_sha", "record_ids", "diagnostics"}
+            if schema_version >= 2:
+                expected_snapshot_fields.add("coverage_ids")
+            if (
+                not isinstance(item, dict)
+                or set(item) != expected_snapshot_fields
+                or item.get("ref") != role.value
+            ):
                 raise EvidenceStoreError(f"invalid {name} evidence snapshot")
             ids = item.get("record_ids", [])
             coverage_ids = item.get("coverage_ids", [])

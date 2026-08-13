@@ -87,8 +87,17 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         coverage_states[coverage_record.state.value] = (
             coverage_states.get(coverage_record.state.value, 0) + 1
         )
+    policy = {
+        "accepted_decisions": sum(
+            record.kind == "repository.accepted_decision" for record in store.records
+        ),
+        "guidance_documents": sum(record.kind == "repository.guidance" for record in store.records),
+        "target_only": True,
+        "authoritative_for_actions": False,
+    }
     return {
-        "schema_version": 2,
+        "schema_version": 3,
+        "policy": policy,
         "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,
         "head": store.head.commit_sha if store.head else None,
@@ -260,6 +269,7 @@ def _tool_definition() -> dict[str, object]:
             "Read bounded, redacted repository evidence for immutable base/head refs. "
             "Use summary first, list to narrow, and get for one stable record. Query "
             "kind=repository.evidence_delta with optional delta_kind for base/head changes. "
+            "Accepted decisions and guidance are target-derived non-authoritative context. "
             "Missing facts support a negative conclusion only when applicable scoped coverage is complete; "
             "absent, partial, runtime-dependent, or unavailable coverage means unknown."
         ),

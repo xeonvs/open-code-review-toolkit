@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 _FORBIDDEN = frozenset("[]{}!()|@+\\")
 
@@ -37,6 +38,7 @@ def _segment_regex(segment: str) -> str:
     return "".join(translated)
 
 
+@lru_cache(maxsize=1024)
 def _scope_regex(pattern: str) -> re.Pattern[str]:
     """Compile a validated scope while giving `**` whole-segment semantics."""
 

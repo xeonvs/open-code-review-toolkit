@@ -584,3 +584,42 @@ def test_reader_rejects_duplicate_and_untrusted_batch_entries(tmp_path: Path) ->
     injected = RepositoryObject("../outside", "100644", "blob", entry.object_sha)
     with pytest.raises(RepositoryEvidenceError, match="normalized"):
         reader.read_blobs((injected,))
+
+
+def test_bootstrap_summarizes_only_applicable_structured_target_decisions() -> None:
+    """Keep rationale out of bootstrap while exposing bounded target orientation."""
+
+    store = EvidenceStore()
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.accepted_decision",
+            value={
+                "identity": "synthetic-choice",
+                "fact": {
+                    "schema_version": "repository.accepted-decision/v2",
+                    "decision_id": "synthetic-choice",
+                    "title": "Synthetic choice",
+                    "rationale": "PRIVATE RATIONALE MUST STAY IN MCP",
+                    "scopes": ["src/**"],
+                    "category": None,
+                    "owner": None,
+                    "review_after": "2026-08-13",
+                    "stale": True,
+                    "applicability": "applicable",
+                    "matched_paths": ["src/app.py"],
+                },
+            },
+            source_path=".opencodereview/accepted-decisions.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "Applicable accepted decisions" in bootstrap
+    assert "synthetic-choice" in bootstrap
+    assert "src/**" in bootstrap
+    assert "stale review requested" in bootstrap
+    assert "PRIVATE RATIONALE" not in bootstrap

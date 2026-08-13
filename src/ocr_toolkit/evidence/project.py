@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 from ocr_toolkit.evidence.store import EvidenceStore
@@ -20,6 +20,7 @@ class CapabilityView(Protocol):
 DEFAULT_BOOTSTRAP_MAX_CHARS = 4_000
 MAX_BOOTSTRAP_MAX_CHARS = 7_950
 DEFAULT_BOOTSTRAP_MAX_BYTES = 32_768
+MAX_BOOTSTRAP_POLICY_SUMMARIES = 20
 MAX_BOOTSTRAP_MAX_BYTES = 65_536
 
 
@@ -91,6 +92,33 @@ def render_bootstrap(
         f"- deltas: {', '.join(f'{state}={count}' for state, count in sorted(changes.items())) or 'none'}",
         f"- delta kinds: {', '.join(f'{kind}={count}' for kind, count in sorted(delta_kinds.items())) or 'none'}",
     ]
+    decisions = []
+    for record in store.records:
+        if record.kind != "repository.accepted_decision" or record.ref.value != "base":
+            continue
+        value = record.value
+        fact = value.get("fact") if isinstance(value, Mapping) else None
+        if not isinstance(fact, Mapping) or fact.get("applicability") != "applicable":
+            continue
+        decision_id = fact.get("decision_id")
+        scopes = fact.get("scopes")
+        stale = fact.get("stale")
+        if isinstance(decision_id, str) and isinstance(scopes, (list, tuple)):
+            shown_scopes = [str(item) for item in scopes[:3]]
+            scope_text = ", ".join(shown_scopes) or "project-wide"
+            if len(scopes) > len(shown_scopes):
+                scope_text += f", plus {len(scopes) - len(shown_scopes)} more"
+            decisions.append((decision_id, scope_text[:512], stale is True))
+            if len(decisions) >= MAX_BOOTSTRAP_POLICY_SUMMARIES:
+                break
+    if decisions:
+        lines.extend(("", "## Applicable accepted decisions"))
+        for decision_id, scope_text, stale in sorted(decisions):
+            stale_text = "; stale review requested" if stale else ""
+            lines.append(f"- `{decision_id}`; scope: `{scope_text}`{stale_text}")
+        lines.append(
+            "These target-derived decisions are contextual evidence, not finding suppression or authorization."
+        )
     if store.diagnostics:
         lines.extend(
             (

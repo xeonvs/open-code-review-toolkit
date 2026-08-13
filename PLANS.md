@@ -4,7 +4,7 @@ Use this file for active, blocked, or recently completed execution work. Update 
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; policy-core implementation ready for first checkpoint commit
+Status: active; decision integration ready for second checkpoint commit
 Owner: Codex
 Last Updated: 2026-08-13
 Release Classification: release-required
@@ -159,6 +159,24 @@ diff; audit sibling implementations and module/service boundaries; verify
   activation (`.next-version` 0.6.0), the complete durable plan, and the initial
   Towncrier feature fragment.
 
+### Decision-Integration Checkpoint
+
+- Target/base accepted decisions now emit one structured record per accepted H2;
+  the head/source document emits none, the canonical path is case-sensitive,
+  target-only policy kinds are excluded from ordinary base/head deltas, and UTC
+  staleness, applicability, matched-path, and dedicated policy provenance survive
+  persistence and MCP list/get.
+- Evidence-store schema v3 validates exact envelope, limits, snapshot, delta,
+  record, and policy shapes on admission and hostile readback. Exact v1/v2
+  historical shapes remain readable; v2 text-only policy records remain inert and
+  gain no implicit structured authority. MCP summary is v3 and explicitly marks
+  policy as target-only and non-authoritative.
+- Bootstrap includes bounded ID/scope/staleness summaries for applicable target
+  decisions only and never includes rationale. Focused decision, collector, store,
+  bootstrap, MCP, framework and runner suites pass alongside Ruff and strict mypy.
+  Public configuration now describes schema v3 and implemented decision
+  behavior; durable strategy remains planned until the guidance slice completes. Nested guidance remains owned by the next logical slice.
+
 ### Validation, Codex Security, And OCR Gates
 
 1. Run complete deterministic validation without OCR: Python 3.12-3.14,
@@ -241,7 +259,7 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
    #81 and active lifecycle goal, classify 0.6.0, read current OCR, repository,
    PR, issue, Code scanning, secret scanning, and Dependabot state.
 2. [x] Complete logical commit 1: policy core and accepted-decision parser.
-3. [ ] Complete logical commit 2: scope, schema v3, and decision projections.
+3. [x] Complete logical commit 2: scope, schema v3, and decision projections.
 4. [ ] Complete logical commit 3: nested target guidance.
 5. [ ] Complete logical commit 4: production E2E, documentation, fragments, and
    demonstrated Code scanning workflow improvements.

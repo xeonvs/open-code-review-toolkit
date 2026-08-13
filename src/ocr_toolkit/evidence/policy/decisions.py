@@ -5,13 +5,14 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from ocr_toolkit.evidence.policy.contracts import AcceptedDecision
 from ocr_toolkit.evidence.policy.scopes import PolicyScopeError, matches_scope, validate_scope
 
 MAX_DECISIONS = 256
 MAX_MATCHED_PATHS = 64
+MAX_SCOPES = 64
 MAX_TITLE_CHARS = 256
 MAX_METADATA_CHARS = 512
 _HEADING = re.compile(r"^##[ \t]+(.+?)\s*$")
@@ -66,7 +67,7 @@ def parse_accepted_decisions(
         diagnostics.append(f"accepted decisions truncated at {MAX_DECISIONS} entries")
         sections = sections[:MAX_DECISIONS]
     parsed: list[AcceptedDecision] = []
-    current_date = today or date.today()
+    current_date = today or datetime.now(timezone.utc).date()
     for index, (title, lines) in enumerate(sections, 1):
         label = f"decision {index}"
         if not title or len(title) > MAX_TITLE_CHARS:
@@ -100,6 +101,10 @@ def parse_accepted_decisions(
                     invalid_scope = True
                 continue
             if name == "scope":
+                if len(scopes) >= MAX_SCOPES:
+                    invalid_scope = True
+                    diagnostics.append(f"{decision_id}: scope limit exceeded")
+                    continue
                 try:
                     scopes.append(validate_scope(value))
                 except PolicyScopeError:

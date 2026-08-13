@@ -25,6 +25,12 @@ def _strings(value: object, *, label: str, limit: int, item_limit: int = 4096) -
         raise ValueError(f"{label} must be a bounded string array")
 
 
+def is_legacy_policy_value(value: object) -> bool:
+    """Recognize the exact text-only shape used by schema-v1/v2 stores."""
+
+    return isinstance(value, Mapping) and set(value) == {"text"} and isinstance(value["text"], str)
+
+
 def validate_policy_record(kind: str, value: object) -> None:
     """Validate one schema-v3 structured policy evidence value."""
 
@@ -53,12 +59,19 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("accepted-decision schema version is invalid")
         if fact["decision_id"] != outer["identity"]:
             raise ValueError("accepted-decision identity is inconsistent")
-        if not isinstance(fact["title"], str) or not isinstance(fact["rationale"], str):
+        if (
+            not isinstance(fact["title"], str)
+            or not 1 <= len(fact["title"]) <= 256
+            or not isinstance(fact["rationale"], str)
+            or len(fact["rationale"]) > 64_000
+        ):
             raise ValueError("accepted-decision text fields are invalid")
         _strings(fact["scopes"], label="accepted-decision scopes", limit=64, item_limit=512)
         _strings(fact["matched_paths"], label="accepted-decision matched paths", limit=64)
         for key in ("category", "owner"):
-            if fact[key] is not None and not isinstance(fact[key], str):
+            if fact[key] is not None and (
+                not isinstance(fact[key], str) or not 1 <= len(fact[key]) <= 512
+            ):
                 raise ValueError(f"accepted-decision {key} is invalid")
         review_after = fact["review_after"]
         if review_after is not None and (
@@ -92,6 +105,14 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("guidance identity or schema is invalid")
         if not all(
             isinstance(fact[key], str) for key in ("path", "document_type", "scope", "text")
+        ) or any(
+            len(fact[key]) > limit
+            for key, limit in (
+                ("path", 4096),
+                ("document_type", 64),
+                ("scope", 4096),
+                ("text", 64_000),
+            )
         ):
             raise ValueError("guidance text fields are invalid")
         if fact["applicability"] not in {"applicable", "not_applicable"}:
