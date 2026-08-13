@@ -28,6 +28,12 @@ Normalized source adapters live under `src/ocr_toolkit/evidence/ecosystems/`. Sh
 
 Do not add a flat compatibility module when moving or adding an adapter. Parser changes need semantic-variant fixtures, explicit item/include bounds, malformed-input behavior, redaction checks, and collector/delta/MCP coverage where applicable. A new framework that interprets those normalized facts belongs in `evidence/frameworks/`, not in the source adapter.
 
+## Extending repository policy evidence
+
+Pure policy contracts, accepted-decision parsing, safe scope matching, and guidance applicability live under `src/ocr_toolkit/evidence/policy/`. Register providers statically; do not use entry points or repository-controlled imports. Policy code consumes bounded immutable text and normalized changed paths only. Git/tree/blob reads remain in `evidence.collectors`, admission and hostile readback remain in `evidence.store`, compact hints remain in `evidence.project`, and transport remains in the single built-in evidence MCP.
+
+Parser changes need legacy-format, duplicate-ID, malformed-field, unknown-field, scope, date, applicability, precedence, rename, unsafe-object, multibyte-boundary, and redaction fixtures. New policy values require exact kind-specific persisted schemas. Repository guidance is untrusted evidence and must never become executable instructions or an authorization channel.
+
 ## Extending framework evidence
 
 Framework support lives under `src/ocr_toolkit/evidence/frameworks/`. Add an ecosystem declaration under `frameworks/providers/` and register it explicitly in `frameworks/registry.py`; keep Jinja2 first in the bounded priority order. Reuse the generic package detector where its direct-declaration and resolution semantics fit. Extend the closed schema and generic detector deliberately when a demonstrated provider needs different normalized semantics. Do not add entry-point discovery, compatibility shims, repository reads, filesystem access, subprocesses, network calls, mutation, or another MCP lifecycle to this package. Git/tree/manifest collection, storage, and serving remain core-owned boundaries.
