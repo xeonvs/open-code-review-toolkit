@@ -13,6 +13,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | File-based user configuration | Retained and redesigned | BL-020 waits for profile, MCP, and evidence schemas while preserving environment precedence and excluding secrets. |
 | M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through the shared evidence contracts; unproven formats are not retained as mandatory work. |
 | M2 framework selection (BL-009) | Completed and removed | The anonymized selection produced bounded static Jinja2, Go web, Symfony/Twig, and React/Next providers with synthetic cross-provider validation and no second MCP. |
+| M2 milestone closure | Completed | Stable 0.5.0 delivery and independent external readback establish M2; BL-010 remains a conditional M6 extension and is not unfinished M2 scope. |
 
 ## M3 External MCP hardening
 
