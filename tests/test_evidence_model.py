@@ -948,3 +948,148 @@ def test_store_rejects_unknown_envelope_limit_snapshot_and_record_fields(tmp_pat
         path.write_text(json.dumps(candidate), encoding="utf-8")
         with pytest.raises(EvidenceStoreError):
             EvidenceStore.read(path)
+
+
+def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path: Path) -> None:
+    """Keep structured guidance closed and recursively redacted on admission and load."""
+
+    store = EvidenceStore()
+    record = EvidenceRecord(
+        kind="repository.guidance",
+        value={
+            "identity": "services/AGENTS.md",
+            "fact": {
+                "schema_version": "repository.guidance/v2",
+                "path": "services/AGENTS.md",
+                "document_type": "AGENTS.md",
+                "scope": "services/**",
+                "text": "token=synthetic-sensitive-guidance-value",
+                "applicability": "applicable",
+                "matched_paths": ["services/app.py"],
+                "precedence": {"depth": 1, "path": "services/AGENTS.md", "document_order": 0},
+            },
+        },
+        source_path="services/AGENTS.md",
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        trust=TrustClass.TARGET_REPOSITORY,
+    )
+    assert store.add(record)
+    assert "synthetic-sensitive-guidance-value" not in store.to_json()
+    path = tmp_path / "guidance.json"
+    store.write(path)
+
+    payload = store.to_dict()
+    records = payload["records"]
+    assert isinstance(records, list) and isinstance(records[0], dict)
+    records[0].pop("id")
+    value = records[0]["value"]
+    assert isinstance(value, dict) and isinstance(value["fact"], dict)
+    precedence = value["fact"]["precedence"]
+    assert isinstance(precedence, dict)
+    precedence["permission"] = "write"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(EvidenceStoreError, match=r"invalid repository\.guidance"):
+        EvidenceStore.read(path)
+
+
+@pytest.mark.parametrize(
+    ("ref", "trust"),
+    [
+        (RefRole.HEAD, TrustClass.SOURCE_REPOSITORY),
+        (RefRole.BASE, TrustClass.SOURCE_REPOSITORY),
+    ],
+)
+def test_structured_policy_requires_target_ref_and_target_trust(
+    ref: RefRole, trust: TrustClass
+) -> None:
+    """Reject structured policy that is not bound to immutable target provenance."""
+
+    template = _structured_decision_record()
+    record = EvidenceRecord(
+        kind=template.kind,
+        value=template.value,
+        source_path=template.source_path,
+        ref=ref,
+        commit_sha=HEAD_SHA if ref is RefRole.HEAD else BASE_SHA,
+        trust=trust,
+    )
+
+    with pytest.raises(EvidenceStoreError, match=r"invalid repository\.accepted_decision"):
+        EvidenceStore().add(record)
+
+
+def test_guidance_schema_rejects_inconsistent_path_scope_and_match() -> None:
+    """Keep persisted applicability derived from path semantics rather than caller claims."""
+
+    template = {
+        "identity": "services/AGENTS.md",
+        "fact": {
+            "schema_version": "repository.guidance/v2",
+            "path": "services/AGENTS.md",
+            "document_type": "AGENTS.md",
+            "scope": "web/**",
+            "text": "Synthetic guidance.",
+            "applicability": "applicable",
+            "matched_paths": ["web/app.py"],
+            "precedence": {
+                "depth": 1,
+                "path": "services/AGENTS.md",
+                "document_order": 0,
+            },
+        },
+    }
+    record = EvidenceRecord(
+        kind="repository.guidance",
+        value=template,
+        source_path="services/AGENTS.md",
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        trust=TrustClass.TARGET_REPOSITORY,
+    )
+
+    with pytest.raises(EvidenceStoreError, match=r"invalid repository\.guidance"):
+        EvidenceStore().add(record)
+
+
+def test_structured_policy_identity_is_bound_to_its_record_source_path() -> None:
+    """Prevent an envelope path from disguising the origin of structured policy."""
+
+    decision = _structured_decision_record()
+    disguised_decision = EvidenceRecord(
+        kind=decision.kind,
+        value=decision.value,
+        source_path="docs/decisions.md",
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        trust=TrustClass.TARGET_REPOSITORY,
+    )
+    guidance = EvidenceRecord(
+        kind="repository.guidance",
+        value={
+            "identity": "services/AGENTS.md",
+            "fact": {
+                "schema_version": "repository.guidance/v2",
+                "path": "services/AGENTS.md",
+                "document_type": "AGENTS.md",
+                "scope": "services/**",
+                "text": "Synthetic guidance.",
+                "applicability": "applicable",
+                "matched_paths": ["services/app.py"],
+                "precedence": {
+                    "depth": 1,
+                    "path": "services/AGENTS.md",
+                    "document_order": 0,
+                },
+            },
+        },
+        source_path="other/AGENTS.md",
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        trust=TrustClass.TARGET_REPOSITORY,
+    )
+
+    for record in (disguised_decision, guidance):
+        with pytest.raises(EvidenceStoreError, match="invalid repository"):
+            EvidenceStore().add(record)

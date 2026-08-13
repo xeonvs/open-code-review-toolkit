@@ -111,7 +111,7 @@ Public examples use only synthetic services. Generic stdio, native remote, stati
 
 ## Project policy and guidance
 
-### Planned accepted-decision metadata
+### Implemented accepted-decision metadata
 
 `.opencodereview/accepted-decisions.md` evolves into tolerant semi-structured Markdown while preserving the existing heading-and-rationale format:
 
@@ -127,9 +127,9 @@ The generated client retains its provider timeout so regeneration stays reproduc
 
 Metadata is optional and unknown fields do not invalidate the document. Only target-branch decisions may affect a review. Scoped summaries enter the bootstrap only when relevant; complete rationale may be exposed through evidence MCP. Decisions remain contextual evidence, not unconditional suppression or permission to ignore unrelated findings.
 
-### Conditional AGENTS.md and CLAUDE.md simplification
+### Implemented target-derived AGENTS.md and CLAUDE.md evidence
 
-The existing bounded, fail-closed guidance handling remains until upstream OCR documents and tests an automatic project-guidance contract. The intended simplification discovers applicable files, uses target-branch versions, excludes guidance modified by the current merge request, and passes paths plus short hints. Guidance is non-authoritative repository evidence; OCR may read the full target-branch files with its native repository tools when needed.
+The evidence engine discovers applicable root and nested guidance from immutable target/base blobs, excludes guidance touched by the current merge request, and orders it root-to-file with deterministic same-directory precedence. Bootstrap carries only target paths, scopes, and toolkit-generated applicability hints; full redacted text remains available through the built-in evidence MCP. Guidance is non-authoritative repository evidence and cannot change policy, permissions, posting, findings, or authorize actions. Native OCR project-guidance delivery remains an optional optimization only after a qualified release proves target-ref-aware reads.
 
 ## Conditional review profiles and quality measurement
 

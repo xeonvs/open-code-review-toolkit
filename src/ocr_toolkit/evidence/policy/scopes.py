@@ -60,6 +60,19 @@ def _scope_regex(pattern: str) -> re.Pattern[str]:
 def matches_scope(pattern: str, path: str) -> bool:
     """Return whether one normalized repository path matches a safe scope."""
 
-    if not path or path.startswith("/") or any(part in {"", ".", ".."} for part in path.split("/")):
+    if not is_safe_repository_path(path):
         return False
     return _scope_regex(pattern).fullmatch(path) is not None
+
+
+def is_safe_repository_path(path: object) -> bool:
+    """Recognize one normalized repository-relative path without Git I/O."""
+
+    return (
+        isinstance(path, str)
+        and bool(path)
+        and not path.startswith(("/", "-"))
+        and "\\" not in path
+        and all(part not in {"", ".", ".."} for part in path.split("/"))
+        and not any(character == "\x7f" or ord(character) < 32 for character in path)
+    )

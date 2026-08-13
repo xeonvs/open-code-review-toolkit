@@ -6,6 +6,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.5.0` | [M2 ecosystem and framework coverage](releases.md#plan-toolkit-0-5-0) | Framework/template evidence, OCR 1.9.2 qualification, both local review cycles, and immutable stable-delivery receipts. |
 | `v0.4.7` | [GitLab review delivery and OCR 1.9.0-1.9.1 qualification](releases.md#plan-toolkit-0-4-7) | Exact-range suggestions, add-only SHA-bound approval, and the release lifecycle used by later stable delivery. |
 | `v0.4.6` | [OCR 1.8.9-1.8.10 qualification and toolkit 0.4.6](releases.md#plan-toolkit-0-4-6) | The subsequent [0.4.6 lifecycle and backlog reconciliation](releases.md#plan-toolkit-0-4-6-reconciliation) records the process correction carried into later releases. |
 | `v0.4.5` | [OCR 1.8.7-1.8.8 qualification and toolkit 0.4.5](releases.md#plan-toolkit-0-4-5) | Compatibility-chain automation and the toolchain update included in that release. |
@@ -20,4 +21,4 @@
 | `v0.2.0` | [Stable 0.2.0 publication](releases.md#plan-toolkit-0-2-0) | [GitLab discussion lifecycle](releases.md#plan-gitlab-discussions) and [non-release workflow no-op](releases.md#plan-release-no-op). |
 | `v0.1.0` | [Stable 0.1.0 release and security remediation](releases.md#plan-toolkit-0-1-0-release) | [Release preparation](releases.md#plan-toolkit-0-1-0-preparation), [initial extraction](releases.md#plan-initial-extraction), [private TestPyPI preview](releases.md#plan-private-testpypi-preview), [OCR 1.7.12 hardening](releases.md#plan-ocr-1-7-12), and [language/TestPyPI alpha work](releases.md#plan-language-testpypi-alpha). |
 
-The most recent completed release cycle remains in `PLANS.md` until the next release PR. During that PR, move the previously retained externally reconciled cycle into `releases.md`, add or update its tag row here, verify every anchor, and preserve the original receipts rather than summarizing away audit evidence. The newly prepared cycle remains current while its post-merge immutable receipt and independent readback are pending; no separate repository closure PR is required.
+`PLANS.md` contains only active, blocked, or handoff-relevant execution. Move a completed stable cycle into `releases.md` without rewriting its receipts, add or update its tag row here, and verify every anchor. After immutable delivery and independent readback close the active release, return `PLANS.md` to its template state rather than retaining the completed cycle there; no separate repository closure PR is required.

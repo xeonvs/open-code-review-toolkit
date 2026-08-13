@@ -5,6 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 
+from ocr_toolkit.evidence.policy.guidance import guidance_metadata
+from ocr_toolkit.evidence.policy.scopes import (
+    is_safe_repository_path,
+    matches_scope,
+    validate_scope,
+)
+
 
 def _exact_mapping(value: object, keys: set[str], label: str) -> Mapping[str, object]:
     """Require one exact mapping shape without extension fields."""
@@ -68,6 +75,18 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("accepted-decision text fields are invalid")
         _strings(fact["scopes"], label="accepted-decision scopes", limit=64, item_limit=512)
         _strings(fact["matched_paths"], label="accepted-decision matched paths", limit=64)
+        scopes = tuple(fact["scopes"])
+        matched_paths = tuple(fact["matched_paths"])
+        if not all(is_safe_repository_path(path) for path in matched_paths):
+            raise ValueError("accepted-decision matched path is invalid")
+        for scope in scopes:
+            validate_scope(scope)
+        if scopes and any(
+            not any(matches_scope(scope, path) for scope in scopes) for path in matched_paths
+        ):
+            raise ValueError("accepted-decision matched path is outside its scopes")
+        if fact["applicability"] in {"invalid", "not_applicable"} and matched_paths:
+            raise ValueError("inapplicable accepted decision cannot contain matched paths")
         for key in ("category", "owner"):
             if fact[key] is not None and (
                 not isinstance(fact[key], str) or not 1 <= len(fact[key]) <= 512
@@ -115,9 +134,22 @@ def validate_policy_record(kind: str, value: object) -> None:
             )
         ):
             raise ValueError("guidance text fields are invalid")
+        try:
+            document_type, scope, depth, document_order = guidance_metadata(fact["path"])
+        except ValueError as exc:
+            raise ValueError("guidance path is invalid") from exc
+        if fact["document_type"] != document_type or fact["scope"] != scope:
+            raise ValueError("guidance document type or scope is inconsistent")
         if fact["applicability"] not in {"applicable", "not_applicable"}:
             raise ValueError("guidance applicability is invalid")
         _strings(fact["matched_paths"], label="guidance matched paths", limit=64)
+        matched_paths = tuple(fact["matched_paths"])  # type: ignore[arg-type]
+        if not all(is_safe_repository_path(path) for path in matched_paths):
+            raise ValueError("guidance matched path is invalid")
+        if any(not matches_scope(scope, path) for path in matched_paths):
+            raise ValueError("guidance matched path is outside its scope")
+        if fact["applicability"] == "not_applicable" and matched_paths:
+            raise ValueError("inapplicable guidance cannot contain matched paths")
         precedence = _exact_mapping(
             fact["precedence"], {"depth", "path", "document_order"}, "guidance precedence"
         )
@@ -126,6 +158,8 @@ def validate_policy_record(kind: str, value: object) -> None:
             or isinstance(precedence["depth"], bool)
             or not isinstance(precedence["document_order"], int)
             or isinstance(precedence["document_order"], bool)
+            or precedence["depth"] != depth
+            or precedence["document_order"] != document_order
             or precedence["path"] != fact["path"]
         ):
             raise ValueError("guidance precedence is invalid")

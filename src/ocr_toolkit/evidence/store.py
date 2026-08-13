@@ -179,6 +179,25 @@ class EvidenceStore:
             if record.kind in {"framework.detected", "template.file"}:
                 validate_plugin_record(record.kind, redacted_value)
             if record.kind in POLICY_KINDS:
+                if structured_policy and (
+                    record.ref is not RefRole.BASE or record.trust.value != "target_repository"
+                ):
+                    raise ValueError("structured policy evidence must come from the target ref")
+                if (
+                    structured_policy
+                    and record.kind == "repository.guidance"
+                    and (
+                        not isinstance(redacted_value, Mapping)
+                        or redacted_value.get("identity") != record.source_path
+                    )
+                ):
+                    raise ValueError("structured guidance identity must match its source path")
+                if (
+                    structured_policy
+                    and record.kind == "repository.accepted_decision"
+                    and (record.source_path != ".opencodereview/accepted-decisions.md")
+                ):
+                    raise ValueError("structured decision must use the canonical target path")
                 if structured_policy and not (
                     allow_legacy_policy and is_legacy_policy_value(redacted_value)
                 ):

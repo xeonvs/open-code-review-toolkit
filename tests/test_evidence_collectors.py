@@ -872,8 +872,36 @@ def test_changed_head_guidance_cannot_self_authorize_policy(tmp_path: Path) -> N
     base_records, _ = collect_ref_facts(reader, base, RefRole.BASE, changed_paths=["AGENTS.md"])
     head_records, _ = collect_ref_facts(reader, head, RefRole.HEAD, changed_paths=["AGENTS.md"])
 
-    assert [record.kind for record in base_records] == ["repository.guidance"]
+    assert not base_records
     assert not head_records
+
+
+def test_source_guidance_content_is_not_read(tmp_path: Path) -> None:
+    """Never include source guidance in the bounded blob read queue."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "AGENTS.md").write_text("source-only instructions\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "source guidance")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = RecordingReader(tmp_path)
+
+    records, diagnostics = collect_ref_facts(
+        reader,
+        head,
+        RefRole.HEAD,
+        changed_paths=reader.changed_paths(base, head),
+    )
+
+    assert not records
+    assert diagnostics == []
+    assert reader.batch_sizes == [0]
 
 
 def test_collector_skips_unrelated_unchanged_yaml(tmp_path: Path) -> None:
@@ -1335,3 +1363,118 @@ def test_case_variant_decision_path_is_not_policy_authority(tmp_path: Path) -> N
 
     assert diagnostics == []
     assert not any(item.kind == "repository.accepted_decision" for item in records)
+
+
+def test_nested_target_guidance_has_applicability_precedence_and_no_source_records(
+    tmp_path: Path,
+) -> None:
+    """Discover nested target blobs and expose deterministic untrusted context only."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    for path, text in (
+        ("AGENTS.md", "root agents"),
+        ("CLAUDE.md", "root claude"),
+        ("services/AGENTS.md", "service agents"),
+        ("services/api/CLAUDE.md", "api claude"),
+        ("web/AGENTS.md", "web agents"),
+        ("PR_REVIEW.md", "global review"),
+    ):
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text + "\n", encoding="utf-8")
+    app = tmp_path / "services" / "api" / "app.py"
+    app.write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base guidance")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    app.write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source change")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = GitRepositoryReader(tmp_path)
+    changed = reader.changed_paths(base, head)
+
+    base_records, diagnostics = collect_ref_facts(reader, base, RefRole.BASE, changed_paths=changed)
+    head_records, head_diagnostics = collect_ref_facts(
+        reader, head, RefRole.HEAD, changed_paths=changed
+    )
+
+    guidance = [record for record in base_records if record.kind == "repository.guidance"]
+    assert not diagnostics
+    assert not head_diagnostics
+    assert not any(record.kind == "repository.guidance" for record in head_records)
+    facts = {record.source_path: record.value["fact"] for record in guidance}
+    assert set(facts) == {
+        "AGENTS.md",
+        "CLAUDE.md",
+        "PR_REVIEW.md",
+        "services/AGENTS.md",
+        "services/api/CLAUDE.md",
+        "web/AGENTS.md",
+    }
+    assert facts["AGENTS.md"]["matched_paths"] == ("services/api/app.py",)
+    assert facts["CLAUDE.md"]["precedence"] == {
+        "depth": 0,
+        "path": "CLAUDE.md",
+        "document_order": 1,
+    }
+    assert facts["services/AGENTS.md"]["scope"] == "services/**"
+    assert facts["services/api/CLAUDE.md"]["matched_paths"] == ("services/api/app.py",)
+    assert facts["web/AGENTS.md"]["applicability"] == "not_applicable"
+    assert facts["PR_REVIEW.md"]["matched_paths"] == ("services/api/app.py",)
+    assert all(record.trust.value == "target_repository" for record in guidance)
+
+
+def test_changed_renamed_deleted_guidance_is_excluded_from_target_and_source(
+    tmp_path: Path,
+) -> None:
+    """Treat both rename sides and every guidance mutation as self-instruction risk."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    for path in ("AGENTS.md", "docs/AGENTS.md", "services/CLAUDE.md"):
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"target {path}\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "AGENTS.md").write_text("source override\n", encoding="utf-8")
+    _git(tmp_path, "mv", "docs/AGENTS.md", "docs/CLAUDE.md")
+    (tmp_path / "services/CLAUDE.md").unlink()
+    _git(tmp_path, "commit", "-qam", "guidance attacks")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = GitRepositoryReader(tmp_path)
+    changed = reader.changed_paths(base, head)
+
+    assert changed == (
+        "AGENTS.md",
+        "docs/AGENTS.md",
+        "docs/CLAUDE.md",
+        "services/CLAUDE.md",
+    )
+    for ref, role in ((base, RefRole.BASE), (head, RefRole.HEAD)):
+        records, _ = collect_ref_facts(reader, ref, role, changed_paths=changed)
+        assert not any(record.kind == "repository.guidance" for record in records)
+
+
+def test_guidance_symlink_and_submodule_are_not_read(tmp_path: Path) -> None:
+    """Never follow target indirection for files whose names imply guidance."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "outside.txt").write_text("outside\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").symlink_to("outside.txt")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "symlink")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path), base, RefRole.BASE, changed_paths=("src/app.py",)
+    )
+
+    assert not any(record.kind == "repository.guidance" for record in records)
+    assert diagnostics == ["base:AGENTS.md: guidance rejected (symlink-source)"]

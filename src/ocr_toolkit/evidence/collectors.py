@@ -58,7 +58,11 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
-from ocr_toolkit.evidence.policy import parse_accepted_decisions
+from ocr_toolkit.evidence.policy import (
+    guidance_document,
+    is_guidance_path,
+    parse_accepted_decisions,
+)
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
@@ -71,13 +75,6 @@ MAX_MANIFEST_INCLUDE_DIAGNOSTICS = 64
 MAX_MANIFEST_INCLUDE_EDGES = 4_096
 MAX_TOPOLOGY_FACTS_PER_KIND = 256
 IMAGE_LINE_RE = re.compile(r"^\s*image\s*:\s*['\"]?([^'\"\s#]+)")
-GUIDANCE_PATHS = {
-    "PR_REVIEW.md",
-    "AGENTS.md",
-    "CLAUDE.md",
-    ".cursorrules",
-    ".github/copilot-instructions.md",
-}
 ACCEPTED_DECISIONS_PATH = ".opencodereview/accepted-decisions.md"
 CONTEXT_YAML_DIRECTORIES = (
     ".circleci/",
@@ -721,6 +718,16 @@ def collect_ref_facts(
     coverage_observations: dict[tuple[str, str], list[CoverageObservation]] = {}
     topology_kind_counts: dict[str, int] = {}
     topology_truncation_scopes: set[tuple[str, str]] = set()
+    for entry in entries:
+        if ref is not RefRole.BASE or entry.path in changed_exact:
+            continue
+        if not is_guidance_path(entry.path):
+            continue
+        if entry.is_symlink:
+            diagnostics.append(f"{ref.value}:{entry.path}: guidance rejected (symlink-source)")
+        elif entry.is_submodule or entry.object_type != "blob":
+            diagnostics.append(f"{ref.value}:{entry.path}: guidance rejected (non-blob-source)")
+
     candidates = tuple(
         entry
         for entry in entries
@@ -730,8 +737,13 @@ def collect_ref_facts(
             or _is_context_yaml(entry.path, changed)
             or entry in topology_entries
             or infrastructure_candidate(entry.path)
-            or entry.path in GUIDANCE_PATHS
-            or entry.path == ACCEPTED_DECISIONS_PATH
+            or (
+                ref is RefRole.BASE
+                and (
+                    (is_guidance_path(entry.path) and entry.path not in changed_exact)
+                    or entry.path == ACCEPTED_DECISIONS_PATH
+                )
+            )
         )
         and not entry.is_symlink
         and not entry.is_submodule
@@ -856,7 +868,7 @@ def collect_ref_facts(
         image_source = PurePosixPath(path).name.casefold().startswith(
             ".gitlab-ci"
         ) or _is_context_yaml(path, changed)
-        guidance_source = path in GUIDANCE_PATHS or path == ACCEPTED_DECISIONS_PATH
+        guidance_source = is_guidance_path(path) or path == ACCEPTED_DECISIONS_PATH
         entry = entries_by_path.get(path)
         executable = entry is not None and entry.mode == "100755"
         topology_source = topology_candidate(path, executable=executable) and (
@@ -935,20 +947,17 @@ def collect_ref_facts(
                         for decision in parsed_decisions.decisions
                     ]
             elif guidance_source:
-                # The schema-v2 text-only guidance path remains explicit until
-                # nested target-only guidance is integrated in the next slice.
-                facts = (
-                    []
-                    if ref == RefRole.HEAD and path.casefold() in changed
-                    else [
+                facts = []
+                if ref == RefRole.BASE and path not in changed_exact:
+                    document = guidance_document(path, text, changed_exact)
+                    facts = [
                         ManifestFact(
                             "repository.guidance",
                             "repository",
-                            path.casefold(),
-                            {"text": text},
+                            path,
+                            document.evidence_value()["fact"],
                         )
                     ]
-                )
             else:
                 infrastructure = (
                     parse_infrastructure_pins(path, text)

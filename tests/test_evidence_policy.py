@@ -141,6 +141,13 @@ def test_scope_matching_is_case_sensitive_and_segment_aware(
     assert matches_scope(scope, path) is expected
 
 
+@pytest.mark.parametrize("path", [r"src\\app.py", "../app.py", "-option", "src/line\nfeed"])
+def test_scope_matching_rejects_non_normalized_candidate_paths(path: str) -> None:
+    """Fail closed when hostile persisted applicability supplies an unsafe path."""
+
+    assert not matches_scope("**", path)
+
+
 def test_guidance_applicability_and_precedence_are_toolkit_generated() -> None:
     root = guidance_document("AGENTS.md", "root text", ("services/api/main.py",))
     nested_agents = guidance_document(
@@ -171,3 +178,28 @@ def test_scope_limit_fails_closed_without_widening_decision() -> None:
     assert result.decisions[0].applicability == "invalid"
     assert result.decisions[0].matched_paths == ()
     assert result.diagnostics == ("bounded: scope limit exceeded",)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["../AGENTS.md", "/AGENTS.md", r"services\\AGENTS.md", "services/../AGENTS.md"],
+)
+def test_guidance_rejects_unsafe_repository_paths(path: str) -> None:
+    """Do not derive scope or precedence from traversal or platform-specific paths."""
+
+    with pytest.raises(ValueError):
+        guidance_document(path, "text", ("services/app.py",))
+
+
+def test_global_guidance_has_repository_wide_precedence() -> None:
+    """Treat historical root-only sources as global regardless of their stored path."""
+
+    document = guidance_document(
+        ".github/copilot-instructions.md",
+        "Synthetic global guidance.",
+        ("services/app.py",),
+    )
+
+    assert document.scope == "**"
+    assert document.depth == 0
+    assert document.document_order == 2

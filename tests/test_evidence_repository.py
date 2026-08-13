@@ -623,3 +623,77 @@ def test_bootstrap_summarizes_only_applicable_structured_target_decisions() -> N
     assert "src/**" in bootstrap
     assert "stale review requested" in bootstrap
     assert "PRIVATE RATIONALE" not in bootstrap
+
+
+def test_bootstrap_lists_guidance_hints_without_repository_text() -> None:
+    """Expose target paths and applicability while keeping full text MCP-only."""
+
+    store = EvidenceStore()
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.guidance",
+            value={
+                "identity": "services/AGENTS.md",
+                "fact": {
+                    "schema_version": "repository.guidance/v2",
+                    "path": "services/AGENTS.md",
+                    "document_type": "AGENTS.md",
+                    "scope": "services/**",
+                    "text": "REPOSITORY TEXT MUST STAY IN MCP",
+                    "applicability": "applicable",
+                    "matched_paths": ["services/api/app.py"],
+                    "precedence": {
+                        "depth": 1,
+                        "path": "services/AGENTS.md",
+                        "document_order": 0,
+                    },
+                },
+            },
+            source_path="services/AGENTS.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "Applicable target guidance" in bootstrap
+    assert "services/AGENTS.md" in bootstrap
+    assert "services/**" in bootstrap
+    assert "applies to 1 changed path(s)" in bootstrap
+    assert "REPOSITORY TEXT" not in bootstrap
+
+
+def test_bootstrap_orders_same_directory_agents_before_claude() -> None:
+    """Present one directory's guidance in its documented deterministic order."""
+
+    store = EvidenceStore()
+    for name, order in (("CLAUDE.md", 1), ("AGENTS.md", 0)):
+        path = f"services/{name}"
+        assert store.add(
+            EvidenceRecord(
+                kind="repository.guidance",
+                value={
+                    "identity": path,
+                    "fact": {
+                        "schema_version": "repository.guidance/v2",
+                        "path": path,
+                        "document_type": name,
+                        "scope": "services/**",
+                        "text": f"Synthetic {name} guidance.",
+                        "applicability": "applicable",
+                        "matched_paths": ["services/app.py"],
+                        "precedence": {"depth": 1, "path": path, "document_order": order},
+                    },
+                },
+                source_path=path,
+                ref=RefRole.BASE,
+                commit_sha="a" * 40,
+                trust=TrustClass.TARGET_REPOSITORY,
+            )
+        )
+
+    bootstrap = render_bootstrap(store)
+
+    assert bootstrap.index("services/AGENTS.md") < bootstrap.index("services/CLAUDE.md")
