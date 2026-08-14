@@ -1,195 +1,122 @@
 # Agent Execution Pitfalls
 
-## Closing a public-contract change after only the feature merge
+This is a diagnostic catalogue of recurring incident classes. It is not an instruction source: current requirements live with the linked canonical owner, and prevention lives in the linked subsystem check. Historical evidence explains why the control exists without making old plans normative.
 
-**Failure mode:** A feature changes a public command or integration contract, its pull request merges, and a TestPyPI `.devN` build succeeds. The plan is then marked completed even though stable PyPI users still receive the old behavior.
+Root-cause vocabulary:
 
-**Why it happens:** Implementation, preview publication, and stable delivery are treated as separate mental tasks even when the user asked for one outcome. SCM-derived versions also make the source tree appear ready for the next version without proving that a stable tag or package exists.
+- **missing rule** - no canonical requirement existed when the incident occurred;
+- **conflicting rule** - active sources prescribed incompatible outcomes;
+- **not loaded** - the requirement existed only in secondary context that the workflow did not reliably select;
+- **unenforced rule** - prose existed, but the relevant process had no effective stop.
 
-**Required prevention:**
+## Delivery closed at readiness
 
-1. Classify the work at plan start and write the target stable version into `PLANS.md`.
-2. Treat feature merge and TestPyPI `.devN` verification as intermediate receipts.
-3. When release is required, prepare the version/changelog release PR immediately after the development build is verified.
-4. Keep the objective active until the release workflow publishes and independent readback confirms PyPI, TestPyPI, the signed tag, immutable GitHub Release, hashes, attestations, and supported-Python installs.
-5. If publication is intentionally deferred, record who deferred it, why, and the exact command or PR needed to resume.
+- **Symptom:** A feature merge or development package was treated as delivery while stable users still received the old contract.
+- **Root cause:** missing rule; implementation and stable delivery were modelled as separate objectives.
+- **Canonical owner:** [Release-required changes](../release.md#release-required-changes).
+- **Control:** release authorization, receipt, immutable-release, registry, provenance, install, and issue-closure checks in `.github/workflows/release.yml` and their release test suites.
+- **Historical evidence:** [0.2.0 process correction](../engineering/execution_history/releases.md#plan-toolkit-0-2-0).
 
-**Closure question:** "Can a user installing from production PyPI obtain the promised behavior now?" If not, the stable-release objective is not complete.
+## Candidate supplied its own release authorizer
 
-This note records recurring execution mistake patterns discovered during real work. Record generalized lessons, not one-off complaints.
+- **Symptom:** Candidate code could decide whether its own tree, metadata, and checks authorized publication.
+- **Root cause:** unenforced rule; exact-tree validation did not establish the trust source of the validator.
+- **Canonical owner:** [Stable release](../release.md#stable-release).
+- **Control:** `.github/workflows/release.yml` checks out the protected reviewed base for authorization; `tests/test_release_authorization.py` binds that checkout separately from candidate inspection.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-## Planning And Context Discipline
+## Status representations drifted from current state
 
-- Do not leave durable scope, source boundaries, or resume state only in chat; keep the active plan current.
-- Do not treat a local working specification as publishable documentation; translate its public requirements and keep private audit criteria outside tracked files.
-- Do not silently reduce extraction scope because the source is large; split it into coherent, validated subsystem slices.
-- Do not commit completed work while the active plan still says `planned` or `in_progress`.
-- Do not close a milestone by updating only its execution plan. Reconcile roadmap labels, diagram status colors, and the future backlog in the same closure change. Remove an entry only after its own deliverables and validation are proven complete; preserve unfinished adjacent work even if an earlier feature plan accidentally marked it complete.
+- **Symptom:** Implemented scope remained in the backlog or status tables, diagrams, and narrative current-state prose disagreed.
+- **Root cause:** not loaded; the implementation changed without selecting every status-bearing representation owned by the milestone.
+- **Canonical owner:** [Planning and documentation lifecycle](../development.md#planning-and-documentation-lifecycle).
+- **Control:** logical-commit and release-PR self-review reconcile current code, roadmap table and diagram, backlog, strategy, and README before changing milestone state.
+- **Historical evidence:** [execution-history index](../engineering/execution_history/README.md).
 
-## Preserving the original backlog after implementation has moved on
+## A completed plan remained in the active registry
 
-**Failure mode:** A future item keeps broad deliverables that current code and tests already satisfy, so completed behavior is planned again under its historical ID.
+- **Symptom:** `PLANS.md` retained an externally reconciled release cycle and became a second release-history database.
+- **Root cause:** conflicting rule; active-state and archive lifecycle descriptions prescribed different retention points.
+- **Canonical owner:** [External reconciliation and plan archiving](../release.md#external-reconciliation-and-plan-archiving).
+- **Control:** ordinary release-PR documentation review follows the canonical lifecycle; no archive-specific executable gate is needed.
+- **Historical evidence:** [M2 archive correction](../engineering/execution_history/releases.md#plan-toolkit-0-5-0).
 
-**Correction:** Build a current capability matrix first. Retain only demonstrable gaps, mark deliberate non-goals explicitly, and preserve an old identifier only when its remaining scope is still coherent.
+## Unpublished history reached the remote secret scan first
 
-## Letting conditional work block unconditional work
+- **Symptom:** Tip validation passed, but a secret-shaped synthetic value in an intermediate commit failed the hosted feature-range scan after push.
+- **Root cause:** unenforced rule; local validation did not reproduce the pinned scanner and complete first-parent range.
+- **Canonical owner:** [Public source and disclosure](../engineering/project_principles.md#public-source-and-disclosure) and the [local validation procedure](../development.md#local-validation).
+- **Control:** `scripts/gitleaks.sh` fails closed on the pinned engine and complete unpublished feature range; `tests/test_quality_script.py` protects that range construction.
+- **Historical evidence:** [M2 rewritten-range gate](../engineering/execution_history/releases.md#plan-toolkit-0-5-0).
 
-**Failure mode:** A provider-specific or demand-triggered feature becomes a hard dependency for a generic capability that already works safely without it.
+## A post-hoc limit was called bounded I/O
 
-**Correction:** Separate implementation, safety, and rollout edges. An unmet conditional trigger may block only the behavior that consumes it; it cannot block static-header, stdio, documentation, or other unconditional paths.
+- **Symptom:** A complete subprocess, Git, HTTP, configuration, or protocol payload was captured before its byte, line, record, or time limit was checked.
+- **Root cause:** unenforced rule; ordinary fixtures tested the final value rather than acquisition at the boundary.
+- **Canonical owner:** [Bounded data lifecycle](../engineering/project_principles.md#bounded-data-lifecycle).
+- **Control:** boundary-specific tests exercise over-limit producers, multibyte units, missing terminators, descriptor growth, timeout/termination, and retained prior state.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-## Making the release PR either preclaim delivery or require a redundant closure PR
+## Persisted state bypassed hostile readback
 
-**Failure mode:** Repository preparation and external publication are called complete in the same PR even though external facts exist only after merge, or every release pays for another protected repository PR only to copy those facts back into prose.
+- **Symptom:** A toolkit-created artifact bypassed exact schema, redaction, size, or cross-reference checks when loaded again.
+- **Root cause:** unenforced rule; file ownership was mistaken for future content integrity.
+- **Canonical owner:** [Persisted and atomic state](../engineering/project_principles.md#persisted-and-atomic-state).
+- **Control:** hostile reload tests reject unknown nested fields, replaced or linked artifacts, oversized values, invalid references, and partial state.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-**Correction:** Make the release PR the final repository mutation while leaving external gates explicitly pending. Bind publication to the exact reviewed tree; create and independently read back an immutable machine-readable receipt after registry, provenance, tag, Release, hash, and install verification; close tracked issues only then. Recover partial publication from the original authorization and receipt without another commit or closure PR.
+## A bounded HTTP response became trusted too early
 
-## Letting a release candidate execute its own authorizer
+- **Symptom:** A size-limited response crossed into trusted state before endpoint, redirects, authentication, transfer status, and atomic replacement all committed.
+- **Root cause:** unenforced rule; a byte limit was treated as the complete trust decision.
+- **Canonical owner:** [Network acquisition](../engineering/project_principles.md#network-acquisition).
+- **Control:** bounded HTTP tests reject unknown endpoints, unsafe authentication redirects, failed status or transfer, partial output, and non-atomic replacement.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-**Failure mode:** The post-merge workflow checks out the candidate or merge
-commit and runs its release-authorization helper from that tree. Exact tree,
-parent, metadata, and check validation then appear rigorous even though the
-candidate supplied the code deciding whether those checks pass.
+## Git identity was isolated in only one caller
 
-**Correction:** Run authorization code from the protected base SHA that
-predates the release PR. Fetch candidate head, merge, metadata, checks, and
-rules only as bounded data, bind recovery to the same reviewed base, and test
-that workflow checkout independently from candidate inspection.
+- **Symptom:** A sibling Git helper, repository configuration, object-store override, or replacement ref changed which object a reviewed SHA named.
+- **Root cause:** unenforced rule; isolation was implemented as a local environment checklist rather than one object-identity invariant.
+- **Canonical owner:** [Immutable Git identity](../engineering/project_principles.md#immutable-git-identity).
+- **Control:** real-repository tests cover process, global/system, repository, object-store, replacement-ref, path-record, and sibling-caller behavior.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-## Updating status tables but not current-state prose
+## Destructive provider write lacked a mutation-time guard
 
-**Failure mode:** The roadmap says a milestone is established while strategy and README still describe its implementation as a target or migration in progress.
+- **Symptom:** Automation read an expected SHA, then deleted, reset, withdrew, or invalidated state through an endpoint that could not bind that SHA.
+- **Root cause:** unenforced rule; preflight and readback were treated as a substitute for mutation-time identity.
+- **Canonical owner:** [Provider mutation identity](../engineering/project_principles.md#provider-mutation-identity); public supported behavior remains in [operations](../operations.md).
+- **Control:** provider transaction tests assert exact-SHA guarded write endpoints and absence of unsupported destructive operations.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
 
-**Correction:** Search narrative documentation for the superseded architecture and update it in the same milestone closure. Classify migration evidence as historical rather than deleting it blindly.
+## One fixture spelling stood in for a parser contract
 
-## Keeping completed plans indefinitely in the active registry
+- **Symptom:** Equivalent valid key order, indentation, scalar/mapping, marker, URL, digest, or status forms failed despite one canonical fixture passing.
+- **Root cause:** unenforced rule; tests mirrored implementation structure instead of the external grammar.
+- **Canonical owner:** [External format parsing](../engineering/project_principles.md#external-format-parsing).
+- **Control:** semantic-variant matrices exercise equivalent forms, malformed optional values, and bounded degradation that preserves unrelated facts.
+- **Historical evidence:** [M2 framework parser corrections](../engineering/execution_history/releases.md#plan-toolkit-0-5-0).
 
-**Failure mode:** `PLANS.md` becomes the permanent release database, obscuring active work and making resume state expensive to recover.
+## Mocks stood in for installed integration
 
-**Correction:** Keep only active, blocked, recently completed work and the latest reconciled release. Move older completed cycles intact to the release-tag archive, update its index, validate anchors, and retain every decision and receipt needed to reconstruct context.
-
-## Source And Privacy Boundaries
-
-- Inventory tracked source explicitly and avoid broad copy commands that could include ignored or untracked files.
-- Do not turn one-time private marker criteria into a tracked denylist or test fixture.
-- Do not use real provider payloads, hosts, repositories, or credentials in public fixtures.
-
-## Relying On The Remote Secret Scan As The First History Check
-
-**Failure mode:** Local file and package checks pass, but the ready pull request fails because a secret-shaped synthetic fixture exists in an intermediate commit. A tip-only correction cannot satisfy a CI scanner that inspects feature history.
-
-**Why it happens:** Secret scanning is treated as a remote workflow concern or as a working-tree scan. The local release gate therefore does not reproduce the CI action's pinned scanner version and first-parent commit range before history is published.
-
-**Required prevention:** Run `scripts/gitleaks.sh` before every push and before expensive closure validation. Keep its scanner version explicit, make CI read the same pin, scan the complete first-parent feature range, fail closed if the base ref or exact tool version is unavailable, and rewrite unpublished feature history when the finding exists only in an intermediate commit. Do not hide provider-shaped fixtures behind an allowlist when an equally useful non-secret-shaped synthetic value proves the contract.
-
-## Tooling And Validation Hygiene
-
-- Prefer the narrowest reproducer before broad reruns.
-- Verify both UTF-8 byte limits and Python character limits when changing note formatting.
-- Treat tests, lint, typing, artifact checks, install smoke, privacy scans, and source-integrity checks as distinct gates.
-- Pin third-party Actions by full commit SHA and keep readable version comments beside the pin.
-- When a review finds one boundary defect, enumerate and inspect sibling boundaries before declaring the class fixed.
-- Give negative tests valid preconditions up to the exact branch they target, then assert the precise error contract. A fixture rejected earlier for an unrelated reason is missing coverage.
-- Use NUL-delimited Git records for paths, explicit descriptor-ownership transfer for `fdopen`, and recursive redaction for nested diagnostic configuration.
-
-## Learning Loop
-
-- Promote a repeated stable lesson into `docs/engineering/project_principles.md`.
-- Record actionable future work in `docs/codex/TASKS_BACKLOG.md` only when it has an activation trigger and next safe action.
-
-## Deriving rollout dependencies from the desired end state
-
-**Failure mode:** A backlog is organized as a linear path through the target architecture. Existing capabilities become blocked on future components, independent foundations become coupled, or one technical refactor ships an unsafe intermediate user state.
-
-**Why it happens:** Architecture dependencies, implementation conveniences, and user-visible release dependencies are treated as the same graph. Candidate priorities may also be inferred from code that already exists rather than demonstrated repository demand. Field-completeness tests then preserve a structurally complete but semantically incorrect backlog.
-
-**Required prevention:**
-
-1. Inventory implemented primitives before assigning dependencies; a future integration may depend on a component even when current operation and documentation do not.
-2. Label each edge as an implementation, safety, or rollout dependency and remove edges that express only the desired end state.
-3. Test every proposed intermediate release: if it removes information or safety before its replacement is available, combine the work into one user-visible slice or retain an explicit compatibility mode.
-4. Keep independent foundations parallel and join them only at the first interface that consumes both.
-5. Select ecosystem and framework priorities from anonymized inventory, deterministic detection, synthetic fixtures, and expected review impact rather than parser familiarity.
-6. Review critical forbidden and required edges explicitly when the backlog changes. Do not encode mutable item counts, identifiers, wording, or temporary dependency edges into the permanent product test suite.
-
-## Treating post-hoc checks as bounded I/O
-
-**Failure mode:** Code captures an entire Git response or newline-delimited request and only then checks its size or item count. Character counts are also used where the contract is bytes.
-
-**Why it happens:** Ordinary fixtures make the final value look bounded, hiding the allocation and decoding that already happened. ASCII-only tests hide byte/code-point divergence.
-
-**Correction:** Bound the read itself, including persisted configuration and sibling helper paths; stop producers after the allowed prefix plus one sentinel unit, and name the unit in the constant. Test a line without a newline, multibyte text, excessive Git or config input, and subprocess termination.
-
-## Trusting a bounded HTTP response before the complete read commits
-
-**Failure mode:** A helper limits bytes and time but accepts arbitrary endpoint
-paths, forwards a bearer header across redirects, or writes directly over a
-trusted destination before curl and status validation finish.
-
-**Correction:** Use a closed endpoint grammar, transport-native redirect-safe
-authentication, HTTPS-only redirect policy, and a private same-directory
-temporary file. Replace the destination atomically only after transfer success
-and an allowed status. Preserve the prior trusted file and remove partial output
-on every failure path.
-
-## Automating a destructive provider write without a mutation-time identity guard
-
-**Failure mode:** A preflight read confirms the reviewed SHA, then automation
-deletes, resets, or withdraws state through an endpoint that cannot receive that
-SHA. The provider may advance between the read and write, so later readback can
-detect but cannot undo a destructive TOCTOU mutation.
-
-**Correction:** Require the immutable reviewed identity in the mutation request
-itself. If the provider endpoint has no such guard, do not automate the
-destructive transition; preserve existing state and rely on explicit
-provider-owned reset or invalidation policy.
-
-## Trusting toolkit-created evidence on reload
-
-**Failure mode:** Collection validates records, but reload assigns snapshots, deltas, or diagnostics directly. A replaced private artifact bypasses the original redaction, size, or cross-reference checks.
-
-**Why it happens:** File ownership is confused with future content integrity. Persistence is not treated as a fresh deserialization boundary.
-
-**Correction:** Validate, bound, normalize, redact, and cross-check every persisted field on every read. Test missing references, oversized nested delta values, secrets, control characters, hard links, and schema/type mismatches.
-
-## Accepting extension fields in a security receipt
-
-**Failure mode:** Recovery compares the known fields of a persisted release or
-security receipt but silently accepts extra top-level or nested keys. A future
-or attacker-controlled shape is then treated as the old authorization contract.
-
-**Correction:** Define and validate an exact key set at every receipt object
-level before comparing values. Add regressions for unknown top-level and nested
-fields, malformed optional values, and type-confused identities.
-
-## Clearing only process-level Git overrides
-
-**Failure mode:** A primary Git reader clears `GIT_DIR` and object-store variables, but repository replacement refs, global/system config, or a sibling posting helper still changes which objects a reviewed SHA names.
-
-**Why it happens:** Git isolation is treated as one environment-variable checklist or one module's concern instead of a shared object-identity invariant. Removing `GIT_REPLACE_REF_BASE` prevents a custom namespace but does not disable default `refs/replace`.
-
-**Correction:** Audit every Git plumbing caller together. Scrub process-level overrides, point global/system configuration to the null device, constrain repository configuration, set `GIT_NO_REPLACE_OBJECTS=1`, and verify with a real repository replacement-ref regression.
-
-## Testing only the canonical parser spelling
-
-**Failure mode:** A parser accepts fixtures that mirror its implementation but rejects equivalent valid syntax: reordered keys, another indentation width, scalar sources containing colons, environment markers, alternate digests, malformed optional URLs, or additional Git status letters.
-
-**Why it happens:** Fixtures come from the happy-path algorithm rather than the external format's semantic grammar and degradation policy.
-
-**Correction:** Write a contract matrix before implementation. Cover equivalent forms, optional and unknown fields, malformed optional values, case variants, marker semantics, rename/copy/type changes, and bounded degradation that preserves unrelated facts.
-
-## Proving subprocess integration only with mocks
-
-**Failure mode:** A command works in unit tests but fails under the real caller because `PATH`, working directory, artifact contents, protocol revision, permissions, or import resolution differs.
-
-**Why it happens:** Function tests are mistaken for installation and lifecycle tests. Editable environments accidentally supply executables and modules absent from clean installs.
-
-**Correction:** Test built wheel and sdist artifacts in clean environments. Restrict `PATH`, add a hostile repository-local shadow package, verify private modes, use the exact protocol client when practical, and exercise the complete process lifecycle.
-
-## Letting outcome branches drift
-
-**Failure mode:** Normal and error reports include mandatory evidence or usage metadata, while a clean or skipped branch omits it.
-
-**Why it happens:** Outcomes are assembled independently and tests assert prose rather than shared invariants.
-
-**Correction:** Compose mandatory metadata once and apply it to every outcome. Test skipped, clean, warning, error, and finding states through one table, including zero-value omission and optional emoji behavior.
+- **Symptom:** Unit tests passed while the built artifact failed under the real protocol client, restricted `PATH`, permissions, or hostile working directory.
+- **Root cause:** unenforced rule; function behavior was mistaken for installation and process-lifecycle proof.
+- **Canonical owner:** [Installed integration proof](../engineering/project_principles.md#installed-integration-proof).
+- **Control:** clean wheel/sdist, hostile-shadow, restricted-environment, private-permission, and real-protocol E2E tests.
+- **Historical evidence:** [M2 release-grade installed-artifact checkpoint](../engineering/execution_history/releases.md#plan-toolkit-0-5-0).
+
+## A relevant boundary rule lived only in secondary context
+
+- **Symptom:** A typical parser, provider, or subprocess change passed routine checks but repeated a known failure class that was described only in a long incident document not selected for the change.
+- **Root cause:** not loaded; applicability depended on an agent remembering to reread an accumulating secondary rule set.
+- **Canonical owner:** [Local validation](../development.md#local-validation) selects the relevant [trust-boundary invariant](../engineering/project_principles.md#trust-boundary-invariants) from the changed subsystem.
+- **Control:** the active plan identifies changed boundaries and focused behavioral tests before the complete quality gate; the incident catalogue is consulted only to diagnose a matching failure.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).
+
+## Outcome branches disagreed about the same run
+
+- **Symptom:** Clean, skipped, warning, or error branches omitted mandatory evidence or described inconsistent completion state.
+- **Root cause:** unenforced rule; outcomes were assembled independently and tests asserted prose rather than one result invariant.
+- **Canonical owner:** [Outcome consistency](../engineering/project_principles.md#outcome-consistency).
+- **Control:** table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts.
+- **Historical evidence:** [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7).

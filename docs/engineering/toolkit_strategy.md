@@ -60,12 +60,14 @@ Every evidence record should preserve its kind and value together with source pa
 
 The engine keeps implemented responsibilities separate:
 
-- collectors parse repository material into structured evidence;
-- bounded storage normalizes and indexes that evidence;
+- collectors select and acquire immutable repository material, then project it into structured evidence;
+- bounded storage normalizes, indexes, serializes, and strictly reloads that evidence;
 - bootstrap planning selects the smallest useful trusted overview;
 - renderers produce stable text or read-only MCP responses.
 
 The evidence model is the main extension point. Ecosystem and framework plugins may contribute typed facts, but cannot run arbitrary commands, fetch the network, mutate the repository, or introduce a second review workflow.
+
+Runtime packages follow responsibility rather than file-count boundaries. Pure registries, contracts, and projections point downward; one-ref orchestration may compose them, but they cannot import it back. Persistence normalization and hostile readback share contracts without importing the concrete store cyclically. This keeps future adapters and policy kinds extensible through the existing model while retaining one collector, store, bootstrap, and MCP lifecycle.
 
 ## Implemented compact bootstrap and built-in evidence MCP
 
@@ -85,7 +87,7 @@ Evidence already distinguishes declared constraints, locked versions, runtime de
 
 Implemented collectors cover Python declarations, requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata plus npm, Yarn, and pnpm locks; Go modules, toolchains, requirements, replacements, and checksums; Composer manifests, locks, and platform evidence; Ansible Galaxy requirements, role topology, inventories, and runtime-dependent coverage; and declarative container and GitLab CI images. Further expansion follows demonstrated repository use and requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
 
-The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` layer below framework derivation. Shared fact/result contracts plus Python, JavaScript, Go, and PHP adapters live directly in that package; Ansible Galaxy and topology/inventory adapters live under `ecosystems.ansible` because they are distinct inputs from one automation ecosystem, not framework plugins. `collectors.py` retains immutable Git/tree orchestration and source-status ownership, while cross-ecosystem container/CI extraction, storage, and MCP serving remain outside the adapter package. The package has no old flat-module shims, dynamic discovery, repository I/O, or upward dependency on frameworks or lifecycle services.
+The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` layer below framework derivation. Shared fact/result contracts plus Python, JavaScript, Go, and PHP adapters live directly in that package; Ansible Galaxy and topology/inventory adapters live under `ecosystems.ansible` because they are distinct inputs from one automation ecosystem, not framework plugins. The `ocr_toolkit.evidence.collectors` package retains immutable Git/tree orchestration and source-status ownership behind one facade, with separate registry, source selection, include-graph, projection, and one-ref orchestration modules. Storage is likewise one `ocr_toolkit.evidence.store` facade over contracts, normalization, in-memory admission/serialization, owner-only atomic writes, and hostile readback. Neither package has a flat compatibility module or a second collection, persistence, or serving lifecycle.
 
 ### Framework and template evidence
 
@@ -111,7 +113,7 @@ Public examples use only synthetic services. Generic stdio, native remote, stati
 
 ## Project policy and guidance
 
-### Planned accepted-decision metadata
+### Implemented accepted-decision metadata
 
 `.opencodereview/accepted-decisions.md` evolves into tolerant semi-structured Markdown while preserving the existing heading-and-rationale format:
 
@@ -127,9 +129,9 @@ The generated client retains its provider timeout so regeneration stays reproduc
 
 Metadata is optional and unknown fields do not invalidate the document. Only target-branch decisions may affect a review. Scoped summaries enter the bootstrap only when relevant; complete rationale may be exposed through evidence MCP. Decisions remain contextual evidence, not unconditional suppression or permission to ignore unrelated findings.
 
-### Conditional AGENTS.md and CLAUDE.md simplification
+### Implemented target-derived AGENTS.md and CLAUDE.md evidence
 
-The existing bounded, fail-closed guidance handling remains until upstream OCR documents and tests an automatic project-guidance contract. The intended simplification discovers applicable files, uses target-branch versions, excludes guidance modified by the current merge request, and passes paths plus short hints. Guidance is non-authoritative repository evidence; OCR may read the full target-branch files with its native repository tools when needed.
+The evidence engine selects applicable root and ancestor guidance before immutable target/base blob reads, excludes guidance touched by the current merge request, and orders it root-to-file with deterministic same-directory precedence. An explicit policy-document budget and domain-isolated store admission prevent unrelated guidance from evicting applicable or sibling evidence. Bootstrap carries only safely rendered target paths, scopes, and toolkit-generated applicability hints; full redacted text remains available through the built-in evidence MCP. Schema-v3 readback rebinds structured policy provenance and applicability to the atomic snapshots, while historical text records retain explicit legacy provenance. Guidance is non-authoritative repository evidence and cannot change policy, permissions, posting, findings, or authorize actions. Native OCR project-guidance delivery remains an optional optimization only after a qualified release proves target-ref-aware reads.
 
 ## Conditional review profiles and quality measurement
 

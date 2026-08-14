@@ -38,6 +38,7 @@ from ocr_toolkit.posting.settings import (
     MAX_TOOL_CALL_NAME_CHARS,
     MAX_TOOL_CALL_SUMMARY_TOOLS,
     SUGGESTION_HEADER,
+    post_badges,
     post_emoji,
     post_mode,
 )
@@ -84,6 +85,15 @@ CATEGORY_EMOJI = {
     "other": "📌",
 }
 
+SHIELDS_BADGE_BASE_URL = "https://img.shields.io/badge"
+SHIELDS_SEVERITY_COLORS = {
+    "critical": "darkred",
+    "high": "red",
+    "medium": "orange",
+    "low": "green",
+}
+SHIELDS_CATEGORY_COLOR = "blue"
+
 
 def inline_code(value: str) -> str:
     """Return a Markdown inline-code representation safe for backticks."""
@@ -108,10 +118,40 @@ def finding_metadata(comment: dict[str, Any]) -> tuple[str, str]:
     return severity, category
 
 
-def format_finding_tags(comment: dict[str, Any], *, emoji: bool | None = None) -> str:
-    """Return GitLab-visible tags for structured OCR finding metadata."""
+def _finding_badge_label(*, severity: str, category: str) -> str:
+    """Return a compact label built only from normalized closed enums."""
+
+    return " · ".join(value for value in (category, severity) if value)
+
+
+def _format_shields_badge(*, severity: str, category: str) -> str:
+    """Project normalized metadata into one fixed-host static image badge."""
+
+    label = _finding_badge_label(severity=severity, category=category)
+    if not label:
+        return ""
+    if category and severity:
+        path_label = f"{category}-{severity}"
+    elif category:
+        path_label = f"category-{category}"
+    else:
+        path_label = f"severity-{severity}"
+    color = SHIELDS_SEVERITY_COLORS.get(severity, SHIELDS_CATEGORY_COLOR)
+    return f"![{label}]({SHIELDS_BADGE_BASE_URL}/{path_label}-{color})"
+
+
+def format_finding_tags(
+    comment: dict[str, Any],
+    *,
+    emoji: bool | None = None,
+    badge_mode: str | None = None,
+) -> str:
+    """Return GitLab-visible metadata for one structured OCR finding."""
 
     severity, category = finding_metadata(comment)
+    mode = post_badges() if badge_mode is None else badge_mode
+    if mode == "shields":
+        return _format_shields_badge(severity=severity, category=category)
     tags = []
     if severity:
         tags.append(f"**Severity:** {inline_code(severity)}")
@@ -147,13 +187,14 @@ def format_inline_comment(
     *,
     suggestion_decision: SuggestionDecision | None = None,
     emoji: bool | None = None,
+    badge_mode: str | None = None,
 ) -> str:
     """Format one OCR comment as Markdown for an inline GitLab discussion."""
 
     raw_content = clean_text(comment.get("content")) or "Open Code Review reported an issue here."
     content = neutralize_suggestion_fences(neutralize_quick_actions(raw_content))
     content = "\n".join(escape_control_chars(line) for line in content.split("\n"))
-    tags = format_finding_tags(comment, emoji=emoji)
+    tags = format_finding_tags(comment, emoji=emoji, badge_mode=badge_mode)
     body = f"{tags}\n\n{content}" if tags else content
     if include_suggestion:
         body += format_suggestion_block(
@@ -168,6 +209,7 @@ def format_fallback_comment(
     *,
     suggestion_decision: SuggestionDecision | None = None,
     emoji: bool | None = None,
+    badge_mode: str | None = None,
 ) -> str:
     """Format an OCR comment for a fallback non-inline MR note."""
 
@@ -189,7 +231,7 @@ def format_fallback_comment(
     safe_path = _inline_code(path, escape_controls=True)
     body = (
         f"### {safe_path}{location}\n\n"
-        f"{format_inline_comment(comment, include_suggestion=False, emoji=emoji)}"
+        f"{format_inline_comment(comment, include_suggestion=False, emoji=emoji, badge_mode=badge_mode)}"
     )
 
     decision = suggestion_decision or SuggestionDecision(SuggestionState.ABSENT)
@@ -224,6 +266,7 @@ def format_fallback_comment_chunks(
     comments: Sequence[tuple[dict[str, Any], SuggestionDecision]],
     *,
     emoji: bool | None = None,
+    badge_mode: str | None = None,
 ) -> list[str]:
     """Split fallback comments into safe chunks before publishing MR notes."""
 
@@ -236,6 +279,7 @@ def format_fallback_comment_chunks(
                 comment,
                 suggestion_decision=suggestion_decision,
                 emoji=emoji,
+                badge_mode=badge_mode,
             ),
             max_chars=FALLBACK_NOTE_CHUNK_BUDGET,
         )
@@ -755,6 +799,78 @@ def format_reviewer_guide(
     return "\n".join(lines)
 
 
+def _review_outcome_line(
+    *,
+    total: int,
+    omitted_count: int,
+    suppressed_count: int,
+    warning_count: int,
+    outcome_status: str,
+    outcome_message: str,
+    diagnostics: CoverageDiagnostics,
+    emoji: bool,
+) -> str:
+    """Combine review health and finding publication into one visible status."""
+
+    budget_stop = outcome_status == "budget_exceeded" or (
+        outcome_status == "partial" and "budget" in outcome_message.casefold()
+    )
+    partial_result = outcome_status in {"partial", "completed_with_errors", "budget_exceeded"}
+    has_finding_state = total > 0 or omitted_count > 0 or suppressed_count > 0
+    if outcome_status == "skipped":
+        marker, status_text = "ℹ️", "Review skipped"  # noqa: RUF001
+        result_text = "no supported files changed"
+    elif outcome_status == "failed":
+        marker, status_text = "❌", "Review failed"
+        result_text = "no reliable review result was produced"
+    else:
+        if budget_stop:
+            marker, status_text = "⚠️", "Review stopped at token budget"
+        elif partial_result:
+            marker, status_text = "⚠️", "Review incomplete"
+        elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
+            marker, status_text = "⚠️", "Review complete with warnings"
+        elif has_finding_state:
+            marker, status_text = "🔎", "Review complete"
+        else:
+            marker, status_text = "✅", "Review complete"
+
+        if total:
+            noun = "finding" if total == 1 else "findings"
+            result_text = f"{total} {noun} published"
+            if partial_result:
+                result_text += " from reviewed files"
+        elif omitted_count:
+            result_text = (
+                "no findings published from reviewed files"
+                if partial_result
+                else "no findings published"
+            )
+        elif suppressed_count:
+            result_text = (
+                "no new findings published from reviewed files"
+                if partial_result
+                else "no new findings published"
+            )
+        elif partial_result:
+            result_text = "no findings in reviewed files"
+        else:
+            result_text = "no findings"
+
+        if omitted_count:
+            noun = "finding" if omitted_count == 1 else "findings"
+            result_text += f"; {omitted_count} {noun} omitted by posting limit"
+        if suppressed_count:
+            noun = "finding" if suppressed_count == 1 else "findings"
+            result_text += f"; {suppressed_count} {noun} matched prior reviewer decisions"
+        if partial_result and diagnostics.file_count is not None:
+            noun = "file" if diagnostics.file_count == 1 else "files"
+            result_text += f"; {diagnostics.file_count} {noun} not reviewed"
+
+    prefix = f"{marker} " if emoji else ""
+    return f"{prefix}**{status_text} — {result_text}**"
+
+
 def summarize_result(
     total: int,
     inline_count: int,
@@ -783,51 +899,17 @@ def summarize_result(
 
     use_emoji = post_emoji() if emoji is None else emoji
     diagnostics = coverage_diagnostics or CoverageDiagnostics((), 0, 0, 0, 0)
-    budget_stop = outcome_status == "budget_exceeded" or (
-        outcome_status == "partial" and "budget" in outcome_message.casefold()
+    outcome_line = _review_outcome_line(
+        total=total,
+        omitted_count=omitted_count,
+        suppressed_count=suppressed_count,
+        warning_count=warning_count,
+        outcome_status=outcome_status,
+        outcome_message=outcome_message,
+        diagnostics=diagnostics,
+        emoji=use_emoji,
     )
-    if outcome_status == "skipped":
-        marker, status_text = "ℹ️", "Review skipped"  # noqa: RUF001
-    elif outcome_status == "failed":
-        marker, status_text = "❌", "Review failed"
-    elif budget_stop:
-        marker, status_text = "⚠️", "Review stopped at token budget"
-    elif outcome_status in {"partial", "completed_with_errors"}:
-        marker, status_text = "⚠️", "Review incomplete"
-    elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
-        marker, status_text = "⚠️", "Review complete with warnings"
-    elif total:
-        marker, status_text = "🔎", "Review complete"
-    else:
-        marker, status_text = "✅", "Review complete"
-    prefix = f"{marker} " if use_emoji else ""
-    lines = ["## Open Code Review", "", f"{prefix}**{status_text}**", ""]
-
-    file_suffix = (
-        f" · {diagnostics.file_count} "
-        f"{'file' if diagnostics.file_count == 1 else 'files'} not reviewed"
-        if diagnostics.file_count is not None
-        else ""
-    )
-    finding_prefix = "🔎 " if use_emoji and total else ""
-    if outcome_status == "failed":
-        finding_line = "No reliable review result was produced"
-    elif outcome_status == "skipped":
-        finding_line = "No supported files changed"
-    elif total:
-        noun = "finding" if total == 1 else "findings"
-        partial_prefix = (
-            "Partial result · " if outcome_status in {"partial", "budget_exceeded"} else ""
-        )
-        finding_line = f"{partial_prefix}{finding_prefix}**{total} {noun} published**{file_suffix}"
-    elif suppressed_count:
-        noun = "finding" if suppressed_count == 1 else "findings"
-        finding_line = f"No new findings published · {suppressed_count} {noun} matched prior reviewer decisions{file_suffix}"
-    elif outcome_status in {"partial", "completed_with_errors", "budget_exceeded"}:
-        finding_line = f"No findings in reviewed files{file_suffix}"
-    else:
-        finding_line = "No findings"
-    lines.append(finding_line)
+    lines = ["## Open Code Review", "", outcome_line]
     if outcome_status == "failed":
         lines.extend(
             [

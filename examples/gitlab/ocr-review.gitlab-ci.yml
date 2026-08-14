@@ -6,14 +6,16 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.9.2"
+  OCR_VERSION: "v1.9.3"
   OCR_TOOLKIT_VERSION: "0.1.0"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v0.1.0/SHA256SUMS"
-  OCR_SHA256: "15ed605305fc679604ed0f5fa8715db505af81c10ecb8a7846d5642bce4b834e"
+  OCR_SHA256: "d494812b9ba316a34bb08efbaebf871ab1069e83f5892c5d87d93ab703626838"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on exact-SHA approval; set "false" for a comment-only bot.
   OCR_AUTO_APPROVE: "true"
+  # Optional remote category/severity images; text is the private-safe default.
+  # OCR_POST_BADGES: "shields"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"

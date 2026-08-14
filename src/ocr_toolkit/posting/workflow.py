@@ -92,6 +92,7 @@ from ocr_toolkit.posting.settings import (
     auto_approve,
     max_post_comments,
     ocr_exit_code,
+    post_badges,
     post_emoji,
     post_mode,
     strict_posting,
@@ -643,6 +644,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         comments = comments[:publish_limit]
 
     emoji = post_emoji()
+    badge_mode = post_badges()
     approval_setting = auto_approve()
     approval_eligibility = evaluate_approval_policy(
         approval_setting,
@@ -774,6 +776,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 raw_comment,
                 suggestion_decision=suggestion_decision,
                 emoji=emoji,
+                badge_mode=badge_mode,
             ),
             refs=refs,
             draft_note_ids=draft_note_ids,
@@ -802,7 +805,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             return 1
 
     if failed_comments:
-        fallback_chunks = format_fallback_comment_chunks(failed_comments, emoji=emoji)
+        fallback_chunks = format_fallback_comment_chunks(
+            failed_comments,
+            emoji=emoji,
+            badge_mode=badge_mode,
+        )
 
         for index, fallback_chunk in enumerate(fallback_chunks, start=1):
             fallback_title = (

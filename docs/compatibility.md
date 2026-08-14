@@ -14,6 +14,8 @@ The built-in stdio entry uses the toolkit's current absolute Python executable i
 
 Candidates then take one of two lanes:
 
+Before selecting a lane, classify every upstream changelog item as a toolkit-consumed contract change, a demonstrated future-backlog impact, or release-note-only context. Only consumed contracts justify toolkit code or release scope; a new upstream capability does not create roadmap work unless the toolkit has a demonstrated need for it.
+
 - `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence, runtime preflight version, and GitLab example version/checksum. It never writes directly to `main`.
 - `human-review-required`: every minor/major release, skipped or non-increasing patch, changed or failed contract, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
 

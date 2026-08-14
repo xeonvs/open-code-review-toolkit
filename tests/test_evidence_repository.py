@@ -14,6 +14,7 @@ from ocr_toolkit.evidence import (
     EvidenceRecord,
     EvidenceStore,
     EvidenceStoreError,
+    EvidenceStoreLimits,
     RefRole,
     TrustClass,
 )
@@ -285,7 +286,46 @@ def test_collection_never_keeps_deltas_for_rejected_typed_records(
 
     assert not any(record.kind == "dependency.declared" for record in store.records)
     assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
-    assert "typed evidence was truncated by store limits" in store.diagnostics
+    assert store.diagnostics == []
+
+
+def test_collection_continues_after_a_real_per_kind_store_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep later evidence domains after one kind exhausts its real budget."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    (root / "requirements.txt").write_text("alpha==1\nbeta==1\n", encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.12"\n', encoding="utf-8"
+    )
+    (root / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+    (root / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    git(root, "commit", "-qam", "head")
+    head = git(root, "rev-parse", "HEAD")
+
+    class ConstrainedStore(EvidenceStore):
+        """Use a small genuine per-kind budget through the production store."""
+
+        def __init__(self, **kwargs: object) -> None:
+            super().__init__(
+                limits=EvidenceStoreLimits(max_records=64, max_records_per_kind=2),
+                **kwargs,
+            )
+
+    monkeypatch.setattr("ocr_toolkit.evidence.collect.EvidenceStore", ConstrainedStore)
+
+    store = collect_repository_evidence(root, base_ref=base, head_ref=head)
+
+    assert len([record for record in store.records if record.kind == "dependency.declared"]) == 2
+    assert len([record for record in store.records if record.kind == "runtime.declared"]) == 2
+    assert "per-kind evidence record limit reached for dependency.declared" in store.diagnostics
+    assert "typed dependency.declared evidence was truncated by store limits" in store.diagnostics
 
 
 def test_collection_builds_deltas_from_canonical_redacted_store_records(
@@ -384,8 +424,8 @@ def test_bootstrap_neutralizes_untrusted_diagnostic_markdown() -> None:
     rendered = render_bootstrap(store)
 
     assert "\n# injected" not in rendered
-    assert "```tool" not in rendered
-    assert r"- notice # injected \`\`\`tool call \`\`\`" in rendered
+    assert "\n```tool" not in rendered
+    assert "- ```` notice # injected ```tool call ``` ````" in rendered
 
 
 def test_internal_artifacts_are_private_regular_files(tmp_path: Path) -> None:
@@ -584,3 +624,227 @@ def test_reader_rejects_duplicate_and_untrusted_batch_entries(tmp_path: Path) ->
     injected = RepositoryObject("../outside", "100644", "blob", entry.object_sha)
     with pytest.raises(RepositoryEvidenceError, match="normalized"):
         reader.read_blobs((injected,))
+
+
+def test_bootstrap_summarizes_only_applicable_structured_target_decisions() -> None:
+    """Keep rationale out of bootstrap while exposing bounded target orientation."""
+
+    store = EvidenceStore()
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.accepted_decision",
+            value={
+                "identity": "synthetic-choice",
+                "fact": {
+                    "schema_version": "repository.accepted-decision/v2",
+                    "decision_id": "synthetic-choice",
+                    "title": "Synthetic choice",
+                    "rationale": "PRIVATE RATIONALE MUST STAY IN MCP",
+                    "scopes": ["src/**"],
+                    "category": None,
+                    "owner": None,
+                    "review_after": "2026-08-13",
+                    "stale": True,
+                    "applicability": "applicable",
+                    "matched_paths": ["src/app.py"],
+                },
+            },
+            source_path=".opencodereview/accepted-decisions.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            component="repository",
+            provenance="policy:accepted-decisions",
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "Applicable accepted decisions" in bootstrap
+    assert "synthetic-choice" in bootstrap
+    assert "src/**" in bootstrap
+    assert "stale review requested" in bootstrap
+    assert "PRIVATE RATIONALE" not in bootstrap
+
+
+def test_bootstrap_lists_guidance_hints_without_repository_text() -> None:
+    """Expose target paths and applicability while keeping full text MCP-only."""
+
+    store = EvidenceStore()
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.guidance",
+            value={
+                "identity": "services/AGENTS.md",
+                "fact": {
+                    "schema_version": "repository.guidance/v2",
+                    "path": "services/AGENTS.md",
+                    "document_type": "AGENTS.md",
+                    "scope": "services/**",
+                    "text": "REPOSITORY TEXT MUST STAY IN MCP",
+                    "applicability": "applicable",
+                    "matched_paths": ["services/api/app.py"],
+                    "precedence": {
+                        "depth": 1,
+                        "path": "services/AGENTS.md",
+                        "document_order": 0,
+                    },
+                },
+            },
+            source_path="services/AGENTS.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            component="repository",
+            provenance="policy:project-guidance",
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "Applicable target guidance" in bootstrap
+    assert "services/AGENTS.md" in bootstrap
+    assert "services/**" in bootstrap
+    assert "applies to 1 changed path(s)" in bootstrap
+    assert "REPOSITORY TEXT" not in bootstrap
+
+
+def test_bootstrap_orders_same_directory_agents_before_claude() -> None:
+    """Present one directory's guidance in its documented deterministic order."""
+
+    store = EvidenceStore()
+    for name, order in (("CLAUDE.md", 1), ("AGENTS.md", 0)):
+        path = f"services/{name}"
+        assert store.add(
+            EvidenceRecord(
+                kind="repository.guidance",
+                value={
+                    "identity": path,
+                    "fact": {
+                        "schema_version": "repository.guidance/v2",
+                        "path": path,
+                        "document_type": name,
+                        "scope": "services/**",
+                        "text": f"Synthetic {name} guidance.",
+                        "applicability": "applicable",
+                        "matched_paths": ["services/app.py"],
+                        "precedence": {"depth": 1, "path": path, "document_order": order},
+                    },
+                },
+                source_path=path,
+                ref=RefRole.BASE,
+                commit_sha="a" * 40,
+                component="repository",
+                provenance="policy:project-guidance",
+                trust=TrustClass.TARGET_REPOSITORY,
+            )
+        )
+
+    bootstrap = render_bootstrap(store)
+
+    assert bootstrap.index("services/AGENTS.md") < bootstrap.index("services/CLAUDE.md")
+
+
+def test_bootstrap_applies_guidance_cap_after_precedence_ordering() -> None:
+    """Never let source-path order evict higher-precedence root guidance."""
+
+    store = EvidenceStore()
+    for index in range(21):
+        path = f"{index:02d}/AGENTS.md"
+        assert store.add(
+            EvidenceRecord(
+                kind="repository.guidance",
+                value={
+                    "identity": path,
+                    "fact": {
+                        "schema_version": "repository.guidance/v2",
+                        "path": path,
+                        "document_type": "AGENTS.md",
+                        "scope": f"{index:02d}/**",
+                        "text": "Synthetic directory guidance.",
+                        "applicability": "applicable",
+                        "matched_paths": [f"{index:02d}/app.py"],
+                        "precedence": {"depth": 1, "path": path, "document_order": 0},
+                    },
+                },
+                source_path=path,
+                ref=RefRole.BASE,
+                commit_sha="a" * 40,
+                component="repository",
+                provenance="policy:project-guidance",
+                trust=TrustClass.TARGET_REPOSITORY,
+            )
+        )
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.guidance",
+            value={
+                "identity": "AGENTS.md",
+                "fact": {
+                    "schema_version": "repository.guidance/v2",
+                    "path": "AGENTS.md",
+                    "document_type": "AGENTS.md",
+                    "scope": "**",
+                    "text": "Synthetic root guidance.",
+                    "applicability": "applicable",
+                    "matched_paths": ["00/app.py"],
+                    "precedence": {"depth": 0, "path": "AGENTS.md", "document_order": 0},
+                },
+            },
+            source_path="AGENTS.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            component="repository",
+            provenance="policy:project-guidance",
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "`AGENTS.md`" in bootstrap
+    assert "`18/AGENTS.md`" in bootstrap
+    assert "`19/AGENTS.md`" not in bootstrap
+    assert "`20/AGENTS.md`" not in bootstrap
+
+
+def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> None:
+    """Keep repository delimiters inside complete generated Markdown lines."""
+
+    path = "services/`review text`/AGENTS.md"
+    scope = "services/`review text`/**"
+    store = EvidenceStore()
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.guidance",
+            value={
+                "identity": path,
+                "fact": {
+                    "schema_version": "repository.guidance/v2",
+                    "path": path,
+                    "document_type": "AGENTS.md",
+                    "scope": scope,
+                    "text": "Synthetic guidance.",
+                    "applicability": "applicable",
+                    "matched_paths": ["services/`review text`/app.py"],
+                    "precedence": {"depth": 2, "path": path, "document_order": 0},
+                },
+            },
+            source_path=path,
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            component="repository",
+            provenance="policy:project-guidance",
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store, max_chars=1024)
+
+    assert "`` services/`review text`/AGENTS.md ``" in bootstrap
+    assert "`` services/`review text`/** ``" in bootstrap
+    clipped = render_bootstrap(store, max_chars=256)
+    assert clipped.endswith(
+        "> Evidence bootstrap truncated; query `ocr_toolkit_evidence` for details.\n"
+    )
+    assert not any(line.count("``") == 1 for line in clipped.splitlines())

@@ -507,3 +507,50 @@ def test_composed_server_launches_without_path_lookup() -> None:
     assert completed.returncode == 0, completed.stderr
     assert completed.stderr == ""
     assert json.loads(completed.stdout)["result"] == {}
+
+
+def test_summary_describes_schema_v3_target_policy_without_authority() -> None:
+    """Keep MCP actions stable while making the policy trust boundary explicit."""
+
+    summary = _payload(call_tool(_store(1), {"action": "summary"}))
+
+    assert summary["schema_version"] == 3
+    assert summary["policy"] == {
+        "accepted_decisions": 0,
+        "guidance_documents": 0,
+        "structured_target_records": 0,
+        "legacy_text_records": 0,
+        "target_only": True,
+        "authoritative_for_actions": False,
+    }
+
+
+def test_summary_preserves_legacy_policy_provenance_instead_of_claiming_target_only(
+    tmp_path: Path,
+) -> None:
+    """Describe exact historical text records without upgrading their trust class."""
+
+    legacy_record = EvidenceRecord(
+        kind="repository.guidance",
+        value={"text": "Historical source guidance."},
+        source_path="AGENTS.md",
+        ref=RefRole.HEAD,
+        commit_sha=SHA,
+        trust=TrustClass.SOURCE_REPOSITORY,
+    )
+    payload = EvidenceStore().to_dict()
+    payload["schema_version"] = 2
+    payload["records"] = [legacy_record.to_dict()]
+    path = tmp_path / "legacy-v2.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    summary = _payload(call_tool(EvidenceStore.read(path), {"action": "summary"}))
+
+    assert summary["policy"] == {
+        "accepted_decisions": 0,
+        "guidance_documents": 1,
+        "structured_target_records": 0,
+        "legacy_text_records": 1,
+        "target_only": False,
+        "authoritative_for_actions": False,
+    }

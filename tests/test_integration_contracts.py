@@ -92,8 +92,8 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert ".opencodereview/accepted-decisions.md" in configuration
     assert "ocr-accept: generated-client-timeout" in configuration
     assert "not a source-code parser" in configuration
-    assert "Target/base guidance may describe policy" in security
-    assert "changed source/head guidance and accepted decisions cannot authorize" in security
+    assert "come only from immutable target blobs" in security
+    assert "source/head content never becomes policy evidence" in security
     assert f'OCR_VERSION: "v{recommended}"' in workflow
     assert "compatibility/ocr-support.json" in readme
     assert "../compatibility/ocr-support.json" in docs

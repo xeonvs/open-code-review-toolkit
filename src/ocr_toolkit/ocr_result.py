@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import json
 import os
 import secrets
@@ -12,6 +11,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.common.filesystem import fsync_directory
 from ocr_toolkit.common.redaction import sanitize_ocr_value
 
 DEFAULT_MAX_RESULT_BYTES = 2_000_000
@@ -163,19 +163,6 @@ def _write_all(descriptor: int, payload: bytes) -> None:
         written += count
 
 
-def _fsync_directory(descriptor: int) -> None:
-    """Persist a replacement entry when the platform supports directory fsync."""
-
-    try:
-        os.fsync(descriptor)
-    except OSError as exc:
-        # Some supported filesystems reject directory fsync even though the
-        # atomic rename itself succeeded; do not turn durable metadata into a
-        # false review failure in that platform-specific case.
-        if exc.errno not in {errno.EINVAL, errno.ENOTSUP, errno.EBADF}:
-            raise
-
-
 def _same_result_entry(parent_descriptor: int, path: Path, opened: os.stat_result) -> bool:
     """Return whether the directory entry still names the inspected result inode."""
 
@@ -302,7 +289,7 @@ def attach_toolkit_metadata(
         except OSError as exc:
             raise OcrResultMissing(f"could not replace private OCR result: {exc}") from exc
         temporary_name = ""
-        _fsync_directory(parent_descriptor)
+        fsync_directory(parent_descriptor)
         return result, metadata
     finally:
         if temporary_descriptor >= 0:

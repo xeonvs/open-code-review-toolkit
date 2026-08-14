@@ -49,10 +49,10 @@ def test_review_runner_is_inside_the_wheel_runtime_package() -> None:
     assert '[tool.hatch.build.targets.wheel]\npackages = ["src/ocr_toolkit"]' in pyproject
 
 
-def test_built_wheel_contains_ecosystem_packages_without_flat_parser_shims(
+def test_built_wheel_contains_evidence_packages_without_flat_module_shims(
     tmp_path: Path,
 ) -> None:
-    """Lock the installed source-adapter layout rather than source imports alone."""
+    """Lock installed evidence package owners and removed flat-module boundaries."""
 
     import subprocess
     import sys
@@ -70,6 +70,12 @@ def test_built_wheel_contains_ecosystem_packages_without_flat_parser_shims(
         names = set(archive.namelist())
 
     expected = {
+        "ocr_toolkit/evidence/collectors/__init__.py",
+        "ocr_toolkit/evidence/collectors/graphs.py",
+        "ocr_toolkit/evidence/collectors/orchestration.py",
+        "ocr_toolkit/evidence/collectors/projections.py",
+        "ocr_toolkit/evidence/collectors/registry.py",
+        "ocr_toolkit/evidence/collectors/sources.py",
         "ocr_toolkit/evidence/ecosystems/__init__.py",
         "ocr_toolkit/evidence/ecosystems/ansible/__init__.py",
         "ocr_toolkit/evidence/ecosystems/ansible/requirements.py",
@@ -79,6 +85,12 @@ def test_built_wheel_contains_ecosystem_packages_without_flat_parser_shims(
         "ocr_toolkit/evidence/ecosystems/javascript.py",
         "ocr_toolkit/evidence/ecosystems/php.py",
         "ocr_toolkit/evidence/ecosystems/python.py",
+        "ocr_toolkit/evidence/store/__init__.py",
+        "ocr_toolkit/evidence/store/atomic.py",
+        "ocr_toolkit/evidence/store/contracts.py",
+        "ocr_toolkit/evidence/store/core.py",
+        "ocr_toolkit/evidence/store/readback.py",
+        "ocr_toolkit/evidence/store/values.py",
     }
     removed = {
         "ocr_toolkit/evidence/ansible.py",
@@ -88,6 +100,8 @@ def test_built_wheel_contains_ecosystem_packages_without_flat_parser_shims(
         "ocr_toolkit/evidence/javascript_manifests.py",
         "ocr_toolkit/evidence/manifest_model.py",
         "ocr_toolkit/evidence/python_manifests.py",
+        "ocr_toolkit/evidence/collectors.py",
+        "ocr_toolkit/evidence/store.py",
     }
     assert expected <= names
     assert not removed & names

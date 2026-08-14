@@ -3,11 +3,15 @@
 Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.x change still requires a Towncrier fragment.
 OCR compatibility updates may be prepared mechanically only after the [qualification policy](compatibility.md) returns `automatic-safe`; this never replaces the protected feature and stable-release PR gates.
 
+The toolkit release version remains single-sourced from VCS tags and is read at runtime through `ocr_toolkit.__version__`. Schema, wire-protocol, fixture, and qualified-upstream versions are independent compatibility contracts and use explicitly named constants rather than duplicated toolkit release literals.
+
 Towncrier renders `🚀 Features`, `🐛 Bug Fixes`, `🔧 Refactoring`, and `📖 Documentation` only when their categories have entries; Security, Deprecations, and Removals remain conditional categories as well. Use `🧩 Rules` when the effective rules contract changes in the toolkit `examples/gitlab/rules.json`, the recommended OCR release's built-in rules, or OCR's allowlist of reviewable file types. Omit `🧩 Rules` when all three layers are unchanged. Write readable entries without conventional-commit prefixes. GitHub Release notes contain the exact new Towncrier section and end with `**Full Changelog**:` comparing the adjacent previous stable changelog section to the release being published.
 
 ## Release-required changes
 
-A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one active plan through implementation, publication, and external reconciliation. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
+A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one delivery objective across implementation, publication, and external reconciliation. Keep its complete repository plan active until the release PR archives the final repository state. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
+
+At plan start, classify user-visible work as `no-release`, `release-required`, or `release-deferred` and record the target stable version where applicable. A deferral is a pending or blocked delivery state, not completion: retain the reason, completed checkpoints, and exact resume action. Feature validation proves readiness; only the external gates below prove stable delivery.
 
 The delivery sequence is:
 
@@ -19,7 +23,7 @@ The delivery sequence is:
 6. independently compare artifact hashes and smoke-install every supported Python boundary;
 7. independently read the immutable `release-receipt.json`, close the tracked issues, and finish the active objective without another repository pull request.
 
-The release pull request is the final repository mutation. It owns repository-side preparation: stable and next version markers, deterministic source epoch, tracked release authorization metadata, generated Towncrier changelog, release notes, and reconciliation of `PLANS.md`, the execution-history index, roadmap, backlog, strategy, and README where applicable. It lists external checks as pending and must not claim that registry files, provenance, tag, immutable Release, receipt, or installs already exist.
+The release pull request is the final repository mutation. It owns repository-side preparation: stable and next version markers, deterministic source epoch, tracked release authorization metadata, generated Towncrier changelog, release notes, and reconciliation of the execution plan, history index, roadmap, backlog, strategy, and README where applicable. It archives the repository-complete plan with external delivery pending and returns `PLANS.md` to its template state. It must not claim that registry files, provenance, tag, immutable Release, receipt, or installs already exist.
 
 The post-merge workflow executes its authorizer from the protected base SHA that
 predates the release PR; candidate head and squash-merge commits are inspected
@@ -46,7 +50,7 @@ Development builds never create tags or GitHub Releases and never publish to pro
 
 ## Stable release
 
-Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-version`, `.release-source-date-epoch`, package metadata, documentation, checksum-pinned examples, and the Towncrier changelog. The pull request title must be exactly `Release vX.Y.Z`. Required CI, security, CodeQL, Dependency Review, and build checks must pass before squash merge.
+Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-version`, `.release-source-date-epoch`, package metadata, documentation, checksum-pinned examples, and the Towncrier changelog. Reconcile the active plan and release history as described below. The pull request title must be exactly `Release vX.Y.Z`. Required CI, security, CodeQL, Dependency Review, and build checks must pass before squash merge. Because TestPyPI is public disclosure, the protected feature/release review includes the privacy and license gate before either publication path.
 
 Squash-merging that exact repository-owned release PR is the only human publication gate. The **Release** workflow then:
 
@@ -75,7 +79,9 @@ After publication, independently compare TestPyPI, PyPI, the GitHub workflow art
 
 The immutable receipt carries the release PR, reviewed base/head/merge/tree, original workflow run and attempt, tracked issue set, distribution hashes, registry/provenance verification states, annotated-tag target, and supported-Python matrix. Independent external readback confirms facts that the receipt cannot assert about itself, especially Release asset equality and immutable state. Issue comments retain the receipt asset hash and are the durable post-merge closure surface.
 
-`PLANS.md` keeps the just-prepared release cycle so its pending gates and later external receipt remain immediately discoverable from the tag and tracked issues. During the next release PR, move the previously retained externally reconciled cycle without rewriting it into `docs/engineering/execution_history/releases.md`, add or update the corresponding stable-tag row in the [execution-history index](engineering/execution_history/README.md), and validate every archive anchor. Preserve dates inside archived plans; stable tags, not calendar years, are the lookup keys.
+In the release PR, move the complete repository plan to `docs/engineering/execution_history/releases.md` with external delivery pending, link it from the stable-tag row in the [execution-history index](engineering/execution_history/README.md), and return `PLANS.md` to its template state. Review this as ordinary release documentation: preserve the decisions and receipts and keep a usable index link. Byte-exact prose preservation and archive-specific automation are unnecessary because Git retains the original text and trusted-base exact-tree authorization remains the publication boundary.
+
+The immutable receipt and tracked issue comments make the post-merge result discoverable without another repository PR. Publication and independent readback complete delivery externally; they do not rewrite the pending-at-merge historical plan or create a closure PR. Preserve historical dates and receipts, and use stable tags rather than calendar years as lookup keys.
 
 Recovery dispatch is bound to the original release PR, version, merge commit,
 reviewed head, and protected reviewed base. It executes the same trusted-base
