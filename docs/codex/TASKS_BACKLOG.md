@@ -16,6 +16,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | M2 milestone closure | Completed | Stable 0.5.0 delivery and independent external readback establish M2; BL-010 remains a conditional M6 extension and is not unfinished M2 scope. |
 | M4 accepted decisions (BL-014) | Completed and removed | Structured target-only decisions now preserve deterministic identity, optional metadata, safe scope, applicability, staleness, and bounded bootstrap/MCP projections without granting suppression authority. |
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance now has bounded discovery, deterministic nested applicability and precedence, changed-guidance exclusion, compact bootstrap hints, and full text through the existing read-only evidence MCP. |
+| M4 milestone closure | Completed | Independently verified stable v0.6.0 artifacts, provenance, hashes, annotated tag, immutable Release, supported-Python installs, and release receipts establish M4; later target-policy identity work extends rather than reopens it. |
 
 ## M3 External MCP hardening
 

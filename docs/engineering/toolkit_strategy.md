@@ -111,7 +111,7 @@ All merge-request metadata and external MCP responses are untrusted evidence. A 
 
 Public examples use only synthetic services. Generic stdio, native remote, static-header, and OAuth-owning proxy composition are documented today. Provider-specific YouTrack, Confluence, and documentation examples remain planned after the external-reference threat model; managed browser OAuth is conditional on a named provider need. External-system writes remain outside the generic toolkit scope.
 
-## Project policy and guidance
+## Established project policy and guidance
 
 ### Implemented accepted-decision metadata
 
@@ -131,7 +131,7 @@ Metadata is optional and unknown fields do not invalidate the document. Only tar
 
 ### Implemented target-derived AGENTS.md and CLAUDE.md evidence
 
-The evidence engine selects applicable root and ancestor guidance before immutable target/base blob reads, excludes guidance touched by the current merge request, and orders it root-to-file with deterministic same-directory precedence. An explicit policy-document budget and domain-isolated store admission prevent unrelated guidance from evicting applicable or sibling evidence. Bootstrap carries only safely rendered target paths, scopes, and toolkit-generated applicability hints; full redacted text remains available through the built-in evidence MCP. Schema-v3 readback rebinds structured policy provenance and applicability to the atomic snapshots, while historical text records retain explicit legacy provenance. Guidance is non-authoritative repository evidence and cannot change policy, permissions, posting, findings, or authorize actions. The evidence MCP is the complete delivery contract; a future native OCR adapter is justified only by a demonstrated target-ref-aware capability and does not reopen M4.
+The evidence engine selects applicable root and ancestor guidance before immutable target/base blob reads, excludes guidance touched by the current merge request, and orders it root-to-file with deterministic same-directory precedence. An explicit policy-document budget and domain-isolated store admission prevent unrelated guidance from evicting applicable or sibling evidence. Bootstrap carries only safely rendered target paths, scopes, and toolkit-generated applicability hints; full redacted text remains available through the built-in evidence MCP. Schema-v3 readback rebinds structured policy provenance and applicability to the atomic snapshots, while historical text records retain explicit legacy provenance. Guidance is non-authoritative repository evidence and cannot change policy, permissions, posting, findings, or authorize actions. The evidence MCP is the complete delivery contract. Stable v0.6.0 and its independently verified publication receipts establish this policy-and-guidance milestone; later target-policy identity improvements extend the established boundary rather than reopening it. A future native OCR adapter is justified only by a demonstrated target-ref-aware capability.
 
 ## Conditional review profiles and quality measurement
 
