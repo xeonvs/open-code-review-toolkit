@@ -1,3 +1,27 @@
+## 0.6.0 - 2026-08-14
+
+### 🚀 Features
+
+- Improve repository-aware reviews and their GitLab result presentation:
+
+  - Add target-branch structured accepted decisions and nested project guidance through the existing read-only evidence MCP, with deterministic scopes, applicability, staleness, precedence, and self-authorization safeguards.
+  - Isolate malformed or oversized policy entries, preserve global root guidance when changed-path identity is empty, and keep complete multibyte or redaction-expanded policy values within persistence and MCP budgets.
+  - Separate collection and persistence responsibilities into explicit internal packages while retaining the supported evidence API and one collector/store/MCP lifecycle.
+  - Preserve source provenance when semantic facts collide, reject ambiguous post-redaction mappings, validate snapshot indexes before serialization, and make atomic store replacement durable where the platform supports directory synchronization.
+  - Combine review health and finding publication into one clear outcome line while preserving warning, incomplete-coverage, posting-limit, suppression, and failure states, and add opt-in closed-enum Shields badges for individual GitLab findings with a private-safe text fallback.
+
+  ([#81](https://github.com/xeonvs/open-code-review-toolkit/issues/81))
+- Target checksum-verified Open Code Review 1.9.3 after adjacent compatibility qualification. ([#82](https://github.com/xeonvs/open-code-review-toolkit/issues/82))
+
+### 📖 Documentation
+
+- Document the repository threat model and security-review calibration so contributors, researchers, and automated security scans share the same assets, attacker capabilities, trust boundaries, and reportability context. ([#81](https://github.com/xeonvs/open-code-review-toolkit/issues/81))
+
+### Security
+
+- Scope the destructive GitHub Actions storage permission to the cleanup job, and harden repository policy evidence against Markdown delimiter injection, irrelevant-guidance saturation, forged schema-v3 provenance/applicability, and legacy trust-label confusion. ([#81](https://github.com/xeonvs/open-code-review-toolkit/issues/81))
+
+
 ## 0.5.0 - 2026-08-12
 
 ### 🚀 Features
