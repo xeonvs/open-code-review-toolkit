@@ -143,6 +143,25 @@ class SettingsTests(unittest.TestCase):
         self.assertNotIn("secret-value", stderr.getvalue())
         self.assertIn("Invalid OCR_POST_MODE value", stderr.getvalue())
 
+    def test_finding_badges_default_to_text_and_invalid_mode_falls_back_safely(self) -> None:
+        settings.post_badges.cache_clear()
+        try:
+            with patched_env(OCR_POST_BADGES=""):
+                self.assertEqual(settings.post_badges(), "text")
+
+            settings.post_badges.cache_clear()
+            stderr = io.StringIO()
+            with (
+                redirect_stderr(stderr),
+                patched_env(OCR_POST_BADGES="private_token=secret-value"),
+            ):
+                self.assertEqual(settings.post_badges(), "text")
+        finally:
+            settings.post_badges.cache_clear()
+
+        self.assertNotIn("secret-value", stderr.getvalue())
+        self.assertIn("OCR_POST_BADGES must be text or shields", stderr.getvalue())
+
 
 class RedactionTests(unittest.TestCase):
     def test_redacts_long_secret_shaped_environment_values(self) -> None:

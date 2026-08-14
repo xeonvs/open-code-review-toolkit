@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.2",
-  "recommended_version": "1.9.2",
+  "monitoring_floor": "1.9.3",
+  "recommended_version": "1.9.3",
   "releases": [
     {
       "assets": [
@@ -726,6 +726,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.2",
       "status": "tested",
       "version": "1.9.2"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "450340797c4e40b43bc04da9566c313b043b0d1134d5bca392d47b58e7e5dff0",
+          "size": 47233968
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "1a9b570ded1c510f6ab93dfd273d7892dbbf618333eca4b80eb8ae7487f5d560",
+          "size": 44898642
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "d494812b9ba316a34bb08efbaebf871ab1069e83f5892c5d87d93ab703626838",
+          "size": 45715618
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "e46ad1b32af1477b7d6632e532cc184823db8213ddd8144083cd097343776e39",
+          "size": 43122850
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "5967c9b099ada93eaec390e52cf7fadad25008ea4341105848905dfe656221b0",
+          "size": 46949888
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "1eabaadef85e9e10bcd1f7b6a24911ee48cb1f68efb51c4e2bb9308e224a339c",
+          "size": 43738624
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "f1ee9c65976844a1bc71b4bb8cf0ac0fc15ed9263d6080db8bf4fbad27f1de14",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.3.json",
+      "evidence_sha256": "7f5b5f7d27afb8df53ad874b0a99ffedc2633dec355e5188cdeffab5ca972533",
+      "human_conclusion": "Compatible after human adjacent source review in issue #82 and hosted workflow run 31778152040. Required review flags, JSON result and manifest, structured comment metadata, rules/allowlist, and the Go MCP SDK v1.6.1 remain compatible. Optional retry_report is additive observability and remains private; SARIF, no-review, trusted resume lineage, session affinity, stabilized upstream item fingerprints, and argument diagnostics require no toolkit runtime adaptation. Case-insensitive user filters improve selection without changing built-in allowlist membership. The grace round can add ordinary findings without changing consumed outcome semantics. GitHub Shields badges are presentation-only; the toolkit independently projects only normalized metadata at its GitLab rendering boundary.",
+      "published_at": "2026-08-14T03:50:37Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.3",
+      "status": "tested",
+      "version": "1.9.3"
     }
   ],
   "schema_version": 1,

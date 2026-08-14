@@ -142,6 +142,17 @@ def post_emoji() -> bool:
 
 
 @cache
+def post_badges() -> str:
+    """Return the finding metadata presentation mode."""
+
+    mode = getenv("OCR_POST_BADGES", "text").strip().lower()
+    if mode in {"text", "shields"}:
+        return mode
+    print("OCR_POST_BADGES must be text or shields; using text.", file=sys.stderr)
+    return "text"
+
+
+@cache
 def auto_approve() -> BooleanSetting:
     """Return fail-closed automatic approval configuration."""
 

@@ -4,7 +4,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; Codex Security remediation and deterministic revalidation complete, exact-head security revalidation next
+Status: active; OCR 1.9.3 and GitLab presentation checkpoint complete, exact-head security revalidation next
 Owner: Codex
 Last Updated: 2026-08-14
 Release Classification: release-required
@@ -13,6 +13,7 @@ Next Development Version After Release PR: 0.6.1
 Tracking Issue: #81
 Branch: `feat/m4-policy-guidance`; no checkpoint commit is pushed individually
 Qualified OCR Baseline At Activation: 1.9.2
+Current Qualified OCR: 1.9.3; local promotion complete, issue #82 closure pending merged-support readback
 
 ### Goal And Closure Boundary
 
@@ -141,6 +142,14 @@ validation, self-review, and local history consolidation are complete.
    wheel/sdist and real stdio MCP E2E, security/user docs, remaining Towncrier
    fragments, and only demonstrated least-privilege fixes for actionable GitHub
    Code scanning alerts.
+6. **OCR 1.9.3 compatibility and GitLab presentation.** Reconcile the adjacent
+   upstream release from official Linux qualification evidence, promote the
+   checksum-pinned compatibility manifest only after human contract review,
+   keep the summary as one canonical outcome line, and add an independently
+   configurable finding-badge renderer with text fallback. This commit also
+   carries the generalized repository threat model derived from the completed
+   security review. It changes no review, evidence-MCP, provider-mutation, or
+   release-authorization boundary.
 
 Before every commit: run focused tests and `git diff --check`; inspect the staged
 diff; audit sibling implementations and module/service boundaries; verify
@@ -310,20 +319,84 @@ unsafe trust or mutation mechanism.
    A later OCR qualification that changes executable contracts or the reviewed
    tree invalidates the gate and requires a new final concurrency-2 review.
    Runtime/trust-boundary OCR fixes require a final Codex Security verification.
-4. Consolidate unpublished history into the five logical commits, prove exact
+4. Consolidate unpublished history into the six logical commits, prove exact
    final-tree equivalence, verify signatures, and rerun Gitleaks over the full
    first-parent range. Only then make one initial push of the complete branch.
 
 ### Upstream OCR Monitoring
 
 At activation and between completed logical stages, query stable upstream OCR
-releases and this project's release issues. If OCR 1.9.3 or newer appears,
-qualify the complete adjacent chain from 1.9.2. Classify every upstream item as
- consumed-contract change, future-backlog impact, or release-note-only context;
-adapt only demonstrated toolkit contracts. Add one logical compatibility commit
-if repository changes are required and use the latest fully qualified release
-for installed E2E and final OCR. At activation on 2026-08-13, live readback still
-reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
+releases and this project's release issues. Qualify every newly observed stable
+release as one complete adjacent chain, classify every upstream item as a
+consumed-contract change, future-backlog impact, or release-note-only context,
+and adapt only demonstrated toolkit contracts. Use the latest fully qualified
+release for installed E2E and final OCR. A later release that changes executable
+contracts or the reviewed tree invalidates the final OCR gate as described
+above.
+
+#### OCR 1.9.3 Qualification And Contract Decision
+
+- Official scheduled workflow run 31778152040 qualified exactly 1.9.2 -> 1.9.3
+  on Linux amd64. Every release asset and `sha256sum.txt` digest matched, and
+  version, help, preview, required review flags, result-consumer, additive-field,
+  comment-thinking, and manifest probes passed. The chain result is
+  `human-review-required`, tracked in issue #82. The human conclusion,
+  manifest/evidence update, and focused tests qualify the exact local tree for
+  installed E2E and OCR; repository-wide support is not externally complete
+  until the feature PR merges and issue #82's evidence comment and closure are
+  independently read back.
+- The JSON result adds optional `retry_report` observability. The toolkit already
+  accepts and preserves additive top-level fields and need not publish provider,
+  model, request, or file-path retry details into GitLab. Keep the field private
+  in the OCR result artifact; add no second retry-report schema or posting
+  service unless a separate demonstrated operator need is activated.
+- SARIF, `no-review`, trusted resume lineage, session affinity, stabilized
+  upstream item fingerprints, and clearer non-review CLI argument errors do not
+  alter toolkit-owned invocation, result normalization, suppression fingerprints,
+  or provider mutation. The grace round may produce additional ordinary
+  findings after tool-request exhaustion but does not change partial/budget
+  outcome semantics consumed by the toolkit.
+- User include/exclude patterns are now case-insensitive. Built-in allowlist
+  membership is unchanged, the rules diff changes matching only, required flags
+  remain present, and the consumed Go MCP SDK remains v1.6.1. Existing synthetic
+  rules use portable lowercase patterns, so no rules or evidence-MCP adaptation
+  is justified.
+- Upstream image badges are a GitHub Action presentation feature implemented
+  from existing comment `category` and `severity`; they are not a new OCR JSON
+  field and do not belong in the toolkit summary/result parser. The toolkit may
+  independently project the same normalized facts at its GitLab presentation
+  boundary, subject to the privacy and fallback contract below.
+
+#### GitLab Summary And Finding-Badge Contract
+
+- The review summary and individual findings are separate presentation
+  contracts. The summary has one bold text outcome line combining review health
+  and publication state across clean, findings, warnings, incomplete coverage,
+  token budget, skipped, failed, omitted, and reviewer-suppressed outcomes. It
+  uses no remote image and remains readable with emoji disabled.
+- Inline discussions and fallback finding notes own category/severity rendering.
+  Existing normalized OCR enums and the `priority` compatibility fallback remain
+  the sole metadata source. Unknown, malformed, control-bearing, or unsupported
+  values are omitted; repository/model text is never interpolated into an image
+  URL, alt delimiter, color, host, or query.
+- Text tags remain the private-safe default. An explicit `OCR_POST_BADGES=shields`
+  mode renders one static `img.shields.io` image before each finding when at
+  least one normalized field is present. URL segments, host, severity colors,
+  and category fallback color come from closed toolkit constants. The image alt
+  text carries the same normalized `category · severity` label, so blocked or
+  failed image loads degrade to text. Invalid configuration fails back to text
+  without logging its raw value.
+- The external mode is opt-in because a browser, GitLab instance, or image proxy
+  may contact a third party while rendering an otherwise private review. Public
+  docs must state that tradeoff and recommend text mode where external image
+  requests or disclosure of viewer/network metadata are unacceptable. Badge
+  selection never affects fingerprints, suppression, approval, posting limits,
+  note ownership, draft transactions, rollback, or summary counts.
+- Contract tests cover the complete summary matrix, emoji-disabled output,
+  normalized badge combinations and color coverage, one-field badges, malformed
+  metadata, text/alt fallback, invalid mode, inline/fallback placement, suggestion
+  coexistence, bounded note rendering, and the absence of arbitrary URLs or
+  untrusted metadata in generated Markdown.
 
 ### GitHub Code Scanning Audit
 
@@ -410,6 +483,55 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
   syntax, privacy, and diff-hygiene checks. The remaining pre-OCR gate is a
   fresh security scan bound to the committed remediation tree; final full-tree
   validation is repeated after OCR remediation as already required above.
+- Before that exact-head scan, the user requested a public posting refinement and
+  OCR 1.9.3 became available. Keep review-health plus publication state in one
+  canonical summary line, but treat the release's badges as finding-comment
+  presentation rather than summary or result data. Implement the opt-in,
+  closed-enum Shields projection and private-safe text fallback defined above;
+  preserve incomplete coverage, warnings, approval, commit identity, posting
+  counts, and tool/MCP/token receipts in their existing owned sections. The
+  formatter remains presentation-only; result normalization and GitLab
+  transaction boundaries do not change. Complete compatibility promotion,
+  threat-model documentation, focused tests, self-review, and one new signed
+  local commit before the exact-head security scan. Nothing is pushed before the
+  later consolidated feature handoff.
+
+### OCR 1.9.3 And GitLab Presentation Checkpoint
+
+- Official run 31778152040 and the downloaded qualification artifact prove the
+  complete adjacent 1.9.2 -> 1.9.3 chain, exact asset digests, and Linux amd64
+  version/help/preview/result-consumer contracts. Human source review classifies
+  the additive retry report as private observability, case-insensitive user
+  filters as a compatible selection correction, and the remaining upstream
+  features as outside toolkit-owned runtime contracts. The compatibility
+  manifest, canonical evidence, preflight pin, synthetic CI example, and tests
+  now target checksum-pinned 1.9.3. Issue #82 remains open until merged support
+  and its evidence comment are independently read back.
+- GitLab review health and publication state now render as one canonical summary
+  line for every clean, finding, warning, partial, budget, skipped, failed,
+  omitted, and suppressed state. Individual findings independently retain local
+  text metadata by default and support opt-in `OCR_POST_BADGES=shields` images.
+  Posting orchestration resolves that mode once and supplies it only to inline
+  and fallback renderers; summaries, fingerprints, suppression, approval,
+  transaction ownership, and counts do not consume it.
+- The image projection accepts only normalized closed category/severity enums,
+  a fixed host, and a complete fixed color map. Unknown or control-bearing
+  metadata is omitted, alt text carries the same normalized label, invalid mode
+  fails back to text without echoing its input, and docs explicitly describe the
+  optional third-party render request. OCR 1.9.3 `retry_report` remains inside
+  the private result artifact and is absent from GitLab notes.
+- The repository threat model and scanner policy now generalize the completed
+  security review into assets, attacker capabilities, trust boundaries,
+  invariants, reportability calibration, safe diagnostics, and the remote-image
+  boundary. The security-policy resolver finds one applicable root policy for
+  the posting package; no duplicate nested scanner policy was introduced.
+- Focused posting, workflow, compatibility, result-contract, operations,
+  runtime, integration, and release-note suites pass. The complete quality gate
+  passes 742 tests and 99 subtests with Ruff, strict mypy, Bandit, coverage,
+  privacy, compatibility validation, Towncrier rendering, local-link checks,
+  and diff hygiene. Live readback still reports OCR 1.9.3 as latest, issue #82
+  open without a premature completion comment, no secret-scanning or Dependabot
+  alerts, and the same six previously classified Scorecard alerts.
 
 ### Feature, Release, And Stable Closure
 
@@ -445,15 +567,20 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
 6. [x] Complete logical commit 5: production E2E, documentation, fragments, and
    demonstrated Code scanning workflow improvements.
 7. [x] Complete deterministic Python/package/security/privacy validation.
-8. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
-   required security revalidation before OCR.
-9. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,
+8. [x] Complete OCR 1.9.3 human qualification and local compatibility promotion;
+   finish the separate one-line summary, opt-in finding badges, threat-model
+   documentation, focused validation, and logical commit 6.
+9. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
+   required exact-head security revalidation before OCR.
+10. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,
    remediation, deterministic revalidation, and final self-review.
-10. [ ] Consolidate and verify unpublished history, run full-range Gitleaks, and
+11. [ ] Consolidate and verify unpublished history, run full-range Gitleaks, and
    push the complete feature branch once.
-11. [ ] Complete feature PR and independent TestPyPI development readback.
-12. [ ] Prepare the final repository mutation in the release PR and reconcile
-    backlog, roadmap, strategy, and release metadata honestly.
-13. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
-    the immutable release receipt; use the release-PR archive and template state
-    as repository evidence without another closure mutation.
+12. [ ] Complete feature PR and independent TestPyPI development readback, then
+   comment on and close OCR qualification issue #82 only after merged support is
+   independently read back.
+13. [ ] Prepare the final repository mutation in the release PR and reconcile
+   backlog, roadmap, strategy, and release metadata honestly.
+14. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
+   the immutable release receipt; use the release-PR archive and template state
+   as repository evidence without another closure mutation.

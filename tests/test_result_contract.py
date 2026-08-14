@@ -180,3 +180,24 @@ def test_budget_flag_requires_matching_manifest_failure() -> None:
 
     with pytest.raises(OcrResultContractError, match="no matching manifest budget failure"):
         parse_result_outcome(result)
+
+
+def test_additive_retry_report_does_not_change_outcome_semantics() -> None:
+    """Keep OCR 1.9.3 retry observability outside the review-health contract."""
+
+    result = manifest_result(
+        "complete",
+        selected=["a"],
+        completed=["a"],
+    )
+    result["retry_report"] = {
+        "schema_version": "ocr.llm-retry-report/v1",
+        "total_requests": 2,
+        "retried_requests": 1,
+        "requests": [{"file_path": "private/example.py"}],
+    }
+
+    outcome = parse_result_outcome(result)
+
+    assert outcome.kind == "clean"
+    assert outcome.manifest_present

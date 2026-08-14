@@ -8,7 +8,15 @@ The toolkit reads the previous OCR-owned notes and discussions before it writes 
 
 - inline GitLab discussions when a finding has a valid diff position;
 - bounded fallback notes when GitLab cannot accept a position, for example after relevant lines moved outside the current diff;
-- one `## Open Code Review` note that separates review health, published findings, and incomplete coverage, with operational posting, commit, token/tool, and used-MCP metadata under a collapsed technical-details disclosure.
+- one `## Open Code Review` note whose single bold outcome line combines review health with the published, omitted, or reviewer-suppressed finding state; incomplete coverage and warnings remain explicit below it, with operational posting, commit, token/tool, and used-MCP metadata under a collapsed technical-details disclosure.
+
+Category and severity belong to each individual finding, not to the review
+outcome line. They use private-safe text labels by default. Operators may opt in
+to static Shields.io images with `OCR_POST_BADGES=shields`; only closed,
+normalized OCR enums enter the fixed-host URL and the same label remains as alt
+text. Unknown metadata never becomes a URL. Because rendering can contact an
+external image service directly or through a GitLab proxy, keep text mode for
+installations that must avoid that disclosure or dependency.
 
 An actionable GitLab suggestion is stricter than an ordinary finding. The
 toolkit reads the exact reviewed head blob and requires `existing_code` to
@@ -23,7 +31,7 @@ suppressed.
 
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
-The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews independently from whether findings were published. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; inline findings retain quiet text-only severity and category fields.
+The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews while preserving the finding state in that same line. A complete clean review is visibly positive; a complete review with findings or only reviewer-suppressed findings is neutral; warning, partial, budget, and failed states never look clean. Findings withheld by the posting limit remain counted even when the limit allows no individual finding note. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; finding labels remain text unless their separate badge mode is enabled.
 
 ## Automatic approval lifecycle
 

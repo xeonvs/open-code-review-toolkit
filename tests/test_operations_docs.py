@@ -57,6 +57,21 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
     assert 'OCR_AUTO_APPROVE: "true"' in example
     assert "OCR_POST_MODE=draft" in configuration
     assert "OCR_STRICT_POSTING=true" in configuration
+    assert 'OCR_POST_BADGES: "shields"' in example
+    assert "OCR_POST_BADGES" in configuration
+    assert "default `text` mode" in configuration
+
+
+def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+
+    assert "Category and severity belong to each individual finding" in operations
+    assert "OCR_POST_BADGES=shields" in operations
+    assert "external image service" in operations
+    assert "Unknown metadata never becomes a URL" in operations
+    assert "makes no\nexternal image request" in configuration
+    assert "does not change summary outcomes" in configuration
 
 
 def test_auto_approval_contract_is_default_on_exact_sha_and_own_user_only() -> None:
@@ -100,6 +115,16 @@ def test_security_workflow_has_a_bounded_bandit_job() -> None:
         "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium" in development
     )
     assert "# nosec B108" in security
+
+
+def test_threat_model_covers_remote_finding_image_boundary() -> None:
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    policy = (PROJECT_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+
+    assert "Optional remote finding images add a" in security
+    assert "External finding images are disabled by default" in security
+    assert "does not send finding prose" in security
+    assert "arbitrary remote-image requests" in policy
 
 
 def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:

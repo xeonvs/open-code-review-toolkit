@@ -4,6 +4,20 @@
 
 Before 1.0, only the newest published release receives security fixes.
 
+## Security review context
+
+The canonical runtime [threat model](docs/security.md#threat-model) treats repository content, OCR/LLM/MCP output, provider responses, inherited process state, and persisted artifacts as hostile data. Security reviews should prioritize contributor-reachable paths that can:
+
+- execute or import repository-controlled content;
+- forge immutable identity, provenance, trust, applicability, coverage, approval, or release authorization;
+- escape acquisition/output bounds or let one exhausted domain suppress unrelated evidence;
+- inject active Markdown or protocol control syntax across a trust boundary;
+- turn untrusted review metadata into arbitrary remote-image requests;
+- expose credentials or private repository/provider material; or
+- perform an ambiguous or unguarded provider mutation with security impact.
+
+Calibrate findings to demonstrated reachability and impact. Prompt-like text without a privileged action path is not code execution. Same-owner modification of owner-only local artifacts is not an ordinary contributor escalation unless a lower-privilege writer is established. OpenSSF posture signals, repository age, and the documented single-maintainer review limitation are not vulnerability findings on their own. Safe bounded read-only diagnostics and synthetic reproduction are in scope; do not require live credentials, private source, or provider mutation to validate a report.
+
 ## Reporting a vulnerability
 
 Use [GitHub private vulnerability reporting](https://github.com/xeonvs/open-code-review-toolkit/security/advisories/new) for this repository. Do not open a public issue or attach live credentials, proprietary source, or production provider responses. Include a minimal synthetic reproducer, impact, affected version, and suggested mitigation when available.

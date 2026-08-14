@@ -2,6 +2,49 @@
 
 The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP providers, CI secrets, and the GitLab API. None of the first three should be assumed safe merely because a job runs in a trusted project.
 
+## Threat model
+
+### Assets
+
+- Immutable base, source, reviewed-head, and release identities.
+- Review integrity: selected files, evidence, coverage, findings, suppression decisions, and approval state.
+- Private evidence, OCR result, configuration, and release-receipt artifacts.
+- CI, GitLab, LLM-provider, registry, and optional MCP credentials.
+- Published packages, tags, attestations, release assets, and provider-side merge-request state.
+
+### Attacker capabilities
+
+A merge-request contributor may choose repository paths and blob contents, including manifests, templates, accepted-decision-like text, nested guidance, Markdown delimiters, and high-cardinality but bounded tree shapes. They may trigger a review pipeline and supply text that resembles reviewer or tool instructions. Repository content, OCR/LLM/MCP output, provider responses, inherited process state, and persisted local artifacts are therefore untrusted inputs even when the toolkit produced an earlier version of the artifact.
+
+The ordinary contributor is not assumed to control the protected target branch, protected CI variables, publishing identity, or trusted release environment. A compromised runner or a process with the same operating-system ownership as private artifacts is a stronger attacker; controls still fail closed where practical, but complete containment of that host-level compromise is outside the toolkit boundary.
+
+### Trust boundaries
+
+1. Repository paths and immutable Git blobs enter bounded collection and parsing.
+2. Persisted evidence, result, configuration, and receipt files re-enter schema validation and redaction.
+3. Typed evidence crosses into the compact OCR bootstrap and read-only MCP projections.
+4. OCR findings and coverage cross into GitLab Markdown, discussions,
+   suppression, and approval decisions. Optional remote finding images add a
+   third-party rendering boundary for normalized display metadata only.
+5. CI configuration and credentials cross into GitLab, LLM/MCP providers, package registries, and release automation.
+6. A release candidate crosses into protected-base authorization, publication, provenance, and external readback.
+
+### Security objectives
+
+- Repository-controlled content remains data: it is neither imported nor executed and cannot promote itself into policy, permission, suppression, approval, or release authority.
+- Every security-relevant claim remains bound to exact immutable identity, provenance, trust class, scope, and semantic applicability.
+- Bounds apply while data is acquired and emitted. Exhaustion or malformed input degrades explicitly and cannot silently suppress an unrelated evidence domain.
+- Hostile persisted state is accepted only through exact closed schemas whose related snapshots, indexes, coverage, deltas, and receipts agree atomically.
+- Markdown and protocol projections preserve trust labels, neutralize control syntax, and expose only bounded context.
+- External finding images are disabled by default. When explicitly enabled,
+  their host, path vocabulary, colors, and alt text come from closed toolkit
+  constants and normalized enums rather than repository or model-controlled
+  strings; blocked images retain a text label.
+- Provider mutations bind the reviewed identity when the provider supports such a guard; ambiguous non-idempotent writes preserve prior state rather than guessing success.
+- Secrets remain outside repository-controlled context, logs, public notes, fixtures, and release artifacts.
+
+Security severity depends on demonstrated reachability across these boundaries. Prompt-like or Markdown content injection is an integrity issue unless it is shown to alter a privileged action or mandatory control. Tampering that requires same-owner access to private local artifacts is not treated as an ordinary contributor privilege escalation without evidence of a lower-privilege writer. Governance scores and the single-maintainer review limitation are posture or residual-risk signals, not application vulnerabilities by themselves.
+
 ## Preserved safety properties
 
 - Repository reads are bounded, rooted, symlink-aware, and exclude common dependency/build trees.
@@ -37,6 +80,13 @@ Formal GitLab approval is a default-on write. Set
 is not an eligible project approver. GitLab approval rules, Code Owners,
 protected branches, and reauthentication remain server-side controls; the
 toolkit does not bypass them.
+
+Finding badges are a presentation-only opt-in. Keep the default text mode when
+private review viewers or a GitLab image proxy must not contact a third-party
+image service. Enabling Shields.io does not send finding prose, repository
+paths, project identifiers, or arbitrary OCR metadata in the image URL, but the
+render request can still expose ordinary viewer, proxy, and network metadata to
+that service.
 
 Pin the exact recommended Open Code Review release from the [compatibility manifest](../compatibility/ocr-support.json) and verify its listed checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP stdio commands and remote endpoints are privileged configuration; allow only reviewed servers and tools.
 The [OCR compatibility policy](compatibility.md) requires double-source asset digest verification, bounded downloads, an executed Linux contract probe, and protected PR/release gates; qualification automation never writes directly to `main` or promotes an ambiguous release.

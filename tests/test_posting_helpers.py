@@ -479,6 +479,117 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIn("did not match the reviewed range", inline_bodies[0])
         self.assertNotIn("```suggestion", inline_bodies[0])
 
+    def test_post_results_applies_opt_in_badges_to_inline_findings_only(self) -> None:
+        inline_bodies: list[str] = []
+        notes: list[str] = []
+
+        def capture_discussion(*_args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
+            inline_bodies.append(kwargs["body"])
+            return gitlab.GitLabWriteResult("posted")
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": len(notes)}
+
+        settings.post_badges.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_BADGES="shields"),
+                patched_attr(
+                    workflow,
+                    "get_diff_refs",
+                    lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                ),
+                patched_attr(
+                    workflow,
+                    "collect_previous_bot_comment_refs",
+                    lambda _config: snapshot.BotCommentRefs(),
+                ),
+                patched_attr(workflow, "post_review_discussion", capture_discussion),
+                patched_attr(workflow, "post_review_note_bounded", capture_note),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                patched_attr(
+                    workflow,
+                    "delete_previous_bot_comments_if_collected",
+                    lambda *_args: None,
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                exit_code = workflow.post_results(
+                    gitlab_config(),
+                    {
+                        "comments": [
+                            {
+                                "path": "src/example.py",
+                                "line": 7,
+                                "content": "Guard this branch.",
+                                "category": "bug",
+                                "severity": "high",
+                            }
+                        ]
+                    },
+                )
+        finally:
+            settings.post_badges.cache_clear()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(inline_bodies), 1)
+        self.assertIn(
+            "![bug · high](https://img.shields.io/badge/bug-high-red)",
+            inline_bodies[0],
+        )
+        summary = next(note for note in notes if "## Open Code Review" in note)
+        self.assertNotIn("img.shields.io", summary)
+
+    def test_retry_report_remains_private_from_gitlab_notes(self) -> None:
+        notes: list[str] = []
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            _title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: None,
+            ),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "comments": [],
+                    "retry_report": {
+                        "schema_version": "ocr.llm-retry-report/v1",
+                        "provider": "synthetic-provider",
+                        "file_path": "private/example.py",
+                    },
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        published = "\n".join(notes)
+        self.assertNotIn("retry_report", published)
+        self.assertNotIn("synthetic-provider", published)
+        self.assertNotIn("private/example.py", published)
+
     def test_invalid_inline_position_falls_back_without_rollback(self) -> None:
         calls: list[str] = []
 
@@ -644,8 +755,8 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0][0], "")
         self.assertEqual(notes[0][1].count("## Open Code Review"), 1)
-        self.assertIn("✅ **Review complete**", notes[0][1])
-        self.assertIn("No findings", notes[0][1])
+        self.assertIn("✅ **Review complete — no findings**", notes[0][1])
+        self.assertNotIn("\nNo findings", notes[0][1])
         self.assertIn("MCP used: 1 server(s)", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
 
@@ -682,7 +793,7 @@ class PostingIdentityTests(unittest.TestCase):
             )
 
         assert exit_code == 0
-        assert "No supported files changed" in notes[0]
+        assert "no supported files changed" in notes[0]
         assert "did not complete cleanly" not in notes[0]
 
     def test_budget_exceeded_without_comments_posts_partial_outcome(self) -> None:
@@ -1332,6 +1443,7 @@ class PostingWorkflowTests(unittest.TestCase):
 
 class PostingSummaryTests(unittest.TestCase):
     def tearDown(self) -> None:
+        settings.post_badges.cache_clear()
         settings.post_emoji.cache_clear()
         settings.post_mode.cache_clear()
 
@@ -1411,7 +1523,7 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("Reviewed commit: `abc123`", summary)
         self.assertIn("MR head commit: `def456`", summary)
         self.assertTrue(summary.startswith("## Open Code Review\n"))
-        self.assertIn("🔎 **3 findings published**", summary)
+        self.assertIn("🔎 **Review complete — 3 findings published**", summary)
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(
@@ -1424,7 +1536,7 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=False,
         )
 
-        self.assertIn("No supported files changed", summary)
+        self.assertIn("no supported files changed", summary)
         self.assertNotIn("0 posted", summary)
         self.assertNotIn(posting_formatting.SEVERITY_EMOJI["low"], summary)
 
@@ -1442,9 +1554,128 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("✅ **Review complete**", summary)
-        self.assertIn("No findings", summary)
+        self.assertIn("✅ **Review complete — no findings**", summary)
+        self.assertNotIn("\nNo findings", summary)
         self.assertNotIn("tool calls", summary)
+
+    def test_summary_uses_one_canonical_line_for_every_outcome_state(self) -> None:
+        """Keep review health and finding publication inseparable at a glance."""
+
+        cases = (
+            (
+                "clean findings",
+                "success",
+                2,
+                0,
+                0,
+                0,
+                "🔎 **Review complete — 2 findings published**",
+            ),
+            (
+                "warnings",
+                "completed_with_warnings",
+                1,
+                0,
+                0,
+                1,
+                "⚠️ **Review complete with warnings — 1 finding published**",
+            ),
+            (
+                "partial",
+                "partial",
+                0,
+                0,
+                0,
+                0,
+                "⚠️ **Review incomplete — no findings in reviewed files**",
+            ),
+            (
+                "budget",
+                "budget_exceeded",
+                0,
+                0,
+                0,
+                1,
+                "⚠️ **Review stopped at token budget — no findings in reviewed files**",
+            ),
+            (
+                "skipped",
+                "skipped",
+                0,
+                0,
+                0,
+                0,
+                "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} "
+                "**Review skipped — no supported files changed**",
+            ),
+            (
+                "failed",
+                "failed",
+                0,
+                0,
+                0,
+                0,
+                "❌ **Review failed — no reliable review result was produced**",
+            ),
+            (
+                "suppressed",
+                "success",
+                0,
+                0,
+                2,
+                0,
+                "🔎 **Review complete — no new findings published; 2 findings matched prior reviewer decisions**",
+            ),
+            (
+                "all omitted",
+                "success",
+                0,
+                3,
+                0,
+                0,
+                "🔎 **Review complete — no findings published; 3 findings omitted by posting limit**",
+            ),
+        )
+        for label, status, total, omitted, suppressed, warnings, expected in cases:
+            with self.subTest(label=label):
+                summary = posting_formatting.summarize_result(
+                    total=total,
+                    inline_count=0,
+                    fallback_count=0,
+                    warning_count=warnings,
+                    omitted_count=omitted,
+                    suppressed_count=suppressed,
+                    outcome_status=status,
+                    emoji=True,
+                )
+                visible = summary.split("<details>", 1)[0]
+                self.assertIn(expected, visible)
+                self.assertEqual(sum("Review " in line for line in visible.splitlines()), 1)
+
+    def test_partial_summary_appends_known_unreviewed_files_once(self) -> None:
+        diagnostics = result.CoverageDiagnostics(
+            (result.CoverageDiagnostic("src/a.py", "review timed out"),),
+            0,
+            0,
+            1,
+            1,
+        )
+
+        summary = posting_formatting.summarize_result(
+            total=1,
+            inline_count=1,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="partial",
+            coverage_diagnostics=diagnostics,
+            emoji=False,
+        )
+
+        self.assertIn(
+            "**Review incomplete — 1 finding published from reviewed files; 1 file not reviewed**",
+            summary,
+        )
+        self.assertEqual(summary.count("1 file not reviewed"), 1)
 
     def test_budget_summary_and_guide_mark_findings_as_partial(self) -> None:
         guide = posting_formatting.format_reviewer_guide(
@@ -1463,8 +1694,11 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("⚠️ **Review stopped at token budget**", summary)
-        self.assertIn("Partial result · 🔎 **1 finding published**", summary)
+        self.assertIn(
+            "⚠️ **Review stopped at token budget — 1 finding published from reviewed files**",
+            summary,
+        )
+        self.assertNotIn("Partial result", summary)
         self.assertIn("Review scope:", summary)
         self.assertIn("partial review", summary)
         self.assertIn("321 total", summary)
@@ -1516,9 +1750,9 @@ class PostingSummaryTests(unittest.TestCase):
             emoji=True,
         )
 
-        self.assertIn("⚠️ **Review complete with warnings**", warning)
-        self.assertIn("⚠️ **Review incomplete**", error)
-        self.assertIn("No findings in reviewed files", error)
+        self.assertIn("⚠️ **Review complete with warnings — no findings**", warning)
+        self.assertIn("⚠️ **Review incomplete — no findings in reviewed files**", error)
+        self.assertNotIn("\nNo findings in reviewed files", error)
         self.assertNotIn("✅", error)
 
     def test_outcome_message_is_redacted_compacted_and_not_a_quick_action(self) -> None:
@@ -1549,6 +1783,101 @@ class PostingSummaryTests(unittest.TestCase):
                 plain = posting_formatting.format_finding_tags({"category": value}, emoji=False)
                 self.assertEqual(tagged, plain)
                 self.assertNotIn(marker, plain)
+
+    def test_shields_badges_project_only_normalized_finding_metadata(self) -> None:
+        cases = (
+            (
+                {"category": "security", "severity": "CRITICAL"},
+                "![security · critical](https://img.shields.io/badge/security-critical-darkred)",
+            ),
+            (
+                {"category": "bug", "severity": "high"},
+                "![bug · high](https://img.shields.io/badge/bug-high-red)",
+            ),
+            (
+                {"category": "performance", "severity": "medium"},
+                "![performance · medium](https://img.shields.io/badge/performance-medium-orange)",
+            ),
+            (
+                {"category": "style", "severity": "low"},
+                "![style · low](https://img.shields.io/badge/style-low-green)",
+            ),
+            (
+                {"category": "documentation"},
+                "![documentation](https://img.shields.io/badge/documentation-blue)",
+            ),
+            (
+                {"priority": "high"},
+                "![high](https://img.shields.io/badge/high-red)",
+            ),
+        )
+        for finding, expected in cases:
+            with self.subTest(finding=finding):
+                self.assertEqual(
+                    posting_formatting.format_finding_tags(
+                        finding,
+                        badge_mode="shields",
+                    ),
+                    expected,
+                )
+
+        self.assertEqual(
+            set(posting_formatting.SHIELDS_SEVERITY_COLORS),
+            posting_formatting.OCR_FINDING_SEVERITIES,
+        )
+
+    def test_shields_badges_drop_untrusted_metadata_and_keep_text_fallback(self) -> None:
+        hostile = {
+            "category": "bug](https://attacker.invalid/x)",
+            "severity": "high\n/merge",
+            "content": "Finding body",
+        }
+
+        self.assertEqual(
+            posting_formatting.format_finding_tags(hostile, badge_mode="shields"),
+            "",
+        )
+        self.assertEqual(
+            posting_formatting.format_finding_tags(hostile, badge_mode="text"),
+            "",
+        )
+        rendered = posting_formatting.format_inline_comment(hostile, badge_mode="shields")
+        self.assertNotIn("attacker.invalid", rendered)
+        self.assertNotIn("/merge", rendered)
+        self.assertEqual(rendered, "Finding body")
+
+    def test_badge_mode_changes_finding_presentation_not_summary_or_suggestion(self) -> None:
+        finding = {
+            "content": "Use the guarded value.",
+            "category": "bug",
+            "severity": "high",
+        }
+        decision = SuggestionDecision(
+            SuggestionState.ACTIONABLE,
+            replacement="new_value",
+            range_suffix="-0+1",
+        )
+
+        with patched_env(OCR_POST_BADGES="shields"):
+            settings.post_badges.cache_clear()
+            inline = posting_formatting.format_inline_comment(
+                finding,
+                suggestion_decision=decision,
+            )
+            fallback = posting_formatting.format_fallback_comment(finding)
+            summary = posting_formatting.summarize_result(
+                total=1,
+                inline_count=1,
+                fallback_count=0,
+                warning_count=0,
+                emoji=False,
+            )
+
+        self.assertTrue(inline.startswith("![bug · high](https://img.shields.io/badge/"))
+        self.assertIn("```suggestion:-0+1\nnew_value\n```", inline)
+        self.assertIn("![bug · high](https://img.shields.io/badge/", fallback)
+        self.assertNotIn("img.shields.io", summary)
+        self.assertIn("**Review complete — 1 finding published**", summary)
 
     def test_security_signal_is_promoted_when_present(self) -> None:
         guide = posting_formatting.format_reviewer_guide(

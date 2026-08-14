@@ -53,9 +53,21 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 
 ## Posting controls
 
-`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, `OCR_POST_BADGES`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
 
 `OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
+
+`OCR_POST_BADGES` controls only category/severity presentation on individual
+findings. The default `text` mode renders local Markdown labels and makes no
+external image request. Set it to `shields` to render one static Shields.io
+image whose URL, color, and alt text are built only from toolkit-normalized OCR
+category/severity enums. Missing or malformed metadata is omitted, and an
+invalid setting falls back to `text` without logging its value. The image alt
+text retains the normalized label when images are blocked, but displaying a
+remote image may let a browser, GitLab proxy, or network intermediary contact a
+third party. Keep `text` where that request or its viewer/network metadata is
+not acceptable. This setting does not change summary outcomes, fingerprints,
+suppression, approval, limits, or posting transactions.
 
 `OCR_AUTO_APPROVE` defaults to `true` and adds a formal GitLab approval after a
 complete review publishes. It accepts `true`, `1`, `yes`, or `on`; set `false`,
