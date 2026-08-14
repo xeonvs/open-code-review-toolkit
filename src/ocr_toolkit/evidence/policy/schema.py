@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 
-from ocr_toolkit.evidence.policy.guidance import guidance_metadata
+from ocr_toolkit.evidence.policy.guidance import guidance_applicability, guidance_metadata
 from ocr_toolkit.evidence.policy.scopes import (
     is_safe_repository_path,
     matches_scope,
@@ -87,6 +87,8 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("accepted-decision matched path is outside its scopes")
         if fact["applicability"] in {"invalid", "not_applicable"} and matched_paths:
             raise ValueError("inapplicable accepted decision cannot contain matched paths")
+        if fact["applicability"] == "applicable" and scopes and not matched_paths:
+            raise ValueError("scoped applicable decision must contain a matched path")
         for key in ("category", "owner"):
             if fact[key] is not None and (
                 not isinstance(fact[key], str) or not 1 <= len(fact[key]) <= 512
@@ -150,6 +152,10 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("guidance matched path is outside its scope")
         if fact["applicability"] == "not_applicable" and matched_paths:
             raise ValueError("inapplicable guidance cannot contain matched paths")
+        if fact["applicability"] == "applicable" and not matched_paths:
+            expected_empty_state, _ = guidance_applicability(fact["path"], ())
+            if expected_empty_state != "applicable":
+                raise ValueError("applicable guidance must contain a matched path")
         precedence = _exact_mapping(
             fact["precedence"], {"depth", "path", "document_order"}, "guidance precedence"
         )
@@ -165,3 +171,39 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("guidance precedence is invalid")
         return
     raise ValueError(f"unsupported policy record kind: {kind}")
+
+
+def validate_policy_applicability(kind: str, value: object, changed_paths: tuple[str, ...]) -> None:
+    """Bind persisted applicability to the exact changed-path snapshot identity."""
+
+    outer = _exact_mapping(value, {"identity", "fact"}, kind)
+    fact = outer["fact"]
+    if not isinstance(fact, Mapping):
+        raise ValueError(f"{kind} fact is invalid")
+    applicability = fact.get("applicability")
+    matched_paths = tuple(fact.get("matched_paths", ()))
+    if kind == "repository.guidance":
+        path = fact.get("path")
+        if not isinstance(path, str):
+            raise ValueError("guidance path is invalid")
+        expected_state, expected_paths = guidance_applicability(path, changed_paths)
+    elif kind == "repository.accepted_decision":
+        if applicability == "invalid":
+            if matched_paths:
+                raise ValueError("invalid accepted decision cannot contain matched paths")
+            return
+        scopes = tuple(fact.get("scopes", ()))
+        expected_paths = tuple(
+            path
+            for path in changed_paths
+            if not scopes or any(matches_scope(scope, path) for scope in scopes)
+        )[:64]
+        expected_state = (
+            "applicable"
+            if expected_paths or (not scopes and not changed_paths)
+            else "not_applicable"
+        )
+    else:
+        raise ValueError(f"unsupported policy record kind: {kind}")
+    if applicability != expected_state or matched_paths != expected_paths:
+        raise ValueError(f"{kind} applicability does not match the loaded snapshots")

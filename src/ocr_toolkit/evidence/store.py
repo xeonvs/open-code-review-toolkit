@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from ocr_toolkit.common.redaction import (
     SENSITIVE_NAMED_KEY_PATTERN,
@@ -28,7 +28,11 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     Sensitivity,
 )
-from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value, validate_policy_record
+from ocr_toolkit.evidence.policy.schema import (
+    is_legacy_policy_value,
+    validate_policy_applicability,
+    validate_policy_record,
+)
 
 SCHEMA_VERSION = 3
 SUPPORTED_SCHEMA_VERSIONS = {1, 2, SCHEMA_VERSION}
@@ -168,7 +172,6 @@ class EvidenceStore:
         record: EvidenceRecord,
         *,
         structured_policy: bool,
-        allow_legacy_policy: bool = False,
     ) -> bool:
         """Admit a record while preserving explicit legacy read semantics."""
 
@@ -183,6 +186,16 @@ class EvidenceStore:
                     record.ref is not RefRole.BASE or record.trust.value != "target_repository"
                 ):
                     raise ValueError("structured policy evidence must come from the target ref")
+                expected_provenance = {
+                    "repository.accepted_decision": "policy:accepted-decisions",
+                    "repository.guidance": "policy:project-guidance",
+                }[record.kind]
+                if structured_policy and (
+                    record.component != "repository"
+                    or record.provenance != expected_provenance
+                    or record.confidence.value != "exact"
+                ):
+                    raise ValueError("structured policy evidence provenance is invalid")
                 if (
                     structured_policy
                     and record.kind == "repository.guidance"
@@ -198,9 +211,7 @@ class EvidenceStore:
                     and (record.source_path != ".opencodereview/accepted-decisions.md")
                 ):
                     raise ValueError("structured decision must use the canonical target path")
-                if structured_policy and not (
-                    allow_legacy_policy and is_legacy_policy_value(redacted_value)
-                ):
+                if structured_policy:
                     validate_policy_record(record.kind, redacted_value)
                 elif not structured_policy and not is_legacy_policy_value(redacted_value):
                     raise ValueError("legacy policy evidence must contain text only")
@@ -228,7 +239,7 @@ class EvidenceStore:
         )
         if redacted.id in self._records:
             return True
-        if len(self._records) >= self.limits.max_records:
+        if len(self._records) + len(self._coverage) >= self.limits.max_records:
             self._diagnose_once("global evidence record limit reached")
             return False
         if self._kind_counts[redacted.kind] >= self.limits.max_records_per_kind:
@@ -237,6 +248,53 @@ class EvidenceStore:
         self._records[redacted.id] = redacted
         self._kind_counts[redacted.kind] += 1
         return True
+
+    def record_limit_state(self, kind: str) -> Literal["global", "kind"] | None:
+        """Explain whether a failed admission exhausted a shared or kind budget."""
+
+        if len(self._records) + len(self._coverage) >= self.limits.max_records:
+            return "global"
+        if self._kind_counts[kind] >= self.limits.max_records_per_kind:
+            return "kind"
+        return None
+
+    def _validate_policy_snapshot_bindings(self) -> None:
+        """Bind schema-v3 policy to the exact atomic base/head snapshot pair."""
+
+        policy_records = tuple(
+            record for record in self._records.values() if record.kind in POLICY_KINDS
+        )
+        if not policy_records:
+            return
+        if self.base is None or self.head is None:
+            raise EvidenceStoreError("structured policy evidence requires base and head snapshots")
+        changed_paths = tuple(
+            sorted(
+                {
+                    record.source_path
+                    for snapshot in (self.base, self.head)
+                    for record in snapshot.records
+                    if record.kind == "repository.file"
+                }
+            )
+        )
+        for record in policy_records:
+            if is_legacy_policy_value(record.value):
+                raise EvidenceStoreError(
+                    "legacy text policy cannot be serialized as schema-v3 evidence"
+                )
+            if (
+                record.ref is not RefRole.BASE
+                or record.trust.value != "target_repository"
+                or record.commit_sha != self.base.commit_sha
+            ):
+                raise EvidenceStoreError(
+                    "structured policy evidence does not match the base snapshot"
+                )
+            try:
+                validate_policy_applicability(record.kind, record.value, changed_paths)
+            except ValueError as exc:
+                raise EvidenceStoreError(f"invalid {record.kind} snapshot applicability") from exc
 
     def _diagnose_once(self, message: str) -> None:
         """Append one deterministic diagnostic without repeated noise."""
@@ -318,6 +376,7 @@ class EvidenceStore:
     def to_dict(self) -> dict[str, object]:
         """Return the complete versioned store representation."""
 
+        self._validate_policy_snapshot_bindings()
         snapshots: dict[str, object] = {}
         for name, snapshot in (("base", self.base), ("head", self.head)):
             if snapshot is not None:
@@ -446,7 +505,6 @@ class EvidenceStore:
                 if not store._add(
                     EvidenceRecord.from_dict(item),
                     structured_policy=schema_version >= 3,
-                    allow_legacy_policy=True,
                 ):
                     raise EvidenceStoreError("evidence store records exceed declared limits")
         except (TypeError, ValueError) as exc:
@@ -477,6 +535,8 @@ class EvidenceStore:
         except EvidenceStoreError as exc:
             raise EvidenceStoreError("invalid evidence store diagnostic") from exc
         store._read_snapshots(raw.get("snapshots", {}), schema_version=schema_version)
+        if schema_version >= 3:
+            store._validate_policy_snapshot_bindings()
         store._read_deltas(raw.get("deltas", []))
         return store
 

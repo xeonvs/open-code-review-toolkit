@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import PurePosixPath
 
 from ocr_toolkit.evidence.policy.contracts import GuidanceDocument
 
 NESTED_GUIDANCE_NAMES = ("AGENTS.md", "CLAUDE.md")
 ROOT_GUIDANCE_PATHS = ("PR_REVIEW.md", ".cursorrules", ".github/copilot-instructions.md")
+MAX_GUIDANCE_DOCUMENTS = 256
+MAX_GUIDANCE_DIAGNOSTICS = 64
 MAX_MATCHED_PATHS = 64
 MAX_GUIDANCE_TEXT_CHARS = 64_000
 
@@ -52,12 +55,12 @@ def guidance_metadata(path: str) -> tuple[str, str, int, int]:
     return name, scope, depth, document_order
 
 
-def guidance_document(path: str, text: str, changed_paths: tuple[str, ...]) -> GuidanceDocument:
-    """Build one target-only guidance record with deterministic applicability."""
+def guidance_applicability(
+    path: str, changed_paths: tuple[str, ...]
+) -> tuple[str, tuple[str, ...]]:
+    """Derive applicability before content reads and again during hostile readback."""
 
-    if len(text) > MAX_GUIDANCE_TEXT_CHARS:
-        raise ValueError("guidance text exceeds the policy character budget")
-    name, scope, depth, document_order = guidance_metadata(path)
+    name, _scope, _depth, _document_order = guidance_metadata(path)
     nested = name in NESTED_GUIDANCE_NAMES
     parent = PurePosixPath(path).parent.as_posix()
     directory = "." if parent == "." else parent
@@ -71,6 +74,52 @@ def guidance_document(path: str, text: str, changed_paths: tuple[str, ...]) -> G
     applicability = (
         "applicable" if matched or (not nested and not changed_paths) else "not_applicable"
     )
+    return applicability, matched
+
+
+def guidance_precedence_key(path: str) -> tuple[int, str, int, str]:
+    """Return deterministic root-to-file ordering without reading document content."""
+
+    _name, _scope, depth, document_order = guidance_metadata(path)
+    parent = PurePosixPath(path).parent.as_posix()
+    return depth, parent, document_order, path
+
+
+def applicable_guidance_paths(
+    paths: Iterable[str], changed_paths: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Select potentially applicable paths in work linear to tree and diff size."""
+
+    changed_directories: set[str] = set()
+    if changed_paths:
+        changed_directories.add(".")
+    for changed_path in changed_paths:
+        parts = PurePosixPath(changed_path).parts
+        changed_directories.update(
+            PurePosixPath(*parts[:depth]).as_posix() for depth in range(1, len(parts))
+        )
+    selected = []
+    for path in paths:
+        if not is_guidance_path(path):
+            continue
+        name, _scope, _depth, _document_order = guidance_metadata(path)
+        if name not in NESTED_GUIDANCE_NAMES:
+            selected.append(path)
+            continue
+        parent = PurePosixPath(path).parent.as_posix()
+        directory = "." if parent == "." else parent
+        if directory in changed_directories:
+            selected.append(path)
+    return tuple(sorted(selected, key=guidance_precedence_key))
+
+
+def guidance_document(path: str, text: str, changed_paths: tuple[str, ...]) -> GuidanceDocument:
+    """Build one target-only guidance record with deterministic applicability."""
+
+    if len(text) > MAX_GUIDANCE_TEXT_CHARS:
+        raise ValueError("guidance text exceeds the policy character budget")
+    name, scope, depth, document_order = guidance_metadata(path)
+    applicability, matched = guidance_applicability(path, changed_paths)
     return GuidanceDocument(
         path=path,
         document_type=name,

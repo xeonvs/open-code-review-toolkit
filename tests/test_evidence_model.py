@@ -313,6 +313,16 @@ def test_store_deduplicates_and_reports_deterministic_limits() -> None:
     ]
 
 
+def test_store_counts_coverage_against_later_record_admission() -> None:
+    """Keep the shared record bound symmetric regardless of admission order."""
+
+    store = EvidenceStore(EvidenceStoreLimits(max_records=1, max_records_per_kind=1))
+    assert store.add_coverage(coverage())
+
+    assert not store.add(record())
+    assert store.record_limit_state("dependency.declared") == "global"
+
+
 def test_plugin_schema_rejects_unknown_record_kinds() -> None:
     """Keep the plugin validator closed when called outside the store registry."""
 
@@ -866,32 +876,68 @@ def _structured_decision_record() -> EvidenceRecord:
     )
 
 
+def _snapshot_file(path: str, ref: RefRole, sha: str) -> EvidenceRecord:
+    """Build one changed-file identity used to bind structured policy tests."""
+
+    return EvidenceRecord(
+        kind="repository.file",
+        value={"mode": "100644", "object_type": "blob", "object_sha": "c" * 40},
+        source_path=path,
+        ref=ref,
+        commit_sha=sha,
+        provenance="git.ls_tree",
+        trust=(
+            TrustClass.TARGET_REPOSITORY if ref is RefRole.BASE else TrustClass.SOURCE_REPOSITORY
+        ),
+    )
+
+
+def _structured_policy_store(policy_record: EvidenceRecord, *, changed_path: str) -> EvidenceStore:
+    """Build one atomically indexed schema-v3 policy store."""
+
+    base_file = _snapshot_file(changed_path, RefRole.BASE, BASE_SHA)
+    head_file = _snapshot_file(changed_path, RefRole.HEAD, HEAD_SHA)
+    store = EvidenceStore(
+        base=EvidenceSnapshot(RefRole.BASE, BASE_SHA, (base_file,)),
+        head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (head_file,)),
+    )
+    for item in (base_file, head_file, policy_record):
+        assert store.add(item)
+    return store
+
+
 def test_schema_v3_round_trips_structured_policy_and_rejects_nested_extensions(
     tmp_path: Path,
 ) -> None:
     """Revalidate exact nested policy shapes on every hostile load."""
 
-    store = EvidenceStore()
-    assert store.add(_structured_decision_record())
+    store = _structured_policy_store(_structured_decision_record(), changed_path="src/app.py")
     path = tmp_path / "evidence.json"
     store.write(path)
     restored = EvidenceStore.read(path)
-    assert restored.records == (_structured_decision_record(),)
+    assert [
+        record for record in restored.records if record.kind == "repository.accepted_decision"
+    ] == [_structured_decision_record()]
 
     payload = store.to_dict()
     records = payload["records"]
-    assert isinstance(records, list) and isinstance(records[0], dict)
-    value = records[0]["value"]
+    assert isinstance(records, list)
+    decision = next(
+        record
+        for record in records
+        if isinstance(record, dict) and record.get("kind") == "repository.accepted_decision"
+    )
+    value = decision["value"]
     assert isinstance(value, dict) and isinstance(value["fact"], dict)
     value["fact"]["authority"] = True
-    records[0].pop("id")
+    decision.pop("id")
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(EvidenceStoreError, match=r"invalid repository\.accepted_decision"):
         EvidenceStore.read(path)
 
 
-def test_schema_v3_reads_exact_legacy_policy_as_text_without_granting_structure(
+def test_schema_v2_reads_exact_legacy_policy_as_text_without_granting_structure(
     tmp_path: Path,
 ) -> None:
     """Keep v2 text records readable without assigning policy applicability."""
@@ -972,18 +1018,25 @@ def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path
         source_path="services/AGENTS.md",
         ref=RefRole.BASE,
         commit_sha=BASE_SHA,
+        component="repository",
+        provenance="policy:project-guidance",
         trust=TrustClass.TARGET_REPOSITORY,
     )
-    assert store.add(record)
+    store = _structured_policy_store(record, changed_path="services/app.py")
     assert "synthetic-sensitive-guidance-value" not in store.to_json()
     path = tmp_path / "guidance.json"
     store.write(path)
 
     payload = store.to_dict()
     records = payload["records"]
-    assert isinstance(records, list) and isinstance(records[0], dict)
-    records[0].pop("id")
-    value = records[0]["value"]
+    assert isinstance(records, list)
+    guidance = next(
+        item
+        for item in records
+        if isinstance(item, dict) and item.get("kind") == "repository.guidance"
+    )
+    guidance.pop("id")
+    value = guidance["value"]
     assert isinstance(value, dict) and isinstance(value["fact"], dict)
     precedence = value["fact"]["precedence"]
     assert isinstance(precedence, dict)
@@ -992,6 +1045,59 @@ def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path
 
     with pytest.raises(EvidenceStoreError, match=r"invalid repository\.guidance"):
         EvidenceStore.read(path)
+
+
+def test_schema_v3_rejects_legacy_policy_commit_drift_and_impossible_applicability(
+    tmp_path: Path,
+) -> None:
+    """Bind v3 policy shape, commit, and matched paths to the atomic snapshots."""
+
+    valid = _structured_policy_store(_structured_decision_record(), changed_path="src/app.py")
+    mutations: list[dict[str, object]] = []
+
+    legacy = valid.to_dict()
+    legacy_records = legacy["records"]
+    assert isinstance(legacy_records, list)
+    legacy_decision = next(
+        item
+        for item in legacy_records
+        if isinstance(item, dict) and item.get("kind") == "repository.accepted_decision"
+    )
+    legacy_decision["value"] = {"text": "Historical only."}
+    legacy_decision.pop("id")
+    mutations.append(legacy)
+
+    commit_drift = valid.to_dict()
+    drift_records = commit_drift["records"]
+    assert isinstance(drift_records, list)
+    drift_decision = next(
+        item
+        for item in drift_records
+        if isinstance(item, dict) and item.get("kind") == "repository.accepted_decision"
+    )
+    drift_decision["commit_sha"] = "d" * 40
+    drift_decision.pop("id")
+    mutations.append(commit_drift)
+
+    empty_match = valid.to_dict()
+    empty_records = empty_match["records"]
+    assert isinstance(empty_records, list)
+    empty_decision = next(
+        item
+        for item in empty_records
+        if isinstance(item, dict) and item.get("kind") == "repository.accepted_decision"
+    )
+    empty_value = empty_decision["value"]
+    assert isinstance(empty_value, dict) and isinstance(empty_value["fact"], dict)
+    empty_value["fact"]["matched_paths"] = []
+    empty_decision.pop("id")
+    mutations.append(empty_match)
+
+    for index, payload in enumerate(mutations):
+        path = tmp_path / f"hostile-policy-{index}.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(EvidenceStoreError):
+            EvidenceStore.read(path)
 
 
 @pytest.mark.parametrize(

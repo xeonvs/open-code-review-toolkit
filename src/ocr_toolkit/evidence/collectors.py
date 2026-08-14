@@ -59,11 +59,16 @@ from ocr_toolkit.evidence.model import (
     TrustClass,
 )
 from ocr_toolkit.evidence.policy import (
+    MAX_GUIDANCE_DIAGNOSTICS,
+    MAX_GUIDANCE_DOCUMENTS,
+    applicable_guidance_paths,
     guidance_document,
+    guidance_precedence_key,
     is_guidance_path,
     parse_accepted_decisions,
 )
 from ocr_toolkit.evidence.repository import (
+    BoundedBlobRead,
     GitRepositoryReader,
     RepositoryEvidenceError,
     RepositoryObject,
@@ -718,15 +723,73 @@ def collect_ref_facts(
     coverage_observations: dict[tuple[str, str], list[CoverageObservation]] = {}
     topology_kind_counts: dict[str, int] = {}
     topology_truncation_scopes: set[tuple[str, str]] = set()
-    for entry in entries:
-        if ref is not RefRole.BASE or entry.path in changed_exact:
-            continue
-        if not is_guidance_path(entry.path):
-            continue
+    applicable_paths = (
+        set(
+            applicable_guidance_paths(
+                (
+                    entry.path
+                    for entry in entries
+                    if entry.path not in changed_exact and is_guidance_path(entry.path)
+                ),
+                changed_exact,
+            )
+        )
+        if ref is RefRole.BASE
+        else set()
+    )
+    applicable_guidance = tuple(
+        sorted(
+            (entry for entry in entries if entry.path in applicable_paths),
+            key=lambda entry: guidance_precedence_key(entry.path),
+        )
+    )
+    rejected_guidance = tuple(
+        entry
+        for entry in applicable_guidance
+        if entry.is_symlink or entry.is_submodule or entry.object_type != "blob"
+    )
+    for entry in rejected_guidance[:MAX_GUIDANCE_DIAGNOSTICS]:
         if entry.is_symlink:
             diagnostics.append(f"{ref.value}:{entry.path}: guidance rejected (symlink-source)")
-        elif entry.is_submodule or entry.object_type != "blob":
+        else:
             diagnostics.append(f"{ref.value}:{entry.path}: guidance rejected (non-blob-source)")
+    if len(rejected_guidance) > MAX_GUIDANCE_DIAGNOSTICS:
+        diagnostics.append(f"{ref.value}: guidance rejection diagnostics were truncated")
+
+    regular_guidance = tuple(
+        entry
+        for entry in applicable_guidance
+        if not entry.is_symlink and not entry.is_submodule and entry.object_type == "blob"
+    )
+    if len(regular_guidance) > MAX_GUIDANCE_DOCUMENTS:
+        diagnostics.append(
+            f"{ref.value}: applicable guidance truncated after {MAX_GUIDANCE_DOCUMENTS} documents"
+        )
+        regular_guidance = regular_guidance[:MAX_GUIDANCE_DOCUMENTS]
+    target_decision_entry = next(
+        (
+            entry
+            for entry in entries
+            if ref is RefRole.BASE and entry.path == ACCEPTED_DECISIONS_PATH
+        ),
+        None,
+    )
+    # Keep the canonical decision document ahead of guidance inside the shared
+    # policy byte budget; applicable guidance must not evict decision authority.
+    policy_candidates = tuple(
+        entry
+        for entry in (
+            *((target_decision_entry,) if target_decision_entry is not None else ()),
+            *regular_guidance,
+        )
+        if not entry.is_symlink and not entry.is_submodule and entry.object_type == "blob"
+    )
+    policy_paths = {entry.path for entry in policy_candidates}
+    if target_decision_entry is not None and target_decision_entry.path not in policy_paths:
+        reason = "symlink-source" if target_decision_entry.is_symlink else "non-blob-source"
+        diagnostics.append(
+            f"{ref.value}:{ACCEPTED_DECISIONS_PATH}: accepted decisions rejected ({reason})"
+        )
 
     candidates = tuple(
         entry
@@ -737,13 +800,6 @@ def collect_ref_facts(
             or _is_context_yaml(entry.path, changed)
             or entry in topology_entries
             or infrastructure_candidate(entry.path)
-            or (
-                ref is RefRole.BASE
-                and (
-                    (is_guidance_path(entry.path) and entry.path not in changed_exact)
-                    or entry.path == ACCEPTED_DECISIONS_PATH
-                )
-            )
         )
         and not entry.is_symlink
         and not entry.is_submodule
@@ -759,26 +815,23 @@ def collect_ref_facts(
         for entry in candidates
         if (collector := manifest_collector(entry.path)) is not None
     }
+    policy_blobs: dict[str, bytes] = {}
+    if policy_candidates:
+        try:
+            policy_read = reader.read_candidate_blobs(policy_candidates)
+        except RepositoryEvidenceError as exc:
+            diagnostics.append(f"policy batch read failed: {exc}")
+        else:
+            policy_blobs = policy_read.blobs
+            diagnostics.extend(f"{ref.value}:{message}" for message in policy_read.diagnostics)
     try:
         read = reader.read_candidate_blobs(candidates)
     except RepositoryEvidenceError as exc:
         diagnostics.append(f"collector batch read failed: {exc}")
-        for entry in topology_entries:
-            unavailable_topology(entry, "bounded-read-omission")
-        if coverage_sink is not None:
-            for (domain, scope), observations in sorted(coverage_observations.items()):
-                coverage_sink.append(
-                    compose_coverage(
-                        component="ansible",
-                        domain=domain,
-                        scope=scope,
-                        observations=tuple(observations),
-                        ref=ref,
-                        commit_sha=commit_sha,
-                    )
-                )
-        return records, diagnostics
-    blobs = read.blobs
+        # Policy has an independent authenticated batch and remains usable when an
+        # unrelated source domain fails before ordinary candidate acquisition.
+        read = BoundedBlobRead({}, ())
+    blobs = {**policy_blobs, **read.blobs}
     for path, status in tuple(source_statuses.items()):
         source_statuses[path] = PluginSourceStatus(
             status.path,
@@ -842,6 +895,7 @@ def collect_ref_facts(
             diagnostics.append(qualified)
     paths = dict.fromkeys(
         (
+            *tuple(entry.path for entry in policy_candidates),
             *tuple(entry.path for entry in candidates),
             *graph.galaxy_paths,
             *python_graph.requirement_paths,
@@ -948,7 +1002,7 @@ def collect_ref_facts(
                     ]
             elif guidance_source:
                 facts = []
-                if ref == RefRole.BASE and path not in changed_exact:
+                if ref == RefRole.BASE and path in policy_paths:
                     document = guidance_document(path, text, changed_exact)
                     facts = [
                         ManifestFact(

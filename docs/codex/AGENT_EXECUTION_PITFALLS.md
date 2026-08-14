@@ -38,7 +38,7 @@ Root-cause vocabulary:
 - **Symptom:** `PLANS.md` retained an externally reconciled release cycle and became a second release-history database.
 - **Root cause:** conflicting rule; active-state and archive lifecycle descriptions prescribed different retention points.
 - **Canonical owner:** [External reconciliation and plan archiving](../release.md#external-reconciliation-and-plan-archiving).
-- **Control:** ordinary release-PR review moves the complete repository plan to its stable-tag archive with external delivery pending, links it from the release index, and returns the active registry to its template state.
+- **Control:** ordinary release-PR documentation review follows the canonical lifecycle; no archive-specific executable gate is needed.
 - **Historical evidence:** [M2 archive correction](../engineering/execution_history/releases.md#plan-toolkit-0-5-0).
 
 ## Unpublished history reached the remote secret scan first

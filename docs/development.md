@@ -58,7 +58,7 @@ Do not add a flat compatibility module when moving or adding an adapter. Parser 
 
 Pure policy contracts, accepted-decision parsing, safe scope matching, and guidance applicability live under `src/ocr_toolkit/evidence/policy/`. Register providers statically; do not use entry points or repository-controlled imports. Policy code consumes bounded immutable text and normalized changed paths only. Git/tree/blob reads remain in `evidence.collectors`, admission and hostile readback remain in `evidence.store`, compact hints remain in `evidence.project`, and transport remains in the single built-in evidence MCP.
 
-Parser changes need legacy-format, duplicate-ID, malformed-field, unknown-field, scope, date, applicability, precedence, rename, unsafe-object, multibyte-boundary, and redaction fixtures. New policy values require exact kind-specific persisted schemas. Repository guidance is untrusted evidence and must never become executable instructions or an authorization channel.
+Parser changes need legacy-format, duplicate-ID, malformed-field, unknown-field, scope, date, applicability, precedence, rename, unsafe-object, multibyte-boundary, and redaction fixtures. New policy values require exact kind-specific persisted schemas, snapshot/provenance correlation, and impossible-state rejection. Select applicable guidance before content reads and isolate policy truncation from unrelated evidence domains. Repository guidance is untrusted evidence and must never become executable instructions or an authorization channel; bootstrap renderers must use shared delimiter-aware Markdown helpers for repository-derived values.
 
 ## Extending framework evidence
 

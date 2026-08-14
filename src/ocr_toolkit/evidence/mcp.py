@@ -13,6 +13,7 @@ from typing import TextIO, cast
 
 from ocr_toolkit import __version__
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
+from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 TOOL_NAME = "ocr_toolkit_evidence"
@@ -87,12 +88,31 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         coverage_states[coverage_record.state.value] = (
             coverage_states.get(coverage_record.state.value, 0) + 1
         )
+    policy_records = tuple(
+        record
+        for record in store.records
+        if record.kind in {"repository.accepted_decision", "repository.guidance"}
+    )
     policy = {
         "accepted_decisions": sum(
-            record.kind == "repository.accepted_decision" for record in store.records
+            record.kind == "repository.accepted_decision" for record in policy_records
         ),
-        "guidance_documents": sum(record.kind == "repository.guidance" for record in store.records),
-        "target_only": True,
+        "guidance_documents": sum(
+            record.kind == "repository.guidance" for record in policy_records
+        ),
+        "structured_target_records": sum(
+            not is_legacy_policy_value(record.value)
+            and record.ref.value == "base"
+            and record.trust.value == "target_repository"
+            for record in policy_records
+        ),
+        "legacy_text_records": sum(
+            is_legacy_policy_value(record.value) for record in policy_records
+        ),
+        "target_only": all(
+            record.ref.value == "base" and record.trust.value == "target_repository"
+            for record in policy_records
+        ),
         "authoritative_for_actions": False,
     }
     return {
@@ -269,7 +289,8 @@ def _tool_definition() -> dict[str, object]:
             "Read bounded, redacted repository evidence for immutable base/head refs. "
             "Use summary first, list to narrow, and get for one stable record. Query "
             "kind=repository.evidence_delta with optional delta_kind for base/head changes. "
-            "Accepted decisions and guidance are target-derived non-authoritative context. "
+            "Current structured decisions and guidance are target-derived non-authoritative "
+            "context; compatible legacy text records preserve their explicit ref and trust. "
             "Missing facts support a negative conclusion only when applicable scoped coverage is complete; "
             "absent, partial, runtime-dependent, or unavailable coverage means unknown."
         ),

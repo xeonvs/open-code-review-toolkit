@@ -4,9 +4,9 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; production integration checkpoint complete, deterministic validation next
+Status: active; Codex Security remediation and deterministic revalidation complete, exact-head security revalidation next
 Owner: Codex
-Last Updated: 2026-08-13
+Last Updated: 2026-08-14
 Release Classification: release-required
 Target Stable Version: 0.6.0
 Next Development Version After Release PR: 0.6.1
@@ -207,13 +207,11 @@ diff; audit sibling implementations and module/service boundaries; verify
   attacks, symlink rejection, MCP/store redaction, and bootstrap secrecy. Public
   README, security, configuration, development, and strategy documentation now
   match the implemented service and trust boundaries.
-- The previously retained externally reconciled M2 cycle moved byte-for-byte
-  into the stable release archive under `plan-toolkit-0-5-0`; its SHA-256 before
-  and after extraction is
-  `dd699e63f81faa3d3baf2cc302864ecc1514de874cbcb88d8ff37ffec43a9f79`.
-  The archive index resolves every unique anchor. `PLANS.md` now contains only
-  this active M4 lifecycle; the 0.6.0 release PR will archive the complete
-  current plan and return this file to its empty template before publication.
+- The previously retained externally reconciled M2 cycle moved into the stable
+  release archive and is linked from the release index. `PLANS.md` now contains
+  only this active M4 lifecycle; the 0.6.0 release PR will preserve its decisions
+  and receipts in the archive and return this file to its empty template before
+  publication.
 
 ### Instruction-Governance Remediation
 
@@ -277,6 +275,10 @@ unsafe trust or mutation mechanism.
   schema, helper, verifier, or publication gate. The release PR records external
   delivery as pending; the immutable receipt and independent readback close it
   without another repository mutation.
+- A follow-up audit removed the unnecessary byte-for-byte/hash expectation for
+  archived prose. Normal review checks only that decisions and receipts remain
+  discoverable and the release index has a usable link; Git history preserves
+  the original text without making Markdown layout a release boundary.
 - Full quality, focused release and evidence suites, workflow YAML parsing,
   compatibility validation, Towncrier draft rendering, privacy inspection, and
   `git diff --check` pass. Self-review mapped every removed durable requirement
@@ -367,6 +369,48 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
   readback still reports OCR 1.9.2 as latest, issue #81 as the only open project
   issue, and no secret-scanning or Dependabot alerts.
 
+### Deterministic Validation And Codex Security Remediation
+
+- Exact commit `95c58d5142060c8f78f6b904d9ffc0c8f836ea60` passed the complete
+  deterministic Python 3.12-3.14, routine quality, Bandit, dependency, package,
+  reproducibility, installed-artifact, hostile-environment, privacy, Gitleaks,
+  and real stdio MCP matrix. The ignored private receipt binds that tree and its
+  development wheel/sdist hashes.
+- The pre-OCR diff scan reviewed all changed runtime files and supporting
+  collection, rendering, persistence, MCP, test, installed-package, and workflow
+  boundaries. Two low-severity findings survived: repository backticks could
+  escape fixed bootstrap code spans, and non-applicable nested guidance could
+  consume the policy budget then stop unrelated typed evidence. Private-store
+  provenance forgery and legacy summary misclassification reproduced as defects
+  but were not security-reportable because their proven paths require
+  operator-equivalent local artifact selection or write access.
+- Remediation uses the existing module boundaries rather than adding a service:
+  the pure policy package selects applicable ancestor guidance and owns its
+  document bound; collectors read that bounded policy batch separately; generic
+  store admission continues after one kind's ordinary truncation; schema-v3
+  readback rejects legacy values and rebinds policy provenance/applicability to
+  the exact snapshots; MCP derives legacy/target labels from actual records; and
+  bootstrap rendering uses the shared delimiter-aware inline-code helper with
+  complete-line clipping. Focused hostile tests and documentation are updated.
+- Final pre-commit self-review also made canonical accepted decisions first in
+  the isolated policy byte budget, so even a large set of genuinely applicable
+  guidance cannot evict the decision document. A synthetic constrained-budget
+  regression proves the decision survives while later guidance degrades with an
+  explicit omission diagnostic.
+- The remediation worktree before the final self-review refinement passed the
+  corrected direct-interpreter Python 3.12-3.14 matrix, routine quality and security/dependency
+  checks, deterministic target-version wheel/sdist builds, Twine, clean
+  installed-artifact checks on every supported Python, hostile shadow-package
+  imports, restricted-path CLI, real stdio MCP summary/list/get, private-mode
+  and synthetic-repository checks, workflow parsing, compatibility validation,
+  Towncrier rendering, Gitleaks, private-marker inspection, and diff hygiene.
+  The earlier environment-manager matrix attempt is explicitly superseded and
+  is not acceptance evidence. The final decision-priority refinement then
+  passed the focused policy/evidence, integration/release, Ruff, strict-mypy,
+  syntax, privacy, and diff-hygiene checks. The remaining pre-OCR gate is a
+  fresh security scan bound to the committed remediation tree; final full-tree
+  validation is repeated after OCR remediation as already required above.
+
 ### Feature, Release, And Stable Closure
 
 - Open the feature PR only after the one complete push. Read back exact head,
@@ -400,7 +444,7 @@ reports v1.9.2 as latest and issue #81 is the only open toolkit issue.
    incident catalogue cleanup, focused subsystem controls, and validation.
 6. [x] Complete logical commit 5: production E2E, documentation, fragments, and
    demonstrated Code scanning workflow improvements.
-7. [ ] Complete deterministic Python/package/security/privacy validation.
+7. [x] Complete deterministic Python/package/security/privacy validation.
 8. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
    required security revalidation before OCR.
 9. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,

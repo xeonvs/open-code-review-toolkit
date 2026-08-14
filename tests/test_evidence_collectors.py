@@ -28,7 +28,11 @@ from ocr_toolkit.evidence.ecosystems.ansible.requirements import (
 from ocr_toolkit.evidence.ecosystems.contracts import MAX_MANIFEST_ITEMS
 from ocr_toolkit.evidence.ecosystems.python import parse_requirements
 from ocr_toolkit.evidence.mcp import handle_request
-from ocr_toolkit.evidence.repository import BoundedBlobRead, RepositoryObject
+from ocr_toolkit.evidence.repository import (
+    BoundedBlobRead,
+    RepositoryEvidenceError,
+    RepositoryObject,
+)
 
 
 def _git(root: Path, *args: str) -> str:
@@ -1411,7 +1415,6 @@ def test_nested_target_guidance_has_applicability_precedence_and_no_source_recor
         "PR_REVIEW.md",
         "services/AGENTS.md",
         "services/api/CLAUDE.md",
-        "web/AGENTS.md",
     }
     assert facts["AGENTS.md"]["matched_paths"] == ("services/api/app.py",)
     assert facts["CLAUDE.md"]["precedence"] == {
@@ -1421,7 +1424,7 @@ def test_nested_target_guidance_has_applicability_precedence_and_no_source_recor
     }
     assert facts["services/AGENTS.md"]["scope"] == "services/**"
     assert facts["services/api/CLAUDE.md"]["matched_paths"] == ("services/api/app.py",)
-    assert facts["web/AGENTS.md"]["applicability"] == "not_applicable"
+    assert "web/AGENTS.md" not in facts
     assert facts["PR_REVIEW.md"]["matched_paths"] == ("services/api/app.py",)
     assert all(record.trust.value == "target_repository" for record in guidance)
 
@@ -1478,3 +1481,139 @@ def test_guidance_symlink_and_submodule_are_not_read(tmp_path: Path) -> None:
 
     assert not any(record.kind == "repository.guidance" for record in records)
     assert diagnostics == ["base:AGENTS.md: guidance rejected (symlink-source)"]
+
+
+def test_irrelevant_guidance_is_not_read_or_stored_before_applicable_policy(
+    tmp_path: Path,
+) -> None:
+    """Keep irrelevant policy from consuming blob, record, or sibling-domain budgets."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    for index in range(520):
+        guidance = tmp_path / "a" / f"component-{index}" / "AGENTS.md"
+        guidance.parent.mkdir(parents=True)
+        guidance.write_text("Irrelevant synthetic guidance.\n", encoding="utf-8")
+    relevant = tmp_path / "z" / "AGENTS.md"
+    relevant.parent.mkdir()
+    relevant.write_text("Relevant synthetic guidance.\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.12"\n', encoding="utf-8"
+    )
+    app = tmp_path / "z" / "app.py"
+    app.write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "target tree")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    app.write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source change")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+
+    guidance_records = [record for record in store.records if record.kind == "repository.guidance"]
+    assert [record.source_path for record in guidance_records] == ["z/AGENTS.md"]
+    assert guidance_records[0].value["fact"]["applicability"] == "applicable"
+    assert any(record.kind == "runtime.declared" for record in store.records)
+    assert not any("repository.guidance" in item for item in store.diagnostics)
+
+
+def test_policy_batch_survives_an_unrelated_candidate_batch_failure(tmp_path: Path) -> None:
+    """Preserve policy while every failed ordinary source degrades coverage."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    (tmp_path / "AGENTS.md").write_text("Synthetic target guidance.\n", encoding="utf-8")
+    (tmp_path / "requirements.txt").write_text("jinja2==3.1.6\n", encoding="utf-8")
+    (tmp_path / "inventory.ini").write_text("[synthetic]\nnode.example.invalid\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "target")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    class FailingOrdinaryBatchReader(GitRepositoryReader):
+        """Fail only the second candidate batch after policy was authenticated."""
+
+        calls = 0
+
+        def read_candidate_blobs(self, entries: tuple[RepositoryObject, ...]) -> BoundedBlobRead:
+            self.calls += 1
+            if self.calls == 2:
+                raise RepositoryEvidenceError("synthetic ordinary batch failure")
+            return super().read_candidate_blobs(entries)
+
+    reader = FailingOrdinaryBatchReader(tmp_path)
+    coverage = []
+    records, diagnostics = collect_ref_facts(
+        reader,
+        base,
+        RefRole.BASE,
+        changed_paths=reader.changed_paths(base, head),
+        coverage_sink=coverage,
+    )
+
+    assert [record.source_path for record in records if record.kind == "repository.guidance"] == [
+        "AGENTS.md"
+    ]
+    assert not any(
+        record.source_path in {"requirements.txt", "inventory.ini"} for record in records
+    )
+    declaration = next(
+        item
+        for item in coverage
+        if item.component == "."
+        and item.domain == "framework.declaration"
+        and item.scope == "jinja2"
+    )
+    assert declaration.state.value == "unavailable"
+    assert declaration.reasons == ("bounded-source-omission",)
+    inventory = next(
+        item
+        for item in coverage
+        if item.component == "ansible" and item.domain == "inventory.groups" and item.scope == "."
+    )
+    assert inventory.state.value == "unavailable"
+    assert inventory.reasons == ("bounded-read-omission",)
+    assert "collector batch read failed" in diagnostics[0]
+
+
+def test_accepted_decisions_precede_guidance_inside_the_policy_byte_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Do not let applicable guidance evict the canonical decision document."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    policy = tmp_path / ".opencodereview" / "accepted-decisions.md"
+    policy.parent.mkdir()
+    policy.write_text("## Keep boundary\nSynthetic rationale.\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("G" * 96, encoding="utf-8")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "target")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    monkeypatch.setattr("ocr_toolkit.evidence.repository.MAX_BATCH_BLOB_BYTES", 100)
+
+    records, diagnostics = collect_ref_facts(
+        GitRepositoryReader(tmp_path),
+        base,
+        RefRole.BASE,
+        changed_paths=GitRepositoryReader(tmp_path).changed_paths(base, head),
+    )
+
+    assert [
+        record.value["fact"]["decision_id"]
+        for record in records
+        if record.kind == "repository.accepted_decision"
+    ] == ["keep-boundary"]
+    assert not any(record.kind == "repository.guidance" for record in records)
+    assert any("omitted AGENTS.md: batch content exceeds 100 bytes" in item for item in diagnostics)

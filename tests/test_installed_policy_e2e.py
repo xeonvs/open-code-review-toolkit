@@ -159,6 +159,8 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         assert receipt["policy"] == {
             "accepted_decisions": 1,
             "guidance_documents": 3,
+            "structured_target_records": 4,
+            "legacy_text_records": 0,
             "target_only": True,
             "authoritative_for_actions": False,
         }
