@@ -30,6 +30,7 @@ Homepage = "https://github.com/xeonvs/open-code-review-toolkit"
 Repository = "https://github.com/xeonvs/open-code-review-toolkit"
 Issues = "https://github.com/xeonvs/open-code-review-toolkit/issues"
 Changelog = "https://github.com/xeonvs/open-code-review-toolkit/blob/main/CHANGELOG.md"
+"Code of Conduct" = "https://github.com/xeonvs/open-code-review-toolkit/blob/main/CODE_OF_CONDUCT.md"
 
 [project.scripts]
 ocr-ci = "ocr_toolkit.cli:main"

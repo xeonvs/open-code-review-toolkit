@@ -194,17 +194,21 @@ def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
 
 def test_gitlab_example_uses_pinned_bounded_stable_wheel_install() -> None:
     example = GITLAB_EXAMPLE.read_text(encoding="utf-8")
-    wheel_name = "open_code_review_toolkit-0.1.0-py3-none-any.whl"
+    stable_version = (PROJECT_ROOT / ".release-version").read_text(encoding="utf-8").strip()
 
-    assert "releases/download/v0.1.0/SHA256SUMS" in example
-    assert wheel_name in example
+    assert f'OCR_TOOLKIT_VERSION: "{stable_version}"' in example
+    assert "releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS" in example
+    assert (
+        'OCR_TOOLKIT_WHEEL="open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl"'
+        in example
+    )
     assert "--require-hashes --no-deps --only-binary=:all:" in example
     assert "--retries 3 --timeout 10" in example
     assert "--retry 3 --retry-delay 2 --retry-connrefused" in example
     assert "--connect-timeout 10 --max-time 120" in example
     assert "--proto '=https' --proto-redir '=https'" in example
     assert "sha256sum --check --strict" in example
-    assert f"pip install --no-deps /tmp/{wheel_name}" in example
+    assert 'pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"' in example
 
 
 def test_production_release_verifies_reviewed_registry_artifacts() -> None:
