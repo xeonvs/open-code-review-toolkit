@@ -14,6 +14,8 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through the shared evidence contracts; unproven formats are not retained as mandatory work. |
 | M2 framework selection (BL-009) | Completed and removed | The anonymized selection produced bounded static Jinja2, Go web, Symfony/Twig, and React/Next providers with synthetic cross-provider validation and no second MCP. |
 | M2 milestone closure | Completed | Stable 0.5.0 delivery and independent external readback establish M2; BL-010 remains a conditional M6 extension and is not unfinished M2 scope. |
+| M4 accepted decisions (BL-014) | Completed and removed | Structured target-only decisions now preserve deterministic identity, optional metadata, safe scope, applicability, staleness, and bounded bootstrap/MCP projections without granting suppression authority. |
+| M4 project guidance (BL-015) | Completed and removed | Immutable target guidance now has bounded discovery, deterministic nested applicability and precedence, changed-guidance exclusion, compact bootstrap hints, and full text through the existing read-only evidence MCP. |
 
 ## M3 External MCP hardening
 
@@ -59,37 +61,6 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Exclusions:** New provider transports, external writes, generic URL fetch, content prefetch, or duplicate evidence collectors.
 - **Validation:** Provider configuration, capability-rendering, redaction, and end-to-end synthetic example tests; do not duplicate the established core composition matrix.
 - **Release classification expectation:** `no-release` for threat-model and documentation examples; any new public runtime behavior is classified separately.
-
-## M4 Policy and project guidance
-
-### BL-014: Evolve accepted decisions into tolerant structured Markdown
-
-- **Status:** planned
-- **Priority:** medium
-- **Roadmap theme:** M4 Policy and project guidance
-- **Dependencies:** Established M1 evidence/MCP contracts and current target-branch self-whitelisting guard.
-- **Activation trigger:** Evidence model can preserve decision scope and provenance.
-- **Goal:** Add optional Scope, Category, Review after, and Owner metadata without breaking existing decision documents.
-- **Scoped deliverables:** Parse heading/rationale entries and optional bullet metadata; normalize unique decision IDs; define repository-relative glob semantics, Category as descriptive metadata, Owner as contact metadata, and `Review after` as an expiry signal rather than automatic deletion; tolerate unknown fields; filter by target branch and component scope; place summaries in bootstrap and full rationale in evidence MCP.
-- **Acceptance criteria:** Existing files remain valid; duplicate IDs and unsafe scope patterns are reported deterministically; malformed optional metadata cannot invalidate unrelated decisions; expired decisions are surfaced as stale and do not silently suppress findings; Owner/Category cannot grant authority; source-branch edits never affect the current review.
-- **Exclusions:** YAML, unconditional finding suppression, policy authorization, or mandatory metadata.
-- **Validation:** Backward-compatibility, unknown/malformed field, scope, date, target/source, and size-bound fixtures.
-- **Release classification expectation:** `release-required`.
-
-### BL-015: Simplify project guidance after an upstream OCR contract exists
-
-- **Status:** conditional
-- **Priority:** medium
-- **Roadmap theme:** M4 Policy and project guidance
-- **Dependencies:** Established M1 evidence/MCP contracts and documented/tested upstream OCR automatic guidance behavior.
-- **Activation trigger:** A supported OCR release proves in compatibility tests that its guidance mechanism can resolve the intended target-ref version rather than the source worktree path.
-- **Goal:** Replace large excerpts with target-branch paths and short non-authoritative hints while preserving fail-closed handling.
-- **Scoped deliverables:** Define root-to-file applicability and precedence for nested `AGENTS.md`/`CLAUDE.md`; discover applicable target-branch files without checkout or execution; exclude guidance changed, added, renamed, or deleted by the merge request; supply target-ref-aware paths/hints; permit OCR native tools to read only the intended target versions on demand.
-- **Acceptance criteria:** Source changes and symlink/submodule indirection cannot self-instruct; conflicting nested guidance resolves deterministically; missing upstream capability retains current bounded behavior; guidance remains untrusted and never overrides system policy.
-- **Exclusions:** Removing safeguards before the trigger, copying full guidance into bootstrap, or toolkit-specific instruction execution.
-- **Validation:** Multi-scope target/source fixtures, changed-guidance attacks, capability fallback tests, and bootstrap budget tests.
-- **Release classification expectation:** `release-required`.
-- **Upstream overlap:** OCR 1.9.1 adds repository-maintainer `AGENTS.md` guidance for upstream contributors, not a runtime target-ref-aware guidance discovery contract. The activation trigger remains unmet.
 
 ## M5 Review profiles and quality measurement
 

@@ -40,7 +40,7 @@ flowchart LR
 - OCR compatibility and the established common evidence model now converge at compact-bootstrap/evidence-MCP integration.
 - M3 threat modeling can proceed from the established generic composition boundary; provider examples wait for BL-011, while managed OAuth does not block static-header or stdio operation.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M6 and do not reopen M2; M4 can proceed independently from the stable evidence contracts it consumes.
-- M4 implementation and local review are active in the 0.6.0 lifecycle; it remains in progress until stable artifacts and tracking closure are independently read back.
+- M4 implementation, protected feature merge, development publication, security review, and local OCR remediation are complete in the 0.6.0 lifecycle; it remains in progress until stable artifacts and tracking closure are independently read back.
 - The M5 measurement-gap audit can begin from current lifecycle and result receipts; BL-016 is required only for later named-profile comparisons.
 - Versioned documentation remains a separate MCP integration: the toolkit supplies package/version evidence but does not store documentation.
 - Additional code-hosting adapters are not ecosystem collectors. They remain conditional because the near-term product is GitLab-first.
