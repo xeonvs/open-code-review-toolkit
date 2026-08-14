@@ -8,7 +8,7 @@ default:
 variables:
   OCR_VERSION: "v1.9.3"
   OCR_TOOLKIT_VERSION: "0.6.0"
-  OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v0.1.0/SHA256SUMS"
+  OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
   OCR_SHA256: "d494812b9ba316a34bb08efbaebf871ab1069e83f5892c5d87d93ab703626838"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
@@ -67,7 +67,7 @@ open_code_review:
       --index-url https://pypi.org/simple
       --dest /tmp --requirement /tmp/ocr-toolkit-requirement.txt
     - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/${OCR_TOOLKIT_WHEEL}" | sha256sum --check --strict
-    - pip install --no-deps /tmp/open_code_review_toolkit-0.1.0-py3-none-any.whl
+    - pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"
     - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
     - ocr-ci preflight
     - ocr-ci configure

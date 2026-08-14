@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 
 from tests.support import HELPER_DIR, PROJECT_ROOT
 
@@ -89,6 +90,13 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "OCR_LLM_VALIDATE_MODEL" in workflow
     assert "OCR_TOOLKIT_VERSION" in workflow
     assert "OCR_TOOLKIT_CHECKSUMS_URL" in workflow
+    assert (
+        'OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/'
+        'open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"' in workflow
+    )
+    assert 'pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"' in workflow
+    assert not re.search(r"releases/download/v\d+\.\d+\.\d+/SHA256SUMS", workflow)
+    assert not re.search(r"pip install --no-deps /tmp/open_code_review_toolkit-\d", workflow)
     assert ".opencodereview/accepted-decisions.md" in configuration
     assert "ocr-accept: generated-client-timeout" in configuration
     assert "not a source-code parser" in configuration
