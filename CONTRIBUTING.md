@@ -2,6 +2,8 @@
 
 Thank you for improving Open Code Review Toolkit. Keep changes focused, add regression tests for behavior changes, and use synthetic examples only.
 
+Participation in this project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). Report conduct incidents through its private enforcement route rather than a public issue.
+
 1. Create a branch from `main`.
 2. Install the locked development environment with `uv sync --frozen`.
 3. Update `PLANS.md` for substantial work.
@@ -9,6 +11,6 @@ Thank you for improving Open Code Review Toolkit. Keep changes focused, add regr
 5. Run the checks in [docs/development.md](docs/development.md).
 6. Open a pull request; protected `main` accepts changes only through green pull requests.
 
-Every non-release merge publishes a `0.2.0.devN` development build to TestPyPI. Stable releases use a repository-owned `release/vX.Y.Z` branch and an exact `Release vX.Y.Z` pull-request title; merging that reviewed PR authorizes the automated TestPyPI, PyPI, and GitHub Release chain.
+Every non-release merge publishes a development build for the current `.next-version` line to TestPyPI. Stable releases use a repository-owned `release/vX.Y.Z` branch and an exact `Release vX.Y.Z` pull-request title; merging that reviewed PR authorizes the automated TestPyPI, PyPI, and GitHub Release chain.
 
-Do not include real credentials, provider payloads, internal hosts, or private repository details. Security reports should follow [SECURITY.md](SECURITY.md), not public issues.
+Do not include real credentials, provider payloads, internal hosts, or private repository details. Security reports should follow [SECURITY.md](SECURITY.md), while conduct incidents follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md); neither belongs in a public issue.

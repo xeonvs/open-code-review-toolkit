@@ -8,6 +8,7 @@ OPERATIONS = PROJECT_ROOT / "docs" / "operations.md"
 GITLAB_GUIDE = PROJECT_ROOT / "docs" / "gitlab.md"
 CONFIGURATION = PROJECT_ROOT / "docs" / "configuration.md"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
+CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 
 
 def test_readme_and_gitlab_guide_link_to_operations() -> None:
@@ -17,6 +18,28 @@ def test_readme_and_gitlab_guide_link_to_operations() -> None:
     assert "docs/operations.md" in readme
     assert "operations.md" in gitlab
     assert "## How reviews evolve" in readme
+
+
+def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
+    """Keep conduct reports private and separate from public issue intake."""
+
+    conduct = CODE_OF_CONDUCT.read_text(encoding="utf-8")
+    readme = README.read_text(encoding="utf-8")
+    contributing = (PROJECT_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    issue_config = (PROJECT_ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Contributor Covenant" in conduct
+    assert "version 2.1" in conduct
+    assert "[INSERT CONTACT METHOD]" not in conduct
+    assert "security/advisories/new" in conduct
+    assert "[Code of Conduct]" in conduct
+    assert "Do not report conduct incidents in public issues" in conduct
+    assert "CODE_OF_CONDUCT.md" in readme
+    assert contributing.count("(CODE_OF_CONDUCT.md)") == 2
+    assert "Code of Conduct report" in issue_config
+    assert "Security vulnerability" in issue_config
 
 
 def test_operations_guide_documents_lifecycle_contract() -> None:

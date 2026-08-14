@@ -61,6 +61,7 @@ Mandatory evidence and usage metadata are composed once and applied across skipp
 ## Documentation Ownership
 
 - `README.md` owns the concise public introduction and quick start.
+- `CODE_OF_CONDUCT.md` owns community behavior, scope, confidential reporting, and enforcement; `CONTRIBUTING.md` owns the contribution workflow.
 - `docs/configuration.md` owns the environment and generated-configuration contract.
 - `docs/operations.md` owns the public review state machine; `docs/gitlab.md` owns GitLab setup and operator procedure.
 - `docs/security.md` owns runtime trust guarantees; `SECURITY.md` owns vulnerability reporting.

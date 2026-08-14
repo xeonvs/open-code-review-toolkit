@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Code of Conduct report
+    url: https://github.com/xeonvs/open-code-review-toolkit/security/advisories/new
+    about: Report conduct incidents privately and start the title with [Code of Conduct].
   - name: Security vulnerability
     url: https://github.com/xeonvs/open-code-review-toolkit/security/advisories/new
     about: Report vulnerabilities privately.

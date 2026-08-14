@@ -71,6 +71,7 @@ Repository content, OCR output, and provider responses are untrusted inputs. The
 ## Development and release
 
 - [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Development guide](docs/development.md)
 - [Security policy](SECURITY.md)
 - [Release process](docs/release.md)
