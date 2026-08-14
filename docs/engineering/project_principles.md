@@ -9,11 +9,12 @@ This document owns durable cross-cutting engineering invariants for Open Code Re
 3. Keep the Open Code Review binary external; the toolkit verifies but does not install it.
 4. Keep supported user configuration environment-driven and documented in one public contract. A future non-secret file format requires an explicit schema, trust source, and precedence design.
 5. Deliver large changes as coherent production-quality slices with explicit module and service boundaries rather than placeholder architecture.
-6. Version public behavior deliberately. Readiness and delivery are different states; `docs/release.md` owns their lifecycle.
-7. Treat automated security scores as evidence to classify, not targets to game. Repository-owned risks receive evidence-backed fixes; temporal and governance limits remain explicit.
-8. Derive active scope and dependencies from current implementation, tests, and published behavior. Historical plans and backlog wording are intent evidence, not current-state authority.
-9. Keep stable evidence identity tied to semantic applicability and source scope. Mutable versions and constraints remain values; alternatives that can coexist retain distinct identities.
-10. Permit a missing fact to support absence only when the applicable component, domain, and scope report complete coverage. Partial, runtime-dependent, unavailable, and absent coverage remain unknown.
+6. Keep each runtime module centered on one cohesive owner and lifecycle. When independent parsing, acquisition, persistence, transport, or projection responsibilities accumulate, extract already characterized blocks behind explicit package boundaries before the unit can no longer be reviewed end to end. Reuse pure contracts and helpers rather than duplicating them. Size and complexity are review signals, not numeric lint targets.
+7. Version public behavior deliberately. Readiness and delivery are different states; `docs/release.md` owns their lifecycle.
+8. Treat automated security scores as evidence to classify, not targets to game. Repository-owned risks receive evidence-backed fixes; temporal and governance limits remain explicit.
+9. Derive active scope and dependencies from current implementation, tests, and published behavior. Historical plans and backlog wording are intent evidence, not current-state authority.
+10. Keep stable evidence identity tied to semantic applicability and source scope. Mutable versions and constraints remain values; alternatives that can coexist retain distinct identities.
+11. Permit a missing fact to support absence only when the applicable component, domain, and scope report complete coverage. Partial, runtime-dependent, unavailable, and absent coverage remain unknown.
 
 ## Trust Boundary Invariants
 

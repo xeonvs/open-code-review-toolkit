@@ -130,7 +130,12 @@ def _format_shields_badge(*, severity: str, category: str) -> str:
     label = _finding_badge_label(severity=severity, category=category)
     if not label:
         return ""
-    path_label = "-".join(value for value in (category, severity) if value)
+    if category and severity:
+        path_label = f"{category}-{severity}"
+    elif category:
+        path_label = f"category-{category}"
+    else:
+        path_label = f"severity-{severity}"
     color = SHIELDS_SEVERITY_COLORS.get(severity, SHIELDS_CATEGORY_COLOR)
     return f"![{label}]({SHIELDS_BADGE_BASE_URL}/{path_label}-{color})"
 

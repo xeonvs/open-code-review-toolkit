@@ -7,13 +7,18 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
-from ocr_toolkit.evidence.policy.contracts import AcceptedDecision
+from ocr_toolkit.evidence.policy.contracts import (
+    MAX_DECISION_TITLE_CHARS,
+    MAX_POLICY_VALUE_BYTES,
+    MAX_RATIONALE_CHARS,
+    AcceptedDecision,
+    policy_value_within_budget,
+)
 from ocr_toolkit.evidence.policy.scopes import PolicyScopeError, matches_scope, validate_scope
 
 MAX_DECISIONS = 256
 MAX_MATCHED_PATHS = 64
 MAX_SCOPES = 64
-MAX_TITLE_CHARS = 256
 MAX_METADATA_CHARS = 512
 _HEADING = re.compile(r"^##[ \t]+(.+?)\s*$")
 _METADATA = re.compile(r"^[ \t]*[-*][ \t]+([^:]+):[ \t]*(.*?)\s*$")
@@ -70,7 +75,7 @@ def parse_accepted_decisions(
     current_date = today or datetime.now(timezone.utc).date()
     for index, (title, lines) in enumerate(sections, 1):
         label = f"decision {index}"
-        if not title or len(title) > MAX_TITLE_CHARS:
+        if not title or len(title) > MAX_DECISION_TITLE_CHARS:
             diagnostics.append(f"{label}: heading is empty or oversized")
             continue
         try:
@@ -124,32 +129,42 @@ def parse_accepted_decisions(
                     review_after = _parse_date(value)
                 except ValueError:
                     diagnostics.append(f"{decision_id}: invalid review after metadata")
-        matched = tuple(
-            path
-            for path in changed_paths
-            if not invalid_scope
-            and (not scopes or any(matches_scope(scope, path) for scope in scopes))
-        )[:MAX_MATCHED_PATHS]
+        rationale = "\n".join(rationale_lines).strip()
+        if len(rationale) > MAX_RATIONALE_CHARS:
+            diagnostics.append(f"{decision_id}: rationale exceeds {MAX_RATIONALE_CHARS} characters")
+            continue
+        matched_paths: list[str] = []
+        if not invalid_scope:
+            for path in changed_paths:
+                if not scopes or any(matches_scope(scope, path) for scope in scopes):
+                    matched_paths.append(path)
+                    if len(matched_paths) == MAX_MATCHED_PATHS:
+                        break
+        matched = tuple(matched_paths)
         applicability = (
             "invalid" if invalid_scope else "applicable" if matched else "not_applicable"
         )
         # A project-wide decision is applicable even for an empty diff-oriented caller.
         if not invalid_scope and not scopes and not changed_paths:
             applicability = "applicable"
-        parsed.append(
-            AcceptedDecision(
-                decision_id=decision_id,
-                title=title,
-                rationale="\n".join(rationale_lines).strip(),
-                scopes=tuple(scopes),
-                category=category,
-                owner=owner,
-                review_after=review_after,
-                stale=review_after is not None and current_date >= review_after,
-                applicability=applicability,  # type: ignore[arg-type]
-                matched_paths=matched,
-            )
+        decision = AcceptedDecision(
+            decision_id=decision_id,
+            title=title,
+            rationale=rationale,
+            scopes=tuple(scopes),
+            category=category,
+            owner=owner,
+            review_after=review_after,
+            stale=review_after is not None and current_date >= review_after,
+            applicability=applicability,  # type: ignore[arg-type]
+            matched_paths=matched,
         )
+        if not policy_value_within_budget(decision.evidence_value()):
+            diagnostics.append(
+                f"{decision_id}: decision exceeds the {MAX_POLICY_VALUE_BYTES}-byte policy budget"
+            )
+            continue
+        parsed.append(decision)
     counts: dict[str, int] = {}
     for item in parsed:
         counts[item.decision_id] = counts.get(item.decision_id, 0) + 1

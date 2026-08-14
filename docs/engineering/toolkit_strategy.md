@@ -60,12 +60,14 @@ Every evidence record should preserve its kind and value together with source pa
 
 The engine keeps implemented responsibilities separate:
 
-- collectors parse repository material into structured evidence;
-- bounded storage normalizes and indexes that evidence;
+- collectors select and acquire immutable repository material, then project it into structured evidence;
+- bounded storage normalizes, indexes, serializes, and strictly reloads that evidence;
 - bootstrap planning selects the smallest useful trusted overview;
 - renderers produce stable text or read-only MCP responses.
 
 The evidence model is the main extension point. Ecosystem and framework plugins may contribute typed facts, but cannot run arbitrary commands, fetch the network, mutate the repository, or introduce a second review workflow.
+
+Runtime packages follow responsibility rather than file-count boundaries. Pure registries, contracts, and projections point downward; one-ref orchestration may compose them, but they cannot import it back. Persistence normalization and hostile readback share contracts without importing the concrete store cyclically. This keeps future adapters and policy kinds extensible through the existing model while retaining one collector, store, bootstrap, and MCP lifecycle.
 
 ## Implemented compact bootstrap and built-in evidence MCP
 
@@ -85,7 +87,7 @@ Evidence already distinguishes declared constraints, locked versions, runtime de
 
 Implemented collectors cover Python declarations, requirements, uv, Poetry, Pipenv locks, and standardized locks; JavaScript package metadata plus npm, Yarn, and pnpm locks; Go modules, toolchains, requirements, replacements, and checksums; Composer manifests, locks, and platform evidence; Ansible Galaxy requirements, role topology, inventories, and runtime-dependent coverage; and declarative container and GitLab CI images. Further expansion follows demonstrated repository use and requires synthetic fixtures, deterministic semantics, size bounds, and explicit behavior for malformed or missing files.
 
-The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` layer below framework derivation. Shared fact/result contracts plus Python, JavaScript, Go, and PHP adapters live directly in that package; Ansible Galaxy and topology/inventory adapters live under `ecosystems.ansible` because they are distinct inputs from one automation ecosystem, not framework plugins. `collectors.py` retains immutable Git/tree orchestration and source-status ownership, while cross-ecosystem container/CI extraction, storage, and MCP serving remain outside the adapter package. The package has no old flat-module shims, dynamic discovery, repository I/O, or upward dependency on frameworks or lifecycle services.
+The normalized adapters form the internal `ocr_toolkit.evidence.ecosystems` layer below framework derivation. Shared fact/result contracts plus Python, JavaScript, Go, and PHP adapters live directly in that package; Ansible Galaxy and topology/inventory adapters live under `ecosystems.ansible` because they are distinct inputs from one automation ecosystem, not framework plugins. The `ocr_toolkit.evidence.collectors` package retains immutable Git/tree orchestration and source-status ownership behind one facade, with separate registry, source selection, include-graph, projection, and one-ref orchestration modules. Storage is likewise one `ocr_toolkit.evidence.store` facade over contracts, normalization, in-memory admission/serialization, owner-only atomic writes, and hostile readback. Neither package has a flat compatibility module or a second collection, persistence, or serving lifecycle.
 
 ### Framework and template evidence
 

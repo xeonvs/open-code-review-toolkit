@@ -4,7 +4,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Plan: M4 policy and project guidance for 0.6.0
 
-Status: active; OCR 1.9.3 and GitLab presentation checkpoint complete, exact-head security revalidation next
+Status: active; local implementation, review, validation, and history consolidation complete; feature publication next
 Owner: Codex
 Last Updated: 2026-08-14
 Release Classification: release-required
@@ -20,8 +20,8 @@ Current Qualified OCR: 1.9.3; local promotion complete, issue #82 closure pendin
 Deliver all of M4 as stable toolkit 0.6.0: BL-014 structured accepted decisions
 and BL-015 safe nested target-branch project guidance through the established
 read-only evidence MCP. Keep the lifecycle active through focused implementation
-commits, complete validation, Codex Security before OCR, one full local OCR
-review at concurrency 2, feature and release PRs, stable TestPyPI/PyPI
+commits, complete validation, the completed pre-review Codex Security gate,
+local OCR review cycles at concurrency 2, feature and release PRs, stable TestPyPI/PyPI
 publication, provenance, annotated tag, immutable Release, supported-Python
 installs, immutable receipt readback, and closure of issue #81. Feature merge
 and development publication are intermediate receipts.
@@ -39,11 +39,19 @@ validation, self-review, and local history consolidation are complete.
 - Policy providers consume already bounded immutable documents. They perform no
   Git/filesystem/network/subprocess I/O, dynamic import, entry-point discovery,
   repository-code execution, mutation, persistence, transport, or review.
-- `evidence.collectors` retains bounded Git/tree/blob orchestration and changed
-  path identity. `evidence.store` owns admission, recursive redaction, closed
-  schema validation, atomic persistence, and hostile readback. `evidence.project`
-  owns only compact bootstrap projection. `evidence.mcp` remains the one
-  read-only stdio transport.
+- `evidence.collectors` is an intentional package facade over manifest registry,
+  source selection, bounded immutable include-graph acquisition, record/coverage
+  projection, and one-ref orchestration. `evidence.store` is an intentional
+  package facade over contracts, recursive value normalization, in-memory
+  admission/serialization, atomic persistence, and hostile readback.
+  `evidence.project` owns only compact bootstrap projection. `evidence.mcp`
+  remains the one read-only stdio transport.
+- Decomposition is extract-and-delegate: move already characterized functions
+  and classes as intact blocks, retain the established public import surfaces,
+  and prove parity with the same contract suites before and after each move.
+  Do not rewrite working collection or persistence algorithms merely to reduce
+  file size. Module size is a reviewability signal; responsibility and dependency
+  direction, not a numeric line threshold, determine a split.
 - Preserve the single reserved `ocr_toolkit_evidence` MCP with the existing
   `summary`, `list`, and `get` actions. Do not add a review engine, service,
   CLI/environment contract, runtime dependency, dynamic plugin loading, or
@@ -302,24 +310,32 @@ unsafe trust or mutation mechanism.
    restricted `PATH`, hostile shadow package and private permissions, real
    stdio MCP, bootstrap budgets, hostile schema readback, and synthetic
    multi-component E2E.
-2. Before OCR, run Codex Security `security-diff-scan` for the exact merge-base
-   `origin/main..HEAD`: repository-level threat model, diff-scoped discovery
-   with one work-ledger completion receipt per changed source-like file,
-   validation of every candidate, attack-path analysis for every remaining
-   candidate, and canonical report/coverage receipts in the authoritative
-   ignored private scan directory. Fix actionable findings, audit siblings and
-   boundaries, rerun deterministic validation, and rerun the needed security
-   verification until the security cycle is closed.
-3. Then run exactly one complete local OCR review over the full M4 diff with the
-   latest fully qualified stable OCR, concurrency 2, posting disabled, private
-   ignored artifacts, and proven `ocr_toolkit_evidence` summary/list/get use for
-   policy and guidance. Fix actionable findings, audit the root cause and
-   sibling module/service boundaries, repeat deterministic validation and final
-   self-review, but do not run a routine second OCR without new authorization.
-   A later OCR qualification that changes executable contracts or the reviewed
-   tree invalidates the gate and requires a new final concurrency-2 review.
-   Runtime/trust-boundary OCR fixes require a final Codex Security verification.
-4. Consolidate unpublished history into the six logical commits, prove exact
+2. The pre-review Codex Security `security-diff-scan` is complete for exact
+   committed range `fa65b2e..98aaa07`. Its ignored canonical receipt reports
+   complete coverage, no deferred surfaces, and zero findings; findings and
+   coverage hashes are `c885cabf99d78c31b067710636dd0ff8e7b1a690d7bf78fa76f0bf9eab4d3c0a`
+   and `92c2639d5f5c07b500671f285b2fd12185697da671b48b71af20fbbe3c424695`.
+   The generalized threat model is already reflected in public security docs.
+   The owner explicitly replaced a further post-remediation security rerun with
+   another local OCR review; do not run an additional Codex Security cycle for
+   this release unless the user asks again or a new demonstrated security defect
+   invalidates the completed receipt.
+3. The first OCR 1.9.3 run at concurrency 2 reviewed 19 of 21 selected files,
+   failed two oversized flat modules on tool-round budget, and produced five
+   findings. Its exact `fa65b2e..98aaa07` result is retained privately with hash
+   `f6f128ff5da5dbb3177d9b158ff0a7a33a05fc915180088dde92c50da2eec7e4`.
+   All findings now have negative regressions and fixes: oversized decisions,
+   empty-path root guidance, adjacent recursive scope segments, cap-before-
+   precedence bootstrap ordering, and one-field badge paths. Sibling review also
+   bounds the complete UTF-8 policy value before persistence/MCP projection.
+4. Complete deterministic validation on the remediated and responsibility-
+   decomposed tree, then run the newly authorized complete local OCR review over
+   the full M4 diff with qualified OCR 1.9.3, concurrency 2, posting disabled,
+   and private ignored artifacts. Record actual evidence-MCP use without claiming
+   action granularity that the OCR receipt cannot prove. Fix every actionable
+   result, inspect sibling boundaries, and repeat the applicable deterministic
+   validation and final self-review. Do not run a third OCR without new approval.
+5. Consolidate unpublished history into logical owner commits, prove exact
    final-tree equivalence, verify signatures, and rerun Gitleaks over the full
    first-parent range. Only then make one initial push of the complete branch.
 
@@ -480,9 +496,8 @@ above.
   The earlier environment-manager matrix attempt is explicitly superseded and
   is not acceptance evidence. The final decision-priority refinement then
   passed the focused policy/evidence, integration/release, Ruff, strict-mypy,
-  syntax, privacy, and diff-hygiene checks. The remaining pre-OCR gate is a
-  fresh security scan bound to the committed remediation tree; final full-tree
-  validation is repeated after OCR remediation as already required above.
+  syntax, privacy, and diff-hygiene checks. The later exact-head security scan
+  completed with zero findings as recorded below.
 - Before that exact-head scan, the user requested a public posting refinement and
   OCR 1.9.3 became available. Keep review-health plus publication state in one
   canonical summary line, but treat the release's badges as finding-comment
@@ -533,6 +548,103 @@ above.
   open without a premature completion comment, no secret-scanning or Dependabot
   alerts, and the same six previously classified Scorecard alerts.
 
+### First OCR Remediation And Evidence-Module Architecture Review
+
+- The completed pre-review Codex Security diff scan is sealed under the ignored
+  release evidence directory. It covered every changed source-like file and all
+  supporting control surfaces at exact head `98aaa07`, has complete coverage,
+  no deferred work, and zero findings. The user explicitly waived a redundant
+  post-remediation security rerun in favor of a second local OCR cycle.
+- OCR 1.9.3 then ran over the exact committed M4 range with posting disabled and
+  concurrency 2. It selected 21 files, completed 19, failed the former flat
+  `collectors.py` and `store.py` only after exhausting tool-request rounds, and
+  returned five medium bug findings. The run is partial rather than clean. It
+  made 47 calls attributed to `ocr_toolkit_evidence`; preflight separately
+  proved summary/list/get, while the OCR receipt itself does not distinguish
+  those action names.
+- Negative tests reproduce and close every OCR finding: one oversized decision
+  is isolated without dropping siblings; root `AGENTS.md`/`CLAUDE.md` remain
+  global with empty changed-path identity; adjacent `**` segments fail closed;
+  bootstrap caps apply after semantic ordering; and one-field Shields images use
+  an explicit category or severity label. A sibling boundary audit additionally
+  rejects complete multibyte policy values that cannot fit storage/MCP budgets,
+  both before admission and on hostile schema-v3 readback. A final adversarial
+  audit also proved that recursive redaction can expand repeated short secret
+  fields; store admission now reapplies the whole-value UTF-8 budget after that
+  trust transition, ordinary collection omits only the affected record, and
+  hostile readback rejects the incomplete atomic envelope.
+- Architecture review found the former flat collectors and store mixed distinct
+  lifecycles. Using extract-and-delegate rather than algorithm rewrites,
+  collectors now separates registry, source projections, immutable include
+  graphs, record/coverage projections, and one-ref orchestration. Store separates
+  contracts, recursive normalization, in-memory admission/serialization,
+  owner-only atomic replacement, and hostile readback. Existing public package
+  imports remain intentional facades; there are no flat compatibility modules,
+  cycles, new runtime services, dependencies, configuration, or MCP lifecycle.
+- The same characterization suites passed before and after every move. Current
+  focused receipts include 97 collector tests and the complete policy/store/MCP
+  boundary suite; the final broad installed-policy matrix passes 349 tests plus
+  26 subtests. Architecture checks enforce required responsibility
+  owners and forbidden upward imports without freezing line counts or every
+  future helper filename. The canonical engineering principle treats size as a
+  reviewability signal and requires cohesive owners and shared pure contracts.
+- Final deterministic validation on the current tree passes 754 tests plus 99
+  subtests independently on Python 3.12.14, 3.13.15, and 3.14.6. The complete
+  quality gate passes Ruff format/lint, strict mypy, Bandit, the same test count,
+  and 80.96% branch coverage. Lock validation, dependency audit, workflow YAML,
+  shell syntax, OCR compatibility validation, Towncrier draft rendering,
+  privacy inspection, complete committed-range Gitleaks, and diff hygiene pass.
+- Two source-epoch-controlled target builds are byte-identical and pass Twine,
+  closed package-content checks, zero-runtime-dependency metadata, and
+  restricted-path hostile-shadow installs on every supported Python. The sealed
+  `0.6.0.dev0` hashes are wheel
+  `2e2af14595523ba81a44e420ebd2b245098415f639e29fdc67c6a4fa98bd8d76`
+  and sdist
+  `56f20ec1d55d71038ffa7c2e22d2a067d54b3149d556933572b0676fdb74dc1d`.
+- That pre-second-review receipt is superseded for final-tree packaging by the
+  post-remediation build recorded below. Final self-review is complete; the
+  remaining work is history consolidation and the feature/release/publication
+  lifecycle.
+
+### Second OCR Review And Remediation
+
+- The authorized second OCR 1.9.3 run reviewed the exact committed range
+  `fa65b2e..39e9c26` through `ocr-ci review` with concurrency 2, JSON agent
+  output, the public synthetic rules, and posting disabled. It completed all 31
+  selected source-like files with no failed, waived, or reused item and made 67
+  calls attributed to the built-in evidence MCP. Its private result hash is
+  `e28cde985307b095a51bad3e383eecec0596cb588e54f80b64fe40ddd181b1fc`.
+- Nine findings were validated as boundary classes rather than applied as raw
+  suggestions. Negative tests and fixes now preserve every source when semantic
+  delta identities collide or move; report all parents of a shared missing
+  Python include; recognize YAML list-item images; cap decision matching work;
+  distinguish a decision submodule diagnostic; reject boolean schema versions,
+  unadmitted snapshot indexes, obfuscated sensitive mapping keys, and key
+  collisions after redaction; and synchronize the store directory after atomic
+  replacement through the existing cross-platform durability contract.
+- Final sibling review applied the same source-provenance class to Ansible and
+  later-depth Python include edges, and the same explicit object-type diagnostic
+  to guidance submodules. These are narrow extensions of characterized graph and
+  policy-source behavior, not rewrites of collector orchestration.
+- The fixes remain inside the extracted responsibility owners. They do not
+  recombine collectors/store, rewrite the characterized orchestration or
+  persistence algorithms, add a service or MCP lifecycle, or change ordinary
+  unique-fact delta values. A third OCR cycle is not authorized; the final
+  focused, complete deterministic, package, E2E, privacy, and self-review gates
+  passed as recorded below.
+- Final post-remediation quality passes 766 tests plus 99 subtests with 81.12%
+  branch coverage; exact Python 3.12.14, 3.13.15, and 3.14.7 matrices pass the same
+  suite. The final source-epoch-controlled `0.6.0.dev0` builds are byte-identical
+  with wheel hash
+  `606582acb64e5e8add5df01d2b78517d87632d6d81283207c7e1cb29eb61d98a`
+  and sdist hash
+  `2c8e32b55f950acc9d88e2579cda316cf6cae7db92699c98bebdd7d0b34332e2`.
+  Twine, lock, dependency audit, compatibility manifest, Towncrier draft,
+  workflow/example YAML, changed-shell syntax, private-marker, diff-hygiene,
+  facade/package-layout, and installed wheel/sdist policy-MCP gates pass. The
+  installed-focused matrix passes 376 tests plus 49 subtests. No third OCR or
+  redundant Codex Security cycle was run.
+
 ### Feature, Release, And Stable Closure
 
 - Open the feature PR only after the one complete push. Read back exact head,
@@ -570,17 +682,22 @@ above.
 8. [x] Complete OCR 1.9.3 human qualification and local compatibility promotion;
    finish the separate one-line summary, opt-in finding badges, threat-model
    documentation, focused validation, and logical commit 6.
-9. [ ] Complete Codex Security diff scan, remediation, sibling audit, and
-   required exact-head security revalidation before OCR.
-10. [ ] Complete one full local OCR review at concurrency 2, evidence-MCP receipt,
-   remediation, deterministic revalidation, and final self-review.
-11. [ ] Consolidate and verify unpublished history, run full-range Gitleaks, and
-   push the complete feature branch once.
-12. [ ] Complete feature PR and independent TestPyPI development readback, then
+9. [x] Complete the pre-review Codex Security diff scan with complete coverage
+   and zero findings; retain its receipt and do not add the waived redundant rerun.
+10. [x] Complete the first local OCR review, fix all five findings, audit sibling
+   boundary risks, and decompose collectors/store by responsibility through
+   characterized extract-and-delegate moves.
+11. [x] Complete the second OCR 31/31 review, remediate all nine findings with
+   negative tests, inspect sibling boundaries, and pass final deterministic,
+   package, installed E2E, privacy, and self-review gates without a third OCR.
+12. [ ] Unpublished history is consolidated with exact tree equivalence, signed
+   commits, and a passing full-range Gitleaks scan; make and read back the one
+   initial push of the complete feature branch.
+13. [ ] Complete feature PR and independent TestPyPI development readback, then
    comment on and close OCR qualification issue #82 only after merged support is
    independently read back.
-13. [ ] Prepare the final repository mutation in the release PR and reconcile
+14. [ ] Prepare the final repository mutation in the release PR and reconcile
    backlog, roadmap, strategy, and release metadata honestly.
-14. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
+15. [ ] Complete stable 0.6.0 publication/readback and close issue #81 only from
    the immutable release receipt; use the release-PR archive and template state
    as repository evidence without another closure mutation.

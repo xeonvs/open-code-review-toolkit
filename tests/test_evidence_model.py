@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -22,6 +24,8 @@ from ocr_toolkit.evidence import (
 )
 from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
 from ocr_toolkit.evidence.frameworks.schema import validate_plugin_record
+from ocr_toolkit.evidence.policy import parse_accepted_decisions
+from ocr_toolkit.evidence.policy.contracts import MAX_POLICY_VALUE_BYTES
 
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
@@ -77,6 +81,56 @@ def test_record_id_is_canonical_and_content_addressed() -> None:
     assert first.id == reordered.id
     assert first.id.startswith("ev1_")
     assert first.id != base.id
+
+
+def test_store_package_keeps_closed_responsibility_dependencies() -> None:
+    """Keep contracts, values, atomic writes, core state, and readback distinct."""
+
+    evidence_root = Path(__file__).parents[1] / "src/ocr_toolkit/evidence"
+    package = evidence_root / "store"
+    assert not (evidence_root / "store.py").exists()
+    required_modules = {
+        "__init__.py",
+        "atomic.py",
+        "contracts.py",
+        "core.py",
+        "readback.py",
+        "values.py",
+    }
+    assert required_modules <= {path.name for path in package.glob("*.py")}
+    forbidden_by_module = {
+        "atomic.py": {"ocr_toolkit.evidence.store.core", "ocr_toolkit.evidence.store.readback"},
+        "contracts.py": {
+            "ocr_toolkit.evidence.store.atomic",
+            "ocr_toolkit.evidence.store.core",
+            "ocr_toolkit.evidence.store.readback",
+            "ocr_toolkit.evidence.store.values",
+        },
+        "values.py": {
+            "ocr_toolkit.evidence.store.atomic",
+            "ocr_toolkit.evidence.store.core",
+            "ocr_toolkit.evidence.store.readback",
+        },
+        "readback.py": {
+            "ocr_toolkit.evidence.store.atomic",
+            "ocr_toolkit.evidence.store.core",
+        },
+    }
+    for name, forbidden_modules in forbidden_by_module.items():
+        source = package / name
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        assert ast.get_docstring(tree)
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module)
+        assert not any(
+            imported == forbidden or imported.startswith(forbidden + ".")
+            for imported in imports
+            for forbidden in forbidden_modules
+        )
 
 
 def test_record_nested_values_are_immutable_and_serialization_is_detached() -> None:
@@ -272,6 +326,19 @@ def test_store_redacts_sensitive_mapping_keys() -> None:
     assert store.records[0].sensitivity.value == "redacted"
 
 
+def test_store_normalizes_obfuscated_sensitive_keys_and_rejects_collisions() -> None:
+    """Redact key names before classification without silently overwriting values."""
+
+    store = EvidenceStore()
+    assert store.add(record({"api\u200b_key": "short-novel-value", "name": "safe"}))
+    assert store.records[0].value == {"api_key": "[REDACTED]", "name": "safe"}
+
+    ambiguous = EvidenceStore()
+    assert not ambiguous.add(record({"api_key": "one", "api\u200b_key": "two"}))
+    assert ambiguous.records == ()
+    assert ambiguous.diagnostics == ["omitted ambiguous dependency.declared evidence value"]
+
+
 def test_store_preserves_public_sensitivity_for_safe_nested_arrays() -> None:
     """Do not mistake immutable JSON containers for a redaction change."""
 
@@ -291,6 +358,28 @@ def test_store_does_not_change_existing_parent_permissions(tmp_path: Path) -> No
     EvidenceStore().write(parent / "evidence.json")
 
     assert stat.S_IMODE(parent.stat().st_mode) == 0o755
+
+
+def test_store_fsyncs_the_parent_directory_after_atomic_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Make the accepted directory entry durable without leaking its descriptor."""
+
+    inspected: list[int] = []
+
+    def inspect(descriptor: int) -> None:
+        assert stat.S_ISDIR(os.fstat(descriptor).st_mode)
+        inspected.append(descriptor)
+
+    monkeypatch.setattr("ocr_toolkit.evidence.store.atomic.fsync_directory", inspect)
+    path = tmp_path / "private" / "evidence.json"
+
+    EvidenceStore().write(path)
+
+    assert len(inspected) == 1
+    with pytest.raises(OSError):
+        os.fstat(inspected[0])
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_store_deduplicates_and_reports_deterministic_limits() -> None:
@@ -387,6 +476,10 @@ def test_store_rejects_unknown_kinds_and_schema_versions(tmp_path: Path) -> None
 
     path = tmp_path / "evidence.json"
     path.write_text(json.dumps({"schema_version": 3}), encoding="utf-8")
+    with pytest.raises(EvidenceStoreError, match="schema"):
+        EvidenceStore.read(path)
+
+    path.write_text(json.dumps({"schema_version": True}), encoding="utf-8")
     with pytest.raises(EvidenceStoreError, match="schema"):
         EvidenceStore.read(path)
 
@@ -533,6 +626,27 @@ def test_store_round_trips_snapshots_and_typed_deltas(tmp_path: Path) -> None:
     assert restored.base == store.base
     assert restored.head == store.head
     assert restored.deltas == store.deltas
+
+
+@pytest.mark.parametrize("missing", ["record", "coverage"])
+def test_store_rejects_unadmitted_snapshot_references_before_serialization(
+    missing: str,
+) -> None:
+    """Never emit a snapshot index that the same store cannot read back."""
+
+    item = record()
+    scoped = coverage()
+    store = EvidenceStore(
+        head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (item,), coverage=(scoped,))
+    )
+    if missing != "record":
+        assert store.add(item)
+    if missing != "coverage":
+        assert store.add_coverage(scoped)
+
+    expected = "unadmitted evidence record" if missing == "record" else "unadmitted coverage"
+    with pytest.raises(EvidenceStoreError, match=expected):
+        store.to_dict()
 
 
 def test_store_rejects_tampered_snapshot_coverage_reference(tmp_path: Path) -> None:
@@ -935,6 +1049,57 @@ def test_schema_v3_round_trips_structured_policy_and_rejects_nested_extensions(
 
     with pytest.raises(EvidenceStoreError, match=r"invalid repository\.accepted_decision"):
         EvidenceStore.read(path)
+
+
+def test_schema_v3_hostile_readback_rejects_multibyte_policy_value_over_budget(
+    tmp_path: Path,
+) -> None:
+    """Reapply the complete UTF-8 policy-value budget after persisted mutation."""
+
+    store = _structured_policy_store(_structured_decision_record(), changed_path="src/app.py")
+    payload = store.to_dict()
+    records = payload["records"]
+    assert isinstance(records, list)
+    decision = next(
+        item
+        for item in records
+        if isinstance(item, dict) and item.get("kind") == "repository.accepted_decision"
+    )
+    value = decision["value"]
+    assert isinstance(value, dict) and isinstance(value["fact"], dict)
+    value["fact"]["rationale"] = "é" * (MAX_POLICY_VALUE_BYTES // 2)
+    decision.pop("id")
+    path = tmp_path / "oversized-policy.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(EvidenceStoreError, match="records exceed declared limits"):
+        EvidenceStore.read(path)
+
+
+def test_store_omits_policy_value_that_redaction_expands_over_byte_budget() -> None:
+    """Reapply the whole-record bound after recursive redaction changes its size."""
+
+    parsed = parse_accepted_decisions(
+        "## Expansion\n" + ("token=x " * 6_900),
+        changed_paths=(),
+    )
+    assert len(parsed.decisions) == 1
+    decision = parsed.decisions[0]
+    record = EvidenceRecord(
+        kind="repository.accepted_decision",
+        value=decision.evidence_value(),
+        source_path=".opencodereview/accepted-decisions.md",
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        component="repository",
+        provenance="policy:accepted-decisions",
+        trust=TrustClass.TARGET_REPOSITORY,
+    )
+    store = EvidenceStore()
+
+    assert not store.add(record)
+    assert store.records == ()
+    assert store.diagnostics == ["omitted oversized repository.accepted_decision evidence value"]
 
 
 def test_schema_v2_reads_exact_legacy_policy_as_text_without_granting_structure(

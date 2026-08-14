@@ -745,6 +745,69 @@ def test_bootstrap_orders_same_directory_agents_before_claude() -> None:
     assert bootstrap.index("services/AGENTS.md") < bootstrap.index("services/CLAUDE.md")
 
 
+def test_bootstrap_applies_guidance_cap_after_precedence_ordering() -> None:
+    """Never let source-path order evict higher-precedence root guidance."""
+
+    store = EvidenceStore()
+    for index in range(21):
+        path = f"{index:02d}/AGENTS.md"
+        assert store.add(
+            EvidenceRecord(
+                kind="repository.guidance",
+                value={
+                    "identity": path,
+                    "fact": {
+                        "schema_version": "repository.guidance/v2",
+                        "path": path,
+                        "document_type": "AGENTS.md",
+                        "scope": f"{index:02d}/**",
+                        "text": "Synthetic directory guidance.",
+                        "applicability": "applicable",
+                        "matched_paths": [f"{index:02d}/app.py"],
+                        "precedence": {"depth": 1, "path": path, "document_order": 0},
+                    },
+                },
+                source_path=path,
+                ref=RefRole.BASE,
+                commit_sha="a" * 40,
+                component="repository",
+                provenance="policy:project-guidance",
+                trust=TrustClass.TARGET_REPOSITORY,
+            )
+        )
+    assert store.add(
+        EvidenceRecord(
+            kind="repository.guidance",
+            value={
+                "identity": "AGENTS.md",
+                "fact": {
+                    "schema_version": "repository.guidance/v2",
+                    "path": "AGENTS.md",
+                    "document_type": "AGENTS.md",
+                    "scope": "**",
+                    "text": "Synthetic root guidance.",
+                    "applicability": "applicable",
+                    "matched_paths": ["00/app.py"],
+                    "precedence": {"depth": 0, "path": "AGENTS.md", "document_order": 0},
+                },
+            },
+            source_path="AGENTS.md",
+            ref=RefRole.BASE,
+            commit_sha="a" * 40,
+            component="repository",
+            provenance="policy:project-guidance",
+            trust=TrustClass.TARGET_REPOSITORY,
+        )
+    )
+
+    bootstrap = render_bootstrap(store)
+
+    assert "`AGENTS.md`" in bootstrap
+    assert "`18/AGENTS.md`" in bootstrap
+    assert "`19/AGENTS.md`" not in bootstrap
+    assert "`20/AGENTS.md`" not in bootstrap
+
+
 def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> None:
     """Keep repository delimiters inside complete generated Markdown lines."""
 

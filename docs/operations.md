@@ -14,7 +14,8 @@ Category and severity belong to each individual finding, not to the review
 outcome line. They use private-safe text labels by default. Operators may opt in
 to static Shields.io images with `OCR_POST_BADGES=shields`; only closed,
 normalized OCR enums enter the fixed-host URL and the same label remains as alt
-text. Unknown metadata never becomes a URL. Because rendering can contact an
+text. If only one field is present, the image path uses an explicit `category`
+or `severity` label rather than an ambiguous value-only badge. Unknown metadata never becomes a URL. Because rendering can contact an
 external image service directly or through a GitLab proxy, keep text mode for
 installations that must avoid that disclosure or dependency.
 

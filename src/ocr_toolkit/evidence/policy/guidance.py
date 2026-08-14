@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import PurePosixPath
 
-from ocr_toolkit.evidence.policy.contracts import GuidanceDocument
+from ocr_toolkit.evidence.policy.contracts import (
+    MAX_POLICY_VALUE_BYTES,
+    GuidanceDocument,
+    policy_value_within_budget,
+)
 
 NESTED_GUIDANCE_NAMES = ("AGENTS.md", "CLAUDE.md")
 ROOT_GUIDANCE_PATHS = ("PR_REVIEW.md", ".cursorrules", ".github/copilot-instructions.md")
@@ -39,6 +43,13 @@ def is_guidance_path(path: str) -> bool:
     return path in ROOT_GUIDANCE_PATHS or candidate.name in NESTED_GUIDANCE_NAMES
 
 
+def _is_directory_scoped_guidance(path: str) -> bool:
+    """Distinguish nested guidance from root documents with global scope."""
+
+    candidate = _safe_guidance_path(path)
+    return candidate.name in NESTED_GUIDANCE_NAMES and candidate.parent.as_posix() != "."
+
+
 def guidance_metadata(path: str) -> tuple[str, str, int, int]:
     """Return the exact document type, scope, depth, and order for a safe path."""
 
@@ -46,7 +57,7 @@ def guidance_metadata(path: str) -> tuple[str, str, int, int]:
     if not is_guidance_path(path):
         raise ValueError("path is not a registered guidance source")
     name = candidate.name
-    nested = name in NESTED_GUIDANCE_NAMES
+    nested = _is_directory_scoped_guidance(path)
     parent = candidate.parent.as_posix()
     directory = "." if parent == "." else parent
     scope = "**" if not nested or directory == "." else f"{directory}/**"
@@ -60,8 +71,8 @@ def guidance_applicability(
 ) -> tuple[str, tuple[str, ...]]:
     """Derive applicability before content reads and again during hostile readback."""
 
-    name, _scope, _depth, _document_order = guidance_metadata(path)
-    nested = name in NESTED_GUIDANCE_NAMES
+    guidance_metadata(path)
+    nested = _is_directory_scoped_guidance(path)
     parent = PurePosixPath(path).parent.as_posix()
     directory = "." if parent == "." else parent
     if nested:
@@ -102,8 +113,8 @@ def applicable_guidance_paths(
     for path in paths:
         if not is_guidance_path(path):
             continue
-        name, _scope, _depth, _document_order = guidance_metadata(path)
-        if name not in NESTED_GUIDANCE_NAMES:
+        guidance_metadata(path)
+        if not _is_directory_scoped_guidance(path):
             selected.append(path)
             continue
         parent = PurePosixPath(path).parent.as_posix()
@@ -120,7 +131,7 @@ def guidance_document(path: str, text: str, changed_paths: tuple[str, ...]) -> G
         raise ValueError("guidance text exceeds the policy character budget")
     name, scope, depth, document_order = guidance_metadata(path)
     applicability, matched = guidance_applicability(path, changed_paths)
-    return GuidanceDocument(
+    document = GuidanceDocument(
         path=path,
         document_type=name,
         scope=scope,
@@ -130,3 +141,6 @@ def guidance_document(path: str, text: str, changed_paths: tuple[str, ...]) -> G
         depth=depth,
         document_order=document_order,
     )
+    if not policy_value_within_budget(document.evidence_value()):
+        raise ValueError(f"guidance exceeds the {MAX_POLICY_VALUE_BYTES}-byte policy budget")
+    return document

@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
 Applicability = Literal["applicable", "not_applicable", "invalid"]
+
+MAX_DECISION_TITLE_CHARS = 256
+MAX_RATIONALE_CHARS = 64_000
+MAX_POLICY_VALUE_BYTES = 56_000
+
+
+def policy_value_within_budget(value: object) -> bool:
+    """Keep one policy fact small enough for persistence and MCP retrieval."""
+
+    serialized = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return len(serialized.encode("utf-8")) <= MAX_POLICY_VALUE_BYTES
 
 
 @dataclass(frozen=True, slots=True)

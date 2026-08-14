@@ -119,11 +119,9 @@ def render_bootstrap(
             if len(scopes) > len(shown_scopes):
                 scope_text += f", plus {len(scopes) - len(shown_scopes)} more"
             decisions.append((decision_id, scope_text, stale is True))
-            if len(decisions) >= MAX_BOOTSTRAP_POLICY_SUMMARIES:
-                break
     if decisions:
         lines.extend(("", "## Applicable accepted decisions"))
-        for decision_id, scope_text, stale in sorted(decisions):
+        for decision_id, scope_text, stale in sorted(decisions)[:MAX_BOOTSTRAP_POLICY_SUMMARIES]:
             stale_text = "; stale review requested" if stale else ""
             lines.append(f"- {inline_code(decision_id)}; scope: {scope_text}{stale_text}")
         lines.append(
@@ -161,11 +159,11 @@ def render_bootstrap(
                 len(matched_paths),
             )
         )
-        if len(guidance) >= MAX_BOOTSTRAP_POLICY_SUMMARIES:
-            break
     if guidance:
         lines.extend(("", "## Applicable target guidance"))
-        for _depth, _parent, _order, path, scope, matched_count in sorted(guidance):
+        for _depth, _parent, _order, path, scope, matched_count in sorted(guidance)[
+            :MAX_BOOTSTRAP_POLICY_SUMMARIES
+        ]:
             lines.append(
                 f"- {inline_code(path)}; scope: {inline_code(scope)}; "
                 f"applies to {matched_count} changed path(s)"

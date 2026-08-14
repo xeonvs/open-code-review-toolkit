@@ -8,9 +8,15 @@ import pytest
 
 from ocr_toolkit.evidence.policy import (
     POLICY_PROVIDERS,
+    applicable_guidance_paths,
     guidance_document,
     parse_accepted_decisions,
 )
+from ocr_toolkit.evidence.policy.contracts import (
+    MAX_POLICY_VALUE_BYTES,
+    MAX_RATIONALE_CHARS,
+)
+from ocr_toolkit.evidence.policy.decisions import MAX_MATCHED_PATHS
 from ocr_toolkit.evidence.policy.scopes import PolicyScopeError, matches_scope, validate_scope
 
 
@@ -105,6 +111,62 @@ def test_review_after_is_stale_from_that_utc_date_without_disappearing() -> None
     assert result.decisions[0].rationale == "Rationale."
 
 
+def test_decision_matching_stops_at_the_persisted_path_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Make the matched-path storage limit also bound broad scope work."""
+
+    calls = 0
+
+    def match(_scope: str, _path: str) -> bool:
+        nonlocal calls
+        calls += 1
+        return True
+
+    monkeypatch.setattr("ocr_toolkit.evidence.policy.decisions.matches_scope", match)
+    result = parse_accepted_decisions(
+        "## Bounded\n- Scope: **\nSynthetic rationale.\n",
+        changed_paths=tuple(f"src/file-{index}.py" for index in range(1_000)),
+        today=date(2026, 8, 14),
+    )
+
+    assert len(result.decisions[0].matched_paths) == MAX_MATCHED_PATHS
+    assert calls == MAX_MATCHED_PATHS
+
+
+def test_parser_isolates_oversized_rationale_without_losing_other_decisions() -> None:
+    """Reject one unpersistable decision at the parser boundary, not store admission."""
+
+    result = parse_accepted_decisions(
+        (
+            "## Oversized\n"
+            f"{'R' * (MAX_RATIONALE_CHARS + 1)}\n"
+            "## Independent\n"
+            "Synthetic bounded rationale.\n"
+        ),
+        changed_paths=("src/app.py",),
+        today=date(2026, 8, 13),
+    )
+
+    assert [item.decision_id for item in result.decisions] == ["independent"]
+    assert result.diagnostics == (f"oversized: rationale exceeds {MAX_RATIONALE_CHARS} characters",)
+
+
+def test_parser_isolates_decision_that_exceeds_the_persisted_value_budget() -> None:
+    """Account for the complete record envelope before handing a decision to storage."""
+
+    result = parse_accepted_decisions(
+        "## Too large\n" + "é" * (MAX_POLICY_VALUE_BYTES // 2) + "\n## Safe\nBounded.\n",
+        changed_paths=("src/app.py",),
+        today=date(2026, 8, 13),
+    )
+
+    assert [item.decision_id for item in result.decisions] == ["safe"]
+    assert result.diagnostics == (
+        f"too-large: decision exceeds the {MAX_POLICY_VALUE_BYTES}-byte policy budget",
+    )
+
+
 @pytest.mark.parametrize(
     "scope",
     [
@@ -118,6 +180,8 @@ def test_review_after_is_stale_from_that_utc_date_without_disappearing() -> None
         "src/[ab].py",
         "src/**.py",
         "src/@(a).py",
+        "**/**",
+        "foo/**/**",
     ],
 )
 def test_scope_grammar_rejects_unsafe_or_ambiguous_syntax(scope: str) -> None:
@@ -165,6 +229,24 @@ def test_guidance_applicability_and_precedence_are_toolkit_generated() -> None:
     assert (nested_claude.depth, nested_claude.document_order) == (2, 1)
 
 
+def test_root_guidance_remains_global_without_changed_path_identity() -> None:
+    """Keep root instructions available to callers whose path snapshot is empty."""
+
+    assert applicable_guidance_paths(("AGENTS.md", "CLAUDE.md", "services/AGENTS.md"), ()) == (
+        "AGENTS.md",
+        "CLAUDE.md",
+    )
+    agents = guidance_document("AGENTS.md", "Synthetic root guidance.", ())
+    claude = guidance_document("CLAUDE.md", "Synthetic root guidance.", ())
+
+    assert (agents.scope, agents.applicability, agents.matched_paths) == (
+        "**",
+        "applicable",
+        (),
+    )
+    assert claude.applicability == "applicable"
+
+
 def test_scope_limit_fails_closed_without_widening_decision() -> None:
     """Never turn truncated scope metadata into broad applicability."""
 
@@ -189,6 +271,13 @@ def test_guidance_rejects_unsafe_repository_paths(path: str) -> None:
 
     with pytest.raises(ValueError):
         guidance_document(path, "text", ("services/app.py",))
+
+
+def test_guidance_rejects_complete_value_that_cannot_fit_mcp_response_budget() -> None:
+    """Bound UTF-8 bytes for the whole policy value, not only text code points."""
+
+    with pytest.raises(ValueError, match="byte policy budget"):
+        guidance_document("AGENTS.md", "é" * (MAX_POLICY_VALUE_BYTES // 2), ())
 
 
 def test_global_guidance_has_repository_wide_precedence() -> None:

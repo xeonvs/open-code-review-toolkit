@@ -5,6 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 
+from ocr_toolkit.evidence.policy.contracts import (
+    MAX_DECISION_TITLE_CHARS,
+    MAX_POLICY_VALUE_BYTES,
+    MAX_RATIONALE_CHARS,
+    policy_value_within_budget,
+)
 from ocr_toolkit.evidence.policy.guidance import guidance_applicability, guidance_metadata
 from ocr_toolkit.evidence.policy.scopes import (
     is_safe_repository_path,
@@ -42,6 +48,8 @@ def validate_policy_record(kind: str, value: object) -> None:
     """Validate one schema-v3 structured policy evidence value."""
 
     outer = _exact_mapping(value, {"identity", "fact"}, kind)
+    if not policy_value_within_budget(outer):
+        raise ValueError(f"{kind} exceeds the {MAX_POLICY_VALUE_BYTES}-byte policy budget")
     if not isinstance(outer["identity"], str) or not outer["identity"]:
         raise ValueError(f"{kind} identity is invalid")
     if kind == "repository.accepted_decision":
@@ -68,9 +76,9 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("accepted-decision identity is inconsistent")
         if (
             not isinstance(fact["title"], str)
-            or not 1 <= len(fact["title"]) <= 256
+            or not 1 <= len(fact["title"]) <= MAX_DECISION_TITLE_CHARS
             or not isinstance(fact["rationale"], str)
-            or len(fact["rationale"]) > 64_000
+            or len(fact["rationale"]) > MAX_RATIONALE_CHARS
         ):
             raise ValueError("accepted-decision text fields are invalid")
         _strings(fact["scopes"], label="accepted-decision scopes", limit=64, item_limit=512)

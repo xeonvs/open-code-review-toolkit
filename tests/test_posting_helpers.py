@@ -1804,11 +1804,11 @@ class PostingSummaryTests(unittest.TestCase):
             ),
             (
                 {"category": "documentation"},
-                "![documentation](https://img.shields.io/badge/documentation-blue)",
+                "![documentation](https://img.shields.io/badge/category-documentation-blue)",
             ),
             (
                 {"priority": "high"},
-                "![high](https://img.shields.io/badge/high-red)",
+                "![high](https://img.shields.io/badge/severity-high-red)",
             ),
         )
         for finding, expected in cases:

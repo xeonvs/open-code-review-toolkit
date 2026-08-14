@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
+from itertools import pairwise
 
 _FORBIDDEN = frozenset("[]{}!()|@+\\")
 
@@ -26,6 +27,8 @@ def validate_scope(pattern: str) -> str:
         raise PolicyScopeError("scope must use normalized repository-relative segments")
     if any("**" in part and part != "**" for part in parts):
         raise PolicyScopeError("double-star is allowed only as a complete segment")
+    if any(left == right == "**" for left, right in pairwise(parts)):
+        raise PolicyScopeError("adjacent double-star segments are ambiguous")
     return pattern
 
 
