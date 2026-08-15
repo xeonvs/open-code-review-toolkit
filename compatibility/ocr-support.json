@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.3",
-  "recommended_version": "1.9.3",
+  "monitoring_floor": "1.9.4",
+  "recommended_version": "1.9.4",
   "releases": [
     {
       "assets": [
@@ -777,6 +777,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.3",
       "status": "tested",
       "version": "1.9.3"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "c8f364cfb237d58206d26bc08c73ad7d92c45817580195f585458ce50dbb6964",
+          "size": 47242560
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "66a591c291947fd7036628f69698c3d240b497e8aa13c5837caae271f014414f",
+          "size": 44899042
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "fcef1060e7e9bad8300111b68784f8c81ee696ca58206f6bb739709625f6c944",
+          "size": 45727906
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "40aa941d81fdca7cd5b2dadb194821c43bff70c9f60223032ad622d954f2a4e2",
+          "size": 43122850
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "4d8b035c07eb6ad774903847e4a7b79796023267586d5ac1ef72b996707c067e",
+          "size": 46962176
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "2cc55503a056cad37744e603c727e1e964e90bb857a1993a07bcce121f239a2d",
+          "size": 43750400
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "9dc7b33dc68cb74dae7c683c4aa1a1a0a41b4e27c17f12f9054fc9db14ef7cb4",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.4.json",
+      "evidence_sha256": "d06dc8fac3071752c52d6f0f135db67b4610544d7e6f4dcb6698c4f444811a1f",
+      "human_conclusion": "Compatible after human adjacent source review in issue #90 and hosted workflow run 31868292800. Required review flags, JSON preview/result and manifest, structured comment metadata, rules/allowlist, and the Go MCP SDK v1.6.1 remain compatible. The new terminal-only session line is not emitted for JSON output and therefore does not alter toolkit result parsing, stderr diagnostics, or posting. TraceSummary is an internal upstream refactor with exact-output tests and no consumed API change. The session identifier is useful correlation evidence for BL-017, but it remains OCR-owned, high-cardinality run identity rather than a reason to add a duplicate toolkit telemetry layer. Provider presets/base URLs, resume/opencode behavior, Pages/install/docs/CI changes, and upstream tests require no toolkit adaptation.",
+      "published_at": "2026-08-15T04:52:37Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.4",
+      "status": "tested",
+      "version": "1.9.4"
     }
   ],
   "schema_version": 1,

@@ -11,6 +11,23 @@ GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.ym
 CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 
 
+def test_readme_security_badges_link_to_repository_specific_results() -> None:
+    readme = README.read_text(encoding="utf-8")
+
+    assert (
+        "[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/"
+        "github.com/xeonvs/open-code-review-toolkit/badge)]"
+        "(https://securityscorecards.dev/viewer/?uri="
+        "github.com/xeonvs/open-code-review-toolkit)"
+    ) in readme
+    assert (
+        "[![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/"
+        "workflows/codeql.yml/badge.svg?branch=main)]"
+        "(https://github.com/xeonvs/open-code-review-toolkit/actions/"
+        "workflows/codeql.yml)"
+    ) in readme
+
+
 def test_readme_and_gitlab_guide_link_to_operations() -> None:
     readme = README.read_text(encoding="utf-8")
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")

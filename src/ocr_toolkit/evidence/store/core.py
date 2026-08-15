@@ -24,6 +24,12 @@ from ocr_toolkit.evidence.policy.schema import (
     validate_policy_applicability,
     validate_policy_record,
 )
+from ocr_toolkit.evidence.review_context import (
+    CONTEXT_KIND,
+    CONTEXT_SOURCE,
+    context_provenance,
+    validate_merge_request_context,
+)
 from ocr_toolkit.evidence.store.atomic import atomic_write
 from ocr_toolkit.evidence.store.contracts import (
     KNOWN_KINDS,
@@ -48,36 +54,71 @@ class EvidenceStore:
     limits: EvidenceStoreLimits = field(default_factory=EvidenceStoreLimits)
     base: EvidenceSnapshot | None = None
     head: EvidenceSnapshot | None = None
+    policy: EvidenceSnapshot | None = None
     deltas: tuple[EvidenceDelta, ...] = ()
+    schema_version: int = field(default=SCHEMA_VERSION, init=False)
     diagnostics: list[str] = field(default_factory=list)
     _records: dict[str, EvidenceRecord] = field(default_factory=dict, init=False, repr=False)
     _coverage: dict[str, CoverageRecord] = field(default_factory=dict, init=False, repr=False)
     _kind_counts: Counter[str] = field(default_factory=Counter, init=False, repr=False)
 
     def add(self, record: EvidenceRecord) -> bool:
-        """Redact and add one schema-v3 record within deterministic bounds."""
+        """Redact and add one current-schema record within deterministic bounds."""
 
-        return self._add(record, structured_policy=True)
+        return self._add(
+            record,
+            structured_policy=self.schema_version >= 3,
+            policy_role=(
+                RefRole.POLICY
+                if self.schema_version >= 4
+                else RefRole.BASE
+                if self.schema_version == 3
+                else None
+            ),
+        )
 
     def _add(
         self,
         record: EvidenceRecord,
         *,
         structured_policy: bool,
+        policy_role: RefRole | None = None,
     ) -> bool:
         """Admit a record while preserving explicit legacy read semantics."""
 
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
         try:
+            if record.kind == CONTEXT_KIND:
+                validate_merge_request_context(record.value)
             redacted_value = safe_value(record.value, self.limits.max_value_chars)
+            if record.kind == CONTEXT_KIND and redacted_value != record.to_dict()["value"]:
+                raise ValueError("merge-request context changed during redaction")
             if record.kind in {"framework.detected", "template.file"}:
                 validate_plugin_record(record.kind, redacted_value)
+            if record.kind == CONTEXT_KIND:
+                if record.id in self._records:
+                    return True
+                if any(item.kind == CONTEXT_KIND for item in self._records.values()):
+                    raise ValueError("only one merge-request context record is allowed")
+                if (
+                    record.ref is not RefRole.SHARED
+                    or record.trust.value != "invocation"
+                    or record.component != "review"
+                    or not isinstance(redacted_value, Mapping)
+                    or record.provenance != context_provenance(str(redacted_value.get("provider")))
+                    or record.source_path != CONTEXT_SOURCE
+                    or record.confidence.value != "exact"
+                    or record.commit_sha != redacted_value.get("source_sha")
+                ):
+                    raise ValueError("merge-request context provenance is invalid")
             if record.kind in POLICY_KINDS:
                 if structured_policy and not policy_value_within_budget(redacted_value):
                     raise EvidenceStoreError("redacted policy value exceeds its byte budget")
                 if structured_policy and (
-                    record.ref is not RefRole.BASE or record.trust.value != "target_repository"
+                    policy_role is None
+                    or record.ref is not policy_role
+                    or record.trust.value != "target_repository"
                 ):
                     raise ValueError("structured policy evidence must come from the target ref")
                 expected_provenance = {
@@ -155,16 +196,20 @@ class EvidenceStore:
             return "kind"
         return None
 
-    def _validate_policy_snapshot_bindings(self) -> None:
-        """Bind schema-v3 policy to the exact atomic base/head snapshot pair."""
+    def _validate_policy_snapshot_bindings(self, schema_version: int = SCHEMA_VERSION) -> None:
+        """Bind structured policy to its schema-owned immutable snapshot."""
 
         policy_records = tuple(
             record for record in self._records.values() if record.kind in POLICY_KINDS
         )
-        if not policy_records:
+        if not policy_records or schema_version < 3:
             return
         if self.base is None or self.head is None:
             raise EvidenceStoreError("structured policy evidence requires base and head snapshots")
+        policy_snapshot = self.policy if schema_version >= 4 else self.base
+        policy_role = RefRole.POLICY if schema_version >= 4 else RefRole.BASE
+        if policy_snapshot is None:
+            raise EvidenceStoreError("structured policy evidence requires its policy snapshot")
         changed_paths = tuple(
             sorted(
                 {
@@ -178,15 +223,15 @@ class EvidenceStore:
         for record in policy_records:
             if is_legacy_policy_value(record.value):
                 raise EvidenceStoreError(
-                    "legacy text policy cannot be serialized as schema-v3 evidence"
+                    "legacy text policy cannot be serialized as structured evidence"
                 )
             if (
-                record.ref is not RefRole.BASE
+                record.ref is not policy_role
                 or record.trust.value != "target_repository"
-                or record.commit_sha != self.base.commit_sha
+                or record.commit_sha != policy_snapshot.commit_sha
             ):
                 raise EvidenceStoreError(
-                    "structured policy evidence does not match the base snapshot"
+                    "structured policy evidence does not match the policy snapshot"
                 )
             try:
                 validate_policy_applicability(record.kind, record.value, changed_paths)
@@ -273,9 +318,12 @@ class EvidenceStore:
     def to_dict(self) -> dict[str, object]:
         """Return the complete versioned store representation."""
 
-        self._validate_policy_snapshot_bindings()
+        self._validate_policy_snapshot_bindings(self.schema_version)
         snapshots: dict[str, object] = {}
-        for name, snapshot in (("base", self.base), ("head", self.head)):
+        snapshot_items = [("base", self.base), ("head", self.head)]
+        if self.schema_version >= 4:
+            snapshot_items.append(("policy", self.policy))
+        for name, snapshot in snapshot_items:
             if snapshot is not None:
                 record_ids = [record.id for record in snapshot.records]
                 coverage_ids = [record.id for record in snapshot.coverage]
@@ -295,7 +343,7 @@ class EvidenceStore:
                     "diagnostics": [safe_diagnostic(message) for message in snapshot.diagnostics],
                 }
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": self.schema_version,
             "records": [record.to_dict() for record in self.records],
             "coverage": [record.to_dict() for record in self.coverage],
             "snapshots": snapshots,

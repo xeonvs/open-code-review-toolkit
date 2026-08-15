@@ -142,6 +142,52 @@ class GitRepositoryReader:
 
         return self._run_at(self.root, args, timeout=timeout, text=text)
 
+    def has_commit(self, sha: str) -> bool:
+        """Return whether one exact lowercase commit object is available locally."""
+
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise RepositoryEvidenceError("Git commit identity must be a lowercase SHA-1")
+        result = self._run(["cat-file", "-e", f"{sha}^{{commit}}"])
+        return result.returncode == 0
+
+    def fetch_commit(self, sha: str, *, remote: str = "origin") -> None:
+        """Fetch one exact commit from the runner-owned origin without ref mutation."""
+
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise RepositoryEvidenceError("Git commit identity must be a lowercase SHA-1")
+        if remote != "origin":
+            raise RepositoryEvidenceError("only the runner-owned origin remote is supported")
+        if self.has_commit(sha):
+            return
+        try:
+            completed = subprocess.run(
+                [
+                    *_git_prefix(self.root),
+                    "-c",
+                    "protocol.version=2",
+                    "fetch",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    "--no-recurse-submodules",
+                    "--filter=blob:none",
+                    "--depth=1",
+                    remote,
+                    sha,
+                ],
+                cwd=self.root,
+                capture_output=True,
+                check=False,
+                env=_git_environment(),
+                text=True,
+                timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RepositoryEvidenceError("bounded protected-target fetch failed") from exc
+        if completed.returncode != 0 or not self.has_commit(sha):
+            raise RepositoryEvidenceError("captured protected-target commit is unavailable")
+        if self.resolve_commit(sha) != sha:
+            raise RepositoryEvidenceError("fetched protected-target identity does not match")
+
     def resolve_commit(self, ref: str) -> str:
         """Resolve an explicit ref to an existing commit without fetching objects."""
 
@@ -454,7 +500,7 @@ def build_file_snapshot(
 ) -> EvidenceSnapshot:
     """Build repository-file facts for a commit without reading file contents."""
 
-    if role is RefRole.SHARED:
+    if role not in {RefRole.BASE, RefRole.HEAD}:
         raise RepositoryEvidenceError("file snapshot role must be base or head")
     sha = reader.resolve_commit(ref)
     selected = set(paths) if paths is not None else None

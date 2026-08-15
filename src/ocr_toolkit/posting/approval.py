@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from ocr_toolkit.ocr_result import (
+    AUTOMATIC_APPROVAL_BLOCK_REASON,
+    MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
+    TOOLKIT_MCP_SERVER_NAME_RE,
+)
 from ocr_toolkit.posting.settings import BooleanSetting
 from ocr_toolkit.result_contract import ReviewOutcome
 
@@ -45,6 +51,7 @@ def evaluate_approval_policy(
     comments: list[dict[str, Any]],
     warnings: list[Any],
     omitted_count: int,
+    toolkit_metadata: Any = None,
 ) -> ApprovalEligibility:
     """Evaluate the fixed v0.4.7 policy from authoritative OCR data."""
 
@@ -58,7 +65,10 @@ def evaluate_approval_policy(
             False,
             ApprovalResult(ApprovalStatus.DISABLED, reason),
         )
-    if not outcome.manifest_present:
+    metadata_reason = automatic_approval_metadata_reason(toolkit_metadata)
+    if metadata_reason:
+        reason = metadata_reason
+    elif not outcome.manifest_present:
         reason = "the OCR result has no authoritative coverage manifest"
     elif outcome.kind != "clean" or outcome.budget_exceeded:
         reason = "the OCR review did not complete cleanly"
@@ -123,3 +133,42 @@ def provisional_approval_result(eligibility: ApprovalEligibility) -> ApprovalRes
         ApprovalStatus.FAILED,
         "automatic approval has not yet been confirmed",
     )
+
+
+def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
+    """Return one toolkit-authored blocker while preserving readable v1 receipts."""
+
+    if not isinstance(toolkit_metadata, dict):
+        return "the review-time approval receipt is missing or invalid"
+    schema_version = toolkit_metadata.get("schema_version")
+    if schema_version not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS:
+        return "the review-time approval receipt is missing or invalid"
+    if schema_version == 1:
+        return "the review-time approval receipt predates current eligibility controls"
+    if set(toolkit_metadata) != {"schema_version", "mcp_usage", "automatic_approval"}:
+        return "the review-time approval receipt is missing or invalid"
+    mcp_usage = toolkit_metadata.get("mcp_usage")
+    if (
+        not isinstance(mcp_usage, dict)
+        or not mcp_usage
+        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
+        or any(
+            not isinstance(server, str)
+            or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count <= 0
+            for server, count in mcp_usage.items()
+        )
+    ):
+        return "the review-time approval receipt is missing or invalid"
+    constraint = toolkit_metadata.get("automatic_approval")
+    if not isinstance(constraint, dict) or set(constraint) != {"eligible", "reason"}:
+        return "the review-time approval receipt is missing or invalid"
+    eligible = constraint.get("eligible")
+    reason = constraint.get("reason")
+    if eligible is True and reason is None:
+        return ""
+    if eligible is False and reason == AUTOMATIC_APPROVAL_BLOCK_REASON:
+        return AUTOMATIC_APPROVAL_BLOCK_REASON
+    return "the review-time approval receipt is missing or invalid"

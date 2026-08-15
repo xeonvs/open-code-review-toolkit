@@ -8,10 +8,12 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
 import urllib.request
 from contextlib import redirect_stderr, redirect_stdout
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -110,6 +112,32 @@ class MCPConfigTests(unittest.TestCase):
         with (
             patched_attr(mcp_config, "read_ocr_config", lambda: current),
             self.assertRaisesRegex(mcp_config.MCPConfigError, "declared by both"),
+        ):
+            mcp_config.compose_mcp_servers([external], replace=False)
+
+    def test_composition_bounds_retained_and_declared_external_servers_together(self) -> None:
+        current = {
+            "mcp_servers": {
+                f"retained_{index}": {"type": "stdio", "tools": [f"read_{index}"]}
+                for index in range(mcp_config.MAX_MCP_SERVERS)
+            }
+        }
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_extra",
+            transport="stdio",
+            command="synthetic-extra",
+            url=None,
+            args=[],
+            tools=["synthetic_extra_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: current),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "more than 16 external servers"),
         ):
             mcp_config.compose_mcp_servers([external], replace=False)
 
@@ -835,7 +863,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.3\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.4\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
@@ -911,6 +939,53 @@ class PreflightTests(unittest.TestCase):
                 {},
             )
 
+    def test_request_json_crosses_real_local_http_transport_without_credentials(self) -> None:
+        requests: list[tuple[str, str | None, str | None]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                requests.append(
+                    (
+                        self.path,
+                        self.headers.get("Accept"),
+                        self.headers.get("User-Agent"),
+                    )
+                )
+                body = b'{"models":["synthetic-model"]}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            payload = preflight._request_json(
+                f"http://127.0.0.1:{server.server_port}/v1/models?scope=synthetic",
+                {},
+            )
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertEqual(payload, {"models": ["synthetic-model"]})
+        self.assertEqual(
+            requests,
+            [
+                (
+                    "/v1/models?scope=synthetic",
+                    "application/json",
+                    "open-code-review-ci-preflight/1.0",
+                )
+            ],
+        )
+
     def test_models_url_accepts_trailing_chat_completions_slash(self) -> None:
         with patched_env(
             OCR_LLM_MODELS_URL="",
@@ -927,7 +1002,7 @@ class PreflightTests(unittest.TestCase):
         ):
             self.assertEqual(preflight._models_url(), "https://gateway.example/v1/models")
 
-    def test_request_json_uses_urllib_transport_and_redacts_errors(self) -> None:
+    def test_request_json_unit_builds_request_and_redacts_mocked_http_error(self) -> None:
         calls: list[tuple[Any, dict[str, Any]]] = []
 
         def fake_open(request: Any, **kwargs: Any) -> Any:

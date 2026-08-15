@@ -59,6 +59,7 @@ class FrameworkPluginContext:
     records: tuple[EvidenceRecord, ...]
     entries: tuple[RepositoryObject, ...]
     source_statuses: tuple[PluginSourceStatus, ...]
+    changed_paths: tuple[str, ...]
     ref: RefRole
     commit_sha: str
 

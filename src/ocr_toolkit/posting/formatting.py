@@ -16,7 +16,7 @@ from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
 from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
+from ocr_toolkit.ocr_result import SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
 from ocr_toolkit.posting.approval import ApprovalResult, approval_summary_line
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -485,7 +485,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
 
     if (
         not isinstance(toolkit_metadata, dict)
-        or toolkit_metadata.get("schema_version") != TOOLKIT_RESULT_SCHEMA_VERSION
+        or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return ""
     mcp_usage = toolkit_metadata.get("mcp_usage")

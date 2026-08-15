@@ -16,6 +16,7 @@ from ocr_toolkit.evidence.repository import (
     file_deltas,
 )
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.evidence.store.contracts import POLICY_KINDS
 
 
 def _commit_refs(
@@ -44,13 +45,18 @@ def _component_for_path(path: str) -> str:
 
 
 def collect_repository_evidence(
-    root: Path | None = None, *, base_ref: str | None = None, head_ref: str | None = None
+    root: Path | None = None,
+    *,
+    base_ref: str | None = None,
+    head_ref: str | None = None,
+    policy_ref: str | None = None,
 ) -> EvidenceStore:
     """Build one evidence store from immutable refs and existing bounded collectors."""
 
     reader = GitRepositoryReader(root or Path.cwd())
     base_sha, head_sha = _commit_refs(reader, base_ref, head_ref)
     changed = reader.changed_paths(base_sha, head_sha)
+    policy_sha = reader.resolve_commit(policy_ref) if policy_ref is not None else base_sha
     base = build_file_snapshot(reader, base_sha, RefRole.BASE, paths=changed)
     head = build_file_snapshot(reader, head_sha, RefRole.HEAD, paths=changed)
     base_paths = {record.source_path for record in base.records}
@@ -63,6 +69,19 @@ def collect_repository_evidence(
         RefRole.BASE,
         changed_paths=changed,
         coverage_sink=base_coverage,
+    )
+    policy_facts, policy_diagnostics = collect_ref_facts(
+        reader,
+        policy_sha,
+        RefRole.POLICY,
+        changed_paths=changed,
+    )
+    policy_facts = [record for record in policy_facts if record.kind in POLICY_KINDS]
+    policy = EvidenceSnapshot(
+        RefRole.POLICY,
+        policy_sha,
+        tuple(policy_facts),
+        diagnostics=tuple(policy_diagnostics),
     )
     head_facts, head_fact_diagnostics = collect_ref_facts(
         reader,
@@ -87,10 +106,12 @@ def collect_repository_evidence(
     )
     all_coverage = tuple((*base.coverage, *head.coverage))
     snapshot_deltas = file_deltas(base, head)
-    store = EvidenceStore(base=base, head=head)
+    store = EvidenceStore(base=base, head=head, policy=policy)
     typed_facts = [*base_facts, *head_facts]
     rejected_snapshot_records = [
-        record for record in (*base.records, *head.records) if not store.add(record)
+        record
+        for record in (*base.records, *head.records, *policy.records)
+        if not store.add(record)
     ]
     if rejected_snapshot_records:
         # Snapshots and their record-id indexes are one atomic contract. Persisting a
@@ -98,6 +119,16 @@ def collect_repository_evidence(
         raise EvidenceStoreError(
             "repository snapshot records exceed the configured evidence store limits"
         )
+    store.policy = EvidenceSnapshot(
+        RefRole.POLICY,
+        policy_sha,
+        tuple(
+            record
+            for record in store.records
+            if record.ref is RefRole.POLICY and record.commit_sha == policy_sha
+        ),
+        diagnostics=policy.diagnostics,
+    )
     for coverage in all_coverage:
         if not store.add_coverage(coverage):
             raise EvidenceStoreError(
@@ -174,6 +205,7 @@ def collect_repository_evidence(
         *head.diagnostics,
         *base_fact_diagnostics,
         *head_fact_diagnostics,
+        *policy_diagnostics,
     ):
         store.add_diagnostic(diagnostic)
     return store

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-SCHEMA_VERSION = 3
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, SCHEMA_VERSION}
+SCHEMA_VERSION = 4
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, SCHEMA_VERSION}
 POLICY_KINDS = frozenset({"repository.accepted_decision", "repository.guidance"})
 MAX_SERIALIZED_BYTES = 20_000_000
 KNOWN_KINDS = frozenset(
@@ -22,6 +22,7 @@ KNOWN_KINDS = frozenset(
         "ansible.inventory",
         "ansible.inventory_group",
         "review.ci_context",
+        "review.merge_request_context",
         "dependency.declared",
         "dependency.locked",
         "runtime.declared",

@@ -31,7 +31,6 @@ from ocr_toolkit.evidence.ecosystems.python import parse_requirements
 from ocr_toolkit.evidence.mcp import handle_request
 from ocr_toolkit.evidence.repository import (
     BoundedBlobRead,
-    RepositoryEvidenceError,
     RepositoryObject,
 )
 
@@ -1512,7 +1511,7 @@ def test_target_decisions_are_structured_and_source_copy_never_has_authority(
     changed = reader.changed_paths(base, head)
 
     base_records, base_diagnostics = collect_ref_facts(
-        reader, base, RefRole.BASE, changed_paths=changed
+        reader, base, RefRole.POLICY, changed_paths=changed
     )
     head_records, head_diagnostics = collect_ref_facts(
         reader, head, RefRole.HEAD, changed_paths=changed
@@ -1548,7 +1547,7 @@ def test_case_variant_decision_path_is_not_policy_authority(tmp_path: Path) -> N
     )
     head = _git(tmp_path, "rev-parse", "HEAD")
 
-    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.BASE)
+    records, diagnostics = collect_ref_facts(GitRepositoryReader(tmp_path), head, RefRole.POLICY)
 
     assert diagnostics == []
     assert not any(item.kind == "repository.accepted_decision" for item in records)
@@ -1586,12 +1585,12 @@ def test_decision_submodule_uses_the_explicit_rejection_reason(tmp_path: Path) -
     ).stdout.strip()
 
     records, diagnostics = collect_ref_facts(
-        GitRepositoryReader(tmp_path), commit_sha, RefRole.BASE
+        GitRepositoryReader(tmp_path), commit_sha, RefRole.POLICY
     )
 
     assert not any(item.kind == "repository.accepted_decision" for item in records)
     assert diagnostics == [
-        "base:.opencodereview/accepted-decisions.md: accepted decisions rejected (submodule-source)"
+        "policy:.opencodereview/accepted-decisions.md: accepted decisions rejected (submodule-source)"
     ]
 
 
@@ -1625,7 +1624,9 @@ def test_nested_target_guidance_has_applicability_precedence_and_no_source_recor
     reader = GitRepositoryReader(tmp_path)
     changed = reader.changed_paths(base, head)
 
-    base_records, diagnostics = collect_ref_facts(reader, base, RefRole.BASE, changed_paths=changed)
+    base_records, diagnostics = collect_ref_facts(
+        reader, base, RefRole.POLICY, changed_paths=changed
+    )
     head_records, head_diagnostics = collect_ref_facts(
         reader, head, RefRole.HEAD, changed_paths=changed
     )
@@ -1674,7 +1675,7 @@ def test_root_target_guidance_is_collected_for_an_empty_changed_path_snapshot(
     records, diagnostics = collect_ref_facts(
         GitRepositoryReader(tmp_path),
         target_sha,
-        RefRole.BASE,
+        RefRole.POLICY,
         changed_paths=(),
     )
 
@@ -1714,7 +1715,7 @@ def test_changed_renamed_deleted_guidance_is_excluded_from_target_and_source(
         "docs/CLAUDE.md",
         "services/CLAUDE.md",
     )
-    for ref, role in ((base, RefRole.BASE), (head, RefRole.HEAD)):
+    for ref, role in ((base, RefRole.POLICY), (head, RefRole.HEAD)):
         records, _ = collect_ref_facts(reader, ref, role, changed_paths=changed)
         assert not any(record.kind == "repository.guidance" for record in records)
 
@@ -1732,11 +1733,11 @@ def test_guidance_symlink_and_submodule_are_not_read(tmp_path: Path) -> None:
     base = _git(tmp_path, "rev-parse", "HEAD")
 
     records, diagnostics = collect_ref_facts(
-        GitRepositoryReader(tmp_path), base, RefRole.BASE, changed_paths=("src/app.py",)
+        GitRepositoryReader(tmp_path), base, RefRole.POLICY, changed_paths=("src/app.py",)
     )
 
     assert not any(record.kind == "repository.guidance" for record in records)
-    assert diagnostics == ["base:AGENTS.md: guidance rejected (symlink-source)"]
+    assert diagnostics == ["policy:AGENTS.md: guidance rejected (symlink-source)"]
 
     submodule_tree = subprocess.run(
         ["git", "-C", str(tmp_path), "mktree"],
@@ -1755,12 +1756,12 @@ def test_guidance_symlink_and_submodule_are_not_read(tmp_path: Path) -> None:
     records, diagnostics = collect_ref_facts(
         GitRepositoryReader(tmp_path),
         submodule_commit,
-        RefRole.BASE,
+        RefRole.POLICY,
         changed_paths=("src/app.py",),
     )
 
     assert not any(record.kind == "repository.guidance" for record in records)
-    assert diagnostics == ["base:AGENTS.md: guidance rejected (submodule-source)"]
+    assert diagnostics == ["policy:AGENTS.md: guidance rejected (submodule-source)"]
 
 
 def test_irrelevant_guidance_is_not_read_or_stored_before_applicable_policy(
@@ -1799,8 +1800,8 @@ def test_irrelevant_guidance_is_not_read_or_stored_before_applicable_policy(
     assert not any("repository.guidance" in item for item in store.diagnostics)
 
 
-def test_policy_batch_survives_an_unrelated_candidate_batch_failure(tmp_path: Path) -> None:
-    """Preserve policy while every failed ordinary source degrades coverage."""
+def test_policy_collection_does_not_read_unrelated_ecosystem_sources(tmp_path: Path) -> None:
+    """Read policy only from the captured policy SHA without a third ecosystem scan."""
 
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.email", "agent@example.invalid")
@@ -1811,55 +1812,22 @@ def test_policy_batch_survives_an_unrelated_candidate_batch_failure(tmp_path: Pa
     (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-qm", "target")
-    base = _git(tmp_path, "rev-parse", "HEAD")
-    (tmp_path / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
-    _git(tmp_path, "commit", "-qam", "source")
-    head = _git(tmp_path, "rev-parse", "HEAD")
+    policy_sha = _git(tmp_path, "rev-parse", "HEAD")
 
-    class FailingOrdinaryBatchReader(GitRepositoryReader):
-        """Fail only the second candidate batch after policy was authenticated."""
-
-        calls = 0
-
-        def read_candidate_blobs(self, entries: tuple[RepositoryObject, ...]) -> BoundedBlobRead:
-            self.calls += 1
-            if self.calls == 2:
-                raise RepositoryEvidenceError("synthetic ordinary batch failure")
-            return super().read_candidate_blobs(entries)
-
-    reader = FailingOrdinaryBatchReader(tmp_path)
     coverage = []
     records, diagnostics = collect_ref_facts(
-        reader,
-        base,
-        RefRole.BASE,
-        changed_paths=reader.changed_paths(base, head),
+        GitRepositoryReader(tmp_path),
+        policy_sha,
+        RefRole.POLICY,
+        changed_paths=("app.py",),
         coverage_sink=coverage,
     )
 
-    assert [record.source_path for record in records if record.kind == "repository.guidance"] == [
-        "AGENTS.md"
-    ]
-    assert not any(
-        record.source_path in {"requirements.txt", "inventory.ini"} for record in records
-    )
-    declaration = next(
-        item
-        for item in coverage
-        if item.component == "."
-        and item.domain == "framework.declaration"
-        and item.scope == "jinja2"
-    )
-    assert declaration.state.value == "unavailable"
-    assert declaration.reasons == ("bounded-source-omission",)
-    inventory = next(
-        item
-        for item in coverage
-        if item.component == "ansible" and item.domain == "inventory.groups" and item.scope == "."
-    )
-    assert inventory.state.value == "unavailable"
-    assert inventory.reasons == ("bounded-read-omission",)
-    assert "collector batch read failed" in diagnostics[0]
+    assert [record.source_path for record in records] == ["AGENTS.md"]
+    assert records[0].kind == "repository.guidance"
+    assert records[0].ref is RefRole.POLICY
+    assert diagnostics == []
+    assert coverage == []
 
 
 def test_accepted_decisions_precede_guidance_inside_the_policy_byte_budget(
@@ -1886,7 +1854,7 @@ def test_accepted_decisions_precede_guidance_inside_the_policy_byte_budget(
     records, diagnostics = collect_ref_facts(
         GitRepositoryReader(tmp_path),
         base,
-        RefRole.BASE,
+        RefRole.POLICY,
         changed_paths=GitRepositoryReader(tmp_path).changed_paths(base, head),
     )
 

@@ -652,6 +652,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         approval_comments,
         warnings,
         omitted_count,
+        result.get(TOOLKIT_RESULT_KEY),
     )
     summary_run_id = secrets.token_hex(16)
     reviewed_commit = reviewed_sha()

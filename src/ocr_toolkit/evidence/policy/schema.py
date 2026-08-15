@@ -45,7 +45,7 @@ def is_legacy_policy_value(value: object) -> bool:
 
 
 def validate_policy_record(kind: str, value: object) -> None:
-    """Validate one schema-v3 structured policy evidence value."""
+    """Validate one structured policy evidence value."""
 
     outer = _exact_mapping(value, {"identity", "fact"}, kind)
     if not policy_value_within_budget(outer):

@@ -76,7 +76,11 @@ def collect_ref_facts(
 
     records = []
     diagnostics = []
-    trust = TrustClass.TARGET_REPOSITORY if ref == RefRole.BASE else TrustClass.SOURCE_REPOSITORY
+    trust = (
+        TrustClass.TARGET_REPOSITORY
+        if ref in {RefRole.BASE, RefRole.POLICY}
+        else TrustClass.SOURCE_REPOSITORY
+    )
     changed_exact = tuple(sorted(set(changed_paths)))
     changed = {path.casefold() for path in changed_exact}
     entries = reader.list_objects(commit_sha)
@@ -118,7 +122,7 @@ def collect_ref_facts(
                 changed_exact,
             )
         )
-        if ref is RefRole.BASE
+        if ref is RefRole.POLICY
         else set()
     )
     applicable_guidance = tuple(
@@ -158,7 +162,7 @@ def collect_ref_facts(
         (
             entry
             for entry in entries
-            if ref is RefRole.BASE and entry.path == ACCEPTED_DECISIONS_PATH
+            if ref is RefRole.POLICY and entry.path == ACCEPTED_DECISIONS_PATH
         ),
         None,
     )
@@ -188,7 +192,8 @@ def collect_ref_facts(
     candidates = tuple(
         entry
         for entry in entries
-        if (
+        if ref is not RefRole.POLICY
+        and (
             is_supported_manifest(entry.path)
             or PurePosixPath(entry.path).name.casefold().startswith(".gitlab-ci")
             or is_context_yaml(entry.path, changed)
@@ -380,7 +385,7 @@ def collect_ref_facts(
                 ]
             elif path == ACCEPTED_DECISIONS_PATH:
                 facts = []
-                if ref == RefRole.BASE:
+                if ref == RefRole.POLICY:
                     parsed_decisions = parse_accepted_decisions(text, changed_paths=changed_exact)
                     diagnostics.extend(
                         f"{ref.value}:{path}: {notice}" for notice in parsed_decisions.diagnostics
@@ -396,7 +401,7 @@ def collect_ref_facts(
                     ]
             elif guidance_source:
                 facts = []
-                if ref == RefRole.BASE and path in policy_paths:
+                if ref == RefRole.POLICY and path in policy_paths:
                     document = guidance_document(path, text, changed_exact)
                     facts = [
                         ManifestFact(
@@ -490,25 +495,35 @@ def collect_ref_facts(
                     trust=trust,
                 )
             )
-    plugin_context = FrameworkPluginContext(
-        records=tuple(records),
-        entries=entries,
-        source_statuses=tuple(sorted(source_statuses.values(), key=lambda item: item.path)),
-        ref=ref,
-        commit_sha=commit_sha,
-    )
-    plugin_facts, plugin_observations, plugin_notices = collect_framework_plugins(plugin_context)
-    template_facts, template_observations, template_notices = collect_template_files(plugin_context)
-    records.extend(
-        plugin_records(
-            (*plugin_facts, *template_facts),
+    plugin_observations = ()
+    template_observations = ()
+    if ref is not RefRole.POLICY:
+        plugin_context = FrameworkPluginContext(
+            records=tuple(records),
+            entries=entries,
+            source_statuses=tuple(sorted(source_statuses.values(), key=lambda item: item.path)),
+            changed_paths=changed_exact,
             ref=ref,
             commit_sha=commit_sha,
-            trust=trust,
         )
-    )
-    diagnostics.extend(f"{ref.value}:{notice}" for notice in (*plugin_notices, *template_notices))
-    if coverage_sink is not None:
+        plugin_facts, plugin_observations, plugin_notices = collect_framework_plugins(
+            plugin_context
+        )
+        template_facts, template_observations, template_notices = collect_template_files(
+            plugin_context
+        )
+        records.extend(
+            plugin_records(
+                (*plugin_facts, *template_facts),
+                ref=ref,
+                commit_sha=commit_sha,
+                trust=trust,
+            )
+        )
+        diagnostics.extend(
+            f"{ref.value}:{notice}" for notice in (*plugin_notices, *template_notices)
+        )
+    if coverage_sink is not None and ref is not RefRole.POLICY:
         for (domain, scope), observations in sorted(coverage_observations.items()):
             coverage_sink.append(
                 compose_coverage(

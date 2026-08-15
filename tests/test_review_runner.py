@@ -7,6 +7,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -90,8 +91,9 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 1,
+        "schema_version": 2,
         "mcp_usage": {"ocr_toolkit_evidence": 2},
+        "automatic_approval": {"eligible": True, "reason": None},
     }
 
     result.write_text(
@@ -100,6 +102,38 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
     )
     with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
         review_runner._record_ocr_result_mcp_usage(result, composition)
+
+
+def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
+    tmp_path: Path,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    review_runner._record_ocr_result_mcp_usage(result, composition, approval_blocked=True)
+
+    assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
+        "schema_version": 2,
+        "mcp_usage": {"ocr_toolkit_evidence": 1},
+        "automatic_approval": {
+            "eligible": False,
+            "reason": "author-controlled merge-request context was admitted",
+        },
+    }
 
 
 def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> None:
@@ -364,7 +398,7 @@ def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) 
     assert target.read_text(encoding="utf-8") == original
 
 
-def test_run_review_writes_private_artifacts_and_returns_success() -> None:
+def test_run_review_unit_wires_argv_and_artifact_streams_to_subprocess() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         assert argv == ["ocr", "review", "--from", "base", "--to", "head"]
         kwargs["stdout"].write(b'{"comments": []}\n')  # type: ignore[union-attr]
@@ -384,7 +418,7 @@ def test_run_review_writes_private_artifacts_and_returns_success() -> None:
         assert stat.S_IMODE(stderr_path.stat().st_mode) == 0o600
 
 
-def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
+def test_run_review_unit_redacts_failure_from_mocked_child_output() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         kwargs["stderr"].write(  # type: ignore[union-attr]
             b"Authorization: Bearer synthetic-secret-value\nprovider timeout\n"
@@ -406,6 +440,60 @@ def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
     assert "provider timeout" in output.getvalue()
     assert "synthetic-secret-value" not in output.getvalue()
     assert "Authorization: ***" in output.getvalue()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")
+def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
+    tmp_path: Path,
+) -> None:
+    """Exercise the production launcher against a child process beyond its boundary."""
+
+    binary_directory = tmp_path / "bin"
+    binary_directory.mkdir()
+    executable = binary_directory / "ocr"
+    executable.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "if sys.stdin.read() != '': raise SystemExit(90)\n"
+        "print(json.dumps({'argv': sys.argv[1:], 'secret_present': "
+        "'OCR_LLM_TOKEN' in os.environ}, sort_keys=True))\n"
+        "print('synthetic child stderr', file=sys.stderr)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o700)
+    result_path = tmp_path / "artifacts" / "result.json"
+    stderr_path = tmp_path / "artifacts" / "stderr.log"
+    result_path.parent.mkdir()
+    result_path.write_text("stale result", encoding="utf-8")
+    stderr_path.write_text("stale stderr", encoding="utf-8")
+    result_path.chmod(0o644)
+    stderr_path.chmod(0o644)
+
+    with patched_env(
+        PATH=os.pathsep.join((str(binary_directory), os.environ.get("PATH", ""))),
+        OCR_LLM_TOKEN="synthetic-secret-value",
+    ):
+        exit_code = review_runner.run_review(
+            result_path,
+            stderr_path,
+            ["--from", "base ref", "--to=head-ref", "--format", "json"],
+        )
+
+    assert exit_code == 0
+    assert json.loads(result_path.read_text(encoding="utf-8")) == {
+        "argv": [
+            "review",
+            "--from",
+            "base ref",
+            "--to=head-ref",
+            "--format",
+            "json",
+        ],
+        "secret_present": True,
+    }
+    assert stderr_path.read_text(encoding="utf-8") == "synthetic child stderr\n"
+    assert stat.S_IMODE(result_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(stderr_path.stat().st_mode) == 0o600
 
 
 def test_run_review_rejects_symlink_artifact() -> None:
@@ -597,7 +685,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         patched_attr(
             review_runner,
             "_record_ocr_result_mcp_usage",
-            lambda _result, _registry: events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
+            lambda _result, _registry, **_kwargs: (
+                events.append("ocr-usage") or {"ocr_toolkit_evidence": 1}
+            ),
         ),
         patched_attr(review_runner, "run_review", run),
     ):
@@ -608,7 +698,14 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         )
 
     assert result == 0
-    assert events[0] == ("collect", {"base_ref": "a" * 40, "head_ref": "b" * 40})
+    assert events[0] == (
+        "collect",
+        {
+            "base_ref": "a" * 40,
+            "head_ref": "b" * 40,
+            "policy_ref": "a" * 40,
+        },
+    )
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
     assert events[2] == ("write", artifacts.store)
     assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")

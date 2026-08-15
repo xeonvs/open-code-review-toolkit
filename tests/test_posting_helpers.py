@@ -7,10 +7,12 @@ import json
 import os
 import random
 import tempfile
+import threading
 import unittest
 import urllib.error
 import urllib.request
 from contextlib import redirect_stderr, redirect_stdout
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -745,8 +747,12 @@ class PostingIdentityTests(unittest.TestCase):
                                         "comments": [],
                                         "warnings": [],
                                         "_ocr_toolkit": {
-                                            "schema_version": 1,
+                                            "schema_version": 2,
                                             "mcp_usage": {"ocr_toolkit_evidence": 2},
+                                            "automatic_approval": {
+                                                "eligible": True,
+                                                "reason": None,
+                                            },
                                         },
                                     },
                                 )
@@ -2002,7 +2008,78 @@ class PostingSummaryTests(unittest.TestCase):
 
 
 class GitLabSnapshotTests(unittest.TestCase):
-    def test_gitlab_api_success_reads_are_bounded(self) -> None:
+    def test_gitlab_transport_crosses_local_peer_for_get_and_nonretrying_write(self) -> None:
+        requests: list[tuple[str, str, str | None, object]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def _handle(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = self.rfile.read(length) if length else b""
+                requests.append(
+                    (
+                        self.command,
+                        self.path,
+                        self.headers.get("PRIVATE-TOKEN"),
+                        json.loads(body) if body else None,
+                    )
+                )
+                payload = json.dumps({"method": self.command}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            do_GET = _handle
+            do_POST = _handle
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        root = f"http://127.0.0.1:{server.server_port}"
+        try:
+            read = gitlab.api_request_url(
+                f"{root}/api/v4/projects/7/merge_requests/9",
+                "synthetic-token",
+                "PRIVATE-TOKEN",
+                method="GET",
+            )
+            write = gitlab.api_write_url_detailed(
+                f"{root}/api/v4/projects/7/merge_requests/9/notes",
+                "synthetic-token",
+                "PRIVATE-TOKEN",
+                {"body": "Synthetic review note"},
+            )
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertEqual(read, {"method": "GET"})
+        self.assertTrue(write.posted)
+        self.assertEqual(write.response, {"method": "POST"})
+        self.assertEqual(
+            requests,
+            [
+                (
+                    "GET",
+                    "/api/v4/projects/7/merge_requests/9",
+                    "synthetic-token",
+                    None,
+                ),
+                (
+                    "POST",
+                    "/api/v4/projects/7/merge_requests/9/notes",
+                    "synthetic-token",
+                    {"body": "Synthetic review note"},
+                ),
+            ],
+        )
+
+    def test_gitlab_api_unit_bounds_mocked_success_responses(self) -> None:
         read_limits: list[int] = []
 
         class FakeResponse:
@@ -2037,7 +2114,7 @@ class GitLabSnapshotTests(unittest.TestCase):
             [gitlab.MAX_API_RESPONSE_BODY_BYTES, gitlab.MAX_API_RESPONSE_BODY_BYTES],
         )
 
-    def test_gitlab_api_success_rejects_oversized_body(self) -> None:
+    def test_gitlab_api_unit_rejects_mocked_oversized_success_body(self) -> None:
         class FakeResponse:
             def __init__(self) -> None:
                 self.calls = 0

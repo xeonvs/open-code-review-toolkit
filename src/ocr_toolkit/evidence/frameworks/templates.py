@@ -93,7 +93,10 @@ def collect_template_files(
     }
     limited_components: set[tuple[str, str]] = set()
     truncated = False
-    for entry in sorted(context.entries, key=lambda item: item.path):
+    changed_paths = frozenset(context.changed_paths)
+    for entry in sorted(
+        context.entries, key=lambda item: (item.path not in changed_paths, item.path)
+    ):
         description = _template_description(entry.path, context)
         if description is None:
             continue

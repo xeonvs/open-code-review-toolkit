@@ -37,9 +37,7 @@ The outcome wording distinguishes skipped, complete, complete-with-warnings, inc
 ## Automatic approval lifecycle
 
 `OCR_AUTO_APPROVE=true` is the default. Approval is a separate transaction only
-after every current review note publishes. A review is eligible only with a
-supported complete manifest, no warnings, failures, waivers, token-budget stop,
-or omitted findings, and at most three findings. Every finding must have
+after every current review note publishes. A review is eligible only with a supported review-time approval receipt, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, and at most three findings. Receipt v2 makes a run ineligible whenever mutable author-controlled MR title, description, labels, or source-branch context was admitted; comments and summaries still publish normally. Historical receipt v1 remains readable, but ordinary current reviews emit receipt v2. Every finding must have
 severity exactly `low` and category exactly `style`, `documentation`, or
 `maintainability`. A complete zero-finding review is eligible. Four findings,
 malformed metadata, or any other severity/category are not eligible.

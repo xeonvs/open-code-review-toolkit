@@ -93,6 +93,16 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         for record in store.records
         if record.kind in {"repository.accepted_decision", "repository.guidance"}
     )
+    mr_context_records = tuple(
+        record for record in store.records if record.kind == "review.merge_request_context"
+    )
+    merge_request_context = {
+        "contract": ("review.merge-request-context/v1" if mr_context_records else "absent"),
+        "records": len(mr_context_records),
+        "trust": "invocation" if mr_context_records else None,
+        "content_role": "untrusted_data" if mr_context_records else None,
+        "authoritative_for_actions": False,
+    }
     policy = {
         "accepted_decisions": sum(
             record.kind == "repository.accepted_decision" for record in policy_records
@@ -102,7 +112,7 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         ),
         "structured_target_records": sum(
             not is_legacy_policy_value(record.value)
-            and record.ref.value == "base"
+            and record.ref.value in {"base", "policy"}
             and record.trust.value == "target_repository"
             for record in policy_records
         ),
@@ -110,14 +120,16 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
             is_legacy_policy_value(record.value) for record in policy_records
         ),
         "target_only": all(
-            record.ref.value == "base" and record.trust.value == "target_repository"
+            record.ref.value in {"base", "policy"} and record.trust.value == "target_repository"
             for record in policy_records
         ),
         "authoritative_for_actions": False,
     }
     return {
-        "schema_version": 3,
+        "schema_version": store.schema_version,
         "policy": policy,
+        "merge_request_context": merge_request_context,
+        "policy_ref": store.policy.commit_sha if store.policy else None,
         "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,
         "head": store.head.commit_sha if store.head else None,
@@ -136,9 +148,9 @@ def _optional_filter(arguments: dict[str, object], name: str) -> str | None:
     """Read one bounded optional exact-match filter."""
 
     value = arguments.get(name)
-    if value is None:
+    if value is None or value == "":
         return None
-    if not isinstance(value, str) or not value or len(value) > 256:
+    if not isinstance(value, str) or len(value) > 256:
         raise EvidenceMCPError(f"{name} must be a non-empty string of at most 256 characters")
     return value
 
@@ -154,9 +166,9 @@ def _encode_cursor(offset: int, query: _Query) -> str:
 def _decode_cursor(value: object, query: _Query) -> int:
     """Validate and decode a cursor bound to the current filters."""
 
-    if value is None:
+    if value is None or value == "":
         return 0
-    if not isinstance(value, str) or not value or len(value) > 256:
+    if not isinstance(value, str) or len(value) > 256:
         raise EvidenceMCPError("cursor must be a bounded opaque string")
     try:
         padded = value + "=" * (-len(value) % 4)
@@ -185,8 +197,8 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
         raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
     if query.kind == "repository.evidence_delta" and query.ref is not None:
         raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
-    if query.ref not in {None, "base", "head", "shared"}:
-        raise EvidenceMCPError("ref must be base, head, or shared")
+    if query.ref not in {None, "base", "head", "policy", "shared"}:
+        raise EvidenceMCPError("ref must be base, head, policy, or shared")
     page_size = arguments.get("page_size", DEFAULT_PAGE_SIZE)
     if isinstance(page_size, bool) or not isinstance(page_size, int):
         raise EvidenceMCPError("page_size must be an integer")
@@ -254,29 +266,33 @@ def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
     if not isinstance(arguments, dict):
         raise EvidenceMCPError("tool arguments must be an object")
     typed = cast(dict[str, object], arguments)
+    # The public schema is one union-shaped object. OCR/provider adapters may
+    # materialize every declared property even when an action does not consume
+    # it, so reject unknown names globally and let each action read only its own
+    # fields.
+    declared = {
+        "action",
+        "kind",
+        "delta_kind",
+        "component",
+        "ref",
+        "page_size",
+        "cursor",
+        "id",
+    }
+    unknown = set(typed) - declared
+    if unknown:
+        raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
+
     action = typed.get("action")
     if action == "summary":
-        allowed = {"action"}
         payload = evidence_summary(store)
     elif action == "list":
-        allowed = {
-            "action",
-            "kind",
-            "delta_kind",
-            "component",
-            "ref",
-            "page_size",
-            "cursor",
-        }
         payload = _list_records(store, typed)
     elif action == "get":
-        allowed = {"action", "id"}
         payload = _get_record(store, typed)
     else:
         raise EvidenceMCPError("action must be summary, list, or get")
-    unknown = set(typed) - allowed
-    if unknown:
-        raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
     return _text_result(payload)
 
 
@@ -299,14 +315,53 @@ def _tool_definition() -> dict[str, object]:
             "additionalProperties": False,
             "required": ["action"],
             "properties": {
-                "action": {"type": "string", "enum": ["summary", "list", "get"]},
-                "kind": {"type": "string", "maxLength": 256},
-                "delta_kind": {"type": "string", "maxLength": 256},
-                "component": {"type": "string", "maxLength": 256},
-                "ref": {"type": "string", "enum": ["base", "head", "shared"]},
-                "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
-                "cursor": {"type": "string", "maxLength": 256},
-                "id": {"type": "string", "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$"},
+                "action": {
+                    "type": "string",
+                    "enum": ["summary", "list", "get"],
+                    "description": (
+                        "Use summary for counts, list to filter records, and get only after "
+                        "list returns a stable record id."
+                    ),
+                },
+                "kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional exact record-kind filter for action=list only.",
+                },
+                "delta_kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": (
+                        "Optional original fact-kind filter for action=list with "
+                        "kind=repository.evidence_delta only."
+                    ),
+                },
+                "component": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional exact component filter for action=list only.",
+                },
+                "ref": {
+                    "type": "string",
+                    "enum": ["base", "head", "policy", "shared"],
+                    "description": "Optional immutable-ref filter for action=list only.",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": MAX_PAGE_SIZE,
+                    "description": "Bounded page size for action=list only.",
+                },
+                "cursor": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Opaque next_cursor from a prior action=list call.",
+                },
+                "id": {
+                    "type": "string",
+                    "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$",
+                    "description": "Stable record id returned by action=list; action=get only.",
+                },
             },
         },
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},

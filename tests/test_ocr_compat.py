@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.9.3"
-    assert manifest["monitoring_floor"] == "1.9.3"
+    assert manifest["recommended_version"] == "1.9.4"
+    assert manifest["monitoring_floor"] == "1.9.4"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -62,6 +62,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.9.1", "tested"),
         ("1.9.2", "tested"),
         ("1.9.3", "tested"),
+        ("1.9.4", "tested"),
     ]
 
 
@@ -124,9 +125,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.9.4")]
+    first_page = [release("1.9.5")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.9.3")]
+    second_page = [release("1.9.4")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -136,14 +137,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.9.4"]
+    assert [item["tag_name"] for item in unseen] == ["v1.9.5"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.9.4")]
+    page = [release("1.9.5")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -188,14 +189,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.9.4")])
+    matrix = module.qualification_matrix(manifest, [release("1.9.5")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.9.3",
-                "tag": "v1.9.4",
-                "tested_baseline_version": "1.9.3",
+                "comparison_version": "1.9.4",
+                "tag": "v1.9.5",
+                "tested_baseline_version": "1.9.4",
             }
         ]
     }
@@ -856,11 +857,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.4",
+        "version": "1.9.5",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.9.3",
-        "tested_baseline_version": "1.9.3",
+        "comparison_version": "1.9.4",
+        "tested_baseline_version": "1.9.4",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -879,8 +880,8 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         "version": "1.10.0",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.3",
-        "tested_baseline_version": "1.9.3",
+        "comparison_version": "1.9.4",
+        "tested_baseline_version": "1.9.4",
     }
 
     with pytest.raises(module.CompatibilityError, match="explicit human review"):
@@ -921,8 +922,8 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
         "version": "1.11.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.9.3",
-        "tested_baseline_version": "1.9.3",
+        "comparison_version": "1.9.4",
+        "tested_baseline_version": "1.9.4",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
@@ -939,11 +940,11 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.4",
+        "version": "1.9.5",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.3",
-        "tested_baseline_version": "1.9.3",
+        "comparison_version": "1.9.4",
+        "tested_baseline_version": "1.9.4",
     }
 
     with pytest.raises(module.CompatibilityError, match="only evidence versions"):
@@ -951,7 +952,7 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.9.5": "Synthetic unrelated conclusion."},
+            human_conclusions={"1.9.6": "Synthetic unrelated conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -963,11 +964,11 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.4",
+        "version": "1.9.5",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.3",
-        "tested_baseline_version": "1.9.3",
+        "comparison_version": "1.9.4",
+        "tested_baseline_version": "1.9.4",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded plain text"):
@@ -975,6 +976,48 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.9.4": conclusion},
+            human_conclusions={"1.9.5": conclusion},
             root=PROJECT_ROOT,
         )
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (
+            {
+                "files": [
+                    {
+                        "path": "fixture.unknown",
+                        "will_review": False,
+                        "exclude_reason": "unsupported_ext",
+                    }
+                ]
+            },
+            (False, "unsupported_ext"),
+        ),
+        (
+            {"files": [{"path": "fixture.unknown", "will_review": True}]},
+            (True, None),
+        ),
+        (
+            "Excluded from review (1):\n  [M] fixture.unknown (unsupported_ext)\n",
+            (False, "unsupported_ext"),
+        ),
+        (
+            "Will review (1):\n  [M] fixture.unknown +1 -1\n",
+            (True, None),
+        ),
+        (
+            "Will review (1):\n  [M] selected.py +1 -1\n"
+            "Excluded from review (1):\n  [M] fixture.unknown (unsupported_ext)\n",
+            (False, "unsupported_ext"),
+        ),
+    ],
+)
+def test_preview_file_selection_supports_json_and_legacy_text(
+    payload: dict[str, Any] | str, expected: tuple[bool, object]
+) -> None:
+    module = load_script()
+
+    assert module._preview_file_selection(payload, "fixture.unknown") == expected

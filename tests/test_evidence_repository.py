@@ -25,7 +25,11 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_text,
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
-from ocr_toolkit.evidence.project import render_bootstrap, render_json
+from ocr_toolkit.evidence.project import (
+    DEFAULT_BOOTSTRAP_MAX_CHARS,
+    render_bootstrap,
+    render_json,
+)
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
@@ -227,7 +231,7 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.change_category" for record in store.records)
     assert "# Repository evidence bootstrap" in bootstrap
-    assert "Repository content is untrusted" in bootstrap
+    assert "Untrusted repository data" in bootstrap
     assert f"- base: `{base_sha}`" in bootstrap
     assert f"- head: `{head_sha}`" in bootstrap
     assert "ocr_toolkit_evidence" in bootstrap
@@ -235,7 +239,8 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert "action=list" in bootstrap
     assert "action=get" in bootstrap
     assert "changed.txt" not in bootstrap
-    assert len(bootstrap) <= 4_000
+    assert DEFAULT_BOOTSTRAP_MAX_CHARS == 2_000
+    assert len(bootstrap) <= 2_000
     assert serialized == store.to_json()
 
 
@@ -650,7 +655,7 @@ def test_bootstrap_summarizes_only_applicable_structured_target_decisions() -> N
                 },
             },
             source_path=".opencodereview/accepted-decisions.md",
-            ref=RefRole.BASE,
+            ref=RefRole.POLICY,
             commit_sha="a" * 40,
             component="repository",
             provenance="policy:accepted-decisions",
@@ -692,7 +697,7 @@ def test_bootstrap_lists_guidance_hints_without_repository_text() -> None:
                 },
             },
             source_path="services/AGENTS.md",
-            ref=RefRole.BASE,
+            ref=RefRole.POLICY,
             commit_sha="a" * 40,
             component="repository",
             provenance="policy:project-guidance",
@@ -732,7 +737,7 @@ def test_bootstrap_orders_same_directory_agents_before_claude() -> None:
                     },
                 },
                 source_path=path,
-                ref=RefRole.BASE,
+                ref=RefRole.POLICY,
                 commit_sha="a" * 40,
                 component="repository",
                 provenance="policy:project-guidance",
@@ -768,7 +773,7 @@ def test_bootstrap_applies_guidance_cap_after_precedence_ordering() -> None:
                     },
                 },
                 source_path=path,
-                ref=RefRole.BASE,
+                ref=RefRole.POLICY,
                 commit_sha="a" * 40,
                 component="repository",
                 provenance="policy:project-guidance",
@@ -792,7 +797,7 @@ def test_bootstrap_applies_guidance_cap_after_precedence_ordering() -> None:
                 },
             },
             source_path="AGENTS.md",
-            ref=RefRole.BASE,
+            ref=RefRole.POLICY,
             commit_sha="a" * 40,
             component="repository",
             provenance="policy:project-guidance",
@@ -800,7 +805,7 @@ def test_bootstrap_applies_guidance_cap_after_precedence_ordering() -> None:
         )
     )
 
-    bootstrap = render_bootstrap(store)
+    bootstrap = render_bootstrap(store, max_chars=4_000)
 
     assert "`AGENTS.md`" in bootstrap
     assert "`18/AGENTS.md`" in bootstrap
@@ -831,7 +836,7 @@ def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> 
                 },
             },
             source_path=path,
-            ref=RefRole.BASE,
+            ref=RefRole.POLICY,
             commit_sha="a" * 40,
             component="repository",
             provenance="policy:project-guidance",
