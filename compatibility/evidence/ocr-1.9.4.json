@@ -1,0 +1,97 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "c8f364cfb237d58206d26bc08c73ad7d92c45817580195f585458ce50dbb6964",
+      "size": 47242560
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "66a591c291947fd7036628f69698c3d240b497e8aa13c5837caae271f014414f",
+      "size": 44899042
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "fcef1060e7e9bad8300111b68784f8c81ee696ca58206f6bb739709625f6c944",
+      "size": 45727906
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "40aa941d81fdca7cd5b2dadb194821c43bff70c9f60223032ad622d954f2a4e2",
+      "size": 43122850
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "4d8b035c07eb6ad774903847e4a7b79796023267586d5ac1ef72b996707c067e",
+      "size": 46962176
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "2cc55503a056cad37744e603c727e1e964e90bb857a1993a07bcce121f239a2d",
+      "size": 43750400
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "9dc7b33dc68cb74dae7c683c4aa1a1a0a41b4e27c17f12f9054fc9db14ef7cb4",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.9.3",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-15T04:52:37Z",
+  "release_changes": "## 🚀 Features\n\n- feat(providers): add xAI (Grok) to built-in providers (#899)\n- feat(providers): add glm-5.3 to the Z.AI Coding Plan provider (#915)\n- feat(pages): add MacOS, Linux, and Windows install channels to hero section (#904)\n- feat(telemetry): display session ID in terminal summary output (#870)\n- feat(pages): serve install scripts from custom domain (#797)\n- feat(pages): add macports to pages homepage (#873)\n- feat(provider): support custom Base URL for LiteLLM/built-in providers (#729)\n\n## 🐛 Bug Fixes\n\n- fix(resume): preserve checkpoints after Ctrl-C (#902)\n- fix(opencode): separate per-file and overall timeouts (#717)\n\n## 🔧 Refactoring\n\n- refactor(telemetry): replace PrintTraceSummary positional params with TraceSummary struct (#909)\n\n## 📖 Documentation\n\n- docs(cli): document review no-filter option (#871)\n- docs(pages): update CLI reference and i18n for --format sarif (#874)\n\n## Other Changes\n\n- ci: skip CI runs for documentation-only changes (#907)\n- Link AACR-Bench dataset from README (#901)\n- test(agent): add end-to-end regression test for review item fingerprint stability (#898)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.9.3...v1.9.4",
+  "release_notes_sha256": "681ec62c998c61edad0294884010c025e677ac180f7e466b4401ab9a0e1fa133",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.9.4",
+  "tested_baseline_version": "1.9.3",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.9.4"
+}
