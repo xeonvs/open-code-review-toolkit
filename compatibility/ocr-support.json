@@ -822,7 +822,7 @@
         "per_run_provider_override"
       ],
       "evidence": "compatibility/evidence/ocr-1.9.4.json",
-      "evidence_sha256": "468dd1227e614375b3a5580a0ee128f5105caa3dbbdd207b2beb01142ed2aa46",
+      "evidence_sha256": "d06dc8fac3071752c52d6f0f135db67b4610544d7e6f4dcb6698c4f444811a1f",
       "human_conclusion": "Compatible after human adjacent source review in issue #90 and hosted workflow run 31868292800. Required review flags, JSON preview/result and manifest, structured comment metadata, rules/allowlist, and the Go MCP SDK v1.6.1 remain compatible. The new terminal-only session line is not emitted for JSON output and therefore does not alter toolkit result parsing, stderr diagnostics, or posting. TraceSummary is an internal upstream refactor with exact-output tests and no consumed API change. The session identifier is useful correlation evidence for BL-017, but it remains OCR-owned, high-cardinality run identity rather than a reason to add a duplicate toolkit telemetry layer. Provider presets/base URLs, resume/opencode behavior, Pages/install/docs/CI changes, and upstream tests require no toolkit adaptation.",
       "published_at": "2026-08-15T04:52:37Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.4",

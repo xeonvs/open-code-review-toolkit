@@ -979,3 +979,45 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             human_conclusions={"1.9.5": conclusion},
             root=PROJECT_ROOT,
         )
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (
+            {
+                "files": [
+                    {
+                        "path": "fixture.unknown",
+                        "will_review": False,
+                        "exclude_reason": "unsupported_ext",
+                    }
+                ]
+            },
+            (False, "unsupported_ext"),
+        ),
+        (
+            {"files": [{"path": "fixture.unknown", "will_review": True}]},
+            (True, None),
+        ),
+        (
+            "Excluded from review (1):\n  [M] fixture.unknown (unsupported_ext)\n",
+            (False, "unsupported_ext"),
+        ),
+        (
+            "Will review (1):\n  [M] fixture.unknown +1 -1\n",
+            (True, None),
+        ),
+        (
+            "Will review (1):\n  [M] selected.py +1 -1\n"
+            "Excluded from review (1):\n  [M] fixture.unknown (unsupported_ext)\n",
+            (False, "unsupported_ext"),
+        ),
+    ],
+)
+def test_preview_file_selection_supports_json_and_legacy_text(
+    payload: dict[str, Any] | str, expected: tuple[bool, object]
+) -> None:
+    module = load_script()
+
+    assert module._preview_file_selection(payload, "fixture.unknown") == expected

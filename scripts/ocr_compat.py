@@ -712,6 +712,117 @@ def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> li
     return sorted(optional_capabilities)
 
 
+def _preview_file_selection(payload: dict[str, Any] | str, path: str) -> tuple[bool, object]:
+    """Return one preview file's selected state and closed exclusion reason."""
+
+    if isinstance(payload, str):
+        section: str | None = None
+        for raw_line in payload.splitlines():
+            line = re.sub(r"\x1b\[[0-9;]*m", "", raw_line).strip()
+            if line.startswith("Will review ("):
+                section = "selected"
+                continue
+            if line.startswith("Excluded from review ("):
+                section = "excluded"
+                continue
+            if path not in line:
+                continue
+            exclusion = "unsupported_ext" if "(unsupported_ext)" in line else None
+            return section == "selected", exclusion
+        return False, None
+    files = payload.get("files")
+    if not isinstance(files, list):
+        _fail("target-rule preview emitted an invalid file manifest")
+    records = [item for item in files if isinstance(item, dict) and item.get("path") == path]
+    if len(records) != 1:
+        _fail("target-rule preview did not report the synthetic changed file exactly once")
+    return records[0].get("will_review") is True, records[0].get("exclude_reason")
+
+
+def _target_rule_selection_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+    """Prove the real OCR selector consumes target rules without changing its range."""
+
+    git_env = _isolated_probe_environment(directory / "rule-git-home")
+    repo = directory / "target-rule-selection"
+    repo.mkdir()
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+    target = repo / "synthetic-template.ocrfixture"
+    target.write_text("before={{ value }}\n", encoding="utf-8")
+    _run(["git", "add", target.name], cwd=repo, env=git_env)
+    _run(["git", "commit", "-m", "target rule baseline"], cwd=repo, env=git_env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    target.write_text("after={{ value }}\n", encoding="utf-8")
+    _run(["git", "commit", "-am", "change synthetic template"], cwd=repo, env=git_env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    rules = directory / "target-policy-rules.json"
+    rules.write_bytes(
+        canonical_json(
+            {
+                "exclude": [],
+                "include": [f"**/*{target.suffix}"],
+                "rules": [
+                    {
+                        "merge_system_rule": True,
+                        "path": f"**/*{target.suffix}",
+                        "rule": "Review the synthetic target-policy fixture.",
+                    }
+                ],
+            }
+        )
+    )
+
+    json_preview = _version(version) >= (1, 9, 0)
+
+    def preview(home_name: str, *extra: str) -> dict[str, Any] | str:
+        home = directory / home_name
+        env = _isolated_probe_environment(home)
+        command = [
+            str(binary),
+            "review",
+            "--from",
+            base,
+            "--to",
+            head,
+            "--preview",
+            *extra,
+        ]
+        if json_preview:
+            command.extend(["--format", "json"])
+        output = _run(command, cwd=repo, env=env)
+        if os.path.lexists(home / ".opencodereview" / "sessions"):
+            _fail("target-rule preview created a review session store")
+        if not json_preview:
+            return output
+        try:
+            payload = json.loads(output)
+        except json.JSONDecodeError as exc:
+            raise CompatibilityError("target-rule preview did not emit JSON") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+            _fail("target-rule preview emitted an invalid file manifest")
+        return payload
+
+    without_rules = preview("rule-source-home")
+    with_rules = preview("rule-target-home", "--rule", str(rules))
+
+    source_selected, source_reason = _preview_file_selection(without_rules, target.name)
+    target_selected, target_reason = _preview_file_selection(with_rules, target.name)
+    expected_source_reason = "unsupported_ext"
+    if source_selected or source_reason != expected_source_reason:
+        _fail("synthetic file was not excluded before target-rule admission")
+    if not target_selected or target_reason not in {None, ""}:
+        _fail("real OCR did not select the synthetic file from target rules")
+    return {
+        "format": "json" if json_preview else "text",
+        "from_to_unchanged": True,
+        "path": target.name,
+        "result": "passed",
+        "source_exclusion": "unsupported_ext",
+        "target_selected": True,
+    }
+
+
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
     """Run deterministic CLI and JSON-consumer probes against one OCR binary."""
 
@@ -829,6 +940,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
 
     contracts: dict[str, Any] = {
         "optional_capabilities": optional_capabilities,
+        "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),
         "version_probe": "passed",
         "required_review_flags": sorted(REQUIRED_REVIEW_FLAGS),
         "preview_probe": {

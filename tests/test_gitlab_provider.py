@@ -6,6 +6,7 @@ import json
 import os
 import ssl
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -30,6 +31,8 @@ class _GitLabHandler(BaseHTTPRequestHandler):
 
     requests: list[tuple[str, str | None]] = []
     response_mode = "valid"
+    source_sha = SOURCE_SHA
+    target_sha = TARGET_SHA
 
     def do_GET(self) -> None:
         type(self).requests.append((self.path, self.headers.get("PRIVATE-TOKEN")))
@@ -42,7 +45,7 @@ class _GitLabHandler(BaseHTTPRequestHandler):
             if self.response_mode == "slow":
                 body = json.dumps(
                     {
-                        "sha": SOURCE_SHA,
+                        "sha": type(self).source_sha,
                         "target_project_id": 7,
                         "target_branch": "main",
                     }
@@ -69,7 +72,7 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                     pass
                 return
             payload: object = {
-                "sha": SOURCE_SHA,
+                "sha": type(self).source_sha,
                 "target_project_id": 7,
                 "target_branch": "main",
                 "title": "Deploy synthetic service",
@@ -90,7 +93,11 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                     "web_url": "https://private.example.invalid/must-not-be-collected",
                 }
         elif self.path == "/api/v4/projects/7/repository/branches/main":
-            payload = {"name": "main", "protected": True, "commit": {"id": TARGET_SHA}}
+            payload = {
+                "name": "main",
+                "protected": True,
+                "commit": {"id": type(self).target_sha},
+            }
             if self.response_mode == "unprotected":
                 payload = {**payload, "protected": False}
         else:
@@ -108,9 +115,16 @@ class _GitLabHandler(BaseHTTPRequestHandler):
 
 
 @contextmanager
-def _https_gitlab(tmp_path: Path, mode: str = "valid") -> Iterator[str]:
+def _https_gitlab(
+    tmp_path: Path,
+    mode: str = "valid",
+    *,
+    source_sha: str = SOURCE_SHA,
+    target_sha: str = TARGET_SHA,
+) -> Iterator[str]:
     """Run a local TLS peer beyond the production urllib adapter."""
 
+    tmp_path.mkdir(mode=0o700, parents=True, exist_ok=True)
     cert = tmp_path / "cert.pem"
     key = tmp_path / "key.pem"
     subprocess.run(
@@ -141,6 +155,8 @@ def _https_gitlab(tmp_path: Path, mode: str = "valid") -> Iterator[str]:
     server.socket = context.wrap_socket(server.socket, server_side=True)
     _GitLabHandler.requests = []
     _GitLabHandler.response_mode = mode
+    _GitLabHandler.source_sha = source_sha
+    _GitLabHandler.target_sha = target_sha
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     previous = os.environ.get("SSL_CERT_FILE")
@@ -386,3 +402,193 @@ def test_bounded_fetch_gets_exact_commit_without_moving_refs(tmp_path: Path) -> 
     assert _git(clone, "symbolic-ref", "--short", "HEAD") == "main"
     with pytest.raises(RepositoryEvidenceError, match="runner-owned origin"):
         reader.fetch_commit(second, remote="upstream")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")
+def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prove the complete read-only review preflight with doubles only beyond its owners."""
+
+    remote = tmp_path / "remote.git"
+    source = tmp_path / "source"
+    checkout = tmp_path / "checkout"
+    _git(tmp_path, "init", "--bare", str(remote))
+    source.mkdir()
+    _git(source, "init", "-q")
+    _git(source, "config", "user.name", "Synthetic")
+    _git(source, "config", "user.email", "synthetic@example.invalid")
+    (source / ".opencodereview").mkdir()
+    (source / ".opencodereview/rules.json").write_text(
+        '{"exclude":[],"include":[],"rules":[]}\n', encoding="utf-8"
+    )
+    (source / ".gitignore").write_text(".review-context/\n", encoding="utf-8")
+    (source / "AGENTS.md").write_text("Stale base guidance.\n", encoding="utf-8")
+    (source / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(source, "add", ".")
+    _git(source, "commit", "-qm", "base")
+    base = _git(source, "rev-parse", "HEAD")
+    _git(source, "branch", "-M", "main")
+    _git(source, "remote", "add", "origin", str(remote))
+    _git(source, "push", "-q", "-u", "origin", "main")
+    _git(source, "checkout", "-qb", "source", base)
+    (source / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    (source / "synthetic-template.ocrfixture").write_text(
+        "value={{ source_value }}\n", encoding="utf-8"
+    )
+    _git(source, "add", ".")
+    _git(source, "commit", "-qm", "source change")
+    head = _git(source, "rev-parse", "HEAD")
+    _git(source, "push", "-q", "-u", "origin", "source")
+    _git(source, "checkout", "-q", "main")
+    policy_rules = (
+        '{"exclude":[],"include":["**/*.ocrfixture"],"rules":['
+        '{"merge_system_rule":true,"path":"**/*.ocrfixture",'
+        '"rule":"SYNTHETIC_TARGET_POLICY_MARKER"}]}\n'
+    )
+    (source / ".opencodereview/rules.json").write_text(policy_rules, encoding="utf-8")
+    (source / "AGENTS.md").write_text("Current protected guidance.\n", encoding="utf-8")
+    _git(source, "commit", "-qam", "protected policy")
+    policy = _git(source, "rev-parse", "HEAD")
+    _git(source, "push", "-q", "origin", "main")
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "-q",
+            "--branch",
+            "source",
+            "--single-branch",
+            "--depth=2",
+            f"file://{remote}",
+            str(checkout),
+        ],
+        check=True,
+    )
+    assert _git(checkout, "rev-parse", "HEAD") == head
+    assert _git(checkout, "rev-parse", "HEAD^") == base
+    assert (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{policy}^{{commit}}"],
+            cwd=checkout,
+            check=False,
+            capture_output=True,
+        ).returncode
+        != 0
+    )
+    refs_before = _git(checkout, "for-each-ref", "--format=%(refname) %(objectname)")
+
+    binary_directory = tmp_path / "bin"
+    binary_directory.mkdir()
+    executable = binary_directory / "ocr"
+    executable.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, subprocess, sys\n"
+        "args = sys.argv[1:]\n"
+        "assert args[0] == 'review'\n"
+        "def option(name):\n"
+        "    index = args.index(name)\n"
+        "    return args[index + 1]\n"
+        "base = option('--from'); head = option('--to')\n"
+        "rules = pathlib.Path(option('--rule'))\n"
+        "bootstrap = pathlib.Path(option('--background-file'))\n"
+        "assert rules.read_text() == " + repr(policy_rules) + "\n"
+        "bootstrap_text = bootstrap.read_text()\n"
+        "assert 'The broad rollout is intentional.' not in bootstrap_text\n"
+        "config = json.loads((pathlib.Path.home() / '.opencodereview/config.json').read_text())\n"
+        "server = config['mcp_servers']['ocr_toolkit_evidence']\n"
+        "requests = [\n"
+        " {'jsonrpc':'2.0','id':1,'method':'initialize','params':"
+        "{'protocolVersion':'2025-11-25','capabilities':{},"
+        "'clientInfo':{'name':'synthetic-ocr','version':'1'}}},\n"
+        " {'jsonrpc':'2.0','id':2,'method':'tools/call','params':"
+        "{'name':'ocr_toolkit_evidence','arguments':{'action':'summary'}}},\n"
+        " {'jsonrpc':'2.0','id':3,'method':'tools/call','params':"
+        "{'name':'ocr_toolkit_evidence','arguments':"
+        "{'action':'list','kind':'repository.guidance','ref':'policy'}}},\n"
+        " {'jsonrpc':'2.0','id':4,'method':'tools/call','params':"
+        "{'name':'ocr_toolkit_evidence','arguments':"
+        "{'action':'list','kind':'review.merge_request_context','ref':'shared'}}},\n"
+        "]\n"
+        "completed = subprocess.run([server['command'], *server['args']], "
+        "input=''.join(json.dumps(item, separators=(',', ':')) + '\\n' for item in requests), "
+        "text=True, capture_output=True, check=True, timeout=15)\n"
+        "responses = [json.loads(line) for line in completed.stdout.splitlines()]\n"
+        "assert completed.stderr == '' and [item['id'] for item in responses] == [1,2,3,4]\n"
+        "def payload(response):\n"
+        "    return json.loads(response['result']['content'][0]['text'])\n"
+        "summary = payload(responses[1])\n"
+        "guidance = payload(responses[2])['records']\n"
+        "context = payload(responses[3])['records']\n"
+        "assert summary['base'] == base and summary['head'] == head\n"
+        "assert summary['policy']['target_only'] is True\n"
+        "assert len(guidance) == 1\n"
+        "assert guidance[0]['value']['fact']['text'] == 'Current protected guidance.\\n'\n"
+        "assert len(context) == 1\n"
+        "assert context[0]['value']['fields']['description']['value'] == "
+        "'The broad rollout is intentional.'\n"
+        "print(json.dumps({'status':'success','comments':[],"
+        "'tool_calls':{'total':3,'by_tool':{'ocr_toolkit_evidence':3}}}, "
+        "sort_keys=True))\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o700)
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    result = tmp_path / "result.json"
+    stderr = tmp_path / "stderr.log"
+    environment = {
+        "CI_API_V4_URL": "placeholder",
+        "CI_PROJECT_ID": "7",
+        "CI_MERGE_REQUEST_IID": "9",
+        "GITLAB_API_TOKEN": "synthetic-token",
+        "HOME": str(home),
+        "OCR_MCP_REPLACE": "true",
+        "PATH": os.pathsep.join((str(binary_directory), os.environ.get("PATH", ""))),
+    }
+    monkeypatch.chdir(checkout)
+    monkeypatch.delenv("OCR_MCP_SERVERS_JSON", raising=False)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    from ocr_toolkit import review_runner
+    from ocr_toolkit.evidence.store import EvidenceStore
+
+    with _https_gitlab(tmp_path / "tls", source_sha=head, target_sha=policy) as api_root:
+        monkeypatch.setenv("CI_API_V4_URL", api_root)
+        exit_code = review_runner.run_evidence_review(
+            result,
+            stderr,
+            [
+                "--from",
+                base,
+                "--to",
+                head,
+                "--rule",
+                ".opencodereview/rules.json",
+                "--format",
+                "json",
+            ],
+        )
+
+    assert exit_code == 0
+    artifacts = repository_artifacts(checkout)
+    assert artifacts.policy_rules.read_text(encoding="utf-8") == policy_rules
+    store = EvidenceStore.read(artifacts.store)
+    assert store.base is not None and store.base.commit_sha == base
+    assert store.head is not None and store.head.commit_sha == head
+    assert store.policy is not None and store.policy.commit_sha == policy
+    assert _git(checkout, "for-each-ref", "--format=%(refname) %(objectname)") == refs_before
+    assert _git(checkout, "cat-file", "-t", policy) == "commit"
+    assert _git(checkout, "status", "--short") == ""
+    payload = json.loads(result.read_text(encoding="utf-8"))
+    assert payload["_ocr_toolkit"] == {
+        "automatic_approval": {
+            "eligible": False,
+            "reason": "author-controlled merge-request context was admitted",
+        },
+        "mcp_usage": {"ocr_toolkit_evidence": 3},
+        "schema_version": 2,
+    }
+    for path in (artifacts.store, artifacts.bootstrap, artifacts.policy_rules, result, stderr):
+        assert path.stat().st_mode & 0o777 == 0o600

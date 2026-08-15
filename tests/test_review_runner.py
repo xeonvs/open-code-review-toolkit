@@ -7,6 +7,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -397,7 +398,7 @@ def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) 
     assert target.read_text(encoding="utf-8") == original
 
 
-def test_run_review_writes_private_artifacts_and_returns_success() -> None:
+def test_run_review_unit_wires_argv_and_artifact_streams_to_subprocess() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         assert argv == ["ocr", "review", "--from", "base", "--to", "head"]
         kwargs["stdout"].write(b'{"comments": []}\n')  # type: ignore[union-attr]
@@ -417,7 +418,7 @@ def test_run_review_writes_private_artifacts_and_returns_success() -> None:
         assert stat.S_IMODE(stderr_path.stat().st_mode) == 0o600
 
 
-def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
+def test_run_review_unit_redacts_failure_from_mocked_child_output() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         kwargs["stderr"].write(  # type: ignore[union-attr]
             b"Authorization: Bearer synthetic-secret-value\nprovider timeout\n"
@@ -439,6 +440,60 @@ def test_run_review_logs_only_bounded_redacted_failure_details() -> None:
     assert "provider timeout" in output.getvalue()
     assert "synthetic-secret-value" not in output.getvalue()
     assert "Authorization: ***" in output.getvalue()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")
+def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
+    tmp_path: Path,
+) -> None:
+    """Exercise the production launcher against a child process beyond its boundary."""
+
+    binary_directory = tmp_path / "bin"
+    binary_directory.mkdir()
+    executable = binary_directory / "ocr"
+    executable.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "if sys.stdin.read() != '': raise SystemExit(90)\n"
+        "print(json.dumps({'argv': sys.argv[1:], 'secret_present': "
+        "'OCR_LLM_TOKEN' in os.environ}, sort_keys=True))\n"
+        "print('synthetic child stderr', file=sys.stderr)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o700)
+    result_path = tmp_path / "artifacts" / "result.json"
+    stderr_path = tmp_path / "artifacts" / "stderr.log"
+    result_path.parent.mkdir()
+    result_path.write_text("stale result", encoding="utf-8")
+    stderr_path.write_text("stale stderr", encoding="utf-8")
+    result_path.chmod(0o644)
+    stderr_path.chmod(0o644)
+
+    with patched_env(
+        PATH=os.pathsep.join((str(binary_directory), os.environ.get("PATH", ""))),
+        OCR_LLM_TOKEN="synthetic-secret-value",
+    ):
+        exit_code = review_runner.run_review(
+            result_path,
+            stderr_path,
+            ["--from", "base ref", "--to=head-ref", "--format", "json"],
+        )
+
+    assert exit_code == 0
+    assert json.loads(result_path.read_text(encoding="utf-8")) == {
+        "argv": [
+            "review",
+            "--from",
+            "base ref",
+            "--to=head-ref",
+            "--format",
+            "json",
+        ],
+        "secret_present": True,
+    }
+    assert stderr_path.read_text(encoding="utf-8") == "synthetic child stderr\n"
+    assert stat.S_IMODE(result_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(stderr_path.stat().st_mode) == 0o600
 
 
 def test_run_review_rejects_symlink_artifact() -> None:

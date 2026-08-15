@@ -83,6 +83,14 @@
       "normalized_outcome": "clean",
       "result": "passed"
     },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
     "version_probe": "passed"
   },
   "published_at": "2026-08-15T04:52:37Z",
