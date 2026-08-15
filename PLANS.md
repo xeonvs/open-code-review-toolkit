@@ -32,7 +32,7 @@ Use this file for active or blocked repository work. Update it before implementa
 5. [x] Add centralized `ocr-ci --version` source/wheel/sdist coverage.
 6. [x] Add policy ref/schema v4, protected GitLab target acquisition, bounded object fetch, exact policy rules transport, and compatibility/failure tests.
 7. [x] Add bounded MR intent, hostile readback, toolkit-authored trust guidance, receipt-v2 approval blocker, and external-MCP attack-path coverage.
-8. [ ] Add verified README security badges, public contracts, Towncrier fragments, and integration tests.
+8. [x] Add verified README security badges, public contracts, Towncrier fragments, and integration tests.
 9. [ ] Run focused gates for each commit, complete Python 3.12-3.14 quality/security/package validation, deterministic double builds, installed wheel/sdist tests, and Gitleaks.
 10. [x] After completing #87-#89 and before the README/documentation pass, qualify OCR 1.9.4 through #90, analyze telemetry and backlog impact, update the local binary and compatibility contract, and use 1.9.4 thereafter; include any newer intervening stable release if one appears.
 11. [x] Audit every #87-#90 acceptance criterion and touched boundary first, then audit the complete test suite: record each claimed production owner and test entry point, permit doubles only beyond that owner, and replace mock-selected success/rejection with real Git, local HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths before relying on integration coverage. The matrix covers all 38 test modules; model-dependent #89 intent calibration is explicitly not claimed by a fake LLM and remains a qualification assertion for the final OCR gate.

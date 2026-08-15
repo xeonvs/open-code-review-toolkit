@@ -1,6 +1,8 @@
 # Open Code Review Toolkit
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13906/badge)](https://www.bestpractices.dev/projects/13906)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/xeonvs/open-code-review-toolkit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/xeonvs/open-code-review-toolkit)
+[![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml)
 
 Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
