@@ -1,3 +1,23 @@
+## 0.6.1 - 2026-08-15
+
+### 🚀 Features
+
+- Add top-level `ocr-ci --version` reporting from the installed package version metadata. ([#88](https://github.com/xeonvs/open-code-review-toolkit/issues/88))
+- Expose bounded redacted merge-request title, description, labels, and source-branch context as untrusted invocation evidence while blocking automatic approval for runs that admit mutable author-controlled intent. ([#89](https://github.com/xeonvs/open-code-review-toolkit/issues/89))
+- Target checksum-verified Open Code Review 1.9.4 after human qualification of its unchanged JSON result contract and terminal-only session correlation output. ([#90](https://github.com/xeonvs/open-code-review-toolkit/issues/90))
+
+### 🐛 Bug Fixes
+
+- Derive every release URL and wheel path in the synthetic GitLab example from its single toolkit version pin. ([#86](https://github.com/xeonvs/open-code-review-toolkit/issues/86))
+- Use the current protected GitLab target commit for repository-owned OCR rules, accepted decisions, and project guidance without changing the forge-defined review range. ([#87](https://github.com/xeonvs/open-code-review-toolkit/issues/87))
+- Prioritize changed templates on both immutable review refs before unchanged inventory, preserving typed template evidence under the existing bounded fact limits. ([#88](https://github.com/xeonvs/open-code-review-toolkit/issues/88))
+
+### 📖 Documentation
+
+- Adopt Contributor Covenant 2.1 with a confidential conduct-reporting route and links from the public contributor documentation. ([#86](https://github.com/xeonvs/open-code-review-toolkit/issues/86))
+- Add repository-specific OpenSSF Scorecard and CodeQL status badges to the README. ([#91](https://github.com/xeonvs/open-code-review-toolkit/issues/91))
+
+
 ## 0.6.0 - 2026-08-14
 
 ### 🚀 Features
