@@ -559,7 +559,7 @@ require github.com/gofiber/fiber/v2 v2.52.6
     assert f"template.file={len(template_deltas)}" in bootstrap
     assert "kind=repository.evidence_delta" in bootstrap
     assert "delta_kind" in bootstrap
-    assert "automation/roles/worker" in bootstrap
+    assert "automation/roles/worker" in cast(dict[str, int], summary["components"])
     assert "action=summary" in bootstrap
     assert "action=list" in bootstrap
     assert "action=get" in bootstrap

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import stat
 import sys
@@ -20,6 +21,9 @@ TOOLKIT_RESULT_KEY = "_ocr_toolkit"
 TOOLKIT_RESULT_SCHEMA_VERSION = 2
 SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({1, TOOLKIT_RESULT_SCHEMA_VERSION})
 AUTOMATIC_APPROVAL_BLOCK_REASON = "author-controlled merge-request context was admitted"
+# The receipt can name the 16 configured external servers plus the mandatory built-in.
+MAX_TOOLKIT_MCP_USAGE_SERVERS = 17
+TOOLKIT_MCP_SERVER_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class OcrResultMissing(Exception):

@@ -281,6 +281,40 @@ def test_tool_rejects_unknown_or_mutating_requests(arguments: dict[str, object])
         call_tool(_store(), arguments)
 
 
+def test_actions_ignore_declared_inactive_arguments_materialized_by_ocr() -> None:
+    """Accept OCR 1.9.4's union-shaped optional argument materialization."""
+
+    store = _store(1)
+    record = store.records[0]
+    common: dict[str, object] = {
+        "component": "synthetic-unused-component",
+        "cursor": "",
+        "delta_kind": "",
+        "id": "ev1_" + "0" * 64,
+        "kind": "repository.file",
+        "page_size": 10,
+        "ref": "head",
+    }
+
+    summary = _payload(call_tool(store, {"action": "summary", **common}))
+    listed = _payload(
+        call_tool(
+            store,
+            {
+                "action": "list",
+                **common,
+                "component": "python",
+                "kind": "dependency.declared",
+            },
+        )
+    )
+    fetched = _payload(call_tool(store, {"action": "get", **common, "id": record.id}))
+
+    assert summary["records"] == 1
+    assert listed["records"] == [record.to_dict()]
+    assert fetched["record"] == record.to_dict()
+
+
 def test_json_rpc_initialize_lists_read_only_tool_and_returns_safe_errors() -> None:
     store = _store()
     initialized = handle_request(

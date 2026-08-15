@@ -8,7 +8,9 @@ from typing import Any
 
 from ocr_toolkit.ocr_result import (
     AUTOMATIC_APPROVAL_BLOCK_REASON,
+    MAX_TOOLKIT_MCP_USAGE_SERVERS,
     SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
+    TOOLKIT_MCP_SERVER_NAME_RE,
 )
 from ocr_toolkit.posting.settings import BooleanSetting
 from ocr_toolkit.result_contract import ReviewOutcome
@@ -144,6 +146,21 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if schema_version == 1:
         return "the review-time approval receipt predates current eligibility controls"
     if set(toolkit_metadata) != {"schema_version", "mcp_usage", "automatic_approval"}:
+        return "the review-time approval receipt is missing or invalid"
+    mcp_usage = toolkit_metadata.get("mcp_usage")
+    if (
+        not isinstance(mcp_usage, dict)
+        or not mcp_usage
+        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
+        or any(
+            not isinstance(server, str)
+            or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count <= 0
+            for server, count in mcp_usage.items()
+        )
+    ):
         return "the review-time approval receipt is missing or invalid"
     constraint = toolkit_metadata.get("automatic_approval")
     if not isinstance(constraint, dict) or set(constraint) != {"eligible", "reason"}:

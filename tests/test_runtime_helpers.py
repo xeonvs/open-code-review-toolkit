@@ -115,6 +115,32 @@ class MCPConfigTests(unittest.TestCase):
         ):
             mcp_config.compose_mcp_servers([external], replace=False)
 
+    def test_composition_bounds_retained_and_declared_external_servers_together(self) -> None:
+        current = {
+            "mcp_servers": {
+                f"retained_{index}": {"type": "stdio", "tools": [f"read_{index}"]}
+                for index in range(mcp_config.MAX_MCP_SERVERS)
+            }
+        }
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_extra",
+            transport="stdio",
+            command="synthetic-extra",
+            url=None,
+            args=[],
+            tools=["synthetic_extra_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+
+        with (
+            patched_attr(mcp_config, "read_ocr_config", lambda: current),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "more than 16 external servers"),
+        ):
+            mcp_config.compose_mcp_servers([external], replace=False)
+
     def test_replace_drops_external_state_but_keeps_builtin(self) -> None:
         with patched_attr(
             mcp_config,

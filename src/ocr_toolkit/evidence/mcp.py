@@ -148,9 +148,9 @@ def _optional_filter(arguments: dict[str, object], name: str) -> str | None:
     """Read one bounded optional exact-match filter."""
 
     value = arguments.get(name)
-    if value is None:
+    if value is None or value == "":
         return None
-    if not isinstance(value, str) or not value or len(value) > 256:
+    if not isinstance(value, str) or len(value) > 256:
         raise EvidenceMCPError(f"{name} must be a non-empty string of at most 256 characters")
     return value
 
@@ -166,9 +166,9 @@ def _encode_cursor(offset: int, query: _Query) -> str:
 def _decode_cursor(value: object, query: _Query) -> int:
     """Validate and decode a cursor bound to the current filters."""
 
-    if value is None:
+    if value is None or value == "":
         return 0
-    if not isinstance(value, str) or not value or len(value) > 256:
+    if not isinstance(value, str) or len(value) > 256:
         raise EvidenceMCPError("cursor must be a bounded opaque string")
     try:
         padded = value + "=" * (-len(value) % 4)
@@ -266,29 +266,33 @@ def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
     if not isinstance(arguments, dict):
         raise EvidenceMCPError("tool arguments must be an object")
     typed = cast(dict[str, object], arguments)
+    # The public schema is one union-shaped object. OCR/provider adapters may
+    # materialize every declared property even when an action does not consume
+    # it, so reject unknown names globally and let each action read only its own
+    # fields.
+    declared = {
+        "action",
+        "kind",
+        "delta_kind",
+        "component",
+        "ref",
+        "page_size",
+        "cursor",
+        "id",
+    }
+    unknown = set(typed) - declared
+    if unknown:
+        raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
+
     action = typed.get("action")
     if action == "summary":
-        allowed = {"action"}
         payload = evidence_summary(store)
     elif action == "list":
-        allowed = {
-            "action",
-            "kind",
-            "delta_kind",
-            "component",
-            "ref",
-            "page_size",
-            "cursor",
-        }
         payload = _list_records(store, typed)
     elif action == "get":
-        allowed = {"action", "id"}
         payload = _get_record(store, typed)
     else:
         raise EvidenceMCPError("action must be summary, list, or get")
-    unknown = set(typed) - allowed
-    if unknown:
-        raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
     return _text_result(payload)
 
 
@@ -311,17 +315,53 @@ def _tool_definition() -> dict[str, object]:
             "additionalProperties": False,
             "required": ["action"],
             "properties": {
-                "action": {"type": "string", "enum": ["summary", "list", "get"]},
-                "kind": {"type": "string", "maxLength": 256},
-                "delta_kind": {"type": "string", "maxLength": 256},
-                "component": {"type": "string", "maxLength": 256},
+                "action": {
+                    "type": "string",
+                    "enum": ["summary", "list", "get"],
+                    "description": (
+                        "Use summary for counts, list to filter records, and get only after "
+                        "list returns a stable record id."
+                    ),
+                },
+                "kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional exact record-kind filter for action=list only.",
+                },
+                "delta_kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": (
+                        "Optional original fact-kind filter for action=list with "
+                        "kind=repository.evidence_delta only."
+                    ),
+                },
+                "component": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional exact component filter for action=list only.",
+                },
                 "ref": {
                     "type": "string",
                     "enum": ["base", "head", "policy", "shared"],
+                    "description": "Optional immutable-ref filter for action=list only.",
                 },
-                "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
-                "cursor": {"type": "string", "maxLength": 256},
-                "id": {"type": "string", "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$"},
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": MAX_PAGE_SIZE,
+                    "description": "Bounded page size for action=list only.",
+                },
+                "cursor": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Opaque next_cursor from a prior action=list call.",
+                },
+                "id": {
+                    "type": "string",
+                    "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$",
+                    "description": "Stable record id returned by action=list; action=get only.",
+                },
             },
         },
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},

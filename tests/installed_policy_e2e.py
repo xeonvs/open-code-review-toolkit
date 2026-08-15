@@ -192,6 +192,8 @@ This source-only decision must not replace target policy.
         render_bootstrap(store, capabilities=composition.capabilities),
     )
     bootstrap = artifacts.bootstrap.read_text(encoding="utf-8")
+    assert len(bootstrap) <= 2_000
+    assert "Evidence bootstrap truncated" not in bootstrap
     assert "current-policy-choice" in bootstrap
     assert policy in bootstrap
     assert "services/api/AGENTS.md" in bootstrap
@@ -252,19 +254,45 @@ This source-only decision must not replace target policy.
         """Call the installed evidence tool and advance its request identity."""
 
         nonlocal request_id
+        materialized = {
+            "action": "summary",
+            "component": "",
+            "cursor": "",
+            "delta_kind": "",
+            "id": "ev1_" + "0" * 64,
+            "kind": "",
+            "page_size": 10,
+            "ref": "",
+        }
+        materialized.update(arguments)
         response = _rpc(
             process,
             {
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "method": "tools/call",
-                "params": {"name": "ocr_toolkit_evidence", "arguments": arguments},
+                "params": {"name": "ocr_toolkit_evidence", "arguments": materialized},
             },
         )
         request_id += 1
         return _tool_payload(response)
 
     summary = call({"action": "summary"})
+    unknown_response = _rpc(
+        process,
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {
+                "name": "ocr_toolkit_evidence",
+                "arguments": {"action": "summary", "synthetic_unknown": "value"},
+            },
+        },
+    )
+    request_id += 1
+    assert unknown_response["result"]["isError"] is True
+    assert "unsupported tool argument" in unknown_response["result"]["content"][0]["text"]
     assert summary["base"] == base and summary["head"] == head
     assert summary["schema_version"] == 4
     assert summary["policy"] == {
@@ -365,6 +393,8 @@ This source-only decision must not replace target policy.
                 "head": head,
                 "policy_sha": policy,
                 "installed_version": expected_version,
+                "bootstrap_chars": len(bootstrap),
+                "bootstrap_truncated": "Evidence bootstrap truncated" in bootstrap,
                 "policy": summary["policy"],
                 "merge_request_context": summary["merge_request_context"],
                 "prioritized_template": {

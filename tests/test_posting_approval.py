@@ -180,6 +180,21 @@ class ApprovalPolicyTests(unittest.TestCase):
             {
                 "schema_version": 2,
                 "mcp_usage": {},
+                "automatic_approval": {"eligible": True, "reason": None},
+            },
+            {
+                "schema_version": 2,
+                "mcp_usage": "invalid",
+                "automatic_approval": {"eligible": True, "reason": None},
+            },
+            {
+                "schema_version": 2,
+                "mcp_usage": {"ocr_toolkit_evidence": True},
+                "automatic_approval": {"eligible": True, "reason": None},
+            },
+            {
+                "schema_version": 2,
+                "mcp_usage": {},
                 "automatic_approval": {
                     "eligible": False,
                     "reason": "provider-controlled reason",
@@ -200,6 +215,41 @@ class ApprovalPolicyTests(unittest.TestCase):
                     decision.result.reason,
                     "the review-time approval receipt is missing or invalid",
                 )
+
+    def test_v2_receipt_accepts_full_registry_and_rejects_one_more_server(self) -> None:
+        full_usage = {"ocr_toolkit_evidence": 1}
+        full_usage.update({f"synthetic_{index}": 1 for index in range(16)})
+        accepted = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            {
+                "schema_version": 2,
+                "mcp_usage": full_usage,
+                "automatic_approval": {"eligible": True, "reason": None},
+            },
+        )
+        overflow = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            {
+                "schema_version": 2,
+                "mcp_usage": {**full_usage, "synthetic_overflow": 1},
+                "automatic_approval": {"eligible": True, "reason": None},
+            },
+        )
+
+        self.assertTrue(accepted.eligible)
+        self.assertFalse(overflow.eligible)
+        self.assertEqual(
+            overflow.result.reason,
+            "the review-time approval receipt is missing or invalid",
+        )
 
     def test_disabled_and_invalid_setting_remain_non_actionable(self) -> None:
         for setting in (

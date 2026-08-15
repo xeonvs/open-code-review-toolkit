@@ -27,7 +27,16 @@ FIELD_STATUSES = frozenset(
         "omitted_redaction_limit",
     }
 )
-LABEL_STATUSES = FIELD_STATUSES | {"partial", "omitted_collision"}
+LABEL_STATUSES = frozenset(
+    {
+        "absent",
+        "admitted",
+        "omitted_invalid",
+        "omitted_limit",
+        "partial",
+        "omitted_collision",
+    }
+)
 MAX_LABELS = 32
 
 

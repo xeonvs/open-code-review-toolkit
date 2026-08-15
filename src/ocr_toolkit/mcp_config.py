@@ -458,6 +458,10 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
         capabilities = [item for item in capabilities if item.server != server.name]
         capabilities.append(capability)
 
+    if len(payload) > MAX_MCP_SERVERS:
+        raise MCPConfigError(
+            f"composed OCR MCP registry has more than {MAX_MCP_SERVERS} external servers"
+        )
     if not sys.executable or not os.path.isabs(sys.executable):
         raise MCPConfigError(
             "the running Python executable must be absolute for built-in MCP launch"

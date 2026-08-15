@@ -202,7 +202,7 @@ class EvidenceStore:
         policy_records = tuple(
             record for record in self._records.values() if record.kind in POLICY_KINDS
         )
-        if not policy_records:
+        if not policy_records or schema_version < 3:
             return
         if self.base is None or self.head is None:
             raise EvidenceStoreError("structured policy evidence requires base and head snapshots")

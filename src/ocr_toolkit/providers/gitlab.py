@@ -231,6 +231,8 @@ def acquire_review_snapshot(
     )
     if not isinstance(mr, dict):
         raise GitLabProviderError("GitLab merge-request metadata must be an object")
+    if mr.get("state") != "opened":
+        raise GitLabProviderError("GitLab merge request is not open")
     source_sha = _sha(mr.get("sha"), "merge-request source head")
     if source_sha != expected_head:
         raise GitLabProviderError("GitLab merge-request head does not match the reviewed head")

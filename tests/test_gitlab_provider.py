@@ -73,6 +73,7 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                 return
             payload: object = {
                 "sha": type(self).source_sha,
+                "state": "opened",
                 "target_project_id": 7,
                 "target_branch": "main",
                 "title": "Deploy synthetic service",
@@ -82,6 +83,8 @@ class _GitLabHandler(BaseHTTPRequestHandler):
             }
             if self.response_mode == "mismatch":
                 payload = {**payload, "sha": "c" * 40}  # type: ignore[arg-type]
+            if self.response_mode == "closed":
+                payload = {**payload, "state": "closed"}  # type: ignore[arg-type]
             if self.response_mode == "adversarial":
                 payload = {
                     **payload,  # type: ignore[arg-type]
@@ -233,7 +236,11 @@ def test_adversarial_provider_text_stays_bounded_untrusted_data_through_real_htt
 
 @pytest.mark.parametrize(
     ("mode", "message"),
-    (("mismatch", "does not match"), ("unprotected", "not the captured protected")),
+    (
+        ("mismatch", "does not match"),
+        ("closed", "is not open"),
+        ("unprotected", "not the captured protected"),
+    ),
 )
 def test_gitlab_snapshot_rejects_identity_failures_through_real_https(
     tmp_path: Path, mode: str, message: str

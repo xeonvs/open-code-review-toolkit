@@ -1175,6 +1175,10 @@ def test_schema_v2_reads_exact_legacy_policy_as_text_without_granting_structure(
 
     assert restored.records[0].value == {"text": "## Legacy\nHistorical rationale.\n"}
     assert "applicability" not in restored.records[0].value
+    assert restored.to_dict()["schema_version"] == 2
+    assert json.loads(restored.to_json())["records"][0]["value"] == {
+        "text": "## Legacy\nHistorical rationale.\n"
+    }
 
 
 def test_store_rejects_unknown_envelope_limit_snapshot_and_record_fields(tmp_path: Path) -> None:
