@@ -31,8 +31,10 @@ from ocr_toolkit.evidence.repository import (
     RepositoryEvidenceError,
     normalize_repo_path,
 )
+from ocr_toolkit.evidence.review_context import MergeRequestContext, merge_request_context_record
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
+    AUTOMATIC_APPROVAL_BLOCK_REASON,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -92,7 +94,10 @@ def _verify_evidence_mcp(store: EvidenceStore) -> None:
 
 
 def _mcp_usage_receipt(
-    payload: dict[str, object], composition: mcp_config.MCPComposition
+    payload: dict[str, object],
+    composition: mcp_config.MCPComposition,
+    *,
+    approval_blocked: bool,
 ) -> dict[str, object]:
     """Return bounded MCP usage tied to one validated review-time registry."""
 
@@ -117,7 +122,13 @@ def _mcp_usage_receipt(
             raise ReviewRunnerError(
                 "OCR skipped result does not match the pinned no-supported-files contract"
             )
-        return {"mcp_usage": {}}
+        return {
+            "mcp_usage": {},
+            "automatic_approval": {
+                "eligible": not approval_blocked,
+                "reason": (AUTOMATIC_APPROVAL_BLOCK_REASON if approval_blocked else None),
+            },
+        }
 
     tool_calls = payload.get("tool_calls")
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
@@ -140,17 +151,29 @@ def _mcp_usage_receipt(
                 usage[owner] = usage.get(owner, 0) + count
     if outcome.requires_evidence_mcp and usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
-    return {"mcp_usage": dict(sorted(usage.items()))}
+    return {
+        "mcp_usage": dict(sorted(usage.items())),
+        "automatic_approval": {
+            "eligible": not approval_blocked,
+            "reason": AUTOMATIC_APPROVAL_BLOCK_REASON if approval_blocked else None,
+        },
+    }
 
 
 def _record_ocr_result_mcp_usage(
-    result_path: Path, composition: mcp_config.MCPComposition
+    result_path: Path,
+    composition: mcp_config.MCPComposition,
+    *,
+    approval_blocked: bool = False,
 ) -> dict[str, int]:
     """Verify MCP use and bind its safe review-time receipt to the OCR result."""
 
     try:
         _payload, metadata = attach_toolkit_metadata(
-            result_path, lambda payload: _mcp_usage_receipt(payload, composition)
+            result_path,
+            lambda payload: _mcp_usage_receipt(
+                payload, composition, approval_blocked=approval_blocked
+            ),
         )
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
@@ -290,24 +313,26 @@ def _repository_rule_path(value: str, root: Path) -> str | None:
 
 def _prepare_policy_context(
     refs: ReviewRefs, ocr_args: list[str], artifacts: EvidenceArtifacts
-) -> tuple[str, list[str]]:
-    """Capture protected GitLab policy and materialize exact repository-owned rules."""
+) -> tuple[str, MergeRequestContext | None, list[str]]:
+    """Capture policy and bounded intent, then materialize repository-owned rules."""
 
     reader = GitRepositoryReader(Path.cwd())
+    context = None
     if is_merge_request_environment(os.environ):
         snapshot = acquire_review_snapshot(os.environ, expected_head=refs.head)
         reader.fetch_commit(snapshot.target_sha)
         policy_sha = reader.resolve_commit(snapshot.target_sha)
+        context = snapshot.context
     else:
         policy_sha = refs.base
     rule = _one_option(ocr_args, "--rule")
     if rule is None:
         remove_private_artifact(artifacts.policy_rules)
-        return policy_sha, ocr_args
+        return policy_sha, context, ocr_args
     repository_path = _repository_rule_path(rule, reader.root)
     if repository_path is None:
         remove_private_artifact(artifacts.policy_rules)
-        return policy_sha, ocr_args
+        return policy_sha, context, ocr_args
     try:
         content = reader.read_blob(policy_sha, repository_path)
     except RepositoryEvidenceError as exc:
@@ -316,7 +341,7 @@ def _prepare_policy_context(
         raise ReviewRunnerError("protected-target OCR rule does not exist")
     policy_rules = artifacts.policy_rules
     write_private_bytes(policy_rules, content)
-    return policy_sha, _replace_rule_argument(ocr_args, rule, str(policy_rules))
+    return policy_sha, context, _replace_rule_argument(ocr_args, rule, str(policy_rules))
 
 
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
@@ -328,7 +353,9 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
     try:
         prepare_artifact_directory(artifacts)
-        policy_sha, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
+        policy_sha, mr_context, effective_ocr_args = _prepare_policy_context(
+            refs, ocr_args, artifacts
+        )
         store = collect_repository_evidence(
             base_ref=refs.base, head_ref=refs.head, policy_ref=policy_sha
         )
@@ -338,6 +365,8 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             if not store.add(record):
                 store.add_diagnostic("review invocation evidence was truncated by store limits")
                 break
+        if mr_context is not None and not store.add(merge_request_context_record(mr_context)):
+            store.add_diagnostic("merge-request context was truncated by store limits")
         store.write(artifacts.store)
         composition = mcp_config.build_mcp_composition()
         bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
@@ -386,7 +415,11 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         ],
     )
     if exit_code == 0:
-        usage = _record_ocr_result_mcp_usage(result_path, composition)
+        usage = _record_ocr_result_mcp_usage(
+            result_path,
+            composition,
+            approval_blocked=mr_context is not None and mr_context.admitted,
+        )
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
             print(

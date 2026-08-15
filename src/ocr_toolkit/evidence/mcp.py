@@ -93,6 +93,16 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         for record in store.records
         if record.kind in {"repository.accepted_decision", "repository.guidance"}
     )
+    mr_context_records = tuple(
+        record for record in store.records if record.kind == "review.merge_request_context"
+    )
+    merge_request_context = {
+        "contract": ("review.merge-request-context/v1" if mr_context_records else "absent"),
+        "records": len(mr_context_records),
+        "trust": "invocation" if mr_context_records else None,
+        "content_role": "untrusted_data" if mr_context_records else None,
+        "authoritative_for_actions": False,
+    }
     policy = {
         "accepted_decisions": sum(
             record.kind == "repository.accepted_decision" for record in policy_records
@@ -118,6 +128,7 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
     return {
         "schema_version": store.schema_version,
         "policy": policy,
+        "merge_request_context": merge_request_context,
         "policy_ref": store.policy.commit_sha if store.policy else None,
         "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,

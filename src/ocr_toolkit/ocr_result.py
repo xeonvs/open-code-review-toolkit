@@ -17,7 +17,9 @@ from ocr_toolkit.common.redaction import sanitize_ocr_value
 DEFAULT_MAX_RESULT_BYTES = 2_000_000
 MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
-TOOLKIT_RESULT_SCHEMA_VERSION = 1
+TOOLKIT_RESULT_SCHEMA_VERSION = 2
+SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({1, TOOLKIT_RESULT_SCHEMA_VERSION})
+AUTOMATIC_APPROVAL_BLOCK_REASON = "author-controlled merge-request context was admitted"
 
 
 class OcrResultMissing(Exception):

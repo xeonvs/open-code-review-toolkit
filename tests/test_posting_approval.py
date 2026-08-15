@@ -57,6 +57,11 @@ def eligibility(
         comments or [],
         warnings or [],
         omitted,
+        {
+            "schema_version": 2,
+            "mcp_usage": {"ocr_toolkit_evidence": 1},
+            "automatic_approval": {"eligible": True, "reason": None},
+        },
     )
 
 
@@ -127,6 +132,74 @@ class ApprovalPolicyTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertFalse(decision.eligible)
+
+    def test_author_controlled_context_receipt_blocks_without_exposing_provider_text(self) -> None:
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            {
+                "schema_version": 2,
+                "mcp_usage": {"ocr_toolkit_evidence": 1},
+                "automatic_approval": {
+                    "eligible": False,
+                    "reason": "author-controlled merge-request context was admitted",
+                },
+            },
+        )
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
+        self.assertEqual(
+            decision.result.reason,
+            "author-controlled merge-request context was admitted",
+        )
+
+    def test_historical_v1_receipt_is_readable_but_not_approval_eligible(self) -> None:
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            {"schema_version": 1, "mcp_usage": {"ocr_toolkit_evidence": 1}},
+        )
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(
+            decision.result.reason,
+            "the review-time approval receipt predates current eligibility controls",
+        )
+
+    def test_missing_or_malformed_v2_receipt_fails_closed(self) -> None:
+        for metadata in (
+            None,
+            {"schema_version": 2, "mcp_usage": {}},
+            {
+                "schema_version": 2,
+                "mcp_usage": {},
+                "automatic_approval": {
+                    "eligible": False,
+                    "reason": "provider-controlled reason",
+                },
+            },
+        ):
+            with self.subTest(metadata=metadata):
+                decision = approval.evaluate_approval_policy(
+                    settings.BooleanSetting(True),
+                    complete_outcome(),
+                    [],
+                    [],
+                    0,
+                    metadata,
+                )
+                self.assertFalse(decision.eligible)
+                self.assertEqual(
+                    decision.result.reason,
+                    "the review-time approval receipt is missing or invalid",
+                )
 
     def test_disabled_and_invalid_setting_remain_non_actionable(self) -> None:
         for setting in (

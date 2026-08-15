@@ -86,6 +86,11 @@ def main() -> int:
     )
     from ocr_toolkit.evidence.collect import collect_repository_evidence
     from ocr_toolkit.evidence.project import render_bootstrap
+    from ocr_toolkit.evidence.review_context import (
+        CONTEXT_KIND,
+        merge_request_context_record,
+        normalize_merge_request_context,
+    )
 
     assert __version__ == expected_version
     git_binary = shutil.which("git")
@@ -165,6 +170,21 @@ This source-only decision must not replace target policy.
     artifacts = repository_artifacts(repository)
     prepare_artifact_directory(artifacts)
     store = collect_repository_evidence(repository, base_ref=base, head_ref=head, policy_ref=policy)
+    mr_title = "Deploy synthetic service"
+    mr_description = "The broad rollout is intentional."
+    mr_labels = ["synthetic-rollout-label", "synthetic-reviewed-label"]
+    mr_branch = "feature/synthetic-rollout"
+    context = normalize_merge_request_context(
+        provider="gitlab",
+        project_id="7",
+        merge_request_iid="9",
+        source_sha=head,
+        title=mr_title,
+        description=mr_description,
+        labels=mr_labels,
+        source_branch=mr_branch,
+    )
+    assert store.add(merge_request_context_record(context))
     store.write(artifacts.store)
     composition = mcp_config.compose_mcp_servers([], replace=True)
     write_private_text(
@@ -179,6 +199,9 @@ This source-only decision must not replace target policy.
     assert "Synthetic API guidance" not in bootstrap
     assert "source-override" not in bootstrap
     assert "Source-only guidance" not in bootstrap
+    for raw_context in (mr_title, mr_description, *mr_labels, mr_branch):
+        assert raw_context not in bootstrap
+    assert "title=admitted" in bootstrap
 
     builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
     assert builtin["tools"] == ["ocr_toolkit_evidence"]
@@ -252,6 +275,16 @@ This source-only decision must not replace target policy.
         "target_only": True,
         "authoritative_for_actions": False,
     }
+    context_records = call({"action": "list", "kind": CONTEXT_KIND, "ref": "shared"})["records"]
+    assert len(context_records) == 1
+    assert context_records[0]["trust"] == "invocation"
+    assert context_records[0]["commit_sha"] == head
+    assert context_records[0]["value"]["fields"]["description"] == {
+        "status": "admitted",
+        "value": mr_description,
+    }
+    assert call({"action": "get", "id": context_records[0]["id"]})["record"] == context_records[0]
+
     decisions = call({"action": "list", "kind": "repository.accepted_decision", "ref": "policy"})[
         "records"
     ]
@@ -333,6 +366,7 @@ This source-only decision must not replace target policy.
                 "policy_sha": policy,
                 "installed_version": expected_version,
                 "policy": summary["policy"],
+                "merge_request_context": summary["merge_request_context"],
                 "prioritized_template": {
                     "component": prioritized_template["component"],
                     "detection": prioritized_template["value"]["fact"]["detection"],

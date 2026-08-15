@@ -24,6 +24,12 @@ from ocr_toolkit.evidence.policy.schema import (
     validate_policy_applicability,
     validate_policy_record,
 )
+from ocr_toolkit.evidence.review_context import (
+    CONTEXT_KIND,
+    CONTEXT_SOURCE,
+    context_provenance,
+    validate_merge_request_context,
+)
 from ocr_toolkit.evidence.store.atomic import atomic_write
 from ocr_toolkit.evidence.store.contracts import (
     KNOWN_KINDS,
@@ -83,9 +89,29 @@ class EvidenceStore:
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
         try:
+            if record.kind == CONTEXT_KIND:
+                validate_merge_request_context(record.value)
             redacted_value = safe_value(record.value, self.limits.max_value_chars)
+            if record.kind == CONTEXT_KIND and redacted_value != record.to_dict()["value"]:
+                raise ValueError("merge-request context changed during redaction")
             if record.kind in {"framework.detected", "template.file"}:
                 validate_plugin_record(record.kind, redacted_value)
+            if record.kind == CONTEXT_KIND:
+                if record.id in self._records:
+                    return True
+                if any(item.kind == CONTEXT_KIND for item in self._records.values()):
+                    raise ValueError("only one merge-request context record is allowed")
+                if (
+                    record.ref is not RefRole.SHARED
+                    or record.trust.value != "invocation"
+                    or record.component != "review"
+                    or not isinstance(redacted_value, Mapping)
+                    or record.provenance != context_provenance(str(redacted_value.get("provider")))
+                    or record.source_path != CONTEXT_SOURCE
+                    or record.confidence.value != "exact"
+                    or record.commit_sha != redacted_value.get("source_sha")
+                ):
+                    raise ValueError("merge-request context provenance is invalid")
             if record.kind in POLICY_KINDS:
                 if structured_policy and not policy_value_within_budget(redacted_value):
                     raise EvidenceStoreError("redacted policy value exceeds its byte budget")

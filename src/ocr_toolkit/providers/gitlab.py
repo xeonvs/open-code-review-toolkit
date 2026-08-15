@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.evidence.invocation import MAX_CI_IDENTIFIER_CHARS, InvocationIdentifier
+from ocr_toolkit.evidence.review_context import (
+    MergeRequestContext,
+    normalize_merge_request_context,
+)
 
 CI_IDENTIFIER_FIELDS = (
     ("CI_PROJECT_ID", "project_id"),
@@ -39,6 +43,7 @@ class GitLabReviewSnapshot:
     source_sha: str
     target_branch: str
     target_sha: str
+    context: MergeRequestContext
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -233,6 +238,16 @@ def acquire_review_snapshot(
     if isinstance(target_project, bool) or str(target_project) != project_id:
         raise GitLabProviderError("GitLab merge request targets a different project")
     target_branch = _branch(mr.get("target_branch"))
+    context = normalize_merge_request_context(
+        provider="gitlab",
+        project_id=project_id,
+        merge_request_iid=merge_request_iid,
+        source_sha=source_sha,
+        title=mr.get("title"),
+        description=mr.get("description"),
+        labels=mr.get("labels"),
+        source_branch=mr.get("source_branch"),
+    )
     encoded_branch = urllib.parse.quote(target_branch, safe="")
     branch = _read_json(
         f"{api_root}/projects/{project}/repository/branches/{encoded_branch}",
@@ -253,4 +268,5 @@ def acquire_review_snapshot(
         source_sha=source_sha,
         target_branch=target_branch,
         target_sha=target_sha,
+        context=context,
     )

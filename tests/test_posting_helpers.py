@@ -745,8 +745,12 @@ class PostingIdentityTests(unittest.TestCase):
                                         "comments": [],
                                         "warnings": [],
                                         "_ocr_toolkit": {
-                                            "schema_version": 1,
+                                            "schema_version": 2,
                                             "mcp_usage": {"ocr_toolkit_evidence": 2},
+                                            "automatic_approval": {
+                                                "eligible": True,
+                                                "reason": None,
+                                            },
                                         },
                                     },
                                 )

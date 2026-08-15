@@ -90,8 +90,9 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 1,
+        "schema_version": 2,
         "mcp_usage": {"ocr_toolkit_evidence": 2},
+        "automatic_approval": {"eligible": True, "reason": None},
     }
 
     result.write_text(
@@ -100,6 +101,38 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
     )
     with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
         review_runner._record_ocr_result_mcp_usage(result, composition)
+
+
+def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
+    tmp_path: Path,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    review_runner._record_ocr_result_mcp_usage(result, composition, approval_blocked=True)
+
+    assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
+        "schema_version": 2,
+        "mcp_usage": {"ocr_toolkit_evidence": 1},
+        "automatic_approval": {
+            "eligible": False,
+            "reason": "author-controlled merge-request context was admitted",
+        },
+    }
 
 
 def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> None:
@@ -597,7 +630,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         patched_attr(
             review_runner,
             "_record_ocr_result_mcp_usage",
-            lambda _result, _registry: events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
+            lambda _result, _registry, **_kwargs: (
+                events.append("ocr-usage") or {"ocr_toolkit_evidence": 1}
+            ),
         ),
         patched_attr(review_runner, "run_review", run),
     ):

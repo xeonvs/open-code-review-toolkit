@@ -22,6 +22,7 @@ KNOWN_KINDS = frozenset(
         "ansible.inventory",
         "ansible.inventory_group",
         "review.ci_context",
+        "review.merge_request_context",
         "dependency.declared",
         "dependency.locked",
         "runtime.declared",

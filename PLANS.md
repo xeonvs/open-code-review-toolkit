@@ -31,11 +31,11 @@ Use this file for active or blocked repository work. Update it before implementa
 4. [x] Prioritize changed template evidence and add installed-artifact coverage.
 5. [x] Add centralized `ocr-ci --version` source/wheel/sdist coverage.
 6. [x] Add policy ref/schema v4, protected GitLab target acquisition, bounded object fetch, exact policy rules transport, and compatibility/failure tests.
-7. [ ] Add bounded MR intent, hostile readback, toolkit-authored trust guidance, receipt-v2 approval blocker, and external-MCP attack-path coverage.
+7. [x] Add bounded MR intent, hostile readback, toolkit-authored trust guidance, receipt-v2 approval blocker, and external-MCP attack-path coverage.
 8. [ ] Add verified README security badges, public contracts, Towncrier fragments, and integration tests.
 9. [ ] Run focused gates for each commit, complete Python 3.12-3.14 quality/security/package validation, deterministic double builds, installed wheel/sdist tests, and Gitleaks.
 10. [ ] After completing #87-#89 and before the README/documentation pass, qualify OCR 1.9.4 through #90, analyze telemetry and backlog impact, update the local binary and compatibility contract, and use 1.9.4 thereafter; include any newer intervening stable release if one appears.
-11. [ ] Audit every #87-#90 acceptance criterion and touched boundary: record the production owner and test entry point, permit doubles only beyond that owner, and replace mock-selected success/rejection with real Git, local HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths before relying on coverage.
+11. [ ] Audit every #87-#90 acceptance criterion and touched boundary first, then audit the complete test suite: record each claimed production owner and test entry point, permit doubles only beyond that owner, and replace mock-selected success/rejection with real Git, local HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths before relying on integration coverage.
 12. [ ] Run exactly one completed local OCR review over the exact feature range, remediate findings, and repeat self-review plus architecture review without routinely rerunning OCR.
 13. [ ] Push the complete feature history, pass required checks, merge the protected feature PR, and independently verify the resulting TestPyPI development artifacts.
 14. [ ] Prepare and merge exact `Release v0.6.1`, then independently verify TestPyPI/PyPI bytes, provenance/attestations, supported-Python installs, annotated tag, immutable GitHub Release, and receipt.

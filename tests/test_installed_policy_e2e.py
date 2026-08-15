@@ -163,6 +163,13 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         receipt = json.loads(output)
         assert receipt["installed_version"] == ARTIFACT_VERSION
         assert receipt["base"] != receipt["policy_sha"] != receipt["head"]
+        assert receipt["merge_request_context"] == {
+            "contract": "review.merge-request-context/v1",
+            "records": 1,
+            "trust": "invocation",
+            "content_role": "untrusted_data",
+            "authoritative_for_actions": False,
+        }
         assert receipt["policy"] == {
             "accepted_decisions": 1,
             "guidance_documents": 3,

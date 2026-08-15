@@ -25,8 +25,8 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Status:** ready
 - **Priority:** high
 - **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** Current MR metadata, external stdio MCP, allowlist, and secret-injection contracts.
-- **Activation trigger:** Before automatic external-reference detection or provider-specific YouTrack/Confluence examples are introduced.
+- **Dependencies:** Bounded untrusted MR context, external stdio MCP, allowlist, and secret-injection contracts.
+- **Activation trigger:** Met by the 0.6.1 MR-context boundary; complete this threat model before automatic external-reference detection or provider-specific YouTrack/Confluence examples are introduced.
 - **Goal:** Detect useful references without allowing untrusted metadata or retrieved content to control policy or tools.
 - **Scoped deliverables:** Define configured project-key patterns, host/space allowlists, canonical parsing, reference and traversal bounds, audit metadata, narrow tool contracts, and prompt-injection instructions.
 - **Acceptance criteria:** External content cannot change policy, suppress findings, authorize actions, modify permissions, or trigger writes; rejected and truncated references are auditable without leaking secrets.
@@ -56,7 +56,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 - **Dependencies:** BL-011 before provider-specific examples or automatic external-reference instructions. Managed OAuth is not a prerequisite for static-header, stdio, YouTrack, Confluence, or documentation MCP composition.
 - **Activation trigger:** The external-reference threat model is complete and a provider example has a supported narrow read-only tool contract.
 - **Goal:** Publish synthetic provider examples on top of the established generic composition boundary without broadening permissions or duplicating evidence.
-- **Implemented baseline:** Ordinary reviews always register the built-in evidence server; external stdio and native HTTPS servers remain independent entries; merge and replacement semantics preserve the built-in entry; reserved server/tool names, global tool collisions, deterministic capability inventory, protected environment/header injection, bootstrap composition, result receipts, and installed-artifact integration tests are complete.
+- **Implemented baseline:** Ordinary reviews always register the built-in evidence server; external stdio and native HTTPS servers remain independent entries; merge and replacement semantics preserve the built-in entry; reserved server/tool names, global tool collisions, deterministic capability inventory, protected environment/header injection, bootstrap composition, result receipts, and installed-artifact integration tests are complete. Bounded MR title, description, labels, and source branch are now invocation-trust evidence, but 0.6.1 deliberately performs no reference extraction, URL traversal, content prefetch, or provider-specific tool routing.
 - **Scoped deliverables:** Add threat-model-aligned synthetic configuration and usage guidance for selected YouTrack, Confluence, and documentation MCP servers; validate their narrow read-only allowlists, protected secret injection, and combined bootstrap instructions through the existing composition contract.
 - **Acceptance criteria:** Each example uses only synthetic services, cannot replace or shadow built-in evidence tools, exposes no generic URL fetch or write tool, and passes provider-specific configuration, redaction, capability-rendering, and end-to-end synthetic validation.
 - **Exclusions:** New provider transports, external writes, generic URL fetch, content prefetch, or duplicate evidence collectors.
