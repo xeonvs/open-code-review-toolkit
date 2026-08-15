@@ -113,10 +113,18 @@ The synthetic service deliberately uses one bounded retry.
     _write(repository, "services/api/AGENTS.md", "Synthetic API guidance.\n")
     _write(repository, "services/api/CLAUDE.md", "Target text that will be changed.\n")
     _write(repository, "services/api/app.py", "RETRIES = 1\n")
+    for index in range(260):
+        _write(
+            repository,
+            f"early/templates/page-{index:04}.j2",
+            "before={{ value }}\n",
+        )
+    _write(repository, "late/templates/service.conf.j2", "before={{ port }}\n")
     _git(git_binary, repository, "add", ".")
     _git(git_binary, repository, "commit", "-qm", "target policy")
     base = _git(git_binary, repository, "rev-parse", "HEAD")
     _write(repository, "services/api/app.py", "RETRIES = 2\n")
+    _write(repository, "late/templates/service.conf.j2", "after={{ port }}\n")
     _write(
         repository,
         ".opencodereview/accepted-decisions.md",
@@ -264,6 +272,29 @@ This source-only decision must not replace target policy.
     assert call({"action": "get", "id": nested["id"]})["record"] == nested
     assert call({"action": "list", "kind": "repository.guidance", "ref": "head"})["records"] == []
 
+    prioritized_templates = call(
+        {
+            "action": "list",
+            "kind": "template.file",
+            "component": "late/templates",
+            "ref": "head",
+        }
+    )["records"]
+    assert len(prioritized_templates) == 1
+    prioritized_template = prioritized_templates[0]
+    assert prioritized_template["source_path"] == "late/templates/service.conf.j2"
+    assert prioritized_template["component"] == "late/templates"
+    assert prioritized_template["provenance"] == "framework plugin:jinja2"
+    template_fact = prioritized_template["value"]["fact"]
+    assert template_fact["schema_version"] == "repository.template-evidence/v1"
+    assert template_fact["plugin"] == "jinja2"
+    assert template_fact["engine"] == "jinja2"
+    assert template_fact["detection"] == "jinja-extension"
+    assert template_fact["rendered_extension"] == ".conf"
+    assert template_fact["object_sha"] == _git(
+        git_binary, repository, "rev-parse", f"{head}:late/templates/service.conf.j2"
+    )
+
     process.stdin.close()
     assert process.wait(timeout=10) == 0
     assert process.stderr is not None
@@ -279,6 +310,15 @@ This source-only decision must not replace target policy.
                 "head": head,
                 "installed_version": expected_version,
                 "policy": summary["policy"],
+                "prioritized_template": {
+                    "component": prioritized_template["component"],
+                    "detection": prioritized_template["value"]["fact"]["detection"],
+                    "engine": prioritized_template["value"]["fact"]["engine"],
+                    "provenance": prioritized_template["provenance"],
+                    "rendered_extension": prioritized_template["value"]["fact"][
+                        "rendered_extension"
+                    ],
+                },
                 "private_modes": True,
                 "read_only": True,
                 "repository_clean": True,

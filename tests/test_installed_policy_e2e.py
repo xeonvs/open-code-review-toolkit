@@ -131,6 +131,12 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             env={"HOME": str(root), "PATH": ""},
         ).strip()
         assert installed_version == ARTIFACT_VERSION
+        version_text = _run(
+            [str(cli), "--version"],
+            cwd=root,
+            env={"HOME": str(root), "PATH": str(binary_directory)},
+        )
+        assert version_text.strip() == f"ocr-ci {ARTIFACT_VERSION}"
         help_text = _run(
             [str(cli), "--help"],
             cwd=root,
@@ -163,6 +169,13 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             "legacy_text_records": 0,
             "target_only": True,
             "authoritative_for_actions": False,
+        }
+        assert receipt["prioritized_template"] == {
+            "component": "late/templates",
+            "detection": "jinja-extension",
+            "engine": "jinja2",
+            "provenance": "framework plugin:jinja2",
+            "rendered_extension": ".conf",
         }
         assert receipt["private_modes"] is True
         assert receipt["read_only"] is True

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from ocr_toolkit import cli
+from ocr_toolkit import __version__, cli
 from tests.support import patched_attr
 
 
@@ -20,6 +22,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["configure"]).command, "configure")
         self.assertEqual(parser.parse_args(["mcp-config"]).command, "mcp-config")
         self.assertEqual(parser.parse_args(["post"]).command, "post")
+
+    def test_top_level_version_uses_centralized_package_metadata(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as raised:
+            cli.main(["--version"])
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stdout.getvalue().strip(), f"ocr-ci {__version__}")
 
     def test_post_dispatch_forwards_artifact_paths(self) -> None:
         calls: list[list[str]] = []

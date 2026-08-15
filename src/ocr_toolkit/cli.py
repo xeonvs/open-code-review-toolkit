@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from ocr_toolkit import configure, mcp_config, preflight, review_runner
+from ocr_toolkit import __version__, configure, mcp_config, preflight, review_runner
 from ocr_toolkit.posting.workflow import main as posting_main
 
 
@@ -17,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ocr-ci",
         description="Safe CI integration helpers for Open Code Review.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("preflight", help="Validate OCR, GitLab, and LLM access.")

@@ -494,6 +494,7 @@ def collect_ref_facts(
         records=tuple(records),
         entries=entries,
         source_statuses=tuple(sorted(source_statuses.values(), key=lambda item: item.path)),
+        changed_paths=changed_exact,
         ref=ref,
         commit_sha=commit_sha,
     )

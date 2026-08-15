@@ -88,10 +88,11 @@ def test_framework_package_keeps_one_static_immutable_plugin_boundary() -> None:
         "records",
         "entries",
         "source_statuses",
+        "changed_paths",
         "ref",
         "commit_sha",
     )
-    context = FrameworkPluginContext((), (), (), RefRole.HEAD, "a" * 40)
+    context = FrameworkPluginContext((), (), (), (), RefRole.HEAD, "a" * 40)
     with pytest.raises(FrozenInstanceError):
         context.commit_sha = "b" * 40  # type: ignore[misc]
 
@@ -865,6 +866,99 @@ def test_repository_root_and_named_repository_directory_are_distinct_components(
     ]
 
 
+@pytest.mark.parametrize(
+    ("change", "expected_refs"),
+    (
+        ("added", {RefRole.HEAD}),
+        ("modified", {RefRole.BASE, RefRole.HEAD}),
+        ("deleted", {RefRole.BASE}),
+        ("renamed", {RefRole.BASE, RefRole.HEAD}),
+    ),
+)
+def test_changed_templates_are_prioritized_beyond_inventory_limit(
+    tmp_path: Path, change: str, expected_refs: set[RefRole]
+) -> None:
+    """Keep changed template objects on every applicable immutable side."""
+
+    initialize(tmp_path)
+    inventory = tmp_path / "early" / "templates"
+    inventory.mkdir(parents=True)
+    for index in range(MAX_PLUGIN_FACTS + 4):
+        (inventory / f"page-{index:04}.j2").write_text("{{ value }}\n", encoding="utf-8")
+    late = tmp_path / "late" / "templates" / "changed.conf.j2"
+    renamed = tmp_path / "late" / "templates" / "renamed.conf.j2"
+    if change != "added":
+        late.parent.mkdir(parents=True)
+        late.write_text("before={{ value }}\n", encoding="utf-8")
+    base = commit(tmp_path, "bounded base inventory")
+    if change == "added":
+        late.parent.mkdir(parents=True)
+        late.write_text("after={{ value }}\n", encoding="utf-8")
+    elif change == "modified":
+        late.write_text("after={{ value }}\n", encoding="utf-8")
+    elif change == "deleted":
+        late.unlink()
+    else:
+        late.rename(renamed)
+    head = commit(tmp_path, f"{change} late template")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    expected_paths = (
+        {
+            RefRole.BASE: "late/templates/changed.conf.j2",
+            RefRole.HEAD: "late/templates/renamed.conf.j2",
+        }
+        if change == "renamed"
+        else {role: "late/templates/changed.conf.j2" for role in expected_refs}
+    )
+    prioritized = {
+        record.ref: record
+        for record in store.records
+        if record.kind == "template.file" and record.source_path.startswith("late/templates/")
+    }
+
+    assert set(prioritized) == expected_refs
+    assert {role: record.source_path for role, record in prioritized.items()} == expected_paths
+    assert all(record.value["fact"]["engine"] == "jinja2" for record in prioritized.values())
+    assert sum(record.kind == "template.file" for record in store.records) == (MAX_PLUGIN_FACTS * 2)
+    assert any("template plugin fact limit reached" in item for item in store.diagnostics)
+
+
+def test_more_than_fact_limit_changed_templates_remain_deterministic_and_partial(
+    tmp_path: Path,
+) -> None:
+    """Bound an oversized changed set without allowing unchanged inventory to evict it."""
+
+    initialize(tmp_path)
+    unchanged = tmp_path / "aaa" / "unchanged.j2"
+    unchanged.parent.mkdir()
+    unchanged.write_text("{{ old }}\n", encoding="utf-8")
+    base = commit(tmp_path, "early unchanged template")
+    for index in range(MAX_PLUGIN_FACTS + 2):
+        path = tmp_path / "changed" / f"page-{index:04}.j2"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text("{{ value }}\n", encoding="utf-8")
+    head = commit(tmp_path, "oversized changed template set")
+
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    head_templates = [
+        record
+        for record in store.records
+        if record.kind == "template.file" and record.ref is RefRole.HEAD
+    ]
+
+    assert len(head_templates) == MAX_PLUGIN_FACTS
+    assert all(record.source_path.startswith("changed/") for record in head_templates)
+    assert [record.source_path for record in head_templates] == sorted(
+        record.source_path for record in head_templates
+    )
+    coverage = coverage_record(
+        store, component="changed", domain="template.inventory", scope="jinja2"
+    )
+    assert coverage.state.value == "partial"
+    assert "template-fact-limit" in coverage.reasons
+
+
 def test_template_fact_limit_emits_one_observation_per_component() -> None:
     """Bound post-limit template coverage work by semantic component scope."""
 
@@ -879,7 +973,7 @@ def test_template_fact_limit_emits_one_observation_per_component() -> None:
     )
 
     facts, coverage, notices = collect_template_files(
-        FrameworkPluginContext((), entries, (), RefRole.HEAD, "a" * 40)
+        FrameworkPluginContext((), entries, (), (), RefRole.HEAD, "a" * 40)
     )
 
     limited = [
@@ -998,6 +1092,7 @@ def test_plugin_failure_isolated_from_sibling_provider(monkeypatch: pytest.Monke
             records=(jinja_record, declaration),
             entries=(RepositoryObject("pyproject.toml", "100644", "blob", "b" * 40),),
             source_statuses=(),
+            changed_paths=(),
             ref=RefRole.HEAD,
             commit_sha="a" * 40,
         )
@@ -1059,6 +1154,7 @@ def test_malformed_provider_result_isolated_from_sibling_provider(
         FrameworkPluginContext(
             (manifest, declaration),
             (RepositoryObject("pyproject.toml", "100644", "blob", "b" * 40),),
+            (),
             (),
             RefRole.HEAD,
             "a" * 40,
