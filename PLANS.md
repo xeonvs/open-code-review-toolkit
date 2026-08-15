@@ -92,6 +92,12 @@ Use this file for active or blocked repository work. Update it before implementa
   `574668fbfb4f0a422a6ad1610c4a817b27c118995eb197e041d1384afdd50614`.
   Twine, closed archive-content checks, and direct wheel plus sdist-derived
   installed MCP E2E pass.
+- The first exact-head hosted run exposed two test-fixture defects rather than
+  runtime failures: a shallow clone relied on the bare remote's host-dependent
+  default branch, and the local TLS peer did not set an explicit protocol floor.
+  The real-Git fixture now selects `main` explicitly and the real HTTPS peer
+  requires TLS 1.2 or newer; item 13 remains open pending exact corrected-head
+  hosted readback.
 
 #### Commit discipline
 

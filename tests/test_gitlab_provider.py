@@ -154,6 +154,7 @@ def _https_gitlab(
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), _GitLabHandler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(cert, key)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     _GitLabHandler.requests = []
@@ -388,7 +389,19 @@ def test_bounded_fetch_gets_exact_commit_without_moving_refs(tmp_path: Path) -> 
     _git(source, "branch", "-M", "main")
     _git(source, "remote", "add", "origin", str(remote))
     _git(source, "push", "-q", "-u", "origin", "main")
-    subprocess.run(["git", "clone", "-q", "--depth=1", f"file://{remote}", str(clone)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "-q",
+            "--depth=1",
+            "--branch",
+            "main",
+            f"file://{remote}",
+            str(clone),
+        ],
+        check=True,
+    )
     (source / "rules.json").write_text('{"next":true}\n', encoding="utf-8")
     _git(source, "commit", "-qam", "two")
     second = _git(source, "rev-parse", "HEAD")
