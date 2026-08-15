@@ -33,13 +33,32 @@ Use this file for active or blocked repository work. Update it before implementa
 6. [x] Add policy ref/schema v4, protected GitLab target acquisition, bounded object fetch, exact policy rules transport, and compatibility/failure tests.
 7. [x] Add bounded MR intent, hostile readback, toolkit-authored trust guidance, receipt-v2 approval blocker, and external-MCP attack-path coverage.
 8. [x] Add verified README security badges, public contracts, Towncrier fragments, and integration tests.
-9. [ ] Run focused gates for each commit, complete Python 3.12-3.14 quality/security/package validation, deterministic double builds, installed wheel/sdist tests, and Gitleaks.
+9. [x] Run focused gates for each commit, complete Python 3.12-3.14 quality/security/package validation, deterministic double builds, installed wheel/sdist tests, and Gitleaks.
 10. [x] After completing #87-#89 and before the README/documentation pass, qualify OCR 1.9.4 through #90, analyze telemetry and backlog impact, update the local binary and compatibility contract, and use 1.9.4 thereafter; include any newer intervening stable release if one appears.
 11. [x] Audit every #87-#90 acceptance criterion and touched boundary first, then audit the complete test suite: record each claimed production owner and test entry point, permit doubles only beyond that owner, and replace mock-selected success/rejection with real Git, local HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths before relying on integration coverage. The matrix covers all 38 test modules; model-dependent #89 intent calibration is explicitly not claimed by a fake LLM and remains a qualification assertion for the final OCR gate.
 12. [ ] Run exactly one completed local OCR review over the exact feature range, including the remaining model-dependent #89 calibration assertion, remediate findings, and repeat self-review plus architecture review without routinely rerunning OCR.
 13. [ ] Push the complete feature history, pass required checks, merge the protected feature PR, and independently verify the resulting TestPyPI development artifacts.
 14. [ ] Prepare and merge exact `Release v0.6.1`, then independently verify TestPyPI/PyPI bytes, provenance/attestations, supported-Python installs, annotated tag, immutable GitHub Release, and receipt.
 15. [ ] Confirm only Actions-owned release receipts close #87-#90 and synchronize a clean local `main`.
+
+#### Pre-OCR validation receipt
+
+- The complete quality gate and independent Homebrew Python 3.12.14, 3.13.15,
+  and 3.14.7 matrices each pass 806 tests plus 102 subtests with at least 81%
+  coverage. Ruff formatting/lint, mypy, Bandit, dependency audit, compatibility
+  manifest validation, Towncrier rendering, `git diff --check`, and pinned
+  full-feature-history Gitleaks pass.
+- Checksum-verified local OCR 1.9.4 passes version, help, JSON preview/result,
+  additive comment, manifest, and real protected-target rule-selection probes;
+  bounded discovery reports no unseen stable OCR release before the final review.
+- Two source-epoch-controlled `0.6.1.dev0` builds are byte-identical and pass
+  Twine plus closed archive-content checks. The wheel SHA-256 is
+  `a14c4e6807dbbf9b1be67bf1a4fb82a94d37f2bb4528b738ebc3bcae646791c0` and
+  the sdist SHA-256 is
+  `aa6b99427c353d2a10614048ee617bf64fde03495b22b22d3b2adb32a76031d3`.
+  Real installed wheel and sdist-to-wheel policy/MR-context/stdin-MCP E2E passes,
+  as do clean restricted-path wheel installs on Python 3.12/3.13 and the sdist
+  on Python 3.14 with exact centralized `ocr-ci --version` output.
 
 #### Commit discipline
 
