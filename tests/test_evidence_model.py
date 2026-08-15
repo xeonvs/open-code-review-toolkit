@@ -29,6 +29,7 @@ from ocr_toolkit.evidence.policy.contracts import MAX_POLICY_VALUE_BYTES
 
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
+POLICY_SHA = "d" * 40
 
 
 def record(
@@ -266,8 +267,8 @@ def test_coverage_requires_its_versioned_persisted_contract(field: str) -> None:
         CoverageRecord.from_dict(payload)
 
 
-def test_store_round_trips_schema_v3_coverage_and_legacy_v1_fails_closed(tmp_path: Path) -> None:
-    """Persist v3 coverage while treating a v1 store's missing metadata as unknown."""
+def test_store_round_trips_current_coverage_and_legacy_v1_fails_closed(tmp_path: Path) -> None:
+    """Persist current coverage while treating a v1 store's missing metadata as unknown."""
 
     store = EvidenceStore()
     assert store.add_coverage(coverage())
@@ -276,7 +277,7 @@ def test_store_round_trips_schema_v3_coverage_and_legacy_v1_fails_closed(tmp_pat
     restored = EvidenceStore.read(path)
 
     assert restored.coverage == (coverage(),)
-    assert restored.to_dict()["schema_version"] == 3
+    assert restored.to_dict()["schema_version"] == 4
 
     legacy = store.to_dict()
     legacy["schema_version"] = 1
@@ -291,6 +292,7 @@ def test_store_round_trips_schema_v3_coverage_and_legacy_v1_fails_closed(tmp_pat
     loaded_legacy = EvidenceStore.read(legacy_path)
 
     assert loaded_legacy.coverage == ()
+    assert loaded_legacy.to_dict()["schema_version"] == 1
     assert any("missing facts are unknown" in item for item in loaded_legacy.diagnostics)
 
 
@@ -961,7 +963,7 @@ def test_store_revalidates_snapshot_diagnostics_on_read(tmp_path: Path) -> None:
 
 
 def _structured_decision_record() -> EvidenceRecord:
-    """Build one valid schema-v3 target decision record."""
+    """Build one valid schema-v4 policy decision record."""
 
     return EvidenceRecord(
         kind="repository.accepted_decision",
@@ -982,8 +984,8 @@ def _structured_decision_record() -> EvidenceRecord:
             },
         },
         source_path=".opencodereview/accepted-decisions.md",
-        ref=RefRole.BASE,
-        commit_sha=BASE_SHA,
+        ref=RefRole.POLICY,
+        commit_sha=POLICY_SHA,
         component="repository",
         provenance="policy:accepted-decisions",
         trust=TrustClass.TARGET_REPOSITORY,
@@ -1007,20 +1009,27 @@ def _snapshot_file(path: str, ref: RefRole, sha: str) -> EvidenceRecord:
 
 
 def _structured_policy_store(policy_record: EvidenceRecord, *, changed_path: str) -> EvidenceStore:
-    """Build one atomically indexed schema-v3 policy store."""
+    """Build one atomically indexed schema-v4 policy store."""
 
     base_file = _snapshot_file(changed_path, RefRole.BASE, BASE_SHA)
     head_file = _snapshot_file(changed_path, RefRole.HEAD, HEAD_SHA)
     store = EvidenceStore(
         base=EvidenceSnapshot(RefRole.BASE, BASE_SHA, (base_file,)),
         head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (head_file,)),
+        policy=EvidenceSnapshot(RefRole.POLICY, POLICY_SHA, (policy_record,)),
     )
     for item in (base_file, head_file, policy_record):
         assert store.add(item)
+    stored_policy = next(
+        item
+        for item in store.records
+        if item.kind in {"repository.accepted_decision", "repository.guidance"}
+    )
+    store.policy = EvidenceSnapshot(RefRole.POLICY, POLICY_SHA, (stored_policy,))
     return store
 
 
-def test_schema_v3_round_trips_structured_policy_and_rejects_nested_extensions(
+def test_schema_v4_round_trips_structured_policy_and_rejects_nested_extensions(
     tmp_path: Path,
 ) -> None:
     """Revalidate exact nested policy shapes on every hostile load."""
@@ -1051,7 +1060,48 @@ def test_schema_v3_round_trips_structured_policy_and_rejects_nested_extensions(
         EvidenceStore.read(path)
 
 
-def test_schema_v3_hostile_readback_rejects_multibyte_policy_value_over_budget(
+def test_schema_v3_policy_preserves_legacy_base_role_on_read_and_reserialize(
+    tmp_path: Path,
+) -> None:
+    """Keep the exact v3 base-bound policy contract rather than relabelling it as v4."""
+
+    decision = _structured_decision_record()
+    legacy_decision = EvidenceRecord(
+        kind=decision.kind,
+        value=decision.value,
+        source_path=decision.source_path,
+        ref=RefRole.BASE,
+        commit_sha=BASE_SHA,
+        component=decision.component,
+        provenance=decision.provenance,
+        trust=decision.trust,
+    )
+    base_file = _snapshot_file("src/app.py", RefRole.BASE, BASE_SHA)
+    head_file = _snapshot_file("src/app.py", RefRole.HEAD, HEAD_SHA)
+    store = EvidenceStore(
+        base=EvidenceSnapshot(RefRole.BASE, BASE_SHA, (base_file, legacy_decision)),
+        head=EvidenceSnapshot(RefRole.HEAD, HEAD_SHA, (head_file,)),
+    )
+    store.schema_version = 3
+    for item in (base_file, head_file, legacy_decision):
+        assert store.add(item)
+    path = tmp_path / "legacy-v3.json"
+    store.write(path)
+
+    restored = EvidenceStore.read(path)
+
+    assert restored.schema_version == 3
+    assert restored.policy is None
+    restored_decision = next(
+        record for record in restored.records if record.kind == "repository.accepted_decision"
+    )
+    assert restored_decision.ref is RefRole.BASE
+    assert restored.add(legacy_decision)
+    assert restored.to_dict()["schema_version"] == 3
+    assert "policy" not in restored.to_dict()["snapshots"]
+
+
+def test_schema_v4_hostile_readback_rejects_multibyte_policy_value_over_budget(
     tmp_path: Path,
 ) -> None:
     """Reapply the complete UTF-8 policy-value budget after persisted mutation."""
@@ -1089,8 +1139,8 @@ def test_store_omits_policy_value_that_redaction_expands_over_byte_budget() -> N
         kind="repository.accepted_decision",
         value=decision.evidence_value(),
         source_path=".opencodereview/accepted-decisions.md",
-        ref=RefRole.BASE,
-        commit_sha=BASE_SHA,
+        ref=RefRole.POLICY,
+        commit_sha=POLICY_SHA,
         component="repository",
         provenance="policy:accepted-decisions",
         trust=TrustClass.TARGET_REPOSITORY,
@@ -1161,7 +1211,7 @@ def test_store_rejects_unknown_envelope_limit_snapshot_and_record_fields(tmp_pat
             EvidenceStore.read(path)
 
 
-def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path: Path) -> None:
+def test_schema_v4_guidance_revalidates_nested_precedence_and_redaction(tmp_path: Path) -> None:
     """Keep structured guidance closed and recursively redacted on admission and load."""
 
     store = EvidenceStore()
@@ -1181,8 +1231,8 @@ def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path
             },
         },
         source_path="services/AGENTS.md",
-        ref=RefRole.BASE,
-        commit_sha=BASE_SHA,
+        ref=RefRole.POLICY,
+        commit_sha=POLICY_SHA,
         component="repository",
         provenance="policy:project-guidance",
         trust=TrustClass.TARGET_REPOSITORY,
@@ -1212,10 +1262,10 @@ def test_schema_v3_guidance_revalidates_nested_precedence_and_redaction(tmp_path
         EvidenceStore.read(path)
 
 
-def test_schema_v3_rejects_legacy_policy_commit_drift_and_impossible_applicability(
+def test_schema_v4_rejects_legacy_policy_commit_drift_and_impossible_applicability(
     tmp_path: Path,
 ) -> None:
-    """Bind v3 policy shape, commit, and matched paths to the atomic snapshots."""
+    """Bind v4 policy shape, commit, and matched paths to the atomic snapshots."""
 
     valid = _structured_policy_store(_structured_decision_record(), changed_path="src/app.py")
     mutations: list[dict[str, object]] = []
@@ -1240,7 +1290,7 @@ def test_schema_v3_rejects_legacy_policy_commit_drift_and_impossible_applicabili
         for item in drift_records
         if isinstance(item, dict) and item.get("kind") == "repository.accepted_decision"
     )
-    drift_decision["commit_sha"] = "d" * 40
+    drift_decision["commit_sha"] = "e" * 40
     drift_decision.pop("id")
     mutations.append(commit_drift)
 

@@ -46,9 +46,13 @@ Bounded HTTP reads are diagnostic evidence until a closed endpoint allowlist, re
 
 A destructive provider mutation is automated only when the mutation request itself binds the validated immutable identity. Preflight and post-write reads may diagnose state but cannot close a mutation-time race. If the provider offers no guard, existing state is preserved for explicit provider-owned policy or operator action.
 
-### Installed integration proof
+### Test doubles and integration proof
 
-Executable integration claims require clean built artifacts, restricted environments, hostile working-directory shadow packages, private permissions, and the real protocol client where practical. Unit mocks establish local behavior but not installation, import, process, or protocol correctness.
+A test double may replace an external collaborator only beyond the production boundary being verified. It must not replace the adapter, parser, transport, persistence owner, Git plumbing, subprocess launcher, protocol client, or other boundary whose behavior the test claims to prove. Wiring tests with a mocked boundary owner remain useful unit evidence, but they are never integration evidence for that boundary.
+
+Each integration claim maps to a test that enters through the production caller, crosses the real boundary implementation, and observes the real serialized, filesystem, process, protocol, or transport result. Negative and hostile cases must reach the intended rejection or degradation branch through that same production path; configuring a mock to return the expected rejection proves only wiring. When the true external service is unsuitable for deterministic tests, use a controlled local peer at the far side of the boundary, such as a real Git repository, local HTTP server, child process, stdio protocol peer, or installed artifact, and retain at least one end-to-end qualification against the actual external component where the public contract depends on it.
+
+Executable integration claims additionally require clean built artifacts, restricted environments, hostile working-directory shadow packages, private permissions, and the real protocol client where practical. Unit mocks establish local behavior but not installation, import, process, transport, persistence, or protocol correctness.
 
 ### Public source and disclosure
 

@@ -31,17 +31,25 @@ class ReadbackStore(Protocol):
     limits: EvidenceStoreLimits
     base: EvidenceSnapshot | None
     head: EvidenceSnapshot | None
+    policy: EvidenceSnapshot | None
+    schema_version: int
     deltas: tuple[EvidenceDelta, ...]
     _records: dict[str, EvidenceRecord]
     _coverage: dict[str, CoverageRecord]
 
-    def _add(self, record: EvidenceRecord, *, structured_policy: bool) -> bool: ...
+    def _add(
+        self,
+        record: EvidenceRecord,
+        *,
+        structured_policy: bool,
+        policy_role: RefRole | None = None,
+    ) -> bool: ...
 
     def add_coverage(self, record: CoverageRecord) -> bool: ...
 
     def add_diagnostic(self, message: str) -> None: ...
 
-    def _validate_policy_snapshot_bindings(self) -> None: ...
+    def _validate_policy_snapshot_bindings(self, schema_version: int) -> None: ...
 
 
 StoreT = TypeVar("StoreT", bound=ReadbackStore)
@@ -101,6 +109,7 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
     if len(raw_bytes) > limits.max_bytes:
         raise EvidenceStoreError("evidence store exceeds its declared byte budget")
     store = factory(limits)
+    store.schema_version = schema_version
     records_raw = raw.get("records")
     if not isinstance(records_raw, list):
         raise EvidenceStoreError("evidence store records must be a list")
@@ -109,6 +118,13 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
             if not store._add(
                 EvidenceRecord.from_dict(item),
                 structured_policy=schema_version >= 3,
+                policy_role=(
+                    RefRole.POLICY
+                    if schema_version >= 4
+                    else RefRole.BASE
+                    if schema_version == 3
+                    else None
+                ),
             ):
                 raise EvidenceStoreError("evidence store records exceed declared limits")
     except (TypeError, ValueError) as exc:
@@ -138,7 +154,7 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
         raise EvidenceStoreError("invalid evidence store diagnostic") from exc
     read_snapshots(store, raw.get("snapshots", {}), schema_version=schema_version)
     if schema_version >= 3:
-        store._validate_policy_snapshot_bindings()
+        store._validate_policy_snapshot_bindings(schema_version)
     read_deltas(store, raw.get("deltas", []))
     return store
 
@@ -146,9 +162,13 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
 def read_snapshots(store: ReadbackStore, raw: object, *, schema_version: int) -> None:
     """Validate exact historical snapshot shapes and accepted references."""
 
-    if not isinstance(raw, dict) or not set(raw) <= {"base", "head"}:
+    allowed_snapshots = {"base", "head", "policy"} if schema_version >= 4 else {"base", "head"}
+    if not isinstance(raw, dict) or not set(raw) <= allowed_snapshots:
         raise EvidenceStoreError("evidence snapshots must be a closed object")
-    for name, role in (("base", RefRole.BASE), ("head", RefRole.HEAD)):
+    roles = [("base", RefRole.BASE), ("head", RefRole.HEAD)]
+    if schema_version >= 4:
+        roles.append(("policy", RefRole.POLICY))
+    for name, role in roles:
         item = raw.get(name)
         if item is None:
             continue

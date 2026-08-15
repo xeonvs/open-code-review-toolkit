@@ -514,7 +514,7 @@ def test_summary_describes_schema_v3_target_policy_without_authority() -> None:
 
     summary = _payload(call_tool(_store(1), {"action": "summary"}))
 
-    assert summary["schema_version"] == 3
+    assert summary["schema_version"] == 4
     assert summary["policy"] == {
         "accepted_decisions": 0,
         "guidance_documents": 0,
@@ -546,6 +546,7 @@ def test_summary_preserves_legacy_policy_provenance_instead_of_claiming_target_o
 
     summary = _payload(call_tool(EvidenceStore.read(path), {"action": "summary"}))
 
+    assert summary["schema_version"] == 2
     assert summary["policy"] == {
         "accepted_decisions": 0,
         "guidance_documents": 1,

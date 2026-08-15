@@ -102,7 +102,7 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         ),
         "structured_target_records": sum(
             not is_legacy_policy_value(record.value)
-            and record.ref.value == "base"
+            and record.ref.value in {"base", "policy"}
             and record.trust.value == "target_repository"
             for record in policy_records
         ),
@@ -110,14 +110,15 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
             is_legacy_policy_value(record.value) for record in policy_records
         ),
         "target_only": all(
-            record.ref.value == "base" and record.trust.value == "target_repository"
+            record.ref.value in {"base", "policy"} and record.trust.value == "target_repository"
             for record in policy_records
         ),
         "authoritative_for_actions": False,
     }
     return {
-        "schema_version": 3,
+        "schema_version": store.schema_version,
         "policy": policy,
+        "policy_ref": store.policy.commit_sha if store.policy else None,
         "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,
         "head": store.head.commit_sha if store.head else None,
@@ -185,8 +186,8 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
         raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
     if query.kind == "repository.evidence_delta" and query.ref is not None:
         raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
-    if query.ref not in {None, "base", "head", "shared"}:
-        raise EvidenceMCPError("ref must be base, head, or shared")
+    if query.ref not in {None, "base", "head", "policy", "shared"}:
+        raise EvidenceMCPError("ref must be base, head, policy, or shared")
     page_size = arguments.get("page_size", DEFAULT_PAGE_SIZE)
     if isinstance(page_size, bool) or not isinstance(page_size, int):
         raise EvidenceMCPError("page_size must be an integer")
@@ -303,7 +304,10 @@ def _tool_definition() -> dict[str, object]:
                 "kind": {"type": "string", "maxLength": 256},
                 "delta_kind": {"type": "string", "maxLength": 256},
                 "component": {"type": "string", "maxLength": 256},
-                "ref": {"type": "string", "enum": ["base", "head", "shared"]},
+                "ref": {
+                    "type": "string",
+                    "enum": ["base", "head", "policy", "shared"],
+                },
                 "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
                 "cursor": {"type": "string", "maxLength": 256},
                 "id": {"type": "string", "pattern": "^(ev1|cov1|del1)_[0-9a-f]{64}$"},

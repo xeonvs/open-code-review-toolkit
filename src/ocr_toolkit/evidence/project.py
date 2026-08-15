@@ -92,6 +92,7 @@ def render_bootstrap(
         "## Immutable review refs",
         f"- base: `{store.base.commit_sha if store.base else 'unavailable'}`",
         f"- head: `{store.head.commit_sha if store.head else 'unavailable'}`",
+        f"- policy: `{store.policy.commit_sha if store.policy else 'legacy base semantics'}`",
         "",
         "## Evidence coverage",
         f"- records: {len(store.records)}",
@@ -104,7 +105,10 @@ def render_bootstrap(
     ]
     decisions = []
     for record in store.records:
-        if record.kind != "repository.accepted_decision" or record.ref.value != "base":
+        if record.kind != "repository.accepted_decision" or record.ref.value not in {
+            "policy",
+            "base",
+        }:
             continue
         value = record.value
         fact = value.get("fact") if isinstance(value, Mapping) else None
@@ -129,7 +133,7 @@ def render_bootstrap(
         )
     guidance = []
     for record in store.records:
-        if record.kind != "repository.guidance" or record.ref.value != "base":
+        if record.kind != "repository.guidance" or record.ref.value not in {"policy", "base"}:
             continue
         value = record.value
         fact = value.get("fact") if isinstance(value, Mapping) else None

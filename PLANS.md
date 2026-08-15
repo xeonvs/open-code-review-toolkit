@@ -21,7 +21,7 @@ Use this file for active or blocked repository work. Update it before implementa
 - MR title, description, labels, and optional source-branch hint are invocation-trust data, never policy. Raw provider text stays out of bootstrap, argv, environment, logs, and receipts; admitted intent blocks automatic approval but not comment publication.
 - The external-reference attack path is documented without implementing reference extraction, content prefetch, generic URL access, provider-specific MCP adapters, or external writes. Existing configured read-only allowlisted MCP tools remain the only retrieval route.
 - Runtime remains standard-library-only; fixtures and public examples remain synthetic and private-safe.
-- After OCR 1.9.4 qualification, map every #87-#90 acceptance criterion to production-path evidence. Mocks may isolate negative branches, but cannot substitute for real Git plumbing, bounded HTTP behavior, private artifact transport, hostile store reload, stdio MCP, installed wheel/sdist entrypoints, or OCR result consumption where those boundaries are claimed.
+- After OCR 1.9.4 qualification, map every #87-#90 acceptance criterion and every touched boundary to production-path evidence. A test double may replace an external collaborator only beyond the claimed boundary; it cannot replace the production owner being verified. Wiring-only tests remain unit evidence and must be paired with real Git, local HTTP, private artifact, hostile store reload, stdio MCP, installed wheel/sdist, subprocess, and actual OCR-consumer paths where those contracts are claimed.
 
 #### Delivery checklist
 
@@ -30,12 +30,12 @@ Use this file for active or blocked repository work. Update it before implementa
 3. [x] Open and maintain early Draft PR #91 after the first signed planning commit; avoid further pushes until the local feature is ready.
 4. [x] Prioritize changed template evidence and add installed-artifact coverage.
 5. [x] Add centralized `ocr-ci --version` source/wheel/sdist coverage.
-6. [ ] Add policy ref/schema v4, protected GitLab target acquisition, bounded object fetch, exact policy rules transport, and compatibility/failure tests.
+6. [x] Add policy ref/schema v4, protected GitLab target acquisition, bounded object fetch, exact policy rules transport, and compatibility/failure tests.
 7. [ ] Add bounded MR intent, hostile readback, toolkit-authored trust guidance, receipt-v2 approval blocker, and external-MCP attack-path coverage.
 8. [ ] Add verified README security badges, public contracts, Towncrier fragments, and integration tests.
 9. [ ] Run focused gates for each commit, complete Python 3.12-3.14 quality/security/package validation, deterministic double builds, installed wheel/sdist tests, and Gitleaks.
 10. [ ] After completing #87-#89 and before the README/documentation pass, qualify OCR 1.9.4 through #90, analyze telemetry and backlog impact, update the local binary and compatibility contract, and use 1.9.4 thereafter; include any newer intervening stable release if one appears.
-11. [ ] Audit #87-#90 tests for mock-only proof: map acceptance criteria to real Git, HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths; replace any conditionally green substitute before relying on coverage.
+11. [ ] Audit every #87-#90 acceptance criterion and touched boundary: record the production owner and test entry point, permit doubles only beyond that owner, and replace mock-selected success/rejection with real Git, local HTTP, persistence, MCP, installed-artifact, subprocess, and OCR-consumer paths before relying on coverage.
 12. [ ] Run exactly one completed local OCR review over the exact feature range, remediate findings, and repeat self-review plus architecture review without routinely rerunning OCR.
 13. [ ] Push the complete feature history, pass required checks, merge the protected feature PR, and independently verify the resulting TestPyPI development artifacts.
 14. [ ] Prepare and merge exact `Release v0.6.1`, then independently verify TestPyPI/PyPI bytes, provenance/attestations, supported-Python installs, annotated tag, immutable GitHub Release, and receipt.

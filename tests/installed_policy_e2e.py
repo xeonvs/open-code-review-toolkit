@@ -123,6 +123,25 @@ The synthetic service deliberately uses one bounded retry.
     _git(git_binary, repository, "add", ".")
     _git(git_binary, repository, "commit", "-qm", "target policy")
     base = _git(git_binary, repository, "rev-parse", "HEAD")
+    _git(git_binary, repository, "branch", "source", base)
+    _write(repository, "AGENTS.md", "Current protected root guidance.\n")
+    _write(
+        repository,
+        ".opencodereview/accepted-decisions.md",
+        """# Accepted decisions
+
+## Current policy choice
+- Scope: services/api/**
+- Category: compatibility
+- Owner: synthetic-platform
+- Review after: 2099-01-01
+
+The protected target now owns the current decision.
+""",
+    )
+    _git(git_binary, repository, "commit", "-qam", "advance protected policy")
+    policy = _git(git_binary, repository, "rev-parse", "HEAD")
+    _git(git_binary, repository, "checkout", "-q", "source")
     _write(repository, "services/api/app.py", "RETRIES = 2\n")
     _write(repository, "late/templates/service.conf.j2", "after={{ port }}\n")
     _write(
@@ -145,7 +164,7 @@ This source-only decision must not replace target policy.
 
     artifacts = repository_artifacts(repository)
     prepare_artifact_directory(artifacts)
-    store = collect_repository_evidence(repository, base_ref=base, head_ref=head)
+    store = collect_repository_evidence(repository, base_ref=base, head_ref=head, policy_ref=policy)
     store.write(artifacts.store)
     composition = mcp_config.compose_mcp_servers([], replace=True)
     write_private_text(
@@ -153,7 +172,8 @@ This source-only decision must not replace target policy.
         render_bootstrap(store, capabilities=composition.capabilities),
     )
     bootstrap = artifacts.bootstrap.read_text(encoding="utf-8")
-    assert "keep-bounded-retries" in bootstrap
+    assert "current-policy-choice" in bootstrap
+    assert policy in bootstrap
     assert "services/api/AGENTS.md" in bootstrap
     assert "deliberately uses one bounded retry" not in bootstrap
     assert "Synthetic API guidance" not in bootstrap
@@ -223,7 +243,7 @@ This source-only decision must not replace target policy.
 
     summary = call({"action": "summary"})
     assert summary["base"] == base and summary["head"] == head
-    assert summary["schema_version"] == 3
+    assert summary["schema_version"] == 4
     assert summary["policy"] == {
         "accepted_decisions": 1,
         "guidance_documents": 3,
@@ -232,16 +252,18 @@ This source-only decision must not replace target policy.
         "target_only": True,
         "authoritative_for_actions": False,
     }
-    decisions = call({"action": "list", "kind": "repository.accepted_decision", "ref": "base"})[
+    decisions = call({"action": "list", "kind": "repository.accepted_decision", "ref": "policy"})[
         "records"
     ]
     assert len(decisions) == 1
     decision = decisions[0]
+    assert decision["value"]["fact"]["decision_id"] == "current-policy-choice"
+    assert decision["commit_sha"] == policy
     assert decision["value"]["fact"]["matched_paths"] == [
         "services/api/CLAUDE.md",
         "services/api/app.py",
     ]
-    assert "bounded retry" in decision["value"]["fact"]["rationale"]
+    assert "current decision" in decision["value"]["fact"]["rationale"]
     assert "source-only decision" not in decision["value"]["fact"]["rationale"]
     assert call({"action": "get", "id": decision["id"]})["record"] == decision
     assert (
@@ -253,7 +275,7 @@ This source-only decision must not replace target policy.
         {
             "action": "list",
             "kind": "repository.guidance",
-            "ref": "base",
+            "ref": "policy",
             "page_size": 50,
         }
     )["records"]
@@ -308,6 +330,7 @@ This source-only decision must not replace target policy.
             {
                 "base": base,
                 "head": head,
+                "policy_sha": policy,
                 "installed_version": expected_version,
                 "policy": summary["policy"],
                 "prioritized_template": {

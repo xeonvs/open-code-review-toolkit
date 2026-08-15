@@ -15,6 +15,7 @@ class EvidenceArtifacts:
     directory: Path
     store: Path
     bootstrap: Path
+    policy_rules: Path
 
 
 def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
@@ -26,6 +27,7 @@ def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
         directory=directory,
         store=directory / "evidence.json",
         bootstrap=directory / "bootstrap.md",
+        policy_rules=directory / "policy-rules.json",
     )
 
 
@@ -42,8 +44,8 @@ def prepare_artifact_directory(artifacts: EvidenceArtifacts) -> None:
     directory.chmod(0o700)
 
 
-def write_private_text(path: Path, content: str) -> None:
-    """Write one internal text artifact without following the final symlink."""
+def write_private_bytes(path: Path, content: bytes) -> None:
+    """Write one private byte artifact without following the final symlink."""
 
     if path.parent.is_symlink() or not path.parent.is_dir():
         raise OSError(f"private artifact parent is not a safe directory: {path.parent}")
@@ -63,7 +65,7 @@ def write_private_text(path: Path, content: str) -> None:
             raise OSError(f"private artifact is an existing hard link: {path}")
         os.fchmod(descriptor, 0o600)
         os.ftruncate(descriptor, 0)
-        stream = os.fdopen(descriptor, "w", encoding="utf-8")
+        stream = os.fdopen(descriptor, "wb")
         descriptor = -1
         with stream:
             stream.write(content)
@@ -72,3 +74,22 @@ def write_private_text(path: Path, content: str) -> None:
         if descriptor >= 0:
             os.close(descriptor)
         raise
+
+
+def write_private_text(path: Path, content: str) -> None:
+    """Write one internal UTF-8 artifact through the private byte boundary."""
+
+    write_private_bytes(path, content.encode("utf-8"))
+
+
+def remove_private_artifact(path: Path) -> None:
+    """Remove one toolkit-owned artifact name without following its target."""
+
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise OSError(f"private artifact parent is not a safe directory: {path.parent}")
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except IsADirectoryError as exc:
+        raise OSError(f"private artifact path is not a file: {path}") from exc

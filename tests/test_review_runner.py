@@ -608,7 +608,14 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         )
 
     assert result == 0
-    assert events[0] == ("collect", {"base_ref": "a" * 40, "head_ref": "b" * 40})
+    assert events[0] == (
+        "collect",
+        {
+            "base_ref": "a" * 40,
+            "head_ref": "b" * 40,
+            "policy_ref": "a" * 40,
+        },
+    )
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
     assert events[2] == ("write", artifacts.store)
     assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")
