@@ -6,6 +6,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.6.2` | [OCR 1.9.5 and explicit review budgets](releases.md#plan-toolkit-0-6-2) | OCR 1.9.5 qualification, explicit aggregate review budget, backlog reconciliation, anti-mock evidence, development provenance verification, and isolated registry-verifier state. |
 | `v0.6.1` | [Protected-target policy and bounded MR intent](releases.md#plan-toolkit-0-6-1) | Protected-target rules, changed-template priority, bounded invocation context, OCR 1.9.4 qualification, anti-mock evidence audit, bootstrap remediation, and stable-delivery handoff. |
 | `v0.6.0` | [M4 policy and project guidance](releases.md#plan-toolkit-0-6-0) | Structured target decisions, nested guidance, schema-v3 evidence, responsibility-based collectors/store extraction, OCR 1.9.3 qualification, security/OCR reviews, and stable-delivery handoff. |
 | `v0.5.0` | [M2 ecosystem and framework coverage](releases.md#plan-toolkit-0-5-0) | Framework/template evidence, OCR 1.9.2 qualification, both local review cycles, and immutable stable-delivery receipts. |

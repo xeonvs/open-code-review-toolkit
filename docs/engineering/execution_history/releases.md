@@ -2,6 +2,64 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-6-2"></a>
+
+## Repository-Complete Plan: OCR 1.9.5 and explicit review budgets for 0.6.2
+
+- **Status:** repository work complete; release PR and stable external delivery pending
+- **Release classification:** `release-required`
+- **Target stable version:** `0.6.2`
+- **Tracking:** #93
+- **Objective:** qualify checksum-verified Open Code Review 1.9.5 against every toolkit-consumed boundary, promote it as the tested and recommended baseline, expose its aggregate review-token budget as an explicit operator setting without adopting full-repository scan behavior, reconcile the affected profile and telemetry backlog, and publish and independently verify stable toolkit v0.6.2.
+
+#### Boundaries and decisions
+
+- The toolkit continues to invoke `ocr review`, not `ocr scan`. OCR 1.9.5's scan-only `summary.budget_exceeded` addition is upstream-owned telemetry and does not justify a scan adapter, a second result path, or duplicated token accounting.
+- `OCR_MAX_TOKENS_BUDGET` is an explicit optional non-negative ceiling passed directly to OCR. `0` remains unlimited. A budget stop preserves completed findings, reports incomplete coverage, and remains ineligible for automatic approval.
+- Budget remains independent from future named profiles. BL-016 is parked and limited to demonstrated model aliases; profiles must not silently change completeness through hidden token, per-file, or tool limits. BL-017 remains ready, but OCR owns token and budget telemetry unless a toolkit-owned measurement gap is demonstrated.
+- Swift guidance and default Swift-test exclusions change the recommended OCR rules contract. Cross-file comment re-filing remains compatible with normalized path/range and suggestion-proof boundaries. OCR's internal review-filter tools do not become configured MCP capabilities or toolkit authority. Provider, marketplace, viewer, and CLI-documentation changes require no toolkit runtime adaptation.
+- Public material and fixtures remain synthetic and private-safe. Qualification uses the official checksum-verified OCR executable; no mock replaces OCR, its production launcher, accounting, manifest, result serialization, or the toolkit parser for an integration claim. A controlled local HTTP peer replaces only the external model API beyond the claimed OCR boundary.
+
+#### Delivery checklist
+
+1. [x] Review #93, the complete public v1.9.4...v1.9.5 release/source delta, current strategy/backlog/contracts, and all toolkit-consumed boundaries.
+2. [x] Verify and install the official Darwin arm64 OCR 1.9.5 binary and run local version/help, selection, result-consumer, and budget-limited probes.
+3. [x] Promote 1.9.5 in compatibility evidence, preflight, tests, and the synthetic GitLab executable pin; make the aggregate review-budget flag a qualification contract.
+4. [x] Expose and document `OCR_MAX_TOKENS_BUDGET`, preserving partial findings, incomplete-coverage diagnostics, and approval ineligibility.
+5. [x] Reconcile BL-016, BL-017, roadmap, and strategy without adding `ocr scan`, profile-hidden limits, duplicated telemetry, a Swift evidence pack, or runtime dependencies.
+6. [x] Complete requirement-to-evidence anti-mock, architecture, self-review, security, privacy, supported-Python, packaging, and real-executable validation.
+7. [x] Merge protected feature PR #94 as `13093602a0b40521641447c9d31ed61754e90aea` and independently verify TestPyPI `0.6.2.dev56` bytes and supported-Python installs.
+8. [x] Close the discovered development-provenance gap through PR #95 and the stale cross-version verifier-state collision through PR #96; independently verify exact TestPyPI `0.6.2.dev58` publisher, subjects, bytes, and installs.
+9. [ ] Merge the exact protected `Release v0.6.2` PR, then independently verify stable TestPyPI/PyPI bytes, provenance and attestations, supported-Python installs, annotated tag, immutable GitHub Release, release receipt, and Actions-owned issue closure.
+10. [ ] Synchronize a clean local `main` only after all external release surfaces agree.
+
+#### Qualification and feature validation receipt
+
+- The active `/Users/xeon/.local/bin/ocr` reports 1.9.5 and has SHA-256 `459d3986e59fed5ed8ad6a97bc02d2eb995a89106b3fe6a6fcf74bb69cab1b73`, matching the official Darwin arm64 release metadata and `sha256sum.txt`. Hosted run `32000131436` verified every official asset and the Linux amd64 contracts.
+- The real budget probe selected three files, completed two, retained their findings, and represented the third as `summary.budget_exceeded`, `token_budget_reached`, and manifest `failed(budget)` coverage normalized to `partial`. The evidence matrix records the real OCR/launcher/parser boundaries and the local model-peer non-claim.
+- PR #94's reviewed head `a0d55caad296f14de9839eb283947d754b1633be` passed all 13 hosted checks and is tree-equivalent to squash merge `13093602a0b40521641447c9d31ed61754e90aea`.
+- Feature validation passed clean Python 3.12.14, 3.13.15, and 3.14.7 suites with 813 tests plus 105 subtests and at least 81.20% coverage, including real nested-venv wheel/sdist and stdio-MCP paths. Ruff, mypy, Bandit, pip-audit, pinned Gitleaks, manifest, YAML/shell, Towncrier, deterministic packaging, Twine, and clean installed-artifact smokes passed.
+
+#### Development publication and verifier-hardening receipt
+
+- TestPyPI development run `32009213205` published `0.6.2.dev56` from the feature merge. Independent byte and install readback succeeded, while provenance inspection found that the canonical verifier assumed stable `release.yml` and the development workflow did not run that exact publisher/subject validation.
+- PR #95's reviewed head `40e4ab2d9a5bbb75047992cefb13f607b39058de` was squash-merged as `cdab8671439cd94de476c1290113e835fce5dcf0`. The canonical verifier now receives one allowlisted expected workflow: `testpypi.yml` for development and `release.yml` for stable publication. Hosted run `32010083361` verified `0.6.2.dev57` through that production boundary.
+- Independent dev57 readback then found retained dev56 in a registry-wide temporary artifact directory. PR #96 version-scoped artifact, environment, and requirements paths and added guarded cleanup only for direct disposable `/tmp` children. Its reviewed head `d88ec13b3982363c8509ee068017d01db01043e5` was squash-merged as `d2ea8c24e54388d4e13259ac1159bb9ef783338d`.
+- Hosted run `32010829614` published and verified `0.6.2.dev58` from that exact merge. Independent verification matched wheel SHA-256 `639750995ee9a86d584c5bdcf362895ae5b2ab49ed0fe59f7d058a7d93dbc240` and sdist SHA-256 `a1be7a9364b30bbd4776fb970daa19a86a17b85ed88c8f18371921b0f92d9c55`, exact `testpypi.yml` PEP 740 publisher and subjects, and clean wheel plus hash-locked sdist installs. The bounded retry absorbed a short registry propagation window without weakening the closed artifact-set contract.
+- The final verifier follow-up passed `scripts/quality.sh check` with 814 tests plus 105 subtests at 81.21% coverage, focused release contracts, pip-audit, YAML/shell, privacy checks, and pinned Gitleaks. The verifier was also run live with deliberately seeded stale files; no mock replaced the registry, provenance, or install boundary.
+
+#### Release preparation state
+
+- This release PR is the final repository mutation. It advances the stable marker to 0.6.2 and the development line to 0.6.3, binds issue #93, consumes the feature, bug-fix, and rules fragments into the exact changelog section, updates the synthetic GitLab toolkit pin, archives this plan, and returns `PLANS.md` to its empty template.
+- The latest stable upstream OCR release was still 1.9.5 at release preparation. ROADMAP, backlog, strategy, and README already reflect the completed feature decisions; no cosmetic release-only edits are needed.
+- Stable TestPyPI/PyPI publication, stable registry and GitHub provenance, supported-Python installs, annotated tag, immutable GitHub Release, release receipt, and Actions-owned closure of #93 do not exist yet and remain post-merge gates.
+- Release-preparation validation passes the complete 814-test and 105-subtest quality suite plus clean Python 3.12-3.14 suites, Ruff, mypy, canonical medium-or-higher Bandit, pip-audit, OCR manifest, lockfile, workflow/shell syntax, release contracts, Towncrier/release notes, privacy checks, and pinned Gitleaks.
+- Two `0.6.2` builds using tracked source epoch `1786955532` are byte-identical and pass Twine, exact archive-content/version checks, and clean wheel/sdist installs on Python 3.12, 3.13, and 3.14. Wheel SHA-256 is `e67be59482b188b94e4c623a1b295b570b7be1e2cf48b1b3f64f52167860d04a`; sdist SHA-256 is `9fffd0e52278c9c0c267a68ca9905c78a320f072105b4b7e421feead6bcf5b28`.
+
+#### Commit discipline
+
+Before the release commit: update status-bearing text to post-commit truth, inspect the complete staged diff, run focused and full validation plus `git diff --check`, and perform self-review, architecture review, requirement-to-evidence review, and privacy review. The one logical release commit is signed and pushed only after local readiness; the release PR remains the final repository mutation.
+
 <a id="plan-toolkit-0-6-1"></a>
 
 ## Repository-Complete Plan: Protected-target policy and bounded MR intent for 0.6.1
