@@ -4,6 +4,12 @@ set -eu
 registry=${1:?registry is required}
 version=${2:?version is required}
 hashes=${3:?hash file is required}
+workflow=${4:?expected publisher workflow is required}
+
+case "${workflow}" in
+  testpypi.yml|release.yml) ;;
+  *) echo "unsupported publisher workflow: ${workflow}" >&2; exit 2 ;;
+esac
 
 case "${registry}" in
   testpypi)
@@ -100,7 +106,8 @@ while IFS="${tab}" read -r provenance_url filename; do
     --hashes "${hashes}" \
     --filename "${filename}" \
     --environment "${provenance_environment}" \
-    --repository "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+    --repository "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}" \
+    --workflow "${workflow}"
 done < "${provenance_downloads}"
 
 python -m venv "/tmp/${registry}-wheel"

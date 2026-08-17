@@ -182,13 +182,11 @@ def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     bounded_curl = "--retry 3 --retry-delay 2 --retry-connrefused"
 
-    assert workflow.count(bounded_curl) == 3
-    assert workflow.count("--connect-timeout 10 --max-time 120") == 3
-    assert workflow.count("--proto '=https' --proto-redir '=https'") == 3
-    assert "sha256sum --check --strict" in workflow
-    assert "pip install --no-deps /tmp/testpypi-artifacts/*.whl" in workflow
-    assert "scripts/install_local_artifact.py" in workflow
-    assert "--index-url" not in workflow
+    assert workflow.count(bounded_curl) == 1
+    assert workflow.count("--connect-timeout 10 --max-time 120") == 1
+    assert workflow.count("--proto '=https' --proto-redir '=https'") == 1
+    assert "verify_registry_artifacts.sh testpypi" in workflow
+    assert "artifact-hashes.json testpypi.yml" in workflow
     assert "python -m build --no-isolation" in workflow
 
 
@@ -221,6 +219,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "SOURCE_DATE_EPOCH" in workflow
     assert "attestations: true" in workflow
     assert workflow.count("verify_registry_artifacts.sh") == 2
+    assert workflow.count("artifact-hashes.json release.yml") == 2
     assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
@@ -237,6 +236,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "--proto '=https' --proto-redir '=https'" in verifier
     assert "sha256sum --check --strict" in verifier
     assert "verify_registry_provenance.py" in verifier
+    assert '--workflow "${workflow}"' in verifier
     assert "application/vnd.pypi.integrity.v1+json" in verifier
     assert '"${destination}"/*.whl' in verifier
     assert "scripts/install_local_artifact.py" in verifier

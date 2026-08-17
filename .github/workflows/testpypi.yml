@@ -144,53 +144,7 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: testpypi-development-distributions
-      - name: Verify and install immutable published artifacts
+      - name: Verify provenance and install immutable published artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              --header 'Accept: application/vnd.pypi.simple.v1+json' \
-              https://test.pypi.org/simple/open-code-review-toolkit/ \
-              --output /tmp/testpypi-index.json && \
-              test "$(python scripts/testpypi_preview.py check-index \
-                --version "${VERSION}" \
-                --index-json /tmp/testpypi-index.json \
-                --hashes-json artifact-hashes.json)" = already-published; then
-              break
-            fi
-            test "${attempt}" -lt 5 || exit 1
-            sleep 15
-          done
-          python scripts/testpypi_preview.py artifact-manifest \
-            --version "${VERSION}" \
-            --index-json /tmp/testpypi-index.json \
-            --hashes-json artifact-hashes.json > /tmp/artifact-manifest.json
-          python - <<'PY' > /tmp/artifact-downloads.tsv
-          import json
-          from pathlib import Path
-
-          for item in json.loads(Path("/tmp/artifact-manifest.json").read_text()):
-              print(item["sha256"], item["url"], item["filename"], sep="\t")
-          PY
-          mkdir -p /tmp/testpypi-artifacts
-          while IFS=$'\t' read -r sha256 url filename; do
-            curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --retry-connrefused \
-              --connect-timeout 10 --max-time 120 \
-              --proto '=https' --proto-redir '=https' \
-              "${url}" --output "/tmp/testpypi-artifacts/${filename}"
-            echo "${sha256}  /tmp/testpypi-artifacts/${filename}" | sha256sum --check --strict
-          done < /tmp/artifact-downloads.tsv
-          python -m venv /tmp/testpypi-wheel
-          /tmp/testpypi-wheel/bin/pip install --no-deps /tmp/testpypi-artifacts/*.whl
-          /tmp/testpypi-wheel/bin/ocr-ci --help
-          python -m venv /tmp/testpypi-sdist
-          python scripts/install_local_artifact.py \
-            --python /tmp/testpypi-sdist/bin/python \
-            --artifact "$(find /tmp/testpypi-artifacts -maxdepth 1 -name '*.tar.gz' -print -quit)" \
-            --requirements /tmp/testpypi-sdist-requirements.txt
-          /tmp/testpypi-sdist/bin/ocr-ci --help
+        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json testpypi.yml
