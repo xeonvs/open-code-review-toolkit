@@ -1,3 +1,18 @@
+## 0.6.2 - 2026-08-17
+
+### 🚀 Features
+
+- Target checksum-verified Open Code Review 1.9.5 and expose its aggregate review-token budget as an explicit synthetic GitLab CI setting while preserving partial findings and incomplete-coverage reporting. ([#93](https://github.com/xeonvs/open-code-review-toolkit/issues/93))
+
+### 🐛 Bug Fixes
+
+- Verify development TestPyPI PEP 740 attestations against the exact `testpypi.yml` publisher and artifact subjects, and isolate repeated registry verification by version so stale artifacts cannot enter install evidence. ([#93](https://github.com/xeonvs/open-code-review-toolkit/issues/93))
+
+### 🧩 Rules
+
+- The recommended OCR built-in rules now add Swift-specific review guidance and exclude conventional Swift test files by default. ([#93](https://github.com/xeonvs/open-code-review-toolkit/issues/93))
+
+
 ## 0.6.1 - 2026-08-15
 
 ### 🚀 Features
