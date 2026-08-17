@@ -365,7 +365,7 @@ jobs:
       - name: Verify and smoke exact TestPyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json
+        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json release.yml
 
   publish-pypi:
     name: publish-pypi
@@ -415,7 +415,7 @@ jobs:
       - name: Verify and smoke exact PyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: ./scripts/verify_registry_artifacts.sh pypi "${VERSION}" artifact-hashes.json
+        run: ./scripts/verify_registry_artifacts.sh pypi "${VERSION}" artifact-hashes.json release.yml
 
   github-release:
     name: publish-github-release

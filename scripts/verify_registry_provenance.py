@@ -11,7 +11,7 @@ from typing import Any
 
 
 class ProvenanceError(ValueError):
-    """Registry provenance is missing or does not match the release workflow."""
+    """Registry provenance is missing or does not match the expected workflow."""
 
 
 def verify_provenance(
@@ -21,6 +21,7 @@ def verify_provenance(
     digest: str,
     environment: str,
     repository: str,
+    workflow: str,
 ) -> None:
     """Require one GitHub publisher bundle with the exact publish subject."""
 
@@ -32,11 +33,11 @@ def verify_provenance(
     expected_publisher = {
         "kind": "GitHub",
         "repository": repository,
-        "workflow": "release.yml",
+        "workflow": workflow,
         "environment": environment,
     }
     if publisher != expected_publisher:
-        raise ProvenanceError("integrity publisher does not match the release workflow")
+        raise ProvenanceError("integrity publisher does not match the expected workflow")
     attestations = bundle.get("attestations")
     if not isinstance(attestations, list) or not attestations:
         raise ProvenanceError("integrity bundle has no attestations")
@@ -71,6 +72,7 @@ def main() -> int:
     parser.add_argument("--filename", required=True)
     parser.add_argument("--environment", required=True)
     parser.add_argument("--repository", required=True)
+    parser.add_argument("--workflow", required=True)
     args = parser.parse_args()
     payload = json.loads(args.payload.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -87,6 +89,7 @@ def main() -> int:
         digest=digest,
         environment=args.environment,
         repository=args.repository,
+        workflow=args.workflow,
     )
     return 0
 

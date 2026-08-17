@@ -44,7 +44,7 @@ and exact resume action.
 
 ## Development builds
 
-Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
+Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies the exact `testpypi.yml` PEP 740 publisher and subjects plus bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
 
 Development builds never create tags or GitHub Releases and never publish to production PyPI. TestPyPI is public disclosure, so only reviewed pull requests may reach `main`.
 
@@ -67,7 +67,8 @@ Registry reruns are fail-closed. An absent release may be published and an exact
 
 ## Required configuration
 
-- TestPyPI Trusted Publisher: workflow `release.yml`, environment `testpypi-public-disclosure`.
+- TestPyPI development Trusted Publisher: workflow `testpypi.yml`, environment `testpypi-public-disclosure`.
+- TestPyPI stable Trusted Publisher: workflow `release.yml`, environment `testpypi-public-disclosure`.
 - PyPI Trusted Publisher: workflow `release.yml`, environment `pypi-production`.
 - Both environments restrict deployment to protected `main` and do not add a second manual approval after the release PR merge.
 - The `main` ruleset requires pull requests, linear history, signed commits, resolved conversations, required merge checks, and blocks deletion and force pushes.

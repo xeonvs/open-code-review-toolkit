@@ -194,7 +194,9 @@ def encoded_statement(filename: str, digest: str) -> str:
     return base64.b64encode(json.dumps(statement).encode()).decode()
 
 
-def integrity_payload(filename: str, digest: str) -> dict[str, Any]:
+def integrity_payload(
+    filename: str, digest: str, *, workflow: str = "release.yml"
+) -> dict[str, Any]:
     """Return one minimal registry-authoritative integrity response."""
 
     return {
@@ -204,7 +206,7 @@ def integrity_payload(filename: str, digest: str) -> dict[str, Any]:
                 "publisher": {
                     "kind": "GitHub",
                     "repository": "synthetic/open-code-review-toolkit",
-                    "workflow": "release.yml",
+                    "workflow": workflow,
                     "environment": "pypi-production",
                 },
                 "attestations": [{"envelope": {"statement": encoded_statement(filename, digest)}}],
@@ -224,7 +226,27 @@ def test_registry_provenance_requires_exact_publisher_and_subject() -> None:
         digest=digest,
         environment="pypi-production",
         repository="synthetic/open-code-review-toolkit",
+        workflow="release.yml",
     )
+
+    development = integrity_payload(filename, digest, workflow="testpypi.yml")
+    provenance.verify_provenance(
+        development,
+        filename=filename,
+        digest=digest,
+        environment="pypi-production",
+        repository="synthetic/open-code-review-toolkit",
+        workflow="testpypi.yml",
+    )
+    with pytest.raises(provenance.ProvenanceError, match="publisher"):
+        provenance.verify_provenance(
+            development,
+            filename=filename,
+            digest=digest,
+            environment="pypi-production",
+            repository="synthetic/open-code-review-toolkit",
+            workflow="release.yml",
+        )
 
     payload["attestation_bundles"][0]["publisher"]["environment"] = "other"
     with pytest.raises(provenance.ProvenanceError, match="publisher"):
@@ -234,6 +256,7 @@ def test_registry_provenance_requires_exact_publisher_and_subject() -> None:
             digest=digest,
             environment="pypi-production",
             repository="synthetic/open-code-review-toolkit",
+            workflow="release.yml",
         )
 
 
@@ -247,6 +270,7 @@ def test_registry_provenance_rejects_wrong_digest_and_malformed_statement() -> N
             digest="a" * 64,
             environment="pypi-production",
             repository="synthetic/open-code-review-toolkit",
+            workflow="release.yml",
         )
 
     payload["attestation_bundles"][0]["attestations"][0]["envelope"]["statement"] = "bad"
@@ -257,6 +281,7 @@ def test_registry_provenance_rejects_wrong_digest_and_malformed_statement() -> N
             digest="a" * 64,
             environment="pypi-production",
             repository="synthetic/open-code-review-toolkit",
+            workflow="release.yml",
         )
 
 
