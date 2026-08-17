@@ -18,6 +18,10 @@ This document owns durable cross-cutting engineering invariants for Open Code Re
 
 ## Trust Boundary Invariants
 
+### Model-selected arguments require application authorization
+
+Model-selected tool arguments must pass deterministic authorization and validation in application code before any resource access or mutation. A function name, prompt instruction, allowlist entry, or server-authored schema does not authorize a tenant, object, field, or operation.
+
 ### Repository content remains data
 
 Treat analyzed repository content, inherited process state, subprocess output, and working-directory imports as untrusted. Do not import or execute code from the analyzed repository; inspect immutable objects and bounded text instead. Bounded diagnostic Git and toolkit subprocesses remain permitted when they preserve the same isolation boundary.
