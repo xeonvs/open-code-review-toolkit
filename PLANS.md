@@ -40,7 +40,7 @@ Qualify checksum-verified Open Code Review 1.9.5 against every toolkit-consumed 
 2. [x] Download and checksum-verify the official Darwin arm64 binary, update the local OCR installation to 1.9.5, and run version/help plus deterministic local compatibility probes.
 3. [x] Promote 1.9.5 in compatibility evidence, preflight, synthetic GitLab version/checksum, and tests; require the aggregate review-budget flag in future qualification.
 4. [x] Add the explicit synthetic GitLab aggregate budget control and document its independent partial-result, coverage, and approval behavior.
-5. [ ] Reconcile BL-016 and BL-017 plus roadmap/strategy wording so profiles cannot hide coverage limits and scan-only telemetry does not create toolkit scope.
+5. [x] Reconcile BL-016 and BL-017 plus roadmap/strategy wording so profiles cannot hide coverage limits and scan-only telemetry does not create toolkit scope.
 6. [x] Add Towncrier feature/rules entries and record the human conclusion for every upstream change.
 7. [x] Run focused tests, real executable probes, the complete quality/security/package matrix, requirement-to-evidence anti-mock review, architecture/self-review, full diff and privacy checks; correct every actionable finding.
 8. [ ] Merge the protected feature PR after exact-head checks and independently verify its TestPyPI development artifacts and supported-Python installs.
@@ -52,6 +52,7 @@ Qualify checksum-verified Open Code Review 1.9.5 against every toolkit-consumed 
 - Hosted run `32000131436` verified every official asset and the existing Linux amd64 contracts. The extended local real-executable probe additionally verifies `--max-tokens-budget`: two of three files complete, their findings survive, and the third is represented by `summary.budget_exceeded`, `token_budget_reached`, and manifest `failed(budget)` coverage normalized as partial.
 - The controlled HTTP peer is beyond the production OCR boundary; no mock replaces OCR, its launcher, dispatch, accounting, manifest, JSON serialization, or toolkit parser. The test evidence matrix records the exact claim limits.
 - OCR 1.9.5 is promoted in the manifest, preflight, and synthetic executable pin. The example exposes `OCR_MAX_TOKENS_BUDGET=0` and passes it as a quoted OCR argument; documentation keeps it independent from profiles and explains approximate enforcement, partial findings, coverage, and approval ineligibility.
+- BL-016 is parked and narrowed to demonstrated model aliases; hidden aggregate/per-file/tool limits are excluded. BL-017 remains ready and treats 1.9.5 scan-only output plus review telemetry as OCR-owned rather than a toolkit runtime gap. Roadmap and strategy agree.
 
 #### Review and validation checkpoint
 
