@@ -135,9 +135,9 @@ The evidence engine selects applicable root and ancestor guidance before immutab
 
 ## Conditional review profiles and quality measurement
 
-Qualified OCR releases expose explicit per-run provider/model overrides plus additive result identity. A lightweight explicit profile abstraction may select that one run-level model and existing OCR limits: `economy`, `standard`, or `strong`. Profiles do not dispatch individual files or tools to different models, and the compatibility manifest remains the source of capability availability.
+Qualified OCR releases expose explicit per-run provider/model overrides, additive result identity, and an independent aggregate review budget. Direct operator settings remain the current contract. Model-profile aliases such as `economy`, `standard`, or `strong` are parked until repeated use demonstrates that aliases are needed and the owner approves a closed matrix. A profile cannot hide aggregate, per-file, or tool limits that change review completeness; those remain explicit inputs with partial coverage reported normally.
 
-Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, and never routes a merge request to a full-repository scan.
+Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, never changes explicit coverage controls, and never routes a merge request to a full-repository scan.
 
 ## OCR compatibility policy
 

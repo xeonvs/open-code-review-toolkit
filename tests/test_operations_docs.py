@@ -95,11 +95,28 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
     assert 'OCR_POST_MODE: "draft"' in example
     assert 'OCR_STRICT_POSTING: "true"' in example
     assert 'OCR_AUTO_APPROVE: "true"' in example
+    assert 'OCR_MAX_TOKENS_BUDGET: "0"' in example
+    assert '--max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}"' in example
+    assert "OCR_MAX_TOKENS_BUDGET" in configuration
     assert "OCR_POST_MODE=draft" in configuration
     assert "OCR_STRICT_POSTING=true" in configuration
     assert 'OCR_POST_BADGES: "shields"' in example
     assert "OCR_POST_BADGES" in configuration
     assert "default `text` mode" in configuration
+
+
+def test_aggregate_review_budget_is_explicit_and_never_looks_complete() -> None:
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+
+    for document in (operations, configuration, gitlab):
+        assert "OCR_MAX_TOKENS_BUDGET" in document
+        assert "partial" in document
+        assert "automatic" in document
+    assert "operator-owned cost ceiling" in configuration
+    assert "not a quality profile" in configuration
+    assert "approximate" in configuration
 
 
 def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:

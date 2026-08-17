@@ -14,7 +14,7 @@ Open Code Review Toolkit uses environment variables for CI/runtime configuration
 | `OCR_LLM_EXTRA_HEADERS` | Optional JSON object of additional string headers. |
 | `OCR_LLM_SUPPORTS_FUNCTION_CALLING` | Boolean capability flag. |
 | `OCR_LLM_SUPPORTS_REASONING` | Boolean capability flag. |
-| `OCR_LLM_MAX_TOKENS` | Optional positive completion-token limit. |
+| `OCR_MAX_TOKENS_BUDGET` | Optional non-negative aggregate input-plus-output token ceiling passed to `ocr review`; `0` (default) is unlimited. |
 | `OCR_LLM_VALIDATE_MODEL` | `true`, `false`, or `auto`; defaults to `false`. |
 | `OCR_LLM_MODELS_URL` | Explicit `/models` metadata URL. |
 | `OCR_LLM_ALLOWED_MODELS` | Optional comma-separated offline allowlist for `auto` validation. |
@@ -56,6 +56,15 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 `OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, `OCR_POST_BADGES`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
 
 `OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
+
+`OCR_MAX_TOKENS_BUDGET` is an operator-owned cost ceiling for one diff review,
+not a quality profile or telemetry setting. The synthetic GitLab example passes
+it directly to the recommended OCR's `--max-tokens-budget`; leave it at `0` for
+unlimited review. When a positive ceiling stops dispatch, OCR preserves completed
+findings and reports the unreviewed files as budget-attributed failed coverage.
+The toolkit publishes that run as partial and never treats it as clean or eligible
+for automatic approval. The cap is approximate because already-running work may
+finish and OCR accounts the provider-reported input plus output tokens.
 
 `OCR_POST_BADGES` controls only category/severity presentation on individual
 findings. The default `text` mode renders local Markdown labels and makes no

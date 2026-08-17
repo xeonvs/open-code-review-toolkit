@@ -52,6 +52,8 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
 
     assert workflow.index("  - lint") < workflow.index("  - ai_review")
     assert 'OCR_LLM_VALIDATE_MODEL: "false"' in workflow
+    assert 'OCR_MAX_TOKENS_BUDGET: "0"' in workflow
+    assert '--max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}"' in review_job
     assert "lint:\n  stage: lint" in workflow
     assert "open_code_review:" in review_job
     assert "when: manual" not in review_job.split("open_code_review:", 1)[1]
@@ -88,6 +90,8 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
         assert obsolete not in workflow
     assert "OCR_LLM_VALIDATE_MODEL" in configuration
     assert "OCR_LLM_VALIDATE_MODEL" in workflow
+    assert "OCR_MAX_TOKENS_BUDGET" in configuration
+    assert "OCR_MAX_TOKENS_BUDGET" in workflow
     assert "OCR_TOOLKIT_VERSION" in workflow
     assert "OCR_TOOLKIT_CHECKSUMS_URL" in workflow
     assert (

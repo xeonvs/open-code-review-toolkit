@@ -61,6 +61,7 @@ REQUIRED_REVIEW_FLAGS = {
     "--audience",
     "--background-file",
     "--format",
+    "--max-tokens-budget",
     "--from",
     "--preview",
     "--rule",
@@ -235,6 +236,25 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
         evidence = load_json(evidence_path)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             _fail(f"evidence does not qualify {version} as compatible")
+        if _version(version) >= (1, 9, 5):
+            contracts = evidence.get("contracts")
+            required_flags = (
+                contracts.get("required_review_flags") if isinstance(contracts, dict) else None
+            )
+            budget_probe = (
+                contracts.get("review_budget_probe") if isinstance(contracts, dict) else None
+            )
+            if not isinstance(required_flags, list) or "--max-tokens-budget" not in required_flags:
+                _fail(f"evidence does not qualify the review budget flag for {version}")
+            if budget_probe != {
+                "budget": 30_000,
+                "completed": 2,
+                "failed_budget": 1,
+                "partial_findings_preserved": True,
+                "result": "passed",
+                "selected": 3,
+            }:
+                _fail(f"evidence does not qualify partial review budget behavior for {version}")
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -593,6 +613,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     """Deterministic OpenAI-compatible response sequence for OCR probes."""
 
     request_count = 0
+    tokens_per_request = 2
 
     def do_POST(self) -> None:
         if self.path != "/v1/chat/completions":
@@ -610,56 +631,84 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         if not isinstance(request, dict):
             self.send_error(400)
             return
+        messages = request.get("messages")
+        if not isinstance(messages, list):
+            self.send_error(400)
+            return
         type(self).request_count += 1
-        if type(self).request_count == 1:
-            arguments = json.dumps(
-                {
-                    "comments": [
-                        {
-                            "content": "Synthetic compatibility finding.",
-                            "existing_code": "    return 2",
-                            "thinking": "Synthetic private compatibility reasoning.",
-                            "category": "maintainability",
-                            "severity": "low",
-                        }
-                    ]
-                }
-            )
+        tools = request.get("tools")
+        tool_names: set[str] = set()
+        if isinstance(tools, list):
+            for tool in tools:
+                function = tool.get("function") if isinstance(tool, dict) else None
+                if isinstance(function, dict) and isinstance(function.get("name"), str):
+                    tool_names.add(function["name"])
+        if "approve_all_comments" in tool_names:
             message = {
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
                     {
-                        "id": "call-comment",
+                        "id": "call-filter",
                         "type": "function",
-                        "function": {"name": "code_comment", "arguments": arguments},
-                    }
-                ],
-            }
-            finish_reason = "tool_calls"
-        elif type(self).request_count == 2:
-            message = {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": "call-done",
-                        "type": "function",
-                        "function": {"name": "task_done", "arguments": "{}"},
+                        "function": {"name": "approve_all_comments", "arguments": "{}"},
                     }
                 ],
             }
             finish_reason = "tool_calls"
         else:
-            message = {"role": "assistant", "content": "[]"}
-            finish_reason = "stop"
+            prior_comment = any(
+                isinstance(message, dict)
+                and any(
+                    isinstance(call, dict)
+                    and isinstance(call.get("function"), dict)
+                    and call["function"].get("name") == "code_comment"
+                    for call in message.get("tool_calls", [])
+                )
+                for message in messages
+            )
+            if not prior_comment:
+                arguments = json.dumps(
+                    {
+                        "comments": [
+                            {
+                                "content": "Synthetic compatibility finding.",
+                                "existing_code": "    return 2",
+                                "thinking": "Synthetic private compatibility reasoning.",
+                                "category": "maintainability",
+                                "severity": "low",
+                            }
+                        ]
+                    }
+                )
+                function = {"name": "code_comment", "arguments": arguments}
+                call_id = "call-comment"
+            else:
+                function = {"name": "task_done", "arguments": "{}"}
+                call_id = "call-done"
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": function,
+                    }
+                ],
+            }
+            finish_reason = "tool_calls"
         payload = json.dumps(
             {
                 "id": f"compat-{type(self).request_count}",
                 "object": "chat.completion",
                 "model": "synthetic-model",
                 "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                "usage": {
+                    "prompt_tokens": type(self).tokens_per_request - 1,
+                    "completion_tokens": 1,
+                    "total_tokens": type(self).tokens_per_request,
+                },
             }
         ).encode()
         self.send_response(200)
@@ -675,8 +724,13 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def _stub_gateway() -> Iterator[str]:
+def _stub_gateway(*, tokens_per_request: int = 2) -> Iterator[str]:
+    """Serve deterministic responses with configurable real usage accounting."""
+
+    if tokens_per_request < 2:
+        _fail("stub gateway token usage must be at least two")
     _StubHandler.request_count = 0
+    _StubHandler.tokens_per_request = tokens_per_request
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -710,6 +764,104 @@ def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> li
             _fail("candidate full review emitted an invalid additive LLM provider identity")
         optional_capabilities.add("llm_result_identity")
     return sorted(optional_capabilities)
+
+
+def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Drive the real OCR review budget gate and validate its partial manifest."""
+
+    git_env = _isolated_probe_environment(directory / "budget-git-home")
+    repo = directory / "budget-review"
+    repo.mkdir()
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+    for name in ("first.py", "second.py", "third.py"):
+        (repo / name).write_text("def value():\n    return 1\n", encoding="utf-8")
+    _run(["git", "add", "first.py", "second.py", "third.py"], cwd=repo, env=git_env)
+    _run(["git", "commit", "-m", "budget baseline"], cwd=repo, env=git_env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    for name in ("first.py", "second.py", "third.py"):
+        (repo / name).write_text("def value():\n    return 2\n", encoding="utf-8")
+    _run(["git", "commit", "-am", "budget changes"], cwd=repo, env=git_env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+
+    home = directory / "budget-review-home"
+    env = _isolated_probe_environment(home)
+    with _stub_gateway(tokens_per_request=20_000) as gateway_url:
+        env.update(
+            {
+                "OCR_LLM_URL": gateway_url,
+                "OCR_LLM_TOKEN": "synthetic-token",
+                "OCR_LLM_MODEL": "synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_TELEMETRY_ENABLED": "false",
+            }
+        )
+        output = _run(
+            [
+                str(binary),
+                "review",
+                "--from",
+                base,
+                "--to",
+                head,
+                "--format",
+                "json",
+                "--audience",
+                "agent",
+                "--concurrency",
+                "1",
+                "--max-tokens-budget",
+                "30000",
+            ],
+            cwd=repo,
+            env=env,
+        )
+    try:
+        sample = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("budget-limited review did not emit JSON") from exc
+    if not isinstance(sample, dict):
+        _fail("budget-limited review emitted an unsupported result object")
+    summary = sample.get("summary")
+    if not isinstance(summary, dict) or summary.get("budget_exceeded") is not True:
+        _fail("budget-limited review omitted summary.budget_exceeded")
+
+    from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+
+    try:
+        outcome = parse_result_outcome(sample)
+    except OcrResultContractError as exc:
+        raise CompatibilityError(
+            f"budget-limited review emitted an unsupported result object: {exc}"
+        ) from exc
+    if (
+        outcome.kind != "partial"
+        or not outcome.budget_exceeded
+        or outcome.selected_count != 3
+        or outcome.completed_count != 2
+        or outcome.failed_count != 1
+        or len(outcome.failed_items) != 1
+        or outcome.failed_items[0].classification != "budget"
+    ):
+        _fail("real OCR budget gate did not produce the expected partial coverage contract")
+    warnings = sample.get("warnings")
+    if not isinstance(warnings, list) or not any(
+        isinstance(warning, dict) and warning.get("type") == "token_budget_reached"
+        for warning in warnings
+    ):
+        _fail("budget-limited review omitted the token_budget_reached warning")
+    comments = sample.get("comments")
+    if not isinstance(comments, list) or len(comments) != 2:
+        _fail("budget-limited review did not preserve its completed finding")
+    return {
+        "budget": 30_000,
+        "completed": 2,
+        "failed_budget": 1,
+        "partial_findings_preserved": True,
+        "result": "passed",
+        "selected": 3,
+    }
 
 
 def _preview_file_selection(payload: dict[str, Any] | str, path: str) -> tuple[bool, object]:
@@ -940,6 +1092,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
 
     contracts: dict[str, Any] = {
         "optional_capabilities": optional_capabilities,
+        "review_budget_probe": _budget_result_probe(binary, directory),
         "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),
         "version_probe": "passed",
         "required_review_flags": sorted(REQUIRED_REVIEW_FLAGS),

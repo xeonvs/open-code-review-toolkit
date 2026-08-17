@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.9.4"
+  OCR_VERSION: "v1.9.5"
   OCR_TOOLKIT_VERSION: "0.6.1"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "fcef1060e7e9bad8300111b68784f8c81ee696ca58206f6bb739709625f6c944"
+  OCR_SHA256: "864cf7e7304e37974c298eded2685ec0fb63a4ac6c518ad4524da718e3e72012"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on exact-SHA approval; set "false" for a comment-only bot.
@@ -19,6 +19,8 @@ variables:
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
   OCR_RUN_HELPER_TESTS: "false"
+  # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
+  OCR_MAX_TOKENS_BUDGET: "0"
   # Reviews default to English. To request another language, for example Russian, set:
   # OCR_REVIEW_LANGUAGE: "Russian"
 
@@ -72,7 +74,7 @@ open_code_review:
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
-    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json || export OCR_EXIT_CODE=$?
+    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
     - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 
 open_code_review_self_test:

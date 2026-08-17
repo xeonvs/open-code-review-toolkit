@@ -11,7 +11,7 @@ flowchart LR
     M0 --> M3["M3 External MCP hardening<br/>next / planned"]
     M1 --> M2["M2 Ecosystem and framework coverage<br/>established"]
     M1 --> M4["M4 Policy and project guidance<br/>established"]
-    M1 --> M5["M5 Measurement audit and profiles<br/>planned"]
+    M1 --> M5["M5 Measurement audit and profiles<br/>planned / conditional"]
     M1 --> M6["M6 Later and conditional work<br/>conditional"]
 
     classDef established fill:#1f883d,stroke:#116329,color:#ffffff
@@ -32,7 +32,7 @@ flowchart LR
 | M2 Ecosystem and framework coverage | Established | Supply framework and template evidence selected from demonstrated use without creating framework-specific review engines. | Established evidence, snapshot/delta, scoped-completeness, and built-in MCP contracts. | Selected static plugins and template review rules have deterministic fixtures, bounds, provenance, component ownership, completeness, first-class source/target delta queries, installed-artifact validation, verified use through the existing built-in MCP, and independently read-back stable delivery. |
 | M3 External MCP hardening | Next / planned | Threat-model external references and validate provider-specific read-only examples on the established built-in/external MCP composition boundary. | Existing external MCP and built-in composition for current generic operation; BL-011 before reference detection or provider examples. | Threat model precedes reference detection and provider examples; synthetic YouTrack, Confluence, or documentation examples preserve narrow read-only tools, reserved namespaces, and trust separation. Managed OAuth remains conditional on a named provider requirement. |
 | M4 Policy and project guidance | Established | Supply relevant target-branch decisions and guidance without allowing self-whitelisting. | Evidence scoping and target/source snapshots. | Stable delivery independently proves backward-compatible structured decisions, bounded target-derived guidance, one read-only MCP lifecycle, and closure of the tracked release work. |
-| M5 Profiles and quality measurement | Planned | Audit current OCR telemetry and result-derived review signals before adding profiles or any toolkit metrics. | Established result, discussion, coverage, posting, and MCP-use receipts; the owner-approved matrix is required only for profile implementation. | The audit either proves current bounded reporting sufficient or isolates a separately scoped provider-neutral gap; any later profiles are deterministic and documented without sensitive, high-cardinality, or duplicate data. |
+| M5 Profiles and quality measurement | Planned / conditional | Audit current OCR telemetry and result-derived review signals; add model-profile aliases only after demonstrated operational need. | Established result, discussion, coverage, posting, and MCP-use receipts; a demonstrated alias need and owner-approved matrix are required only for profile implementation. | The audit either proves current bounded reporting sufficient or isolates a separately scoped provider-neutral gap; any later model profiles remain independent from explicit coverage and budget controls. |
 | M6 Later and conditional work | Conditional | Activate routing, more ecosystems, fuzzing, configuration, forge adapters, or governance work only from demonstrated need. | Milestone-specific activation signals and stable preceding contracts. | Each item meets its own trigger and ships as a coherent validated slice without weakening core invariants. |
 
 ## Ordering notes
@@ -41,7 +41,7 @@ flowchart LR
 - M3 threat modeling can proceed from the established generic composition boundary; provider examples wait for BL-011, while managed OAuth does not block static-header or stdio operation.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M6 and do not reopen M2; M4 can proceed independently from the stable evidence contracts it consumes.
 - M4 is established through independently verified v0.6.0 artifacts, provenance, hashes, annotated tag, immutable GitHub Release, supported-Python installs, and release-receipt closure. Later target-policy identity improvements extend the established boundary without reopening the milestone.
-- The M5 measurement-gap audit can begin from current lifecycle and result receipts; BL-016 is required only for later named-profile comparisons.
+- The M5 measurement-gap audit can begin from current lifecycle and result receipts. BL-016 is parked because OCR already exposes direct run-level selection; any later alias must leave budget and coverage controls explicit.
 - Versioned documentation remains a separate MCP integration: the toolkit supplies package/version evidence but does not store documentation.
 - Additional code-hosting adapters are not ecosystem collectors. They remain conditional because the near-term product is GitLab-first.
 - Calendar commitments belong in release or project management systems when work is funded; they are intentionally absent here.

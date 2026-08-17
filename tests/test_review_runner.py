@@ -443,8 +443,9 @@ def test_run_review_unit_redacts_failure_from_mocked_child_output() -> None:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")
+@pytest.mark.parametrize("budget", ["0", "120000"])
 def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
-    tmp_path: Path,
+    tmp_path: Path, budget: str
 ) -> None:
     """Exercise the production launcher against a child process beyond its boundary."""
 
@@ -476,7 +477,15 @@ def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
         exit_code = review_runner.run_review(
             result_path,
             stderr_path,
-            ["--from", "base ref", "--to=head-ref", "--format", "json"],
+            [
+                "--from",
+                "base ref",
+                "--to=head-ref",
+                "--format",
+                "json",
+                "--max-tokens-budget",
+                budget,
+            ],
         )
 
     assert exit_code == 0
@@ -488,6 +497,8 @@ def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
             "--to=head-ref",
             "--format",
             "json",
+            "--max-tokens-budget",
+            budget,
         ],
         "secret_present": True,
     }
