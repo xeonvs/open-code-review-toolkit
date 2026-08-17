@@ -239,6 +239,12 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert '--workflow "${workflow}"' in verifier
     assert "application/vnd.pypi.integrity.v1+json" in verifier
     assert '"${destination}"/*.whl' in verifier
+    assert "destination=/tmp/${registry}-artifacts-${version}" in verifier
+    assert "wheel_environment=/tmp/${registry}-wheel-${version}" in verifier
+    assert "sdist_environment=/tmp/${registry}-sdist-${version}" in verifier
+    assert "shutil.rmtree(path, ignore_errors=True)" in verifier
+    assert 'path.parent != Path("/tmp")' in verifier
+    assert "rm -rf" not in verifier
     assert "scripts/install_local_artifact.py" in verifier
     assert "--require-hashes" in (PROJECT_ROOT / "scripts/install_local_artifact.py").read_text(
         encoding="utf-8"
