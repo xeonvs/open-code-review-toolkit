@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.9.4"
-    assert manifest["monitoring_floor"] == "1.9.4"
+    assert manifest["recommended_version"] == "1.9.5"
+    assert manifest["monitoring_floor"] == "1.9.5"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -63,6 +63,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.9.2", "tested"),
         ("1.9.3", "tested"),
         ("1.9.4", "tested"),
+        ("1.9.5", "tested"),
     ]
 
 
@@ -96,6 +97,28 @@ def test_manifest_rejects_floor_above_recommended() -> None:
         module.validate_manifest(manifest, PROJECT_ROOT)
 
 
+def test_manifest_rejects_missing_required_review_budget_evidence(tmp_path: Path) -> None:
+    module = load_script()
+    root = tmp_path
+    compatibility = root / "compatibility"
+    evidence_dir = compatibility / "evidence"
+    evidence_dir.mkdir(parents=True)
+    source_evidence = PROJECT_ROOT / "compatibility" / "evidence" / "ocr-1.9.5.json"
+    evidence = json.loads(source_evidence.read_text(encoding="utf-8"))
+    evidence["contracts"].pop("review_budget_probe")
+    evidence_path = evidence_dir / "ocr-1.9.5.json"
+    evidence_path.write_bytes(module.canonical_json(evidence))
+
+    manifest = module.load_json(MANIFEST)
+    manifest["releases"] = [item for item in manifest["releases"] if item["version"] == "1.9.5"]
+    manifest["releases"][0]["evidence_sha256"] = module.hashlib.sha256(
+        evidence_path.read_bytes()
+    ).hexdigest()
+
+    with pytest.raises(module.CompatibilityError, match="partial review budget behavior"):
+        module.validate_manifest(manifest, root)
+
+
 def test_manifest_rejects_assets_that_differ_from_evidence() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
@@ -125,9 +148,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.9.5")]
+    first_page = [release("1.9.6")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.9.4")]
+    second_page = [release("1.9.5")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -137,14 +160,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.9.5"]
+    assert [item["tag_name"] for item in unseen] == ["v1.9.6"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.9.5")]
+    page = [release("1.9.6")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -189,14 +212,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.9.5")])
+    matrix = module.qualification_matrix(manifest, [release("1.9.6")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.9.4",
-                "tag": "v1.9.5",
-                "tested_baseline_version": "1.9.4",
+                "comparison_version": "1.9.5",
+                "tag": "v1.9.6",
+                "tested_baseline_version": "1.9.5",
             }
         ]
     }
@@ -562,6 +585,21 @@ def test_metadata_request_rejects_non_github_origin_before_authentication() -> N
         module._request_json("https://downloads.example.invalid/releases")
 
 
+def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> None:
+    module = load_script()
+
+    with module._stub_gateway() as gateway:
+        request = module.urllib.request.Request(
+            f"{gateway}/chat/completions",
+            data=json.dumps({"messages": {"invalid": True}}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(module.urllib.error.HTTPError) as error:
+            module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+
+    assert error.value.code == 400
+
+
 def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     module = load_script()
     captured: dict[str, Any] = {}
@@ -857,11 +895,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.5",
+        "version": "1.9.6",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.9.4",
-        "tested_baseline_version": "1.9.4",
+        "comparison_version": "1.9.5",
+        "tested_baseline_version": "1.9.5",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -880,8 +918,8 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         "version": "1.10.0",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.4",
-        "tested_baseline_version": "1.9.4",
+        "comparison_version": "1.9.5",
+        "tested_baseline_version": "1.9.5",
     }
 
     with pytest.raises(module.CompatibilityError, match="explicit human review"):
@@ -940,11 +978,11 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.5",
+        "version": "1.9.6",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.4",
-        "tested_baseline_version": "1.9.4",
+        "comparison_version": "1.9.5",
+        "tested_baseline_version": "1.9.5",
     }
 
     with pytest.raises(module.CompatibilityError, match="only evidence versions"):
@@ -952,7 +990,7 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.9.6": "Synthetic unrelated conclusion."},
+            human_conclusions={"1.9.7": "Synthetic unrelated conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -964,11 +1002,11 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.5",
+        "version": "1.9.6",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.4",
-        "tested_baseline_version": "1.9.4",
+        "comparison_version": "1.9.5",
+        "tested_baseline_version": "1.9.5",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded plain text"):
@@ -976,7 +1014,7 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.9.5": conclusion},
+            human_conclusions={"1.9.6": conclusion},
             root=PROJECT_ROOT,
         )
 

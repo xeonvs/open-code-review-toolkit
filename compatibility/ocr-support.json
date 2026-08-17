@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.4",
-  "recommended_version": "1.9.4",
+  "monitoring_floor": "1.9.5",
+  "recommended_version": "1.9.5",
   "releases": [
     {
       "assets": [
@@ -828,6 +828,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.4",
       "status": "tested",
       "version": "1.9.4"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "e1349da91fee8fa6cfb439c537b891ac8c56d135ac432c059932d3ec960ee948",
+          "size": 47267440
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "459d3986e59fed5ed8ad6a97bc02d2eb995a89106b3fe6a6fcf74bb69cab1b73",
+          "size": 44932370
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "864cf7e7304e37974c298eded2685ec0fb63a4ac6c518ad4524da718e3e72012",
+          "size": 45752482
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "4a7c4e08028e893f6fe7d8daa1522742863b5876ddd0a8b83d7dd3c93187b3f6",
+          "size": 43122850
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "0180796bf64ebd468a68a71ab247ffdeac41f010a28c67983aaa090f26d0fedc",
+          "size": 46987264
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "af265b4660c9a9e2deec73e424da0efb5e32f557c2b1f57765ad19d0f4174e57",
+          "size": 43772416
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "d08be583facd2479181058e5e371937be48ad644107c16d6301a551d1c48e2f4",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.5.json",
+      "evidence_sha256": "1cfc0582ab01adc63b0acc79f1ea408e3c2b15d8bb9c52fdbe4858c0941ca1a0",
+      "human_conclusion": "Compatible after human adjacent source review in issue #93 and hosted workflow run 32000131436, plus a checksum-verified local Darwin arm64 qualification. Required review flags now explicitly include --max-tokens-budget; real OCR preserves completed findings and emits a partial manifest with budget-attributed failed coverage when that cap stops dispatch. The new scan budget summary is scan-only and does not expand the toolkit review boundary. Swift built-in rules and default test exclusions change the effective recommended-OCR rules contract. Cross-file relocation and the conservative tool-based review filter improve upstream finding positioning/filtering without changing toolkit result, MCP, posting, or authority contracts. The kimi-global preset, plugin marketplaces, viewer handling, and documentation require no toolkit adaptation.",
+      "published_at": "2026-08-17T04:01:19Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.5",
+      "status": "tested",
+      "version": "1.9.5"
     }
   ],
   "schema_version": 1,

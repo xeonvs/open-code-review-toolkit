@@ -32,6 +32,8 @@ suppressed.
 
 `OCR_MAX_POST_COMMENTS` limits individually published findings. The default is 50 and the hard limit is 200. Omitted findings are counted in the summary rather than silently disappearing.
 
+`OCR_MAX_TOKENS_BUDGET` can set an aggregate input-plus-output token ceiling for the OCR diff review. The default `0` is unlimited. A positive ceiling is approximate rather than a hard billing cutoff because already-running work may complete; when it stops further dispatch, completed findings remain publishable and unreviewed files stay explicit as budget-attributed failed coverage. Such a run is partial and cannot automatically approve.
+
 The outcome wording distinguishes skipped, complete, complete-with-warnings, incomplete, token-budget, and failed reviews while preserving the finding state in that same line. A complete clean review is visibly positive; a complete review with findings or only reviewer-suppressed findings is neutral; warning, partial, budget, and failed states never look clean. Findings withheld by the posting limit remain counted even when the limit allows no individual finding note. OCR 1.8.5 and later manifest failures provide the canonical failed-file receipt; legacy warnings are a bounded fallback, and `summary.files_reviewed` is never treated as proof of successful coverage. Zero-valued counters and configured-but-unused MCP servers are omitted. Status and aggregate semantic-category emoji are enabled by default and can be disabled together with `OCR_POST_EMOJI=false`; finding labels remain text unless their separate badge mode is enabled.
 
 ## Automatic approval lifecycle

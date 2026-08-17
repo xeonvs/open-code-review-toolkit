@@ -1,0 +1,114 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "e1349da91fee8fa6cfb439c537b891ac8c56d135ac432c059932d3ec960ee948",
+      "size": 47267440
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "459d3986e59fed5ed8ad6a97bc02d2eb995a89106b3fe6a6fcf74bb69cab1b73",
+      "size": 44932370
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "864cf7e7304e37974c298eded2685ec0fb63a4ac6c518ad4524da718e3e72012",
+      "size": 45752482
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "4a7c4e08028e893f6fe7d8daa1522742863b5876ddd0a8b83d7dd3c93187b3f6",
+      "size": 43122850
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "0180796bf64ebd468a68a71ab247ffdeac41f010a28c67983aaa090f26d0fedc",
+      "size": 46987264
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "af265b4660c9a9e2deec73e424da0efb5e32f557c2b1f57765ad19d0f4174e57",
+      "size": 43772416
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "d08be583facd2479181058e5e371937be48ad644107c16d6301a551d1c48e2f4",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.9.4",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-17T04:01:19Z",
+  "release_changes": "## 🚀 Features\n\n- feat(scan): report token budget stop in JSON summary.budget_exceeded (#791)\n- feat(providers): add kimi-global (Moonshot international API) to built-in providers (#914)\n- feat(rules): add Swift review rules (#918)\n\n## 🐛 Bug Fixes\n\n- fix(plugin): separate client marketplace registrations (#908)\n- fix(diff): re-file comments whose code lives in another file (#921)\n- fix(review-filter): add `submit_filter_result` func for review filter stage (#295)\n\n## 📖 Documentation\n\n- docs(cli-reference): add missing ocr review flags examples (#920)\n- docs(cli-reference): document missing review flags (#900)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.9.4...v1.9.5",
+  "release_notes_sha256": "cd532585c6304f7f31ed00520f922970b1b28f1082203b50bb97a66d3dc98942",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.9.5",
+  "tested_baseline_version": "1.9.4",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.9.5"
+}

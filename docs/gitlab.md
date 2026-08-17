@@ -18,6 +18,8 @@ Store secrets as masked, protected CI variables. Do not place them in YAML, comm
 
 `OCR_REVIEW_LANGUAGE` is an optional non-secret OCR configuration setting and defaults to `English`. Set an explicit language name only when localized review output is required; `Russian` is one example.
 
+`OCR_MAX_TOKENS_BUDGET` is an optional non-secret aggregate review ceiling. Its default `0` is unlimited; a positive value can intentionally stop dispatch and yield a partial review with completed findings plus explicit budget-failed coverage. It is a separate operator control, not a named quality profile, and a budget-stopped run cannot automatically approve.
+
 ## Operating model
 
 `ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` resolves `OCR_REVIEW_LANGUAGE`. `ocr-ci review` verifies the exact reviewed source SHA, captures the current protected target SHA, and keeps those policy and forge diff identities separate. Repository-owned OCR rules plus accepted decisions and project guidance come from that immutable policy commit; OCR still reviews the original diff-base-to-source-head range. Explicit absolute rule paths outside the repository remain operator-owned.
