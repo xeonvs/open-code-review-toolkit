@@ -13,7 +13,10 @@ The canonical runtime [threat model](docs/security.md#threat-model) treats repos
 - escape acquisition/output bounds or let one exhausted domain suppress unrelated evidence;
 - inject active Markdown or protocol control syntax across a trust boundary;
 - turn untrusted review metadata into arbitrary remote-image requests;
-- expose credentials or private repository/provider material; or
+- expose credentials or private repository/provider material;
+- treat a tool-name allowlist, prompt, schema, host, tenant, or successful authentication as object authorization;
+- let untrusted context expand tools, traversal, model egress, publication, retention, suppression, or approval authority;
+- retain model prompts, tool arguments/results, or external records outside the documented containment boundary; or
 - perform an ambiguous or unguarded provider mutation with security impact.
 
 Calibrate findings to demonstrated reachability and impact. Prompt-like text without a privileged action path is not code execution. Same-owner modification of owner-only local artifacts is not an ordinary contributor escalation unless a lower-privilege writer is established. OpenSSF posture signals, repository age, and the documented single-maintainer review limitation are not vulnerability findings on their own. Safe bounded read-only diagnostics and synthetic reproduction are in scope; do not require live credentials, private source, or provider mutation to validate a report.

@@ -1,117 +1,135 @@
 # Security and trust model
 
-The toolkit bridges four trust domains: repository content, OCR and its LLM/MCP providers, CI secrets, and the GitLab API. None of the first three should be assumed safe merely because a job runs in a trusted project.
+The toolkit bridges repository/forge content, OCR and its LLM/MCP providers, CI/operator configuration and secrets, and provider APIs. No input becomes safe merely because a trusted pipeline acquired it. This document distinguishes the current runtime from planned controls explicitly.
 
 ## Threat model
 
 ### Assets
 
-- Immutable base, source, reviewed-head, and release identities.
-- Review integrity: selected files, evidence, coverage, findings, suppression decisions, and approval state.
-- Private evidence, OCR result, configuration, and release-receipt artifacts.
-- CI, GitLab, LLM-provider, registry, and optional MCP credentials.
-- Published packages, tags, attestations, release assets, and provider-side merge-request state.
+Current assets include immutable base, source, reviewed-head, protected-target, and release identities; review integrity and coverage; private evidence, OCR results and session transcripts; configuration and receipts; CI, forge, LLM, registry, and MCP credentials; published packages and provider state.
 
-### Attacker capabilities
+Planned M5 assets, currently absent, add external-object confidentiality and integrity; provider-declared author/account classes; immutable context/DLP policy; bounded context records and completeness; opaque run-bound handles; retrieval, model-egress, publication, and retention projections; and context receipts.
 
-A merge-request contributor may choose repository paths and blob contents, including manifests, templates, accepted-decision-like text, nested guidance, Markdown delimiters, and high-cardinality but bounded tree shapes. They may trigger a review pipeline and supply text that resembles reviewer or tool instructions. Repository content, OCR/LLM/MCP output, provider responses, inherited process state, and persisted local artifacts are therefore untrusted inputs even when the toolkit produced an earlier version of the artifact.
+### Actors and attacker capabilities
 
-The ordinary contributor is not assumed to control the protected target branch, protected CI variables, publishing identity, or trusted release environment. A compromised runner or a process with the same operating-system ownership as private artifacts is a stronger attacker; controls still fail closed where practical, but complete containment of that host-level compromise is outside the toolkit boundary.
+A merge-request contributor can choose repository paths, blobs, title, description, labels, source branch, and text resembling reviewer/tool instructions. Repository content, OCR/LLM/MCP output, provider responses, inherited process state, and persisted artifacts are untrusted even when the toolkit produced an earlier copy. An operator controls CI configuration, direct MCP servers, commands, endpoints, setup, and credentials; a direct MCP server controls its tool descriptions, schemas, and responses. A compromised runner or same-owner process is stronger than an ordinary contributor and remains a host-level residual risk.
 
-### Trust boundaries
+The planned M5 model also assumes mutable forge discussions, edits/reordering, automation or service-account impersonation, crafted references, externally controlled issue/page text, compromised adapter/MCP responses, cross-tenant identifiers, replay, and timing races. These planned inputs are not collected today.
+
+### Current trust transitions
 
 1. Repository paths and immutable Git blobs enter bounded collection and parsing.
-2. Persisted evidence, result, configuration, and receipt files re-enter schema validation and redaction.
-3. Typed evidence crosses into the compact OCR bootstrap and read-only MCP projections.
-4. OCR findings and coverage cross into GitLab Markdown, discussions,
-   suppression, and approval decisions. Optional remote finding images add a
-   third-party rendering boundary for normalized display metadata only.
-5. CI configuration and credentials cross into GitLab, LLM/MCP providers, package registries, and release automation.
-6. A release candidate crosses into protected-base authorization, publication, provenance, and external readback.
+2. Provider MR metadata enters closed invocation normalization; target-derived policy comes only from the captured protected-target SHA.
+3. Persisted evidence, results, OCR configuration, sessions, and receipts re-enter hostile parsing or external retention boundaries.
+4. Typed evidence crosses into the compact bootstrap and mandatory read-only evidence MCP.
+5. Operator-configured direct MCP command/endpoint/setup/credentials cross into OCR; server-authored descriptions and schemas cross into plan and main model context; model-generated arguments cross to allowed tools; textual responses cross back to the model and OCR session.
+6. OCR findings and coverage cross into deterministic GitLab publication, suppression, and approval policy.
+7. A release candidate crosses protected-base authorization, publication, provenance, and live readback.
 
 ### Security objectives
 
-- Repository-controlled content remains data: it is neither imported nor executed and cannot promote itself into policy, permission, suppression, approval, or release authority.
-- Every security-relevant claim remains bound to exact immutable identity, provenance, trust class, scope, and semantic applicability.
-- Bounds apply while data is acquired and emitted. Exhaustion or malformed input degrades explicitly and cannot silently suppress an unrelated evidence domain.
-- Hostile persisted state is accepted only through exact closed schemas whose related snapshots, indexes, coverage, deltas, and receipts agree atomically.
-- Markdown and protocol projections preserve trust labels, neutralize control syntax, and expose only bounded context.
-- External finding images are disabled by default. When explicitly enabled,
-  their host, path vocabulary, colors, and alt text come from closed toolkit
-  constants and normalized enums rather than repository or model-controlled
-  strings; blocked images retain a text label.
-- Provider mutations bind the reviewed identity when the provider supports such a guard; ambiguous non-idempotent writes preserve prior state rather than guessing success.
-- Secrets remain outside repository-controlled context, logs, public notes, fixtures, and release artifacts.
+- Repository and provider-controlled content remains data. It cannot promote itself into policy, tools, permissions, suppression, posting, approval, or release authority.
+- Every security-relevant claim remains bound to immutable identity, provenance, trust class, scope, and semantic applicability.
+- Bounds apply while data is acquired and emitted; malformed or exhausted domains degrade visibly without suppressing unrelated evidence.
+- Persisted state is accepted only through closed schemas whose related snapshots, indexes, deltas, and receipts agree atomically.
+- Model-selected tool arguments receive deterministic authorization and validation in application or server code; names, prompts, and schemas are not resource authorization.
+- Direct MCP credentials, tools, and content remain least-privilege and acceptable for both model egress and OCR-session retention.
+- Provider mutations bind reviewed identity where supported; ambiguous non-idempotent writes preserve prior state.
+- Secrets remain outside repository-controlled context, public notes, fixtures, and release artifacts.
 
-Security severity depends on demonstrated reachability across these boundaries. Prompt-like or Markdown content injection is an integrity issue unless it is shown to alter a privileged action or mandatory control. Tampering that requires same-owner access to private local artifacts is not treated as an ordinary contributor privilege escalation without evidence of a lower-privilege writer. Governance scores and the single-maintainer review limitation are posture or residual-risk signals, not application vulnerabilities by themselves.
+### Current generic external-MCP boundary (M3 established)
 
-## Preserved safety properties
+BL-011 used the production `ocr-ci review` path, official checksum-verified OCR 1.9.5, a disposable synthetic Git repository, owner-only isolated homes, a local OpenAI-compatible peer, and a real stdio MCP protocol peer. The qualification observed, rather than inferred from mocks:
 
-- Repository reads are bounded, rooted, symlink-aware, and exclude common dependency/build trees.
-- Review-invocation metadata is provider-normalized from closed schemas. Numeric project, pipeline, job, and merge-request identifiers remain separate invocation facts. GitLab MR context admits only complete bounded title, description, labels, optional source branch, and source SHA; unknown fields, URLs, author profiles, comments, linked bodies, tokens, and arbitrary environment values are not collected. Author-controlled context carries invocation trust, remains raw only in the private evidence MCP, and cannot select policy, tools, permissions, suppression, posting, or approval.
-- Generated Markdown escapes control characters and neutralizes GitLab quick actions.
-- Actionable GitLab suggestions require an exact `existing_code` match against
-  one bounded range in the immutable reviewed head blob. Multi-region omission
-  markers, diff-prefixed replacements, unsafe fences, and unverifiable ranges
-  retain the explanatory finding but cannot create an apply button.
-- Secrets and credential-shaped values are redacted before operational output.
-- OCR result and provider response reads have byte limits.
-- GitLab notes enforce both UTF-8 byte limits and Python character limits.
-- Non-idempotent API writes are not blindly retried.
-- Automatic approval is bound to the exact reviewed MR head after GitLab diff
-  synchronization and bounded readback. A v2 review-time receipt makes any run
-  with admitted mutable author-controlled MR context ineligible for approval;
-  comment publication remains available. The transaction is add-only: because
-  GitLab cannot bind unapproval to an immutable reviewed SHA, the toolkit never
-  removes an existing approval. Project-owned approval reset and invalidation
-  rules remain authoritative.
-- Markers, fingerprints, snapshots, and rollback logic constrain repeated runs.
-- Human replies are ownership boundaries: automation must not rewrite or resolve a discussion after a human takes part.
-- Merge-request source SHA and merge-result SHA remain distinct.
+- toolkit configuration allowed only `tenant_read` and `tenant_fail`; the peer also advertised `hidden_write` and reserved `file_read`, but neither appeared as an external model tool, while toolkit reserved names and cross-server collisions failed before OCR;
+- a synthetic cross-tenant identifier generated by the model was forwarded unchanged to the allowed tool: the allowlist authorized only the tool name, not its arguments or object;
+- hostile server-authored description and schema markers entered the plan prompt and main tool definitions;
+- the same external tools appeared in plan and main phases; OCR has no toolkit-controlled phase-specific external policy;
+- a bounded high-volume text result was returned completely to the next model request, with no toolkit-configurable response byte/character boundary;
+- OCR's mode-0600 session JSONL retained prompts, responses, external arguments, tool results, and both `plan_task` and `main_task` records;
+- an MCP `isError` result remained model-visible and review continued; an unavailable optional server emitted a warning, review continued with mandatory evidence, and the receipt omitted the unavailable server;
+- `_ocr_toolkit.mcp_usage` counted one mandatory evidence call and two known external calls, but contained no arguments, results, completeness, content-safety, or model-correctness proof.
 
-The evidence engine reads exact base/head Git objects without checkout, refuses symlinks and submodules, stores redacted typed records and deltas in owner-only files, and exposes them through a closed read-only MCP tool with bounded requests, responses, filters, and pagination. Collection separates pure path registries and projections from immutable object acquisition and one-ref orchestration. Persistence separates limits and recursive normalization from in-memory admission, owner-only atomic replacement, and hostile readback; the decoder re-enters the same admission and snapshot-policy binding controls rather than constructing trusted state directly. Snapshot indexes are checked against admitted records before serialization, and the atomic replacement synchronizes its parent directory where supported. Deltas are recursively re-redacted and re-bounded before list/get projection; their metadata and stable IDs are derived only after that normalization. Colliding semantic facts retain source paths instead of overwriting one another. Recursive redaction normalizes mapping keys before sensitive-name classification and rejects key collisions rather than losing a value.
+These observations establish the current safe-use envelope, not the safety of arbitrary direct providers. Generic external MCP is privileged operator-configured composition, not author-triggered reference resolution. Each direct server must independently authorize tenant, canonical object, fields, and operation for every request. Use only reviewed narrow read-only tools, dedicated least-privilege credentials, bounded responses, and content permissible to send to the LLM and retain in OCR sessions. Do not expose generic search, arbitrary URL/ID fetch, traversal, writes, or broad service credentials to merge-request-selected references. Every direct tool must be safe in both OCR phases.
 
-Repository-owned OCR rules, accepted decisions, and root or nested `AGENTS.md`/`CLAUDE.md` guidance come only from immutable target blobs at the captured current protected-target SHA; the forge diff base remains unchanged for code deltas. Exact policy rules are materialized into an owner-only artifact without modifying the checkout; explicit external operator-owned rules are preserved. Guidance touched on either side of a change or rename is excluded, source/head content never becomes policy evidence, and unrelated nested guidance is filtered before blob reads and store admission. Structured policy values are bounded as complete canonical UTF-8 records, not only by repository-text code points, before storage, after recursive redaction, and again on hostile load. A redaction expansion omits only that record during ordinary collection, while hostile readback rejects the incomplete atomic envelope. Schema-v4 policy provenance binds to the distinct policy snapshot while applicability is rebound to the atomic base/head changed paths on every load. Schema-v3 remains explicitly base-bound, and compatible historical text records keep their original legacy provenance. The compact bootstrap carries only refs, coverage, counts, delta kinds, applicable decision summaries, normalized guidance paths/scopes, toolkit-generated applicability hints, diagnostics, and MCP usage instructions. Every repository-derived inline value uses delimiter-aware Markdown rendering and truncation stops only between complete lines. Full redacted rationale and guidance text remain in the evidence store and are untrusted context that cannot override policy, permissions, findings, posting, or authorize actions.
+Server command, endpoint, setup, schemas, descriptions, arguments, and responses cross separate executable or untrusted boundaries. `setup` is operator-owned shell configuration executed in the analyzed repository; keep it empty unless explicitly reviewed. Raw endpoint, setup, and credential values are not safe diagnostic material. Toolkit diagnostics avoid them, but OCR may emit operator-owned setup or transport details; keep those values non-sensitive and retain OCR stderr privately. Managed OAuth authenticates a client but does not authorize an object and remains conditional.
 
-Ansible Galaxy requirement includes use the same immutable-object boundary. Relative includes may only resolve to YAML blobs inside the authenticated tree; absolute, home-relative, root-escaping, symlink, and submodule targets are rejected. Include depth, file count, graph edges, parser items, and emitted diagnostics have independent limits so adversarial manifests degrade visibly without expanding unbounded work.
+The direct MCP receipt proves only positive calls attributed from known tool names. It is operational attribution, not security evidence for resource authorization, completeness, response safety, actual semantic use, or model output. Security severity still depends on demonstrated reachability and impact: prompt-like or Markdown text is not code execution without a privileged action path, and same-owner artifact tampering is not an ordinary-contributor escalation without a lower-privilege writer.
+
+## Preserved current safety properties
+
+- Repository reads are bounded, rooted, symlink-aware, immutable-object reads that exclude common dependency/build trees and never execute repository content.
+- Review-invocation metadata admits only complete bounded title, description, labels, optional source branch, and source SHA. Unknown fields, URLs, profiles, comments, linked bodies, tokens, and arbitrary environment values are not collected. Invocation evidence cannot select authority and blocks automatic approval when admitted.
+- Generated Markdown neutralizes controls and GitLab quick actions. Actionable suggestions require exact reviewed-head proof; unverifiable replacements retain prose only.
+- Result and provider reads have byte limits; notes enforce character and UTF-8 byte limits; non-idempotent writes are not blindly retried.
+- Automatic approval binds the exact synchronized reviewed head and never removes an existing approval. Partial, warning, legacy, omitted, or mutable-context runs are ineligible.
+- Human replies are ownership boundaries. Merge-request source SHA, protected-target policy SHA, and merge-result SHA remain distinct.
+- The evidence engine stores recursively redacted typed facts/deltas in owner-only files and serves a closed bounded network-independent MCP. Absence supports a negative claim only for applicable complete scope.
+- OCR rules, decisions, and guidance come only from captured protected-target blobs; source changes cannot create policy. Full guidance remains untrusted context, not authority.
+- External finding images are disabled by default and, when enabled, use closed normalized display metadata only.
+- Markers, fingerprints, snapshots, and rollback logic constrain repeated runs. Secrets and credential-shaped values are redacted before operational output.
+
+The evidence engine reads exact base/head Git objects without checkout, refuses symlinks and submodules, and separates collection, normalization, owner-only atomic persistence, hostile readback, and bounded MCP projection. Snapshot indexes must agree with admitted records; deltas are recursively re-redacted and re-bounded before IDs or responses are derived; colliding facts retain source paths; normalized mapping-key collisions fail instead of dropping a value.
+
+Repository-owned OCR rules, accepted decisions, and root or nested `AGENTS.md`/`CLAUDE.md` guidance come only from immutable target blobs at the captured protected-target SHA while code deltas retain the forge diff base. Guidance changed on either side is excluded; source/head content never becomes policy evidence; applicable guidance is selected before blob reads and domain-isolated admission. Structured policy values are bounded before storage, after redaction, and on hostile load. Schema-v4 binds policy provenance to the policy snapshot and applicability to atomic base/head changed paths; older schemas retain explicit historical semantics. The bootstrap contains only bounded refs, counts, coverage, summaries, paths, diagnostics, and MCP instructions; full text remains untrusted evidence in the private store.
+
+Ansible Galaxy requirements use the same immutable-object boundary. Relative includes resolve only to YAML blobs inside the authenticated tree; absolute, home-relative, escaping, symlink, and submodule targets fail. Independent depth, file, edge, item, and diagnostic limits keep degradation visible and bounded.
+
+## Planned and disabled M5 boundary
+
+M5 bounded review-context enrichment is planned; no current release implements this section. `.opencodereview/review-context-policy.json` is not read today, discussions and references are not acquired, no context broker/store/handles exist, and `context_list`/`context_get` are unavailable. The following are requirements for future BL-023 implementation, **planned / not proven** until runtime and release qualification.
+
+### Planned data flow and trust transitions
+
+1. A forge adapter acquires bounded discussion snapshots and reference-bearing text before OCR.
+2. An immutable policy read only from the captured protected-target SHA decides admitted fields, provider-declared author classes, origins, tenant/resource classes, projections, budgets, and retention. Missing policy means disabled.
+3. A deterministic recognizer emits a candidate; reference presence is never authorization.
+4. An adapter performs object-level authorization and bounded version-aware retrieval.
+5. Allowed projections are normalized, DLP-filtered, and atomically stored in a run-local context store.
+6. Only successful storage mints an opaque unguessable run-bound handle binding adapter, tenant, canonical object, projection, version/ETag or digest, policy version, expiry, and run without exposing the upstream identifier.
+7. During OCR, the model may list/read only minted handles through fixed toolkit-authored closed-schema `context_list` and `context_get` tools in the existing toolkit MCP process. No upstream search, arbitrary ID/URL, external schema, redirect, traversal, write, or external network access exists in the model loop.
+8. After OCR, deterministic publication validation/DLP and retention are decided independently.
+
+### Planned control ownership
+
+- Forge adapters own discussion snapshots and provider-declared account classes.
+- The protected-policy loader owns admission and independent retrieval, model-egress, publication, and retention decisions.
+- Recognizers own syntax only; adapters own resource authorization and bounded acquisition; the context store owns atomic records and handle binding.
+- The existing toolkit MCP owns fixed context projections; OCR owns the model loop and session persistence; toolkit review/post owners enforce cleanup, approval ineligibility, and publication validation.
+
+### Planned controls and abuse cases
+
+- **BOLA/confused deputy and credential mismatch:** authorize exact tenant, object, operation, and fields in adapter/application code; use dedicated AI-readable corpora and least-privilege credentials. Host allowlisting and successful authentication are insufficient.
+- **Prompt and indirect injection/data poisoning:** keep external text non-authoritative; use fixed toolkit schemas; prevent content from changing tools, policy, permissions, lifecycle commands, suppression, posting, or approval.
+- **SSRF/traversal/broad agency:** recognizers cannot fetch; the broker accepts only minted handles; generic search, URL fetch, redirects, recursion, and writes are absent.
+- **Oversize/denial of wallet/selective omission:** enforce acquisition-time character, UTF-8 byte, record, thread, age, count, time, and aggregate budgets independent of repository evidence; expose partial, mutated, unavailable, and omitted states.
+- **Identity spoofing and privacy:** represent authors by provider-declared class plus run-local pseudonym; omit name, email, avatar, and profile URL. Unknown classification fails closed.
+- **TOCTOU/replay/cache poisoning:** bind snapshots and handles to version/ETag or digest, policy version, run, and expiry; use atomic store commits and uniform unavailable outcomes.
+- **PII/secret bypass and output laundering:** make retrieval, model egress, publication, and retention separate decisions. Minimize before model egress; publication DLP cannot undo prior disclosure. Uncertainty blocks the affected projection.
+- **Approval/suppression manipulation:** any admitted mutable discussion/external context blocks automatic approval; partial context cannot prove absence or restore eligibility. Existing suppression, `/ocr` commands, and discussion ownership remain separate consumers.
+- **Persistent-session leakage:** run OCR under an isolated owner-only home and clean session artifacts deterministically. Containment/cleanup failure blocks publication unless an explicit secure-debug mode was agreed before execution.
+- **Second-review-engine drift:** OCR remains the sole review engine. If contextual adjudication needs a separate model phase, depend on a native structured OCR API rather than merge two toolkit-driven reviews.
+
+### Planned deployment assumptions and residual risks
+
+Operators must maintain a dedicated AI-readable corpus and credentials whose service identity cannot read broader material than policy permits. Provider account classifications may be incomplete; unknowns remain unavailable. Model inference after egress cannot be reversed. OCR version/capability dependencies must be exact and fail closed. Even with bounds and DLP, admitted untrusted text can influence model judgment; deterministic publication checks contain authority but do not make model reasoning deterministic. A host-level compromise can read same-owner artifacts. These residuals remain visible in deployment guidance and qualification claims.
 
 ## Deployment guidance
 
-Use a dedicated bot identity and least-privilege `GITLAB_API_TOKEN`. Protect and mask credentials. Do not expose secrets to pipelines for untrusted forks. Begin with manual execution for trusted contributors, review generated notes, and enable automatic posting only after the repository's threat model is accepted.
+Use a dedicated bot and least-privilege forge token. Protect/mask credentials; do not expose secrets to untrusted forks. Begin with manual execution for trusted contributors and enable posting/approval only after accepting this threat model. `OCR_AUTO_APPROVE=false` keeps the bot comment-only; forge approval rules and protected branches remain authoritative.
 
-Formal GitLab approval is a default-on write. Set
-`OCR_AUTO_APPROVE=false` before upgrading if the bot must remain comment-only or
-is not an eligible project approver. GitLab approval rules, Code Owners,
-protected branches, and reauthentication remain server-side controls; the
-toolkit does not bypass them.
+Pin the exact recommended Open Code Review release from the [compatibility manifest](../compatibility/ocr-support.json) and verify its checksum. Pin Python and Actions dependencies. Follow the M3 direct-MCP safe-use envelope above and the exact public [configuration contract](configuration.md).
 
-Finding badges are a presentation-only opt-in. Keep the default text mode when
-private review viewers or a GitLab image proxy must not contact a third-party
-image service. Enabling Shields.io does not send finding prose, repository
-paths, project identifiers, or arbitrary OCR metadata in the image URL, but the
-render request can still expose ordinary viewer, proxy, and network metadata to
-that service.
+Optional remote finding images add a third-party rendering boundary. External finding images are disabled by default. Finding badges are presentation-only; keep text mode when a third-party image request is unacceptable. Enabling Shields.io does not send finding prose, repository paths, project identifiers, or arbitrary OCR metadata in the image URL, but ordinary viewer, proxy, and network metadata can reach that service. Toolkit-owned Git ignores process/global/system/repository/object-store overrides and replacement refs. Existing OCR configuration is hostile persisted input and is descriptor-read, regular-file and single-link checked, byte-bounded, JSON-object validated, and atomically replaced with owner-only permissions before/after update.
 
-Pin the exact recommended Open Code Review release from the [compatibility manifest](../compatibility/ocr-support.json) and verify its listed checksum. Pin Python dependencies through `uv.lock` and GitHub Actions by immutable commit SHA. MCP stdio commands and remote endpoints are privileged configuration; allow only reviewed servers and tools.
-The [OCR compatibility policy](compatibility.md) requires double-source asset digest verification, bounded downloads, an executed Linux contract probe, and protected PR/release gates; qualification automation never writes directly to `main` or promotes an ambiguous release.
+The OCR compatibility policy requires double-source asset digest verification, bounded downloads, executed contract probes, and protected PR/release gates; automation never promotes ambiguous releases or writes directly to `main`. Remote MCP is HTTPS-only, forbids userinfo/fragments, and keeps secret headers environment-backed.
 
-Stable-release authorization executes from the protected base SHA that predates
-the release candidate. Candidate and merge commits are bounded data rather than
-the source of their own authorizer. GitHub API reads use a closed endpoint
-allowlist, HTTPS-only redirect policy, redirect-safe bearer authentication, and
-atomic replacement only after transfer and status validation. Persisted release
-receipts accept only their exact versioned top-level and nested schemas.
+Release authorization executes from protected-base code predating the candidate. GitHub reads use a closed endpoint allowlist, HTTPS-only redirect policy, redirect-safe authentication, bounded transfer, atomic replacement, and exact receipt schemas. Bandit scans runtime source at medium-or-higher severity/confidence; narrow `# nosec B108` temporary-path suppressions require adjacent containment rationale.
 
-Remote MCP is HTTPS-only, forbids URL userinfo and fragments, and never logs endpoint URLs or header values. Put credentials in protected/masked CI variables and reference them through `headers_from`; literal credential-like headers fail closed. OCR expands the resulting `$VARIABLE` at connection time. Full browser OAuth, PKCE, refresh-token persistence, tenant binding, and revocation remain conditional on a named supported-provider requirement; use a reviewed stdio OAuth proxy when those flows are required today.
+## Standards and guidance
 
-All toolkit-owned Git plumbing ignores process-level repository/object-store overrides, global and system Git configuration, and replacement refs before it derives evidence or remaps an inline finding. Existing OCR configuration is treated as hostile persisted input: reads are descriptor-based, single-link, and byte-bounded before JSON parsing.
-
-The repository runs Bandit as a bounded SAST gate over `src/ocr_toolkit` at medium-or-higher severity and confidence. Narrow `# nosec B108` annotations are permitted only beside fixed CI temporary paths whose isolation or containment is explained in the adjacent source comment; tests, examples, and broad plugin suppressions are not part of that exception policy.
+The M3 current boundary and planned M5 controls align with [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) and [MCP security best practices](https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices); OAuth resource indicators and best current practice in [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707), [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700), and [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728); [OWASP GenAI LLM risks](https://genai.owasp.org/llm-top-10/) and [Agentic risks](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/); [OWASP API BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/); and [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html). These references inform controls but do not themselves prove the implementation.
 
 ## Repository security posture
 
-Protected `main` requires pull requests, signed commits, a current branch, resolved review threads, and the complete CI, package-build, dependency, secret, and CodeQL check set. The project currently has one maintainer, so it cannot truthfully require an independent human approval for maintainer-authored changes. This is an explicit residual risk: automated review does not replace a second human. External contributions still receive maintainer review, and independent approval will become mandatory when a second active maintainer can provide it without blocking security fixes.
-
-OpenSSF Scorecard findings are interpreted as supply-chain posture signals rather than vulnerability reports. Repository-age and historical-coverage checks improve only with time and repeated runs; the owner-attested OpenSSF Best Practices record is public and passing; a useful fuzzing integration requires native fuzz targets and infrastructure rather than a workflow added only to satisfy a scanner. Actionable repository-owned findings are fixed through normal signed pull requests.
-
-The detailed environment contract is in [configuration.md](configuration.md). Vulnerability reporting is in [SECURITY.md](../SECURITY.md).
+Protected `main` requires pull requests, signed commits, a current branch, resolved review threads, and required CI/security/build checks. One maintainer cannot provide independent human approval for maintainer-authored changes; automated review does not replace a second human. OpenSSF findings are posture signals, not vulnerabilities by themselves. The reporting process is in [SECURITY.md](../SECURITY.md).
