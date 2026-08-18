@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.posting.gitlab_identity import valid_discussion_id
 from ocr_toolkit.posting.payloads import (
     build_marked_note_body,
     note_body_budget,
@@ -82,8 +83,12 @@ class GitLabWriteResult:
             raise ValueError("invalid GitLab write identity")
         if self.create_kind not in {None, "draft", "discussion"}:
             raise ValueError("invalid GitLab create kind")
-        if self.status in {"definite_failure", "ambiguous_create"} and self.create_kind is None:
+        if self.status in {"invalid_position", "definite_failure", "ambiguous_create"} and (
+            self.create_kind is None
+        ):
             raise ValueError("create outcome requires an endpoint kind")
+        if self.status == "write_failed" and self.create_kind is not None:
+            raise ValueError("non-create write outcome cannot carry a create kind")
 
     @property
     def posted(self) -> bool:
@@ -348,7 +353,7 @@ def api_write_url_detailed(
         raw_body = exc.read(MAX_API_ERROR_BODY_BYTES).decode("utf-8", errors="replace")
         safe_body = truncate_plain_text(redact_sensitive(raw_body), 2_000)
         print(f"GitLab API error {exc.code} for {method} {url}: {safe_body}", file=sys.stderr)
-        if _is_invalid_position_error(exc.code, raw_body):
+        if create_kind is not None and _is_invalid_position_error(exc.code, raw_body):
             return GitLabWriteResult("invalid_position", write_id=write_id, create_kind=create_kind)
         if create_kind is not None:
             status = (
@@ -412,11 +417,8 @@ def fetch_current_user_id(server_url: str, api_token: str, auth_header: str) -> 
         return None
 
     raw_user_id = result.get("id")
-    if isinstance(raw_user_id, (str, int, float)) and not isinstance(raw_user_id, bool):
-        try:
-            return int(raw_user_id)
-        except ValueError:
-            pass
+    if isinstance(raw_user_id, int) and not isinstance(raw_user_id, bool) and raw_user_id > 0:
+        return raw_user_id
     print_user_id_failure_banner("GET /user response has no valid id field")
     return None
 
@@ -614,7 +616,10 @@ class DiscussionNoteCreation:
     note_id: int
 
 
-DISCUSSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,255}")
+def discussion_id(value: Any) -> str | None:
+    """Return one endpoint-safe GitLab discussion identity."""
+
+    return value if valid_discussion_id(value) else None
 
 
 def created_discussion_note(response: Any) -> DiscussionNoteCreation | None:
@@ -622,11 +627,10 @@ def created_discussion_note(response: Any) -> DiscussionNoteCreation | None:
 
     if not isinstance(response, dict):
         return None
-    discussion_id = response.get("id")
+    parsed_discussion_id = discussion_id(response.get("id"))
     notes = response.get("notes")
     if (
-        not isinstance(discussion_id, str)
-        or DISCUSSION_ID_RE.fullmatch(discussion_id) is None
+        parsed_discussion_id is None
         or not isinstance(notes, list)
         or len(notes) != 1
         or not isinstance(notes[0], dict)
@@ -643,7 +647,7 @@ def created_discussion_note(response: Any) -> DiscussionNoteCreation | None:
             file=sys.stderr,
         )
         return None
-    return DiscussionNoteCreation(response, discussion_id, note_id)
+    return DiscussionNoteCreation(response, parsed_discussion_id, note_id)
 
 
 def delete_plain_note(config: GitLabConfig, note_id: int) -> bool:

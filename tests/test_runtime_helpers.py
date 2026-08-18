@@ -503,6 +503,7 @@ class MCPConfigTests(unittest.TestCase):
             {"X-Api-Key": "literal-secret"},
             {"Ocp-Apim-Subscription-Key": "literal-secret"},
             {"X-Test": "line-one\r\nInjected: value"},
+            {"X-Reference": "$SYNTHETIC_MCP_TOKEN"},
         )
         for headers in cases:
             raw = json.dumps(
@@ -708,6 +709,72 @@ class MCPConfigTests(unittest.TestCase):
             self.assertRaises(mcp_config.MCPConfigError),
         ):
             mcp_config.compose_mcp_servers([], replace=False, profile="gitlab_mr")
+
+    def test_profiled_composition_revalidates_its_persisted_secret_references(self) -> None:
+        raw = json.dumps(
+            {
+                "remote": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1",
+                    "headers_from": {"Authorization": "SYNTHETIC_MCP_TOKEN"},
+                    "tools": ["docs_read"],
+                }
+            }
+        )
+        with patched_env(SYNTHETIC_MCP_TOKEN="remote-secret-value"):
+            servers = mcp_config.parse_mcp_servers(raw, profile="gitlab_mr")
+            first = mcp_config.compose_mcp_servers(servers, replace=True, profile="gitlab_mr")
+            with patched_attr(
+                mcp_config, "read_ocr_config", lambda: {"mcp_servers": first.payload}
+            ):
+                second = mcp_config.compose_mcp_servers([], replace=False, profile="gitlab_mr")
+
+        self.assertEqual(second.payload, first.payload)
+        self.assertEqual(
+            second.payload["remote"]["headers"]["Authorization"],
+            "$SYNTHETIC_MCP_TOKEN",
+        )
+        self.assertEqual(
+            [(item.server, item.transport) for item in second.capabilities],
+            [(mcp_config.BUILTIN_EVIDENCE_SERVER, "stdio"), ("remote", "remote")],
+        )
+
+    def test_persisted_remote_header_sources_reject_cross_form_duplicates(self) -> None:
+        current = {
+            "mcp_servers": {
+                "remote": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1",
+                    "headers": {"Authorization": "$SYNTHETIC_MCP_TOKEN"},
+                    "headers_from": {"authorization": "SYNTHETIC_MCP_TOKEN"},
+                    "tools": ["docs_read"],
+                }
+            }
+        }
+        with (
+            patched_env(SYNTHETIC_MCP_TOKEN="remote-secret-value"),
+            patched_attr(mcp_config, "read_ocr_config", lambda: current),
+            self.assertRaisesRegex(mcp_config.MCPConfigError, "duplicate header sources"),
+        ):
+            mcp_config.compose_mcp_servers([], replace=False, profile="gitlab_mr")
+
+    def test_local_composition_revalidates_its_persisted_stdio_environment(self) -> None:
+        raw = json.dumps(
+            {
+                "local": {
+                    "command": "synthetic-local",
+                    "env": {"MODE": "readonly"},
+                    "tools": ["local_read"],
+                }
+            }
+        )
+        servers = mcp_config.parse_mcp_servers(raw, profile="local")
+        first = mcp_config.compose_mcp_servers(servers, replace=True, profile="local")
+        with patched_attr(mcp_config, "read_ocr_config", lambda: {"mcp_servers": first.payload}):
+            second = mcp_config.compose_mcp_servers([], replace=False, profile="local")
+
+        self.assertEqual(second.payload, first.payload)
+        self.assertEqual(second.payload["local"]["env"], ["MODE=readonly"])
 
     def test_configure_mcp_servers_writes_config_without_subprocess(self) -> None:
         raw = json.dumps(

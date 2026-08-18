@@ -145,8 +145,12 @@ def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     source_sha = review.get("source_sha")
     author_id = review.get("mr_author_id")
     return (
-        source_sha if isinstance(source_sha, str) else "",
-        author_id if isinstance(author_id, int) and not isinstance(author_id, bool) else None,
+        source_sha
+        if isinstance(source_sha, str) and re.fullmatch(r"[0-9a-f]{40}", source_sha)
+        else "",
+        author_id
+        if isinstance(author_id, int) and not isinstance(author_id, bool) and author_id > 0
+        else None,
     )
 
 
@@ -173,7 +177,13 @@ def find_current_summary_note(config: GitLabConfig, run_id: str) -> int | None:
             continue
         body = note.get("body")
         note_id = note.get("id")
-        if isinstance(body, str) and marker in body and isinstance(note_id, int):
+        if (
+            isinstance(body, str)
+            and marker in body
+            and isinstance(note_id, int)
+            and not isinstance(note_id, bool)
+            and note_id > 0
+        ):
             matches.append(note_id)
     return matches[0] if len(matches) == 1 else None
 

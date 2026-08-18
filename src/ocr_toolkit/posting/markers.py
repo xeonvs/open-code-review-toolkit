@@ -268,11 +268,8 @@ def author_id_from_note(note: dict[str, Any]) -> int | None:
         if isinstance(author, dict):
             raw_author_id = author.get("id")
 
-    if isinstance(raw_author_id, (str, int, float)) and not isinstance(raw_author_id, bool):
-        try:
-            return int(raw_author_id)
-        except ValueError:
-            pass
+    if isinstance(raw_author_id, int) and not isinstance(raw_author_id, bool) and raw_author_id > 0:
+        return raw_author_id
     return None
 
 

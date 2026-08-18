@@ -23,6 +23,8 @@ SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({1, 2, TOOLKIT_RESULT_SCHEM
 AUTOMATIC_APPROVAL_BLOCK_REASON = "author-controlled merge-request context was admitted"
 # The receipt can name the 16 configured external servers plus the mandatory built-in.
 MAX_TOOLKIT_MCP_USAGE_SERVERS = 17
+MAX_TOOLKIT_MCP_TOOLS_PER_SERVER = 128
+MAX_TOOLKIT_MCP_USAGE_COUNT = 1_000_000_000
 TOOLKIT_MCP_SERVER_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 

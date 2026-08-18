@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ocr_toolkit.posting.gitlab_identity import valid_discussion_id
+
 
 @dataclass(slots=True)
 class PostingTransaction:
@@ -63,7 +65,11 @@ class PostingTransaction:
         """Record one direct discussion identity exactly once."""
 
         ref = (discussion_id, note_id)
-        if not discussion_id or not self._positive_id(note_id) or ref in self._discussion_note_refs:
+        if (
+            not valid_discussion_id(discussion_id)
+            or not self._positive_id(note_id)
+            or ref in self._discussion_note_refs
+        ):
             return False
         self._discussion_note_refs.append(ref)
         return True

@@ -97,6 +97,50 @@ class PostingIdentityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             gitlab.GitLabWriteResult("ambiguous_create", write_id="a" * 32)
 
+    def test_provider_author_id_parsers_require_exact_positive_integers(self) -> None:
+        valid = {"author": {"id": 7}}
+        self.assertEqual(markers.author_id_from_note(valid), 7)
+        for value in (True, 0, -1, "7", 7.0, None):
+            with self.subTest(value=value):
+                self.assertIsNone(markers.author_id_from_note({"author": {"id": value}}))
+
+        with patched_attr(gitlab, "api_request_url", lambda *_args, **_kwargs: {"id": 7}):
+            self.assertEqual(
+                gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN"),
+                7,
+            )
+        for value in (True, 0, -1, "7", 7.0, None):
+            with (
+                self.subTest(value=value),
+                patched_attr(
+                    gitlab, "api_request_url", lambda *_args, item=value, **_kwargs: {"id": item}
+                ),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertIsNone(
+                    gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN")
+                )
+
+    def test_posting_identity_consumers_reject_bool_and_nonpositive_ids(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        notes = [
+            {
+                "id": value,
+                "body": build_marker(None) + "\nbot",
+                "author": {"id": 7},
+            }
+            for value in (True, 0, -1)
+        ]
+        snapshot.process_discussion_for_refs(
+            gitlab_config(), refs, "discussion-id", notes, preserve_human_touched=False
+        )
+        self.assertEqual(refs.discussion_note_refs, [])
+
+        transaction = PostingTransaction()
+        self.assertFalse(transaction.record_discussion("../unsafe", 7))
+        self.assertFalse(transaction.record_discussion("discussion-id", True))
+        self.assertEqual(transaction.discussion_note_refs, ())
+
     def test_write_marker_has_closed_independent_identity_grammar(self) -> None:
         write_id = "1" * 32
         body = f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n{markers.build_write_marker(write_id)}\nbody"
@@ -631,7 +675,7 @@ class PostingIdentityTests(unittest.TestCase):
 
         def fake_post_review_discussion(*args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
             calls.append("inline")
-            return gitlab.GitLabWriteResult("invalid_position")
+            return gitlab.GitLabWriteResult("invalid_position", create_kind="discussion")
 
         def fake_note(*args: Any, **kwargs: Any) -> dict[str, int]:
             calls.append("note")
@@ -2775,6 +2819,64 @@ class GitLabSnapshotTests(unittest.TestCase):
 
         self.assertIsNone(loaded)
 
+    def test_pre_run_snapshot_baseline_contains_all_valid_endpoint_identities(self) -> None:
+        plain_notes = [
+            {"id": 10, "body": "human", "author": {"id": 8}},
+            {"id": 11, "body": build_marker(None) + "\nbot", "author": {"id": 7}},
+            {"id": True, "body": "invalid", "author": {"id": 8}},
+        ]
+        discussions = [
+            {
+                "id": "discussion-id",
+                "notes": [
+                    {
+                        "id": 21,
+                        "body": build_marker(None) + "\nbot",
+                        "author": {"id": 7},
+                    },
+                    {"id": 20, "body": "human", "author": {"id": 8}},
+                ],
+            },
+            {"id": "../unsafe", "notes": [{"id": 22, "body": "ignored"}]},
+        ]
+        drafts = [
+            {"id": 30, "note": "human", "author_id": 8},
+            {"id": 31, "note": build_marker(None) + "\nbot", "author_id": 7},
+        ]
+
+        def page(_config: Any, endpoint: str, **_kwargs: Any) -> list[Any]:
+            if endpoint.startswith("/notes"):
+                return plain_notes
+            if endpoint == "/discussions":
+                return discussions
+            if endpoint == "/draft_notes":
+                return drafts
+            self.fail(endpoint)
+
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(snapshot, "api_get_paginated", page),
+            ):
+                refs = snapshot.collect_previous_bot_comment_refs(gitlab_config())
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertIsNotNone(refs)
+        assert refs is not None
+        self.assertEqual(refs.all_plain_note_ids, [10, 11])
+        self.assertEqual(refs.plain_note_ids, [11])
+        self.assertEqual(
+            refs.all_discussion_note_refs,
+            [("discussion-id", 21), ("discussion-id", 20)],
+        )
+        # The human reply preserves the existing bot thread from ordinary cleanup;
+        # the complete baseline still records both identities for rollback guards.
+        self.assertEqual(refs.discussion_note_refs, [])
+        self.assertEqual(refs.all_draft_note_ids, [30, 31])
+        self.assertEqual(refs.draft_note_ids, [31])
+
     def test_rollback_collection_keeps_current_run_bot_notes_with_human_reply(self) -> None:
         refs = snapshot.BotCommentRefs()
         notes = [
@@ -3022,6 +3124,8 @@ class ApiErrorRedactionTests(unittest.TestCase):
                     "token",
                     "PRIVATE-TOKEN",
                     {"body": "x"},
+                    create_kind="discussion",
+                    write_id="1" * 32,
                 )
 
         self.assertTrue(write_result.invalid_position)
@@ -3048,9 +3152,38 @@ class ApiErrorRedactionTests(unittest.TestCase):
                 "token",
                 "PRIVATE-TOKEN",
                 {"body": "x"},
+                create_kind="discussion",
+                write_id="2" * 32,
             )
 
         self.assertTrue(write_result.invalid_position)
+
+    def test_generic_non_create_write_never_uses_create_only_invalid_position(self) -> None:
+        class FakeResponse:
+            def read(self, _limit: int = -1) -> bytes:
+                return b'{"message":"position line is invalid"}'
+
+            def close(self) -> None:
+                return None
+
+        error = urllib.error.HTTPError(
+            "https://gitlab.example/api", 400, "Bad Request", None, FakeResponse()
+        )
+        with (
+            patched_attr(
+                gitlab, "_open_gitlab_request", lambda _request: (_ for _ in ()).throw(error)
+            ),
+            redirect_stderr(io.StringIO()),
+        ):
+            write_result = gitlab.api_write_url_detailed(
+                "https://gitlab.example/api",
+                "token",
+                "PRIVATE-TOKEN",
+                {"body": "x"},
+            )
+
+        self.assertTrue(write_result.write_failed)
+        self.assertFalse(write_result.invalid_position)
 
     def test_generic_path_error_is_not_typed_as_invalid_position(self) -> None:
         class FakeResponse:

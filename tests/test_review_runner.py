@@ -369,6 +369,42 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
     }
 
 
+@pytest.mark.parametrize(
+    "by_tool,error",
+    [
+        ({"ocr_toolkit_evidence": True}, "invalid known MCP usage count"),
+        ({"ocr_toolkit_evidence": 1_000_000_001}, "invalid known MCP usage count"),
+        ({"ocr_toolkit_evidence": 2}, "inconsistent aggregate MCP usage"),
+        (
+            {"external_a": 600_000_000, "external_b": 600_000_000, "ocr_toolkit_evidence": 1},
+            "per-server MCP usage bound",
+        ),
+    ],
+)
+def test_ocr_result_rejects_unbounded_known_mcp_usage(
+    tmp_path: Path, by_tool: dict[str, object], error: str
+) -> None:
+    """Do not serialize a receipt that its hostile readback owner must reject."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps({"status": "success", "tool_calls": {"total": 1, "by_tool": by_tool}}),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),
+            MCPCapability("external", ("external_a", "external_b")),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match=error):
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
+
+
 def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> None:
     """Treat a budget stop as a partial completed review, not unsupported output."""
 

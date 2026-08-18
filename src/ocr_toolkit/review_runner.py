@@ -39,6 +39,7 @@ from ocr_toolkit.evidence.review_context import (
 )
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
+    MAX_TOOLKIT_MCP_USAGE_COUNT,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -128,6 +129,7 @@ def _review_receipt(
 
     tool_calls = payload.get("tool_calls")
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+    total_calls = tool_calls.get("total") if isinstance(tool_calls, dict) else None
     if outcome.kind == "skipped":
         legacy_message_invalid = (
             not outcome.manifest_present and payload.get("message") != "No supported files changed."
@@ -151,15 +153,26 @@ def _review_receipt(
     usage: dict[str, int] = {}
     if isinstance(by_tool, dict):
         for tool, count in by_tool.items():
+            if not isinstance(tool, str) or tool not in owners:
+                continue
             if (
-                isinstance(tool, str)
-                and isinstance(count, int)
-                and not isinstance(count, bool)
-                and count > 0
-                and tool in owners
+                not isinstance(count, int)
+                or isinstance(count, bool)
+                or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
             ):
-                owner = owners[tool]
-                usage[owner] = usage.get(owner, 0) + count
+                raise ReviewRunnerError("OCR result has an invalid known MCP usage count")
+            owner = owners[tool]
+            aggregate = usage.get(owner, 0) + count
+            if aggregate > MAX_TOOLKIT_MCP_USAGE_COUNT:
+                raise ReviewRunnerError("OCR result exceeds the per-server MCP usage bound")
+            usage[owner] = aggregate
+    known_usage_total = sum(usage.values())
+    if (
+        not isinstance(total_calls, int)
+        or isinstance(total_calls, bool)
+        or total_calls < known_usage_total
+    ):
+        raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
     evidence_used = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) > 0
     if outcome.requires_evidence_mcp and not evidence_used:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")

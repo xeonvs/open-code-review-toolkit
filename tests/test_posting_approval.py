@@ -42,7 +42,7 @@ def finding(category: Any = "style", severity: Any = "low") -> dict[str, Any]:
 
 
 def receipt_v3(
-    *, context_state: str = "disabled", external: bool = False, author_id: int | None = None
+    *, context_state: str = "disabled", external: bool = False, author_id: int | None = 41
 ) -> dict[str, Any]:
     """Return one closed synthetic review-time receipt."""
 
@@ -237,6 +237,57 @@ class ApprovalPolicyTests(unittest.TestCase):
                     "the review-time approval receipt is missing or invalid",
                 )
 
+    def test_impossible_v3_capability_and_evidence_states_fail_closed(self) -> None:
+        cases: list[dict[str, Any]] = []
+
+        builtin_remote = receipt_v3()
+        builtin_remote["mcp"]["capabilities"][0]["transport"] = "remote"
+        cases.append(builtin_remote)
+
+        external_builtin = receipt_v3(external=True)
+        external_builtin["mcp"]["capabilities"][1]["transport"] = "builtin"
+        cases.append(external_builtin)
+
+        wrong_builtin_tool = receipt_v3()
+        wrong_builtin_tool["mcp"]["capabilities"][0]["tools"] = ["other_read"]
+        cases.append(wrong_builtin_tool)
+
+        duplicate_tool = receipt_v3(external=True)
+        duplicate_tool["mcp"]["capabilities"][1]["tools"] = ["ocr_toolkit_evidence"]
+        cases.append(duplicate_tool)
+
+        too_many_tools = receipt_v3(external=True)
+        too_many_tools["mcp"]["capabilities"][1]["tools"] = [
+            f"tool_{index}" for index in range(129)
+        ]
+        cases.append(too_many_tools)
+
+        usage_mismatch = receipt_v3()
+        usage_mismatch["mcp"]["usage"] = {}
+        cases.append(usage_mismatch)
+
+        usage_overflow = receipt_v3()
+        usage_overflow["mcp"]["usage"] = {"ocr_toolkit_evidence": 1_000_000_001}
+        cases.append(usage_overflow)
+
+        missing_author = receipt_v3(author_id=None)
+        cases.append(missing_author)
+
+        mandatory_mismatch = receipt_v3()
+        mandatory_mismatch["evidence"] = {"mandatory": False, "used": True}
+        cases.append(mandatory_mismatch)
+
+        for metadata in cases:
+            with self.subTest(metadata=metadata):
+                decision = approval.evaluate_approval_policy(
+                    settings.BooleanSetting(True), complete_outcome(), [], [], 0, metadata
+                )
+                self.assertFalse(decision.eligible)
+                self.assertEqual(
+                    decision.result.reason,
+                    "the review-time approval receipt is missing or invalid",
+                )
+
     def test_disabled_and_invalid_setting_remain_non_actionable(self) -> None:
         for setting in (
             settings.BooleanSetting(False),
@@ -375,6 +426,51 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
 
         self.assertEqual(approve_shas, [self.SHA])
         self.assertEqual(result.result.status, approval.ApprovalStatus.APPROVED)
+
+    def test_post_write_author_change_fails_closed_after_exact_sha_approval(self) -> None:
+        for post_write_author in (42, 7):
+            with self.subTest(post_write_author=post_write_author):
+                mr_reads = 0
+                writes: list[str] = []
+
+                def request(_config: Any, endpoint: str, **_kwargs: Any) -> Any:
+                    nonlocal mr_reads
+                    if endpoint == "":
+                        mr_reads += 1
+                        return {
+                            "sha": self.SHA,
+                            "state": "opened",
+                            "author": {"id": 41 if mr_reads == 1 else post_write_author},
+                            "detailed_merge_status": "mergeable",
+                        }
+                    if endpoint == "/approvals":
+                        return {"approved_by": ([{"user": {"id": 7}}] if mr_reads > 1 else [])}
+                    raise AssertionError(endpoint)
+
+                def approve(_config: Any, sha: str) -> gitlab.GitLabWriteResult:
+                    writes.append(sha)
+                    return gitlab.GitLabWriteResult("posted")
+
+                with (
+                    patched_attr(gitlab, "api_request", request),
+                    patched_attr(
+                        gitlab_approval,
+                        "_latest_diff_version",
+                        lambda _config: {
+                            "id": 2,
+                            "head_commit_sha": self.SHA,
+                            "patch_id_sha": "b" * 40,
+                        },
+                    ),
+                    patched_attr(gitlab, "approve_merge_request", approve),
+                ):
+                    result = gitlab_approval.execute_approval(
+                        gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
+                    )
+
+                self.assertEqual(writes, [self.SHA])
+                self.assertEqual(result.result.status, approval.ApprovalStatus.FAILED)
+                self.assertIn("post-write merge-request author", result.result.reason)
 
     def test_ambiguous_approve_is_not_retried(self) -> None:
         writes: list[str] = []
@@ -525,6 +621,15 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             with self.subTest(status=decision.result.status):
                 result = gitlab_approval.execute_approval(gitlab_config(), decision, self.SHA, 41)
                 self.assertEqual(result.result, decision.result)
+
+    def test_current_user_approval_rejects_nonpositive_user_ids(self) -> None:
+        for value in (True, 0, -1, "7", 7.0):
+            with self.subTest(value=value):
+                self.assertIsNone(
+                    gitlab_approval._current_user_approved(
+                        {"approved_by": [{"user": {"id": value}}]}, 7
+                    )
+                )
 
     def test_latest_diff_version_uses_highest_valid_id_not_response_order(self) -> None:
         versions = [

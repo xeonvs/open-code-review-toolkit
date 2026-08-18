@@ -7,6 +7,8 @@ from enum import Enum
 from typing import Any
 
 from ocr_toolkit.ocr_result import (
+    MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
+    MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
@@ -66,6 +68,8 @@ def evaluate_approval_policy(
     metadata_reason = automatic_approval_metadata_reason(toolkit_metadata)
     if metadata_reason:
         reason = metadata_reason
+    elif toolkit_metadata["evidence"]["mandatory"] is not outcome.requires_evidence_mcp:
+        reason = "the review-time approval receipt is missing or invalid"
     elif not outcome.manifest_present:
         reason = "the OCR result has no authoritative coverage manifest"
     elif outcome.kind != "clean" or outcome.budget_exceeded:
@@ -168,7 +172,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     if not _full_sha(review.get("source_sha")) or not _full_sha(review.get("policy_sha")):
         return invalid
-    if not _positive_id_or_none(review.get("mr_author_id")):
+    if not _positive_id_or_none(review.get("mr_author_id")) or review.get("mr_author_id") is None:
         return invalid
 
     context = toolkit_metadata.get("context")
@@ -201,7 +205,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     ):
         return invalid
     servers: set[str] = set()
+    tool_owners: set[str] = set()
     external = False
+    builtin_server = "ocr_toolkit_evidence"
     for capability in capabilities:
         if not isinstance(capability, dict) or set(capability) != {"server", "transport", "tools"}:
             return invalid
@@ -214,24 +220,28 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             or server in servers
             or transport not in {"builtin", "stdio", "remote"}
             or not isinstance(tools, list)
-            or not tools
+            or not 1 <= len(tools) <= MAX_TOOLKIT_MCP_TOOLS_PER_SERVER
             or any(
                 not isinstance(tool, str) or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(tool) is None
                 for tool in tools
             )
             or len(set(tools)) != len(tools)
+            or any(tool in tool_owners for tool in tools)
+            or (server == builtin_server) != (transport == "builtin")
+            or (server == builtin_server and tools != [builtin_server])
         ):
             return invalid
         servers.add(server)
-        external = external or transport != "builtin"
-    if "ocr_toolkit_evidence" not in servers:
+        tool_owners.update(tools)
+        external = external or server != builtin_server
+    if builtin_server not in servers:
         return invalid
     if any(
         not isinstance(server, str)
         or server not in servers
         or not isinstance(count, int)
         or isinstance(count, bool)
-        or count <= 0
+        or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
         for server, count in usage.items()
     ):
         return invalid
@@ -241,7 +251,13 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     mandatory = evidence.get("mandatory")
     used = evidence.get("used")
-    if not isinstance(mandatory, bool) or not isinstance(used, bool) or (mandatory and not used):
+    evidence_called = usage.get(builtin_server, 0) > 0
+    if (
+        not isinstance(mandatory, bool)
+        or not isinstance(used, bool)
+        or used is not evidence_called
+        or (mandatory and not used)
+    ):
         return invalid
     if context.get("state") == "degraded":
         return "the selected review context was degraded"

@@ -88,7 +88,7 @@ Ambiguous position-bearing inline creates can now recover only from exactly one 
 
 `ocr-ci post` also manages conservative automatic approval by default. After all
 current notes publish, it waits for GitLab diff and approval synchronization,
-verifies the current MR head and author against the receipt-bound identities, skips self-approval when the toolkit user authored the MR, submits that exact SHA only when all gates pass, and confirms only the authenticated toolkit user's approval through bounded readback. Set `OCR_AUTO_APPROVE=false` for a comment-only bot or before upgrading
+verifies the current MR head and author against the receipt-bound identities, skips self-approval when the toolkit user authored the MR, submits that exact SHA only when all gates pass, and confirms the authenticated toolkit user's approval plus the unchanged SHA and non-bot author through bounded post-write readback. Set `OCR_AUTO_APPROVE=false` for a comment-only bot or before upgrading
 an integration whose approval rules have not granted the bot permission. This
 transaction is add-only: an ineligible or disabled later run never removes an
 existing approval. Configure GitLab's own reset or invalidation policy if

@@ -59,7 +59,7 @@ def _current_user_approved(payload: Any, current_user_id: int) -> bool | None:
         if not isinstance(user, dict):
             return None
         user_id = user.get("id")
-        if isinstance(user_id, bool) or not isinstance(user_id, int):
+        if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
             return None
         own_approved = own_approved or user_id == current_user_id
     return own_approved
@@ -237,13 +237,27 @@ def execute_approval(
         interval_seconds=0,
         sleep=sleep,
     )
-    if confirmed is None or not confirmed.own_approved:
+    if confirmed is None:
         return ApprovalExecution(
             confirmation_error
             or ApprovalResult(
                 ApprovalStatus.FAILED,
                 "GitLab approval readback did not confirm the toolkit user",
             ),
+        )
+    if confirmed.author_id != expected_author_id or config.current_user_id == confirmed.author_id:
+        return ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.FAILED,
+                "the post-write merge-request author no longer matches the reviewed identity",
+            )
+        )
+    if not confirmed.own_approved:
+        return ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.FAILED,
+                "GitLab approval readback did not confirm the toolkit user",
+            )
         )
     return ApprovalExecution(
         ApprovalResult(

@@ -189,6 +189,11 @@ def _headers(value: Any, env_from: Any, server_name: str) -> tuple[dict[str, str
             )
         if not isinstance(item, str):
             raise MCPConfigError(f"servers.{server_name}.headers.{name} must be a string")
+        if item.startswith("$") and MCP_ENV_NAME_RE.fullmatch(item[1:]):
+            raise MCPConfigError(
+                f"servers.{server_name}.headers.{name} resembles an environment reference; "
+                "use headers_from"
+            )
         if not item or len(item) > MAX_MCP_HEADER_VALUE_CHARS:
             raise MCPConfigError(
                 f"servers.{server_name}.headers.{name} must be non-empty and at most "
@@ -424,7 +429,43 @@ def _existing_server(
         raise MCPConfigError(f"Existing OCR MCP server {name!r} is not a JSON object")
     if name == BUILTIN_EVIDENCE_SERVER:
         raise MCPConfigError("the toolkit-owned MCP server cannot be inherited")
-    raw = json.dumps({name: value}, separators=(",", ":"), ensure_ascii=False)
+    normalized = dict(value)
+    transport = normalized.get("type", "stdio")
+    if transport == "stdio" and isinstance(normalized.get("env"), list):
+        environment: dict[str, str] = {}
+        for assignment in normalized["env"]:
+            if not isinstance(assignment, str) or "=" not in assignment:
+                raise MCPConfigError(f"Existing OCR MCP server {name!r} has invalid env")
+            key, item = assignment.split("=", 1)
+            if key in environment:
+                raise MCPConfigError(f"Existing OCR MCP server {name!r} has duplicate env name")
+            environment[key] = item
+        normalized["env"] = environment
+    elif transport == "remote" and isinstance(normalized.get("headers"), dict):
+        literal_headers: dict[str, object] = {}
+        headers_from: dict[str, str] = {}
+        for header, item in normalized["headers"].items():
+            source = item[1:] if isinstance(item, str) and item.startswith("$") else ""
+            if source and MCP_ENV_NAME_RE.fullmatch(source):
+                headers_from[header] = source
+            else:
+                literal_headers[header] = item
+        if literal_headers:
+            normalized["headers"] = literal_headers
+        else:
+            normalized.pop("headers", None)
+        if headers_from:
+            inherited_sources = normalized.get("headers_from")
+            if inherited_sources is None:
+                normalized["headers_from"] = headers_from
+            elif isinstance(inherited_sources, dict):
+                normalized_names = {str(header).casefold() for header in inherited_sources}
+                if any(header.casefold() in normalized_names for header in headers_from):
+                    raise MCPConfigError(
+                        f"Existing OCR MCP server {name!r} has duplicate header sources"
+                    )
+                normalized["headers_from"] = {**inherited_sources, **headers_from}
+    raw = json.dumps({name: normalized}, separators=(",", ":"), ensure_ascii=False)
     parsed = parse_mcp_servers(raw, profile=profile)
     if len(parsed) != 1:
         raise MCPConfigError(f"Existing OCR MCP server {name!r} is disabled or invalid")

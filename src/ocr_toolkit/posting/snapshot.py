@@ -16,6 +16,9 @@ from ocr_toolkit.posting.gitlab import (
     delete_plain_note,
     draft_note_id,
 )
+from ocr_toolkit.posting.gitlab import (
+    discussion_id as parse_discussion_id,
+)
 from ocr_toolkit.posting.markers import (
     OCR_REPLY_COMMAND_RE,
     author_id_from_note,
@@ -227,7 +230,7 @@ def process_discussion_for_refs(
 
     for note in bot_notes:
         note_id = note.get("id")
-        if isinstance(note_id, int):
+        if isinstance(note_id, int) and not isinstance(note_id, bool) and note_id > 0:
             refs.discussion_note_refs.append((discussion_id, note_id))
 
 
@@ -256,26 +259,25 @@ def collect_previous_bot_comment_refs(
         if not isinstance(discussion, dict):
             continue
 
-        discussion_id = str(discussion.get("id") or "")
+        parsed_discussion_id = parse_discussion_id(discussion.get("id"))
         notes = discussion.get("notes")
-
-        if not discussion_id or not isinstance(notes, list):
+        if parsed_discussion_id is None or not isinstance(notes, list):
             continue
 
         for note in notes:
             if not isinstance(note, dict):
                 continue
-            if not is_own_bot_note(config, note, body_field="body"):
-                continue
             note_id = note.get("id")
-            if isinstance(note_id, int):
+            if isinstance(note_id, int) and not isinstance(note_id, bool) and note_id > 0:
+                refs.all_discussion_note_refs.append((parsed_discussion_id, note_id))
+                # GET /notes may return the same diff note. Keep every discussion
+                # note out of the plain-note baseline and cleanup path.
                 discussion_bot_note_ids.add(note_id)
-                refs.all_discussion_note_refs.append((discussion_id, note_id))
 
         process_discussion_for_refs(
             config,
             refs,
-            discussion_id,
+            parsed_discussion_id,
             notes,
             preserve_human_touched=preserve_human_touched,
         )
@@ -283,24 +285,15 @@ def collect_previous_bot_comment_refs(
     for note in plain_notes:
         if not isinstance(note, dict):
             continue
-
-        if not is_own_bot_note(config, note, body_field="body"):
-            continue
-
         note_id = note.get("id")
-        if not isinstance(note_id, int):
+        if isinstance(note_id, bool) or not isinstance(note_id, int) or note_id <= 0:
             continue
-
-        # GET /notes can include diff notes that also appear in
-        # /discussions. GitLab does not always expose enough shape in
-        # /notes to classify them with is_diff_note(), so skip every own
-        # bot note id already seen in /discussions before using
-        # DELETE /notes/{id}.
         if note_id in discussion_bot_note_ids or is_diff_note(note):
             continue
 
         refs.all_plain_note_ids.append(note_id)
-        refs.plain_note_ids.append(note_id)
+        if is_own_bot_note(config, note, body_field="body"):
+            refs.plain_note_ids.append(note_id)
 
     draft_notes: list[Any] = []
     if post_mode() == "draft":
@@ -312,13 +305,11 @@ def collect_previous_bot_comment_refs(
     for note in draft_notes:
         if not isinstance(note, dict):
             continue
-
-        if not is_own_bot_note(config, note, body_field="note"):
-            continue
-
         note_id = draft_note_id(note)
-        if note_id is not None:
-            refs.all_draft_note_ids.append(note_id)
+        if note_id is None:
+            continue
+        refs.all_draft_note_ids.append(note_id)
+        if is_own_bot_note(config, note, body_field="note"):
             refs.draft_note_ids.append(note_id)
 
     return refs
