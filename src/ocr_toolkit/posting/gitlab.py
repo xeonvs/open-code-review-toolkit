@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import sys
 import time
 import urllib.error
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.posting.gitlab_identity import valid_discussion_id
 from ocr_toolkit.posting.payloads import (
     build_marked_note_body,
     note_body_budget,
@@ -28,6 +30,7 @@ from ocr_toolkit.posting.settings import (
     getenv,
     post_mode,
 )
+from ocr_toolkit.posting.transaction import PostingTransaction
 
 
 @dataclass(frozen=True)
@@ -54,11 +57,38 @@ class GitLabConfig:
 
 @dataclass(frozen=True)
 class GitLabWriteResult:
-    """Detailed result for non-idempotent GitLab write calls."""
+    """Closed outcome and recovered identity for one GitLab write call."""
 
     status: str
     response: Any | None = None
     http_status: int | None = None
+    write_id: str | None = None
+    draft_note_id: int | None = None
+    discussion_id: str | None = None
+    discussion_note_id: int | None = None
+    create_kind: str | None = None
+
+    def __post_init__(self) -> None:
+        """Reject accidental expansion of the write outcome vocabulary."""
+
+        if self.status not in {
+            "posted",
+            "invalid_position",
+            "definite_failure",
+            "ambiguous_create",
+            "write_failed",
+        }:
+            raise ValueError("invalid GitLab write outcome")
+        if self.write_id is not None and re.fullmatch(r"[0-9a-f]{32}", self.write_id) is None:
+            raise ValueError("invalid GitLab write identity")
+        if self.create_kind not in {None, "draft", "discussion"}:
+            raise ValueError("invalid GitLab create kind")
+        if self.status in {"invalid_position", "definite_failure", "ambiguous_create"} and (
+            self.create_kind is None
+        ):
+            raise ValueError("create outcome requires an endpoint kind")
+        if self.status == "write_failed" and self.create_kind is not None:
+            raise ValueError("non-create write outcome cannot carry a create kind")
 
     @property
     def posted(self) -> bool:
@@ -69,7 +99,17 @@ class GitLabWriteResult:
         return self.status == "invalid_position"
 
     @property
+    def definite_failure(self) -> bool:
+        return self.status == "definite_failure"
+
+    @property
+    def ambiguous_create(self) -> bool:
+        return self.status == "ambiguous_create"
+
+    @property
     def write_failed(self) -> bool:
+        """Retain the conservative non-create write compatibility predicate."""
+
         return self.status == "write_failed"
 
 
@@ -262,8 +302,14 @@ def api_write_url_detailed(
     auth_header: str,
     data: dict[str, Any],
     method: str = "POST",
+    *,
+    create_kind: str | None = None,
+    write_id: str | None = None,
 ) -> GitLabWriteResult:
-    """Call a non-idempotent GitLab write API without retrying it."""
+    """Call one write once and classify create ambiguity without retrying."""
+
+    if create_kind not in {None, "draft", "discussion"}:
+        raise ValueError("unsupported GitLab create response kind")
 
     headers = {
         auth_header: api_token,
@@ -274,28 +320,75 @@ def api_write_url_detailed(
 
     try:
         with _open_gitlab_request(request) as response:
-            return GitLabWriteResult(
-                "posted", _parse_response_body(_read_limited_response(response))
-            )
+            parsed = _parse_response_body(_read_limited_response(response))
+            if create_kind == "draft":
+                created_draft = created_draft_note(parsed, "inline discussion draft")
+                if created_draft is None:
+                    return GitLabWriteResult(
+                        "ambiguous_create", write_id=write_id, create_kind=create_kind
+                    )
+                return GitLabWriteResult(
+                    "posted",
+                    created_draft.response,
+                    write_id=write_id,
+                    draft_note_id=created_draft.note_id,
+                    create_kind="draft",
+                )
+            if create_kind == "discussion":
+                created_discussion = created_discussion_note(parsed)
+                if created_discussion is None:
+                    return GitLabWriteResult(
+                        "ambiguous_create", write_id=write_id, create_kind=create_kind
+                    )
+                return GitLabWriteResult(
+                    "posted",
+                    created_discussion.response,
+                    write_id=write_id,
+                    discussion_id=created_discussion.discussion_id,
+                    discussion_note_id=created_discussion.note_id,
+                    create_kind="discussion",
+                )
+            return GitLabWriteResult("posted", parsed)
     except urllib.error.HTTPError as exc:
         raw_body = exc.read(MAX_API_ERROR_BODY_BYTES).decode("utf-8", errors="replace")
         safe_body = truncate_plain_text(redact_sensitive(raw_body), 2_000)
         print(f"GitLab API error {exc.code} for {method} {url}: {safe_body}", file=sys.stderr)
-        if _is_invalid_position_error(exc.code, raw_body):
-            return GitLabWriteResult("invalid_position")
+        if create_kind is not None and _is_invalid_position_error(exc.code, raw_body):
+            return GitLabWriteResult("invalid_position", write_id=write_id, create_kind=create_kind)
+        if create_kind is not None:
+            status = (
+                "ambiguous_create"
+                if exc.code == 408 or 300 <= exc.code < 400 or 500 <= exc.code < 600
+                else "definite_failure"
+            )
+            return GitLabWriteResult(
+                status, http_status=exc.code, write_id=write_id, create_kind=create_kind
+            )
         return GitLabWriteResult("write_failed", http_status=exc.code)
     except GitLabResponseTooLarge as exc:
         print(f"GitLab API response too large for {method} {url}: {exc}", file=sys.stderr)
-        return GitLabWriteResult("write_failed")
+        return GitLabWriteResult(
+            "ambiguous_create" if create_kind is not None else "write_failed",
+            write_id=write_id,
+            create_kind=create_kind,
+        )
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         print(
             f"GitLab API request failed for {method} {url}: {redact_sensitive(str(exc))}",
             file=sys.stderr,
         )
-        return GitLabWriteResult("write_failed")
+        return GitLabWriteResult(
+            "ambiguous_create" if create_kind is not None else "write_failed",
+            write_id=write_id,
+            create_kind=create_kind,
+        )
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         print(f"GitLab API returned invalid JSON for {method} {url}: {exc}", file=sys.stderr)
-        return GitLabWriteResult("write_failed")
+        return GitLabWriteResult(
+            "ambiguous_create" if create_kind is not None else "write_failed",
+            write_id=write_id,
+            create_kind=create_kind,
+        )
 
 
 def print_user_id_failure_banner(reason: str) -> None:
@@ -324,11 +417,8 @@ def fetch_current_user_id(server_url: str, api_token: str, auth_header: str) -> 
         return None
 
     raw_user_id = result.get("id")
-    if isinstance(raw_user_id, (str, int, float)) and not isinstance(raw_user_id, bool):
-        try:
-            return int(raw_user_id)
-        except ValueError:
-            pass
+    if isinstance(raw_user_id, int) and not isinstance(raw_user_id, bool) and raw_user_id > 0:
+        return raw_user_id
     print_user_id_failure_banner("GET /user response has no valid id field")
     return None
 
@@ -466,6 +556,17 @@ def api_get_paginated(
     return None
 
 
+def plain_note_id(value: Any) -> int | None:
+    """Extract one exact positive note id from a regular-note response."""
+
+    if not isinstance(value, dict):
+        return None
+    raw_id = value.get("id")
+    if isinstance(raw_id, int) and not isinstance(raw_id, bool) and raw_id > 0:
+        return raw_id
+    return None
+
+
 @dataclass(frozen=True)
 class DraftNoteCreation:
     """Validated draft note creation response."""
@@ -484,11 +585,8 @@ def draft_note_id(value: Any) -> int | None:
     if isinstance(raw_id, bool):
         return None
 
-    if isinstance(raw_id, (str, int, float)) and not isinstance(raw_id, bool):
-        try:
-            return int(raw_id)
-        except ValueError:
-            pass
+    if isinstance(raw_id, int) and not isinstance(raw_id, bool) and raw_id > 0:
+        return raw_id
     return None
 
 
@@ -507,6 +605,49 @@ def created_draft_note(response: Any, context: str) -> DraftNoteCreation | None:
         return None
 
     return DraftNoteCreation(response=response, note_id=note_id)
+
+
+@dataclass(frozen=True)
+class DiscussionNoteCreation:
+    """Validated direct discussion identity needed by current-run rollback."""
+
+    response: dict[str, Any]
+    discussion_id: str
+    note_id: int
+
+
+def discussion_id(value: Any) -> str | None:
+    """Return one endpoint-safe GitLab discussion identity."""
+
+    return value if valid_discussion_id(value) else None
+
+
+def created_discussion_note(response: Any) -> DiscussionNoteCreation | None:
+    """Validate a direct-create response with one usable discussion note."""
+
+    if not isinstance(response, dict):
+        return None
+    parsed_discussion_id = discussion_id(response.get("id"))
+    notes = response.get("notes")
+    if (
+        parsed_discussion_id is None
+        or not isinstance(notes, list)
+        or len(notes) != 1
+        or not isinstance(notes[0], dict)
+    ):
+        print(
+            "GitLab Discussions API create response did not contain a usable identity.",
+            file=sys.stderr,
+        )
+        return None
+    note_id = notes[0].get("id")
+    if isinstance(note_id, bool) or not isinstance(note_id, int) or note_id <= 0:
+        print(
+            "GitLab Discussions API create response did not contain a usable note id.",
+            file=sys.stderr,
+        )
+        return None
+    return DiscussionNoteCreation(response, parsed_discussion_id, note_id)
 
 
 def delete_plain_note(config: GitLabConfig, note_id: int) -> bool:
@@ -608,9 +749,11 @@ def post_inline_note_detailed(
     refs: dict[str, str],
     fingerprint: str | None = None,
     old_path: str | None = None,
+    write_id: str | None = None,
 ) -> GitLabWriteResult:
-    """Post a direct inline note and distinguish invalid positions from write failures."""
+    """Post one direct inline note with an independent write identity."""
 
+    write_id = write_id or secrets.token_hex(16)
     return api_write_url_detailed(
         url=f"{config.api_base}/discussions",
         api_token=config.api_token,
@@ -619,11 +762,14 @@ def post_inline_note_detailed(
             "body": build_marked_note_body(
                 body,
                 fingerprint=fingerprint,
+                write_id=write_id,
                 max_chars=MAX_INLINE_NOTE_CHARS,
                 inline=True,
             ),
             "position": build_text_position(path, line, refs, old_path=old_path),
         },
+        create_kind="discussion",
+        write_id=write_id,
     )
 
 
@@ -635,12 +781,15 @@ def post_inline_draft_note_detailed(
     refs: dict[str, str],
     fingerprint: str | None = None,
     old_path: str | None = None,
+    write_id: str | None = None,
 ) -> GitLabWriteResult:
-    """Create an inline draft note and distinguish invalid positions from write failures."""
+    """Create one inline draft note with an independent write identity."""
 
+    write_id = write_id or secrets.token_hex(16)
     marked_body = build_marked_note_body(
         body,
         fingerprint=fingerprint,
+        write_id=write_id,
         max_chars=MAX_INLINE_NOTE_CHARS,
         inline=True,
     )
@@ -652,6 +801,8 @@ def post_inline_draft_note_detailed(
             "note": marked_body,
             "position": build_text_position(path, line, refs, old_path=old_path),
         },
+        create_kind="draft",
+        write_id=write_id,
     )
 
 
@@ -666,13 +817,13 @@ def publish_draft_note(config: GitLabConfig, draft_note_id_value: int) -> bool:
     return response is not None
 
 
-def publish_created_draft_notes(config: GitLabConfig, draft_note_ids: list[int]) -> bool:
-    """Publish only draft notes created by this script run."""
+def publish_created_draft_notes(config: GitLabConfig, transaction: PostingTransaction) -> bool:
+    """Publish each draft identity from this transaction at most once."""
 
     if post_mode() != "draft":
         return True
 
-    for note_id in draft_note_ids:
+    for note_id in transaction.consume_drafts_for_publication():
         if not publish_draft_note(config, note_id):
             print(f"Failed to publish OCR draft note id={note_id}.", file=sys.stderr)
             return False
@@ -683,7 +834,7 @@ def publish_created_draft_notes(config: GitLabConfig, draft_note_ids: list[int])
 def post_review_note(
     config: GitLabConfig,
     body: str,
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
     fingerprint: str | None = None,
 ) -> Any | None:
     """Post a regular MR note using the configured posting mode."""
@@ -693,17 +844,22 @@ def post_review_note(
         created = created_draft_note(response, "MR note draft")
         if created is None:
             return None
-        draft_note_ids.append(created.note_id)
+        if not transaction.record_draft(created.note_id):
+            return None
         return created.response
 
-    return post_note(config, body, fingerprint=fingerprint)
+    response = post_note(config, body, fingerprint=fingerprint)
+    note_id = plain_note_id(response)
+    if note_id is None or not transaction.record_plain(note_id):
+        return None
+    return response
 
 
 def post_review_note_bounded(
     config: GitLabConfig,
     title: str,
     body: str,
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
     fingerprint: str | None = None,
 ) -> Any | None:
     """Post a bounded regular MR note using the configured posting mode."""
@@ -711,7 +867,7 @@ def post_review_note_bounded(
     body_budget = note_body_budget(MAX_NOTE_CHARS, fingerprint)
     full_body = f"{title}\n\n{body}" if title else body
     if len(full_body) <= body_budget and len(full_body.encode("utf-8")) <= body_budget:
-        return post_review_note(config, full_body, draft_note_ids, fingerprint=fingerprint)
+        return post_review_note(config, full_body, transaction, fingerprint=fingerprint)
 
     title_overhead = len(title.encode("utf-8")) + 2 if title else 0
     content_budget = max(0, body_budget - title_overhead)
@@ -723,7 +879,7 @@ def post_review_note_bounded(
     return post_review_note(
         config,
         final_body,
-        draft_note_ids,
+        transaction,
         fingerprint=fingerprint,
     )
 
@@ -859,24 +1015,54 @@ def post_review_discussion(
     line: int,
     body: str,
     refs: dict[str, str],
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
     fingerprint: str | None = None,
     old_path: str | None = None,
 ) -> GitLabWriteResult:
     """Post an inline discussion using the configured posting mode."""
 
+    write_id = secrets.token_hex(16)
     if post_mode() == "draft":
         result = post_inline_draft_note_detailed(
-            config, path, line, body, refs, fingerprint=fingerprint, old_path=old_path
+            config,
+            path,
+            line,
+            body,
+            refs,
+            fingerprint=fingerprint,
+            old_path=old_path,
+            write_id=write_id,
         )
+        if result.ambiguous_create:
+            from ocr_toolkit.posting.reconciliation import reconcile_ambiguous_inline_create
+
+            result = reconcile_ambiguous_inline_create(config, result)
         if not result.posted:
             return result
-        created = created_draft_note(result.response, "inline discussion draft")
-        if created is None:
-            return GitLabWriteResult("write_failed")
-        draft_note_ids.append(created.note_id)
-        return GitLabWriteResult("posted", created.response)
+        if result.draft_note_id is None or not transaction.record_draft(result.draft_note_id):
+            return GitLabWriteResult("ambiguous_create", write_id=write_id, create_kind="draft")
+        return result
 
-    return post_inline_note_detailed(
-        config, path, line, body, refs, fingerprint=fingerprint, old_path=old_path
+    result = post_inline_note_detailed(
+        config,
+        path,
+        line,
+        body,
+        refs,
+        fingerprint=fingerprint,
+        old_path=old_path,
+        write_id=write_id,
     )
+    if result.ambiguous_create:
+        from ocr_toolkit.posting.reconciliation import reconcile_ambiguous_inline_create
+
+        result = reconcile_ambiguous_inline_create(config, result)
+    if not result.posted:
+        return result
+    if (
+        result.discussion_id is None
+        or result.discussion_note_id is None
+        or not transaction.record_discussion(result.discussion_id, result.discussion_note_id)
+    ):
+        return GitLabWriteResult("ambiguous_create", write_id=write_id, create_kind="discussion")
+    return result

@@ -19,10 +19,10 @@ The planned M5 model also assumes mutable forge discussions, edits/reordering, a
 ### Current trust transitions
 
 1. Repository paths and immutable Git blobs enter bounded collection and parsing.
-2. Provider MR metadata enters closed invocation normalization; target-derived policy comes only from the captured protected-target SHA.
+2. Provider MR identity always enters closed validation; optional bounded metadata enters normalization only when `OCR_REVIEW_CONTEXT_MODE=metadata`; target-derived policy comes only from the captured protected-target SHA.
 3. Persisted evidence, results, OCR configuration, sessions, and receipts re-enter hostile parsing or external retention boundaries.
 4. Typed evidence crosses into the compact bootstrap and mandatory read-only evidence MCP.
-5. Operator-configured direct MCP command/endpoint/setup/credentials cross into OCR; server-authored descriptions and schemas cross into plan and main model context; model-generated arguments cross to allowed tools; textual responses cross back to the model and OCR session.
+5. In the GitLab-MR execution profile, operator-configured external MCP is remote HTTPS only; developer-local execution may pass explicit stdio command/setup configuration. Server-authored descriptions and schemas cross into plan and main model context; model-generated arguments cross to allowed tools; textual responses cross back to the model and OCR session.
 6. OCR findings and coverage cross into deterministic GitLab publication, suppression, and approval policy.
 7. A release candidate crosses protected-base authorization, publication, provenance, and live readback.
 
@@ -34,7 +34,7 @@ The planned M5 model also assumes mutable forge discussions, edits/reordering, a
 - Persisted state is accepted only through closed schemas whose related snapshots, indexes, deltas, and receipts agree atomically.
 - Model-selected tool arguments receive deterministic authorization and validation in application or server code; names, prompts, and schemas are not resource authorization.
 - Direct MCP credentials, tools, and content remain least-privilege and acceptable for both model egress and OCR-session retention.
-- Provider mutations bind reviewed identity where supported; ambiguous non-idempotent writes preserve prior state.
+- Provider mutations bind reviewed identity where supported; ambiguous inline creates use one author-bound readback without retry, and unresolved ambiguity preserves prior state.
 - Secrets remain outside repository-controlled context, public notes, fixtures, and release artifacts.
 
 ### Current generic external-MCP boundary (M3 established)
@@ -52,22 +52,22 @@ BL-011 used the production `ocr-ci review` path, official checksum-verified OCR 
 
 These observations establish the current safe-use envelope, not the safety of arbitrary direct providers. Generic external MCP is privileged operator-configured composition, not author-triggered reference resolution. Each direct server must independently authorize tenant, canonical object, fields, and operation for every request. Use only reviewed narrow read-only tools, dedicated least-privilege credentials, bounded responses, and content permissible to send to the LLM and retain in OCR sessions. Do not expose generic search, arbitrary URL/ID fetch, traversal, writes, or broad service credentials to merge-request-selected references. Every direct tool must be safe in both OCR phases.
 
-Server command, endpoint, setup, schemas, descriptions, arguments, and responses cross separate executable or untrusted boundaries. `setup` is operator-owned shell configuration executed in the analyzed repository; keep it empty unless explicitly reviewed. Raw endpoint, setup, and credential values are not safe diagnostic material. Toolkit diagnostics avoid them, but OCR may emit operator-owned setup or transport details; keep those values non-sensitive and retain OCR stderr privately. Managed OAuth authenticates a client but does not authorize an object and remains conditional.
+Server command, endpoint, setup, schemas, descriptions, arguments, and responses cross separate executable or untrusted boundaries. GitLab-MR external entries are remote HTTPS only and reject stdio/setup fields; local-profile `setup` remains operator-owned shell configuration executed in the analyzed repository. Existing OCR MCP configuration is hostile persisted input and is revalidated against the active profile. Raw endpoint, setup, and credential values are not safe diagnostic material. Toolkit diagnostics avoid them, but OCR may emit operator-owned transport details; keep those values non-sensitive and retain OCR stderr privately. Managed OAuth authenticates a client but does not authorize an object and remains conditional.
 
-The direct MCP receipt proves only positive calls attributed from known tool names. It is operational attribution, not security evidence for resource authorization, completeness, response safety, actual semantic use, or model output. Security severity still depends on demonstrated reachability and impact: prompt-like or Markdown text is not code execution without a privileged action path, and same-owner artifact tampering is not an ordinary-contributor escalation without a lower-privilege writer.
+Receipt v3 records the bounded configured capability inventory and positive calls attributed from known tool names. Every external MCP makes the review comment-only, independent of use; server-authored tool annotations are not used to upgrade that policy. The receipt is operational attribution, not security evidence for resource authorization, completeness, response safety, actual semantic use, or model output. Security severity still depends on demonstrated reachability and impact: prompt-like or Markdown text is not code execution without a privileged action path, and same-owner artifact tampering is not an ordinary-contributor escalation without a lower-privilege writer.
 
 ## Preserved current safety properties
 
 - Repository reads are bounded, rooted, symlink-aware, immutable-object reads that exclude common dependency/build trees and never execute repository content.
-- Review-invocation metadata admits only complete bounded title, description, labels, optional source branch, and source SHA. Unknown fields, URLs, profiles, comments, linked bodies, tokens, and arbitrary environment values are not collected. Invocation evidence cannot select authority and blocks automatic approval when admitted.
+- Review context uses a closed `off|metadata` selector. `off` retains only validated source/protected-target/author identities and never normalizes mutable MR text; `metadata` admits only bounded title, description, labels, and optional source branch. Unknown fields, URLs, profiles, comments, linked bodies, tokens, and arbitrary environment values are not collected. Complete metadata remains non-authoritative but approval-eligible; degraded metadata blocks approval.
 - Generated Markdown neutralizes controls and GitLab quick actions. Actionable suggestions require exact reviewed-head proof; unverifiable replacements retain prose only.
-- Result and provider reads have byte limits; notes enforce character and UTF-8 byte limits; non-idempotent writes are not blindly retried.
-- Automatic approval binds the exact synchronized reviewed head and never removes an existing approval. Partial, warning, legacy, omitted, or mutable-context runs are ineligible.
+- Result and provider reads have byte limits; notes enforce character and UTF-8 byte limits. Position-bearing inline creates reserve independent unguessable markers, classify closed outcomes, and perform at most one complete author-bound reconciliation read with no retry.
+- Automatic approval binds the exact synchronized reviewed head and MR author from receipt v3, skips self-approval, and never removes an existing approval. Partial, warning, legacy, omitted, degraded-context, or external-MCP runs are ineligible.
 - Human replies are ownership boundaries. Merge-request source SHA, protected-target policy SHA, and merge-result SHA remain distinct.
 - The evidence engine stores recursively redacted typed facts/deltas in owner-only files and serves a closed bounded network-independent MCP. Absence supports a negative claim only for applicable complete scope.
 - OCR rules, decisions, and guidance come only from captured protected-target blobs; source changes cannot create policy. Full guidance remains untrusted context, not authority.
 - External finding images are disabled by default and, when enabled, use closed normalized display metadata only.
-- Markers, fingerprints, snapshots, and rollback logic constrain repeated runs. Secrets and credential-shaped values are redacted before operational output.
+- Finding fingerprints, independent write markers, complete pre-run snapshots, and explicit immutable current-run identities constrain repeated runs. Rollback deletes only recorded IDs absent from the baseline; secrets and credential-shaped values are redacted before operational output.
 
 The evidence engine reads exact base/head Git objects without checkout, refuses symlinks and submodules, and separates collection, normalization, owner-only atomic persistence, hostile readback, and bounded MCP projection. Snapshot indexes must agree with admitted records; deltas are recursively re-redacted and re-bounded before IDs or responses are derived; colliding facts retain source paths; normalized mapping-key collisions fail instead of dropping a value.
 
@@ -77,7 +77,7 @@ Ansible Galaxy requirements use the same immutable-object boundary. Relative inc
 
 ## Planned and disabled M5 boundary
 
-M5 bounded review-context enrichment is planned; no current release implements this section. `.opencodereview/review-context-policy.json` is not read today, discussions and references are not acquired, no context broker/store/handles exist, and `context_list`/`context_get` are unavailable. The following are requirements for future BL-023 implementation, **planned / not proven** until runtime and release qualification.
+The 0.6.3 foundation implements only closed context selection, bounded metadata completeness, receipt/approval identity, and GitLab-MR MCP topology. The complete M5 enrichment boundary remains planned: `.opencodereview/review-context-policy.json` is not read today, discussions and references are not acquired as model context, no context broker/store/handles exist, and `context_list`/`context_get` are unavailable. The following are requirements for future BL-023 implementation, **planned / not proven** until runtime and release qualification.
 
 ### Planned data flow and trust transitions
 

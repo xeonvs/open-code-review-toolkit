@@ -84,6 +84,7 @@ from ocr_toolkit.posting.suggestions import (
     evaluate_suggestion,
     safe_repository_path,
 )
+from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
@@ -100,10 +101,10 @@ from ocr_toolkit.posting.settings import (
 from ocr_toolkit.review_runner import read_stderr_excerpt
 
 
-def finalize_posting(config: GitLabConfig, draft_note_ids: list[int]) -> bool:
+def finalize_posting(config: GitLabConfig, transaction: PostingTransaction) -> bool:
     """Publish draft notes created by this script run."""
 
-    return publish_created_draft_notes(config, draft_note_ids)
+    return publish_created_draft_notes(config, transaction)
 
 
 def inline_skip_reason(refs: dict[str, str] | None, path: str, line: int) -> str:
@@ -133,6 +134,27 @@ def mr_head_sha() -> str:
     return clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
 
 
+def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
+    """Return only validated-by-policy receipt identities for provider readback."""
+
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 3:
+        return "", None
+    review = toolkit_metadata.get("review")
+    if not isinstance(review, dict):
+        return "", None
+    source_sha = review.get("source_sha")
+    author_id = review.get("mr_author_id")
+    if not (
+        isinstance(source_sha, str)
+        and re.fullmatch(r"[0-9a-f]{40}", source_sha)
+        and isinstance(author_id, int)
+        and not isinstance(author_id, bool)
+        and author_id > 0
+    ):
+        return "", None
+    return source_sha, author_id
+
+
 def summary_with_run_marker(body: str, run_id: str) -> str:
     """Attach one bounded hidden transaction identity to the summary."""
 
@@ -156,7 +178,13 @@ def find_current_summary_note(config: GitLabConfig, run_id: str) -> int | None:
             continue
         body = note.get("body")
         note_id = note.get("id")
-        if isinstance(body, str) and marker in body and isinstance(note_id, int):
+        if (
+            isinstance(body, str)
+            and marker in body
+            and isinstance(note_id, int)
+            and not isinstance(note_id, bool)
+            and note_id > 0
+        ):
             matches.append(note_id)
     return matches[0] if len(matches) == 1 else None
 
@@ -191,21 +219,23 @@ def finalize_review_approval(
     config: GitLabConfig,
     previous_refs: BotCommentRefs,
     outcome: ReviewOutcome,
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
     eligibility: ApprovalEligibility,
     reviewed_commit: str,
+    reviewed_author_id: int | None,
     run_id: str,
     render_summary: Callable[[ApprovalResult], str],
 ) -> int:
     """Publish notes, manage exact-SHA approval, update summary, then clean old state."""
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
 
     execution = execute_approval(
         config,
         eligibility,
         reviewed_commit,
+        reviewed_author_id,
     )
     final_body = summary_with_run_marker(
         render_summary(execution.result),
@@ -613,7 +643,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
 
     previous_bot_comment_refs = collect_previous_bot_comment_refs(config)
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     if previous_bot_comment_refs is None:
         print(
             "Cannot collect previous OCR bot comments reliably; refusing to publish "
@@ -655,7 +685,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         result.get(TOOLKIT_RESULT_KEY),
     )
     summary_run_id = secrets.token_hex(16)
-    reviewed_commit = reviewed_sha()
+    receipt_sha, reviewed_author_id = approval_receipt_identity(result.get(TOOLKIT_RESULT_KEY))
+    reviewed_commit = receipt_sha or reviewed_sha()
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
@@ -698,18 +729,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             config,
             "",
             body,
-            draft_note_ids,
+            transaction,
         )
         if response is None:
             print("Failed to create OCR no-comments note.", file=sys.stderr)
-            return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
+            return posting_failure_exit(config, previous_bot_comment_refs, transaction)
         return finalize_review_approval(
             config,
             previous_bot_comment_refs,
             outcome,
-            draft_note_ids,
+            transaction,
             approval_eligibility,
             reviewed_commit,
+            reviewed_author_id,
             summary_run_id,
             render_no_comments_summary,
         )
@@ -780,7 +812,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 badge_mode=badge_mode,
             ),
             refs=refs,
-            draft_note_ids=draft_note_ids,
+            transaction=transaction,
             fingerprint=clean_text(raw_comment.get("_ocr_fingerprint")) or None,
             old_path=old_path,
         )
@@ -797,11 +829,12 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             failed_comments.append((raw_comment, suggestion_decision))
         else:
             print(
-                f"Inline posting failed reason=post_failed, path={path!r}, line={line!r}; "
-                "refusing fallback because the GitLab write result is ambiguous.",
+                f"Inline posting failed reason={inline_result.status}, "
+                f"path={path!r}, line={line!r}; refusing fallback because only "
+                "a definite invalid-position rejection permits fallback.",
                 file=sys.stderr,
             )
-            rollback_current_run_comments(config, previous_bot_comment_refs, draft_note_ids)
+            rollback_current_run_comments(config, previous_bot_comment_refs, transaction)
             print_posting_failure_banner()
             return 1
 
@@ -825,12 +858,12 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 config,
                 fallback_title,
                 fallback_body,
-                draft_note_ids,
+                transaction,
             )
 
             if fallback_response is None:
                 print("Failed to create OCR fallback note.", file=sys.stderr)
-                return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
+                return posting_failure_exit(config, previous_bot_comment_refs, transaction)
 
     if omitted_count:
         omitted_response = post_review_note_bounded(
@@ -841,11 +874,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 publish_limit=publish_limit,
                 omitted=omitted_count,
             ),
-            draft_note_ids,
+            transaction,
         )
         if omitted_response is None:
             print("Failed to create OCR omitted-comments note.", file=sys.stderr)
-            return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
+            return posting_failure_exit(config, previous_bot_comment_refs, transaction)
 
     def render_findings_summary(approval_result: ApprovalResult) -> str:
         """Render the findings summary with one approval state."""
@@ -881,20 +914,21 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             render_findings_summary(provisional_approval_result(approval_eligibility)),
             summary_run_id,
         ),
-        draft_note_ids,
+        transaction,
     )
 
     if summary_response is None:
         print("Failed to create OCR summary note.", file=sys.stderr)
-        return posting_failure_exit(config, previous_bot_comment_refs, draft_note_ids)
+        return posting_failure_exit(config, previous_bot_comment_refs, transaction)
 
     approval_exit = finalize_review_approval(
         config,
         previous_bot_comment_refs,
         outcome,
-        draft_note_ids,
+        transaction,
         approval_eligibility,
         reviewed_commit,
+        reviewed_author_id,
         summary_run_id,
         render_findings_summary,
     )
@@ -947,7 +981,7 @@ def invalid_ocr_schema_exit(
     """Post a visible OCR result artifact error without replacing old review notes."""
 
     print(f"OCR result schema error: {message}", file=sys.stderr)
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     safe_message = neutralize_quick_actions(clean_text(message))
     response = post_review_note_bounded(
         config,
@@ -956,14 +990,14 @@ def invalid_ocr_schema_exit(
         "- Normal review comments were not published.\n"
         "- Previous OCR review comments were preserved.\n"
         f"- Schema error: {inline_code(safe_message)}",
-        draft_note_ids,
+        transaction,
     )
     if response is None:
         print("Failed to create OCR schema-error note.", file=sys.stderr)
-        return posting_failure_exit(config, None, draft_note_ids)
+        return posting_failure_exit(config, None, transaction)
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
 
     return 1 if strict_posting() else 0
 
@@ -980,7 +1014,7 @@ def post_manifest_failure(
 ) -> int:
     """Post a manifest-declared run failure while preserving prior review notes."""
 
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     body = summarize_result(
         total=0,
         inline_count=0,
@@ -1001,13 +1035,13 @@ def post_manifest_failure(
         config,
         "",
         body,
-        draft_note_ids,
+        transaction,
     )
     if response is None:
         print("Failed to create OCR manifest-failure note.", file=sys.stderr)
-        return posting_failure_exit(config, None, draft_note_ids)
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+        return posting_failure_exit(config, None, transaction)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
     return 1 if strict_posting() else 0
 
 
@@ -1020,7 +1054,7 @@ def post_llm_provider_failure(
 ) -> int:
     """Post a visible OCR provider failure and preserve previous review notes."""
 
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     warning_items: list[str] = []
     for warning in warnings[:10]:
         safe_warning = compact_escaped_text(
@@ -1050,16 +1084,16 @@ def post_llm_provider_failure(
         config,
         "**Open Code Review provider failure**",
         "\n".join(body_parts),
-        draft_note_ids,
+        transaction,
     )
     if response is None:
         print("Failed to create OCR provider-failure note.", file=sys.stderr)
-        cleanup_drafts_created_by_this_run(config, draft_note_ids)
+        cleanup_drafts_created_by_this_run(config, transaction)
         print_posting_failure_banner()
         return 1
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
 
     print(
         "Open Code Review did not complete because the LLM provider reported a billing/quota failure.",
@@ -1076,7 +1110,7 @@ def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
     valid review must remain visible until a successful run replaces it.
     """
 
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
     details = read_stderr_excerpt(stderr_path) if details_enabled else ""
 
@@ -1086,22 +1120,22 @@ def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
             "**Open Code Review parse error**",
             "**Open Code Review failed to produce valid JSON.**\n\n"
             + neutralize_quick_actions(markdown_code_block("text", details)),
-            draft_note_ids,
+            transaction,
         )
     else:
         parse_error_response = post_review_note_bounded(
             config,
             "**Open Code Review parse error**",
             "**Open Code Review failed to produce valid JSON.** Check the CI job log.",
-            draft_note_ids,
+            transaction,
         )
 
     if parse_error_response is None:
         print("Failed to create OCR parse-error note.", file=sys.stderr)
-        return posting_failure_exit(config, None, draft_note_ids)
+        return posting_failure_exit(config, None, transaction)
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
 
     return 1 if strict_posting() else 0
 
@@ -1120,7 +1154,7 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
     instead of a confusing negative number.
     """
 
-    draft_note_ids: list[int] = []
+    transaction = PostingTransaction()
     details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
     details = read_stderr_excerpt(stderr_path) if details_enabled else ""
 
@@ -1143,14 +1177,14 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
         config,
         "**Open Code Review failure**",
         body,
-        draft_note_ids,
+        transaction,
     )
     if response is None:
         print("Failed to create OCR failure note.", file=sys.stderr)
-        return posting_failure_exit(config, None, draft_note_ids)
+        return posting_failure_exit(config, None, transaction)
 
-    if not finalize_posting(config, draft_note_ids):
-        return publish_failure_exit(config, draft_note_ids)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
 
     return 1 if strict_posting() else 0
 

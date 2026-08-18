@@ -488,7 +488,11 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
         or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return ""
-    mcp_usage = toolkit_metadata.get("mcp_usage")
+    if toolkit_metadata.get("schema_version") == 3:
+        mcp = toolkit_metadata.get("mcp")
+        mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
+    else:
+        mcp_usage = toolkit_metadata.get("mcp_usage")
     if not isinstance(mcp_usage, dict):
         return ""
     used: list[tuple[str, int]] = []

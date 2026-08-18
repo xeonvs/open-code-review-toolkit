@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ocr_toolkit.common.markdown import markdown_code_block
-from ocr_toolkit.posting.markers import build_marker
+from ocr_toolkit.posting.markers import build_marker, build_write_marker
 from ocr_toolkit.posting.settings import (
     MAX_INLINE_NOTE_CHARS,
     MAX_NOTE_CHARS,
@@ -106,26 +106,35 @@ def limit_regular_note_body(body: str, max_chars: int = MAX_NOTE_CHARS) -> str:
     return truncate_note_body(body, max_chars=max_chars)
 
 
-def note_body_budget(max_chars: int, fingerprint: str | None = None) -> int:
-    """Return the body budget after reserving space for the bot marker."""
+def note_body_budget(
+    max_chars: int, fingerprint: str | None = None, write_id: str | None = None
+) -> int:
+    """Return content budget after reserving immutable toolkit markers."""
 
-    return max(0, max_chars - len(build_marker(fingerprint)) - 1)
+    markers = [build_marker(fingerprint)]
+    if write_id is not None:
+        markers.append(build_write_marker(write_id))
+    return max(0, max_chars - len("\n".join(markers)) - 1)
 
 
 def build_marked_note_body(
     body: str,
     *,
     fingerprint: str | None = None,
+    write_id: str | None = None,
     max_chars: int = MAX_NOTE_CHARS,
     inline: bool = False,
 ) -> str:
     """Build the exact GitLab note payload, including marker and size limit."""
 
-    marker = build_marker(fingerprint)
+    markers = [build_marker(fingerprint)]
+    if write_id is not None:
+        markers.append(build_write_marker(write_id))
+    marker = "\n".join(markers)
     if max_chars < len(marker) + 1:
         raise ValueError("GitLab note payload budget is too small for OCR marker")
 
-    budget = note_body_budget(max_chars, fingerprint)
+    budget = note_body_budget(max_chars, fingerprint, write_id)
     limited_body = (
         limit_inline_body(body, max_chars=budget)
         if inline

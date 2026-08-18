@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.5",
-  "recommended_version": "1.9.5",
+  "monitoring_floor": "1.9.6",
+  "recommended_version": "1.9.6",
   "releases": [
     {
       "assets": [
@@ -879,6 +879,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.5",
       "status": "tested",
       "version": "1.9.5"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "6748b7cb3350696dfdcf4960cfe9ef5144dba4ae984bf32c374c004fd5e53462",
+          "size": 47366000
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "0722bf8e77832f4da68d78a1b3fb5317d786d59db57734fd2c0e682d466e8830",
+          "size": 45015202
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "6e06c17954ea3701f33ed657a9b8166632afb5427189935ce22c166ece23edcd",
+          "size": 45854882
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "57c42ab716fabcee1c5389cf33de831da13f860151474bb5510833cc37310b2b",
+          "size": 43253922
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "570ba11718b34950e47242af4da5a68c51a69ca13d6e6d0a2c166e58ed04fd72",
+          "size": 47085568
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "ecdde5df1aa04c8cfc5beed99f3af20005c4f8cc2360f692e037602ebac86e20",
+          "size": 43867136
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "874dc28cc62cea482b5548878316da3ce3ccc1ae8cd6704f5660db6ec02482cb",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.6.json",
+      "evidence_sha256": "8a85c2f150592cf7623fbbd9802fc96fa09ea3e600988f5b9f32f8e6c9f2088b",
+      "human_conclusion": "Compatible after human adjacent review in issue #105 and hosted workflow run 32144971874. Required review flags, JSON preview/result and manifest, structured comment metadata, partial budget behavior, target-rule selection, and optional provider/model capabilities remain compatible. Notebook, R, Zig, Elm, Jsonnet, Thrift, Cap’n Proto, properties, PO, and POT support extends the effective recommended-OCR rules/allowlist contract and requires a Rules changelog entry but no toolkit runtime adaptation. api_key_cmd/auth_token_cmd is an upstream operator configuration and shell-execution boundary; the toolkit neither configures nor invokes it, keeps OCR_LLM_TOKEN environment-backed, and does not adopt a second credential-command interface. Updater, CI, license, Pages, localization, and documentation changes require no toolkit adaptation.",
+      "published_at": "2026-08-18T13:08:44Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.6",
+      "status": "tested",
+      "version": "1.9.6"
     }
   ],
   "schema_version": 1,

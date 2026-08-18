@@ -16,6 +16,9 @@ from ocr_toolkit.posting.gitlab import (
     delete_plain_note,
     draft_note_id,
 )
+from ocr_toolkit.posting.gitlab import (
+    discussion_id as parse_discussion_id,
+)
 from ocr_toolkit.posting.markers import (
     OCR_REPLY_COMMAND_RE,
     author_id_from_note,
@@ -26,6 +29,7 @@ from ocr_toolkit.posting.markers import (
     is_own_bot_note,
 )
 from ocr_toolkit.posting.settings import post_mode, strict_posting
+from ocr_toolkit.posting.transaction import PostingTransaction
 
 
 @dataclass
@@ -35,9 +39,8 @@ class BotCommentRefs:
     plain_note_ids: list[int] = field(default_factory=list)
     discussion_note_refs: list[tuple[str, int]] = field(default_factory=list)
     draft_note_ids: list[int] = field(default_factory=list)
-    # Complete pre-run id baseline, including human-touched discussions that
-    # success cleanup must preserve. Rollback subtracts against these fields so
-    # it deletes only current-run notes after a failed publish attempt.
+    # Complete pre-run id baseline, including human-touched discussions.
+    # Explicit current-run rollback treats these identities as a deletion guard.
     all_plain_note_ids: list[int] = field(default_factory=list)
     all_discussion_note_refs: list[tuple[str, int]] = field(default_factory=list)
     all_draft_note_ids: list[int] = field(default_factory=list)
@@ -52,10 +55,12 @@ class BotCommentRefs:
     discussions_to_resolve: list[str] = field(default_factory=list)
 
 
-def cleanup_drafts_created_by_this_run(config: GitLabConfig, draft_note_ids: list[int]) -> None:
-    """Delete draft notes created by this script run after a creation failure."""
+def cleanup_drafts_created_by_this_run(
+    config: GitLabConfig, transaction: PostingTransaction
+) -> None:
+    """Delete explicit current-run draft identities after a creation failure."""
 
-    for note_id in draft_note_ids:
+    for note_id in transaction.draft_note_ids:
         delete_draft_note(config, note_id)
 
 
@@ -225,7 +230,7 @@ def process_discussion_for_refs(
 
     for note in bot_notes:
         note_id = note.get("id")
-        if isinstance(note_id, int):
+        if isinstance(note_id, int) and not isinstance(note_id, bool) and note_id > 0:
             refs.discussion_note_refs.append((discussion_id, note_id))
 
 
@@ -254,26 +259,25 @@ def collect_previous_bot_comment_refs(
         if not isinstance(discussion, dict):
             continue
 
-        discussion_id = str(discussion.get("id") or "")
+        parsed_discussion_id = parse_discussion_id(discussion.get("id"))
         notes = discussion.get("notes")
-
-        if not discussion_id or not isinstance(notes, list):
+        if parsed_discussion_id is None or not isinstance(notes, list):
             continue
 
         for note in notes:
             if not isinstance(note, dict):
                 continue
-            if not is_own_bot_note(config, note, body_field="body"):
-                continue
             note_id = note.get("id")
-            if isinstance(note_id, int):
+            if isinstance(note_id, int) and not isinstance(note_id, bool) and note_id > 0:
+                refs.all_discussion_note_refs.append((parsed_discussion_id, note_id))
+                # GET /notes may return the same diff note. Keep every discussion
+                # note out of the plain-note baseline and cleanup path.
                 discussion_bot_note_ids.add(note_id)
-                refs.all_discussion_note_refs.append((discussion_id, note_id))
 
         process_discussion_for_refs(
             config,
             refs,
-            discussion_id,
+            parsed_discussion_id,
             notes,
             preserve_human_touched=preserve_human_touched,
         )
@@ -281,24 +285,15 @@ def collect_previous_bot_comment_refs(
     for note in plain_notes:
         if not isinstance(note, dict):
             continue
-
-        if not is_own_bot_note(config, note, body_field="body"):
-            continue
-
         note_id = note.get("id")
-        if not isinstance(note_id, int):
+        if isinstance(note_id, bool) or not isinstance(note_id, int) or note_id <= 0:
             continue
-
-        # GET /notes can include diff notes that also appear in
-        # /discussions. GitLab does not always expose enough shape in
-        # /notes to classify them with is_diff_note(), so skip every own
-        # bot note id already seen in /discussions before using
-        # DELETE /notes/{id}.
         if note_id in discussion_bot_note_ids or is_diff_note(note):
             continue
 
         refs.all_plain_note_ids.append(note_id)
-        refs.plain_note_ids.append(note_id)
+        if is_own_bot_note(config, note, body_field="body"):
+            refs.plain_note_ids.append(note_id)
 
     draft_notes: list[Any] = []
     if post_mode() == "draft":
@@ -310,13 +305,11 @@ def collect_previous_bot_comment_refs(
     for note in draft_notes:
         if not isinstance(note, dict):
             continue
-
-        if not is_own_bot_note(config, note, body_field="note"):
-            continue
-
         note_id = draft_note_id(note)
-        if note_id is not None:
-            refs.all_draft_note_ids.append(note_id)
+        if note_id is None:
+            continue
+        refs.all_draft_note_ids.append(note_id)
+        if is_own_bot_note(config, note, body_field="note"):
             refs.draft_note_ids.append(note_id)
 
     return refs
@@ -359,64 +352,50 @@ def delete_previous_bot_comments_if_collected(
     delete_collected_bot_comments(config, refs)
 
 
-def subtract_bot_comment_ids(current: BotCommentRefs, baseline: BotCommentRefs) -> BotCommentRefs:
-    """Return the delete-able id deltas between current and baseline refs.
-
-    Only the three id-bearing fields (plain notes, inline discussion
-    notes, draft notes) are subtracted. Suppression/resolve state from the
-    baseline is intentionally NOT copied because the only caller
-    (`rollback_current_run_comments`) consumes the result to delete
-    ids only. If a future caller needs lifecycle state, fetch the
-    baseline separately rather than using this delta.
-    """
-
-    baseline_plain_note_ids = set(baseline.all_plain_note_ids or baseline.plain_note_ids)
-    baseline_discussion_note_refs = set(
-        baseline.all_discussion_note_refs or baseline.discussion_note_refs
-    )
-    baseline_draft_note_ids = set(baseline.all_draft_note_ids or baseline.draft_note_ids)
-
-    return BotCommentRefs(
-        plain_note_ids=[
-            note_id for note_id in current.plain_note_ids if note_id not in baseline_plain_note_ids
-        ],
-        discussion_note_refs=[
-            ref for ref in current.discussion_note_refs if ref not in baseline_discussion_note_refs
-        ],
-        draft_note_ids=[
-            note_id for note_id in current.draft_note_ids if note_id not in baseline_draft_note_ids
-        ],
-    )
-
-
 def rollback_current_run_comments(
     config: GitLabConfig,
     previous_bot_comment_refs: BotCommentRefs | None,
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
 ) -> None:
-    """Best-effort cleanup for comments created during a failed posting attempt."""
+    """Delete only explicit identities recorded by this posting transaction."""
 
-    cleanup_drafts_created_by_this_run(config, draft_note_ids)
-
-    if previous_bot_comment_refs is None:
+    baseline = previous_bot_comment_refs
+    if baseline is None:
+        # Pending draft IDs are explicit provider-returned current-run identities
+        # and cannot denote a published pre-run note. Clean them without a
+        # baseline, but retain the baseline guard for every visible identity.
+        cleanup_drafts_created_by_this_run(config, transaction)
         print(
-            "Skipping OCR published-note rollback because previous bot comments were not collected safely.",
+            "Skipping OCR published-note rollback because the complete pre-run "
+            "snapshot is unavailable.",
             file=sys.stderr,
         )
         return
 
-    current_bot_comment_refs = collect_previous_bot_comment_refs(
-        config, preserve_human_touched=False
-    )
-    if current_bot_comment_refs is None:
+    baseline_drafts = set(baseline.all_draft_note_ids or baseline.draft_note_ids)
+    baseline_plain = set(baseline.all_plain_note_ids or baseline.plain_note_ids)
+    baseline_discussions = set(baseline.all_discussion_note_refs or baseline.discussion_note_refs)
+    skipped = False
+    for note_id in transaction.draft_note_ids:
+        if note_id in baseline_drafts:
+            skipped = True
+        else:
+            delete_draft_note(config, note_id)
+    for note_id in transaction.plain_note_ids:
+        if note_id in baseline_plain:
+            skipped = True
+        else:
+            delete_plain_note(config, note_id)
+    for discussion_id, note_id in transaction.discussion_note_refs:
+        if (discussion_id, note_id) in baseline_discussions:
+            skipped = True
+        else:
+            delete_discussion_note(config, discussion_id, note_id)
+    if skipped:
         print(
-            "Skipping OCR published-note rollback because current bot comments are unavailable.",
+            "Skipped rollback identity that was already present in the pre-run snapshot.",
             file=sys.stderr,
         )
-        return
-
-    current_run_refs = subtract_bot_comment_ids(current_bot_comment_refs, previous_bot_comment_refs)
-    delete_collected_bot_comments(config, current_run_refs)
 
 
 def print_posting_failure_banner() -> None:
@@ -437,16 +416,16 @@ def print_posting_failure_banner() -> None:
 def posting_failure_exit(
     config: GitLabConfig,
     previous_bot_comment_refs: BotCommentRefs | None,
-    draft_note_ids: list[int],
+    transaction: PostingTransaction,
 ) -> int:
     """Rollback current-run GitLab comments and return the configured failure code."""
 
-    rollback_current_run_comments(config, previous_bot_comment_refs, draft_note_ids)
+    rollback_current_run_comments(config, previous_bot_comment_refs, transaction)
     print_posting_failure_banner()
     return 1 if strict_posting() else 0
 
 
-def publish_failure_exit(config: GitLabConfig, draft_note_ids: list[int]) -> int:
+def publish_failure_exit(config: GitLabConfig, transaction: PostingTransaction) -> int:
     """Handle ambiguous draft publish failures without deleting published notes.
 
     A draft publish timeout/5xx can mean GitLab already made part of this run
@@ -455,7 +434,7 @@ def publish_failure_exit(config: GitLabConfig, draft_note_ids: list[int]) -> int
     reviews on the MR.
     """
 
-    cleanup_drafts_created_by_this_run(config, draft_note_ids)
+    cleanup_drafts_created_by_this_run(config, transaction)
     print(
         "Skipping OCR published-note rollback after draft publish failure; "
         "some draft notes may already be visible on the MR.",

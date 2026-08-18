@@ -1,6 +1,6 @@
 # GitLab review operations
 
-This guide is for developers and CI operators who connect Open Code Review Toolkit to a GitLab merge-request pipeline and need to understand what happens after the first review. Installation remains in [gitlab.md](gitlab.md); the complete environment contract is in [configuration.md](configuration.md).
+This guide is for developers and CI operators who connect Open Code Review Toolkit to a GitLab merge-request pipeline and need to understand what happens after the first review. Installation and the [production bot recipes](gitlab.md#production-bot-configuration) remain in `gitlab.md`; the complete environment contract is in [configuration.md](configuration.md).
 
 ## What one review run publishes
 
@@ -39,17 +39,12 @@ The outcome wording distinguishes skipped, complete, complete-with-warnings, inc
 ## Automatic approval lifecycle
 
 `OCR_AUTO_APPROVE=true` is the default. Approval is a separate transaction only
-after every current review note publishes. A review is eligible only with a supported review-time approval receipt, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, and at most three findings. Receipt v2 makes a run ineligible whenever mutable author-controlled MR title, description, labels, or source-branch context was admitted; comments and summaries still publish normally. Historical receipt v1 remains readable, but ordinary current reviews emit receipt v2. Every finding must have
+after every current review note publishes. A review is eligible only with exact closed receipt v3, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, no configured external MCP, non-degraded selected context, and at most three findings. Receipt v1/v2 remains readable for comments but never authorizes approval. Receipt v3 binds reviewed source/policy SHA, merge-request author ID, context mode/state, bounded configured MCP inventory and positive use, and mandatory evidence state. Complete `metadata` context and the built-in evidence MCP do not independently block approval; degraded metadata and every configured external MCP do. Every finding must have
 severity exactly `low` and category exactly `style`, `documentation`, or
 `maintainability`. A complete zero-finding review is eligible. Four findings,
 malformed metadata, or any other severity/category are not eligible.
 
-Before writing, the toolkit repeatedly reads the MR and its bounded diff-version
-list. It requires an open MR, a current head equal to the reviewed 40-character
-SHA, `detailed_merge_status` outside `checking` and `approvals_syncing`, and a
-non-null `patch_id_sha`. It then passes that exact SHA to GitLab's approve API
-and confirms the authenticated user in approval readback. A moved head is a
-normal `skipped` result and is never retried against the new commit.
+Before writing, the toolkit repeatedly reads the MR and its bounded diff-version list. It requires an open MR, a current head equal to the receipt-bound 40-character SHA, the same positive MR author ID recorded at review time, `detailed_merge_status` outside `checking` and `approvals_syncing`, and a non-null `patch_id_sha`. If the authenticated toolkit user is that author, self-approval is skipped without a write. Otherwise it passes the exact reviewed SHA to GitLab's approve API and confirms the authenticated user, exact SHA, and unchanged non-bot author in post-write approval readback. A moved head or changed author before the write is a normal `skipped` result and is never retried against the new identity; a post-write mismatch fails closed and leaves GitLab's existing approval state untouched.
 
 Approve and summary-update writes are not retried after timeout, connection
 loss, 5xx, or another ambiguous response. GitLab remains
@@ -119,9 +114,9 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 ## Posting modes and blocking behavior
 
-`OCR_POST_MODE=draft` is the safe default. The toolkit creates this run's notes as GitLab draft notes, publishes only those drafts one by one, and removes replaceable notes from the previous successful review only after every publish succeeds. If creation fails, drafts from the current attempt are removed and the previous review remains visible. Draft mode avoids exposing an incomplete review during the creation phase, but GitLab does not provide an atomic bulk-publish transaction.
+`OCR_POST_MODE=draft` is the safe default. Every position-bearing inline create receives a separate cryptographically random write marker before `POST /draft_notes`. A valid success records the returned positive draft ID. If the one create is ambiguous, the toolkit performs one complete bounded author-bound `/draft_notes` read and recovers only exactly one matching marker/ID; zero, multiple, foreign, malformed, unavailable, or incomplete results cause no retry and no fallback. Current-run draft IDs are published exactly once, and replaceable notes from the previous successful review are removed only after every publish succeeds. Draft mode avoids exposing an incomplete review during creation, but GitLab does not provide atomic bulk publication.
 
-`OCR_POST_MODE=direct` writes notes immediately. It exists as an emergency compatibility override. The toolkit still performs best-effort rollback, but an ambiguous network timeout can mean GitLab accepted a write that the runner cannot confirm. Prefer `draft` for normal CI.
+`OCR_POST_MODE=direct` is an emergency compatibility override. Position-bearing `POST /discussions` uses the same independent marker and one complete bounded reconciliation read after ambiguity. Recovery requires exactly one toolkit-owned note with the expected author, positive note ID, and bounded discussion ID. Explicit current-run discussion identities participate in rollback; marker-only global rescans do not. Direct mode remains non-atomic, so prefer `draft` for normal CI.
 
 `OCR_STRICT_POSTING=false` is the advisory default: an OCR, posting, or approval-management error remains visible in the job log and, when possible, in an MR note, but the posting helper exits successfully. Set `OCR_STRICT_POSTING=true` when OCR review is a required merge gate so OCR failures, an unavailable GitLab API, an unsafe previous-state snapshot, an invalid OCR result, failed publication, or failed approval management make the job fail.
 
@@ -137,10 +132,10 @@ The toolkit calls `GET /user` before posting and refuses to write if it cannot i
 
 ## Reruns, failures, and fallback notes
 
-Before a rerun, the toolkit takes a bounded snapshot of OCR-owned notes, discussions, and drafts. If it cannot collect that state reliably, it refuses to publish a replacement so resolved, suppressed, and human-owned decisions are not lost. Reads and writes have bounded response sizes and timeouts; writes are retried only when retrying is safe.
+Before a rerun, the toolkit takes a complete bounded snapshot of OCR-owned notes, discussions, and drafts. If it cannot collect that state reliably, it refuses to publish a replacement so resolved, suppressed, and human-owned decisions are not lost. Reads and writes have bounded response sizes and timeouts; non-idempotent creates are never blindly retried.
 
-The previous review is deleted only after the new review has been created and, in draft mode, published. A definite write failure rolls back notes known to belong to the current attempt. An ambiguous draft-publish failure does not delete possibly published notes because the runner cannot prove which writes GitLab accepted.
+For position-bearing inline creates, outcomes are closed: `posted`, `invalid_position`, `definite_failure`, or `ambiguous_create`. Only `invalid_position` may enter bounded fallback. An ambiguous create receives one complete endpoint-specific marker/author readback; unresolved ambiguity causes no retry and no fallback. Regular notes/drafts, updates, deletes, resolve, draft publication, and approval do not gain reconciliation or retry behavior.
 
-When GitLab rejects an inline position as invalid, the toolkit moves that finding into one or more bounded fallback notes. Ambiguous write failures do not use fallback, because doing so could duplicate a discussion that GitLab already accepted.
+The previous review is deleted only after the new review has been created and, in draft mode, published. Explicit provider-returned or reconciled current-run identities drive rollback, guarded by the complete pre-run ID baseline; the toolkit never infers rollback ownership from a marker-only global rescan. An ambiguous draft-publish failure still does not delete possibly published notes because the runner cannot prove which drafts became visible.
 
 Source and base merge-request SHAs define the reviewed range. A merge-result commit is not treated as the source branch head. The summary records the reviewed SHA and warns when the current MR head has moved, so reviewers can distinguish a current review from a stale pipeline result.

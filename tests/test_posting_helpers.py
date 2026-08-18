@@ -19,9 +19,19 @@ from typing import Any
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
-from ocr_toolkit.posting import gitlab, markers, payloads, result, settings, snapshot, workflow
+from ocr_toolkit.posting import (
+    gitlab,
+    markers,
+    payloads,
+    reconciliation,
+    result,
+    settings,
+    snapshot,
+    workflow,
+)
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
+from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
@@ -78,6 +88,76 @@ class PostingIdentityTests(unittest.TestCase):
             markers.line_based_comment_fingerprint({**base, "line": 10}),
             markers.comment_fingerprint_candidates({**base, "line": 10}),
         )
+
+    def test_write_result_rejects_unknown_outcomes_and_malformed_write_ids(self) -> None:
+        with self.assertRaises(ValueError):
+            gitlab.GitLabWriteResult("retry")
+        with self.assertRaises(ValueError):
+            gitlab.GitLabWriteResult("ambiguous_create", write_id="A" * 32)
+        with self.assertRaises(ValueError):
+            gitlab.GitLabWriteResult("ambiguous_create", write_id="a" * 32)
+
+    def test_provider_author_id_parsers_require_exact_positive_integers(self) -> None:
+        valid = {"author": {"id": 7}}
+        self.assertEqual(markers.author_id_from_note(valid), 7)
+        for value in (True, 0, -1, "7", 7.0, None):
+            with self.subTest(value=value):
+                self.assertIsNone(markers.author_id_from_note({"author": {"id": value}}))
+
+        with patched_attr(gitlab, "api_request_url", lambda *_args, **_kwargs: {"id": 7}):
+            self.assertEqual(
+                gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN"),
+                7,
+            )
+        for value in (True, 0, -1, "7", 7.0, None):
+            with (
+                self.subTest(value=value),
+                patched_attr(
+                    gitlab, "api_request_url", lambda *_args, item=value, **_kwargs: {"id": item}
+                ),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertIsNone(
+                    gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN")
+                )
+
+    def test_posting_identity_consumers_reject_bool_and_nonpositive_ids(self) -> None:
+        refs = snapshot.BotCommentRefs()
+        notes = [
+            {
+                "id": value,
+                "body": build_marker(None) + "\nbot",
+                "author": {"id": 7},
+            }
+            for value in (True, 0, -1)
+        ]
+        snapshot.process_discussion_for_refs(
+            gitlab_config(), refs, "discussion-id", notes, preserve_human_touched=False
+        )
+        self.assertEqual(refs.discussion_note_refs, [])
+
+        transaction = PostingTransaction()
+        self.assertFalse(transaction.record_discussion("../unsafe", 7))
+        self.assertFalse(transaction.record_discussion("discussion-id", True))
+        self.assertEqual(transaction.discussion_note_refs, ())
+
+    def test_write_marker_has_closed_independent_identity_grammar(self) -> None:
+        write_id = "1" * 32
+        body = f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n{markers.build_write_marker(write_id)}\nbody"
+
+        self.assertEqual(markers.write_id_from_body(body), write_id)
+        self.assertNotEqual(write_id, "a" * FINGERPRINT_LEN)
+        quoted = f"{body}\nquoted marker text: <!-- open-code-review-write id={'2' * 32} -->"
+        self.assertEqual(markers.write_id_from_body(quoted), write_id)
+        for malformed in (
+            "<!-- open-code-review-write id=ABC -->",
+            f"{markers.build_marker(None)}\n{markers.build_write_marker(write_id)} extra",
+            f"{markers.build_marker(None)}\n<!-- open-code-review-write id=ABC -->",
+        ):
+            with self.subTest(body=malformed):
+                self.assertIsNone(markers.write_id_from_body(malformed))
+        with self.assertRaises(ValueError):
+            markers.build_write_marker("A" * 32)
 
     def test_no_code_fingerprint_keeps_line_tiebreaker(self) -> None:
         base = {
@@ -597,7 +677,7 @@ class PostingIdentityTests(unittest.TestCase):
 
         def fake_post_review_discussion(*args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
             calls.append("inline")
-            return gitlab.GitLabWriteResult("invalid_position")
+            return gitlab.GitLabWriteResult("invalid_position", create_kind="discussion")
 
         def fake_note(*args: Any, **kwargs: Any) -> dict[str, int]:
             calls.append("note")
@@ -1102,6 +1182,26 @@ class PostingPayloadBudgetTests(unittest.TestCase):
             if "/discussions" in endpoint or "position" in (data or {}):
                 self.assertLessEqual(len(body), settings.MAX_INLINE_NOTE_CHARS)
                 self.assertLessEqual(len(body.encode("utf-8")), settings.MAX_INLINE_NOTE_CHARS)
+
+    def test_inline_payload_reserves_write_and_finding_markers_before_utf8_truncation(self) -> None:
+        fingerprint = "a" * FINGERPRINT_LEN
+        write_id = "b" * 32
+        built = payloads.build_marked_note_body(
+            "ж" * (settings.MAX_INLINE_NOTE_CHARS * 2),
+            fingerprint=fingerprint,
+            write_id=write_id,
+            max_chars=settings.MAX_INLINE_NOTE_CHARS,
+            inline=True,
+        )
+
+        self.assertTrue(
+            built.startswith(
+                f"{markers.build_marker(fingerprint)}\n{markers.build_write_marker(write_id)}\n"
+            )
+        )
+        self.assertEqual(markers.write_id_from_body(built), write_id)
+        self.assertLessEqual(len(built), settings.MAX_INLINE_NOTE_CHARS)
+        self.assertLessEqual(len(built.encode("utf-8")), settings.MAX_INLINE_NOTE_CHARS)
 
     def test_build_text_position_preserves_rename_old_path(self) -> None:
         refs = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
@@ -2007,7 +2107,499 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("**Category:** `security`", body)
 
 
+class GitLabReconciliationTests(unittest.TestCase):
+    WRITE_ID = "c" * 32
+
+    @staticmethod
+    def draft(
+        note_id: object = 17, author_id: object = 7, body: str | None = None
+    ) -> dict[str, Any]:
+        return {
+            "id": note_id,
+            "author_id": author_id,
+            "note": body
+            or (
+                f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                f"{markers.build_write_marker(GitLabReconciliationTests.WRITE_ID)}\nbody"
+            ),
+        }
+
+    @staticmethod
+    def discussion(
+        discussion_id: object = "discussion-17",
+        note_id: object = 19,
+        author_id: object = 7,
+        body: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "id": discussion_id,
+            "notes": [
+                {
+                    "id": note_id,
+                    "author": {"id": author_id},
+                    "body": body
+                    or (
+                        f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                        f"{markers.build_write_marker(GitLabReconciliationTests.WRITE_ID)}\nbody"
+                    ),
+                }
+            ],
+        }
+
+    def ambiguous(self, kind: str) -> gitlab.GitLabWriteResult:
+        return gitlab.GitLabWriteResult(
+            "ambiguous_create", write_id=self.WRITE_ID, create_kind=kind
+        )
+
+    def test_draft_reconciliation_requires_exactly_one_author_bound_match(self) -> None:
+        cases = (
+            ([], False),
+            ([self.draft()], True),
+            ([self.draft(), self.draft(18)], False),
+            ([self.draft(author_id=8)], False),
+            ([self.draft(note_id="17")], False),
+            (
+                [self.draft(body=f"{markers.build_write_marker(self.WRITE_ID)}\nbody")],
+                False,
+            ),
+            (
+                [
+                    self.draft(
+                        body=(
+                            f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                            f"{markers.build_write_marker(self.WRITE_ID)}\n"
+                            "quoted <!-- open-code-review-write text"
+                        )
+                    )
+                ],
+                True,
+            ),
+        )
+        for items, recovered in cases:
+            with (
+                self.subTest(items=items),
+                redirect_stderr(io.StringIO()),
+                patched_attr(
+                    gitlab, "api_get_paginated", lambda *_args, value=items, **_kwargs: value
+                ),
+            ):
+                result = reconciliation.reconcile_ambiguous_inline_create(
+                    gitlab_config(), self.ambiguous("draft")
+                )
+            self.assertEqual(result.posted, recovered)
+            self.assertEqual(result.draft_note_id, 17 if recovered else None)
+
+    def test_direct_reconciliation_requires_owned_exact_author_bound_match(self) -> None:
+        no_owner = self.discussion(body=f"{markers.build_write_marker(self.WRITE_ID)}\nbody")
+        cases = (
+            ([], False),
+            ([self.discussion()], True),
+            ([self.discussion(), self.discussion("discussion-18", 20)], False),
+            ([self.discussion(author_id=8)], False),
+            ([self.discussion(note_id="19")], False),
+            ([no_owner], False),
+            (
+                [
+                    self.discussion(
+                        body=(
+                            f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                            f"{markers.build_write_marker(self.WRITE_ID)}\n"
+                            "quoted <!-- open-code-review-write text"
+                        )
+                    )
+                ],
+                True,
+            ),
+        )
+        for items, recovered in cases:
+            with (
+                self.subTest(items=items),
+                redirect_stderr(io.StringIO()),
+                patched_attr(
+                    gitlab, "api_get_paginated", lambda *_args, value=items, **_kwargs: value
+                ),
+            ):
+                result = reconciliation.reconcile_ambiguous_inline_create(
+                    gitlab_config(), self.ambiguous("discussion")
+                )
+            self.assertEqual(result.posted, recovered)
+            self.assertEqual(
+                (result.discussion_id, result.discussion_note_id),
+                ("discussion-17", 19) if recovered else (None, None),
+            )
+
+    def test_reconciliation_ignores_non_ambiguous_results_and_missing_user(self) -> None:
+        calls: list[str] = []
+        with patched_attr(
+            gitlab,
+            "api_get_paginated",
+            lambda *_args, **_kwargs: calls.append("read") or [],
+        ):
+            posted = reconciliation.reconcile_ambiguous_inline_create(
+                gitlab_config(), gitlab.GitLabWriteResult("posted")
+            )
+            missing_user = reconciliation.reconcile_ambiguous_inline_create(
+                gitlab_config(None), self.ambiguous("draft")
+            )
+
+        self.assertTrue(posted.posted)
+        self.assertTrue(missing_user.ambiguous_create)
+        self.assertEqual(calls, [])
+
+    def test_unavailable_or_incomplete_readback_stays_ambiguous_without_create(self) -> None:
+        calls: list[str] = []
+        with patched_attr(
+            gitlab,
+            "api_get_paginated",
+            lambda *_args, **_kwargs: calls.append("read") or None,
+        ):
+            result = reconciliation.reconcile_ambiguous_inline_create(
+                gitlab_config(), self.ambiguous("draft")
+            )
+
+        self.assertTrue(result.ambiguous_create)
+        self.assertEqual(calls, ["read"])
+
+    def test_post_review_recovers_draft_once_without_retry_and_records_transaction(self) -> None:
+        creates: list[str] = []
+        reads: list[str] = []
+        transaction = PostingTransaction()
+        refs = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
+
+        def create(*_args: Any, write_id: str, **_kwargs: Any) -> gitlab.GitLabWriteResult:
+            creates.append(write_id)
+            return gitlab.GitLabWriteResult(
+                "ambiguous_create", write_id=write_id, create_kind="draft"
+            )
+
+        def read(_config: Any, endpoint: str, **_kwargs: Any) -> list[Any]:
+            reads.append(endpoint)
+            body = (
+                f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                f"{markers.build_write_marker(creates[0])}\nbody"
+            )
+            return [self.draft(body=body)]
+
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(gitlab, "post_inline_draft_note_detailed", create),
+                patched_attr(gitlab, "api_get_paginated", read),
+            ):
+                result = gitlab.post_review_discussion(
+                    gitlab_config(), "file.py", 7, "body", refs, transaction
+                )
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertTrue(result.posted)
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(reads, ["/draft_notes"])
+        self.assertEqual(transaction.draft_note_ids, (17,))
+
+    def test_post_review_recovers_direct_identity_for_explicit_rollback(self) -> None:
+        creates: list[str] = []
+        transaction = PostingTransaction()
+        refs = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
+
+        def create(*_args: Any, write_id: str, **_kwargs: Any) -> gitlab.GitLabWriteResult:
+            creates.append(write_id)
+            return gitlab.GitLabWriteResult(
+                "ambiguous_create", write_id=write_id, create_kind="discussion"
+            )
+
+        def read(*_args: Any, **_kwargs: Any) -> list[Any]:
+            body = (
+                f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                f"{markers.build_write_marker(creates[0])}\nbody"
+            )
+            return [self.discussion(body=body)]
+
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="direct"),
+                patched_attr(gitlab, "post_inline_note_detailed", create),
+                patched_attr(gitlab, "api_get_paginated", read),
+            ):
+                result = gitlab.post_review_discussion(
+                    gitlab_config(), "file.py", 7, "body", refs, transaction
+                )
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertTrue(result.posted)
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(transaction.discussion_note_refs, (("discussion-17", 19),))
+
+    def test_reconciliation_crosses_real_paginated_http_read_boundary(self) -> None:
+        requests: list[str] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                requests.append(self.path)
+                payload = json.dumps(
+                    [GitLabReconciliationTests.draft()]
+                    if "page=1" in self.path and "per_page=100" in self.path
+                    else []
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        root = f"http://127.0.0.1:{server.server_port}"
+        config = gitlab_config()
+        try:
+            with patched_attr(
+                type(config),
+                "api_base",
+                property(lambda _self: f"{root}/api/v4/projects/7/merge_requests/9"),
+            ):
+                result = reconciliation.reconcile_ambiguous_inline_create(
+                    config, self.ambiguous("draft")
+                )
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertTrue(result.posted)
+        self.assertEqual(result.draft_note_id, 17)
+        self.assertEqual(len(requests), 1)
+
+
+class PostingTransactionTests(unittest.TestCase):
+    def test_drafts_publish_exactly_once_and_duplicate_identity_fails_closed(self) -> None:
+        transaction = PostingTransaction()
+        published: list[int] = []
+        self.assertTrue(transaction.record_draft(17))
+        self.assertFalse(transaction.record_draft(17))
+        self.assertFalse(transaction.record_draft(True))
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(
+                    gitlab,
+                    "publish_draft_note",
+                    lambda _config, note_id: published.append(note_id) or True,
+                ),
+            ):
+                self.assertTrue(gitlab.publish_created_draft_notes(gitlab_config(), transaction))
+                self.assertTrue(gitlab.publish_created_draft_notes(gitlab_config(), transaction))
+        finally:
+            settings.post_mode.cache_clear()
+        self.assertEqual(published, [17])
+        self.assertTrue(transaction.record_plain(18))
+        self.assertFalse(transaction.record_plain(18))
+        self.assertTrue(transaction.record_discussion("discussion-19", 19))
+        self.assertFalse(transaction.record_discussion("discussion-19", 19))
+        self.assertEqual(transaction.plain_note_ids, (18,))
+        self.assertEqual(transaction.discussion_note_refs, (("discussion-19", 19),))
+
+
 class GitLabSnapshotTests(unittest.TestCase):
+    def test_inline_review_mints_one_write_identity_before_each_create(self) -> None:
+        minted: list[str] = []
+        captured: list[tuple[str, str]] = []
+
+        def token_hex(size: int) -> str:
+            self.assertEqual(size, 16)
+            value = f"{len(minted) + 1:032x}"
+            minted.append(value)
+            return value
+
+        def create_draft(*_args: Any, write_id: str, **_kwargs: Any) -> gitlab.GitLabWriteResult:
+            captured.append(("draft", write_id))
+            return gitlab.GitLabWriteResult("posted", write_id=write_id, draft_note_id=17)
+
+        def create_direct(*_args: Any, write_id: str, **_kwargs: Any) -> gitlab.GitLabWriteResult:
+            captured.append(("direct", write_id))
+            return gitlab.GitLabWriteResult(
+                "posted",
+                write_id=write_id,
+                discussion_id="discussion-19",
+                discussion_note_id=19,
+            )
+
+        refs = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
+        transaction = PostingTransaction()
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_attr(gitlab.secrets, "token_hex", token_hex),
+                patched_attr(gitlab, "post_inline_draft_note_detailed", create_draft),
+                patched_env(OCR_POST_MODE="draft"),
+            ):
+                draft = gitlab.post_review_discussion(
+                    gitlab_config(), "file.py", 7, "body", refs, transaction
+                )
+            settings.post_mode.cache_clear()
+            with (
+                patched_attr(gitlab.secrets, "token_hex", token_hex),
+                patched_attr(gitlab, "post_inline_note_detailed", create_direct),
+                patched_env(OCR_POST_MODE="direct"),
+            ):
+                direct = gitlab.post_review_discussion(
+                    gitlab_config(), "file.py", 7, "body", refs, transaction
+                )
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertEqual([draft.status, direct.status], ["posted", "posted"])
+        self.assertEqual(transaction.draft_note_ids, (17,))
+        self.assertEqual(captured, [("draft", minted[0]), ("direct", minted[1])])
+        self.assertEqual(len(set(minted)), 2)
+
+    def test_endpoint_create_identity_parsers_reject_type_confused_ids(self) -> None:
+        for draft in ({"id": 0}, {"id": True}, {"id": "17"}, {"id": 17.0}):
+            with self.subTest(draft=draft), redirect_stderr(io.StringIO()):
+                self.assertIsNone(gitlab.created_draft_note(draft, "synthetic draft"))
+
+        for discussion in (
+            {"id": "discussion-1", "notes": [{"id": 0}]},
+            {"id": "discussion-1", "notes": [{"id": "19"}]},
+            {"id": "../unsafe", "notes": [{"id": 19}]},
+            {"id": "discussion-1", "notes": [{"id": 19}, {"id": 20}]},
+        ):
+            with self.subTest(discussion=discussion), redirect_stderr(io.StringIO()):
+                self.assertIsNone(gitlab.created_discussion_note(discussion))
+
+    def test_create_transport_serializes_write_marker_and_validates_endpoint_identity(self) -> None:
+        requests: list[tuple[str, dict[str, Any]]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                request_body = json.loads(self.rfile.read(length))
+                requests.append((self.path, request_body))
+                write_id = markers.write_id_from_body(
+                    str(request_body.get("note") or request_body.get("body") or "")
+                )
+                if self.path.endswith("/draft_notes"):
+                    response = {"id": 17}
+                else:
+                    response = {"id": "discussion-17", "notes": [{"id": 19}]}
+                self.send_response(201)
+                self.send_header("Content-Type", "application/json")
+                payload = json.dumps(response).encode()
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                self.server.write_ids.append(write_id)  # type: ignore[attr-defined]
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        server.write_ids = []  # type: ignore[attr-defined]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        root = f"http://127.0.0.1:{server.server_port}"
+        refs = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
+        config = gitlab_config()
+        try:
+            with patched_attr(
+                type(config),
+                "api_base",
+                property(lambda _self: f"{root}/api/v4/projects/7/merge_requests/9"),
+            ):
+                draft = gitlab.post_inline_draft_note_detailed(
+                    config, "file.py", 7, "draft", refs, write_id="1" * 32
+                )
+                direct = gitlab.post_inline_note_detailed(
+                    config, "file.py", 7, "direct", refs, write_id="2" * 32
+                )
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertEqual(draft.status, "posted")
+        self.assertEqual(draft.draft_note_id, 17)
+        self.assertEqual(direct.status, "posted")
+        self.assertEqual((direct.discussion_id, direct.discussion_note_id), ("discussion-17", 19))
+        self.assertEqual(server.write_ids, ["1" * 32, "2" * 32])  # type: ignore[attr-defined]
+        self.assertEqual(len(requests), 2)
+
+    def test_create_transport_classifies_unusable_success_and_http_outcomes(self) -> None:
+        class Response:
+            def __init__(self, payload: bytes) -> None:
+                self.payload = payload
+
+            def __enter__(self) -> Response:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, limit: int) -> bytes:
+                return self.payload[:limit]
+
+        for payload in (b"{}", b"not-json"):
+            with (
+                self.subTest(payload=payload),
+                redirect_stderr(io.StringIO()),
+                patched_attr(
+                    gitlab, "_open_gitlab_request", lambda _request, p=payload: Response(p)
+                ),
+            ):
+                result = gitlab.api_write_url_detailed(
+                    "https://gitlab.example/api",
+                    "token",
+                    "PRIVATE-TOKEN",
+                    {"note": "x"},
+                    create_kind="draft",
+                    write_id="1" * 32,
+                )
+            self.assertTrue(result.ambiguous_create)
+
+        class ErrorBody:
+            def __init__(self, body: bytes) -> None:
+                self.body = body
+
+            def read(self, _limit: int = -1) -> bytes:
+                return self.body
+
+            def close(self) -> None:
+                return None
+
+        for status, expected in (
+            (400, "definite_failure"),
+            (408, "ambiguous_create"),
+            (503, "ambiguous_create"),
+        ):
+            error = urllib.error.HTTPError(
+                "https://gitlab.example/api", status, "synthetic", None, ErrorBody(b"rejected")
+            )
+            with (
+                self.subTest(status=status),
+                redirect_stderr(io.StringIO()),
+                patched_attr(
+                    gitlab,
+                    "_open_gitlab_request",
+                    lambda _request, exc=error: (_ for _ in ()).throw(exc),
+                ),
+            ):
+                result = gitlab.api_write_url_detailed(
+                    "https://gitlab.example/api",
+                    "token",
+                    "PRIVATE-TOKEN",
+                    {"body": "x"},
+                    create_kind="discussion",
+                    write_id="2" * 32,
+                )
+            self.assertEqual(result.status, expected)
+
     def test_gitlab_transport_crosses_local_peer_for_get_and_nonretrying_write(self) -> None:
         requests: list[tuple[str, str, str | None, object]] = []
 
@@ -2249,6 +2841,64 @@ class GitLabSnapshotTests(unittest.TestCase):
 
         self.assertIsNone(loaded)
 
+    def test_pre_run_snapshot_baseline_contains_all_valid_endpoint_identities(self) -> None:
+        plain_notes = [
+            {"id": 10, "body": "human", "author": {"id": 8}},
+            {"id": 11, "body": build_marker(None) + "\nbot", "author": {"id": 7}},
+            {"id": True, "body": "invalid", "author": {"id": 8}},
+        ]
+        discussions = [
+            {
+                "id": "discussion-id",
+                "notes": [
+                    {
+                        "id": 21,
+                        "body": build_marker(None) + "\nbot",
+                        "author": {"id": 7},
+                    },
+                    {"id": 20, "body": "human", "author": {"id": 8}},
+                ],
+            },
+            {"id": "../unsafe", "notes": [{"id": 22, "body": "ignored"}]},
+        ]
+        drafts = [
+            {"id": 30, "note": "human", "author_id": 8},
+            {"id": 31, "note": build_marker(None) + "\nbot", "author_id": 7},
+        ]
+
+        def page(_config: Any, endpoint: str, **_kwargs: Any) -> list[Any]:
+            if endpoint.startswith("/notes"):
+                return plain_notes
+            if endpoint == "/discussions":
+                return discussions
+            if endpoint == "/draft_notes":
+                return drafts
+            self.fail(endpoint)
+
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(snapshot, "api_get_paginated", page),
+            ):
+                refs = snapshot.collect_previous_bot_comment_refs(gitlab_config())
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertIsNotNone(refs)
+        assert refs is not None
+        self.assertEqual(refs.all_plain_note_ids, [10, 11])
+        self.assertEqual(refs.plain_note_ids, [11])
+        self.assertEqual(
+            refs.all_discussion_note_refs,
+            [("discussion-id", 21), ("discussion-id", 20)],
+        )
+        # The human reply preserves the existing bot thread from ordinary cleanup;
+        # the complete baseline still records both identities for rollback guards.
+        self.assertEqual(refs.discussion_note_refs, [])
+        self.assertEqual(refs.all_draft_note_ids, [30, 31])
+        self.assertEqual(refs.draft_note_ids, [31])
+
     def test_rollback_collection_keeps_current_run_bot_notes_with_human_reply(self) -> None:
         refs = snapshot.BotCommentRefs()
         notes = [
@@ -2271,30 +2921,85 @@ class GitLabSnapshotTests(unittest.TestCase):
 
         self.assertEqual(refs.discussion_note_refs, [("discussion-id", 10)])
 
-    def test_rollback_does_not_delete_preexisting_human_touched_threads(self) -> None:
-        previous_refs = snapshot.BotCommentRefs()
-        previous_refs.all_discussion_note_refs.append(("old-discussion", 10))
-        current_refs = snapshot.BotCommentRefs()
-        current_refs.discussion_note_refs.extend([("old-discussion", 10), ("new-discussion", 20)])
-        deleted: list[tuple[str, int]] = []
+    def test_rollback_uses_explicit_current_run_ids_and_preserves_baseline(self) -> None:
+        previous_refs = snapshot.BotCommentRefs(
+            all_plain_note_ids=[10],
+            all_discussion_note_refs=[("old-discussion", 20)],
+            all_draft_note_ids=[30],
+        )
+        transaction = PostingTransaction()
+        for note_id in (10, 11):
+            self.assertTrue(transaction.record_plain(note_id))
+        for discussion_id, note_id in (
+            ("old-discussion", 20),
+            ("new-discussion", 21),
+        ):
+            self.assertTrue(transaction.record_discussion(discussion_id, note_id))
+        for note_id in (30, 31):
+            self.assertTrue(transaction.record_draft(note_id))
+        deleted: list[tuple[str, object]] = []
 
-        def fake_collect(
-            _config: gitlab.GitLabConfig, preserve_human_touched: bool = True
-        ) -> snapshot.BotCommentRefs:
-            self.assertFalse(preserve_human_touched)
-            return current_refs
+        with (
+            patched_attr(
+                snapshot,
+                "delete_plain_note",
+                lambda _config, note_id: deleted.append(("plain", note_id)) or True,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_discussion_note",
+                lambda _config, discussion_id, note_id: (
+                    deleted.append(("discussion", (discussion_id, note_id))) or True
+                ),
+            ),
+            patched_attr(
+                snapshot,
+                "delete_draft_note",
+                lambda _config, note_id: deleted.append(("draft", note_id)) or True,
+            ),
+            redirect_stderr(io.StringIO()),
+        ):
+            snapshot.rollback_current_run_comments(gitlab_config(), previous_refs, transaction)
 
-        def fake_delete(_config: gitlab.GitLabConfig, refs: snapshot.BotCommentRefs) -> None:
-            deleted.extend(refs.discussion_note_refs)
+        self.assertEqual(
+            deleted,
+            [
+                ("draft", 31),
+                ("plain", 11),
+                ("discussion", ("new-discussion", 21)),
+            ],
+        )
 
-        with patched_attr(snapshot, "collect_previous_bot_comment_refs", fake_collect):
-            with patched_attr(snapshot, "delete_collected_bot_comments", fake_delete):
-                with patched_attr(
-                    snapshot, "cleanup_drafts_created_by_this_run", lambda *_args: None
-                ):
-                    snapshot.rollback_current_run_comments(gitlab_config(), previous_refs, [])
+    def test_rollback_without_baseline_deletes_only_explicit_pending_drafts(self) -> None:
+        transaction = PostingTransaction()
+        self.assertTrue(transaction.record_draft(31))
+        self.assertTrue(transaction.record_plain(41))
+        self.assertTrue(transaction.record_discussion("new-discussion", 51))
+        deleted: list[tuple[str, object]] = []
 
-        self.assertEqual(deleted, [("new-discussion", 20)])
+        with (
+            patched_attr(
+                snapshot,
+                "delete_draft_note",
+                lambda _config, note_id: deleted.append(("draft", note_id)) or True,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_plain_note",
+                lambda _config, note_id: deleted.append(("plain", note_id)) or True,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_discussion_note",
+                lambda _config, discussion_id, note_id: (
+                    deleted.append(("discussion", (discussion_id, note_id))) or True
+                ),
+            ),
+            redirect_stderr(io.StringIO()),
+        ):
+            snapshot.rollback_current_run_comments(gitlab_config(), None, transaction)
+
+        self.assertEqual(deleted, [("draft", 31)])
 
 
 class ApiErrorRedactionTests(unittest.TestCase):
@@ -2472,6 +3177,8 @@ class ApiErrorRedactionTests(unittest.TestCase):
                     "token",
                     "PRIVATE-TOKEN",
                     {"body": "x"},
+                    create_kind="discussion",
+                    write_id="1" * 32,
                 )
 
         self.assertTrue(write_result.invalid_position)
@@ -2498,9 +3205,38 @@ class ApiErrorRedactionTests(unittest.TestCase):
                 "token",
                 "PRIVATE-TOKEN",
                 {"body": "x"},
+                create_kind="discussion",
+                write_id="2" * 32,
             )
 
         self.assertTrue(write_result.invalid_position)
+
+    def test_generic_non_create_write_never_uses_create_only_invalid_position(self) -> None:
+        class FakeResponse:
+            def read(self, _limit: int = -1) -> bytes:
+                return b'{"message":"position line is invalid"}'
+
+            def close(self) -> None:
+                return None
+
+        error = urllib.error.HTTPError(
+            "https://gitlab.example/api", 400, "Bad Request", None, FakeResponse()
+        )
+        with (
+            patched_attr(
+                gitlab, "_open_gitlab_request", lambda _request: (_ for _ in ()).throw(error)
+            ),
+            redirect_stderr(io.StringIO()),
+        ):
+            write_result = gitlab.api_write_url_detailed(
+                "https://gitlab.example/api",
+                "token",
+                "PRIVATE-TOKEN",
+                {"body": "x"},
+            )
+
+        self.assertTrue(write_result.write_failed)
+        self.assertFalse(write_result.invalid_position)
 
     def test_generic_path_error_is_not_typed_as_invalid_position(self) -> None:
         class FakeResponse:

@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from ocr_toolkit.posting.gitlab import GitLabConfig
 
 MARKER = "<!-- open-code-review-bot -->"
+WRITE_ID_RE = re.compile(r"[0-9a-f]{32}")
+WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->")
 
 
 MARKER_WITH_FINGERPRINT_RE = re.compile(
@@ -25,6 +27,30 @@ OCR_REPLY_COMMAND_RE = re.compile(
 
 
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
+
+
+def build_write_marker(write_id: str) -> str:
+    """Render one independent create-attempt correlation marker."""
+
+    if WRITE_ID_RE.fullmatch(write_id) is None:
+        raise ValueError("write id must be 32 lowercase hexadecimal characters")
+    return f"<!-- open-code-review-write id={write_id} -->"
+
+
+def write_id_from_body(body: str) -> str | None:
+    """Parse the exact write marker from one toolkit-owned marker preamble.
+
+    Finding text is untrusted visible content and may quote marker-like syntax;
+    only the line immediately after the ownership marker carries write identity.
+    """
+
+    if not note_starts_with_marker(body):
+        return None
+    lines = body.splitlines()
+    if len(lines) < 2:
+        return None
+    match = WRITE_MARKER_RE.fullmatch(lines[1])
+    return match.group(1) if match is not None else None
 
 
 def build_summary_run_marker(run_id: str) -> str:
@@ -248,11 +274,8 @@ def author_id_from_note(note: dict[str, Any]) -> int | None:
         if isinstance(author, dict):
             raw_author_id = author.get("id")
 
-    if isinstance(raw_author_id, (str, int, float)) and not isinstance(raw_author_id, bool):
-        try:
-            return int(raw_author_id)
-        except ValueError:
-            pass
+    if isinstance(raw_author_id, int) and not isinstance(raw_author_id, bool) and raw_author_id > 0:
+        return raw_author_id
     return None
 
 
