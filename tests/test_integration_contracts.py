@@ -92,6 +92,8 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "OCR_LLM_VALIDATE_MODEL" in workflow
     assert "OCR_MAX_TOKENS_BUDGET" in configuration
     assert "OCR_MAX_TOKENS_BUDGET" in workflow
+    assert "OCR_REVIEW_CONTEXT_MODE" in configuration
+    assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in workflow
     assert "OCR_TOOLKIT_VERSION" in workflow
     assert "OCR_TOOLKIT_CHECKSUMS_URL" in workflow
     assert (

@@ -13,6 +13,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | M2 milestone closure | Completed | Stable 0.5.0 delivery and external readback establish M2; BL-010 remains a conditional M7 extension. |
 | M3 generic external-MCP qualification (BL-011) | Completed and removed | Checksum-verified OCR 1.9.5, the production `ocr-ci review` path, a local model peer, and a real stdio MCP peer establish the documented direct-composition safe-use envelope and its claim limits. |
 | M3 provider examples (BL-013) | Removed | Direct provider examples over model-selected unrestricted arguments are not the target architecture; valid synthetic adapter qualification moves behind the BL-023 broker boundary. |
+| Same-session external-MCP annotation enforcement (#103) | Removed / not planned | This repeated the removed direct-provider path: generic direct MCP remains privileged operator configuration, while future external records stay behind the BL-023 broker. A server-authored annotation is not semantic non-mutation proof. |
 | M4 accepted decisions (BL-014) | Completed and removed | Structured target-only decisions preserve deterministic identity, safe applicability, staleness, and bounded projections without suppression authority. |
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
 | M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
@@ -95,21 +96,6 @@ After B, C and D may proceed in parallel.
 - Qualify installed wheel and sdist artifacts, real checksum-verified OCR, stdio protocol, persistence/cleanup, hostile providers, result/publication containment, package/docs, stable publication, and external release readback.
 - Exercise an issue-tracker adapter, documentation/wiki adapter, and arbitrary read-only MCP adapter only behind the broker boundary.
 - Prove expected automatic outcomes, not an imagined interactive author question, and retain explicit claim limits for model-dependent behavior.
-
-### BL-024: Enforce same-session external-MCP read-only registration
-
-- **Status:** blocked on upstream Open Code Review #997.
-- **Priority:** high after the upstream activation trigger.
-- **Roadmap theme:** M5 Bounded review-context enrichment.
-- **Tracking:** toolkit #103; upstream `alibaba/open-code-review#997`.
-- **Dependencies:** Stable OCR support for a policy hook on the same connected MCP client session before discovered tools enter plan/main model projection; the 0.6.3 context receipt and execution-profile foundation from #100.
-- **Activation trigger:** A stable recommended OCR release exposes and documents that hook. A separate probe plus reconnect does not satisfy the trigger.
-- **Goal:** Reject external MCP capabilities before model exposure unless the same-session tool annotations state `readOnlyHint=true` and `destructiveHint=false`, while retaining server-side authorization and least-privilege credentials as the semantic containment boundary.
-- **Scoped deliverables:** Enable the hook unconditionally for external MCP; reject missing, malformed, contradictory, or changed annotations; keep the built-in server independent; record bounded receipt facts only; qualify stdio and Streamable HTTP peers including capability-swap cases.
-- **Acceptance criteria:** Rejected tools never enter descriptions/schemas, plan/main tool definitions, model calls, usage receipts, or approval eligibility; TOCTOU peers cannot swap capabilities between validation and registration; documentation continues to state that annotations are server-authored claims rather than proof of no side effects.
-- **Exclusions:** A toolkit gateway, reconnecting preflight, write-capable model tools, name/verb heuristics, full BL-023 broker implementation, or replacement of server-side tenant/object/field/operation authorization.
-- **Validation:** Exact upstream-version compatibility mapping; real OCR with hostile synthetic stdio and remote peers; persistence/privacy review; installed artifact and stable delivery lifecycle.
-- **Release classification expectation:** `release-required` after activation.
 
 ## M6 Profiles and quality measurement
 

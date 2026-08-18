@@ -95,6 +95,7 @@ def test_blocking_gitlab_example_uses_safe_posting_defaults() -> None:
     assert 'OCR_POST_MODE: "draft"' in example
     assert 'OCR_STRICT_POSTING: "true"' in example
     assert 'OCR_AUTO_APPROVE: "true"' in example
+    assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
     assert 'OCR_MAX_TOKENS_BUDGET: "0"' in example
     assert '--max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}"' in example
     assert "OCR_MAX_TOKENS_BUDGET" in configuration
@@ -146,7 +147,7 @@ def test_auto_approval_contract_is_default_on_exact_sha_and_own_user_only() -> N
         "severity exactly `low`",
         "category exactly `style`, `documentation`, or `maintainability`",
         "`patch_id_sha`",
-        "never retried against the new commit",
+        "never retried against the new identity",
         "never removes an existing approval",
         "Ineligible, partial, skipped, legacy, and disabled runs do not make an approval write",
     ):
@@ -159,6 +160,65 @@ def test_auto_approval_contract_is_default_on_exact_sha_and_own_user_only() -> N
     )
     assert "never removes an existing approval" in normalized_configuration
     assert 'OCR_AUTO_APPROVE: "true"' in example
+
+
+def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    example = GITLAB_EXAMPLE.read_text(encoding="utf-8")
+
+    for document in (configuration, gitlab):
+        assert "OCR_REVIEW_CONTEXT_MODE" in document
+        assert "identity-only" in document
+        assert "`metadata`" in document
+        assert "`enriched`" in document
+    assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
+    assert "receipt v3" in configuration
+    assert "Receipt v1/v2" in configuration
+    assert "Receipt v1/v2" in operations
+    assert "complete `metadata` context" in operations.lower()
+    assert "Every configured external MCP" in configuration
+    assert "absolute HTTPS `url`" in configuration
+    assert "sole stdio exception" in configuration
+
+
+def test_production_bot_recipes_and_062_migration_are_public() -> None:
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+
+    for phrase in (
+        "## Production bot configuration",
+        "Context-free automatic approval",
+        "Bounded metadata-aware automatic approval",
+        "Metadata-aware comment-only operation",
+        "Future enriched context",
+        "Operator-reviewed external MCP",
+        "### Migration from 0.6.2",
+        "Receipt v1/v2 results remain comment-readable",
+        "retry-on-absence",
+    ):
+        assert phrase in gitlab
+    assert gitlab.count('OCR_REVIEW_CONTEXT_MODE: "metadata"') >= 3
+    assert 'OCR_REVIEW_CONTEXT_MODE: "enriched"' in gitlab
+    assert 'OCR_AUTO_APPROVE: "false"' in gitlab
+    assert "SYNTHETIC_MCP_AUTH_HEADER" in gitlab
+    assert "server-side tenant/object/field/operation authorization" in gitlab
+
+
+def test_inline_create_reconciliation_contract_is_bounded_and_nonretrying() -> None:
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "`posted`, `invalid_position`, `definite_failure`, or `ambiguous_create`",
+        "Only `invalid_position` may enter bounded fallback",
+        "no retry and no fallback",
+        "marker-only global rescan",
+        "exactly once",
+    ):
+        assert phrase in operations
+    assert "one author-bound readback without retry" in security
+    assert "Rollback deletes only recorded IDs absent from the baseline" in security
 
 
 def test_security_workflow_has_a_bounded_bandit_job() -> None:

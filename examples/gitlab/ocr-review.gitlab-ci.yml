@@ -12,8 +12,10 @@ variables:
   OCR_SHA256: "864cf7e7304e37974c298eded2685ec0fb63a4ac6c518ad4524da718e3e72012"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
-  # Default-on exact-SHA approval; set "false" for a comment-only bot.
+  # Default-on receipt-bound approval; external MCP always remains comment-only.
   OCR_AUTO_APPROVE: "true"
+  # Identity-only by default; use "metadata" to admit bounded MR text fields.
+  OCR_REVIEW_CONTEXT_MODE: "off"
   # Optional remote category/severity images; text is the private-safe default.
   # OCR_POST_BADGES: "shields"
   OCR_LLM_VALIDATE_MODEL: "false"

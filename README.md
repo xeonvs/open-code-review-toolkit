@@ -31,18 +31,13 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
-After every current review note publishes, the GitLab adapter can add a
-conservative approval bound to the exact reviewed source SHA. This write is
-enabled by default; set `OCR_AUTO_APPROVE=false` before upgrading when the bot
-must remain comment-only. GitLab approval rules and protected-branch policy
-remain authoritative. The toolkit only adds an eligible approval; it never
-removes an existing approval when a later review is ineligible or disabled.
+After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v3's exact reviewed source SHA and merge-request author. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. Complete optional MR metadata remains eligible, while degraded metadata, legacy receipts, any external MCP, author movement, or bot self-authorship prevents an approval write. GitLab approval rules and protected-branch policy remain authoritative. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
 
 Accepted tradeoffs can be recorded in `.opencodereview/accepted-decisions.md`; the evidence collector supplies only applicable target-ref decisions and never lets a source change self-authorize its review. Root and nested target `AGENTS.md`/`CLAUDE.md` guidance is similarly exposed through the existing evidence MCP with deterministic scope and precedence, while any guidance touched by the merge request is excluded. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) and [Target project guidance](docs/configuration.md#target-project-guidance) for formats and trust boundaries.
 
 ## Project architecture
 
-The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, scoped completeness, and base/head changes through the mandatory built-in read-only MCP server. Reviewed external stdio or native HTTPS MCP servers compose alongside it without replacing the built-in evidence boundary.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, scoped completeness, and base/head changes through the mandatory built-in read-only MCP server. GitLab MR reviews allow operator-configured external MCP only over remote HTTPS; developer-local execution may retain explicit stdio peers. Direct external MCP remains privileged operator configuration and comment-only; planned M5 external records use the separate toolkit-owned broker boundary.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
