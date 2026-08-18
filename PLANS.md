@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Plan: toolkit 0.6.3 context approval and GitLab write reconciliation
 
-- **Status:** active; context/provider/receipt and approval/MCP topology slices implemented locally and reviewed; #101 implementation is next.
+- **Status:** active; context/provider/receipt, approval/MCP topology, create outcome/write-marker, and one-shot reconciliation/transaction slices are implemented locally and reviewed; public contracts/evidence are next.
 - **Release classification:** `release-required`.
 - **Target stable version:** `0.6.3`; `.next-version` already selects this development line.
 - **Tracked release work:** [#100](https://github.com/xeonvs/open-code-review-toolkit/issues/100) and [#101](https://github.com/xeonvs/open-code-review-toolkit/issues/101), assigned to GitHub milestone `v0.6.3`.
@@ -116,4 +116,4 @@ Before every commit:
 
 #### Current checkpoint and exact resume action
 
-Planning sources, GitHub milestone `v0.6.3`, #100/#101 assignment, BL-024 #103, upstream OCR #997, signed planning commit `b99c4c4`, and draft PR #104 are live and read back. Slice 1 now implements the closed context selector, identity-only `off` acquisition, validated MR author identity, completeness state, transport-bearing capability inventory, and receipt v3 with production-boundary tests. Slices 1-2 now cover the closed context/receipt contract, metadata-aware eligibility, self-approval and author-race prevention, GitLab-MR remote-only MCP profiles, strict remote schemas, and inherited-config revalidation. Resume after the signed approval/topology commit with #101 create outcomes and markers; do not push again until every complete-branch gate above passes.
+Planning sources, GitHub milestone `v0.6.3`, #100/#101 assignment, BL-024 #103, upstream OCR #997, signed planning commit `b99c4c4`, and draft PR #104 are live and read back. Slice 1 now implements the closed context selector, identity-only `off` acquisition, validated MR author identity, completeness state, transport-bearing capability inventory, and receipt v3 with production-boundary tests. Slices 1-4 now cover the closed context/receipt contract, metadata-aware eligibility, self-approval and author-race prevention, GitLab-MR remote-only MCP profiles, strict remote schemas, inherited-config revalidation, closed create outcomes, endpoint-specific 2xx identity validation, independent marker-aware write identities, complete one-shot author-bound draft/direct reconciliation, exactly-once draft publication, and explicit baseline-guarded current-run rollback. Resume after the signed reconciliation/transaction commit with public contracts, examples, evidence matrix, Towncrier, and status reconciliation; do not push again until every complete-branch gate above passes.

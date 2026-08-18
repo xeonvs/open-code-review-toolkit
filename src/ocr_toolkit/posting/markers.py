@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from ocr_toolkit.posting.gitlab import GitLabConfig
 
 MARKER = "<!-- open-code-review-bot -->"
+WRITE_MARKER_PREFIX = "<!-- open-code-review-write"
+WRITE_ID_RE = re.compile(r"[0-9a-f]{32}")
+WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->")
 
 
 MARKER_WITH_FINGERPRINT_RE = re.compile(
@@ -25,6 +28,23 @@ OCR_REPLY_COMMAND_RE = re.compile(
 
 
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
+
+
+def build_write_marker(write_id: str) -> str:
+    """Render one independent create-attempt correlation marker."""
+
+    if WRITE_ID_RE.fullmatch(write_id) is None:
+        raise ValueError("write id must be 32 lowercase hexadecimal characters")
+    return f"<!-- open-code-review-write id={write_id} -->"
+
+
+def write_id_from_body(body: str) -> str | None:
+    """Parse exactly one closed write marker, rejecting malformed lookalikes."""
+
+    matches = WRITE_MARKER_RE.findall(body)
+    if body.count(WRITE_MARKER_PREFIX) != 1 or len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def build_summary_run_marker(run_id: str) -> str:
