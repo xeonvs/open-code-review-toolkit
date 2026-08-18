@@ -96,6 +96,21 @@ After B, C and D may proceed in parallel.
 - Exercise an issue-tracker adapter, documentation/wiki adapter, and arbitrary read-only MCP adapter only behind the broker boundary.
 - Prove expected automatic outcomes, not an imagined interactive author question, and retain explicit claim limits for model-dependent behavior.
 
+### BL-024: Enforce same-session external-MCP read-only registration
+
+- **Status:** blocked on upstream Open Code Review #997.
+- **Priority:** high after the upstream activation trigger.
+- **Roadmap theme:** M5 Bounded review-context enrichment.
+- **Tracking:** toolkit #103; upstream `alibaba/open-code-review#997`.
+- **Dependencies:** Stable OCR support for a policy hook on the same connected MCP client session before discovered tools enter plan/main model projection; the 0.6.3 context receipt and execution-profile foundation from #100.
+- **Activation trigger:** A stable recommended OCR release exposes and documents that hook. A separate probe plus reconnect does not satisfy the trigger.
+- **Goal:** Reject external MCP capabilities before model exposure unless the same-session tool annotations state `readOnlyHint=true` and `destructiveHint=false`, while retaining server-side authorization and least-privilege credentials as the semantic containment boundary.
+- **Scoped deliverables:** Enable the hook unconditionally for external MCP; reject missing, malformed, contradictory, or changed annotations; keep the built-in server independent; record bounded receipt facts only; qualify stdio and Streamable HTTP peers including capability-swap cases.
+- **Acceptance criteria:** Rejected tools never enter descriptions/schemas, plan/main tool definitions, model calls, usage receipts, or approval eligibility; TOCTOU peers cannot swap capabilities between validation and registration; documentation continues to state that annotations are server-authored claims rather than proof of no side effects.
+- **Exclusions:** A toolkit gateway, reconnecting preflight, write-capable model tools, name/verb heuristics, full BL-023 broker implementation, or replacement of server-side tenant/object/field/operation authorization.
+- **Validation:** Exact upstream-version compatibility mapping; real OCR with hostile synthetic stdio and remote peers; persistence/privacy review; installed artifact and stable delivery lifecycle.
+- **Release classification expectation:** `release-required` after activation.
+
 ## M6 Profiles and quality measurement
 
 Telemetry is intentionally outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry; the toolkit reuses those signals instead of adding another implementation. M6 audits remaining lifecycle, evidence/MCP, context-receipt, posting, and review-value gaps before proposing any provider-neutral toolkit telemetry.
