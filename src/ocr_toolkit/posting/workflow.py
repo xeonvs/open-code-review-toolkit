@@ -144,14 +144,15 @@ def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
         return "", None
     source_sha = review.get("source_sha")
     author_id = review.get("mr_author_id")
-    return (
-        source_sha
-        if isinstance(source_sha, str) and re.fullmatch(r"[0-9a-f]{40}", source_sha)
-        else "",
-        author_id
-        if isinstance(author_id, int) and not isinstance(author_id, bool) and author_id > 0
-        else None,
-    )
+    if not (
+        isinstance(source_sha, str)
+        and re.fullmatch(r"[0-9a-f]{40}", source_sha)
+        and isinstance(author_id, int)
+        and not isinstance(author_id, bool)
+        and author_id > 0
+    ):
+        return "", None
+    return source_sha, author_id
 
 
 def summary_with_run_marker(body: str, run_id: str) -> str:

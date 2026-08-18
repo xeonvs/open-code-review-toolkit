@@ -361,8 +361,13 @@ def rollback_current_run_comments(
 
     baseline = previous_bot_comment_refs
     if baseline is None:
+        # Pending draft IDs are explicit provider-returned current-run identities
+        # and cannot denote a published pre-run note. Clean them without a
+        # baseline, but retain the baseline guard for every visible identity.
+        cleanup_drafts_created_by_this_run(config, transaction)
         print(
-            "Skipping OCR rollback because the complete pre-run snapshot is unavailable.",
+            "Skipping OCR published-note rollback because the complete pre-run "
+            "snapshot is unavailable.",
             file=sys.stderr,
         )
         return

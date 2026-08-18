@@ -199,6 +199,20 @@ class ApprovalPolicyTests(unittest.TestCase):
             external.result.reason, "external MCP was configured for a comment-only review"
         )
 
+    def test_receipt_accepts_ocr_compatible_non_identifier_tool_names(self) -> None:
+        metadata = receipt_v3(external=True)
+        metadata["mcp"]["capabilities"][1]["tools"] = ["repo.search", "records/read"]
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, metadata
+        )
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(
+            decision.result.reason,
+            "external MCP was configured for a comment-only review",
+        )
+
     def test_historical_v1_receipt_is_readable_but_not_approval_eligible(self) -> None:
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
@@ -651,6 +665,20 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         settings.post_mode.cache_clear()
+
+    def test_receipt_identity_is_atomic_for_summary_and_approval(self) -> None:
+        valid = receipt_v3(author_id=41)
+        self.assertEqual(workflow.approval_receipt_identity(valid), ("a" * 40, 41))
+
+        for mutate in (
+            lambda value: value["review"].update({"source_sha": "invalid"}),
+            lambda value: value["review"].update({"mr_author_id": None}),
+            lambda value: value["review"].update({"mr_author_id": True}),
+        ):
+            candidate = receipt_v3(author_id=41)
+            mutate(candidate)
+            with self.subTest(candidate=candidate):
+                self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))
 
     def test_current_summary_readback_requires_one_owned_run_marker(self) -> None:
         body = build_marked_note_body(markers.build_summary_run_marker(self.RUN_ID) + "\nsummary")

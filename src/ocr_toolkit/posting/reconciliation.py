@@ -6,20 +6,9 @@ import sys
 from typing import Any
 
 from ocr_toolkit.posting import gitlab
-from ocr_toolkit.posting.markers import (
-    WRITE_MARKER_PREFIX,
-    author_id_from_note,
-    note_starts_with_marker,
-    write_id_from_body,
-)
+from ocr_toolkit.posting.markers import author_id_from_note, write_id_from_body
 
 MAX_RECONCILIATION_PAGES = 50
-
-
-def _potential_match(body: str, write_id: str) -> bool:
-    """Return whether a malformed body could be claiming this write identity."""
-
-    return WRITE_MARKER_PREFIX in body and write_id in body
 
 
 def _draft_match(note: Any, write_id: str, expected_author_id: int) -> int | None:
@@ -30,8 +19,6 @@ def _draft_match(note: Any, write_id: str, expected_author_id: int) -> int | Non
         return None
     parsed = write_id_from_body(body)
     if parsed != write_id:
-        if _potential_match(body, write_id):
-            raise ValueError("malformed or conflicting draft write marker")
         return None
     if author_id_from_note(note) != expected_author_id:
         raise ValueError("draft write marker matched a foreign or malformed author")
@@ -58,11 +45,7 @@ def _discussion_match(
             continue
         parsed = write_id_from_body(body)
         if parsed != write_id:
-            if _potential_match(body, write_id):
-                raise ValueError("malformed or conflicting discussion write marker")
             continue
-        if not note_starts_with_marker(body):
-            raise ValueError("discussion write marker lacks toolkit ownership")
         if author_id_from_note(note) != expected_author_id:
             raise ValueError("discussion write marker matched a foreign or malformed author")
         parsed_discussion = gitlab.created_discussion_note(

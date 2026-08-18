@@ -94,6 +94,38 @@ class MCPConfigTests(unittest.TestCase):
             [mcp_config.BUILTIN_EVIDENCE_SERVER, "existing", "synthetic_docs"],
         )
 
+    def test_explicit_server_replaces_same_named_invalid_inherited_entry(self) -> None:
+        replacement = mcp_config.MCPServerConfig(
+            name="remote",
+            transport="remote",
+            command=None,
+            url="https://mcp.synthetic.invalid/v1",
+            args=[],
+            tools=["docs_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        current = {
+            "mcp_servers": {
+                "remote": {
+                    "type": "stdio",
+                    "command": "stale-local",
+                    "tools": ["stale_read"],
+                }
+            }
+        }
+
+        with patched_attr(mcp_config, "read_ocr_config", lambda: current):
+            composition = mcp_config.compose_mcp_servers(
+                [replacement], replace=False, profile="gitlab_mr"
+            )
+
+        self.assertEqual(composition.payload["remote"]["type"], "remote")
+        self.assertEqual(composition.payload["remote"]["tools"], ["docs_read"])
+        self.assertNotIn("command", composition.payload["remote"])
+
     def test_composition_rejects_tool_names_shared_by_independent_servers(self) -> None:
         external = mcp_config.MCPServerConfig(
             name="synthetic_docs",
@@ -639,6 +671,52 @@ class MCPConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(mcp_config.MCPConfigError, "reserved"):
             mcp_config.parse_mcp_servers(raw)
 
+    def test_tool_allowlist_accepts_ocr_names_and_rejects_empty_or_duplicate_entries(self) -> None:
+        accepted = json.dumps(
+            {
+                "remote": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1",
+                    "tools": ["repo.search", "records/read"],
+                }
+            }
+        )
+        self.assertEqual(
+            mcp_config.parse_mcp_servers(accepted, profile="gitlab_mr")[0].tools,
+            ["repo.search", "records/read"],
+        )
+        for tools in ([""], ["docs_read", "docs_read"]):
+            candidate = json.dumps(
+                {
+                    "remote": {
+                        "type": "remote",
+                        "url": "https://mcp.synthetic.invalid/v1",
+                        "tools": tools,
+                    }
+                }
+            )
+            with self.subTest(tools=tools), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(candidate, profile="gitlab_mr")
+
+    def test_composer_rejects_prebuilt_stdio_under_gitlab_profile(self) -> None:
+        prebuilt = mcp_config.MCPServerConfig(
+            name="local",
+            transport="stdio",
+            command="bridge",
+            url=None,
+            args=[],
+            tools=["docs_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "external remote"):
+            mcp_config.compose_mcp_servers([prebuilt], replace=True, profile="gitlab_mr")
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "execution profile"):
+            mcp_config.compose_mcp_servers([], replace=True, profile="unknown")
+
     def test_gitlab_profile_accepts_remote_without_setup_and_rejects_external_stdio(self) -> None:
         remote = json.dumps(
             {
@@ -694,6 +772,20 @@ class MCPConfigTests(unittest.TestCase):
         ):
             mcp_config.compose_mcp_servers([], replace=False, profile="gitlab_mr")
 
+        legacy_remote_with_empty_setup = {
+            "mcp_servers": {
+                "existing": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1",
+                    "tools": ["existing_read"],
+                    "setup": "",
+                }
+            }
+        }
+        with patched_attr(mcp_config, "read_ocr_config", lambda: legacy_remote_with_empty_setup):
+            migrated = mcp_config.compose_mcp_servers([], replace=False, profile="gitlab_mr")
+        self.assertNotIn("setup", migrated.payload["existing"])
+
         inherited_remote_with_setup = {
             "mcp_servers": {
                 "existing": {
@@ -738,6 +830,7 @@ class MCPConfigTests(unittest.TestCase):
             [(item.server, item.transport) for item in second.capabilities],
             [(mcp_config.BUILTIN_EVIDENCE_SERVER, "stdio"), ("remote", "remote")],
         )
+        self.assertEqual(second.secret_values, ("remote-secret-value",))
 
     def test_persisted_remote_header_sources_reject_cross_form_duplicates(self) -> None:
         current = {
@@ -1009,7 +1102,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.5\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.6\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

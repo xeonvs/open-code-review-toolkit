@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any
 
 from ocr_toolkit.ocr_result import (
+    MAX_TOOLKIT_MCP_TOOL_NAME_CHARS,
     MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
@@ -145,8 +146,8 @@ def _full_sha(value: Any) -> bool:
     )
 
 
-def _positive_id_or_none(value: Any) -> bool:
-    return value is None or (isinstance(value, int) and not isinstance(value, bool) and value > 0)
+def _positive_id(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
@@ -172,7 +173,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     if not _full_sha(review.get("source_sha")) or not _full_sha(review.get("policy_sha")):
         return invalid
-    if not _positive_id_or_none(review.get("mr_author_id")) or review.get("mr_author_id") is None:
+    if not _positive_id(review.get("mr_author_id")):
         return invalid
 
     context = toolkit_metadata.get("context")
@@ -188,7 +189,6 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         or classes != expected_classes
         or (mode == "off" and state != "disabled")
         or (mode == "metadata" and state == "disabled")
-        or (mode == "metadata" and review.get("mr_author_id") is None)
     ):
         return invalid
 
@@ -222,7 +222,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             or not isinstance(tools, list)
             or not 1 <= len(tools) <= MAX_TOOLKIT_MCP_TOOLS_PER_SERVER
             or any(
-                not isinstance(tool, str) or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(tool) is None
+                not isinstance(tool, str) or not tool or len(tool) > MAX_TOOLKIT_MCP_TOOL_NAME_CHARS
                 for tool in tools
             )
             or len(set(tools)) != len(tools)

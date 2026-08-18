@@ -167,6 +167,8 @@ def _review_receipt(
                 raise ReviewRunnerError("OCR result exceeds the per-server MCP usage bound")
             usage[owner] = aggregate
     known_usage_total = sum(usage.values())
+    if tool_calls is None and outcome.kind == "failed":
+        total_calls = 0
     if (
         not isinstance(total_calls, int)
         or isinstance(total_calls, bool)

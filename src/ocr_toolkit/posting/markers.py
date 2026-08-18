@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from ocr_toolkit.posting.gitlab import GitLabConfig
 
 MARKER = "<!-- open-code-review-bot -->"
-WRITE_MARKER_PREFIX = "<!-- open-code-review-write"
 WRITE_ID_RE = re.compile(r"[0-9a-f]{32}")
 WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->")
 
@@ -39,12 +38,19 @@ def build_write_marker(write_id: str) -> str:
 
 
 def write_id_from_body(body: str) -> str | None:
-    """Parse exactly one closed write marker, rejecting malformed lookalikes."""
+    """Parse the exact write marker from one toolkit-owned marker preamble.
 
-    matches = WRITE_MARKER_RE.findall(body)
-    if body.count(WRITE_MARKER_PREFIX) != 1 or len(matches) != 1:
+    Finding text is untrusted visible content and may quote marker-like syntax;
+    only the line immediately after the ownership marker carries write identity.
+    """
+
+    if not note_starts_with_marker(body):
         return None
-    return matches[0]
+    lines = body.splitlines()
+    if len(lines) < 2:
+        return None
+    match = WRITE_MARKER_RE.fullmatch(lines[1])
+    return match.group(1) if match is not None else None
 
 
 def build_summary_run_marker(run_id: str) -> str:

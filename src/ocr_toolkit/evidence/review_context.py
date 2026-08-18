@@ -39,8 +39,6 @@ LABEL_STATUSES = frozenset(
 )
 MAX_LABELS = 32
 CONTEXT_MODES = frozenset({"off", "metadata", "enriched"})
-CONTEXT_STATES = frozenset({"disabled", "complete", "degraded"})
-CONTEXT_CLASSES = frozenset({"merge_request_metadata"})
 
 
 class ReviewContextModeError(ValueError):

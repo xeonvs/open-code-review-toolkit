@@ -147,10 +147,12 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(markers.write_id_from_body(body), write_id)
         self.assertNotEqual(write_id, "a" * FINGERPRINT_LEN)
+        quoted = f"{body}\nquoted marker text: <!-- open-code-review-write id={'2' * 32} -->"
+        self.assertEqual(markers.write_id_from_body(quoted), write_id)
         for malformed in (
             "<!-- open-code-review-write id=ABC -->",
-            f"{markers.build_write_marker(write_id)}\n{markers.build_write_marker('2' * 32)}",
-            f"{markers.build_write_marker(write_id)} extra <!-- open-code-review-write",
+            f"{markers.build_marker(None)}\n{markers.build_write_marker(write_id)} extra",
+            f"{markers.build_marker(None)}\n<!-- open-code-review-write id=ABC -->",
         ):
             with self.subTest(body=malformed):
                 self.assertIsNone(markers.write_id_from_body(malformed))
@@ -2157,12 +2159,20 @@ class GitLabReconciliationTests(unittest.TestCase):
             ([self.draft(author_id=8)], False),
             ([self.draft(note_id="17")], False),
             (
+                [self.draft(body=f"{markers.build_write_marker(self.WRITE_ID)}\nbody")],
+                False,
+            ),
+            (
                 [
                     self.draft(
-                        body=f"<!-- open-code-review-write id={self.WRITE_ID} --> duplicate <!-- open-code-review-write"
+                        body=(
+                            f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                            f"{markers.build_write_marker(self.WRITE_ID)}\n"
+                            "quoted <!-- open-code-review-write text"
+                        )
                     )
                 ],
-                False,
+                True,
             ),
         )
         for items, recovered in cases:
@@ -2188,6 +2198,18 @@ class GitLabReconciliationTests(unittest.TestCase):
             ([self.discussion(author_id=8)], False),
             ([self.discussion(note_id="19")], False),
             ([no_owner], False),
+            (
+                [
+                    self.discussion(
+                        body=(
+                            f"{markers.build_marker('a' * FINGERPRINT_LEN)}\n"
+                            f"{markers.build_write_marker(self.WRITE_ID)}\n"
+                            "quoted <!-- open-code-review-write text"
+                        )
+                    )
+                ],
+                True,
+            ),
         )
         for items, recovered in cases:
             with (
@@ -2947,6 +2969,37 @@ class GitLabSnapshotTests(unittest.TestCase):
                 ("discussion", ("new-discussion", 21)),
             ],
         )
+
+    def test_rollback_without_baseline_deletes_only_explicit_pending_drafts(self) -> None:
+        transaction = PostingTransaction()
+        self.assertTrue(transaction.record_draft(31))
+        self.assertTrue(transaction.record_plain(41))
+        self.assertTrue(transaction.record_discussion("new-discussion", 51))
+        deleted: list[tuple[str, object]] = []
+
+        with (
+            patched_attr(
+                snapshot,
+                "delete_draft_note",
+                lambda _config, note_id: deleted.append(("draft", note_id)) or True,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_plain_note",
+                lambda _config, note_id: deleted.append(("plain", note_id)) or True,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_discussion_note",
+                lambda _config, discussion_id, note_id: (
+                    deleted.append(("discussion", (discussion_id, note_id))) or True
+                ),
+            ),
+            redirect_stderr(io.StringIO()),
+        ):
+            snapshot.rollback_current_run_comments(gitlab_config(), None, transaction)
+
+        self.assertEqual(deleted, [("draft", 31)])
 
 
 class ApiErrorRedactionTests(unittest.TestCase):

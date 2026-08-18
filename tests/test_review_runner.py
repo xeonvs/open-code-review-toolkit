@@ -171,6 +171,45 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     }
 
 
+def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -> None:
+    """Persist a failed pre-tool result without inventing evidence usage."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "comments": [],
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "failed",
+                    "coverage": {
+                        "selected": [],
+                        "completed": [],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                    "run_failure": {"classification": "configuration"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {}
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert persisted["_ocr_toolkit"]["evidence"] == {"mandatory": False, "used": False}
+    assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
+
+
 def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> None:
     """Do not invent an MCP-use requirement when OCR found no supported files."""
 

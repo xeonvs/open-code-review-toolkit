@@ -95,6 +95,17 @@ def _string_list(value: Any, field: str, *, limit: int) -> list[str]:
     return result
 
 
+def _tool_names(value: Any, field: str) -> list[str]:
+    """Validate one explicit OCR-compatible tool-name allowlist."""
+
+    tools = _string_list(value, field, limit=MAX_MCP_TOOLS)
+    if any(not tool for tool in tools):
+        raise MCPConfigError(f"{field} must not contain empty tool names")
+    if len(set(tools)) != len(tools):
+        raise MCPConfigError(f"{field} must not contain duplicate tool names")
+    return tools
+
+
 def _env_assignments(value: Any, env_from: Any, server_name: str) -> tuple[list[str], list[str]]:
     """Build stdio environment assignments and collect values for redaction."""
 
@@ -354,7 +365,7 @@ def parse_mcp_servers(raw: str | None = None, *, profile: str = "local") -> list
             fields = ", ".join(sorted(unknown_fields))
             raise MCPConfigError(f"servers.{name} has unsupported fields for {transport}: {fields}")
 
-        tools = _string_list(server.get("tools", []), f"servers.{name}.tools", limit=MAX_MCP_TOOLS)
+        tools = _tool_names(server.get("tools", []), f"servers.{name}.tools")
         if not tools:
             raise MCPConfigError(f"servers.{name}.tools must explicitly allow at least one tool")
         if TOOL_NAME in tools:
@@ -420,7 +431,7 @@ def _replace_configured_servers() -> bool:
 
 def _existing_server(
     name: str, value: Any, *, profile: str
-) -> tuple[dict[str, Any], MCPCapability]:
+) -> tuple[dict[str, Any], MCPCapability, tuple[str, ...]]:
     """Revalidate one inherited OCR MCP entry through the active exact schema."""
 
     if not isinstance(name, str) or not MCP_NAME_RE.fullmatch(name):
@@ -431,6 +442,11 @@ def _existing_server(
         raise MCPConfigError("the toolkit-owned MCP server cannot be inherited")
     normalized = dict(value)
     transport = normalized.get("type", "stdio")
+    # Toolkit <=0.6.2 persisted an empty setup key for every remote entry.
+    # Normalize only that exact legacy no-op; non-empty inherited setup remains
+    # invalid and new remote input never admits the field.
+    if transport == "remote" and normalized.get("setup") == "":
+        normalized.pop("setup")
     if transport == "stdio" and isinstance(normalized.get("env"), list):
         environment: dict[str, str] = {}
         for assignment in normalized["env"]:
@@ -485,7 +501,11 @@ def _existing_server(
         )
     else:
         payload.update({"url": server.url, "headers": server.headers})
-    return payload, MCPCapability(server.name, tuple(server.tools), transport=server.transport)
+    return (
+        payload,
+        MCPCapability(server.name, tuple(server.tools), transport=server.transport),
+        tuple(server.secret_values),
+    )
 
 
 def compose_mcp_servers(
@@ -493,8 +513,14 @@ def compose_mcp_servers(
 ) -> MCPComposition:
     """Build OCR's registry from independent optional and mandatory MCP entries."""
 
+    if profile not in MCP_PROFILES:
+        raise MCPConfigError("internal MCP execution profile is invalid")
+    if profile == "gitlab_mr" and any(server.transport != "remote" for server in servers):
+        raise MCPConfigError("GitLab merge-request reviews require external remote MCP")
+
     payload: dict[str, dict[str, Any]] = {}
     capabilities: list[MCPCapability] = []
+    secret_values: list[str] = []
     if not replace:
         try:
             current = read_ocr_config().get("mcp_servers", {})
@@ -502,14 +528,19 @@ def compose_mcp_servers(
             raise MCPConfigError(str(exc)) from exc
         if not isinstance(current, dict):
             raise MCPConfigError("Existing OCR mcp_servers value is not a JSON object")
+        declared_names = {server.name for server in servers}
         for name, value in current.items():
-            if name == BUILTIN_EVIDENCE_SERVER:
+            # Explicit operator input replaces the same named inherited entry;
+            # validate only the state that will survive into the final registry.
+            if name == BUILTIN_EVIDENCE_SERVER or name in declared_names:
                 continue
-            inherited, capability = _existing_server(name, value, profile=profile)
+            inherited, capability, inherited_secrets = _existing_server(
+                name, value, profile=profile
+            )
             payload[name] = inherited
             capabilities.append(capability)
+            secret_values.extend(inherited_secrets)
 
-    secret_values: list[str] = []
     for server in servers:
         payload[server.name] = {
             "type": server.transport,
