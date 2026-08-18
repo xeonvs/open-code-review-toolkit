@@ -1,3 +1,15 @@
+## 0.6.3 - 2026-08-18
+
+### 🚀 Features
+
+- Add bounded GitLab merge-request context selection and receipt-v3 approval controls: identity-only mode is the default, optional complete metadata remains eligible, degraded context or external MCP stays comment-only, and source/author movement or self-approval performs no approval write. ([#100](https://github.com/xeonvs/open-code-review-toolkit/issues/100))
+- Recover an ambiguous GitLab inline create only from one complete author-bound marker match, without retrying or falling back, and track recovered draft/discussion identities for exactly-once publication and baseline-guarded rollback. ([#101](https://github.com/xeonvs/open-code-review-toolkit/issues/101))
+
+### 🧩 Rules
+
+- Target checksum-verified Open Code Review 1.9.6 after qualifying 1.9.6. ([#105](https://github.com/xeonvs/open-code-review-toolkit/issues/105))
+
+
 ## 0.6.2 - 2026-08-17
 
 ### 🚀 Features
