@@ -38,6 +38,24 @@ LABEL_STATUSES = frozenset(
     }
 )
 MAX_LABELS = 32
+CONTEXT_MODES = frozenset({"off", "metadata", "enriched"})
+CONTEXT_STATES = frozenset({"disabled", "complete", "degraded"})
+CONTEXT_CLASSES = frozenset({"merge_request_metadata"})
+
+
+class ReviewContextModeError(ValueError):
+    """Report an unsupported or unavailable review-context mode safely."""
+
+
+def parse_review_context_mode(raw: str | None) -> str:
+    """Return the closed context mode without echoing untrusted configuration."""
+
+    mode = (raw or "").strip().lower() or "off"
+    if mode not in CONTEXT_MODES:
+        raise ReviewContextModeError("OCR_REVIEW_CONTEXT_MODE is invalid")
+    if mode == "enriched":
+        raise ReviewContextModeError("OCR_REVIEW_CONTEXT_MODE=enriched is not available")
+    return mode or "off"
 
 
 def context_provenance(provider: str) -> str:
@@ -83,6 +101,21 @@ class MergeRequestContext:
                 return True
         labels = self.fields.get("labels")
         return bool(isinstance(labels, Mapping) and labels.get("values"))
+
+    @property
+    def state(self) -> str:
+        """Return whether every selected metadata field is completely represented."""
+
+        complete_text = {"absent", "admitted"}
+        complete_labels = {"absent", "admitted"}
+        for name in ("title", "description", "source_branch"):
+            field = self.fields.get(name)
+            if not isinstance(field, Mapping) or field.get("status") not in complete_text:
+                return "degraded"
+        labels = self.fields.get("labels")
+        if not isinstance(labels, Mapping) or labels.get("status") not in complete_labels:
+            return "degraded"
+        return "complete"
 
     def evidence_value(self) -> dict[str, object]:
         """Return the closed persisted descriptor value."""

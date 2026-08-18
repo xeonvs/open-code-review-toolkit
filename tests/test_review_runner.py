@@ -20,6 +20,14 @@ from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from tests.support import patched_attr, patched_env
 
+DEFAULT_IDENTITY = review_runner.ReviewIdentity(
+    source_sha="a" * 40,
+    policy_sha="b" * 40,
+    mr_author_id=None,
+    context_mode="off",
+    context=None,
+)
+
 
 def test_evidence_mcp_self_query_exercises_all_read_actions() -> None:
     """Fail preflight unless summary, list, and stable-ID get share one store."""
@@ -87,13 +95,24 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         external_servers=(),
         secret_values=(),
     )
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 2,
-        "mcp_usage": {"ocr_toolkit_evidence": 2},
-        "automatic_approval": {"eligible": True, "reason": None},
+        "schema_version": 3,
+        "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
+        "context": {"mode": "off", "state": "disabled", "classes": []},
+        "mcp": {
+            "capabilities": [
+                {
+                    "server": "ocr_toolkit_evidence",
+                    "transport": "builtin",
+                    "tools": ["ocr_toolkit_evidence"],
+                }
+            ],
+            "usage": {"ocr_toolkit_evidence": 2},
+        },
+        "evidence": {"mandatory": True, "used": True},
     }
 
     result.write_text(
@@ -101,7 +120,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         encoding="utf-8",
     )
     with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
-        review_runner._record_ocr_result_mcp_usage(result, composition)
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
 def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
@@ -124,15 +143,31 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
         secret_values=(),
     )
 
-    review_runner._record_ocr_result_mcp_usage(result, composition, approval_blocked=True)
+    review_runner._record_ocr_result_mcp_usage(
+        result,
+        composition,
+        review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "metadata", None),
+    )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 2,
-        "mcp_usage": {"ocr_toolkit_evidence": 1},
-        "automatic_approval": {
-            "eligible": False,
-            "reason": "author-controlled merge-request context was admitted",
+        "schema_version": 3,
+        "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
+        "context": {
+            "mode": "metadata",
+            "state": "degraded",
+            "classes": ["merge_request_metadata"],
         },
+        "mcp": {
+            "capabilities": [
+                {
+                    "server": "ocr_toolkit_evidence",
+                    "transport": "builtin",
+                    "tools": ["ocr_toolkit_evidence"],
+                }
+            ],
+            "usage": {"ocr_toolkit_evidence": 1},
+        },
+        "evidence": {"mandatory": True, "used": True},
     }
 
 
@@ -158,7 +193,7 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
         external_servers=(),
         secret_values=(),
     )
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {}
 
 
 def test_ocr_result_allows_manifest_skipped_message_without_tool_calls(tmp_path: Path) -> None:
@@ -195,7 +230,7 @@ def test_ocr_result_allows_manifest_skipped_message_without_tool_calls(tmp_path:
         secret_values=(),
     )
 
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {}
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {}
 
 
 def test_ocr_result_manifest_complete_requires_builtin_mcp_usage(tmp_path: Path) -> None:
@@ -230,7 +265,7 @@ def test_ocr_result_manifest_complete_requires_builtin_mcp_usage(tmp_path: Path)
         secret_values=(),
     )
 
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {
         "ocr_toolkit_evidence": 1
     }
 
@@ -265,7 +300,7 @@ def test_ocr_result_rejects_unpinned_skipped_contract(
     )
 
     with pytest.raises(review_runner.ReviewRunnerError, match="no-supported-files contract"):
-        review_runner._record_ocr_result_mcp_usage(result, composition)
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
 def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> None:
@@ -293,7 +328,7 @@ def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> No
     )
 
     with pytest.raises(review_runner.ReviewRunnerError, match="valid bounded JSON"):
-        review_runner._record_ocr_result_mcp_usage(result, composition)
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
 def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -> None:
@@ -328,7 +363,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
         secret_values=(),
     )
 
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {
         "documentation": 5,
         "ocr_toolkit_evidence": 2,
     }
@@ -359,7 +394,7 @@ def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> N
         secret_values=(),
     )
 
-    assert review_runner._record_ocr_result_mcp_usage(result, composition) == {
+    assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {
         "ocr_toolkit_evidence": 2
     }
     persisted = json.loads(result.read_text(encoding="utf-8"))
@@ -393,7 +428,7 @@ def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) 
     )
 
     with pytest.raises(review_runner.ReviewRunnerError, match="valid bounded JSON"):
-        review_runner._record_ocr_result_mcp_usage(result, composition)
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
     assert target.read_text(encoding="utf-8") == original
 
@@ -668,7 +703,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             lambda _identifiers, *, head_sha: (f"invocation:{head_sha}",),
         ),
         patched_attr(review_runner, "invocation_identifiers", lambda _environment: ("ci",)),
-        patched_attr(review_runner.mcp_config, "build_mcp_composition", lambda: composition),
+        patched_attr(
+            review_runner.mcp_config,
+            "build_mcp_composition",
+            lambda **_kwargs: composition,
+        ),
         patched_attr(
             review_runner.mcp_config,
             "apply_mcp_composition",
@@ -696,7 +735,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         patched_attr(
             review_runner,
             "_record_ocr_result_mcp_usage",
-            lambda _result, _registry, **_kwargs: (
+            lambda _result, _registry, _identity: (
                 events.append("ocr-usage") or {"ocr_toolkit_evidence": 1}
             ),
         ),

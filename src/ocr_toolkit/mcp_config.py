@@ -35,6 +35,7 @@ SENSITIVE_HEADER_NAME_RE = re.compile(
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off", ""}
 BUILTIN_EVIDENCE_SERVER = "ocr_toolkit_evidence"
+MCP_PROFILES = frozenset({"local", "gitlab_mr"})
 
 
 class MCPConfigError(Exception):
@@ -64,6 +65,7 @@ class MCPCapability:
     server: str
     tools: tuple[str, ...]
     builtin: bool = False
+    transport: str = "stdio"
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,8 +267,11 @@ def _remote_url(value: Any, server_name: str) -> str:
     return value
 
 
-def parse_mcp_servers(raw: str | None = None) -> list[MCPServerConfig]:
-    """Return bounded stdio and remote configs from OCR_MCP_SERVERS_JSON."""
+def parse_mcp_servers(raw: str | None = None, *, profile: str = "local") -> list[MCPServerConfig]:
+    """Return bounded external configs admitted by one execution profile."""
+
+    if profile not in MCP_PROFILES:
+        raise MCPConfigError("internal MCP execution profile is invalid")
 
     raw = os.environ.get("OCR_MCP_SERVERS_JSON", "") if raw is None else raw
     raw = raw.strip()
@@ -329,7 +334,11 @@ def parse_mcp_servers(raw: str | None = None) -> list[MCPServerConfig]:
         transport = server.get("type", "stdio")
         if transport not in {"stdio", "remote"}:
             raise MCPConfigError(f"servers.{name}.type must be 'stdio' or 'remote'")
-        common_fields = {"name", "type", "enabled", "tools", "setup"}
+        if profile == "gitlab_mr" and transport != "remote":
+            raise MCPConfigError("GitLab merge-request reviews require external remote MCP")
+        common_fields = {"name", "type", "enabled", "tools"}
+        if transport == "stdio":
+            common_fields.add("setup")
         transport_fields = (
             {"command", "args", "env", "env_from"}
             if transport == "stdio"
@@ -404,24 +413,43 @@ def _replace_configured_servers() -> bool:
     raise MCPConfigError("OCR_MCP_REPLACE must be a boolean (true/false, 1/0, yes/no, or on/off)")
 
 
-def _existing_capability(name: str, value: Any) -> MCPCapability:
-    """Validate the safe capability fields of one existing OCR MCP entry."""
+def _existing_server(
+    name: str, value: Any, *, profile: str
+) -> tuple[dict[str, Any], MCPCapability]:
+    """Revalidate one inherited OCR MCP entry through the active exact schema."""
 
     if not isinstance(name, str) or not MCP_NAME_RE.fullmatch(name):
         raise MCPConfigError("Existing OCR MCP server name is invalid")
     if not isinstance(value, dict):
         raise MCPConfigError(f"Existing OCR MCP server {name!r} is not a JSON object")
-    tools = _string_list(value.get("tools", []), f"existing.{name}.tools", limit=MAX_MCP_TOOLS)
-    if not tools:
-        raise MCPConfigError(
-            f"Existing OCR MCP server {name!r} must explicitly allow at least one tool"
+    if name == BUILTIN_EVIDENCE_SERVER:
+        raise MCPConfigError("the toolkit-owned MCP server cannot be inherited")
+    raw = json.dumps({name: value}, separators=(",", ":"), ensure_ascii=False)
+    parsed = parse_mcp_servers(raw, profile=profile)
+    if len(parsed) != 1:
+        raise MCPConfigError(f"Existing OCR MCP server {name!r} is disabled or invalid")
+    server = parsed[0]
+    payload: dict[str, Any] = {
+        "type": server.transport,
+        "tools": server.tools,
+    }
+    if server.transport == "stdio":
+        payload.update(
+            {
+                "command": server.command,
+                "args": server.args,
+                "env": server.env,
+                "setup": server.setup,
+            }
         )
-    if TOOL_NAME in tools:
-        raise MCPConfigError(f"Existing MCP tool name {TOOL_NAME!r} is reserved by the toolkit")
-    return MCPCapability(name, tuple(tools))
+    else:
+        payload.update({"url": server.url, "headers": server.headers})
+    return payload, MCPCapability(server.name, tuple(server.tools), transport=server.transport)
 
 
-def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCPComposition:
+def compose_mcp_servers(
+    servers: list[MCPServerConfig], *, replace: bool, profile: str = "local"
+) -> MCPComposition:
     """Build OCR's registry from independent optional and mandatory MCP entries."""
 
     payload: dict[str, dict[str, Any]] = {}
@@ -436,17 +464,18 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
         for name, value in current.items():
             if name == BUILTIN_EVIDENCE_SERVER:
                 continue
-            capability = _existing_capability(name, value)
-            payload[name] = value
+            inherited, capability = _existing_server(name, value, profile=profile)
+            payload[name] = inherited
             capabilities.append(capability)
 
     secret_values: list[str] = []
     for server in servers:
         payload[server.name] = {
             "type": server.transport,
-            "setup": server.setup,
             "tools": server.tools,
         }
+        if server.transport == "stdio":
+            payload[server.name]["setup"] = server.setup
         if server.transport == "stdio":
             payload[server.name].update(
                 {"command": server.command, "args": server.args, "env": server.env}
@@ -454,7 +483,7 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
         else:
             payload[server.name].update({"url": server.url, "headers": server.headers})
         secret_values.extend(server.secret_values)
-        capability = MCPCapability(server.name, tuple(server.tools))
+        capability = MCPCapability(server.name, tuple(server.tools), transport=server.transport)
         capabilities = [item for item in capabilities if item.server != server.name]
         capabilities.append(capability)
 
@@ -497,10 +526,14 @@ def compose_mcp_servers(servers: list[MCPServerConfig], *, replace: bool) -> MCP
     )
 
 
-def build_mcp_composition() -> MCPComposition:
-    """Parse environment settings into the complete OCR MCP composition."""
+def build_mcp_composition(*, profile: str = "local") -> MCPComposition:
+    """Parse environment settings into the complete profiled MCP composition."""
 
-    return compose_mcp_servers(parse_mcp_servers(), replace=_replace_configured_servers())
+    return compose_mcp_servers(
+        parse_mcp_servers(profile=profile),
+        replace=_replace_configured_servers(),
+        profile=profile,
+    )
 
 
 def apply_mcp_composition(composition: MCPComposition) -> None:

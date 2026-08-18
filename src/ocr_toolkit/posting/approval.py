@@ -7,9 +7,7 @@ from enum import Enum
 from typing import Any
 
 from ocr_toolkit.ocr_result import (
-    AUTOMATIC_APPROVAL_BLOCK_REASON,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
-    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
 from ocr_toolkit.posting.settings import BooleanSetting
@@ -135,40 +133,118 @@ def provisional_approval_result(eligibility: ApprovalEligibility) -> ApprovalRes
     )
 
 
-def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
-    """Return one toolkit-authored blocker while preserving readable v1 receipts."""
+def _full_sha(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 40
+        and all(char in "0123456789abcdef" for char in value)
+    )
 
+
+def _positive_id_or_none(value: Any) -> bool:
+    return value is None or (isinstance(value, int) and not isinstance(value, bool) and value > 0)
+
+
+def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
+    """Return the closed review-time receipt blocker for automatic approval."""
+
+    invalid = "the review-time approval receipt is missing or invalid"
     if not isinstance(toolkit_metadata, dict):
-        return "the review-time approval receipt is missing or invalid"
+        return invalid
     schema_version = toolkit_metadata.get("schema_version")
-    if schema_version not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS:
-        return "the review-time approval receipt is missing or invalid"
-    if schema_version == 1:
+    if schema_version in {1, 2}:
         return "the review-time approval receipt predates current eligibility controls"
-    if set(toolkit_metadata) != {"schema_version", "mcp_usage", "automatic_approval"}:
-        return "the review-time approval receipt is missing or invalid"
-    mcp_usage = toolkit_metadata.get("mcp_usage")
+    if schema_version != 3 or set(toolkit_metadata) != {
+        "schema_version",
+        "review",
+        "context",
+        "mcp",
+        "evidence",
+    }:
+        return invalid
+
+    review = toolkit_metadata.get("review")
+    if not isinstance(review, dict) or set(review) != {"source_sha", "policy_sha", "mr_author_id"}:
+        return invalid
+    if not _full_sha(review.get("source_sha")) or not _full_sha(review.get("policy_sha")):
+        return invalid
+    if not _positive_id_or_none(review.get("mr_author_id")):
+        return invalid
+
+    context = toolkit_metadata.get("context")
+    if not isinstance(context, dict) or set(context) != {"mode", "state", "classes"}:
+        return invalid
+    mode = context.get("mode")
+    state = context.get("state")
+    classes = context.get("classes")
+    expected_classes = [] if mode == "off" else ["merge_request_metadata"]
     if (
-        not isinstance(mcp_usage, dict)
-        or not mcp_usage
-        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
-        or any(
+        mode not in {"off", "metadata"}
+        or state not in {"disabled", "complete", "degraded"}
+        or classes != expected_classes
+        or (mode == "off" and state != "disabled")
+        or (mode == "metadata" and state == "disabled")
+        or (mode == "metadata" and review.get("mr_author_id") is None)
+    ):
+        return invalid
+
+    mcp = toolkit_metadata.get("mcp")
+    if not isinstance(mcp, dict) or set(mcp) != {"capabilities", "usage"}:
+        return invalid
+    capabilities = mcp.get("capabilities")
+    usage = mcp.get("usage")
+    if (
+        not isinstance(capabilities, list)
+        or not 1 <= len(capabilities) <= MAX_TOOLKIT_MCP_USAGE_SERVERS
+        or not isinstance(usage, dict)
+        or len(usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
+    ):
+        return invalid
+    servers: set[str] = set()
+    external = False
+    for capability in capabilities:
+        if not isinstance(capability, dict) or set(capability) != {"server", "transport", "tools"}:
+            return invalid
+        server = capability.get("server")
+        transport = capability.get("transport")
+        tools = capability.get("tools")
+        if (
             not isinstance(server, str)
             or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
-            or not isinstance(count, int)
-            or isinstance(count, bool)
-            or count <= 0
-            for server, count in mcp_usage.items()
-        )
+            or server in servers
+            or transport not in {"builtin", "stdio", "remote"}
+            or not isinstance(tools, list)
+            or not tools
+            or any(
+                not isinstance(tool, str) or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(tool) is None
+                for tool in tools
+            )
+            or len(set(tools)) != len(tools)
+        ):
+            return invalid
+        servers.add(server)
+        external = external or transport != "builtin"
+    if "ocr_toolkit_evidence" not in servers:
+        return invalid
+    if any(
+        not isinstance(server, str)
+        or server not in servers
+        or not isinstance(count, int)
+        or isinstance(count, bool)
+        or count <= 0
+        for server, count in usage.items()
     ):
-        return "the review-time approval receipt is missing or invalid"
-    constraint = toolkit_metadata.get("automatic_approval")
-    if not isinstance(constraint, dict) or set(constraint) != {"eligible", "reason"}:
-        return "the review-time approval receipt is missing or invalid"
-    eligible = constraint.get("eligible")
-    reason = constraint.get("reason")
-    if eligible is True and reason is None:
-        return ""
-    if eligible is False and reason == AUTOMATIC_APPROVAL_BLOCK_REASON:
-        return AUTOMATIC_APPROVAL_BLOCK_REASON
-    return "the review-time approval receipt is missing or invalid"
+        return invalid
+
+    evidence = toolkit_metadata.get("evidence")
+    if not isinstance(evidence, dict) or set(evidence) != {"mandatory", "used"}:
+        return invalid
+    mandatory = evidence.get("mandatory")
+    used = evidence.get("used")
+    if not isinstance(mandatory, bool) or not isinstance(used, bool) or (mandatory and not used):
+        return invalid
+    if context.get("state") == "degraded":
+        return "the selected review context was degraded"
+    if external:
+        return "external MCP was configured for a comment-only review"
+    return ""

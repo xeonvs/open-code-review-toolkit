@@ -133,6 +133,22 @@ def mr_head_sha() -> str:
     return clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
 
 
+def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
+    """Return only validated-by-policy receipt identities for provider readback."""
+
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 3:
+        return "", None
+    review = toolkit_metadata.get("review")
+    if not isinstance(review, dict):
+        return "", None
+    source_sha = review.get("source_sha")
+    author_id = review.get("mr_author_id")
+    return (
+        source_sha if isinstance(source_sha, str) else "",
+        author_id if isinstance(author_id, int) and not isinstance(author_id, bool) else None,
+    )
+
+
 def summary_with_run_marker(body: str, run_id: str) -> str:
     """Attach one bounded hidden transaction identity to the summary."""
 
@@ -194,6 +210,7 @@ def finalize_review_approval(
     draft_note_ids: list[int],
     eligibility: ApprovalEligibility,
     reviewed_commit: str,
+    reviewed_author_id: int | None,
     run_id: str,
     render_summary: Callable[[ApprovalResult], str],
 ) -> int:
@@ -206,6 +223,7 @@ def finalize_review_approval(
         config,
         eligibility,
         reviewed_commit,
+        reviewed_author_id,
     )
     final_body = summary_with_run_marker(
         render_summary(execution.result),
@@ -655,7 +673,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         result.get(TOOLKIT_RESULT_KEY),
     )
     summary_run_id = secrets.token_hex(16)
-    reviewed_commit = reviewed_sha()
+    receipt_sha, reviewed_author_id = approval_receipt_identity(result.get(TOOLKIT_RESULT_KEY))
+    reviewed_commit = receipt_sha or reviewed_sha()
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
@@ -710,6 +729,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             draft_note_ids,
             approval_eligibility,
             reviewed_commit,
+            reviewed_author_id,
             summary_run_id,
             render_no_comments_summary,
         )
@@ -895,6 +915,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         draft_note_ids,
         approval_eligibility,
         reviewed_commit,
+        reviewed_author_id,
         summary_run_id,
         render_findings_summary,
     )

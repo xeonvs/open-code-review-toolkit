@@ -13,12 +13,13 @@ from ocr_toolkit.evidence.review_context import (
     CONTEXT_KIND,
     CONTEXT_SOURCE,
     MergeRequestContext,
+    ReviewContextModeError,
     context_provenance,
     merge_request_context_record,
     normalize_merge_request_context,
+    parse_review_context_mode,
 )
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
-from ocr_toolkit.ocr_result import AUTOMATIC_APPROVAL_BLOCK_REASON
 from ocr_toolkit.posting.approval import automatic_approval_metadata_reason
 
 SHA = "a" * 40
@@ -43,6 +44,24 @@ def _payload(result: dict[str, object]) -> dict[str, object]:
     content = result["content"]
     assert isinstance(content, list) and isinstance(content[0], dict)
     return json.loads(str(content[0]["text"]))
+
+
+def test_context_mode_parser_defaults_off_and_never_echoes_invalid_value() -> None:
+    assert parse_review_context_mode(None) == "off"
+    assert parse_review_context_mode("") == "off"
+    assert parse_review_context_mode("  OFF ") == "off"
+    assert parse_review_context_mode("metadata") == "metadata"
+    with pytest.raises(ReviewContextModeError, match="not available"):
+        parse_review_context_mode("enriched")
+    with pytest.raises(ReviewContextModeError) as exc_info:
+        parse_review_context_mode("private-secret-value")
+    assert "private-secret-value" not in str(exc_info.value)
+
+
+def test_metadata_context_state_distinguishes_complete_from_degraded() -> None:
+    assert _context().state == "complete"
+    assert _context(description="x" * 12_001).state == "degraded"
+    assert _context(labels=[]).state == "complete"
 
 
 def test_context_round_trips_through_real_store_and_mcp_without_bootstrap_text(
@@ -197,24 +216,16 @@ def test_all_omitted_fields_remain_queryable_without_becoming_admitted_intent() 
     }
 
 
-def test_receipt_v2_blocks_only_the_closed_author_controlled_context_reason() -> None:
-    blocked = {
-        "schema_version": 2,
-        "mcp_usage": {"ocr_toolkit_evidence": 1},
-        "automatic_approval": {
-            "eligible": False,
-            "reason": AUTOMATIC_APPROVAL_BLOCK_REASON,
+def test_receipt_v1_and_v2_are_comment_readable_but_never_approval_authority() -> None:
+    for receipt in (
+        {"schema_version": 1, "mcp_usage": {"ocr_toolkit_evidence": 1}},
+        {
+            "schema_version": 2,
+            "mcp_usage": {"ocr_toolkit_evidence": 1},
+            "automatic_approval": {"eligible": True, "reason": None},
         },
-    }
-    allowed = {
-        "schema_version": 2,
-        "mcp_usage": {"ocr_toolkit_evidence": 1},
-        "automatic_approval": {"eligible": True, "reason": None},
-    }
-
-    assert automatic_approval_metadata_reason(blocked) == AUTOMATIC_APPROVAL_BLOCK_REASON
-    assert automatic_approval_metadata_reason(allowed) == ""
-    assert (
-        automatic_approval_metadata_reason({"schema_version": 1, "mcp_usage": {}})
-        == "the review-time approval receipt predates current eligibility controls"
-    )
+    ):
+        assert (
+            automatic_approval_metadata_reason(receipt)
+            == "the review-time approval receipt predates current eligibility controls"
+        )

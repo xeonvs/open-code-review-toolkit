@@ -41,6 +41,43 @@ def finding(category: Any = "style", severity: Any = "low") -> dict[str, Any]:
     return {"category": category, "severity": severity}
 
 
+def receipt_v3(
+    *, context_state: str = "disabled", external: bool = False, author_id: int | None = None
+) -> dict[str, Any]:
+    """Return one closed synthetic review-time receipt."""
+
+    mode = "metadata" if context_state != "disabled" else "off"
+    capabilities = [
+        {
+            "server": "ocr_toolkit_evidence",
+            "transport": "builtin",
+            "tools": ["ocr_toolkit_evidence"],
+        }
+    ]
+    if external:
+        capabilities.append(
+            {"server": "documentation", "transport": "remote", "tools": ["docs_read"]}
+        )
+    return {
+        "schema_version": 3,
+        "review": {
+            "source_sha": "a" * 40,
+            "policy_sha": "b" * 40,
+            "mr_author_id": author_id,
+        },
+        "context": {
+            "mode": mode,
+            "state": context_state,
+            "classes": ["merge_request_metadata"] if mode == "metadata" else [],
+        },
+        "mcp": {
+            "capabilities": capabilities,
+            "usage": {"ocr_toolkit_evidence": 1},
+        },
+        "evidence": {"mandatory": True, "used": True},
+    }
+
+
 def eligibility(
     comments: list[dict[str, Any]] | None = None,
     *,
@@ -57,11 +94,7 @@ def eligibility(
         comments or [],
         warnings or [],
         omitted,
-        {
-            "schema_version": 2,
-            "mcp_usage": {"ocr_toolkit_evidence": 1},
-            "automatic_approval": {"eligible": True, "reason": None},
-        },
+        receipt_v3(),
     )
 
 
@@ -133,28 +166,37 @@ class ApprovalPolicyTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse(decision.eligible)
 
-    def test_author_controlled_context_receipt_blocks_without_exposing_provider_text(self) -> None:
+    def test_degraded_context_receipt_blocks_without_exposing_provider_text(self) -> None:
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
             complete_outcome(),
             [],
             [],
             0,
-            {
-                "schema_version": 2,
-                "mcp_usage": {"ocr_toolkit_evidence": 1},
-                "automatic_approval": {
-                    "eligible": False,
-                    "reason": "author-controlled merge-request context was admitted",
-                },
-            },
+            receipt_v3(context_state="degraded", author_id=41),
         )
 
         self.assertFalse(decision.eligible)
         self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
+        self.assertEqual(decision.result.reason, "the selected review context was degraded")
+
+    def test_complete_metadata_and_external_mcp_have_independent_approval_effects(self) -> None:
+        complete_metadata = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            receipt_v3(context_state="complete", author_id=41),
+        )
+        external = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v3(external=True)
+        )
+
+        self.assertTrue(complete_metadata.eligible)
+        self.assertFalse(external.eligible)
         self.assertEqual(
-            decision.result.reason,
-            "author-controlled merge-request context was admitted",
+            external.result.reason, "external MCP was configured for a comment-only review"
         )
 
     def test_historical_v1_receipt_is_readable_but_not_approval_eligible(self) -> None:
@@ -173,83 +215,27 @@ class ApprovalPolicyTests(unittest.TestCase):
             "the review-time approval receipt predates current eligibility controls",
         )
 
-    def test_missing_or_malformed_v2_receipt_fails_closed(self) -> None:
-        for metadata in (
-            None,
-            {"schema_version": 2, "mcp_usage": {}},
-            {
-                "schema_version": 2,
-                "mcp_usage": {},
-                "automatic_approval": {"eligible": True, "reason": None},
-            },
-            {
-                "schema_version": 2,
-                "mcp_usage": "invalid",
-                "automatic_approval": {"eligible": True, "reason": None},
-            },
-            {
-                "schema_version": 2,
-                "mcp_usage": {"ocr_toolkit_evidence": True},
-                "automatic_approval": {"eligible": True, "reason": None},
-            },
-            {
-                "schema_version": 2,
-                "mcp_usage": {},
-                "automatic_approval": {
-                    "eligible": False,
-                    "reason": "provider-controlled reason",
-                },
-            },
+    def test_missing_or_malformed_v3_receipt_fails_closed(self) -> None:
+        cases: list[Any] = [None, {"schema_version": 3}]
+        for mutate in (
+            lambda value: value["context"].update({"state": "complete"}),
+            lambda value: value["review"].update({"source_sha": "invalid"}),
+            lambda value: value["mcp"].update({"usage": {"unknown": 1}}),
+            lambda value: value["evidence"].update({"used": False}),
         ):
+            candidate = receipt_v3()
+            mutate(candidate)
+            cases.append(candidate)
+        for metadata in cases:
             with self.subTest(metadata=metadata):
                 decision = approval.evaluate_approval_policy(
-                    settings.BooleanSetting(True),
-                    complete_outcome(),
-                    [],
-                    [],
-                    0,
-                    metadata,
+                    settings.BooleanSetting(True), complete_outcome(), [], [], 0, metadata
                 )
                 self.assertFalse(decision.eligible)
                 self.assertEqual(
                     decision.result.reason,
                     "the review-time approval receipt is missing or invalid",
                 )
-
-    def test_v2_receipt_accepts_full_registry_and_rejects_one_more_server(self) -> None:
-        full_usage = {"ocr_toolkit_evidence": 1}
-        full_usage.update({f"synthetic_{index}": 1 for index in range(16)})
-        accepted = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True),
-            complete_outcome(),
-            [],
-            [],
-            0,
-            {
-                "schema_version": 2,
-                "mcp_usage": full_usage,
-                "automatic_approval": {"eligible": True, "reason": None},
-            },
-        )
-        overflow = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True),
-            complete_outcome(),
-            [],
-            [],
-            0,
-            {
-                "schema_version": 2,
-                "mcp_usage": {**full_usage, "synthetic_overflow": 1},
-                "automatic_approval": {"eligible": True, "reason": None},
-            },
-        )
-
-        self.assertTrue(accepted.eligible)
-        self.assertFalse(overflow.eligible)
-        self.assertEqual(
-            overflow.result.reason,
-            "the review-time approval receipt is missing or invalid",
-        )
 
     def test_disabled_and_invalid_setting_remain_non_actionable(self) -> None:
         for setting in (
@@ -287,7 +273,12 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
     ) -> Any:
         def request(_config: Any, endpoint: str, **_kwargs: Any) -> Any:
             if endpoint == "":
-                return {"sha": sha, "state": "opened", "detailed_merge_status": detailed_status}
+                return {
+                    "sha": sha,
+                    "state": "opened",
+                    "author": {"id": 41},
+                    "detailed_merge_status": detailed_status,
+                }
             if endpoint == "/approvals":
                 return {"approved_by": ([{"user": {"id": 7}}] if own_approved else [])}
             raise AssertionError(endpoint)
@@ -306,6 +297,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                 return {
                     "sha": self.SHA,
                     "state": "opened",
+                    "author": {"id": 41},
                     "detailed_merge_status": "checking" if pending else "mergeable",
                 }
             return self.api_sequence()(*args, **kwargs)
@@ -327,7 +319,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             )
 
         self.assertIsNone(error)
-        self.assertEqual(state, gitlab_approval.GitLabApprovalState(False))
+        self.assertEqual(state, gitlab_approval.GitLabApprovalState(False, 41))
         self.assertEqual(sleeps, [2.0])
 
         with (
@@ -378,7 +370,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
             result = gitlab_approval.execute_approval(
-                gitlab_config(), eligibility(), self.SHA, sleep=lambda _seconds: None
+                gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
             )
 
         self.assertEqual(approve_shas, [self.SHA])
@@ -405,7 +397,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
             result = gitlab_approval.execute_approval(
-                gitlab_config(), eligibility(), self.SHA, sleep=lambda _seconds: None
+                gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
             )
 
         self.assertEqual(writes, [self.SHA])
@@ -430,10 +422,77 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                 lambda *_args: writes.append("approve"),
             ),
         ):
-            result = gitlab_approval.execute_approval(gitlab_config(), eligibility(), self.SHA)
+            result = gitlab_approval.execute_approval(gitlab_config(), eligibility(), self.SHA, 41)
 
         self.assertEqual(result.result.status, approval.ApprovalStatus.SKIPPED)
         self.assertEqual(writes, [])
+
+    def test_author_mismatch_and_self_approval_skip_without_write(self) -> None:
+        writes: list[str] = []
+
+        def approve(*_args: Any) -> gitlab.GitLabWriteResult:
+            writes.append("approve")
+            return gitlab.GitLabWriteResult("posted")
+
+        with (
+            patched_attr(gitlab, "api_request", self.api_sequence()),
+            patched_attr(
+                gitlab_approval,
+                "_latest_diff_version",
+                lambda _config: {
+                    "id": 2,
+                    "head_commit_sha": self.SHA,
+                    "patch_id_sha": "b" * 40,
+                },
+            ),
+            patched_attr(gitlab, "approve_merge_request", approve),
+        ):
+            mismatch = gitlab_approval.execute_approval(
+                gitlab_config(), eligibility(), self.SHA, 42, sleep=lambda _seconds: None
+            )
+            self_authored = gitlab_approval.execute_approval(
+                gitlab_config(current_user_id=41),
+                eligibility(),
+                self.SHA,
+                41,
+                sleep=lambda _seconds: None,
+            )
+
+        self.assertEqual(writes, [])
+        self.assertIn("author no longer matches", mismatch.result.reason)
+        self.assertIn("is the merge-request author", self_authored.result.reason)
+
+    def test_malformed_author_readback_fails_before_write(self) -> None:
+        def request(_config: Any, endpoint: str, **_kwargs: Any) -> Any:
+            if endpoint == "":
+                return {
+                    "sha": self.SHA,
+                    "state": "opened",
+                    "author": {"id": True},
+                    "detailed_merge_status": "mergeable",
+                }
+            if endpoint == "/approvals":
+                return {"approved_by": []}
+            raise AssertionError(endpoint)
+
+        with (
+            patched_attr(gitlab, "api_request", request),
+            patched_attr(
+                gitlab_approval,
+                "_latest_diff_version",
+                lambda _config: {
+                    "id": 2,
+                    "head_commit_sha": self.SHA,
+                    "patch_id_sha": "b" * 40,
+                },
+            ),
+        ):
+            result = gitlab_approval.execute_approval(
+                gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
+            )
+
+        self.assertEqual(result.result.status, approval.ApprovalStatus.FAILED)
+        self.assertIn("author metadata", result.result.reason)
 
     def test_provider_write_uses_only_exact_sha_approval_endpoint(self) -> None:
         calls: list[tuple[str, dict[str, Any], str]] = []
@@ -464,7 +523,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             eligibility(outcome=ReviewOutcome("partial", "partial", False, True)),
         ):
             with self.subTest(status=decision.result.status):
-                result = gitlab_approval.execute_approval(gitlab_config(), decision, self.SHA)
+                result = gitlab_approval.execute_approval(gitlab_config(), decision, self.SHA, 41)
                 self.assertEqual(result.result, decision.result)
 
     def test_latest_diff_version_uses_highest_valid_id_not_response_order(self) -> None:
@@ -541,6 +600,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                 [1],
                 eligibility(),
                 self.SHA,
+                None,
                 self.RUN_ID,
                 lambda result: approval.approval_summary_line(result),
             )
@@ -573,6 +633,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                 [],
                 decision,
                 self.SHA,
+                None,
                 self.RUN_ID,
                 lambda result: approval.approval_summary_line(result),
             )
@@ -610,6 +671,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                         [],
                         eligibility(),
                         self.SHA,
+                        None,
                         self.RUN_ID,
                         lambda result: approval.approval_summary_line(result),
                     )
@@ -647,6 +709,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                 [],
                 eligibility(),
                 self.SHA,
+                None,
                 self.RUN_ID,
                 lambda result: approval.approval_summary_line(result),
             )

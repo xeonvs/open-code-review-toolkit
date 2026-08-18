@@ -43,7 +43,8 @@ class GitLabReviewSnapshot:
     source_sha: str
     target_branch: str
     target_sha: str
-    context: MergeRequestContext
+    author_id: int
+    context: MergeRequestContext | None
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -199,6 +200,14 @@ def _sha(value: object, label: str) -> str:
     return value
 
 
+def _positive_identifier(value: object, label: str) -> int:
+    """Return one positive provider identity without accepting coercive values."""
+
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise GitLabProviderError(f"GitLab returned invalid {label}")
+    return value
+
+
 def _branch(value: object) -> str:
     """Return one bounded safe target branch name for endpoint construction."""
 
@@ -213,7 +222,7 @@ def _branch(value: object) -> str:
 
 
 def acquire_review_snapshot(
-    environment: Mapping[str, str], *, expected_head: str
+    environment: Mapping[str, str], *, expected_head: str, include_metadata: bool = True
 ) -> GitLabReviewSnapshot:
     """Acquire and cross-check one MR plus protected-target branch snapshot."""
 
@@ -240,16 +249,22 @@ def acquire_review_snapshot(
     if isinstance(target_project, bool) or str(target_project) != project_id:
         raise GitLabProviderError("GitLab merge request targets a different project")
     target_branch = _branch(mr.get("target_branch"))
-    context = normalize_merge_request_context(
-        provider="gitlab",
-        project_id=project_id,
-        merge_request_iid=merge_request_iid,
-        source_sha=source_sha,
-        title=mr.get("title"),
-        description=mr.get("description"),
-        labels=mr.get("labels"),
-        source_branch=mr.get("source_branch"),
-    )
+    author = mr.get("author")
+    if not isinstance(author, dict):
+        raise GitLabProviderError("GitLab returned invalid merge-request author")
+    author_id = _positive_identifier(author.get("id"), "merge-request author id")
+    context = None
+    if include_metadata:
+        context = normalize_merge_request_context(
+            provider="gitlab",
+            project_id=project_id,
+            merge_request_iid=merge_request_iid,
+            source_sha=source_sha,
+            title=mr.get("title"),
+            description=mr.get("description"),
+            labels=mr.get("labels"),
+            source_branch=mr.get("source_branch"),
+        )
     encoded_branch = urllib.parse.quote(target_branch, safe="")
     branch = _read_json(
         f"{api_root}/projects/{project}/repository/branches/{encoded_branch}",
@@ -270,5 +285,6 @@ def acquire_review_snapshot(
         source_sha=source_sha,
         target_branch=target_branch,
         target_sha=target_sha,
+        author_id=author_id,
         context=context,
     )

@@ -29,9 +29,10 @@ class ApprovalExecution:
 
 @dataclass(frozen=True, slots=True)
 class GitLabApprovalState:
-    """One synchronized current-head and current-user approval snapshot."""
+    """One synchronized current-head, author, and current-user approval snapshot."""
 
     own_approved: bool
+    author_id: int
 
 
 def _full_sha(value: Any) -> str:
@@ -123,6 +124,13 @@ def wait_for_synchronized_approval_state(
                 ApprovalStatus.SKIPPED,
                 "the merge request is not open",
             )
+        author = merge_request.get("author")
+        author_id = author.get("id") if isinstance(author, dict) else None
+        if isinstance(author_id, bool) or not isinstance(author_id, int) or author_id <= 0:
+            return None, ApprovalResult(
+                ApprovalStatus.FAILED,
+                "GitLab returned malformed merge-request author metadata",
+            )
 
         detailed_status = merge_request.get("detailed_merge_status")
         patch_id = _full_sha(latest.get("patch_id_sha"))
@@ -139,7 +147,7 @@ def wait_for_synchronized_approval_state(
                     ApprovalStatus.FAILED,
                     "GitLab returned malformed approval state",
                 )
-            return GitLabApprovalState(own_approved), None
+            return GitLabApprovalState(own_approved, author_id), None
 
         if attempt + 1 < attempts:
             sleep(interval_seconds)
@@ -173,6 +181,7 @@ def execute_approval(
     config: gitlab.GitLabConfig,
     eligibility: ApprovalEligibility,
     expected_sha: str,
+    expected_author_id: int | None = None,
     *,
     attempts: int = SYNC_ATTEMPTS,
     interval_seconds: float = SYNC_INTERVAL_SECONDS,
@@ -194,6 +203,20 @@ def execute_approval(
         return ApprovalExecution(
             synchronization_result
             or ApprovalResult(ApprovalStatus.FAILED, "GitLab synchronization failed"),
+        )
+    if expected_author_id is None or state.author_id != expected_author_id:
+        return ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.SKIPPED,
+                "the merge-request author no longer matches the reviewed identity",
+            )
+        )
+    if config.current_user_id == state.author_id:
+        return ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.SKIPPED,
+                "the toolkit user is the merge-request author; no approval was attempted",
+            )
         )
 
     if state.own_approved:

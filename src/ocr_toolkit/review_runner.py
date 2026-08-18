@@ -31,10 +31,14 @@ from ocr_toolkit.evidence.repository import (
     RepositoryEvidenceError,
     normalize_repo_path,
 )
-from ocr_toolkit.evidence.review_context import MergeRequestContext, merge_request_context_record
+from ocr_toolkit.evidence.review_context import (
+    MergeRequestContext,
+    ReviewContextModeError,
+    merge_request_context_record,
+    parse_review_context_mode,
+)
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
-    AUTOMATIC_APPROVAL_BLOCK_REASON,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -62,6 +66,23 @@ class ReviewRefs:
 
     base: str
     head: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewIdentity:
+    """Bind immutable review/provider identities to context selection."""
+
+    source_sha: str
+    policy_sha: str
+    mr_author_id: int | None
+    context_mode: str
+    context: MergeRequestContext | None
+
+    @property
+    def context_state(self) -> str:
+        if self.context_mode == "off":
+            return "disabled"
+        return self.context.state if self.context is not None else "degraded"
 
 
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
@@ -93,22 +114,21 @@ def _verify_evidence_mcp(store: EvidenceStore) -> None:
             raise ReviewRunnerError("OCR evidence MCP get self-query failed")
 
 
-def _mcp_usage_receipt(
+def _review_receipt(
     payload: dict[str, object],
     composition: mcp_config.MCPComposition,
-    *,
-    approval_blocked: bool,
+    identity: ReviewIdentity,
 ) -> dict[str, object]:
-    """Return bounded MCP usage tied to one validated review-time registry."""
+    """Return a closed privacy-safe receipt tied to review-time facts."""
 
     try:
         outcome = parse_result_outcome(payload)
     except OcrResultContractError as exc:
         raise ReviewRunnerError(f"OCR result has an unsupported outcome contract: {exc}") from exc
 
+    tool_calls = payload.get("tool_calls")
+    by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     if outcome.kind == "skipped":
-        tool_calls = payload.get("tool_calls")
-        by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
         legacy_message_invalid = (
             not outcome.manifest_present and payload.get("message") != "No supported files changed."
         )
@@ -122,16 +142,7 @@ def _mcp_usage_receipt(
             raise ReviewRunnerError(
                 "OCR skipped result does not match the pinned no-supported-files contract"
             )
-        return {
-            "mcp_usage": {},
-            "automatic_approval": {
-                "eligible": not approval_blocked,
-                "reason": (AUTOMATIC_APPROVAL_BLOCK_REASON if approval_blocked else None),
-            },
-        }
 
-    tool_calls = payload.get("tool_calls")
-    by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     owners = {
         tool: capability.server
         for capability in composition.capabilities
@@ -149,13 +160,35 @@ def _mcp_usage_receipt(
             ):
                 owner = owners[tool]
                 usage[owner] = usage.get(owner, 0) + count
-    if outcome.requires_evidence_mcp and usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) <= 0:
+    evidence_used = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) > 0
+    if outcome.requires_evidence_mcp and not evidence_used:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+    capabilities = [
+        {
+            "server": capability.server,
+            "transport": "builtin" if capability.builtin else capability.transport,
+            "tools": list(capability.tools),
+        }
+        for capability in composition.capabilities
+    ]
     return {
-        "mcp_usage": dict(sorted(usage.items())),
-        "automatic_approval": {
-            "eligible": not approval_blocked,
-            "reason": AUTOMATIC_APPROVAL_BLOCK_REASON if approval_blocked else None,
+        "review": {
+            "source_sha": identity.source_sha,
+            "policy_sha": identity.policy_sha,
+            "mr_author_id": identity.mr_author_id,
+        },
+        "context": {
+            "mode": identity.context_mode,
+            "state": identity.context_state,
+            "classes": ["merge_request_metadata"] if identity.context_mode == "metadata" else [],
+        },
+        "mcp": {
+            "capabilities": capabilities,
+            "usage": dict(sorted(usage.items())),
+        },
+        "evidence": {
+            "mandatory": outcome.requires_evidence_mcp,
+            "used": evidence_used,
         },
     }
 
@@ -163,21 +196,19 @@ def _mcp_usage_receipt(
 def _record_ocr_result_mcp_usage(
     result_path: Path,
     composition: mcp_config.MCPComposition,
-    *,
-    approval_blocked: bool = False,
+    identity: ReviewIdentity,
 ) -> dict[str, int]:
-    """Verify MCP use and bind its safe review-time receipt to the OCR result."""
+    """Verify MCP use and bind the closed review-time receipt to the result."""
 
     try:
         _payload, metadata = attach_toolkit_metadata(
             result_path,
-            lambda payload: _mcp_usage_receipt(
-                payload, composition, approval_blocked=approval_blocked
-            ),
+            lambda payload: _review_receipt(payload, composition, identity),
         )
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
-    usage = metadata.get("mcp_usage")
+    mcp = metadata.get("mcp")
+    usage = mcp.get("usage") if isinstance(mcp, dict) else None
     return usage if isinstance(usage, dict) else {}
 
 
@@ -313,26 +344,37 @@ def _repository_rule_path(value: str, root: Path) -> str | None:
 
 def _prepare_policy_context(
     refs: ReviewRefs, ocr_args: list[str], artifacts: EvidenceArtifacts
-) -> tuple[str, MergeRequestContext | None, list[str]]:
-    """Capture policy and bounded intent, then materialize repository-owned rules."""
+) -> tuple[ReviewIdentity, list[str]]:
+    """Capture policy identity and selected context, then materialize rules."""
 
+    try:
+        context_mode = parse_review_context_mode(os.environ.get("OCR_REVIEW_CONTEXT_MODE"))
+    except ReviewContextModeError as exc:
+        raise ReviewRunnerError(str(exc)) from exc
     reader = GitRepositoryReader(Path.cwd())
     context = None
+    author_id = None
     if is_merge_request_environment(os.environ):
-        snapshot = acquire_review_snapshot(os.environ, expected_head=refs.head)
+        snapshot = acquire_review_snapshot(
+            os.environ, expected_head=refs.head, include_metadata=context_mode == "metadata"
+        )
         reader.fetch_commit(snapshot.target_sha)
         policy_sha = reader.resolve_commit(snapshot.target_sha)
         context = snapshot.context
+        author_id = snapshot.author_id
     else:
+        if context_mode == "metadata":
+            raise ReviewRunnerError("metadata review context requires a GitLab merge request")
         policy_sha = refs.base
+    identity = ReviewIdentity(refs.head, policy_sha, author_id, context_mode, context)
     rule = _one_option(ocr_args, "--rule")
     if rule is None:
         remove_private_artifact(artifacts.policy_rules)
-        return policy_sha, context, ocr_args
+        return identity, ocr_args
     repository_path = _repository_rule_path(rule, reader.root)
     if repository_path is None:
         remove_private_artifact(artifacts.policy_rules)
-        return policy_sha, context, ocr_args
+        return identity, ocr_args
     try:
         content = reader.read_blob(policy_sha, repository_path)
     except RepositoryEvidenceError as exc:
@@ -341,7 +383,7 @@ def _prepare_policy_context(
         raise ReviewRunnerError("protected-target OCR rule does not exist")
     policy_rules = artifacts.policy_rules
     write_private_bytes(policy_rules, content)
-    return policy_sha, context, _replace_rule_argument(ocr_args, rule, str(policy_rules))
+    return identity, _replace_rule_argument(ocr_args, rule, str(policy_rules))
 
 
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
@@ -353,11 +395,9 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
     try:
         prepare_artifact_directory(artifacts)
-        policy_sha, mr_context, effective_ocr_args = _prepare_policy_context(
-            refs, ocr_args, artifacts
-        )
+        identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
         store = collect_repository_evidence(
-            base_ref=refs.base, head_ref=refs.head, policy_ref=policy_sha
+            base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
         )
         head_sha = store.head.commit_sha if store.head else ""
         identifiers = invocation_identifiers(os.environ)
@@ -365,10 +405,14 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             if not store.add(record):
                 store.add_diagnostic("review invocation evidence was truncated by store limits")
                 break
-        if mr_context is not None and not store.add(merge_request_context_record(mr_context)):
+        if identity.context is not None and not store.add(
+            merge_request_context_record(identity.context)
+        ):
             store.add_diagnostic("merge-request context was truncated by store limits")
         store.write(artifacts.store)
-        composition = mcp_config.build_mcp_composition()
+        composition = mcp_config.build_mcp_composition(
+            profile="gitlab_mr" if identity.mr_author_id is not None else "local"
+        )
         bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
         write_private_text(artifacts.bootstrap, bootstrap)
         mcp_config.apply_mcp_composition(composition)
@@ -418,7 +462,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         usage = _record_ocr_result_mcp_usage(
             result_path,
             composition,
-            approval_blocked=mr_context is not None and mr_context.admitted,
+            identity,
         )
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
