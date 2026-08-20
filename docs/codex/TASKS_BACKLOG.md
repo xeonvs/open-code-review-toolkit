@@ -21,7 +21,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established M5 parsers, handles, schemas, and hostile adapter responses in its candidate inventory. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion and snapshot capabilities without blocking GitLab-first M5. |
-| M5 bounded review-context enrichment (BL-023) | Activated and removed from inactive work | Owner authorization on 2026-08-20 moves the complete release-required v0.7.0 lifecycle, including #107-#111, to `PLANS.md`. Stable delivery will reconcile the durable roadmap and archive. |
+| M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
 
 ## M3 External MCP hardening
 

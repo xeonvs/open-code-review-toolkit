@@ -2,6 +2,59 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-7-0"></a>
+
+## Repository-Complete Plan: M5 Bounded Review-Context Enrichment for 0.7.0
+
+- **Status:** repository work complete; protected stable release and external reconciliation pending
+- **Release classification:** `release-required`
+- **Target stable version:** `0.7.0`; the release PR advances the next development line to `0.7.1`
+- **Tracking:** #107, #108, #109, #110, and #111; feature PR #112
+- **Objective:** deliver BL-023/M5 on the v0.6.3 context-selection foundation without a second review engine: protected context policy, GitLab discussions, brokered external records, an independent store and opaque handles, fixed context tools, OCR-session containment, safe-partial publication DLP, receipt-v4 approval policy, closed pre-execution setup reporting, GitLab CI inheritance uncertainty, OCR 1.9.8 qualification, and complete stable publication.
+
+### Fixed product and trust decisions
+
+- `OCR_REVIEW_CONTEXT_MODE=off` and `metadata` retain the v0.6.3 behavior. `enriched` requires a validated GitLab merge request and an exact-schema `.opencodereview/review-context-policy.json` read only from the captured protected-target SHA; a source-branch policy has no authority.
+- Context policy independently controls retrieval, model, publication, and retention projections. Recognizers only identify bounded candidates. Operator allowlists, protected policy, adapter-owned exact-object authorization, version binding, normalization, DLP, atomic storage, and expiry all pass before an opaque handle is exposed.
+- Operator-managed absolute-command stdio and redirect-free HTTPS adapters share one exact `authorize_and_resolve` protocol. No external schema, search, arbitrary model-selected identifier or URL, setup command, write operation, or adapter network path enters the OCR model loop.
+- Context has a separate owner-only atomic store, budgets, receipts, and run/policy-bound `ctx1_` handles. The existing built-in MCP conditionally adds only fixed `context_list` and `context_get`; the mandatory model-recorded `ocr_toolkit_evidence(action=summary)` call remains independent.
+- GitLab discussions use bounded ordered double snapshots, provider-declared account classes, and run-local pseudonyms. Unknown identities, mutations, omissions, authorization ambiguity, changed canonical duplicates, and required/optional degradation remain visible and cannot prove absence.
+- OCR runs once under an isolated owner-only home. Adapters finish before model execution; cleanup covers success, failure, and interruption and gates publication. There is no debug-retention exception in 0.7.0.
+- Receipt v4 stores only closed identity, completeness, usage, DLP, approval, and cleanup facts. Unsafe publication units yield a safe partial review that retains independently safe findings; unsafe private-only fields are atomically sanitized. Rejected values and locations are destroyed, approval is blocked, and the same closed counts are available in a summary marker and structured local log event without a network telemetry exporter.
+- Any admitted mutable discussion/external record or required-source degradation blocks automatic approval. Fully complete zero-record enrichment may continue through the existing approval gates. Direct external MCP remains a separate privileged, comment-only M3 boundary.
+- Schema identifiers remain exact hostile-boundary discriminators, not persistence-migration promises. Ephemeral policy/store/protocol readers accept only the current exact schema; older receipts retain only safe comment-read compatibility and cannot inherit v4 approval guarantees.
+- Runtime remains standard-library-only on Python 3.12-3.14. GitLab is the only forge implementation; issue, document/wiki, and read-only MCP bridge peers remain provider-neutral synthetic adapter qualifications rather than vendor clients.
+
+### Completed implementation and review
+
+1. [x] Activated the release-required plan, reconciled agent execution discipline, froze the M5 architecture/threat/evidence checkpoint, and qualified the contiguous OCR 1.9.7-to-1.9.8 capability chain. OCR 1.9.8 remains the recommended checksum-verified release; Bedrock/SigV4, native severity, and stderr progress changes require no toolkit or CI adaptation beyond version/digest pins.
+2. [x] Made the toolkit-authored evidence-summary instruction mandatory before repository-derived bootstrap detail and retained the fail-closed zero-call receipt gate.
+3. [x] Implemented exact protected policy parsing, deterministic recognizers, independent projections and budgets, DLP normalization, hostile-readable store, random handles, expiry/replay protection, and immutable-Git/object safety.
+4. [x] Implemented stable GitLab discussion acquisition and both stdio/HTTPS adapter transports with exact authorization, tenant, identity, deadline, streaming, replacement, and unavailable semantics.
+5. [x] Activated enriched mode, fixed handle-only context tools, isolated OCR sessions, receipt v4, safe-partial publication DLP, closed summary/log signals, conservative approval, and cleanup-gated publication while preserving off/metadata compatibility.
+6. [x] Closed #107 with an owner-only exact-schema pre-execution envelope and static hostile-read posting outcome only for the immutable protected-rules-path introduction case.
+7. [x] Closed #110 with a protected GitLab CI rule that preserves unknown effective values across unresolved `extends`/includes until a local override or admitted bounded compiled fact proves them.
+8. [x] Updated public configuration, operations, GitLab, security, migration, context, compatibility, strategy, roadmap, backlog, threat, evidence, release, and development documentation plus private-safe examples and Towncrier notes.
+9. [x] Completed the full range/commit/architecture/privacy/license/manual attack-path review. The final real OCR 1.9.8 run recorded 44 mandatory evidence calls and 21 findings. Independent audit fixed 19 validated boundary defects and rejected two suggestions that contradicted the captured-policy and optional-degradation contracts. Per owner direction there was no second OCR run and no repeated Codex Security scan.
+10. [x] Extended deterministic attacker fixtures beyond the observed findings across type confusion and recursion; ordering, duplicates, replacement and budgets; no-read/timeout/partial frames and pagination mutation; replay/expiry/wrong-run/policy; tenant/service confusion; hidden HTML/entity/Unicode/Markdown source forms; marker smuggling; executable resolution; and resource limits. Explicit non-claims remain for lying adapters, same-owner host compromise, semantic paraphrase, and model judgment.
+11. [x] Reduced local history to signed logical commits, pushed the exact accepted tree, passed all required feature-PR checks with no review threads, and squash-merged feature PR #112 as `e0873820f4122dae07e3026a4e5bfd609eb22538`; its tree equals the reviewed feature tree.
+12. [x] Independently verified TestPyPI development run `32376627735` and version `0.7.0.dev62`: workflow and registry wheel SHA-256 `447723dc571c9618109b04d728801f1b81b65ea124bbbf017a306ca47ad50ae2`, sdist SHA-256 `1289297b8ade78ed9eb14fdf0ccb89de3a2f496244020c50ac84a3cd0b4bb65c`; exact publisher/subject/commit/workflow/ref/run provenance and clean registry wheel/sdist CLI plus stdio MCP smokes pass.
+13. [ ] Merge exact protected `Release v0.7.0`, then independently verify stable TestPyPI/PyPI/workflow/GitHub Release bytes, provenance and attestations, Python 3.12-3.14 installs, annotated tag target, immutable Release and complete asset set, release receipt identities, Actions-owned issue receipts, and closed #107-#111.
+
+### Requirement and boundary evidence
+
+- The production-owner matrix in `docs/engineering/test_evidence_matrix.md` records protected Git, policy, recognizer, discussion, adapter, broker/store, handle/MCP, result/publication, approval, cleanup, setup-status, and CI-uncertainty claims. `docs/security.md` and `docs/engineering/m5_context_contracts.md` record the assets, attackers, data flow, trust transitions, controls, residual risks, schema rationale, and OCR capability decision.
+- Focused post-OCR attacker remediation passes 334 tests plus 137 subtests. Full local quality passes 961 tests plus 176 subtests with 81.79% coverage, Ruff format/check, strict mypy, and zero medium/high Bandit findings; the same full tests pass on Python 3.12 and 3.13 as well as the quality-owner Python 3.14 run.
+- OCR manifest and lock validation, dependency audit, pinned complete-history Gitleaks, privacy/license and archive/package-content scans, reproducible wheel/sdist, Twine, clean installed-artifact CLI/MCP smokes, commit signatures, linear history, and `git diff --check` pass.
+- The real OCR run proves mandatory evidence use, fixed tool advertisement, one-pass completion, and success cleanup at the reviewed pre-remediation head. It made zero `context_list`/`context_get` calls; corrected DLP and context-tool behavior are therefore claimed from production-owner deterministic/real-boundary fixtures and installed artifacts, not a second real-model observation.
+- Model-facing context exposes no upstream identifier or personal display identity. Retrieval/model/publication/retention DLP remain independent; context budgets cannot evict evidence; adapters/network are absent from the model loop; previous valid comments survive filtering/pre-execution failures; optional degradation cannot prove absence; mutable context and required degradation cannot approve.
+
+### Repository-complete release checkpoint
+
+- This release PR is the final repository mutation. It sets `.release-version=0.7.0`, deterministic source epoch `1787233864` (one second after the feature squash merge), `.next-version=0.7.1`, exact sorted issues `[107, 108, 109, 110, 111]`, generated Towncrier notes, stable example pins, and the roadmap/strategy/backlog/README establishment state. It consumes only the M5/#107-#111/#112 fragments and resets `PLANS.md`.
+- Release preparation passes the complete 961-test/176-subtest quality gate, focused release/documentation contracts, OCR manifest and lock validation, reproducible packaging, Twine, exact metadata/private-path archive review, and clean wheel/sdist CLI plus stdio MCP smokes on Python 3.12, 3.13, and 3.14. Two source-epoch-controlled builds are byte-identical: wheel SHA-256 `b1302ee18ae47927038ff2f07c10996157d3583c7d12d1be59f36eeac59e41de`, sdist SHA-256 `b41d21ab75b11ef9763a1f7bc535ad5b732805ff3ae6cb755cbd166052ac73fd`.
+- Stable TestPyPI/PyPI bytes, GitHub attestations, registry provenance, annotated `v0.7.0` tag, immutable GitHub Release and assets, `release-receipt.json`, supported-Python registry installs, Actions-owned issue receipts, issue closure, and final clean-main synchronization do not exist yet and remain post-merge external gates.
+
 <a id="plan-toolkit-0-6-3"></a>
 
 ## Repository-Complete Plan: toolkit 0.6.3 context approval and GitLab write reconciliation
