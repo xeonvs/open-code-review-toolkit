@@ -58,7 +58,7 @@ ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- ... 
 ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 ```
 
-See the fully synthetic [`examples/gitlab/ocr-review.gitlab-ci.yml`](examples/gitlab/ocr-review.gitlab-ci.yml), the [GitLab setup guide](docs/gitlab.md), and [GitLab review operations](docs/operations.md).
+See the [`examples/gitlab/ocr-review.gitlab-ci.yml`](examples/gitlab/ocr-review.gitlab-ci.yml) example, the [GitLab setup guide](docs/gitlab.md), and [GitLab review operations](docs/operations.md).
 
 ## Configuration and safety
 
