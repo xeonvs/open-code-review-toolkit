@@ -21,6 +21,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and adds future M5 parsers, handles, schemas, and hostile adapter responses to its candidate inventory. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion and snapshot capabilities without blocking GitLab-first M5. |
+| M5 bounded review-context enrichment (BL-023) | Activated and removed from inactive work | Owner authorization on 2026-08-20 moves the complete release-required v0.7.0 lifecycle, including #107-#111, to `PLANS.md`. Stable delivery will reconcile the durable roadmap and archive. |
 
 ## M3 External MCP hardening
 
@@ -39,63 +40,6 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 - **Exclusions:** Resource authorization by token presence, automatic reference discovery, writes, generic web access, or treating a permanent token as OAuth lifecycle support.
 - **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
 - **Release classification expectation:** `release-required` once public authorization behavior is selected.
-
-## M5 Bounded review-context enrichment
-
-### BL-023: Deliver bounded review-context enrichment
-
-- **Status:** ready
-- **Priority:** high
-- **Roadmap theme:** M5 Bounded review-context enrichment
-- **Dependencies:** Established M1 evidence/MCP architecture, established M3 direct-composition safe-use envelope, established M4 protected-target policy/guidance boundary, and exact qualification of the OCR capabilities consumed by implementation.
-- **Activation trigger:** Owner authorizes M5 implementation. The synthetic pilot must cover forge discussions and one external adapter class; BL-011/M3 are complete. BL-012 does not block activation when reviewed static credentials or a stdio proxy suffice.
-- **Goal:** Deliver one provider-neutral context lifecycle without a second review engine.
-- **Release classification expectation:** Work package A architecture/threat checkpoint is `no-release`; runtime implementation is `release-required` and closes through one stable product delivery.
-
-#### A — Architecture, threats, and OCR capability decision
-
-- Refine contracts, exact OCR requirements, current/upstream gates, and permitted single-pass model semantics before runtime code; map the planned threat model and evidence traceability to future production owners.
-- Separate retrieval, model-egress, publication, and retention decisions. Decide which model-dependent semantics are safe in one review pass and which require a native OCR contextual-adjudication API.
-- Cover prompt/indirect injection, BOLA/confused deputy, service-identity mismatch, identity spoofing, poisoning, arbitrary URL/ID traversal, SSRF, malicious schemas/responses, oversized content, denial of wallet, TOCTOU/replay, omission, Unicode/Markdown deception, PII/secret bypass, output laundering, approval/suppression manipulation, existence oracles, and persistent-session leakage.
-- Do not implement a second toolkit model loop or merge two independent model reviews.
-
-#### B — Common contracts, protected policy, and recognizers
-
-- Define closed schemas for context records, completeness, receipts, independent budgets, and handles; keep retrieval, model egress, publication, and retention as four separate decisions.
-- Use `.opencodereview/review-context-policy.json`; absence means disabled. Read it only from the captured protected-target SHA so source changes cannot expand access.
-- Admit forge fields, provider-declared author classes, origins, tenants/resource classes, projections, budgets, and retention independently. Preserve complete-record and per-thread/age/count/byte/character/aggregate bounds. Keep names, email, avatars, and profile URLs out of model context; use run-local pseudonyms.
-- Deterministic reference grammars create candidates only. Policy admission is not object authorization. Unknown identity, authorization, version, DLP, completeness, or OCR capability fails closed and remains visible.
-- Keep context budgets independent of repository evidence. Retrieval, model egress, publication, and retention are four distinct policy decisions.
-
-After B, C and D may proceed in parallel.
-
-#### C — Forge discussion acquisition
-
-- Acquire bounded point-in-time snapshots with provider-declared user, automation/service, system, toolkit-bot, or unknown account class; thread/reply identity and order; edit/version/timestamp; anchor; resolution; stale/outdated state; pagination consistency; and visible partial/mutated/unavailable outcomes.
-- Preserve existing lifecycle commands, discussion ownership, and suppression as separate consumers. Context projection cannot broaden any of them.
-- Any admitted mutable discussion or external context makes automatic approval ineligible.
-
-#### D — Reference broker and adapters
-
-- Require adapter-owned object authorization for tenant, canonical object, operation, and fields before retrieval and before an opaque handle is minted.
-- Normalize and DLP-project bounded responses, then commit them atomically to a run-local context store. Mint an unguessable handle only after successful storage.
-- Bind the handle to run, adapter, tenant, canonical object, allowed field projection, version/ETag or digest, policy version, expiry, and stored record without exposing the upstream ID.
-- Let the model list/read only minted handles. No generic search, arbitrary URL/ID fetch, redirect, traversal, recursion, or write is available.
-- Qualify one synthetic issue or document adapter class in the pilot. Native APIs and arbitrary MCPs remain behind the broker and dedicated least-privilege credentials.
-
-#### E — OCR execution and publication containment
-
-- Depends on B, C, and D. Run OCR with an isolated owner-only home, deterministic session cleanup, and independently bounded context arguments/results. If containment or cleanup fails, block publication unless an explicit secure-debug mode was agreed before the run.
-- Project fixed toolkit-authored `context_list` and `context_get` descriptions and closed schemas through the existing toolkit MCP process. The M5 model loop has no upstream search, arbitrary ID/URL, external MCP schema, or external network traversal.
-- Minimize model egress to policy-admitted data. Publication validation/DLP is separate and cannot reverse disclosure that already reached the model; uncertainty blocks the affected projection.
-- Preserve objective findings, calibrate or omit assumption-dependent findings only when OCR can do so safely, keep ambiguity visible, and make partial/mutated/unavailable context incapable of proving absence. Existing suppression, `/ocr` commands, and discussion ownership remain separate consumers.
-- External context cannot change policy, tools, permissions, lifecycle commands, suppression, posting authority, or approval. Use a native OCR dependency instead of a toolkit-driven second review pass if separate adjudication is required.
-
-#### F — Provider-neutral qualification and release
-
-- Qualify installed wheel and sdist artifacts, real checksum-verified OCR, stdio protocol, persistence/cleanup, hostile providers, result/publication containment, package/docs, stable publication, and external release readback.
-- Exercise an issue-tracker adapter, documentation/wiki adapter, and arbitrary read-only MCP adapter only behind the broker boundary.
-- Prove expected automatic outcomes, not an imagined interactive author question, and retain explicit claim limits for model-dependent behavior.
 
 ## M6 Profiles and quality measurement
 
