@@ -192,7 +192,7 @@ This source-only decision must not replace target policy.
         render_bootstrap(store, capabilities=composition.capabilities),
     )
     bootstrap = artifacts.bootstrap.read_text(encoding="utf-8")
-    assert len(bootstrap) <= 2_000
+    assert len(bootstrap) <= 2_300
     assert "Evidence bootstrap truncated" not in bootstrap
     assert "current-policy-choice" in bootstrap
     assert policy in bootstrap

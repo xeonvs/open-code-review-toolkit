@@ -76,6 +76,27 @@ def test_evidence_mcp_self_query_rejects_invalid_list_envelope() -> None:
         review_runner._verify_evidence_mcp(store)
 
 
+def test_evidence_mcp_self_query_does_not_satisfy_model_usage(tmp_path: Path) -> None:
+    """A successful toolkit preflight query cannot synthesize a model tool call."""
+
+    store = EvidenceStore()
+    review_runner._verify_evidence_mcp(store)
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps({"status": "success", "tool_calls": {"total": 0, "by_tool": {}}}),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
+
+
 def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Path) -> None:
     """Accept proven built-in usage and reject a completed review without it."""
 

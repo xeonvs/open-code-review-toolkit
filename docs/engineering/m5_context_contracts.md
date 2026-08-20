@@ -37,7 +37,7 @@ Every source uses the exact projection object:
 
 ```json
 {
-  "retrieve": ["descriptor", "text"],
+  "retrieve": ["count", "descriptor", "digest", "expiry", "state", "text", "version"],
   "model": ["descriptor", "text"],
   "publish": ["descriptor"],
   "retain": ["state", "count", "digest", "version", "expiry"]
@@ -99,6 +99,16 @@ Automatic approval preserves every existing manifest, coverage, warning, omissio
 The 1.9.7 and 1.9.8 adjacent releases pass the repository-owned Linux contract probes and official checksum verification. Reviewed changes show additive provider/install behavior in 1.9.7. In 1.9.8, Bedrock/SigV4 is an upstream provider boundary the toolkit does not configure; native severity changes upstream skill guidance while the structured result fields remain compatible; human-audience JSON/SARIF progress moves to stderr while toolkit execution uses agent audience. The checksum-verified Darwin arm64 artifact repeats the required version, flag, preview, result, manifest, budget, target-rule, and session-side-effect probes.
 
 Reviewed Go MCP behavior continues to initialize and discover multiple tools in one review and to persist session material below `HOME/.opencodereview/sessions`. These facts support the fixed multi-tool server and isolated-home design. They do not prove M5 until installed-artifact and real-OCR tests exercise the toolkit production path.
+
+| Release capability | Toolkit consumption | Runtime/CI impact | Required adaptation |
+| --- | --- | --- | --- |
+| 1.9.7 Gemini provider | Not selected or configured by the toolkit | None | None |
+| 1.9.7 mirror-aware upstream installers | Toolkit neither installs nor downloads OCR | Version/checksum pin only | None |
+| 1.9.8 Bedrock/SigV4 provider | Not selected or configured by the toolkit | None; no new toolkit credential boundary | None |
+| 1.9.8 native severity in upstream skill | Toolkit already consumes tolerant structured severity/category result fields | No schema or posting change | None |
+| 1.9.8 JSON/SARIF human-audience progress on stderr | Toolkit invokes `--audience agent` and consumes the result file | No logging or parsing change | None |
+
+This chain therefore has no CI behavior change beyond its OCR version and asset digest pins. A future qualification that changes CI behavior must carry a separate Towncrier entry naming that impact.
 
 ## Explicit non-claims
 
