@@ -77,7 +77,7 @@ Ansible Galaxy requirements use the same immutable-object boundary. Relative inc
 
 ## Planned and disabled M5 boundary
 
-The 0.6.3 foundation implements only closed context selection, bounded metadata completeness, receipt/approval identity, and GitLab-MR MCP topology. The complete M5 enrichment boundary remains planned: `.opencodereview/review-context-policy.json` is not read today, discussions and references are not acquired as model context, no context broker/store/handles exist, and `context_list`/`context_get` are unavailable. The following are requirements for future BL-023 implementation, **planned / not proven** until runtime and release qualification.
+The 0.6.3 foundation implements only closed context selection, bounded metadata completeness, receipt/approval identity, and GitLab-MR MCP topology. The complete M5 enrichment boundary remains planned: `.opencodereview/review-context-policy.json` is not read today, discussions and references are not acquired as model context, no context broker/store/handles exist, and `context_list`/`context_get` are unavailable. The exact v0.7.0 schemas, ownership, and capability decisions are frozen in the [M5 context checkpoint](engineering/m5_context_contracts.md). The following remain **planned / not proven** until runtime and release qualification.
 
 ### Planned data flow and trust transitions
 

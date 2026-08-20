@@ -14,7 +14,7 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 
 - `PLANS.md` - active or blocked repository work and its release classification.
 - `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` - durable direction and outcome state.
-- `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries.
+- `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries; `docs/engineering/m5_context_contracts.md` owns the active v0.7.0 context checkpoint.
 - `docs/development.md` - implementation workflow, boundary checklists, and local validation.
 - `docs/release.md` - release classification, authorization, publication, and archival lifecycle.
 - `docs/codex/TASKS_BACKLOG.md` - inactive work with activation conditions.
