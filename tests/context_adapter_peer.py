@@ -36,7 +36,7 @@ def main() -> int:
         "version": "version-1",
         "expiry": 200,
         "record": {
-            "descriptor": "issue",
+            "descriptor": request["resource_class"],
             "digest": "a" * 64,
             "expiry": 200,
             "state": "open",
@@ -60,6 +60,12 @@ def main() -> int:
         response["record"]["text"] = "person@example.invalid"  # type: ignore[index]
     elif mode == "schema":
         response["record"]["provider_tool_schema"] = {"write": True}  # type: ignore[index]
+    elif mode in {"compiled_true", "compiled_false"}:
+        effective = "true" if mode == "compiled_true" else "false"
+        response["record"]["text"] = (  # type: ignore[index]
+            "Bounded compiled GitLab job fact for synthetic review_job: "
+            f"effective allow_failure is {effective}."
+        )
     output = json.dumps(response, sort_keys=True)
     if mode == "partial":
         sys.stdout.write(output[: len(output) // 2])

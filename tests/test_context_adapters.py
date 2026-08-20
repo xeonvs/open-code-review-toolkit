@@ -503,3 +503,65 @@ def test_document_and_read_only_mcp_proxies_share_only_the_fixed_protocol(name: 
     )
 
     assert response.status == "admitted"
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("compiled_true", "effective allow_failure is true"),
+        ("compiled_false", "effective allow_failure is false"),
+    ],
+)
+def test_synthetic_compiled_gitlab_fact_uses_the_bounded_document_adapter(
+    mode: str, expected: str
+) -> None:
+    value = policy_value()
+    reference_value = value["references"][0]
+    assert isinstance(reference_value, dict)
+    reference_value.update(
+        {
+            "adapter": "compiled_ci",
+            "tenant": "synthetic",
+            "resource_class": "document",
+            "recognizer": {"type": "explicit"},
+        }
+    )
+    policy = parse_policy(encoded_policy(value))
+    reference = policy.references[0]
+    config = parse_adapter_config(
+        json.dumps(
+            [
+                {
+                    "name": "compiled_ci",
+                    "type": "stdio",
+                    "tenants": ["synthetic"],
+                    "resource_classes": ["document"],
+                    "command": sys.executable,
+                    "args": ["-I", str(PEER)],
+                    "env_from": ["SYNTHETIC_ADAPTER_MODE"],
+                }
+            ]
+        )
+    )[0]
+
+    result = acquire_external_records(
+        policy=policy,
+        adapters=[config],
+        selections=[
+            CandidateSelection(
+                policy=reference,
+                candidate=ReferenceCandidate(
+                    "document", "[[context:document:review-job]]", "explicit"
+                ),
+            )
+        ],
+        run_id=RUN_ID,
+        now=100,
+        environment={"SYNTHETIC_ADAPTER_MODE": mode},
+    )
+
+    assert result.required_degraded is False
+    assert len(result.records) == 1
+    assert result.records[0].resource_class == "document"
+    text = result.records[0].projections["model"]["text"]
+    assert isinstance(text, str) and expected in text

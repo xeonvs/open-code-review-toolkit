@@ -1,0 +1,8 @@
+include:
+  - project: synthetic/templates
+    ref: "1111111111111111111111111111111111111111"
+    file: /review.yml
+
+review_job:
+  extends: .shared_review_job
+  stage: review

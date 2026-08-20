@@ -118,6 +118,12 @@ Reviewed Go MCP behavior continues to initialize and discover multiple tools in 
 
 This chain therefore has no CI behavior change beyond its OCR version and asset digest pins. A future qualification that changes CI behavior must carry a separate Towncrier entry naming that impact.
 
+## GitLab CI inheritance uncertainty qualification
+
+The toolkit-owned GitLab CI rule keeps `allow_failure`, `rules`, `needs`, `image`, `before_script`, `variables`, and `environment` unknown across unresolved `extends` or includes. Only an explicit local override or an admitted bounded effective/compiled fact can prove one of those values. Findings, severity, and replacement suggestions cannot depend on an inferred GitLab default. This changes review guidance only: it adds no include fetch, mutable external reference, cross-repository evidence read, or production compiled-config API.
+
+Four synthetic qualification cases distinguish an unresolved parent, a brokered document fact proving effective `allow_failure: true`, a brokered fact proving `false` under an advisory project policy, and an explicit local `false`. Real stdio adapter/broker tests prove the two compiled facts cross only the fixed M5 document protocol. The exact checksum-verified OCR 1.9.8 Darwin arm64 binary (`ace8544c12992cefecec7f0d22265ff5473078ea062f01d682ca1b08691ff0f9`) completed a synthetic unresolved-parent review and received the full uncertainty rule plus every closed field name in its actual request. A deterministic local model peer selected `task_done`, so the observed zero-finding result proves delivery and compatibility, not reliable model judgment; each expected finding/no-finding outcome remains a qualification expectation rather than a deterministic toolkit guarantee.
+
 ## Explicit non-claims
 
 The toolkit cannot make a lying adapter truthful, constrain credentials broader than their service identity, protect same-owner artifacts from a host compromise, reverse model egress, detect arbitrary semantic paraphrase, or make model judgment deterministic. Operator credentials and adapter services must enforce least privilege and auditable object authorization independently.

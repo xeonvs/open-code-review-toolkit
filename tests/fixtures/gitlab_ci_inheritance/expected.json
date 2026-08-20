@@ -1,0 +1,30 @@
+{
+  "schema_version": "ocr.gitlab-ci-inheritance-qualification/v1",
+  "project_policy": "review_job must remain advisory",
+  "scenarios": [
+    {
+      "id": "unresolved_parent",
+      "file": "unresolved-parent.yml",
+      "compiled_fact": null,
+      "expected": "unknown_no_finding"
+    },
+    {
+      "id": "compiled_true",
+      "file": "compiled-true.yml",
+      "compiled_fact": "effective allow_failure is true",
+      "expected": "proven_no_finding"
+    },
+    {
+      "id": "compiled_false_advisory",
+      "file": "compiled-false-advisory.yml",
+      "compiled_fact": "effective allow_failure is false",
+      "expected": "finding_allowed"
+    },
+    {
+      "id": "local_false",
+      "file": "local-false.yml",
+      "compiled_fact": null,
+      "expected": "finding_allowed"
+    }
+  ]
+}

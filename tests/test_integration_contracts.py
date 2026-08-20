@@ -44,6 +44,74 @@ def test_project_rules_extend_instead_of_replacing_ocr_system_rules() -> None:
     assert all(rule["merge_system_rule"] is True for rule in rules[:3])
 
 
+def test_gitlab_ci_rule_preserves_unresolved_inheritance_uncertainty() -> None:
+    payload = json.loads((HELPER_DIR / "rules.json").read_text(encoding="utf-8"))
+    gitlab_rule = next(
+        rule["rule"] for rule in payload["rules"] if ".gitlab-ci.yml" in rule["path"]
+    )
+    fixture_root = PROJECT_ROOT / "tests" / "fixtures" / "gitlab_ci_inheritance"
+    qualification = json.loads((fixture_root / "expected.json").read_text(encoding="utf-8"))
+
+    for field in (
+        "allow_failure",
+        "rules",
+        "needs",
+        "image",
+        "before_script",
+        "variables",
+        "environment",
+    ):
+        assert field in gitlab_rule
+    for contract in (
+        "effective value as unknown",
+        "explicit local override",
+        "admitted bounded effective/compiled fact",
+        "Do not infer a GitLab default",
+        "defect, severity, or replacement suggestion",
+    ):
+        assert contract in gitlab_rule
+
+    assert qualification == {
+        "schema_version": "ocr.gitlab-ci-inheritance-qualification/v1",
+        "project_policy": "review_job must remain advisory",
+        "scenarios": [
+            {
+                "id": "unresolved_parent",
+                "file": "unresolved-parent.yml",
+                "compiled_fact": None,
+                "expected": "unknown_no_finding",
+            },
+            {
+                "id": "compiled_true",
+                "file": "compiled-true.yml",
+                "compiled_fact": "effective allow_failure is true",
+                "expected": "proven_no_finding",
+            },
+            {
+                "id": "compiled_false_advisory",
+                "file": "compiled-false-advisory.yml",
+                "compiled_fact": "effective allow_failure is false",
+                "expected": "finding_allowed",
+            },
+            {
+                "id": "local_false",
+                "file": "local-false.yml",
+                "compiled_fact": None,
+                "expected": "finding_allowed",
+            },
+        ],
+    }
+    scenario_files = {
+        item["id"]: (fixture_root / item["file"]).read_text(encoding="utf-8")
+        for item in qualification["scenarios"]
+    }
+    assert "extends: .shared_review_job" in scenario_files["unresolved_parent"]
+    assert "allow_failure" not in scenario_files["unresolved_parent"]
+    assert "allow_failure" not in scenario_files["compiled_true"]
+    assert "allow_failure" not in scenario_files["compiled_false_advisory"]
+    assert "allow_failure: false" in scenario_files["local_false"]
+
+
 def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
     """Freeze the intentional lint prerequisite and manual diagnostic boundary."""
 

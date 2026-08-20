@@ -22,7 +22,7 @@
     },
     {
       "path": "{.gitlab-ci.yml,.gitlab/**/*.yml,.gitlab/**/*.yaml}",
-      "rule": "Review pipeline triggers, stage gating, token exposure, artifact leakage, failure behavior, and compatibility with the configured CI runtime.",
+      "rule": "Review pipeline triggers, stage gating, token exposure, artifact leakage, failure behavior, and compatibility with the configured CI runtime. Preserve uncertainty across GitLab CI inheritance: for allow_failure, rules, needs, image, before_script, variables, and environment, treat an effective value as unknown when extends or includes remain unresolved and neither an explicit local override nor an admitted bounded effective/compiled fact proves it. Do not infer a GitLab default or publish a defect, severity, or replacement suggestion that depends on that inference. Review proven local overrides and bounded effective/compiled facts normally; when project policy requires advisory review, a proven effective allow_failure: false may support a finding.",
       "merge_system_rule": true
     },
     {
