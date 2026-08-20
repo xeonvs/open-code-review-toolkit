@@ -16,8 +16,9 @@ from dataclasses import dataclass
 from io import BufferedWriter
 from pathlib import Path
 
-from ocr_toolkit import mcp_config
+from ocr_toolkit import configure, mcp_config
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
 from ocr_toolkit.context.adapters import ContextAdapterError, parse_adapter_config
 from ocr_toolkit.context.broker import (
     BrokerResult,
@@ -61,6 +62,13 @@ from ocr_toolkit.ocr_result import (
     OcrResultTooLarge,
     attach_toolkit_metadata,
     inspect_ocr_result,
+)
+from ocr_toolkit.pre_execution import (
+    PROTECTED_TARGET_RULE_PATH_PENDING,
+    STATUS_SCHEMA,
+    PreExecutionStatus,
+    PreExecutionStatusError,
+    write_pre_execution_status,
 )
 from ocr_toolkit.providers.gitlab import (
     GitLabProviderError,
@@ -114,6 +122,12 @@ class EnrichmentReceipt:
     required_degraded: bool
     mutable_admitted: bool
     forbidden_publication: tuple[str, ...]
+
+
+def _write_isolated_runtime_config() -> None:
+    """Rebuild only validated runtime settings inside the fresh OCR home."""
+
+    update_ocr_config(configure.build_config_updates())
 
 
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
@@ -424,6 +438,35 @@ def _repository_rule_path(value: str, root: Path) -> str | None:
         raise ReviewRunnerError("OCR --rule repository path is unsafe") from exc
 
 
+def _record_rules_path_setup(
+    reader: GitRepositoryReader,
+    artifacts: EvidenceArtifacts,
+    *,
+    refs: ReviewRefs,
+    policy_sha: str,
+    repository_path: str,
+) -> bool:
+    """Record only a bounded regular-blob introduction without reading source content."""
+
+    if reader.object_at(refs.base, repository_path) is not None:
+        return False
+    source = reader.object_at(refs.head, repository_path)
+    if source is None:
+        return False
+    reader.bounded_regular_blob_size(source)
+    write_pre_execution_status(
+        artifacts.pre_execution_status,
+        PreExecutionStatus(
+            schema_version=STATUS_SCHEMA,
+            reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+            diff_base_sha=refs.base,
+            source_sha=refs.head,
+            policy_sha=policy_sha,
+        ),
+    )
+    return True
+
+
 def _prepare_policy_context(
     refs: ReviewRefs, ocr_args: list[str], artifacts: EvidenceArtifacts
 ) -> tuple[ReviewIdentity, list[str]]:
@@ -466,6 +509,21 @@ def _prepare_policy_context(
     except RepositoryEvidenceError as exc:
         raise ReviewRunnerError("protected-target OCR rule is unavailable or unsafe") from exc
     if content is None:
+        if author_id is not None:
+            try:
+                setup_pending = _record_rules_path_setup(
+                    reader,
+                    artifacts,
+                    refs=refs,
+                    policy_sha=policy_sha,
+                    repository_path=repository_path,
+                )
+            except (PreExecutionStatusError, RepositoryEvidenceError) as exc:
+                raise ReviewRunnerError(
+                    "protected-target OCR rule does not exist and the source candidate is unsafe"
+                ) from exc
+            if setup_pending:
+                raise ReviewRunnerError("protected-target OCR rule path setup is pending")
         raise ReviewRunnerError("protected-target OCR rule does not exist")
     policy_rules = artifacts.policy_rules
     write_private_bytes(policy_rules, content)
@@ -676,9 +734,14 @@ def _publication_dlp(path: Path, *, forbidden: tuple[str, ...]) -> None:
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
+    artifacts = repository_artifacts()
+    try:
+        prepare_artifact_directory(artifacts)
+        remove_private_artifact(artifacts.pre_execution_status)
+    except OSError as exc:
+        raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
     refs = _immutable_review_refs(_review_refs(ocr_args))
     _reject_owned_background(ocr_args)
-    artifacts = repository_artifacts()
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
     previous_home = os.environ.get("HOME")
     session_home = Path(tempfile.mkdtemp(prefix="ocr-toolkit-session-"))
@@ -689,7 +752,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     enrichment: EnrichmentReceipt | None = None
     try:
         try:
-            prepare_artifact_directory(artifacts)
+            _write_isolated_runtime_config()
             identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
             store = collect_repository_evidence(
                 base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
@@ -723,7 +786,9 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             ContextContractError,
             ContextStoreError,
             EvidenceStoreError,
+            OCRConfigError,
             OSError,
+            configure.OCRRuntimeConfigError,
             GitLabProviderError,
             RepositoryEvidenceError,
             ValueError,

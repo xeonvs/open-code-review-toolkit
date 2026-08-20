@@ -32,6 +32,12 @@ from ocr_toolkit.posting import (
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.posting.transaction import PostingTransaction
+from ocr_toolkit.pre_execution import (
+    PROTECTED_TARGET_RULE_PATH_PENDING,
+    STATUS_SCHEMA,
+    PreExecutionStatus,
+    write_pre_execution_status,
+)
 from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
@@ -1545,6 +1551,112 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("\\/merge", notes[0])
         self.assertNotIn("\n/merge", notes[0])
+
+    def test_setup_pending_status_selects_only_static_text_and_preserves_exit_modes(self) -> None:
+        for emoji, strict, expected_exit in (("true", "false", 0), ("false", "true", 1)):
+            with self.subTest(emoji=emoji, strict=strict), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                directory = root / ".review-context"
+                directory.mkdir(mode=0o700)
+                status_path = directory / "pre-execution-status.json"
+                write_pre_execution_status(
+                    status_path,
+                    PreExecutionStatus(
+                        schema_version=STATUS_SCHEMA,
+                        reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                        diff_base_sha="a" * 40,
+                        source_sha="b" * 40,
+                        policy_sha="c" * 40,
+                    ),
+                )
+                stderr_path = root / "stderr.log"
+                stderr_path.write_text("/merge repository-controlled details\n", encoding="utf-8")
+                notes: list[tuple[str, str]] = []
+
+                def capture_note(
+                    _config: gitlab.GitLabConfig,
+                    title: str,
+                    body: str,
+                    _transaction: PostingTransaction,
+                ) -> dict[str, int]:
+                    notes.append((title, body))
+                    return {"id": 1}
+
+                settings.post_emoji.cache_clear()
+                with (
+                    patched_env(
+                        CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                        CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                        OCR_POST_EMOJI=emoji,
+                        OCR_POST_ERROR_DETAILS="1",
+                        OCR_STRICT_POSTING=strict,
+                    ),
+                    patched_attr(
+                        workflow,
+                        "repository_artifacts",
+                        lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                    ),
+                    patched_attr(workflow, "post_review_note_bounded", capture_note),
+                    patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                ):
+                    exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
+
+                self.assertEqual(exit_code, expected_exit)
+                self.assertEqual(len(notes), 1)
+                self.assertEqual("⏳" in notes[0][0], emoji == "true")
+                self.assertIn("did not run", notes[0][1])
+                self.assertIn("Previous Open Code Review comments were preserved", notes[0][1])
+                self.assertNotIn("/merge", notes[0][1])
+                self.assertNotIn("rules.json", notes[0][1])
+
+    def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
+        notes: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".review-context"
+            directory.mkdir(mode=0o700)
+            status_path = directory / "pre-execution-status.json"
+            write_pre_execution_status(
+                status_path,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                    diff_base_sha="a" * 40,
+                    source_sha="b" * 40,
+                    policy_sha="c" * 40,
+                ),
+            )
+            stderr_path = root / "stderr.log"
+            stderr_path.write_text("generic details\n", encoding="utf-8")
+
+            def capture_note(
+                _config: gitlab.GitLabConfig,
+                _title: str,
+                body: str,
+                _transaction: PostingTransaction,
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
+
+            with (
+                patched_env(
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="d" * 40,
+                    OCR_POST_ERROR_DETAILS="1",
+                ),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture_note),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("result may be partial", notes[0])
+        self.assertIn("generic details", notes[0])
 
 
 class PostingSummaryTests(unittest.TestCase):

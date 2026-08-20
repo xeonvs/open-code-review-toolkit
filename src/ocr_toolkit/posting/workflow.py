@@ -15,6 +15,7 @@ from typing import Any
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_RESULT_KEY,
     OcrResultMalformed,
@@ -85,6 +86,12 @@ from ocr_toolkit.posting.suggestions import (
     safe_repository_path,
 )
 from ocr_toolkit.posting.transaction import PostingTransaction
+from ocr_toolkit.pre_execution import (
+    PROTECTED_TARGET_RULE_PATH_PENDING,
+    PreExecutionStatus,
+    PreExecutionStatusError,
+    read_pre_execution_status,
+)
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
@@ -1154,6 +1161,20 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
     instead of a confusing negative number.
     """
 
+    try:
+        status_path = repository_artifacts().pre_execution_status
+        source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
+        diff_base_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
+        status = read_pre_execution_status(
+            status_path,
+            expected_diff_base_sha=diff_base_sha,
+            expected_source_sha=source_sha,
+        )
+    except (OSError, PreExecutionStatusError, RuntimeError):
+        status = None
+    if status is not None:
+        return post_pre_execution_status(config, status)
+
     transaction = PostingTransaction()
     details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
     details = read_stderr_excerpt(stderr_path) if details_enabled else ""
@@ -1186,6 +1207,34 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
     if not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
 
+    return 1 if strict_posting() else 0
+
+
+def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
+    """Render static toolkit text for one already hostile-validated closed outcome."""
+
+    if status.reason != PROTECTED_TARGET_RULE_PATH_PENDING:
+        raise ValueError("unsupported pre-execution status")
+    transaction = PostingTransaction()
+    heading = (
+        "**⏳ Open Code Review setup is pending**"
+        if post_emoji()
+        else "**Open Code Review setup is pending**"
+    )
+    body = (
+        "This merge request adds the repository rules file configured for Open Code Review. "
+        "Open Code Review did not run because this file was not present in the protected-target "
+        "commit captured for this pipeline. This is expected while the rules path is being "
+        "introduced. Once valid rules are available at this path in the protected target branch, "
+        "subsequent merge requests can run a full review.\n\n"
+        "No review findings were produced. Previous Open Code Review comments were preserved."
+    )
+    response = post_review_note_bounded(config, heading, body, transaction)
+    if response is None:
+        print("Failed to create OCR setup-pending note.", file=sys.stderr)
+        return posting_failure_exit(config, None, transaction)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
     return 1 if strict_posting() else 0
 
 

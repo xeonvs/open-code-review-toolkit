@@ -266,9 +266,25 @@ class GitRepositoryReader:
         entry = self.object_at(ref, path)
         if entry is None:
             return None
+        size = self.bounded_regular_blob_size(entry)
+        content = self._run(["cat-file", "blob", entry.object_sha], text=False)
+        assert isinstance(content.stdout, bytes)
+        if content.returncode != 0 or len(content.stdout) != size:
+            raise RepositoryEvidenceError("failed to read the complete repository blob")
+        return content.stdout
+
+    def bounded_regular_blob_size(self, entry: RepositoryObject) -> int:
+        """Validate one exact entry as a bounded regular blob without reading its content."""
+
+        if normalize_repo_path(entry.path) != entry.path:
+            raise RepositoryEvidenceError("repository blob path is not normalized")
         if entry.is_symlink:
             raise RepositoryEvidenceError(f"refusing to follow repository symlink: {entry.path}")
-        if entry.is_submodule or entry.object_type != "blob":
+        if (
+            entry.is_submodule
+            or entry.object_type != "blob"
+            or entry.mode not in {"100644", "100755"}
+        ):
             raise RepositoryEvidenceError(
                 f"refusing to read non-file repository object: {entry.path}"
             )
@@ -282,11 +298,7 @@ class GitRepositoryReader:
             raise RepositoryEvidenceError(
                 f"repository blob exceeds {self.max_file_bytes} bytes: {entry.path}"
             )
-        content = self._run(["cat-file", "blob", entry.object_sha], text=False)
-        assert isinstance(content.stdout, bytes)
-        if content.returncode != 0 or len(content.stdout) != size:
-            raise RepositoryEvidenceError("failed to read the complete repository blob")
-        return content.stdout
+        return size
 
     @staticmethod
     def _batch_request(entries: tuple[RepositoryObject, ...]) -> bytes:

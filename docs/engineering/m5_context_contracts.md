@@ -46,6 +46,12 @@ Every source uses the exact projection object:
 
 The allowed field vocabulary is closed per projection. `model`, `publish`, and `retain` must each be subsets of `retrieve`; retention additionally rejects text, upstream identifiers, URLs, commands, transport data, personal display data, and raw payloads. A policy with neither discussions nor references is invalid.
 
+## Protected rules-path setup outcome
+
+When a validated GitLab merge request introduces its configured repository-owned OCR rules path, the source candidate still cannot become policy. If the exact normalized path is absent at both the immutable diff base and captured protected-target policy commit, but exists at the exact source head as a regular blob within the Git reader's byte limit, `review` stops before OCR and atomically writes `ocr.pre-execution-status/v1`. Source contents are not read or validated for this classification. A path that existed at the diff base, an absolute operator-owned path outside the repository, or a missing, symlink, tree, submodule, oversized, ambiguous, or unavailable source object retains the generic fail-closed outcome.
+
+The owner-only status contains exactly `schema_version`, the closed reason `protected_target_rule_path_pending`, and the diff-base, source, and captured policy SHAs. It contains no path, ref, hostname, provider text, exception, stderr, or display wording. `post` hostile-reads the bounded regular single-link file, verifies the current source and diff-base identities, and renders only toolkit-authored text. It deliberately does not replace the captured policy SHA with a newer target-branch head. Missing, stale, malformed, oversized, permission-unsafe, unknown-version/reason/key, or identity-mismatched state falls back to the generic failure note. `OCR_POST_ERROR_DETAILS` never appends stderr to the recognized setup note; emoji and strict/advisory exit behavior remain under the existing posting settings.
+
 ## Recognizers and candidates
 
 Candidates are extracted only from admitted merge-request title/description and admitted discussion bodies. A candidate carries only its policy-source identity, tenant alias, resource class, recognizer kind, and bounded candidate string. It grants no authority. Normalization is NFC, strips unsupported controls, rejects ambiguity/collision, and applies character, UTF-8 byte, physical-line, item, source, aggregate, and time limits independently.

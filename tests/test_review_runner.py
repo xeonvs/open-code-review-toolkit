@@ -859,6 +859,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
     session_homes: list[Path] = []
     original_home = os.environ.get("HOME")
     artifacts = review_runner.repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    artifacts.pre_execution_status.write_text("stale", encoding="utf-8")
+    artifacts.pre_execution_status.chmod(0o600)
 
     class Store:
         head = SimpleNamespace(commit_sha="b" * 40)
@@ -897,6 +900,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             "_immutable_review_refs",
             lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
         ),
+        patched_attr(review_runner, "_write_isolated_runtime_config", lambda: None),
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
         patched_attr(review_runner, "collect_repository_evidence", collect),
         patched_attr(
@@ -952,6 +956,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         )
 
     assert result == 0
+    assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1 and not session_homes[0].exists()
     assert os.environ.get("HOME") == original_home
     assert events[0] == (
