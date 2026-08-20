@@ -51,8 +51,6 @@ def parse_review_context_mode(raw: str | None) -> str:
     mode = (raw or "").strip().lower() or "off"
     if mode not in CONTEXT_MODES:
         raise ReviewContextModeError("OCR_REVIEW_CONTEXT_MODE is invalid")
-    if mode == "enriched":
-        raise ReviewContextModeError("OCR_REVIEW_CONTEXT_MODE=enriched is not available")
     return mode or "off"
 
 

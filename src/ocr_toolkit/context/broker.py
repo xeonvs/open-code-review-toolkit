@@ -285,7 +285,8 @@ def acquire_external_records(
             or response.canonical_object is None
             or response.version is None
             or response.expiry is None
-            or response.expiry < now
+            or response.expiry <= now
+            or response.expiry > now + 86_400
         ):
             completeness[source] = "unavailable"
             degradation_counts["invalid"] += 1

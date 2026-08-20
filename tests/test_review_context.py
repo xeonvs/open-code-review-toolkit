@@ -51,8 +51,7 @@ def test_context_mode_parser_defaults_off_and_never_echoes_invalid_value() -> No
     assert parse_review_context_mode("") == "off"
     assert parse_review_context_mode("  OFF ") == "off"
     assert parse_review_context_mode("metadata") == "metadata"
-    with pytest.raises(ReviewContextModeError, match="not available"):
-        parse_review_context_mode("enriched")
+    assert parse_review_context_mode("enriched") == "enriched"
     with pytest.raises(ReviewContextModeError) as exc_info:
         parse_review_context_mode("private-secret-value")
     assert "private-secret-value" not in str(exc_info.value)

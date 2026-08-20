@@ -18,8 +18,8 @@ from ocr_toolkit.common.redaction import sanitize_ocr_value
 DEFAULT_MAX_RESULT_BYTES = 2_000_000
 MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
-TOOLKIT_RESULT_SCHEMA_VERSION = 3
-SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({1, 2, TOOLKIT_RESULT_SCHEMA_VERSION})
+TOOLKIT_RESULT_SCHEMA_VERSION = 4
+SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({1, 2, 3, TOOLKIT_RESULT_SCHEMA_VERSION})
 # The receipt can name the 16 configured external servers plus the mandatory built-in.
 MAX_TOOLKIT_MCP_USAGE_SERVERS = 17
 MAX_TOOLKIT_MCP_TOOLS_PER_SERVER = 128
@@ -233,6 +233,16 @@ def load_ocr_result(path: Path) -> Any:
             )
         except RecursionError as exc:
             raise OcrResultMalformed(str(exc)) from exc
+    finally:
+        os.close(descriptor)
+
+
+def inspect_ocr_result(path: Path) -> Any:
+    """Load bounded raw OCR JSON for a pre-publication policy owner."""
+
+    descriptor = _open_result(path)
+    try:
+        return _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
     finally:
         os.close(descriptor)
 

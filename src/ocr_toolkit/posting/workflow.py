@@ -137,7 +137,7 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 3:
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 4:
         return "", None
     review = toolkit_metadata.get("review")
     if not isinstance(review, dict):

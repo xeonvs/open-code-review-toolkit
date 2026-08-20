@@ -57,6 +57,18 @@ def commit(path: Path, **kwargs: object) -> ContextStore:
     return ContextStore.commit(path, **parameters)  # type: ignore[arg-type]
 
 
+def rewrite_hostile_store(path: Path, payload: dict[str, object]) -> None:
+    body = dict(payload)
+    body.pop("digest", None)
+    payload["digest"] = hashlib.sha256(
+        (
+            json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
+        ).encode()
+    ).hexdigest()
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    os.chmod(path, 0o600)
+
+
 def test_context_store_commits_owner_only_and_resolves_only_minted_handle(tmp_path: Path) -> None:
     path = tmp_path / "context-store.json"
     store = commit(path)
@@ -82,7 +94,14 @@ def test_context_store_rejects_wrong_run_policy_expiry_and_replay(tmp_path: Path
     with pytest.raises(ContextStoreError, match="unavailable"):
         store.get(handle, run_id=RUN_ID, policy_digest="b" * 64, now=150)
     with pytest.raises(ContextStoreError, match="unavailable"):
-        store.get(handle, run_id=RUN_ID, policy_digest=POLICY_DIGEST, now=201)
+        store.get(handle, run_id=RUN_ID, policy_digest=POLICY_DIGEST, now=200)
+    with pytest.raises(ContextStoreError, match="expired"):
+        ContextStore.read(
+            path,
+            expected_run_id=RUN_ID,
+            expected_policy_digest=POLICY_DIGEST,
+            now=200,
+        )
     with pytest.raises(ContextStoreError, match="identity"):
         ContextStore.read(
             path,
@@ -90,6 +109,9 @@ def test_context_store_rejects_wrong_run_policy_expiry_and_replay(tmp_path: Path
             expected_policy_digest=POLICY_DIGEST,
             now=150,
         )
+
+    with pytest.raises(ContextStoreError, match="lifetime"):
+        commit(path, expiry=100 + 86_401, records=[pending(expiry=100 + 86_401)])
 
 
 def test_context_store_rejects_collisions_before_replacing_existing_store(tmp_path: Path) -> None:
@@ -107,6 +129,10 @@ def test_context_store_rejects_collisions_before_replacing_existing_store(tmp_pa
     invalid_projection.projections["model"]["upstream_id"] = "must-not-survive"
     with pytest.raises(ContextStoreError, match="projection fields"):
         commit(path, records=[invalid_projection])
+    assert path.read_bytes() == original_bytes
+
+    with pytest.raises(ContextStoreError, match="record lifetime"):
+        commit(path, records=[pending(expiry=100)])
     assert path.read_bytes() == original_bytes
 
     with pytest.raises(ContextStoreError, match="record lifetime"):
@@ -194,3 +220,32 @@ def test_context_store_rejects_digest_mismatch_duplicate_keys_and_unsafe_mode(
             expected_policy_digest=POLICY_DIGEST,
             now=150,
         )
+
+
+def test_context_store_hostile_read_revalidates_projection_semantics(tmp_path: Path) -> None:
+    path = tmp_path / "context-store.json"
+    mutations = (
+        lambda record: record["projections"]["model"].update(  # type: ignore[index,union-attr]
+            {"text": {"nested": "must-not-reach-model"}}
+        ),
+        lambda record: record["projections"]["model"].update(  # type: ignore[index,union-attr]
+            {"text": "synthetic@example.invalid"}
+        ),
+        lambda record: record["projections"]["retain"].update(  # type: ignore[index,union-attr]
+            {"expiry": 199}
+        ),
+        lambda record: record.update({"descriptor": "issue\u200b"}),
+    )
+    for mutate in mutations:
+        commit(path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        record = payload["records"][0]
+        mutate(record)
+        rewrite_hostile_store(path, payload)
+        with pytest.raises(ContextStoreError, match=r"projection|identity"):
+            ContextStore.read(
+                path,
+                expected_run_id=RUN_ID,
+                expected_policy_digest=POLICY_DIGEST,
+                now=150,
+            )

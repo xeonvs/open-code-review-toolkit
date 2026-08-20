@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
+import time
 from contextlib import ExitStack
 from dataclasses import dataclass
 from io import BufferedWriter
@@ -14,6 +18,18 @@ from pathlib import Path
 
 from ocr_toolkit import mcp_config
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.context.adapters import ContextAdapterError, parse_adapter_config
+from ocr_toolkit.context.broker import (
+    BrokerResult,
+    CandidateSelection,
+    acquire_external_records,
+    prepare_discussion_records,
+)
+from ocr_toolkit.context.contracts import ContextContractError, ContextPolicy, TextBudgets
+from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
+from ocr_toolkit.context.policy import load_protected_policy
+from ocr_toolkit.context.recognizers import recognize
+from ocr_toolkit.context.store import ContextStore, ContextStoreError, PendingContextRecord
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
     prepare_artifact_directory,
@@ -44,6 +60,7 @@ from ocr_toolkit.ocr_result import (
     OcrResultMissing,
     OcrResultTooLarge,
     attach_toolkit_metadata,
+    inspect_ocr_result,
 )
 from ocr_toolkit.providers.gitlab import (
     GitLabProviderError,
@@ -51,6 +68,7 @@ from ocr_toolkit.providers.gitlab import (
     invocation_identifiers,
     is_merge_request_environment,
 )
+from ocr_toolkit.providers.gitlab_discussions import acquire_discussions
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -86,6 +104,18 @@ class ReviewIdentity:
         return self.context.state if self.context is not None else "degraded"
 
 
+@dataclass(frozen=True, slots=True)
+class EnrichmentReceipt:
+    """Carry closed context facts after acquisition and cleanup."""
+
+    policy_digest: str
+    completeness: dict[str, str]
+    degradation_counts: dict[str, int]
+    required_degraded: bool
+    mutable_admitted: bool
+    forbidden_publication: tuple[str, ...]
+
+
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
     """Exercise summary, paginated list, and stable-ID get before starting OCR."""
 
@@ -119,6 +149,7 @@ def _review_receipt(
     payload: dict[str, object],
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
+    enrichment: EnrichmentReceipt | None = None,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -175,7 +206,8 @@ def _review_receipt(
         or total_calls < known_usage_total
     ):
         raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
-    evidence_used = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0) > 0
+    evidence_calls = by_tool.get(TOOL_NAME, 0) if isinstance(by_tool, dict) else 0
+    evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_used:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
     capabilities = [
@@ -186,17 +218,48 @@ def _review_receipt(
         }
         for capability in composition.capabilities
     ]
+    context_classes = []
+    if identity.context_mode in {"metadata", "enriched"}:
+        context_classes.append("merge_request_metadata")
+    if identity.context_mode == "enriched":
+        context_classes.extend(("forge_discussions", "external_records"))
+    context_receipt: dict[str, object] = {
+        "mode": identity.context_mode,
+        "state": identity.context_state,
+        "classes": context_classes,
+        "policy_digest": None,
+        "per_source": {},
+        "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+        "required_degraded": False,
+        "mutable_admitted": False,
+        "tool_usage": {"context_get": 0, "context_list": 0},
+    }
+    if enrichment is not None:
+        context_receipt.update(
+            {
+                "state": "degraded" if enrichment.required_degraded else "complete",
+                "policy_digest": enrichment.policy_digest,
+                "per_source": enrichment.completeness,
+                "degradation_counts": enrichment.degradation_counts,
+                "required_degraded": enrichment.required_degraded,
+                "mutable_admitted": enrichment.mutable_admitted,
+                "tool_usage": {
+                    "context_get": (
+                        by_tool.get("context_get", 0) if isinstance(by_tool, dict) else 0
+                    ),
+                    "context_list": (
+                        by_tool.get("context_list", 0) if isinstance(by_tool, dict) else 0
+                    ),
+                },
+            }
+        )
     return {
         "review": {
             "source_sha": identity.source_sha,
             "policy_sha": identity.policy_sha,
             "mr_author_id": identity.mr_author_id,
         },
-        "context": {
-            "mode": identity.context_mode,
-            "state": identity.context_state,
-            "classes": ["merge_request_metadata"] if identity.context_mode == "metadata" else [],
-        },
+        "context": context_receipt,
         "mcp": {
             "capabilities": capabilities,
             "usage": dict(sorted(usage.items())),
@@ -204,7 +267,10 @@ def _review_receipt(
         "evidence": {
             "mandatory": outcome.requires_evidence_mcp,
             "used": evidence_used,
+            "calls": evidence_calls,
         },
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
 
 
@@ -212,13 +278,14 @@ def _record_ocr_result_mcp_usage(
     result_path: Path,
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
+    enrichment: EnrichmentReceipt | None = None,
 ) -> dict[str, int]:
     """Verify MCP use and bind the closed review-time receipt to the result."""
 
     try:
         _payload, metadata = attach_toolkit_metadata(
             result_path,
-            lambda payload: _review_receipt(payload, composition, identity),
+            lambda payload: _review_receipt(payload, composition, identity, enrichment),
         )
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
@@ -371,15 +438,19 @@ def _prepare_policy_context(
     author_id = None
     if is_merge_request_environment(os.environ):
         snapshot = acquire_review_snapshot(
-            os.environ, expected_head=refs.head, include_metadata=context_mode == "metadata"
+            os.environ,
+            expected_head=refs.head,
+            include_metadata=context_mode in {"metadata", "enriched"},
         )
         reader.fetch_commit(snapshot.target_sha)
         policy_sha = reader.resolve_commit(snapshot.target_sha)
         context = snapshot.context
         author_id = snapshot.author_id
     else:
-        if context_mode == "metadata":
-            raise ReviewRunnerError("metadata review context requires a GitLab merge request")
+        if context_mode in {"metadata", "enriched"}:
+            raise ReviewRunnerError(
+                f"{context_mode} review context requires a GitLab merge request"
+            )
         policy_sha = refs.base
     identity = ReviewIdentity(refs.head, policy_sha, author_id, context_mode, context)
     rule = _one_option(ocr_args, "--rule")
@@ -401,6 +472,207 @@ def _prepare_policy_context(
     return identity, _replace_rule_argument(ocr_args, rule, str(policy_rules))
 
 
+def _context_texts(context: MergeRequestContext) -> tuple[str, ...]:
+    """Return only already-admitted MR metadata text for fixed recognizers."""
+
+    values: list[str] = []
+    for name in ("title", "description", "source_branch"):
+        field = context.fields.get(name)
+        value = field.get("value") if isinstance(field, dict) else None
+        if isinstance(value, str):
+            values.append(value)
+    labels = context.fields.get("labels")
+    label_values = labels.get("values") if isinstance(labels, dict) else None
+    if isinstance(label_values, list):
+        values.extend(value for value in label_values if isinstance(value, str))
+    return tuple(values)
+
+
+def _bounded_combined_records(
+    records: list[PendingContextRecord], policy: ContextPolicy
+) -> tuple[list[PendingContextRecord], set[str]]:
+    """Apply aggregate units across forge and adapter records together."""
+
+    admitted: list[PendingContextRecord] = []
+    chars = bytes_count = lines = 0
+    limited_sources: set[str] = set()
+    for record in records:
+        text = record.projections.get("model", {}).get("text", "")
+        text = text if isinstance(text, str) else ""
+        next_chars = chars + len(text)
+        next_bytes = bytes_count + len(text.encode())
+        next_lines = lines + (text.count("\n") + 1 if text else 0)
+        if (
+            len(admitted) >= policy.budgets.max_records
+            or next_chars > policy.budgets.max_chars
+            or next_bytes > policy.budgets.max_bytes
+            or next_lines > policy.budgets.max_lines
+        ):
+            limited_sources.add(record.source)
+            continue
+        admitted.append(record)
+        chars, bytes_count, lines = next_chars, next_bytes, next_lines
+    return admitted, limited_sources
+
+
+def _prepare_enrichment(
+    identity: ReviewIdentity,
+    artifacts: EvidenceArtifacts,
+    reader: GitRepositoryReader,
+) -> tuple[mcp_config.MCPContextConfig | None, EnrichmentReceipt | None]:
+    """Acquire all external context before the one OCR model loop and commit it locally."""
+
+    if identity.context_mode != "enriched":
+        remove_private_artifact(artifacts.context_store)
+        return None, None
+    if identity.context is None:
+        raise ReviewRunnerError("enriched review context requires validated MR metadata")
+    policy = load_protected_policy(reader.read_blob, policy_sha=identity.policy_sha)
+    now = int(time.time())
+    run_id = secrets.token_urlsafe(24)
+    completeness: dict[str, str] = {}
+    degradation = {"invalid": 0, "limit": 0, "unavailable": 0}
+    required_degraded = False
+    pending: list[PendingContextRecord] = []
+    candidate_texts = list(_context_texts(identity.context))
+    if policy.forge_discussions is not None:
+        discussion_policy = policy.forge_discussions
+        source = "forge:gitlab_discussions"
+        try:
+            snapshot = acquire_discussions(
+                os.environ,
+                project_id=identity.context.project_id,
+                merge_request_iid=identity.context.merge_request_iid,
+                source_sha=identity.source_sha,
+                run_id=run_id,
+                policy=discussion_policy,
+                now=now,
+            )
+        except GitLabProviderError:
+            completeness[source] = "unavailable"
+            degradation["unavailable"] += 1
+            required_degraded = discussion_policy.required
+        else:
+            completeness[source] = snapshot.state
+            if snapshot.state != "complete":
+                degradation["invalid" if snapshot.state == "mutated" else "limit"] += 1
+                required_degraded = required_degraded or discussion_policy.required
+            pending.extend(
+                prepare_discussion_records(
+                    snapshot.records,
+                    policy=discussion_policy,
+                    expiry=now + 3_600,
+                )
+            )
+            candidate_texts.extend(record.body for record in snapshot.records)
+    selections: list[CandidateSelection] = []
+    seen_candidates: set[tuple[str, str, str, str]] = set()
+    for reference in policy.references:
+        for text in candidate_texts:
+            for candidate in recognize(
+                text,
+                resource_class=reference.resource_class,
+                policy=reference.recognizer,
+            ):
+                key = (reference.adapter, reference.tenant, candidate.recognizer, candidate.value)
+                if key not in seen_candidates:
+                    seen_candidates.add(key)
+                    selections.append(CandidateSelection(reference, candidate))
+    adapters = parse_adapter_config(os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON"))
+    external: BrokerResult = acquire_external_records(
+        policy=policy,
+        adapters=adapters,
+        selections=selections,
+        run_id=run_id,
+        now=now,
+        environment=os.environ,
+    )
+    pending.extend(external.records)
+    completeness.update(external.completeness)
+    for reason, count in external.degradation_counts.items():
+        degradation[reason] += count
+    required_degraded = required_degraded or external.required_degraded
+    admitted, limited_sources = _bounded_combined_records(pending, policy)
+    if limited_sources:
+        degradation["limit"] += 1
+        required_sources = {
+            f"reference:{reference.adapter}:{reference.tenant}:{reference.resource_class}"
+            for reference in policy.references
+            if reference.required
+        }
+        if policy.forge_discussions is not None and policy.forge_discussions.required:
+            required_sources.add("forge:gitlab_discussions")
+        required_degraded = required_degraded or bool(limited_sources & required_sources)
+        for source in limited_sources:
+            completeness[source] = "partial"
+    store_expiry = max((record.expiry for record in admitted), default=now + 3_600)
+    context_store = ContextStore.commit(
+        artifacts.context_store,
+        run_id=run_id,
+        policy_digest=policy.digest,
+        completeness=completeness,
+        records=admitted,
+        created_at=now,
+        expiry=store_expiry,
+    )
+    forbidden_values: list[str] = []
+    for record in context_store.records:
+        published = record.projections["publish"]
+        for field, value in record.projections["model"].items():
+            if field in published:
+                continue
+            stack = [value]
+            while stack:
+                nested = stack.pop()
+                if isinstance(nested, dict):
+                    stack.extend(nested.values())
+                elif isinstance(nested, list):
+                    stack.extend(nested)
+                elif isinstance(nested, str) and nested:
+                    forbidden_values.append(nested)
+    forbidden = tuple(forbidden_values)
+    receipt = EnrichmentReceipt(
+        policy_digest=policy.digest,
+        completeness=dict(sorted(completeness.items())),
+        degradation_counts=dict(sorted(degradation.items())),
+        required_degraded=required_degraded,
+        mutable_admitted=any(record.mutable for record in context_store.records),
+        forbidden_publication=forbidden,
+    )
+    return (
+        mcp_config.MCPContextConfig(
+            store_path=str(artifacts.context_store.resolve()),
+            run_id=run_id,
+            policy_digest=policy.digest,
+        ),
+        receipt,
+    )
+
+
+def _publication_dlp(path: Path, *, forbidden: tuple[str, ...]) -> None:
+    """Reject any unsafe OCR-controlled string before result acceptance."""
+
+    payload = inspect_ocr_result(path)
+    stack = [payload]
+    budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
+    matcher = ForbiddenMatcher.compile(forbidden)
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            stack.extend(value.values())
+        elif isinstance(value, list):
+            stack.extend(value)
+        elif isinstance(value, str):
+            checked = check_text(
+                value,
+                budgets=budgets,
+                publication=True,
+                forbidden_matcher=matcher,
+            )
+            if not checked.admitted:
+                raise ReviewRunnerError("OCR result failed publication DLP")
+
+
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
@@ -408,77 +680,120 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     _reject_owned_background(ocr_args)
     artifacts = repository_artifacts()
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
+    previous_home = os.environ.get("HOME")
+    session_home = Path(tempfile.mkdtemp(prefix="ocr-toolkit-session-"))
+    session_home.chmod(0o700)
+    os.environ["HOME"] = str(session_home)
+    cleanup_error: OSError | None = None
+    exit_code = 2
+    enrichment: EnrichmentReceipt | None = None
     try:
-        prepare_artifact_directory(artifacts)
-        identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
-        store = collect_repository_evidence(
-            base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
+        try:
+            prepare_artifact_directory(artifacts)
+            identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
+            store = collect_repository_evidence(
+                base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
+            )
+            head_sha = store.head.commit_sha if store.head else ""
+            identifiers = invocation_identifiers(os.environ)
+            for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
+                if not store.add(record):
+                    store.add_diagnostic("review invocation evidence was truncated by store limits")
+                    break
+            if identity.context is not None and not store.add(
+                merge_request_context_record(identity.context)
+            ):
+                store.add_diagnostic("merge-request context was truncated by store limits")
+            store.write(artifacts.store)
+            context_config, enrichment = _prepare_enrichment(
+                identity, artifacts, GitRepositoryReader(Path.cwd())
+            )
+            composition = mcp_config.build_mcp_composition(
+                profile="gitlab_mr" if identity.mr_author_id is not None else "local",
+                context=context_config,
+            )
+            bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
+            write_private_text(artifacts.bootstrap, bootstrap)
+            mcp_config.apply_mcp_composition(composition)
+            mcp_config.verify_mcp_composition(composition)
+            summary = evidence_summary(store)
+            _verify_evidence_mcp(store)
+        except (
+            ContextAdapterError,
+            ContextContractError,
+            ContextStoreError,
+            EvidenceStoreError,
+            OSError,
+            GitLabProviderError,
+            RepositoryEvidenceError,
+            ValueError,
+            mcp_config.MCPConfigError,
+        ) as exc:
+            raise ReviewRunnerError(
+                f"OCR evidence preflight failed: {redact_sensitive(str(exc))}"
+            ) from exc
+        records = summary.get("records")
+        if not isinstance(records, int) or isinstance(records, bool) or records < 0:
+            raise ReviewRunnerError("OCR evidence preflight returned an invalid MCP summary")
+        print(
+            "OCR evidence preflight: ready "
+            f"base={summary.get('base')} head={summary.get('head')} records={records} "
+            f"mcp_servers={len(composition.capabilities)} builtin_tool={TOOL_NAME}",
+            file=sys.stderr,
         )
-        head_sha = store.head.commit_sha if store.head else ""
-        identifiers = invocation_identifiers(os.environ)
-        for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
-            if not store.add(record):
-                store.add_diagnostic("review invocation evidence was truncated by store limits")
-                break
-        if identity.context is not None and not store.add(
-            merge_request_context_record(identity.context)
-        ):
-            store.add_diagnostic("merge-request context was truncated by store limits")
-        store.write(artifacts.store)
-        composition = mcp_config.build_mcp_composition(
-            profile="gitlab_mr" if identity.mr_author_id is not None else "local"
+        print(
+            "OCR MCP registry: ready "
+            f"servers={len(composition.capabilities)} mandatory={TOOL_NAME} self_query=summary",
+            file=sys.stderr,
         )
-        bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
-        write_private_text(artifacts.bootstrap, bootstrap)
-        mcp_config.apply_mcp_composition(composition)
-        mcp_config.verify_mcp_composition(composition)
-        summary = evidence_summary(store)
-        _verify_evidence_mcp(store)
-    except (
-        EvidenceStoreError,
-        OSError,
-        GitLabProviderError,
-        RepositoryEvidenceError,
-        ValueError,
-        mcp_config.MCPConfigError,
-    ) as exc:
-        raise ReviewRunnerError(
-            f"OCR evidence preflight failed: {redact_sensitive(str(exc))}"
-        ) from exc
-    records = summary.get("records")
-    if not isinstance(records, int) or isinstance(records, bool) or records < 0:
-        raise ReviewRunnerError("OCR evidence preflight returned an invalid MCP summary")
-    print(
-        "OCR evidence preflight: ready "
-        f"base={summary.get('base')} head={summary.get('head')} records={records} "
-        f"mcp_servers={len(composition.capabilities)} "
-        f"builtin_tool={TOOL_NAME}",
-        file=sys.stderr,
-    )
-    print(
-        "OCR MCP registry: ready "
-        f"servers={len(composition.capabilities)} mandatory={TOOL_NAME} self_query=summary",
-        file=sys.stderr,
-    )
-    exit_code = run_review(
-        result_path,
-        stderr_path,
-        [
-            "--from",
-            refs.base,
-            "--to",
-            refs.head,
-            *_without_diff_options(effective_ocr_args),
-            "--background-file",
-            str(artifacts.bootstrap),
-        ],
-    )
-    if exit_code == 0:
-        usage = _record_ocr_result_mcp_usage(
+        exit_code = run_review(
             result_path,
-            composition,
-            identity,
+            stderr_path,
+            [
+                "--from",
+                refs.base,
+                "--to",
+                refs.head,
+                *_without_diff_options(effective_ocr_args),
+                "--background-file",
+                str(artifacts.bootstrap),
+            ],
+            ocr_binary=_resolve_ocr_binary(),
         )
+        if exit_code == 0:
+            forbidden = (*composition.secret_values,)
+            if enrichment is not None:
+                forbidden += enrichment.forbidden_publication
+            try:
+                _publication_dlp(result_path, forbidden=forbidden)
+            except ReviewRunnerError:
+                try:
+                    result_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
+    finally:
+        try:
+            remove_private_artifact(artifacts.context_store)
+        except OSError as exc:
+            cleanup_error = exc
+        try:
+            shutil.rmtree(session_home)
+        except OSError as exc:
+            cleanup_error = cleanup_error or exc
+        finally:
+            if previous_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = previous_home
+    if cleanup_error is not None:
+        try:
+            result_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise ReviewRunnerError("OCR private session cleanup failed") from cleanup_error
+    if exit_code == 0:
+        usage = _record_ocr_result_mcp_usage(result_path, composition, identity, enrichment)
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
             print(
@@ -543,7 +858,26 @@ def read_stderr_excerpt(stderr_path: Path, max_chars: int = DEFAULT_DIAGNOSTIC_C
     return redact_sensitive(text)[:max_chars]
 
 
-def run_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
+def _resolve_ocr_binary() -> str:
+    """Resolve one exact executable before entering the repository-owned process cwd."""
+
+    candidate = shutil.which("ocr")
+    if candidate is None:
+        raise ReviewRunnerError("could not resolve the OCR executable")
+    resolved = Path(candidate).resolve(strict=True)
+    metadata = resolved.stat()
+    if not stat.S_ISREG(metadata.st_mode) or not os.access(resolved, os.X_OK):
+        raise ReviewRunnerError("resolved OCR executable is unsafe")
+    return str(resolved)
+
+
+def run_review(
+    result_path: Path,
+    stderr_path: Path,
+    ocr_args: list[str],
+    *,
+    ocr_binary: str = "ocr",
+) -> int:
     """Execute `ocr review`, retain private artifacts, and report safe failures."""
 
     if not ocr_args:
@@ -565,7 +899,7 @@ def run_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int
             if os.path.samestat(os.fstat(result_file.fileno()), os.fstat(stderr_file.fileno())):
                 raise ReviewRunnerError("result and stderr paths must be different")
             completed = subprocess.run(
-                ["ocr", "review", *ocr_args],
+                [ocr_binary, "review", *ocr_args],
                 check=False,
                 stdin=subprocess.DEVNULL,
                 stdout=result_file,

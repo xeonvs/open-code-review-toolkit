@@ -654,12 +654,18 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 3,
+        "schema_version": 4,
         "review": {"source_sha": head, "policy_sha": policy, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
             "state": "complete",
             "classes": ["merge_request_metadata"],
+            "policy_digest": None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
             "capabilities": [
@@ -671,7 +677,9 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             ],
             "usage": {"ocr_toolkit_evidence": 3},
         },
-        "evidence": {"mandatory": True, "used": True},
+        "evidence": {"mandatory": True, "used": True, "calls": 3},
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
     for path in (artifacts.store, artifacts.bootstrap, artifacts.policy_rules, result, stderr):
         assert path.stat().st_mode & 0o777 == 0o600

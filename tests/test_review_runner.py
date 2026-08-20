@@ -120,9 +120,19 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 3,
+        "schema_version": 4,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
-        "context": {"mode": "off", "state": "disabled", "classes": []},
+        "context": {
+            "mode": "off",
+            "state": "disabled",
+            "classes": [],
+            "policy_digest": None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": {"context_get": 0, "context_list": 0},
+        },
         "mcp": {
             "capabilities": [
                 {
@@ -133,7 +143,9 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             ],
             "usage": {"ocr_toolkit_evidence": 2},
         },
-        "evidence": {"mandatory": True, "used": True},
+        "evidence": {"mandatory": True, "used": True, "calls": 2},
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
 
     result.write_text(
@@ -171,12 +183,18 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 3,
+        "schema_version": 4,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
             "state": "degraded",
             "classes": ["merge_request_metadata"],
+            "policy_digest": None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
             "capabilities": [
@@ -188,8 +206,89 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             ],
             "usage": {"ocr_toolkit_evidence": 1},
         },
-        "evidence": {"mandatory": True, "used": True},
+        "evidence": {"mandatory": True, "used": True, "calls": 1},
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
+
+
+def test_publication_dlp_blocks_context_copy_secret_pii_and_markdown_laundering(
+    tmp_path: Path,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps({"status": "success", "comments": ["Safe finding."]}))
+    forbidden = (
+        "prefix private context sentence suffix",
+        "ghp_abcdefghijklmnopqrstuvwxyz123456",
+    )
+    review_runner._publication_dlp(result, forbidden=forbidden)
+
+    result.write_text(json.dumps({"status": "success", "comments": ["abcdefghijklmnopqrstuvw"]}))
+    review_runner._publication_dlp(
+        result,
+        forbidden=("prefix abcdefghijklmnopqrstuvw suffix",),
+    )
+    for text in (
+        "Copied private context sentence.",
+        "private context <!--split-->sentence",
+        "private context &#x73;entence",
+        "private con&#x200b;text sentence",
+        'private con<span data-x="' + "x" * 600 + '">text</span> sentence',
+        "Contact synthetic@example.invalid.",
+        "Contact synthetic&#64;example.invalid.",
+        "+420<span>123</span>456789",
+        "ghp_abcdefghij<span>klmnop</span>qrstuvwxyz123456",
+        "See [hidden](https://example.invalid/path).",
+        "See [hidden](&#x68;ttps://example.invalid/path).",
+        "Unicode control: &#x202e;hidden.",
+    ):
+        result.write_text(json.dumps({"status": "success", "comments": [text]}))
+        with pytest.raises(review_runner.ReviewRunnerError, match="publication DLP"):
+            review_runner._publication_dlp(result, forbidden=forbidden)
+
+    result.write_text(json.dumps({"status": "success", "comments": ["safe " * 400]}))
+    with pytest.raises(review_runner.ReviewRunnerError, match="publication DLP"):
+        review_runner._publication_dlp(result, forbidden=("private " * 20_000,))
+
+
+def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: Path) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 2, "by_tool": {"context_list": 1, "context_get": 1}},
+            }
+        )
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability(
+                "ocr_toolkit_evidence",
+                ("ocr_toolkit_evidence", "context_list", "context_get"),
+                True,
+            ),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+    enrichment = review_runner.EnrichmentReceipt(
+        policy_digest="c" * 64,
+        completeness={},
+        degradation_counts={"invalid": 0, "limit": 0, "unavailable": 0},
+        required_degraded=False,
+        mutable_admitted=False,
+        forbidden_publication=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="mandatory"):
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "enriched", None),
+            enrichment,
+        )
 
 
 def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -> None:
@@ -227,7 +326,11 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
 
     assert review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY) == {}
     persisted = json.loads(result.read_text(encoding="utf-8"))
-    assert persisted["_ocr_toolkit"]["evidence"] == {"mandatory": False, "used": False}
+    assert persisted["_ocr_toolkit"]["evidence"] == {
+        "mandatory": False,
+        "used": False,
+        "calls": 0,
+    }
     assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
 
 
@@ -753,6 +856,8 @@ def test_review_rejects_caller_owned_background_file() -> None:
 
 def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) -> None:
     events: list[object] = []
+    session_homes: list[Path] = []
+    original_home = os.environ.get("HOME")
     artifacts = review_runner.repository_artifacts(tmp_path)
 
     class Store:
@@ -781,7 +886,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         events.append(("collect", kwargs))
         return Store()
 
-    def run(result: Path, stderr: Path, args: list[str]) -> int:
+    def run(result: Path, stderr: Path, args: list[str], **_kwargs: object) -> int:
+        session_homes.append(Path(os.environ["HOME"]))
         events.append(("ocr", result, stderr, args))
         return 0
 
@@ -831,10 +937,12 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         patched_attr(
             review_runner,
             "_record_ocr_result_mcp_usage",
-            lambda _result, _registry, _identity: (
+            lambda _result, _registry, _identity, _enrichment: (
                 events.append("ocr-usage") or {"ocr_toolkit_evidence": 1}
             ),
         ),
+        patched_attr(review_runner, "_resolve_ocr_binary", lambda: "/synthetic/ocr"),
+        patched_attr(review_runner, "_publication_dlp", lambda *_args, **_kwargs: None),
         patched_attr(review_runner, "run_review", run),
     ):
         result = review_runner.run_evidence_review(
@@ -844,6 +952,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         )
 
     assert result == 0
+    assert len(session_homes) == 1 and not session_homes[0].exists()
+    assert os.environ.get("HOME") == original_home
     assert events[0] == (
         "collect",
         {

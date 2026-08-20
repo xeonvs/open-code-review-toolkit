@@ -16,17 +16,28 @@ from pathlib import Path
 from typing import Any
 
 from ocr_toolkit.context.contracts import (
+    ACCOUNT_CLASSES,
     PROJECTION_FIELDS,
     RESOURCE_CLASSES,
     RETENTION_FIELDS,
     STORE_SCHEMA,
+    TextBudgets,
 )
+from ocr_toolkit.context.dlp import check_text, normalize_text
 
 MAX_STORE_BYTES = 4_000_000
 MAX_STORE_RECORDS = 128
+MAX_STORE_LIFETIME_SECONDS = 86_400
 HANDLE_RE = re.compile(r"ctx1_[A-Za-z0-9_-]{43}\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 RUN_ID_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
+STATE_RE = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
+PSEUDONYM_RE = re.compile(r"actor-[0-9a-f]{16}\Z")
+STORE_TEXT_BUDGETS = TextBudgets(
+    max_chars=2_000_000,
+    max_bytes=MAX_STORE_BYTES,
+    max_lines=100_000,
+)
 
 
 class ContextStoreError(ValueError):
@@ -121,6 +132,68 @@ def _mapping(value: object, label: str) -> Mapping[str, object]:
     return value
 
 
+def _projection_value(field: str, value: object) -> object:
+    """Hostile-read one generic projection value without policy reinterpretation."""
+
+    if field == "text":
+        checked = check_text(value, budgets=STORE_TEXT_BUDGETS)
+        if not checked.admitted or checked.text != value:
+            raise ContextStoreError("context projection text is invalid")
+        return value
+    if field in {"descriptor", "state", "author_class", "author_pseudonym", "version"}:
+        normalized = normalize_text(value)
+        if normalized != value or not normalized or len(normalized) > 512:
+            raise ContextStoreError("context projection string is invalid")
+        if field == "descriptor" and normalized not in {"discussion", *RESOURCE_CLASSES}:
+            raise ContextStoreError("context projection descriptor is invalid")
+        if field == "state" and STATE_RE.fullmatch(normalized) is None:
+            raise ContextStoreError("context projection state is invalid")
+        if field == "author_class" and normalized not in ACCOUNT_CLASSES:
+            raise ContextStoreError("context projection author class is invalid")
+        if field == "author_pseudonym" and PSEUDONYM_RE.fullmatch(normalized) is None:
+            raise ContextStoreError("context projection author pseudonym is invalid")
+        return normalized
+    if field in {"resolved", "outdated"}:
+        if not isinstance(value, bool):
+            raise ContextStoreError("context projection boolean is invalid")
+        return value
+    if field in {"created_at", "updated_at", "count", "expiry"}:
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 0
+            or (field == "count" and value > 1_000_000_000)
+        ):
+            raise ContextStoreError("context projection integer is invalid")
+        return value
+    if field == "digest":
+        if not isinstance(value, str) or SHA256_RE.fullmatch(value) is None:
+            raise ContextStoreError("context projection digest is invalid")
+        return value
+    if field == "anchor":
+        anchor = _mapping(value, "context projection anchor")
+        if set(anchor).difference({"path", "line"}):
+            raise ContextStoreError("context projection anchor is invalid")
+        normalized_anchor: dict[str, object] = {}
+        if "path" in anchor:
+            path = normalize_text(anchor["path"])
+            if (
+                path != anchor["path"]
+                or not path
+                or len(path) > 512
+                or len(path.encode("utf-8")) > 2_048
+            ):
+                raise ContextStoreError("context projection anchor path is invalid")
+            normalized_anchor["path"] = path
+        if "line" in anchor:
+            line = anchor["line"]
+            if not isinstance(line, int) or isinstance(line, bool) or not 0 < line <= 10_000_000:
+                raise ContextStoreError("context projection anchor line is invalid")
+            normalized_anchor["line"] = line
+        return normalized_anchor
+    raise ContextStoreError("context projection field is invalid")
+
+
 def _read_safe(path: Path, metadata: os.stat_result) -> bytes:
     """Read the exact regular inode already checked by lstat, without following links."""
 
@@ -190,7 +263,11 @@ def _record(value: object) -> ContextRecord:
     if not isinstance(handle, str) or HANDLE_RE.fullmatch(handle) is None:
         raise ContextStoreError("context handle is invalid")
     if any(
-        not isinstance(value, str) or not value or len(value) > 512 for value in strings.values()
+        not isinstance(value, str)
+        or not value
+        or len(value) > 512
+        or normalize_text(value) != value
+        for value in strings.values()
     ):
         raise ContextStoreError("context record identity is invalid")
     if strings["resource_class"] not in RESOURCE_CLASSES:
@@ -214,7 +291,28 @@ def _record(value: object) -> ContextRecord:
         allowed = RETENTION_FIELDS if name == "retain" else PROJECTION_FIELDS
         if len(mapped) > len(allowed) or not set(mapped).issubset(allowed):
             raise ContextStoreError("context projection fields are invalid")
-        normalized_projections[name] = dict(mapped)
+        normalized_projections[name] = {
+            field: _projection_value(field, value) for field, value in mapped.items()
+        }
+    for projection in normalized_projections.values():
+        if (
+            ("descriptor" in projection and projection["descriptor"] != strings["descriptor"])
+            or ("version" in projection and projection["version"] != strings["version"])
+            or ("digest" in projection and projection["digest"] != strings["digest"])
+            or ("expiry" in projection and projection["expiry"] != expiry)
+            or (
+                "created_at" in projection
+                and "updated_at" in projection
+                and projection["created_at"] > projection["updated_at"]  # type: ignore[operator]
+            )
+            or (
+                "created_at" in projection and projection["created_at"] > expiry  # type: ignore[operator]
+            )
+            or (
+                "updated_at" in projection and projection["updated_at"] > expiry  # type: ignore[operator]
+            )
+        ):
+            raise ContextStoreError("context projection identity is inconsistent")
     return ContextRecord(
         handle=handle,
         projections=normalized_projections,
@@ -259,6 +357,7 @@ class ContextStore:
             or isinstance(expiry, bool)
             or created_at < 0
             or expiry <= created_at
+            or expiry - created_at > MAX_STORE_LIFETIME_SECONDS
             or len(records) > MAX_STORE_RECORDS
         ):
             raise ContextStoreError("context store lifetime or count is invalid")
@@ -266,7 +365,7 @@ class ContextStore:
         object_identities: set[tuple[str, str, str, str]] = set()
         serialized: list[dict[str, object]] = []
         for pending in records:
-            if pending.expiry < created_at or pending.expiry > expiry:
+            if pending.expiry <= created_at or pending.expiry > expiry:
                 raise ContextStoreError("context record lifetime is invalid")
             identity = (
                 pending.adapter,
@@ -380,7 +479,8 @@ class ContextStore:
             or isinstance(expiry, bool)
             or created_at < 0
             or expiry <= created_at
-            or now > expiry
+            or expiry - created_at > MAX_STORE_LIFETIME_SECONDS
+            or now >= expiry
         ):
             raise ContextStoreError("context store is expired or has an invalid lifetime")
         digest = root.get("digest")
@@ -402,6 +502,8 @@ class ContextStore:
         if not isinstance(values, list) or len(values) > MAX_STORE_RECORDS:
             raise ContextStoreError("context store records are invalid")
         records = tuple(_record(value) for value in values)
+        if any(record.expiry <= created_at or record.expiry > expiry for record in records):
+            raise ContextStoreError("context record lifetime is invalid")
         handles = [record.handle for record in records]
         if len(handles) != len(set(handles)):
             raise ContextStoreError("context store handles collide")
@@ -421,10 +523,10 @@ class ContextStore:
             HANDLE_RE.fullmatch(handle) is None
             or run_id != self.run_id
             or policy_digest != self.policy_digest
-            or now > self.expiry
+            or now >= self.expiry
         ):
             raise ContextStoreError("context handle is unavailable")
         record = next((record for record in self.records if record.handle == handle), None)
-        if record is None or now > record.expiry:
+        if record is None or now >= record.expiry:
             raise ContextStoreError("context handle is unavailable")
         return record
