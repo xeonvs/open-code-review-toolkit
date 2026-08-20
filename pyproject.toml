@@ -134,6 +134,11 @@ name = "🐛 Bug Fixes"
 showcontent = true
 
 [[tool.towncrier.type]]
+directory = "maintenance"
+name = "🛠 Maintenance"
+showcontent = true
+
+[[tool.towncrier.type]]
 directory = "refactor"
 name = "🔧 Refactoring"
 showcontent = true

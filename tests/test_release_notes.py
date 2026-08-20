@@ -36,6 +36,7 @@ def test_towncrier_categories_preserve_conditional_release_contract() -> None:
     assert categories == {
         "feature": "🚀 Features",
         "bugfix": "🐛 Bug Fixes",
+        "maintenance": "🛠 Maintenance",
         "refactor": "🔧 Refactoring",
         "doc": "📖 Documentation",
         "rules": "🧩 Rules",
