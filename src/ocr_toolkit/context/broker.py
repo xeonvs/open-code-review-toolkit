@@ -29,6 +29,8 @@ from ocr_toolkit.context.dlp import check_text, normalize_text
 from ocr_toolkit.context.recognizers import ReferenceCandidate
 from ocr_toolkit.context.store import PendingContextRecord
 
+MAX_ADAPTER_REQUESTS = 512
+
 
 @dataclass(frozen=True, slots=True)
 class CandidateSelection:
@@ -222,7 +224,8 @@ def acquire_external_records(
     degradation_counts = {"unavailable": 0, "invalid": 0, "limit": 0}
     required_degraded = False
     total_chars = total_bytes = total_lines = 0
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: dict[tuple[str, str, str, str], tuple[str, str, PendingContextRecord, int, int, int]] = {}
+    invalidated: set[tuple[str, str, str, str]] = set()
     started_requests = 0
     acquisition_deadline = (
         time.monotonic() + policy.budgets.timeout_ms / 1000 if deadline is None else deadline
@@ -260,7 +263,8 @@ def acquire_external_records(
             required_degraded = required_degraded or reference.required
             continue
         if (
-            started_requests >= policy.budgets.max_records
+            started_requests >= MAX_ADAPTER_REQUESTS
+            or len(records) >= policy.budgets.max_records
             or sum(1 for record in records if record.source == source) >= reference.max_records
         ):
             completeness[source] = "partial"
@@ -331,6 +335,36 @@ def acquire_external_records(
         chars = len(text) if isinstance(text, str) else 0
         byte_count = len(text.encode()) if isinstance(text, str) else 0
         lines = text.count("\n") + 1 if isinstance(text, str) and text else 0
+        digest = hashlib.sha256(
+            json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        identity = (
+            reference.adapter,
+            reference.tenant,
+            reference.resource_class,
+            response.canonical_object,
+        )
+        if identity in invalidated:
+            completeness[source] = "unavailable"
+            degradation_counts["invalid"] += 1
+            required_degraded = required_degraded or reference.required
+            continue
+        prior = seen.get(identity)
+        if prior is not None:
+            if prior[:2] == (response.version, digest):
+                continue
+            _version, _digest, prior_record, prior_chars, prior_bytes, prior_lines = seen.pop(
+                identity
+            )
+            records.remove(prior_record)
+            total_chars -= prior_chars
+            total_bytes -= prior_bytes
+            total_lines -= prior_lines
+            invalidated.add(identity)
+            completeness[source] = "unavailable"
+            degradation_counts["invalid"] += 1
+            required_degraded = required_degraded or reference.required
+            continue
         if (
             total_chars + chars > policy.budgets.max_chars
             or total_bytes + byte_count > policy.budgets.max_bytes
@@ -340,40 +374,28 @@ def acquire_external_records(
             degradation_counts["limit"] += 1
             required_degraded = required_degraded or reference.required
             continue
-        identity = (
-            reference.adapter,
-            reference.tenant,
-            reference.resource_class,
-            response.canonical_object,
-        )
-        if identity in seen:
-            continue
-        seen.add(identity)
         total_chars += chars
         total_bytes += byte_count
         total_lines += lines
-        digest = hashlib.sha256(
-            json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        records.append(
-            PendingContextRecord(
-                source=source,
-                adapter=reference.adapter,
-                tenant=reference.tenant,
-                canonical_object=response.canonical_object,
-                resource_class=reference.resource_class,
-                descriptor=str(normalized.get("descriptor", reference.resource_class)),
-                projections={
-                    "model": _project(normalized, reference.projections.model),
-                    "publish": _project(normalized, reference.projections.publish),
-                    "retain": _project(normalized, reference.projections.retain),
-                },
-                version=response.version,
-                digest=digest,
-                mutable=True,
-                expiry=response.expiry,
-            )
+        admitted = PendingContextRecord(
+            source=source,
+            adapter=reference.adapter,
+            tenant=reference.tenant,
+            canonical_object=response.canonical_object,
+            resource_class=reference.resource_class,
+            descriptor=str(normalized.get("descriptor", reference.resource_class)),
+            projections={
+                "model": _project(normalized, reference.projections.model),
+                "publish": _project(normalized, reference.projections.publish),
+                "retain": _project(normalized, reference.projections.retain),
+            },
+            version=response.version,
+            digest=digest,
+            mutable=True,
+            expiry=response.expiry,
         )
+        records.append(admitted)
+        seen[identity] = (response.version, digest, admitted, chars, byte_count, lines)
     return BrokerResult(
         records=tuple(records),
         completeness=dict(sorted(completeness.items())),

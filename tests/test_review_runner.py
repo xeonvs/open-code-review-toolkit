@@ -250,24 +250,39 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     }
 
 
-def test_publication_dlp_blocks_context_copy_secret_pii_and_markdown_laundering(
-    tmp_path: Path,
-) -> None:
-    result = tmp_path / "result.json"
-    result.write_text(json.dumps({"status": "success", "comments": ["Safe finding."]}))
+def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() -> None:
     forbidden = (
         "prefix private context sentence suffix",
         "ghp_abcdefghijklmnopqrstuvwxyz123456",
+        "<!-- private hidden-only context sentence -->",
     )
-    review_runner._publication_dlp(result, forbidden=forbidden)
+    safe_payload: dict[str, object] = {
+        "status": "success",
+        "comments": [{"content": "Safe finding."}],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        safe_payload, forbidden=forbidden, allowed_tools=frozenset()
+    )
+    assert projected is safe_payload
+    assert publication == {"dlp": "passed"}
+    assert blocked is False
 
-    result.write_text(json.dumps({"status": "success", "comments": ["abcdefghijklmnopqrstuvw"]}))
-    review_runner._publication_dlp(
-        result,
-        forbidden=("prefix abcdefghijklmnopqrstuvw suffix",),
+    excerpt_payload: dict[str, object] = {
+        "status": "success",
+        "comments": [{"content": "abcdefghijklmnopqrstuvwx"}],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        excerpt_payload,
+        forbidden=("prefix abcdefghijklmnopqrstuvwx suffix",),
+        allowed_tools=frozenset(),
     )
+    assert projected["comments"] == []
+    assert publication["dlp"] == "filtered"
+    assert blocked is True
+
     for text in (
         "Copied private context sentence.",
+        "<!-- private hidden-only context sentence -->",
         "private context <!--split-->sentence",
         "private context &#x73;entence",
         "private con&#x200b;text sentence",
@@ -278,15 +293,35 @@ def test_publication_dlp_blocks_context_copy_secret_pii_and_markdown_laundering(
         "ghp_abcdefghij<span>klmnop</span>qrstuvwxyz123456",
         "See [hidden](https://example.invalid/path).",
         "See [hidden](&#x68;ttps://example.invalid/path).",
+        "See [hidden][destination].\n[destination]: https://example.invalid/path",
+        "See <https://example.invalid/path>.",
         "Unicode control: &#x202e;hidden.",
     ):
-        result.write_text(json.dumps({"status": "success", "comments": [text]}))
-        with pytest.raises(review_runner.ReviewRunnerError, match="publication DLP"):
-            review_runner._publication_dlp(result, forbidden=forbidden)
+        hostile_payload: dict[str, object] = {
+            "status": "success",
+            "comments": [{"content": text}],
+        }
+        projected, publication, blocked = review_runner._publication_projection(
+            hostile_payload, forbidden=forbidden, allowed_tools=frozenset()
+        )
+        assert projected["comments"] == []
+        assert publication["dlp"] == "filtered"
+        assert blocked is True
+        assert text not in json.dumps(projected)
 
-    result.write_text(json.dumps({"status": "success", "comments": ["safe " * 400]}))
-    with pytest.raises(review_runner.ReviewRunnerError, match="publication DLP"):
-        review_runner._publication_dlp(result, forbidden=("private " * 20_000,))
+    work_bound_payload: dict[str, object] = {
+        "status": "success",
+        "comments": [{"content": "safe " * 400}],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        work_bound_payload,
+        forbidden=("private " * 20_000,),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+    assert publication["dlp"] == "filtered"
+    assert publication["reason_counts"]["limit"] == 1
+    assert blocked is True
 
 
 def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
@@ -331,9 +366,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
         external_servers=(),
         secret_values=(),
     )
@@ -384,6 +417,186 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     serialized = result.read_text(encoding="utf-8")
     assert "private discussion sentence" not in serialized
     assert "synthetic@example.invalid" not in serialized
+
+
+def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_sinks() -> None:
+    payload: dict[str, object] = {
+        "status": "complete",
+        "message": "Review completed.",
+        "comments": [
+            {
+                "path": "src/safe.py",
+                "start_line": 7,
+                "end_line": 7,
+                "content": "Guard the empty collection before indexing it.",
+            }
+        ],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "sha-a1234567890abcdef1234567890abcdef1234567"}],
+                "completed": [{"item_id": "sha-a1234567890abcdef1234567890abcdef1234567"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+        "locations": [
+            {
+                "source_sha": "a1234567890abcdef1234567890abcdef1234567",
+                "private_diagnostic": "bounded internal diagnostic",
+            }
+        ],
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+
+    assert projected is payload
+    assert publication == {"dlp": "passed"}
+    assert blocked is False
+
+    payload["locations"] = [
+        {
+            "private_diagnostic": "synthetic@example.invalid",
+            "hidden@example.invalid": "must be removed with its hostile key",
+        }
+    ]
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+    assert blocked is True
+    assert publication["dlp"] == "filtered"
+    assert publication["omitted"] == {"comments": 0, "warnings": 0, "fields": 2}
+    assert projected["status"] == "complete"
+    assert projected["locations"] == [{"private_diagnostic": "ocr-redacted-000001"}]
+    assert projected["comments"] == payload["comments"]
+
+    payload["locations"] = []
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("ocr.run-manifest/v1",),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+    assert blocked is True
+    assert publication["dlp"] == "filtered"
+    assert projected["status"] == "completed_with_errors"
+    assert "manifest" not in projected
+    assert projected["comments"] == payload["comments"]
+
+    payload["locations"] = []
+    payload["comments"] = [
+        {
+            "path": "src/safe.py",
+            "content": '<span title="synthetic&#64;example.invalid">safe</span>',
+        }
+    ]
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+    assert blocked is True
+    assert publication["dlp"] == "filtered"
+    assert publication["omitted"] == {"comments": 1, "warnings": 0, "fields": 1}
+    assert projected["comments"] == []
+
+
+def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_manifest(
+    tmp_path: Path,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "comments": [
+                    {
+                        "path": "src/safe.py",
+                        "start_line": 7,
+                        "content": "Guard the empty collection before indexing it.",
+                    }
+                ],
+                "warnings": [],
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "coverage": {
+                        "selected": [{"item_id": "synthetic-item"}],
+                        "completed": [{"item_id": "synthetic-item"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+                "locations": [{"diagnostic": "synthetic@example.invalid"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    usage, blocked, publication = review_runner._finalize_ocr_result(
+        result,
+        composition,
+        DEFAULT_IDENTITY,
+        None,
+        forbidden=(),
+    )
+
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert usage == {"ocr_toolkit_evidence": 1}
+    assert blocked is True
+    assert publication["dlp"] == "filtered"
+    assert publication["omitted"] == {"comments": 0, "warnings": 0, "fields": 1}
+    assert persisted["status"] == "complete"
+    assert persisted["manifest"]["terminal_state"] == "complete"
+    assert persisted["comments"][0]["content"].startswith("Guard the empty")
+    assert persisted["locations"] == [{"diagnostic": "ocr-redacted-000001"}]
+    assert "synthetic@example.invalid" not in result.read_text(encoding="utf-8")
+
+
+def test_resolve_ocr_binary_rejects_relative_and_repository_owned_path_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    local_ocr = repository / "ocr"
+    local_ocr.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    local_ocr.chmod(0o700)
+    external = tmp_path / "bin"
+    external.mkdir()
+    external_ocr = external / "ocr"
+    external_ocr.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    external_ocr.chmod(0o700)
+    monkeypatch.chdir(repository)
+
+    monkeypatch.setenv("PATH", ".")
+    with pytest.raises(review_runner.ReviewRunnerError, match="search path"):
+        review_runner._resolve_ocr_binary()
+
+    monkeypatch.setenv("PATH", str(repository))
+    with pytest.raises(review_runner.ReviewRunnerError, match="executable is unsafe"):
+        review_runner._resolve_ocr_binary()
+
+    monkeypatch.setenv("PATH", str(external))
+    assert review_runner._resolve_ocr_binary() == str(external_ocr)
 
 
 def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: Path) -> None:

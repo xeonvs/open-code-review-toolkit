@@ -19,12 +19,8 @@ WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->
 MARKER_WITH_FINGERPRINT_RE = re.compile(
     r"^<!-- open-code-review-bot(?:\s+fp=([0-9a-f]{8,64}))?\s*-->"
 )
-FINDING_MARKER_RE = re.compile(
-    r"(?m)^<!-- open-code-review-bot\s+fp=([0-9a-f]{8,64})\s*-->$"
-)
-SUMMARY_RUN_MARKER_RE = re.compile(
-    r"(?m)^<!-- open-code-review-summary run=[0-9a-f]{32} -->$"
-)
+SUMMARY_RUN_MARKER_RE = re.compile(r"(?m)^<!-- open-code-review-summary run=[0-9a-f]{32} -->$")
+SETUP_PENDING_MARKER = "<!-- open-code-review-setup-pending -->"
 
 
 OCR_REPLY_COMMAND_RE = re.compile(
@@ -273,13 +269,26 @@ def fingerprint_from_marker(body: str) -> str | None:
 def finding_fingerprints_from_marked_body(body: str) -> set[str]:
     """Return finding markers only from one already author-validated bot body."""
 
-    return {match.group(1) for match in FINDING_MARKER_RE.finditer(body)}
+    fingerprint = fingerprint_from_marker(body)
+    return {fingerprint} if fingerprint is not None else set()
 
 
 def has_summary_run_marker(body: str) -> bool:
     """Return whether one author-validated bot body contains a summary identity."""
 
-    return SUMMARY_RUN_MARKER_RE.search(body) is not None
+    if not note_starts_with_marker(body):
+        return False
+    lines = body.splitlines()
+    return len(lines) >= 2 and SUMMARY_RUN_MARKER_RE.fullmatch(lines[1]) is not None
+
+
+def has_setup_pending_marker(body: str) -> bool:
+    """Return whether the protected preamble identifies one setup-pending note."""
+
+    if not note_starts_with_marker(body):
+        return False
+    lines = body.splitlines()
+    return len(lines) >= 2 and lines[1] == SETUP_PENDING_MARKER
 
 
 def author_id_from_note(note: dict[str, Any]) -> int | None:

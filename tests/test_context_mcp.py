@@ -40,9 +40,24 @@ def test_context_tools_list_and_get_only_minted_handles(tmp_path: Path) -> None:
     for arguments in (
         {"resource_class": []},
         {"cursor": []},
+        {"cursor": "%%%%"},
+        {"cursor": "A==="},
     ):
         with pytest.raises(ContextMCPError):
             call_context_tool(store, "context_list", arguments, now=150)
+
+    malformed = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "context_list", "arguments": {"cursor": "%%%%"}},
+        },
+        store,
+    )
+    assert malformed is not None
+    assert malformed["result"]["isError"] is True  # type: ignore[index]
 
 
 def test_context_tools_enforce_live_expiry_and_colon_source_cursor(tmp_path: Path) -> None:

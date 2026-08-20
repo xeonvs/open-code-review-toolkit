@@ -9,6 +9,7 @@ import subprocess
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -227,6 +228,27 @@ def test_discussions_cross_real_tls_twice_preserve_order_and_hide_display_identi
     assert pending[0].canonical_object != "thread-1"
     assert pending[0].projections["model"]["text"] == "First synthetic reply"
     assert "must-not-survive" not in repr(pending)
+
+
+def test_discussions_stop_at_policy_thread_bound_without_fetching_extra_pages(
+    tmp_path: Path,
+) -> None:
+    policy = replace(discussion_policy(), max_threads=1)
+    with gitlab_peer(tmp_path, mode="pagination") as api_root:
+        snapshot = acquire_discussions(
+            environment(api_root),
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=SOURCE_SHA,
+            run_id="synthetic_run_0001",
+            policy=policy,
+            now=1_787_209_200,
+        )
+
+    assert snapshot.state == "partial"
+    assert snapshot.omitted == 1
+    assert [(record.thread, record.reply) for record in snapshot.records] == [(0, 0), (0, 1)]
+    assert len(DiscussionHandler.requests) == 2
 
 
 def test_discussions_reject_mutated_pagination_and_unknown_actor(tmp_path: Path) -> None:

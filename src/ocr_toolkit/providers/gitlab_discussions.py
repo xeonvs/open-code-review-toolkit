@@ -168,6 +168,7 @@ def _snapshot_once(
     api_root = _api_root(environment)
     project = urllib.parse.quote(project_id, safe="")
     pages: list[object] = []
+    unfetched = 0
     page = "1"
     for _ in range(MAX_PAGES):
         payload, next_page = _read_page(
@@ -181,6 +182,11 @@ def _snapshot_once(
         pages.extend(payload)
         if not next_page:
             break
+        if len(pages) >= policy.max_threads:
+            # The provider proves at least one more page exists. The policy does
+            # not authorize fetching it once the admitted thread bound is full.
+            unfetched = 1
+            break
         if int(next_page) <= int(page):
             raise GitLabProviderError("GitLab discussion pagination did not advance")
         page = next_page
@@ -189,7 +195,7 @@ def _snapshot_once(
     toolkit_raw = environment.get("OCR_GITLAB_BOT_USER_ID", "").strip()
     toolkit_bot_id = int(toolkit_raw) if toolkit_raw.isdecimal() and int(toolkit_raw) > 0 else None
     records: list[DiscussionRecord] = []
-    omitted = 0
+    omitted = unfetched
     total_chars = total_bytes = total_lines = 0
     for thread_index, thread in enumerate(pages):
         if thread_index >= policy.max_threads:

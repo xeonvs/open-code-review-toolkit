@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit.context.contracts import ContextContractError, TextBudgets
-from ocr_toolkit.context.dlp import check_text
+from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
 from ocr_toolkit.context.policy import POLICY_PATH, load_protected_policy, parse_policy
 from ocr_toolkit.context.recognizers import recognize
 from ocr_toolkit.evidence.repository import GitRepositoryReader
@@ -213,6 +213,38 @@ def test_fixed_recognizers_are_bounded_deduplicated_and_origin_exact() -> None:
     )
     assert [item.value for item in urls] == ["https://docs.example.invalid/safe/page?view=1"]
 
+    hostile = recognize(
+        "https://docs.example.invalid:bad/safe/ignored "
+        "https://docs.example.invalid:99999/safe/ignored "
+        "https://docs.example.invalid/safe/accepted",
+        resource_class="document",
+        policy=url_policy.recognizer,
+    )
+    assert [item.value for item in hostile] == ["https://docs.example.invalid/safe/accepted"]
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://docs.example.invalid:bad",
+        "https://docs.example.invalid:99999",
+        "https://docs.example.invalid:",
+        "https://[invalid",
+        "https://:443",
+    ],
+)
+def test_https_recognizer_rejects_ambiguous_authorities(origin: str) -> None:
+    value = policy_value()
+    value["references"][0]["resource_class"] = "document"  # type: ignore[index]
+    value["references"][0]["recognizer"] = {  # type: ignore[index]
+        "type": "https_url",
+        "origin": origin,
+        "path_prefix": "/safe/",
+    }
+
+    with pytest.raises(ContextContractError, match="unsafe"):
+        parse_policy(encoded_policy(value))
+
 
 def test_explicit_recognizer_never_searches_arbitrary_repository_text() -> None:
     value = policy_value()
@@ -236,6 +268,9 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
     assert check_text("ééééé", budgets=budgets).reason == "limit"
     assert check_text("a\nb", budgets=budgets).reason == "limit"
     assert check_text("dev@example.invalid", budgets=TextBudgets(100, 200, 2)).reason == "pii"
+    assert check_text("Call +420 123 456 789", budgets=TextBudgets(100, 200, 2)).reason == "pii"
+    assert check_text("Build 123456789012345", budgets=TextBudgets(100, 200, 2)).admitted
+    assert check_text("sha-a1234567890abcdef", budgets=TextBudgets(100, 200, 2)).admitted
     monkeypatch.setenv("SYNTHETIC_CONTEXT_SECRET", "not-a-real-token-value")
     assert check_text("not-a-real-token-value", budgets=TextBudgets(100, 200, 2)).reason == "secret"
     assert (
@@ -245,4 +280,27 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
             publication=True,
         ).reason
         == "laundering"
+    )
+    for hidden in (
+        "<!-- synthetic&#64;example.invalid -->safe",
+        '<span title="synthetic&#64;example.invalid">safe</span>',
+        "&lt;!-- synthetic&#x40;example.invalid --&gt;safe",
+        "<code>safe</code>",
+    ):
+        assert (
+            check_text(
+                hidden,
+                budgets=TextBudgets(200, 400, 2),
+                publication=True,
+            ).admitted
+            is False
+        )
+    assert check_text(
+        "x < y and y > z", budgets=TextBudgets(100, 200, 2), publication=True
+    ).admitted
+    assert (
+        ForbiddenMatcher.compile(("<!-- hidden-only protected value -->",)).match_reason(
+            "<!-- hidden-only protected value -->"
+        )
+        == "forbidden"
     )

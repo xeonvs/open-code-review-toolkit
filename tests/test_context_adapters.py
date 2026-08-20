@@ -10,6 +10,7 @@ import sys
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,7 @@ from ocr_toolkit.context.adapters import (
     configured_secret_values,
     parse_adapter_config,
 )
-from ocr_toolkit.context.broker import CandidateSelection, acquire_external_records
+from ocr_toolkit.context.broker import BrokerResult, CandidateSelection, acquire_external_records
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.recognizers import ReferenceCandidate
 from tests.test_context_policy import encoded_policy, policy_value
@@ -102,6 +103,43 @@ def test_real_stdio_adapter_timeout_terminates_child() -> None:
             request(deadline_ms=100),
             environment={"SYNTHETIC_ADAPTER_MODE": "timeout"},
         )
+
+
+def test_real_stdio_adapter_deadline_covers_request_delivery() -> None:
+    blocked_request = replace(request(deadline_ms=100), candidate="x" * 30_000)
+    with pytest.raises(ContextAdapterError, match="timed out"):
+        authorize_and_resolve(
+            stdio_config(),
+            blocked_request,
+            environment={"SYNTHETIC_ADAPTER_MODE": "no_read"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("tenants", ["engineering", 7]),
+        ("tenants", ["engineering", {}]),
+        ("resource_classes", ["issue", []]),
+        ("env_from", ["SYNTHETIC_ADAPTER_MODE", 7]),
+        ("env_from", ["SYNTHETIC_ADAPTER_MODE", {}]),
+    ],
+)
+def test_adapter_config_rejects_mixed_and_unhashable_list_items(
+    field: str, value: list[object]
+) -> None:
+    config: dict[str, object] = {
+        "name": "tracker",
+        "type": "stdio",
+        "tenants": ["engineering"],
+        "resource_classes": ["issue"],
+        "command": sys.executable,
+        "args": [],
+        "env_from": [],
+    }
+    config[field] = value
+    with pytest.raises(ContextAdapterError):
+        parse_adapter_config(json.dumps([config]))
 
 
 @pytest.mark.parametrize(
@@ -457,6 +495,146 @@ def test_optional_adapter_degradation_never_claims_required_failure() -> None:
     assert result.records == ()
     assert result.required_degraded is False
     assert result.completeness == {"reference:tracker:engineering:issue": "unavailable"}
+
+
+def test_broker_record_budget_counts_admissions_not_failed_requests() -> None:
+    value = policy_value()
+    value["budgets"]["max_records"] = 1  # type: ignore[index]
+    policy = parse_policy(encoded_policy(value))
+    reference = policy.references[0]
+
+    def invoke(
+        _config: AdapterConfig,
+        adapter_request: AdapterRequest,
+        *,
+        environment: object,
+    ) -> AdapterResponse:
+        del environment
+        if adapter_request.candidate == "DEMO-7":
+            return AdapterResponse(status="unavailable")
+        return AdapterResponse(
+            status="admitted",
+            canonical_object="tenant-object-8",
+            version="version-1",
+            expiry=200,
+            record={
+                "descriptor": "issue",
+                "digest": "a" * 64,
+                "expiry": 200,
+                "state": "open",
+                "text": "Later authorized record.",
+                "version": "version-1",
+            },
+        )
+
+    result = acquire_external_records(
+        policy=policy,
+        adapters=[stdio_config()],
+        selections=[
+            CandidateSelection(reference, ReferenceCandidate("issue", key, "issue_key"))
+            for key in ("DEMO-7", "DEMO-8")
+        ],
+        run_id=RUN_ID,
+        now=100,
+        environment={},
+        invoke=invoke,
+    )
+
+    assert len(result.records) == 1
+    assert result.records[0].canonical_object == "tenant-object-8"
+
+
+def test_broker_has_separate_hard_request_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    policy = parse_policy(encoded_policy())
+    reference = policy.references[0]
+    calls = 0
+
+    def invoke(
+        _config: AdapterConfig,
+        _request: AdapterRequest,
+        *,
+        environment: object,
+    ) -> AdapterResponse:
+        nonlocal calls
+        del environment
+        calls += 1
+        return AdapterResponse(status="unavailable")
+
+    monkeypatch.setattr("ocr_toolkit.context.broker.MAX_ADAPTER_REQUESTS", 2)
+    result = acquire_external_records(
+        policy=policy,
+        adapters=[stdio_config()],
+        selections=[
+            CandidateSelection(reference, ReferenceCandidate("issue", key, "issue_key"))
+            for key in ("DEMO-7", "DEMO-8", "DEMO-9")
+        ],
+        run_id=RUN_ID,
+        now=100,
+        environment={},
+        invoke=invoke,
+    )
+
+    assert calls == 2
+    assert result.degradation_counts == {"unavailable": 2, "invalid": 0, "limit": 1}
+    assert result.completeness == {"reference:tracker:engineering:issue": "partial"}
+
+
+def test_broker_deduplicates_before_budget_and_rejects_changed_duplicate() -> None:
+    value = policy_value()
+    value["budgets"]["max_chars"] = 30  # type: ignore[index]
+    value["budgets"]["max_bytes"] = 60  # type: ignore[index]
+    policy = parse_policy(encoded_policy(value))
+    reference = policy.references[0]
+
+    def acquire(second_text: str) -> BrokerResult:
+        calls = 0
+
+        def invoke(
+            _config: AdapterConfig,
+            _request: AdapterRequest,
+            *,
+            environment: object,
+        ) -> AdapterResponse:
+            nonlocal calls
+            del environment
+            calls += 1
+            text = "Bounded object." if calls == 1 else second_text
+            return AdapterResponse(
+                status="admitted",
+                canonical_object="same-object",
+                version="version-1",
+                expiry=200,
+                record={
+                    "descriptor": "issue",
+                    "digest": "a" * 64,
+                    "expiry": 200,
+                    "state": "open",
+                    "text": text,
+                    "version": "version-1",
+                },
+            )
+
+        return acquire_external_records(
+            policy=policy,
+            adapters=[stdio_config()],
+            selections=[
+                CandidateSelection(reference, ReferenceCandidate("issue", key, "issue_key"))
+                for key in ("DEMO-7", "DEMO-8", "DEMO-9")
+            ],
+            run_id=RUN_ID,
+            now=100,
+            environment={},
+            invoke=invoke,
+        )
+
+    duplicate = acquire("Bounded object.")
+    assert len(duplicate.records) == 1
+    assert duplicate.degradation_counts["limit"] == 0
+
+    changed = acquire("Changed duplicate object text.")
+    assert changed.records == ()
+    assert changed.degradation_counts["invalid"] == 2
+    assert changed.completeness == {"reference:tracker:engineering:issue": "unavailable"}
 
 
 def test_broker_applies_one_aggregate_deadline(monkeypatch: pytest.MonkeyPatch) -> None:

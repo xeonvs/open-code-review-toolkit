@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import time
@@ -62,7 +63,7 @@ def _offset(value: object, query_key: str, records_key: str) -> int:
         if not isinstance(selected_state, list) or len(selected_state) != 3:
             raise ValueError
         offset, selected_query, selected_records = selected_state
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         raise ContextMCPError("cursor is invalid") from exc
     state = json.dumps([offset, selected_query, selected_records], separators=(",", ":"))
     expected = hashlib.sha256(f"ocr-context-list-v1:{state}".encode()).hexdigest()[:16]

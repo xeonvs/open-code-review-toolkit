@@ -27,6 +27,7 @@ from ocr_toolkit.evidence.artifacts import (
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.project import (
     DEFAULT_BOOTSTRAP_MAX_CHARS,
+    MANDATORY_EVIDENCE_INSTRUCTION,
     render_bootstrap,
     render_json,
 )
@@ -858,7 +859,8 @@ def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> 
     assert "`` services/`review text`/AGENTS.md ``" in bootstrap
     assert "`` services/`review text`/** ``" in bootstrap
     clipped = render_bootstrap(store, max_chars=256)
-    assert clipped.endswith(
-        "> Evidence bootstrap truncated; query `ocr_toolkit_evidence` for details.\n"
-    )
+    assert clipped.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
+    assert clipped.endswith("> Bootstrap truncated.\n")
+    assert len(clipped) <= 256
+    assert len(clipped.encode("utf-8")) <= 1024
     assert not any(line.count("``") == 1 for line in clipped.splitlines())

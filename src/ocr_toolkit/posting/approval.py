@@ -200,8 +200,7 @@ def publication_dlp_state(value: Any) -> str | None:
             for count in counts.values()
         )
         or not isinstance(original, dict)
-        or set(original)
-        != {"outcome", "selected", "completed", "reused", "failed", "waived"}
+        or set(original) != {"outcome", "selected", "completed", "reused", "failed", "waived"}
         or original.get("outcome") not in {"clean", "warning", "partial", "failed", "skipped"}
         or any(
             not isinstance(original.get(field), int)

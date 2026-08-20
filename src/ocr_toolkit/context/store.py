@@ -108,6 +108,7 @@ def _atomic_write(path: Path, payload: bytes) -> None:
     try:
         os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
+            descriptor = -1
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
@@ -119,6 +120,8 @@ def _atomic_write(path: Path, payload: bytes) -> None:
         finally:
             os.close(directory)
     except Exception:
+        if descriptor >= 0:
+            os.close(descriptor)
         try:
             os.unlink(temporary)
         except FileNotFoundError:
@@ -452,7 +455,7 @@ class ContextStore:
         try:
             raw = _read_safe(path, metadata)
             payload = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_pairs)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise ContextStoreError("context store is malformed") from exc
         root = _mapping(payload, "context store")
         if set(root) != {

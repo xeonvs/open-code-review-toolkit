@@ -155,7 +155,6 @@ def _names(value: object, *, label: str, allowed: frozenset[str] | None = None) 
         not isinstance(value, list)
         or not value
         or len(value) > 32
-        or value != sorted(set(value))
         or any(
             not isinstance(item, str)
             or (allowed is None and NAME_RE.fullmatch(item) is None)
@@ -163,6 +162,8 @@ def _names(value: object, *, label: str, allowed: frozenset[str] | None = None) 
             for item in value
         )
     ):
+        raise ContextAdapterError(f"{label} is invalid")
+    if value != sorted(set(value)):
         raise ContextAdapterError(f"{label} is invalid")
     return tuple(value)
 
@@ -216,11 +217,12 @@ def parse_adapter_config(raw: str | None) -> tuple[AdapterConfig, ...]:
                 )
                 or not isinstance(env_from, list)
                 or len(env_from) > MAX_ENV_NAMES
-                or env_from != sorted(set(env_from))
                 or any(
                     not isinstance(name, str) or ENV_RE.fullmatch(name) is None for name in env_from
                 )
             ):
+                raise ContextAdapterError("stdio adapter configuration is invalid")
+            if env_from != sorted(set(env_from)):
                 raise ContextAdapterError("stdio adapter configuration is invalid")
             configs.append(
                 AdapterConfig(
@@ -410,7 +412,7 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
         child_environment["HOME"] = directory
         child_environment["TMPDIR"] = directory
         process: subprocess.Popen[bytes] | None = None
-        readers: tuple[threading.Thread, ...] = ()
+        workers: tuple[threading.Thread, ...] = ()
         try:
             process = subprocess.Popen(
                 [command, *config.args],
@@ -429,6 +431,7 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
             stderr_chunks: list[bytes] = []
             stdout_overflow = threading.Event()
             stderr_overflow = threading.Event()
+            writer_failed = threading.Event()
 
             def read_pipe(
                 stream: Any,
@@ -449,7 +452,14 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
                         overflow.set()
                         return
 
-            readers = (
+            def write_request(stream: Any, payload: bytes) -> None:
+                try:
+                    stream.write(payload)
+                    stream.close()
+                except (BrokenPipeError, OSError):
+                    writer_failed.set()
+
+            workers = (
                 threading.Thread(
                     target=read_pipe,
                     args=(stdout_pipe, stdout_chunks, MAX_RESPONSE_BYTES, stdout_overflow),
@@ -460,15 +470,18 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
                     args=(stderr_pipe, stderr_chunks, MAX_STDERR_BYTES, stderr_overflow),
                     daemon=True,
                 ),
+                threading.Thread(
+                    target=write_request,
+                    args=(stdin, _request_bytes(request)),
+                    daemon=True,
+                ),
             )
-            for reader in readers:
-                reader.start()
-            stdin.write(_request_bytes(request))
-            stdin.close()
             deadline = time.monotonic() + timeout
+            for worker in workers:
+                worker.start()
             timed_out = False
             while process.poll() is None:
-                if stdout_overflow.is_set() or stderr_overflow.is_set():
+                if stdout_overflow.is_set() or stderr_overflow.is_set() or writer_failed.is_set():
                     break
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -480,18 +493,19 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
                     continue
             if process.poll() is None:
                 terminate(process)
-            for reader in readers:
-                reader.join(timeout=5)
-            if any(reader.is_alive() for reader in readers):
+            for worker in workers:
+                worker.join(timeout=5)
+            if any(worker.is_alive() for worker in workers):
                 raise ContextAdapterError("stdio adapter pipes did not close")
             stdout = b"".join(stdout_chunks)
-            stderr = b"".join(stderr_chunks)
             if timed_out:
                 raise ContextAdapterError("stdio adapter timed out")
             if stdout_overflow.is_set():
                 raise ContextAdapterError("stdio adapter response exceeds its byte limit")
             if stderr_overflow.is_set():
                 raise ContextAdapterError("stdio adapter diagnostics exceeded their bound")
+            if writer_failed.is_set():
+                raise ContextAdapterError("stdio adapter request delivery failed")
         except ContextAdapterError:
             raise
         except (BrokenPipeError, OSError, subprocess.TimeoutExpired) as exc:
@@ -501,12 +515,11 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
         except BaseException:
             if process is not None and process.poll() is None:
                 terminate(process)
-            for reader in readers:
-                reader.join(timeout=5)
+            for worker in workers:
+                worker.join(timeout=5)
             raise
     assert process is not None
     if process.returncode != 0:
-        _ = redact_sensitive(stderr[:MAX_STDERR_BYTES].decode("utf-8", errors="replace"))
         raise ContextAdapterError("stdio adapter failed")
     return stdout
 

@@ -545,6 +545,15 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
     omitted = signal["omitted"]
     carried = signal["carried_forward_comments"]
     marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
+    completeness = (
+        "One or more publication units were omitted, so this review is partial and cannot "
+        "authorize automatic approval."
+        if omitted["comments"] or omitted["warnings"]
+        else (
+            "No finding or warning was omitted, but result fields were sanitized; automatic "
+            "approval remains unavailable."
+        )
+    )
     return "\n".join(
         [
             "<details>",
@@ -554,12 +563,9 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
                 f"Published safe subset: {retained['comments']} finding(s) and "
                 f"{retained['warnings']} warning(s). Omitted: {omitted['comments']} "
                 f"finding(s), {omitted['warnings']} warning(s), and {omitted['fields']} "
-                "optional finding field(s)."
+                "result field(s)."
             ),
-            (
-                f"{carried} matching finding(s) remain in the previous OCR review. "
-                "This review is partial and cannot authorize automatic approval."
-            ),
+            (f"{carried} matching finding(s) remain in the previous OCR review. {completeness}"),
             "",
             f"<!-- ocr-toolkit-signal {marker} -->",
             "",

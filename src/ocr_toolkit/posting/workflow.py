@@ -64,6 +64,7 @@ from ocr_toolkit.posting.gitlab import (
 )
 from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
 from ocr_toolkit.posting.markers import (
+    SETUP_PENDING_MARKER,
     annotate_comment_fingerprints,
     build_summary_run_marker,
     is_own_bot_note,
@@ -78,6 +79,7 @@ from ocr_toolkit.posting.snapshot import (
     cleanup_drafts_created_by_this_run,
     collect_previous_bot_comment_refs,
     delete_previous_bot_comments_if_collected,
+    delete_previous_setup_notes,
     delete_previous_summary_notes,
     filter_previously_published_comments,
     filter_suppressed_comments,
@@ -701,9 +703,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 f"Preserved {carried_forward_count} matching finding(s) from the previous "
                 "OCR review instead of publishing duplicates."
             )
-    dlp_signal = publication_dlp_signal(
-        publication, carried_forward_comments=carried_forward_count
-    )
+    dlp_signal = publication_dlp_signal(publication, carried_forward_comments=carried_forward_count)
     dlp_details = format_publication_dlp_details(dlp_signal)
     if dlp_signal is not None:
         print(
@@ -1260,6 +1260,10 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
 
     if status.reason != PROTECTED_TARGET_RULE_PATH_PENDING:
         raise ValueError("unsupported pre-execution status")
+    previous_refs = collect_previous_bot_comment_refs(config)
+    if previous_refs is None:
+        print("Cannot collect previous OCR setup notes reliably.", file=sys.stderr)
+        return 1 if strict_posting() else 0
     transaction = PostingTransaction()
     heading = (
         "**⏳ Open Code Review setup is pending**"
@@ -1274,12 +1278,18 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
         "subsequent merge requests can run a full review.\n\n"
         "No review findings were produced. Previous Open Code Review comments were preserved."
     )
-    response = post_review_note_bounded(config, heading, body, transaction)
+    response = post_review_note_bounded(
+        config,
+        heading,
+        f"{SETUP_PENDING_MARKER}\n{body}",
+        transaction,
+    )
     if response is None:
         print("Failed to create OCR setup-pending note.", file=sys.stderr)
         return posting_failure_exit(config, None, transaction)
     if not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
+    delete_previous_setup_notes(config, previous_refs)
     return 1 if strict_posting() else 0
 
 

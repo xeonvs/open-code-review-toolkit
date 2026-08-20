@@ -134,25 +134,51 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(carried, 1)
         self.assertEqual(kept, [comments[1]])
 
-    def test_finding_markers_are_collected_from_owned_fallback_body(self) -> None:
+    def test_markers_are_parsed_only_from_owned_preamble(self) -> None:
         first = "a" * FINGERPRINT_LEN
         second = "b" * FINGERPRINT_LEN
-        body = (
-            f"{markers.build_marker(None)}\nsummary\n"
-            f"{markers.build_marker(first)}\nfinding\n"
-            f"{markers.build_marker(second)}\nother"
-        )
+        body = f"{markers.build_marker(first)}\nfinding text\n{markers.build_marker(second)}\nother"
 
         self.assertEqual(
             markers.finding_fingerprints_from_marked_body(body),
-            {first, second},
+            {first},
         )
         self.assertTrue(
             markers.has_summary_run_marker(
                 f"{markers.build_marker(None)}\n{markers.build_summary_run_marker('c' * 32)}"
             )
         )
-        self.assertFalse(markers.has_summary_run_marker("quoted summary marker"))
+        self.assertFalse(
+            markers.has_summary_run_marker(
+                f"{markers.build_marker(None)}\nvisible text\n"
+                f"{markers.build_summary_run_marker('c' * 32)}"
+            )
+        )
+        self.assertTrue(
+            markers.has_setup_pending_marker(
+                f"{markers.build_marker(None)}\n{markers.SETUP_PENDING_MARKER}"
+            )
+        )
+        self.assertFalse(
+            markers.has_setup_pending_marker(
+                f"{markers.build_marker(None)}\nvisible\n{markers.SETUP_PENDING_MARKER}"
+            )
+        )
+
+    def test_partial_publication_consumes_one_legacy_marker_per_duplicate(self) -> None:
+        comments = [
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+        ]
+        markers.annotate_comment_fingerprints(comments)
+        legacy = markers.line_based_comment_fingerprint(comments[0])
+        self.assertIsNotNone(legacy)
+        previous = snapshot.BotCommentRefs(published_fingerprints={legacy or ""})
+
+        kept, carried = snapshot.filter_previously_published_comments(comments, previous)
+
+        self.assertEqual(carried, 1)
+        self.assertEqual(kept, [comments[1]])
 
     def test_write_result_rejects_unknown_outcomes_and_malformed_write_ids(self) -> None:
         with self.assertRaises(ValueError):
@@ -1707,6 +1733,10 @@ class PostingWorkflowTests(unittest.TestCase):
                 stderr_path = root / "stderr.log"
                 stderr_path.write_text("/merge repository-controlled details\n", encoding="utf-8")
                 notes: list[tuple[str, str]] = []
+                setup_cleanup: list[list[int]] = []
+                previous = snapshot.BotCommentRefs(
+                    summary_plain_note_ids=[8], setup_plain_note_ids=[9]
+                )
 
                 def capture_note(
                     _config: gitlab.GitLabConfig,
@@ -1733,6 +1763,16 @@ class PostingWorkflowTests(unittest.TestCase):
                     ),
                     patched_attr(workflow, "post_review_note_bounded", capture_note),
                     patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                    patched_attr(
+                        workflow,
+                        "collect_previous_bot_comment_refs",
+                        lambda *_args: previous,
+                    ),
+                    patched_attr(
+                        workflow,
+                        "delete_previous_setup_notes",
+                        lambda _config, refs: setup_cleanup.append(refs.setup_plain_note_ids),
+                    ),
                 ):
                     exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
 
@@ -1741,8 +1781,10 @@ class PostingWorkflowTests(unittest.TestCase):
                 self.assertEqual("⏳" in notes[0][0], emoji == "true")
                 self.assertIn("did not run", notes[0][1])
                 self.assertIn("Previous Open Code Review comments were preserved", notes[0][1])
+                self.assertIn(markers.SETUP_PENDING_MARKER, notes[0][1])
                 self.assertNotIn("/merge", notes[0][1])
                 self.assertNotIn("rules.json", notes[0][1])
+                self.assertEqual(setup_cleanup, [[9]])
 
     def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
         notes: list[str] = []
@@ -1900,9 +1942,7 @@ class PostingSummaryTests(unittest.TestCase):
                 "waived": 0,
             },
         }
-        signal = posting_formatting.publication_dlp_signal(
-            publication, carried_forward_comments=1
-        )
+        signal = posting_formatting.publication_dlp_signal(publication, carried_forward_comments=1)
         details = posting_formatting.format_publication_dlp_details(signal)
         summary = posting_formatting.summarize_result(
             total=2,
@@ -1919,6 +1959,16 @@ class PostingSummaryTests(unittest.TestCase):
         marker = summary.split("<!-- ocr-toolkit-signal ", 1)[1].split(" -->", 1)[0]
         self.assertEqual(json.loads(marker), signal)
         self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v1")
+
+        private_only = {
+            **publication,
+            "omitted": {"comments": 0, "warnings": 0, "fields": 2},
+        }
+        private_details = posting_formatting.format_publication_dlp_details(
+            posting_formatting.publication_dlp_signal(private_only)
+        )
+        self.assertIn("No finding or warning was omitted", private_details)
+        self.assertIn("automatic approval remains unavailable", private_details)
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(

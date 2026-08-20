@@ -32,18 +32,29 @@ MANDATORY_EVIDENCE_INSTRUCTION = (
 )
 
 
-def _clip(text: str, *, max_chars: int, max_bytes: int) -> str:
+def _clip(
+    text: str,
+    *,
+    max_chars: int,
+    max_bytes: int,
+    required_prefix: str = "",
+) -> str:
     """Clip UTF-8 Markdown only at complete-line rendering boundaries."""
 
     if len(text) <= max_chars and len(text.encode("utf-8")) <= max_bytes:
         return text
+    if required_prefix and not text.startswith(required_prefix):
+        raise ValueError("required bootstrap prefix is missing")
     notice = "\n\n> Evidence bootstrap truncated; query `ocr_toolkit_evidence` for details.\n"
-    char_budget = max(0, max_chars - len(notice))
-    byte_budget = max(0, max_bytes - len(notice.encode("utf-8")))
-    selected: list[str] = []
+    prefix = required_prefix
+    if len(prefix) + len(notice) > max_chars:
+        notice = "\n> Bootstrap truncated.\n"
+    char_budget = max(0, max_chars - len(prefix) - len(notice))
+    byte_budget = max(0, max_bytes - len(prefix.encode("utf-8")) - len(notice.encode("utf-8")))
+    selected: list[str] = [prefix]
     selected_chars = 0
     selected_bytes = 0
-    for line in text.splitlines(keepends=True):
+    for line in text[len(prefix) :].splitlines(keepends=True):
         line_chars = len(line)
         line_bytes = len(line.encode("utf-8"))
         if selected_chars + line_chars > char_budget or selected_bytes + line_bytes > byte_budget:
@@ -51,7 +62,10 @@ def _clip(text: str, *, max_chars: int, max_bytes: int) -> str:
         selected.append(line)
         selected_chars += line_chars
         selected_bytes += line_bytes
-    return "".join(selected).rstrip() + notice
+    rendered = "".join(selected)
+    if rendered == prefix:
+        return prefix + notice.lstrip("\n")
+    return rendered.rstrip() + notice
 
 
 def _neutralize_markdown_line(message: str) -> str:
@@ -248,7 +262,12 @@ def render_bootstrap(
                 ),
             )
         )
-    return _clip("\n".join(lines).rstrip() + "\n", max_chars=max_chars, max_bytes=max_bytes)
+    return _clip(
+        "\n".join(lines).rstrip() + "\n",
+        max_chars=max_chars,
+        max_bytes=max_bytes,
+        required_prefix=MANDATORY_EVIDENCE_INSTRUCTION,
+    )
 
 
 def render_json(store: EvidenceStore, *, pretty: bool = False) -> str:

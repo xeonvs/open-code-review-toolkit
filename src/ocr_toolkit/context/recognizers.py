@@ -54,13 +54,18 @@ def recognize(
         expected = urlsplit(policy.origin)
         for match in HTTPS_TOKEN_RE.finditer(normalized):
             candidate = match.group(0).rstrip(".,;:!?")
-            parsed = urlsplit(candidate)
+            try:
+                parsed = urlsplit(candidate)
+                candidate_port = parsed.port
+                expected_port = expected.port
+            except ValueError:
+                continue
             if (
                 parsed.scheme == "https"
                 and parsed.username is None
                 and parsed.password is None
                 and parsed.hostname == expected.hostname
-                and parsed.port == expected.port
+                and candidate_port == expected_port
                 and parsed.path.startswith(policy.path_prefix)
                 and ".." not in parsed.path.split("/")
                 and not parsed.fragment

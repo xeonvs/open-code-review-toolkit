@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from ocr_toolkit.context import store as context_store
 from ocr_toolkit.context.store import ContextStore, ContextStoreError, PendingContextRecord
 
 RUN_ID = "synthetic_run_0001"
@@ -220,6 +221,54 @@ def test_context_store_rejects_digest_mismatch_duplicate_keys_and_unsafe_mode(
             expected_policy_digest=POLICY_DIGEST,
             now=150,
         )
+
+
+def test_context_store_rejects_recursive_json_as_closed_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context-store.json"
+    path.write_text("[" * 2_000 + "0" + "]" * 2_000, encoding="utf-8")
+    os.chmod(path, 0o600)
+
+    with pytest.raises(ContextStoreError):
+        ContextStore.read(
+            path,
+            expected_run_id=RUN_ID,
+            expected_policy_digest=POLICY_DIGEST,
+            now=150,
+        )
+
+    commit(path)
+    monkeypatch.setattr(
+        context_store.json,
+        "loads",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(ContextStoreError, match="malformed"):
+        ContextStore.read(
+            path,
+            expected_run_id=RUN_ID,
+            expected_policy_digest=POLICY_DIGEST,
+            now=150,
+        )
+
+
+def test_context_store_atomic_setup_failure_closes_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    descriptors: list[int] = []
+
+    def fail_fchmod(descriptor: int, _mode: int) -> None:
+        descriptors.append(descriptor)
+        raise OSError("synthetic fchmod failure")
+
+    monkeypatch.setattr(context_store.os, "fchmod", fail_fchmod)
+    with pytest.raises(OSError, match="synthetic fchmod"):
+        context_store._atomic_write(tmp_path / "context-store.json", b"{}\n")
+
+    assert len(descriptors) == 1
+    with pytest.raises(OSError):
+        os.fstat(descriptors[0])
 
 
 def test_context_store_hostile_read_revalidates_projection_semantics(tmp_path: Path) -> None:

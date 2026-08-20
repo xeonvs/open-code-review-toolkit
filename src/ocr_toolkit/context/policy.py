@@ -173,10 +173,17 @@ def _recognizer(value: object, *, resource_class: str) -> RecognizerPolicy:
         origin, path_prefix = item.get("origin"), item.get("path_prefix")
         if not isinstance(origin, str) or not isinstance(path_prefix, str):
             raise ContextContractError("HTTPS recognizer is invalid")
-        parsed = urlsplit(origin)
+        try:
+            parsed = urlsplit(origin)
+            hostname = parsed.hostname
+            _port = parsed.port
+        except ValueError as exc:
+            raise ContextContractError("HTTPS recognizer origin or prefix is unsafe") from exc
         if (
             parsed.scheme != "https"
             or not parsed.netloc
+            or hostname is None
+            or parsed.netloc.endswith(":")
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path not in {"", "/"}

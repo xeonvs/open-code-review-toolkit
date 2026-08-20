@@ -9,9 +9,12 @@ import time
 
 
 def main() -> int:
+    mode = os.environ.get("SYNTHETIC_ADAPTER_MODE", "valid")
+    if mode == "no_read":
+        time.sleep(2)
+        return 23
     raw = sys.stdin.buffer.readline()
     request = json.loads(raw)
-    mode = os.environ.get("SYNTHETIC_ADAPTER_MODE", "valid")
     current = os.path.realpath(os.getcwd())
     if current != os.path.realpath(os.environ.get("HOME", "")) or current != os.path.realpath(
         os.environ.get("TMPDIR", "")

@@ -301,6 +301,19 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertEqual(mutable.result.reason, "mutable review context was admitted")
         self.assertEqual(degraded.result.reason, "the selected review context was degraded")
 
+    def test_optional_context_mutation_remains_visible_without_becoming_required_failure(
+        self,
+    ) -> None:
+        receipt = enriched_receipt()
+        receipt["context"]["per_source"] = {"forge:gitlab_discussions": "mutated"}
+        receipt["context"]["degradation_counts"]["invalid"] = 1
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+
+        self.assertTrue(decision.eligible)
+
     def test_receipt_accepts_ocr_compatible_non_identifier_tool_names(self) -> None:
         metadata = receipt_v4(external=True)
         metadata["mcp"]["capabilities"][1]["tools"] = ["repo.search", "records/read"]

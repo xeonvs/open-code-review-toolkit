@@ -37,6 +37,7 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 - Touch only lines that implement the active objective or a necessary consequence. Match existing style, avoid unrelated cleanup, and remove only code made obsolete by the current change.
 - Start substantial work with one bounded reconnaissance pass. Search before broad reads, inspect two exact examples before copying a DSL/schema/configuration form when available, and keep large inspection behind focused ranges.
 - Treat the task's named checks as the acceptance contract. On failure, inspect evidence and update the hypothesis; after two equivalent failures under the same approach, switch to a materially different explanation or method rather than patching another symptom.
+- Treat a check as green only when its process exits successfully and every required output assertion holds. Multi-step shell checks must stop at the first failed step and must not end with an unconditional success marker; use task-specific variable names rather than zsh special parameters such as `path` or `status`.
 - Stop when the scoped result and its required checks are complete. Do not add victory-lap harnesses, optional refactors, or redundant successful checks. For long-running commands, persist the full result outside the waiter before execution and use the completion-driven, bounded-output contract in `docs/development.md`; do not wake the model for periodic empty polls when the environment can wait for process completion.
 
 ## Closure

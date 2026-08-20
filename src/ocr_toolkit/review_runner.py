@@ -69,7 +69,6 @@ from ocr_toolkit.ocr_result import (
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
-    inspect_ocr_result,
     transform_ocr_result,
 )
 from ocr_toolkit.pre_execution import (
@@ -371,9 +370,7 @@ def _review_receipt(
     }
 
 
-def _dlp_reasons(
-    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
-) -> Counter[str]:
+def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
@@ -395,6 +392,157 @@ def _dlp_reasons(
             if not checked.admitted:
                 reasons[checked.reason] += 1
     return reasons
+
+
+def _publication_sinks(payload: dict[str, object]) -> list[object]:
+    """Select only OCR-controlled values that the posting owner can render."""
+
+    sinks: list[object] = []
+    message = payload.get("message")
+    if message is not None:
+        sinks.append(message)
+    comments = payload.get("comments")
+    if isinstance(comments, list):
+        sinks.extend(
+            {key: value for key, value in item.items() if key in QUARANTINE_COMMENT_FIELDS}
+            for item in comments
+            if isinstance(item, dict)
+        )
+    warnings = payload.get("warnings")
+    if warnings is not None:
+        sinks.append(warnings)
+    tool_calls = payload.get("tool_calls")
+    if isinstance(tool_calls, list):
+        for item in tool_calls:
+            if not isinstance(item, dict):
+                continue
+            sinks.extend(item.get(key) for key in ("name", "tool", "tool_name") if key in item)
+            function = item.get("function")
+            if isinstance(function, dict) and "name" in function:
+                sinks.append(function.get("name"))
+    elif isinstance(tool_calls, dict):
+        by_tool = tool_calls.get("by_tool")
+        if isinstance(by_tool, dict):
+            sinks.extend(by_tool)
+        calls = tool_calls.get("calls")
+        if isinstance(calls, list):
+            sinks.extend(_publication_sinks({"tool_calls": calls}))
+    manifest = payload.get("manifest")
+    coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
+    failed = coverage.get("failed") if isinstance(coverage, dict) else None
+    if isinstance(failed, list):
+        sinks.extend(
+            {key: item.get(key) for key in ("path", "reason") if key in item}
+            for item in failed
+            if isinstance(item, dict)
+        )
+    return sinks
+
+
+def _is_publication_sink_path(path: tuple[object, ...]) -> bool:
+    """Return whether one result path can reach toolkit GitLab rendering."""
+
+    if path == ("message",) or (path and path[0] == "warnings"):
+        return True
+    if (
+        len(path) >= 3
+        and path[0] == "comments"
+        and isinstance(path[1], int)
+        and path[2] in QUARANTINE_COMMENT_FIELDS
+    ):
+        return True
+    if len(path) == 3 and path[:2] == ("tool_calls", "by_tool"):
+        return True
+    if (
+        len(path) == 4
+        and path[0] == "tool_calls"
+        and isinstance(path[1], int)
+        and path[2] == "function"
+        and path[3] == "name"
+    ):
+        return True
+    if (
+        len(path) == 3
+        and path[0] == "tool_calls"
+        and isinstance(path[1], int)
+        and path[2] in {"name", "tool", "tool_name"}
+    ):
+        return True
+    return bool(
+        len(path) >= 5
+        and path[:3] == ("manifest", "coverage", "failed")
+        and isinstance(path[3], int)
+        and path[4] in {"path", "reason"}
+    )
+
+
+def _sanitize_nonpublication_fields(
+    payload: dict[str, object], *, budgets: TextBudgets, matcher: ForbiddenMatcher
+) -> tuple[dict[str, object], Counter[str], int]:
+    """Redact unsafe private result fields without changing publication sinks."""
+
+    sanitized: dict[str, object] = {}
+    reasons: Counter[str] = Counter()
+    replacements: dict[str, str] = {}
+    redacted_fields = 0
+    stack: list[
+        tuple[
+            dict[str, object] | list[object], dict[str, object] | list[object], tuple[object, ...]
+        ]
+    ] = [(payload, sanitized, ())]
+    while stack:
+        source, target, path = stack.pop()
+        items = source.items() if isinstance(source, dict) else enumerate(source)
+        for key, value in items:
+            child_path = (*path, key)
+            if isinstance(source, dict):
+                assert isinstance(key, str)
+                if not _is_publication_sink_path(child_path):
+                    checked_key = check_text(
+                        key,
+                        budgets=budgets,
+                        publication=True,
+                        forbidden_matcher=matcher,
+                    )
+                    if not checked_key.admitted:
+                        reasons[checked_key.reason] += 1
+                        redacted_fields += 1
+                        continue
+            if isinstance(value, dict):
+                nested: dict[str, object] = {}
+                if isinstance(target, dict):
+                    target[key] = nested
+                else:
+                    target.append(nested)
+                stack.append((value, nested, child_path))
+                continue
+            if isinstance(value, list):
+                nested_list: list[object] = []
+                if isinstance(target, dict):
+                    target[key] = nested_list
+                else:
+                    target.append(nested_list)
+                stack.append((value, nested_list, child_path))
+                continue
+            projected = value
+            if isinstance(value, str) and not _is_publication_sink_path(child_path):
+                checked = check_text(
+                    value,
+                    budgets=budgets,
+                    publication=True,
+                    forbidden_matcher=matcher,
+                )
+                if not checked.admitted:
+                    reasons[checked.reason] += 1
+                    redacted_fields += 1
+                    projected = replacements.setdefault(
+                        value, f"ocr-redacted-{len(replacements) + 1:06d}"
+                    )
+            if isinstance(target, dict):
+                target[key] = projected
+            else:
+                target.append(projected)
+    return sanitized, reasons, redacted_fields
 
 
 def _safe_publication_comments(
@@ -431,15 +579,11 @@ def _safe_publication_warnings(
 
     if not isinstance(value, list):
         return [], 0
-    retained = [
-        item for item in value if not _dlp_reasons(item, budgets=budgets, matcher=matcher)
-    ]
+    retained = [item for item in value if not _dlp_reasons(item, budgets=budgets, matcher=matcher)]
     return retained, len(value) - len(retained)
 
 
-def _closed_tool_calls(
-    value: object, *, allowed_tools: frozenset[str]
-) -> dict[str, object]:
+def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[str, object]:
     """Project only bounded counters needed to prove model-side toolkit use."""
 
     if not isinstance(value, dict):
@@ -474,17 +618,58 @@ def _publication_projection(
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
-    reasons = _dlp_reasons(payload, budgets=budgets, matcher=matcher)
-    if not reasons:
+    sink_reasons: Counter[str] = Counter()
+    for sink in _publication_sinks(payload):
+        sink_reasons.update(_dlp_reasons(sink, budgets=budgets, matcher=matcher))
+    sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
+        payload, budgets=budgets, matcher=matcher
+    )
+    if not sink_reasons and not private_reasons:
         return payload, {"dlp": "passed"}, False
 
-    comments, omitted_comments, omitted_fields = _safe_publication_comments(
-        payload.get("comments"), budgets=budgets, matcher=matcher
-    )
-    warnings, omitted_warnings = _safe_publication_warnings(
-        payload.get("warnings"), budgets=budgets, matcher=matcher
-    )
     outcome = parse_result_outcome(payload)
+    if sink_reasons:
+        comments, omitted_comments, omitted_fields = _safe_publication_comments(
+            payload.get("comments"), budgets=budgets, matcher=matcher
+        )
+        warnings, omitted_warnings = _safe_publication_warnings(
+            payload.get("warnings"), budgets=budgets, matcher=matcher
+        )
+        projected: dict[str, object] = {
+            "status": "completed_with_errors",
+            "message": (
+                "Publication policy produced a safe partial OCR result. Independently safe "
+                "findings may be published, but the result must not be treated as a complete "
+                "review."
+            ),
+            "comments": comments,
+            "warnings": warnings,
+            "tool_calls": _closed_tool_calls(
+                payload.get("tool_calls"), allowed_tools=allowed_tools
+            ),
+        }
+    else:
+        projected = sanitized
+        comments = payload.get("comments") if isinstance(payload.get("comments"), list) else []
+        warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
+        omitted_comments = omitted_warnings = omitted_fields = 0
+        try:
+            parse_result_outcome(projected)
+        except OcrResultContractError:
+            projected = {
+                "status": "completed_with_errors",
+                "message": (
+                    "Retention policy sanitized private OCR fields that were required for the "
+                    "complete result contract. Safe findings may still be published, but the "
+                    "result must be treated as partial."
+                ),
+                "comments": comments,
+                "warnings": warnings,
+                "tool_calls": _closed_tool_calls(
+                    payload.get("tool_calls"), allowed_tools=allowed_tools
+                ),
+            }
+    reasons = sink_reasons + private_reasons
     publication: dict[str, object] = {
         "dlp": "filtered",
         "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
@@ -492,7 +677,7 @@ def _publication_projection(
         "omitted": {
             "comments": omitted_comments,
             "warnings": omitted_warnings,
-            "fields": omitted_fields,
+            "fields": omitted_fields + redacted_fields,
         },
         "original": {
             "outcome": outcome.kind,
@@ -503,17 +688,7 @@ def _publication_projection(
             "waived": outcome.waived_count,
         },
     }
-    partial_result: dict[str, object] = {
-        "status": "completed_with_errors",
-        "message": (
-            "Publication policy produced a safe partial OCR result. Independently safe findings "
-            "may be published, but the result must not be treated as a complete review."
-        ),
-        "comments": comments,
-        "warnings": warnings,
-        "tool_calls": _closed_tool_calls(payload.get("tool_calls"), allowed_tools=allowed_tools),
-    }
-    return partial_result, publication, True
+    return projected, publication, True
 
 
 def _finalize_ocr_result(
@@ -536,9 +711,7 @@ def _finalize_ocr_result(
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal filtered, publication, usage
         if TOOLKIT_RESULT_KEY in payload:
-            raise OcrResultMalformed(
-                f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}"
-            )
+            raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
         metadata = _review_receipt(payload, composition, identity, enrichment)
         projected, publication, filtered = _publication_projection(
             payload, forbidden=forbidden, allowed_tools=allowed_tools
@@ -997,30 +1170,6 @@ def _prepare_enrichment(
     )
 
 
-def _publication_dlp(path: Path, *, forbidden: tuple[str, ...]) -> None:
-    """Reject any unsafe OCR-controlled string before result acceptance."""
-
-    payload = inspect_ocr_result(path)
-    stack = [payload]
-    budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
-    matcher = ForbiddenMatcher.compile(forbidden)
-    while stack:
-        value = stack.pop()
-        if isinstance(value, dict):
-            stack.extend(value.values())
-        elif isinstance(value, list):
-            stack.extend(value)
-        elif isinstance(value, str):
-            checked = check_text(
-                value,
-                budgets=budgets,
-                publication=True,
-                forbidden_matcher=matcher,
-            )
-            if not checked.admitted:
-                raise ReviewRunnerError("OCR result failed publication DLP")
-
-
 def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
@@ -1175,10 +1324,8 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             counts = publication.get("reason_counts")
             closed_counts = counts if isinstance(counts, dict) else {}
             print(
-                "OCR publication DLP: filtered; safe partial result retained "
-                + " ".join(
-                    f"{reason}={closed_counts.get(reason, 0)}" for reason in DLP_REASONS
-                ),
+                "OCR publication DLP: filtered; safe sanitized result retained "
+                + " ".join(f"{reason}={closed_counts.get(reason, 0)}" for reason in DLP_REASONS),
                 file=sys.stderr,
             )
     return exit_code
@@ -1240,12 +1387,22 @@ def read_stderr_excerpt(stderr_path: Path, max_chars: int = DEFAULT_DIAGNOSTIC_C
 def _resolve_ocr_binary() -> str:
     """Resolve one exact executable before entering the repository-owned process cwd."""
 
+    search_path = os.environ.get("PATH", "")
+    entries = search_path.split(os.pathsep)
+    if not entries or any(not entry or not Path(entry).is_absolute() for entry in entries):
+        raise ReviewRunnerError("OCR executable search path is unsafe")
     candidate = shutil.which("ocr")
     if candidate is None:
         raise ReviewRunnerError("could not resolve the OCR executable")
     resolved = Path(candidate).resolve(strict=True)
     metadata = resolved.stat()
-    if not stat.S_ISREG(metadata.st_mode) or not os.access(resolved, os.X_OK):
+    repository = Path.cwd().resolve()
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or not os.access(resolved, os.X_OK)
+        or resolved == repository
+        or repository in resolved.parents
+    ):
         raise ReviewRunnerError("resolved OCR executable is unsafe")
     return str(resolved)
 
