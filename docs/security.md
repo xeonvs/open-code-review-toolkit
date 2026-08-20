@@ -36,7 +36,7 @@ An operator controls CI configuration, direct MCP servers, adapter commands/endp
 - Direct MCP credentials, tools, and content remain least-privilege and acceptable for both model egress and OCR-session retention.
 - Adapter credentials and services enforce tenant/object/operation/field authorization independently; reference syntax and authentication alone never authorize a resource.
 - Context policy cannot come from the source branch, context budgets cannot evict repository evidence, and model-facing context cannot add a network, arbitrary ID/URL, search, traversal, or write path.
-- Publication and retention are independent from retrieval/model egress. DLP uncertainty and cleanup uncertainty block ordinary publication.
+- Publication and retention are independent from retrieval/model egress. Cleanup uncertainty blocks publication. DLP filtering atomically destroys the raw result while retaining only independently passed findings/fields and closed counts; GitLab may publish the explicit partial subset, preserves prior review state, suppresses duplicates, and cannot approve it.
 - Provider mutations bind reviewed identity where supported; ambiguous inline creates use one author-bound readback without retry, and unresolved ambiguity preserves prior state.
 - Secrets remain outside repository-controlled context, public notes, fixtures, and release artifacts.
 
@@ -108,7 +108,7 @@ The v0.7.0 implementation extends the v0.6.3 selector/approval foundation with p
 - **Oversize/denial of wallet/selective omission:** enforce acquisition-time character, UTF-8 byte, record, thread, age, count, time, and aggregate budgets independent of repository evidence; expose partial, mutated, unavailable, and omitted states.
 - **Identity spoofing and privacy:** represent authors by provider-declared class plus run-local pseudonym; omit name, email, avatar, and profile URL. Unknown classification fails closed.
 - **TOCTOU/replay/cache poisoning:** bind snapshots and handles to version/ETag or digest, policy version, run, and expiry; use atomic store commits and uniform unavailable outcomes.
-- **PII/secret bypass and output laundering:** make retrieval, model egress, publication, and retention separate decisions. Minimize before model egress; publication DLP cannot undo prior disclosure. Uncertainty blocks the affected projection.
+- **PII/secret bypass and output laundering:** make retrieval, model egress, publication, and retention separate decisions. Minimize before model egress; publication DLP cannot undo prior disclosure. Uncertainty filters the affected publication unit, atomically replaces raw output with a safe partial result, exposes only low-cardinality receipt/summary/log signals, and provides no raw-debug retention switch.
 - **Approval/suppression manipulation:** any admitted mutable discussion/external context blocks automatic approval; partial context cannot prove absence or restore eligibility. Existing suppression, `/ocr` commands, and discussion ownership remain separate consumers.
 - **Persistent-session leakage:** run OCR under an isolated owner-only home and clean session artifacts deterministically. Containment/cleanup failure blocks publication; v0.7.0 has no debug-retention exception.
 - **Second-review-engine drift:** OCR remains the sole review engine. If contextual adjudication needs a separate model phase, depend on a native structured OCR API rather than merge two toolkit-driven reviews.

@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import Counter
 from contextlib import ExitStack
 from dataclasses import dataclass
 from io import BufferedWriter
@@ -63,11 +64,13 @@ from ocr_toolkit.evidence.review_context import (
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
+    TOOLKIT_RESULT_KEY,
+    TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
-    attach_toolkit_metadata,
     inspect_ocr_result,
+    transform_ocr_result,
 )
 from ocr_toolkit.pre_execution import (
     PROTECTED_TARGET_RULE_PATH_PENDING,
@@ -87,6 +90,23 @@ from ocr_toolkit.result_contract import OcrResultContractError, parse_result_out
 
 STDERR_PROBE_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
+DLP_REASONS = ("forbidden", "invalid_text", "laundering", "limit", "pii", "secret")
+QUARANTINE_COMMENT_FIELDS = frozenset(
+    {
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "line",
+        "old_path",
+        "path",
+        "priority",
+        "rule_id",
+        "severity",
+        "start_line",
+        "suggestion_code",
+    }
+)
 
 
 class ReviewRunnerError(Exception):
@@ -124,6 +144,30 @@ def _restore_termination_handlers(previous_handlers: dict[int, object]) -> None:
         except (OSError, ValueError):
             # Cleanup must still run if the host changes signal ownership mid-review.
             continue
+
+
+def _block_termination_signals() -> set[int | signal.Signals] | None:
+    """Defer termination until private cleanup and result projection are complete."""
+
+    if threading.current_thread() is not threading.main_thread() or not hasattr(
+        signal, "pthread_sigmask"
+    ):
+        return None
+    try:
+        return signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+    except (OSError, ValueError):
+        return None
+
+
+def _restore_signal_mask(previous_mask: set[int | signal.Signals] | None) -> None:
+    """Restore the caller's signal mask after cleanup has reached a safe state."""
+
+    if previous_mask is None or not hasattr(signal, "pthread_sigmask"):
+        return
+    try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    except (OSError, ValueError):
+        return
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,6 +371,192 @@ def _review_receipt(
     }
 
 
+def _dlp_reasons(
+    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+) -> Counter[str]:
+    """Count closed DLP failures without retaining hostile strings or locations."""
+
+    reasons: Counter[str] = Counter()
+    stack = [value]
+    while stack:
+        nested = stack.pop()
+        if isinstance(nested, dict):
+            stack.extend(nested.keys())
+            stack.extend(nested.values())
+        elif isinstance(nested, list):
+            stack.extend(nested)
+        elif isinstance(nested, str):
+            checked = check_text(
+                nested,
+                budgets=budgets,
+                publication=True,
+                forbidden_matcher=matcher,
+            )
+            if not checked.admitted:
+                reasons[checked.reason] += 1
+    return reasons
+
+
+def _safe_publication_comments(
+    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+) -> tuple[list[dict[str, object]], int, int]:
+    """Retain safe finding fields and omit only findings with unsafe content."""
+
+    if not isinstance(value, list):
+        return [], 0, 0
+    retained: list[dict[str, object]] = []
+    omitted_fields = 0
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        projected: dict[str, object] = {}
+        content_unsafe = False
+        for key, field_value in item.items():
+            if not isinstance(key, str) or key not in QUARANTINE_COMMENT_FIELDS:
+                continue
+            if _dlp_reasons(field_value, budgets=budgets, matcher=matcher):
+                omitted_fields += 1
+                content_unsafe = content_unsafe or key == "content"
+                continue
+            projected[key] = field_value
+        if projected and not content_unsafe:
+            retained.append(projected)
+    return retained, len(value) - len(retained), omitted_fields
+
+
+def _safe_publication_warnings(
+    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+) -> tuple[list[object], int]:
+    """Retain DLP-safe warnings while dropping unsafe or malformed items atomically."""
+
+    if not isinstance(value, list):
+        return [], 0
+    retained = [
+        item for item in value if not _dlp_reasons(item, budgets=budgets, matcher=matcher)
+    ]
+    return retained, len(value) - len(retained)
+
+
+def _closed_tool_calls(
+    value: object, *, allowed_tools: frozenset[str]
+) -> dict[str, object]:
+    """Project only bounded counters needed to prove model-side toolkit use."""
+
+    if not isinstance(value, dict):
+        return {"total": 0, "by_tool": {}}
+    total = value.get("total")
+    by_tool = value.get("by_tool")
+    if (
+        not isinstance(total, int)
+        or isinstance(total, bool)
+        or not 0 <= total <= MAX_TOOLKIT_MCP_USAGE_COUNT
+        or not isinstance(by_tool, dict)
+    ):
+        return {"total": 0, "by_tool": {}}
+    projected = {
+        tool: count
+        for tool, count in by_tool.items()
+        if tool in allowed_tools
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+    }
+    return {"total": total, "by_tool": dict(sorted(projected.items()))}
+
+
+def _publication_projection(
+    payload: dict[str, object],
+    *,
+    forbidden: tuple[str, ...],
+    allowed_tools: frozenset[str],
+) -> tuple[dict[str, object], dict[str, object], bool]:
+    """Return the original result or a DLP-safe partial publication result."""
+
+    budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
+    matcher = ForbiddenMatcher.compile(forbidden)
+    reasons = _dlp_reasons(payload, budgets=budgets, matcher=matcher)
+    if not reasons:
+        return payload, {"dlp": "passed"}, False
+
+    comments, omitted_comments, omitted_fields = _safe_publication_comments(
+        payload.get("comments"), budgets=budgets, matcher=matcher
+    )
+    warnings, omitted_warnings = _safe_publication_warnings(
+        payload.get("warnings"), budgets=budgets, matcher=matcher
+    )
+    outcome = parse_result_outcome(payload)
+    publication: dict[str, object] = {
+        "dlp": "filtered",
+        "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
+        "retained": {"comments": len(comments), "warnings": len(warnings)},
+        "omitted": {
+            "comments": omitted_comments,
+            "warnings": omitted_warnings,
+            "fields": omitted_fields,
+        },
+        "original": {
+            "outcome": outcome.kind,
+            "selected": outcome.selected_count,
+            "completed": outcome.completed_count,
+            "reused": outcome.reused_count,
+            "failed": outcome.failed_count,
+            "waived": outcome.waived_count,
+        },
+    }
+    partial_result: dict[str, object] = {
+        "status": "completed_with_errors",
+        "message": (
+            "Publication policy produced a safe partial OCR result. Independently safe findings "
+            "may be published, but the result must not be treated as a complete review."
+        ),
+        "comments": comments,
+        "warnings": warnings,
+        "tool_calls": _closed_tool_calls(payload.get("tool_calls"), allowed_tools=allowed_tools),
+    }
+    return partial_result, publication, True
+
+
+def _finalize_ocr_result(
+    result_path: Path,
+    composition: mcp_config.MCPComposition,
+    identity: ReviewIdentity,
+    enrichment: EnrichmentReceipt | None,
+    *,
+    forbidden: tuple[str, ...],
+) -> tuple[dict[str, int], bool, dict[str, object]]:
+    """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
+
+    filtered = False
+    publication: dict[str, object] = {"dlp": "passed"}
+    usage: dict[str, int] = {}
+    allowed_tools = frozenset(
+        tool for capability in composition.capabilities for tool in capability.tools
+    )
+
+    def finalize(payload: dict[str, object]) -> dict[str, object]:
+        nonlocal filtered, publication, usage
+        if TOOLKIT_RESULT_KEY in payload:
+            raise OcrResultMalformed(
+                f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}"
+            )
+        metadata = _review_receipt(payload, composition, identity, enrichment)
+        projected, publication, filtered = _publication_projection(
+            payload, forbidden=forbidden, allowed_tools=allowed_tools
+        )
+        metadata["publication"] = publication
+        metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
+        mcp = metadata.get("mcp")
+        raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
+        usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
+        return {**projected, TOOLKIT_RESULT_KEY: metadata}
+
+    try:
+        transform_ocr_result(result_path, finalize)
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
+        raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
+    return usage, filtered, publication
+
+
 def _record_ocr_result_mcp_usage(
     result_path: Path,
     composition: mcp_config.MCPComposition,
@@ -335,16 +565,16 @@ def _record_ocr_result_mcp_usage(
 ) -> dict[str, int]:
     """Verify MCP use and bind the closed review-time receipt to the result."""
 
-    try:
-        _payload, metadata = attach_toolkit_metadata(
-            result_path,
-            lambda payload: _review_receipt(payload, composition, identity, enrichment),
-        )
-    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
-        raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
-    mcp = metadata.get("mcp")
-    usage = mcp.get("usage") if isinstance(mcp, dict) else None
-    return usage if isinstance(usage, dict) else {}
+    usage, filtered, _publication = _finalize_ocr_result(
+        result_path,
+        composition,
+        identity,
+        enrichment,
+        forbidden=(),
+    )
+    if filtered:
+        raise ReviewRunnerError("OCR result failed publication DLP")
+    return usage
 
 
 def _option_values(args: list[str], name: str, short: str | None = None) -> list[str]:
@@ -810,6 +1040,9 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     cleanup_error: OSError | None = None
     exit_code = 2
     enrichment: EnrichmentReceipt | None = None
+    usage: dict[str, int] = {}
+    publication_filtered = False
+    publication: dict[str, object] = {"dlp": "passed"}
     previous_handlers = _install_termination_handlers()
     try:
         try:
@@ -886,33 +1119,43 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             ],
             ocr_binary=_resolve_ocr_binary(),
         )
-        if exit_code == 0:
-            forbidden = (*composition.secret_values,)
-            if enrichment is not None:
-                forbidden += enrichment.forbidden_publication
-            try:
-                _publication_dlp(result_path, forbidden=forbidden)
-            except ReviewRunnerError:
-                try:
-                    result_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                raise
     finally:
-        _restore_termination_handlers(previous_handlers)
+        previous_mask = _block_termination_signals()
         try:
-            remove_private_artifact(artifacts.context_store)
-        except OSError as exc:
-            cleanup_error = exc
-        try:
-            shutil.rmtree(session_home)
-        except OSError as exc:
-            cleanup_error = cleanup_error or exc
+            try:
+                remove_private_artifact(artifacts.context_store)
+            except OSError as exc:
+                cleanup_error = exc
+            try:
+                shutil.rmtree(session_home)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+            finally:
+                if previous_home is None:
+                    os.environ.pop("HOME", None)
+                else:
+                    os.environ["HOME"] = previous_home
+            if cleanup_error is None and exit_code == 0:
+                forbidden = (*composition.secret_values,)
+                if enrichment is not None:
+                    forbidden += enrichment.forbidden_publication
+                try:
+                    usage, publication_filtered, publication = _finalize_ocr_result(
+                        result_path,
+                        composition,
+                        identity,
+                        enrichment,
+                        forbidden=forbidden,
+                    )
+                except ReviewRunnerError:
+                    try:
+                        result_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    raise
         finally:
-            if previous_home is None:
-                os.environ.pop("HOME", None)
-            else:
-                os.environ["HOME"] = previous_home
+            _restore_termination_handlers(previous_handlers)
+            _restore_signal_mask(previous_mask)
     if cleanup_error is not None:
         try:
             result_path.unlink(missing_ok=True)
@@ -920,7 +1163,6 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             pass
         raise ReviewRunnerError("OCR private session cleanup failed") from cleanup_error
     if exit_code == 0:
-        usage = _record_ocr_result_mcp_usage(result_path, composition, identity, enrichment)
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
             print(
@@ -929,6 +1171,16 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             )
         else:
             print("OCR evidence usage: skipped no-supported-files review", file=sys.stderr)
+        if publication_filtered:
+            counts = publication.get("reason_counts")
+            closed_counts = counts if isinstance(counts, dict) else {}
+            print(
+                "OCR publication DLP: filtered; safe partial result retained "
+                + " ".join(
+                    f"{reason}={closed_counts.get(reason, 0)}" for reason in DLP_REASONS
+                ),
+                file=sys.stderr,
+            )
     return exit_code
 
 

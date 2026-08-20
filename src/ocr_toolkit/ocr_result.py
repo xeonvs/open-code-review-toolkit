@@ -247,14 +247,15 @@ def inspect_ocr_result(path: Path) -> Any:
         os.close(descriptor)
 
 
-def attach_toolkit_metadata(
-    path: Path, metadata_factory: Callable[[dict[str, Any]], Mapping[str, Any]]
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Inspect one OCR result and attach toolkit metadata through the same descriptor.
+def transform_ocr_result(
+    path: Path, transformer: Callable[[dict[str, Any]], Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Atomically replace one hostile OCR result with a validated transformation.
 
-    Existing toolkit metadata is rejected so provider-controlled output cannot
-    impersonate the review-time receipt. The private result artifact is opened
-    without following symlinks and restricted to its owner after the rewrite.
+    The transformer observes the same inode that is replaced. This lets policy
+    owners inspect, project, and attach metadata without a check/use gap in
+    which another process could swap an unchecked result into the publication
+    path.
     """
 
     limit = max_result_bytes()
@@ -268,19 +269,16 @@ def attach_toolkit_metadata(
         result = _decode_result(_read_descriptor(descriptor, limit=limit))
         if not isinstance(result, dict):
             raise OcrResultMalformed("OCR result JSON must be an object")
-        if TOOLKIT_RESULT_KEY in result:
-            raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
-        metadata = dict(metadata_factory(result))
-        # Schema ownership remains with the toolkit even if a future internal
-        # producer accidentally returns a conflicting key.
-        metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
-        result[TOOLKIT_RESULT_KEY] = metadata
+        try:
+            transformed = dict(transformer(result))
+        except RecursionError as exc:
+            raise OcrResultMalformed(str(exc)) from exc
         encoded = json.dumps(
-            result, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            transformed, sort_keys=True, separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8")
         if len(encoded) > limit:
             raise OcrResultTooLarge(
-                f"OCR result JSON with toolkit metadata exceeds OCR_MAX_RESULT_BYTES={limit}"
+                f"transformed OCR result JSON exceeds OCR_MAX_RESULT_BYTES={limit}"
             )
         temporary_descriptor, temporary_name = _create_private_temporary(parent_descriptor, path)
         try:
@@ -293,10 +291,8 @@ def attach_toolkit_metadata(
         finally:
             os.close(temporary_descriptor)
             temporary_descriptor = -1
-        # Refuse to publish metadata onto a different result if another process
-        # replaced the path while the original payload was being inspected.
         if not _same_result_entry(parent_descriptor, path, opened):
-            raise OcrResultMissing("OCR result changed while toolkit metadata was prepared")
+            raise OcrResultMissing("OCR result changed while toolkit policy was applied")
         try:
             os.replace(
                 temporary_name,
@@ -308,7 +304,7 @@ def attach_toolkit_metadata(
             raise OcrResultMissing(f"could not replace private OCR result: {exc}") from exc
         temporary_name = ""
         fsync_directory(parent_descriptor)
-        return result, metadata
+        return transformed
     finally:
         if temporary_descriptor >= 0:
             os.close(temporary_descriptor)
@@ -320,3 +316,28 @@ def attach_toolkit_metadata(
         if descriptor >= 0:
             os.close(descriptor)
         os.close(parent_descriptor)
+
+
+def attach_toolkit_metadata(
+    path: Path, metadata_factory: Callable[[dict[str, Any]], Mapping[str, Any]]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Inspect one OCR result and attach toolkit metadata through the same descriptor.
+
+    Existing toolkit metadata is rejected so provider-controlled output cannot
+    impersonate the review-time receipt. The private result artifact is opened
+    without following symlinks and restricted to its owner after the rewrite.
+    """
+
+    metadata: dict[str, Any] = {}
+
+    def attach(result: dict[str, Any]) -> dict[str, Any]:
+        if TOOLKIT_RESULT_KEY in result:
+            raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
+        metadata.update(metadata_factory(result))
+        # Schema ownership remains with the toolkit even if a future internal
+        # producer accidentally returns a conflicting key.
+        metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
+        return {**result, TOOLKIT_RESULT_KEY: metadata}
+
+    transformed = transform_ocr_result(path, attach)
+    return transformed, metadata

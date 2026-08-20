@@ -158,6 +158,62 @@ def _sha256(value: Any) -> bool:
     )
 
 
+def publication_dlp_state(value: Any) -> str | None:
+    """Validate the exact v4 passed or filtered publication receipt."""
+
+    if value == {"dlp": "passed"}:
+        return "passed"
+    if not isinstance(value, dict) or set(value) != {
+        "dlp",
+        "reason_counts",
+        "retained",
+        "omitted",
+        "original",
+    }:
+        return None
+    if value.get("dlp") != "filtered":
+        return None
+    reason_counts = value.get("reason_counts")
+    retained = value.get("retained")
+    omitted = value.get("omitted")
+    original = value.get("original")
+    if (
+        not isinstance(reason_counts, dict)
+        or set(reason_counts)
+        != {"forbidden", "invalid_text", "laundering", "limit", "pii", "secret"}
+        or any(
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for count in reason_counts.values()
+        )
+        or not any(reason_counts.values())
+        or not isinstance(retained, dict)
+        or set(retained) != {"comments", "warnings"}
+        or not isinstance(omitted, dict)
+        or set(omitted) != {"comments", "warnings", "fields"}
+        or any(
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for counts in (retained, omitted)
+            for count in counts.values()
+        )
+        or not isinstance(original, dict)
+        or set(original)
+        != {"outcome", "selected", "completed", "reused", "failed", "waived"}
+        or original.get("outcome") not in {"clean", "warning", "partial", "failed", "skipped"}
+        or any(
+            not isinstance(original.get(field), int)
+            or isinstance(original.get(field), bool)
+            or not 0 <= original[field] <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for field in ("selected", "completed", "reused", "failed", "waived")
+        )
+    ):
+        return None
+    return "filtered"
+
+
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     """Return the closed review-time receipt blocker for automatic approval."""
 
@@ -339,8 +395,11 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     publication = toolkit_metadata.get("publication")
     cleanup = toolkit_metadata.get("cleanup")
-    if publication != {"dlp": "passed"} or cleanup != {"result": "passed"}:
+    publication_state = publication_dlp_state(publication)
+    if publication_state is None or cleanup != {"result": "passed"}:
         return invalid
+    if publication_state == "filtered":
+        return "publication DLP filtered the complete review result"
     if context.get("state") == "degraded" or required_degraded:
         return "the selected review context was degraded"
     if mutable_admitted:

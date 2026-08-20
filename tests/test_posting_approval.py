@@ -215,6 +215,46 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
         self.assertEqual(decision.result.reason, "the selected review context was degraded")
 
+    def test_publication_dlp_filtered_receipt_is_valid_but_never_eligible(self) -> None:
+        receipt = receipt_v4()
+        receipt["publication"] = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 1, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "clean",
+                "selected": 2,
+                "completed": 2,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [finding()],
+            [],
+            0,
+            receipt,
+        )
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
+        self.assertEqual(
+            decision.result.reason,
+            "publication DLP filtered the complete review result",
+        )
+
     def test_complete_metadata_and_external_mcp_have_independent_approval_effects(self) -> None:
         complete_metadata = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),

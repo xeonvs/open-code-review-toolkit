@@ -43,7 +43,7 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 ## M6 Profiles and quality measurement
 
-Telemetry is intentionally outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry; the toolkit reuses those signals instead of adding another implementation. M6 audits remaining lifecycle, evidence/MCP, context-receipt, posting, and review-value gaps before proposing any provider-neutral toolkit telemetry.
+Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. M5 adds only its missing deterministic publication-DLP signal to receipt v4, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. M6 audits whether those result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
 
 ### BL-016: Evaluate explicit run-level model profiles
 
@@ -70,7 +70,7 @@ Telemetry is intentionally outside M1 and M5. OCR owns token, cost, budget, prov
 - **Upstream overlap:** OCR remains authoritative for deterministic tool rendering, provider/model identity, session correlation, diff-review usage/budgets, and request/tool latency. Full-repository `scan` signals do not widen toolkit scope.
 - **Goal:** Decide whether privacy-safe toolkit telemetry is needed before implementing metrics or routing.
 - **Scoped deliverables:** Inventory OCR token, cost, budget, latency, request, tool-call, and provider/model identity alongside established review health, failed-file coverage, findings, suppression, omission, posting, MCP-use receipts, and M5 context receipts only if they exist. Document only genuinely missing lifecycle, evidence degradation, repeated-discussion, compatibility, or review-value gaps and their privacy/cardinality limits; conclude no-new-layer or create a separately scoped follow-up.
-- **Acceptance criteria:** The audit maps every signal to its authoritative source, distinguishes derived from missing data, and reaches an explicit no-new-layer or separately scoped conclusion. OCR remains authoritative for token, cost, budget, request, latency, and tool-call telemetry; the audit adds no runtime, exporter, public schema, or second context telemetry implementation.
+- **Acceptance criteria:** The audit maps every signal to its authoritative source, distinguishes derived from missing data, and reaches an explicit no-new-layer or separately scoped conclusion. OCR remains authoritative for token, cost, budget, request, latency, and tool-call telemetry; toolkit receipt/summary/log events remain authoritative only for deterministic lifecycle and publication filtering. The audit adds no second context telemetry implementation and introduces an exporter only under a separately approved contract.
 - **Exclusions:** User surveillance, developer ranking, automatic routing, or mandatory external telemetry.
 - **Validation:** Representative result/discussion fixtures, privacy review, and source-to-signal matrix.
 - **Release classification expectation:** `no-release` for the audit.

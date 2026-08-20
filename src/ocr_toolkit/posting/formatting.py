@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -17,7 +18,11 @@ from ocr_toolkit.common.markdown import (
 )
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
-from ocr_toolkit.posting.approval import ApprovalResult, approval_summary_line
+from ocr_toolkit.posting.approval import (
+    ApprovalResult,
+    approval_summary_line,
+    publication_dlp_state,
+)
 from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
@@ -508,6 +513,61 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     return f"- MCP used: {len(used)} server(s) ({details})"
 
 
+def publication_dlp_signal(
+    publication: Any, *, carried_forward_comments: int = 0
+) -> dict[str, Any] | None:
+    """Return one low-cardinality signal from an exact filtered receipt."""
+
+    if (
+        publication_dlp_state(publication) != "filtered"
+        or not isinstance(carried_forward_comments, int)
+        or isinstance(carried_forward_comments, bool)
+        or carried_forward_comments < 0
+    ):
+        return None
+    return {
+        "schema_version": "ocr.publication-dlp-signal/v1",
+        "state": "filtered",
+        "reason_counts": dict(publication["reason_counts"]),
+        "retained": dict(publication["retained"]),
+        "omitted": dict(publication["omitted"]),
+        "original": dict(publication["original"]),
+        "carried_forward_comments": carried_forward_comments,
+    }
+
+
+def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
+    """Render a human-visible spoiler plus one stable machine-readable marker."""
+
+    if signal is None:
+        return ""
+    retained = signal["retained"]
+    omitted = signal["omitted"]
+    carried = signal["carried_forward_comments"]
+    marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
+    return "\n".join(
+        [
+            "<details>",
+            "<summary>Publication filtering signal</summary>",
+            "",
+            (
+                f"Published safe subset: {retained['comments']} finding(s) and "
+                f"{retained['warnings']} warning(s). Omitted: {omitted['comments']} "
+                f"finding(s), {omitted['warnings']} warning(s), and {omitted['fields']} "
+                "optional finding field(s)."
+            ),
+            (
+                f"{carried} matching finding(s) remain in the previous OCR review. "
+                "This review is partial and cannot authorize automatic approval."
+            ),
+            "",
+            f"<!-- ocr-toolkit-signal {marker} -->",
+            "",
+            "</details>",
+        ]
+    )
+
+
 TOKEN_USAGE_KEYS = (
     "usage",
     "token_usage",
@@ -886,6 +946,7 @@ def summarize_result(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    publication_dlp_details: str = "",
     reviewer_guide: str = "",
     fallback_reasons: Mapping[str, int] | None = None,
     reviewed_sha: str = "",
@@ -970,6 +1031,9 @@ def summarize_result(
 
     if reviewer_guide:
         lines.extend(["", reviewer_guide.strip()])
+
+    if publication_dlp_details:
+        lines.extend(["", publication_dlp_details])
 
     technical: list[str] = []
     if reviewed_sha:

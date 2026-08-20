@@ -62,6 +62,31 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
+    def test_invalid_v4_publication_state_never_reaches_normal_result_flow(self) -> None:
+        notes: list[str] = []
+        result_data = {
+            "status": "failed",
+            "comments": [{"content": "locally retained safe finding"}],
+            "_ocr_toolkit": {
+                "schema_version": 4,
+                "publication": {"dlp": "blocked"},
+            },
+        }
+
+        with (
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
+
     def test_line_number_rejects_bool_and_non_decimal_values(self) -> None:
         self.assertEqual(posting_comments.line_number(True), 0)
         self.assertEqual(posting_comments.line_number("1.5"), 0)
@@ -94,6 +119,40 @@ class PostingIdentityTests(unittest.TestCase):
             markers.line_based_comment_fingerprint({**base, "line": 10}),
             markers.comment_fingerprint_candidates({**base, "line": 10}),
         )
+
+    def test_partial_publication_reuses_previous_fingerprint_without_duplicate(self) -> None:
+        previous = snapshot.BotCommentRefs()
+        comments = [
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+            {"path": "src/b.py", "line": 9, "content": "new finding"},
+        ]
+        markers.annotate_comment_fingerprints(comments)
+        previous.published_fingerprints.add(comments[0]["_ocr_fingerprint"])
+
+        kept, carried = snapshot.filter_previously_published_comments(comments, previous)
+
+        self.assertEqual(carried, 1)
+        self.assertEqual(kept, [comments[1]])
+
+    def test_finding_markers_are_collected_from_owned_fallback_body(self) -> None:
+        first = "a" * FINGERPRINT_LEN
+        second = "b" * FINGERPRINT_LEN
+        body = (
+            f"{markers.build_marker(None)}\nsummary\n"
+            f"{markers.build_marker(first)}\nfinding\n"
+            f"{markers.build_marker(second)}\nother"
+        )
+
+        self.assertEqual(
+            markers.finding_fingerprints_from_marked_body(body),
+            {first, second},
+        )
+        self.assertTrue(
+            markers.has_summary_run_marker(
+                f"{markers.build_marker(None)}\n{markers.build_summary_run_marker('c' * 32)}"
+            )
+        )
+        self.assertFalse(markers.has_summary_run_marker("quoted summary marker"))
 
     def test_write_result_rejects_unknown_outcomes_and_malformed_write_ids(self) -> None:
         with self.assertRaises(ValueError):
@@ -963,6 +1022,8 @@ class PostingIdentityTests(unittest.TestCase):
     def test_manifest_partial_preserves_previous_review_and_reports_coverage(self) -> None:
         notes: list[str] = []
         cleanup_calls: list[str] = []
+        summary_cleanup_calls: list[str] = []
+        previous = snapshot.BotCommentRefs(summary_plain_note_ids=[91])
 
         def capture_note(
             _config: gitlab.GitLabConfig,
@@ -994,7 +1055,7 @@ class PostingIdentityTests(unittest.TestCase):
             patched_attr(
                 workflow,
                 "collect_previous_bot_comment_refs",
-                lambda _config: snapshot.BotCommentRefs(),
+                lambda _config: previous,
             ),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
@@ -1003,14 +1064,88 @@ class PostingIdentityTests(unittest.TestCase):
                 "delete_previous_bot_comments_if_collected",
                 lambda *_args: cleanup_calls.append("delete"),
             ),
+            patched_attr(
+                workflow,
+                "delete_previous_summary_notes",
+                lambda _config, refs: summary_cleanup_calls.append(
+                    "summary" if refs is previous else "wrong"
+                ),
+            ),
             patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
         ):
             exit_code = workflow.post_results(gitlab_config(), result_data)
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(cleanup_calls, [])
+        self.assertEqual(summary_cleanup_calls, ["summary"])
         self.assertIn("Coverage: selected 2; completed 1", notes[0])
         self.assertNotIn("No issues found", notes[0])
+
+    def test_filtered_publication_posts_safe_new_findings_and_preserves_previous(self) -> None:
+        notes: list[str] = []
+        cleanup_calls: list[str] = []
+        previous = snapshot.BotCommentRefs()
+        old = {"path": "src/old.py", "line": 7, "content": "Existing safe finding."}
+        new = {"path": "src/new.py", "line": 9, "content": "New safe finding."}
+        old_fingerprint = markers.comment_fingerprint(old)
+        self.assertIsNotNone(old_fingerprint)
+        previous.published_fingerprints.add(old_fingerprint or "")
+        publication = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 2, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "clean",
+                "selected": 3,
+                "completed": 3,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+
+        def capture_note(_config: Any, *args: Any) -> dict[str, int]:
+            notes.append("\n".join(value for value in args if isinstance(value, str)))
+            return {"id": len(notes)}
+
+        with (
+            patched_attr(workflow, "collect_previous_bot_comment_refs", lambda _config: previous),
+            patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: cleanup_calls.append("delete"),
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+            redirect_stdout(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "completed_with_errors",
+                    "comments": [old, new],
+                    "warnings": [],
+                    "_ocr_toolkit": {"schema_version": 4, "publication": publication},
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(cleanup_calls, [])
+        rendered = "\n".join(notes)
+        self.assertIn("New safe finding.", rendered)
+        self.assertNotIn("Existing safe finding.", rendered)
+        self.assertIn("<summary>Publication filtering signal</summary>", rendered)
+        self.assertIn('"carried_forward_comments":1', rendered)
 
     def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
         notes: list[str] = []
@@ -1742,6 +1877,48 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("MR head commit: `def456`", summary)
         self.assertTrue(summary.startswith("## Open Code Review\n"))
         self.assertIn("🔎 **Review complete — 3 findings published**", summary)
+
+    def test_publication_filtering_signal_is_visible_and_machine_readable(self) -> None:
+        publication = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 1,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 2, "warnings": 1},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 1},
+            "original": {
+                "outcome": "clean",
+                "selected": 3,
+                "completed": 3,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        signal = posting_formatting.publication_dlp_signal(
+            publication, carried_forward_comments=1
+        )
+        details = posting_formatting.format_publication_dlp_details(signal)
+        summary = posting_formatting.summarize_result(
+            total=2,
+            inline_count=2,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="partial",
+            publication_dlp_details=details,
+            emoji=False,
+        )
+
+        self.assertIn("<summary>Publication filtering signal</summary>", summary)
+        self.assertIn("Published safe subset: 2 finding(s)", summary)
+        marker = summary.split("<!-- ocr-toolkit-signal ", 1)[1].split(" -->", 1)[0]
+        self.assertEqual(json.loads(marker), signal)
+        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v1")
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(

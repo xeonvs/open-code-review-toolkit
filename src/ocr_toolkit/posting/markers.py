@@ -19,6 +19,12 @@ WRITE_MARKER_RE = re.compile(r"<!-- open-code-review-write id=([0-9a-f]{32}) -->
 MARKER_WITH_FINGERPRINT_RE = re.compile(
     r"^<!-- open-code-review-bot(?:\s+fp=([0-9a-f]{8,64}))?\s*-->"
 )
+FINDING_MARKER_RE = re.compile(
+    r"(?m)^<!-- open-code-review-bot\s+fp=([0-9a-f]{8,64})\s*-->$"
+)
+SUMMARY_RUN_MARKER_RE = re.compile(
+    r"(?m)^<!-- open-code-review-summary run=[0-9a-f]{32} -->$"
+)
 
 
 OCR_REPLY_COMMAND_RE = re.compile(
@@ -262,6 +268,18 @@ def fingerprint_from_marker(body: str) -> str | None:
     if not match:
         return None
     return match.group(1)
+
+
+def finding_fingerprints_from_marked_body(body: str) -> set[str]:
+    """Return finding markers only from one already author-validated bot body."""
+
+    return {match.group(1) for match in FINDING_MARKER_RE.finditer(body)}
+
+
+def has_summary_run_marker(body: str) -> bool:
+    """Return whether one author-validated bot body contains a summary identity."""
+
+    return SUMMARY_RUN_MARKER_RE.search(body) is not None
 
 
 def author_id_from_note(note: dict[str, Any]) -> int | None:

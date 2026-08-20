@@ -289,6 +289,103 @@ def test_publication_dlp_blocks_context_copy_secret_pii_and_markdown_laundering(
         review_runner._publication_dlp(result, forbidden=("private " * 20_000,))
 
 
+def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
+    tmp_path: Path,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "comments": [
+                    {
+                        "path": "src/safe.py",
+                        "line": 7,
+                        "content": "Guard the empty collection before indexing it.",
+                        "severity": "medium",
+                        "category": "bug",
+                    },
+                    {
+                        "path": "src/private.py",
+                        "line": 9,
+                        "content": "Copied private discussion sentence.",
+                    },
+                    {
+                        "path": "src/optional.py",
+                        "line": 11,
+                        "content": "Validate the safe branch before returning.",
+                        "suggestion_code": "owner = 'synthetic@example.invalid'",
+                    },
+                ],
+                "warnings": [
+                    "Safe bounded warning.",
+                    "Contact synthetic@example.invalid.",
+                ],
+                "tool_calls": {
+                    "total": 2,
+                    "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    usage, blocked, publication = review_runner._finalize_ocr_result(
+        result,
+        composition,
+        DEFAULT_IDENTITY,
+        None,
+        forbidden=("private discussion sentence",),
+    )
+
+    assert usage == {"ocr_toolkit_evidence": 1}
+    assert blocked is True
+    assert publication["dlp"] == "filtered"
+    assert publication["reason_counts"] == {
+        "forbidden": 1,
+        "invalid_text": 0,
+        "laundering": 0,
+        "limit": 0,
+        "pii": 2,
+        "secret": 0,
+    }
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert persisted["status"] == "completed_with_errors"
+    assert persisted["comments"] == [
+        {
+            "path": "src/safe.py",
+            "line": 7,
+            "content": "Guard the empty collection before indexing it.",
+            "severity": "medium",
+            "category": "bug",
+        },
+        {
+            "path": "src/optional.py",
+            "line": 11,
+            "content": "Validate the safe branch before returning.",
+        },
+    ]
+    assert persisted["warnings"] == ["Safe bounded warning."]
+    assert persisted["tool_calls"] == {
+        "total": 2,
+        "by_tool": {"ocr_toolkit_evidence": 1},
+    }
+    assert persisted["_ocr_toolkit"]["publication"] == publication
+    assert publication["retained"] == {"comments": 2, "warnings": 1}
+    assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
+    serialized = result.read_text(encoding="utf-8")
+    assert "private discussion sentence" not in serialized
+    assert "synthetic@example.invalid" not in serialized
+
+
 def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: Path) -> None:
     result = tmp_path / "result.json"
     result.write_text(
@@ -978,13 +1075,14 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         ),
         patched_attr(
             review_runner,
-            "_record_ocr_result_mcp_usage",
-            lambda _result, _registry, _identity, _enrichment: (
-                events.append("ocr-usage") or {"ocr_toolkit_evidence": 1}
+            "_finalize_ocr_result",
+            lambda *_args, **_kwargs: (
+                events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
+                False,
+                {"dlp": "passed"},
             ),
         ),
         patched_attr(review_runner, "_resolve_ocr_binary", lambda: "/synthetic/ocr"),
-        patched_attr(review_runner, "_publication_dlp", lambda *_args, **_kwargs: None),
         patched_attr(review_runner, "run_review", run),
     ):
         result = review_runner.run_evidence_review(

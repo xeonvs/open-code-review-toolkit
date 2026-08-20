@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -30,6 +31,7 @@ from ocr_toolkit.posting.approval import (
     ApprovalStatus,
     evaluate_approval_policy,
     provisional_approval_result,
+    publication_dlp_state,
 )
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -42,10 +44,12 @@ from ocr_toolkit.posting.formatting import (
     format_inline_comment,
     format_mcp_usage_summary,
     format_omitted_comments_summary,
+    format_publication_dlp_details,
     format_reviewer_guide,
     format_token_usage_summary,
     format_tool_calls_summary,
     inline_code,
+    publication_dlp_signal,
     summarize_result,
 )
 from ocr_toolkit.posting.gitlab import (
@@ -74,6 +78,8 @@ from ocr_toolkit.posting.snapshot import (
     cleanup_drafts_created_by_this_run,
     collect_previous_bot_comment_refs,
     delete_previous_bot_comments_if_collected,
+    delete_previous_summary_notes,
+    filter_previously_published_comments,
     filter_suppressed_comments,
     posting_failure_exit,
     print_posting_failure_banner,
@@ -597,6 +603,23 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         print_posting_failure_banner()
         return 1
 
+    toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
+    publication = (
+        toolkit_metadata.get("publication") if isinstance(toolkit_metadata, dict) else None
+    )
+    publication_state = (
+        publication_dlp_state(publication)
+        if isinstance(toolkit_metadata, dict) and toolkit_metadata.get("schema_version") == 4
+        else "legacy"
+    )
+    if publication_state is None:
+        return invalid_ocr_schema_exit(
+            config,
+            "receipt v4 publication state is invalid",
+            intro="OCR result publication policy state could not be validated.",
+            title="**Open Code Review publication policy error**",
+        )
+
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
@@ -668,6 +691,25 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             f"Suppressed {suppressed_count} OCR comment(s) at locations resolved or "
             "suppressed by the reviewer."
         )
+    carried_forward_count = 0
+    if publication_state == "filtered":
+        comments, carried_forward_count = filter_previously_published_comments(
+            comments, previous_bot_comment_refs
+        )
+        if carried_forward_count:
+            print(
+                f"Preserved {carried_forward_count} matching finding(s) from the previous "
+                "OCR review instead of publishing duplicates."
+            )
+    dlp_signal = publication_dlp_signal(
+        publication, carried_forward_comments=carried_forward_count
+    )
+    dlp_details = format_publication_dlp_details(dlp_signal)
+    if dlp_signal is not None:
+        print(
+            "OCR toolkit telemetry event: "
+            + json.dumps(dlp_signal, sort_keys=True, separators=(",", ":"))
+        )
 
     publishable_comment_count = len(comments)
     publish_limit = max_post_comments()
@@ -715,6 +757,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 tool_calls_summary=tool_calls_summary,
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
+                publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
                 mr_head_sha=mr_head_sha(),
@@ -900,6 +943,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_commit,
@@ -957,6 +1001,7 @@ def finalize_previous_review_state(
 
     if outcome.kind == "partial":
         print("OCR coverage is partial; preserving previous review comments until a complete run.")
+        delete_previous_summary_notes(config, previous_refs)
     else:
         delete_previous_bot_comments_if_collected(config, previous_refs)
     resolve_requested_discussions(config, previous_refs)
