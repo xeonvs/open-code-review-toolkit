@@ -12,6 +12,8 @@ from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, read_ocr_config, update_ocr_config
+from ocr_toolkit.context.mcp import GET_TOOL as CONTEXT_GET_TOOL
+from ocr_toolkit.context.mcp import LIST_TOOL as CONTEXT_LIST_TOOL
 from ocr_toolkit.evidence.mcp import TOOL_NAME
 
 MAX_MCP_CONFIG_BYTES = 64_000
@@ -76,6 +78,15 @@ class MCPComposition:
     capabilities: tuple[MCPCapability, ...]
     external_servers: tuple[MCPServerConfig, ...]
     secret_values: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MCPContextConfig:
+    """Bind the optional built-in context tools to one committed local store."""
+
+    store_path: str
+    run_id: str
+    policy_digest: str
 
 
 def _string_list(value: Any, field: str, *, limit: int) -> list[str]:
@@ -509,7 +520,11 @@ def _existing_server(
 
 
 def compose_mcp_servers(
-    servers: list[MCPServerConfig], *, replace: bool, profile: str = "local"
+    servers: list[MCPServerConfig],
+    *,
+    replace: bool,
+    profile: str = "local",
+    context: MCPContextConfig | None = None,
 ) -> MCPComposition:
     """Build OCR's registry from independent optional and mandatory MCP entries."""
 
@@ -567,19 +582,35 @@ def compose_mcp_servers(
         raise MCPConfigError(
             "the running Python executable must be absolute for built-in MCP launch"
         )
+    builtin_args = ["-I", "-m", "ocr_toolkit.evidence"]
+    builtin_tools = [TOOL_NAME]
+    if context is not None:
+        if not os.path.isabs(context.store_path):
+            raise MCPConfigError("built-in context store path must be absolute")
+        builtin_args.extend(
+            [
+                "--context-store",
+                context.store_path,
+                "--context-run-id",
+                context.run_id,
+                "--context-policy-digest",
+                context.policy_digest,
+            ]
+        )
+        builtin_tools.extend((CONTEXT_LIST_TOOL, CONTEXT_GET_TOOL))
     payload[BUILTIN_EVIDENCE_SERVER] = {
         "type": "stdio",
         # OCR starts MCP servers in the untrusted repository and may use a
         # restricted PATH. Isolated mode prevents repository files from
         # shadowing the toolkit while the venv path binds this exact install.
         "command": sys.executable,
-        "args": ["-I", "-m", "ocr_toolkit.evidence"],
+        "args": builtin_args,
         "env": [],
-        "tools": [TOOL_NAME],
+        "tools": builtin_tools,
         # OCR executes setup through a shell in the analyzed repository root.
         "setup": "",
     }
-    capabilities.append(MCPCapability(BUILTIN_EVIDENCE_SERVER, (TOOL_NAME,), builtin=True))
+    capabilities.append(MCPCapability(BUILTIN_EVIDENCE_SERVER, tuple(builtin_tools), builtin=True))
     capabilities.sort(key=lambda capability: (not capability.builtin, capability.server))
     owners: dict[str, str] = {}
     for capability in capabilities:
@@ -598,13 +629,16 @@ def compose_mcp_servers(
     )
 
 
-def build_mcp_composition(*, profile: str = "local") -> MCPComposition:
+def build_mcp_composition(
+    *, profile: str = "local", context: MCPContextConfig | None = None
+) -> MCPComposition:
     """Parse environment settings into the complete profiled MCP composition."""
 
     return compose_mcp_servers(
         parse_mcp_servers(profile=profile),
         replace=_replace_configured_servers(),
         profile=profile,
+        context=context,
     )
 
 

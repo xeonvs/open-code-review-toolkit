@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.6",
-  "recommended_version": "1.9.6",
+  "monitoring_floor": "1.9.8",
+  "recommended_version": "1.9.8",
   "releases": [
     {
       "assets": [
@@ -930,6 +930,108 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.6",
       "status": "tested",
       "version": "1.9.6"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "bbc641eec0ec6a6df120a4fd44da1234d57525cab66fa943adf50bba04249959",
+          "size": 54202528
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "4fa826f583d93873a426baec51a990579918461873585f366aeb2e7500fafc85",
+          "size": 51579042
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "ec7afd0bf58e36cee55dda6259200da490903a74c22c11b7550ab6b72872c377",
+          "size": 52449442
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "ee001b0286345d10433619309d899b8f9a80cf4d97d293ca364f4efb9a52251f",
+          "size": 49545378
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "c555813f30f45c8280603d920bbb3d2b7220b667e77c6a59f44d53f97f9e31bc",
+          "size": 53846016
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "561495ce3eafa51dcbfb377562fe1c8a3ce45c3643aa6b21611f34ed4a9d7fe1",
+          "size": 50222592
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "3603126c2abb7441ed753871a0e485b9005f048b0273ba0607a20ceee2f8ffc3",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.7.json",
+      "evidence_sha256": "6469a5db4699e05b58a7ad3390ac24ddb624e4ac7306859805fb7bf972e90612",
+      "human_conclusion": "Compatible after reviewed adjacent source and release comparison plus hosted checksum-verified Linux probes. Gemini provider and mirror-aware installers are additive operator/upstream boundaries; the Go MCP, review flags, result/manifest, target-rule, budget, and session contracts consumed by the toolkit remain compatible. No toolkit CI adaptation is required beyond version and checksum pins.",
+      "published_at": "2026-08-19T06:37:11Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.7",
+      "status": "tested",
+      "version": "1.9.7"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "72e05810973d00a9bda10dd1646861ab72a31fef2be6163043d34fcd76d3b0b3",
+          "size": 57483184
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ace8544c12992cefecec7f0d22265ff5473078ea062f01d682ca1b08691ff0f9",
+          "size": 54559186
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "427f3f157d8ba5716d5e849bee34ee4b9983ce96b21e83186460f31b74ec131d",
+          "size": 55742626
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "a23c9468b85f9631b76eeb0e3ee7189d063b996f521a838b22b96a1521d04ca6",
+          "size": 52494498
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "ba195b48983e4c446172763c27ff71241853a93e9e9f627ba1b39e1bbb796c65",
+          "size": 57202688
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "ceca155dd453557f890e8b6d950f73fe5157d73563fdbaaeb3115553470ce5ce",
+          "size": 53200896
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "7cef09bdcc627e42f55d20a411d92eb09d641a9a6589b9dfe681ba189949ff2c",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.8.json",
+      "evidence_sha256": "e14f69085d0356236708c197015cc4dee73fe3c2299cb7439bd70459bb408721",
+      "human_conclusion": "Compatible after reviewed adjacent source and release comparison, hosted checksum-verified Linux probes, and checksum-verified Darwin arm64 local probes. Bedrock/SigV4 configuration is an additive upstream provider boundary not configured by the toolkit. Native severity is confined to upstream skill instructions; OCR result severity/category fields already match the tolerant toolkit contract. JSON/SARIF progress moves to stderr for human audience, while the toolkit uses agent audience and consumes the unchanged JSON result. Review flags, manifest, target-rule, budget, MCP multi-tool composition, and session contracts remain compatible. No toolkit CI adaptation is required beyond version and checksum pins.",
+      "published_at": "2026-08-20T02:46:10Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.8",
+      "status": "tested",
+      "version": "1.9.8"
     }
   ],
   "schema_version": 1,

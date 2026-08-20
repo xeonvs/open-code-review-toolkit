@@ -32,6 +32,12 @@ from ocr_toolkit.posting import (
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.posting.transaction import PostingTransaction
+from ocr_toolkit.pre_execution import (
+    PROTECTED_TARGET_RULE_PATH_PENDING,
+    STATUS_SCHEMA,
+    PreExecutionStatus,
+    write_pre_execution_status,
+)
 from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
@@ -55,6 +61,31 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
+
+    def test_invalid_v4_publication_state_never_reaches_normal_result_flow(self) -> None:
+        notes: list[str] = []
+        result_data = {
+            "status": "failed",
+            "comments": [{"content": "locally retained safe finding"}],
+            "_ocr_toolkit": {
+                "schema_version": 4,
+                "publication": {"dlp": "blocked"},
+            },
+        }
+
+        with (
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
     def test_line_number_rejects_bool_and_non_decimal_values(self) -> None:
         self.assertEqual(posting_comments.line_number(True), 0)
@@ -88,6 +119,66 @@ class PostingIdentityTests(unittest.TestCase):
             markers.line_based_comment_fingerprint({**base, "line": 10}),
             markers.comment_fingerprint_candidates({**base, "line": 10}),
         )
+
+    def test_partial_publication_reuses_previous_fingerprint_without_duplicate(self) -> None:
+        previous = snapshot.BotCommentRefs()
+        comments = [
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+            {"path": "src/b.py", "line": 9, "content": "new finding"},
+        ]
+        markers.annotate_comment_fingerprints(comments)
+        previous.published_fingerprints.add(comments[0]["_ocr_fingerprint"])
+
+        kept, carried = snapshot.filter_previously_published_comments(comments, previous)
+
+        self.assertEqual(carried, 1)
+        self.assertEqual(kept, [comments[1]])
+
+    def test_markers_are_parsed_only_from_owned_preamble(self) -> None:
+        first = "a" * FINGERPRINT_LEN
+        second = "b" * FINGERPRINT_LEN
+        body = f"{markers.build_marker(first)}\nfinding text\n{markers.build_marker(second)}\nother"
+
+        self.assertEqual(
+            markers.finding_fingerprints_from_marked_body(body),
+            {first},
+        )
+        self.assertTrue(
+            markers.has_summary_run_marker(
+                f"{markers.build_marker(None)}\n{markers.build_summary_run_marker('c' * 32)}"
+            )
+        )
+        self.assertFalse(
+            markers.has_summary_run_marker(
+                f"{markers.build_marker(None)}\nvisible text\n"
+                f"{markers.build_summary_run_marker('c' * 32)}"
+            )
+        )
+        self.assertTrue(
+            markers.has_setup_pending_marker(
+                f"{markers.build_marker(None)}\n{markers.SETUP_PENDING_MARKER}"
+            )
+        )
+        self.assertFalse(
+            markers.has_setup_pending_marker(
+                f"{markers.build_marker(None)}\nvisible\n{markers.SETUP_PENDING_MARKER}"
+            )
+        )
+
+    def test_partial_publication_consumes_one_legacy_marker_per_duplicate(self) -> None:
+        comments = [
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+            {"path": "src/a.py", "line": 7, "content": "same finding"},
+        ]
+        markers.annotate_comment_fingerprints(comments)
+        legacy = markers.line_based_comment_fingerprint(comments[0])
+        self.assertIsNotNone(legacy)
+        previous = snapshot.BotCommentRefs(published_fingerprints={legacy or ""})
+
+        kept, carried = snapshot.filter_previously_published_comments(comments, previous)
+
+        self.assertEqual(carried, 1)
+        self.assertEqual(kept, [comments[1]])
 
     def test_write_result_rejects_unknown_outcomes_and_malformed_write_ids(self) -> None:
         with self.assertRaises(ValueError):
@@ -957,6 +1048,8 @@ class PostingIdentityTests(unittest.TestCase):
     def test_manifest_partial_preserves_previous_review_and_reports_coverage(self) -> None:
         notes: list[str] = []
         cleanup_calls: list[str] = []
+        summary_cleanup_calls: list[str] = []
+        previous = snapshot.BotCommentRefs(summary_plain_note_ids=[91])
 
         def capture_note(
             _config: gitlab.GitLabConfig,
@@ -988,7 +1081,7 @@ class PostingIdentityTests(unittest.TestCase):
             patched_attr(
                 workflow,
                 "collect_previous_bot_comment_refs",
-                lambda _config: snapshot.BotCommentRefs(),
+                lambda _config: previous,
             ),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
@@ -997,14 +1090,88 @@ class PostingIdentityTests(unittest.TestCase):
                 "delete_previous_bot_comments_if_collected",
                 lambda *_args: cleanup_calls.append("delete"),
             ),
+            patched_attr(
+                workflow,
+                "delete_previous_summary_notes",
+                lambda _config, refs: summary_cleanup_calls.append(
+                    "summary" if refs is previous else "wrong"
+                ),
+            ),
             patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
         ):
             exit_code = workflow.post_results(gitlab_config(), result_data)
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(cleanup_calls, [])
+        self.assertEqual(summary_cleanup_calls, ["summary"])
         self.assertIn("Coverage: selected 2; completed 1", notes[0])
         self.assertNotIn("No issues found", notes[0])
+
+    def test_filtered_publication_posts_safe_new_findings_and_preserves_previous(self) -> None:
+        notes: list[str] = []
+        cleanup_calls: list[str] = []
+        previous = snapshot.BotCommentRefs()
+        old = {"path": "src/old.py", "line": 7, "content": "Existing safe finding."}
+        new = {"path": "src/new.py", "line": 9, "content": "New safe finding."}
+        old_fingerprint = markers.comment_fingerprint(old)
+        self.assertIsNotNone(old_fingerprint)
+        previous.published_fingerprints.add(old_fingerprint or "")
+        publication = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 2, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "clean",
+                "selected": 3,
+                "completed": 3,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+
+        def capture_note(_config: Any, *args: Any) -> dict[str, int]:
+            notes.append("\n".join(value for value in args if isinstance(value, str)))
+            return {"id": len(notes)}
+
+        with (
+            patched_attr(workflow, "collect_previous_bot_comment_refs", lambda _config: previous),
+            patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: cleanup_calls.append("delete"),
+            ),
+            patched_attr(workflow, "resolve_requested_discussions", lambda *_args: None),
+            redirect_stdout(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "completed_with_errors",
+                    "comments": [old, new],
+                    "warnings": [],
+                    "_ocr_toolkit": {"schema_version": 4, "publication": publication},
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(cleanup_calls, [])
+        rendered = "\n".join(notes)
+        self.assertIn("New safe finding.", rendered)
+        self.assertNotIn("Existing safe finding.", rendered)
+        self.assertIn("<summary>Publication filtering signal</summary>", rendered)
+        self.assertIn('"carried_forward_comments":1', rendered)
 
     def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
         notes: list[str] = []
@@ -1546,6 +1713,128 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertIn("\\/merge", notes[0])
         self.assertNotIn("\n/merge", notes[0])
 
+    def test_setup_pending_status_selects_only_static_text_and_preserves_exit_modes(self) -> None:
+        for emoji, strict, expected_exit in (("true", "false", 0), ("false", "true", 1)):
+            with self.subTest(emoji=emoji, strict=strict), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                directory = root / ".review-context"
+                directory.mkdir(mode=0o700)
+                status_path = directory / "pre-execution-status.json"
+                write_pre_execution_status(
+                    status_path,
+                    PreExecutionStatus(
+                        schema_version=STATUS_SCHEMA,
+                        reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                        diff_base_sha="a" * 40,
+                        source_sha="b" * 40,
+                        policy_sha="c" * 40,
+                    ),
+                )
+                stderr_path = root / "stderr.log"
+                stderr_path.write_text("/merge repository-controlled details\n", encoding="utf-8")
+                notes: list[tuple[str, str]] = []
+                setup_cleanup: list[list[int]] = []
+                previous = snapshot.BotCommentRefs(
+                    summary_plain_note_ids=[8], setup_plain_note_ids=[9]
+                )
+
+                def capture_note(
+                    _config: gitlab.GitLabConfig,
+                    title: str,
+                    body: str,
+                    _transaction: PostingTransaction,
+                ) -> dict[str, int]:
+                    notes.append((title, body))
+                    return {"id": 1}
+
+                settings.post_emoji.cache_clear()
+                with (
+                    patched_env(
+                        CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                        CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                        OCR_POST_EMOJI=emoji,
+                        OCR_POST_ERROR_DETAILS="1",
+                        OCR_STRICT_POSTING=strict,
+                    ),
+                    patched_attr(
+                        workflow,
+                        "repository_artifacts",
+                        lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                    ),
+                    patched_attr(workflow, "post_review_note_bounded", capture_note),
+                    patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                    patched_attr(
+                        workflow,
+                        "collect_previous_bot_comment_refs",
+                        lambda *_args: previous,
+                    ),
+                    patched_attr(
+                        workflow,
+                        "delete_previous_setup_notes",
+                        lambda _config, refs: setup_cleanup.append(refs.setup_plain_note_ids),
+                    ),
+                ):
+                    exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
+
+                self.assertEqual(exit_code, expected_exit)
+                self.assertEqual(len(notes), 1)
+                self.assertEqual("⏳" in notes[0][0], emoji == "true")
+                self.assertIn("did not run", notes[0][1])
+                self.assertIn("Previous Open Code Review comments were preserved", notes[0][1])
+                self.assertIn(markers.SETUP_PENDING_MARKER, notes[0][1])
+                self.assertNotIn("/merge", notes[0][1])
+                self.assertNotIn("rules.json", notes[0][1])
+                self.assertEqual(setup_cleanup, [[9]])
+
+    def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
+        notes: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".review-context"
+            directory.mkdir(mode=0o700)
+            status_path = directory / "pre-execution-status.json"
+            write_pre_execution_status(
+                status_path,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                    diff_base_sha="a" * 40,
+                    source_sha="b" * 40,
+                    policy_sha="c" * 40,
+                ),
+            )
+            stderr_path = root / "stderr.log"
+            stderr_path.write_text("generic details\n", encoding="utf-8")
+
+            def capture_note(
+                _config: gitlab.GitLabConfig,
+                _title: str,
+                body: str,
+                _transaction: PostingTransaction,
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
+
+            with (
+                patched_env(
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="d" * 40,
+                    OCR_POST_ERROR_DETAILS="1",
+                ),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture_note),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("result may be partial", notes[0])
+        self.assertIn("generic details", notes[0])
+
 
 class PostingSummaryTests(unittest.TestCase):
     def tearDown(self) -> None:
@@ -1630,6 +1919,56 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("MR head commit: `def456`", summary)
         self.assertTrue(summary.startswith("## Open Code Review\n"))
         self.assertIn("🔎 **Review complete — 3 findings published**", summary)
+
+    def test_publication_filtering_signal_is_visible_and_machine_readable(self) -> None:
+        publication = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 1,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 2, "warnings": 1},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 1},
+            "original": {
+                "outcome": "clean",
+                "selected": 3,
+                "completed": 3,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        signal = posting_formatting.publication_dlp_signal(publication, carried_forward_comments=1)
+        details = posting_formatting.format_publication_dlp_details(signal)
+        summary = posting_formatting.summarize_result(
+            total=2,
+            inline_count=2,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="partial",
+            publication_dlp_details=details,
+            emoji=False,
+        )
+
+        self.assertIn("<summary>Publication filtering signal</summary>", summary)
+        self.assertIn("Published safe subset: 2 finding(s)", summary)
+        marker = summary.split("<!-- ocr-toolkit-signal ", 1)[1].split(" -->", 1)[0]
+        self.assertEqual(json.loads(marker), signal)
+        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v1")
+
+        private_only = {
+            **publication,
+            "omitted": {"comments": 0, "warnings": 0, "fields": 2},
+        }
+        private_details = posting_formatting.format_publication_dlp_details(
+            posting_formatting.publication_dlp_signal(private_only)
+        )
+        self.assertIn("No finding or warning was omitted", private_details)
+        self.assertIn("automatic approval remains unavailable", private_details)
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(
@@ -1827,6 +2166,22 @@ class PostingSummaryTests(unittest.TestCase):
         )
         self.assertNotIn("unused_optional", summary)
         self.assertNotIn("file_read", summary)
+
+    def test_mcp_usage_summary_reads_receipt_v4_inventory(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 4,
+                "mcp": {
+                    "capabilities": [],
+                    "usage": {"ocr_toolkit_evidence": 3},
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- MCP used: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+        )
 
     def test_mcp_usage_summary_omits_zero_usage(self) -> None:
         self.assertEqual(

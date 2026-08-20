@@ -19,8 +19,14 @@ import pytest
 
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.pre_execution import read_pre_execution_status
 from ocr_toolkit.providers import gitlab
-from ocr_toolkit.review_runner import ReviewRefs, ReviewRunnerError, _prepare_policy_context
+from ocr_toolkit.review_runner import (
+    ReviewRefs,
+    ReviewRunnerError,
+    _prepare_policy_context,
+    _record_rules_path_setup,
+)
 
 SOURCE_SHA = "a" * 40
 TARGET_SHA = "b" * 40
@@ -423,6 +429,132 @@ def test_policy_rule_transport_rejects_unsafe_or_unavailable_repository_inputs(
         )
 
 
+def test_rules_path_setup_uses_only_protected_identity_and_source_blob_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init", "-q")
+    _git(repository, "config", "user.name", "Synthetic")
+    _git(repository, "config", "user.email", "synthetic@example.invalid")
+    (repository / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-qm", "base")
+    base = _git(repository, "rev-parse", "HEAD")
+    (repository / "target.txt").write_text("protected\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-qm", "protected target")
+    policy = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "checkout", "-qb", "source", base)
+    (repository / ".opencodereview").mkdir()
+    (repository / ".opencodereview/rules.json").write_text(
+        "not validated source syntax\n", encoding="utf-8"
+    )
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-qm", "introduce configured rules path")
+    source = _git(repository, "rev-parse", "HEAD")
+    monkeypatch.chdir(repository)
+    artifacts = repository_artifacts(repository)
+    prepare_artifact_directory(artifacts)
+    read_refs: list[str] = []
+    original_read_blob = GitRepositoryReader.read_blob
+
+    def record_read(reader: GitRepositoryReader, ref: str, path: str) -> bytes | None:
+        read_refs.append(ref)
+        return original_read_blob(reader, ref, path)
+
+    monkeypatch.setattr(GitRepositoryReader, "read_blob", record_read)
+    with _https_gitlab(tmp_path / "tls", source_sha=source, target_sha=policy) as api_root:
+        for name, value in _environment(api_root).items():
+            monkeypatch.setenv(name, value)
+        with pytest.raises(ReviewRunnerError, match="setup is pending"):
+            _prepare_policy_context(
+                ReviewRefs(base, source),
+                ["--rule", ".opencodereview/rules.json"],
+                artifacts,
+            )
+
+    recorded = read_pre_execution_status(
+        artifacts.pre_execution_status,
+        expected_diff_base_sha=base,
+        expected_source_sha=source,
+    )
+    assert recorded.policy_sha == policy
+    assert read_refs == [policy]
+
+    artifacts.pre_execution_status.unlink()
+    reader = GitRepositoryReader(repository)
+    assert not _record_rules_path_setup(
+        reader,
+        artifacts,
+        refs=ReviewRefs(source, source),
+        policy_sha=policy,
+        repository_path=".opencodereview/rules.json",
+    )
+    assert not _record_rules_path_setup(
+        reader,
+        artifacts,
+        refs=ReviewRefs(base, base),
+        policy_sha=policy,
+        repository_path=".opencodereview/rules.json",
+    )
+    assert not artifacts.pre_execution_status.exists()
+
+
+def test_rules_path_setup_rejects_unsafe_and_oversized_source_objects(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init", "-q")
+    _git(repository, "config", "user.name", "Synthetic")
+    _git(repository, "config", "user.email", "synthetic@example.invalid")
+    (repository / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-qm", "base")
+    base = _git(repository, "rev-parse", "HEAD")
+    artifacts = repository_artifacts(repository)
+    prepare_artifact_directory(artifacts)
+
+    heads: list[str] = []
+    for name in ("symlink", "tree", "submodule", "oversized"):
+        _git(repository, "checkout", "-qB", name, base)
+        candidate = repository / ".opencodereview/rules.json"
+        if name == "submodule":
+            _git(
+                repository,
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"160000,{base},.opencodereview/rules.json",
+            )
+        else:
+            candidate.parent.mkdir()
+        if name == "symlink":
+            candidate.symlink_to("outside.json")
+        elif name == "tree":
+            candidate.mkdir()
+            (candidate / "nested").write_text("unsafe\n", encoding="utf-8")
+        elif name == "oversized":
+            candidate.write_bytes(b"x" * 256_001)
+        if name != "submodule":
+            _git(repository, "add", ".")
+        _git(repository, "commit", "-qm", name)
+        heads.append(_git(repository, "rev-parse", "HEAD"))
+
+    reader = GitRepositoryReader(repository)
+    for head in heads:
+        with pytest.raises(RepositoryEvidenceError):
+            _record_rules_path_setup(
+                reader,
+                artifacts,
+                refs=ReviewRefs(base, head),
+                policy_sha=base,
+                repository_path=".opencodereview/rules.json",
+            )
+        assert not artifacts.pre_execution_status.exists()
+
+
 def test_bounded_fetch_gets_exact_commit_without_moving_refs(tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
     source = tmp_path / "source"
@@ -566,6 +698,9 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "bootstrap_text = bootstrap.read_text()\n"
         "assert 'The broad rollout is intentional.' not in bootstrap_text\n"
         "config = json.loads((pathlib.Path.home() / '.opencodereview/config.json').read_text())\n"
+        "assert config['llm']['url'] == 'https://llm.example.invalid/v1'\n"
+        "assert config['llm']['model'] == 'synthetic-model'\n"
+        "assert config['llm']['auth_token'] == 'synthetic-runtime-token'\n"
         "server = config['mcp_servers']['ocr_toolkit_evidence']\n"
         "requests = [\n"
         " {'jsonrpc':'2.0','id':1,'method':'initialize','params':"
@@ -615,6 +750,10 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "OCR_REVIEW_CONTEXT_MODE": "metadata",
         "HOME": str(home),
         "OCR_MCP_REPLACE": "true",
+        "OCR_LLM_URL": "https://llm.example.invalid/v1",
+        "OCR_LLM_TOKEN": "synthetic-runtime-token",
+        "OCR_LLM_MODEL": "synthetic-model",
+        "OCR_LLM_PROTOCOL": "openai-responses",
         "PATH": os.pathsep.join((str(binary_directory), os.environ.get("PATH", ""))),
     }
     monkeypatch.chdir(checkout)
@@ -654,12 +793,18 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 3,
+        "schema_version": 4,
         "review": {"source_sha": head, "policy_sha": policy, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
             "state": "complete",
             "classes": ["merge_request_metadata"],
+            "policy_digest": None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
             "capabilities": [
@@ -671,7 +816,9 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             ],
             "usage": {"ocr_toolkit_evidence": 3},
         },
-        "evidence": {"mandatory": True, "used": True},
+        "evidence": {"mandatory": True, "used": True, "calls": 3},
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
     for path in (artifacts.store, artifacts.bootstrap, artifacts.policy_rules, result, stderr):
         assert path.stat().st_mode & 0o777 == 0o600

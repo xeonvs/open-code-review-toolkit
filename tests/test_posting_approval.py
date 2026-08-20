@@ -41,7 +41,7 @@ def finding(category: Any = "style", severity: Any = "low") -> dict[str, Any]:
     return {"category": category, "severity": severity}
 
 
-def receipt_v3(
+def receipt_v4(
     *, context_state: str = "disabled", external: bool = False, author_id: int | None = 41
 ) -> dict[str, Any]:
     """Return one closed synthetic review-time receipt."""
@@ -59,7 +59,7 @@ def receipt_v3(
             {"server": "documentation", "transport": "remote", "tools": ["docs_read"]}
         )
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -69,12 +69,20 @@ def receipt_v3(
             "mode": mode,
             "state": context_state,
             "classes": ["merge_request_metadata"] if mode == "metadata" else [],
+            "policy_digest": None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
             "capabilities": capabilities,
             "usage": {"ocr_toolkit_evidence": 1},
         },
-        "evidence": {"mandatory": True, "used": True},
+        "evidence": {"mandatory": True, "used": True, "calls": 1},
+        "publication": {"dlp": "passed"},
+        "cleanup": {"result": "passed"},
     }
 
 
@@ -94,8 +102,35 @@ def eligibility(
         comments or [],
         warnings or [],
         omitted,
-        receipt_v3(),
+        receipt_v4(),
     )
+
+
+def enriched_receipt(*, mutable: bool = False, required_degraded: bool = False) -> dict[str, Any]:
+    """Return one v4 local-store-only enrichment receipt."""
+
+    receipt = receipt_v4()
+    receipt["context"] = {
+        "mode": "enriched",
+        "state": "degraded" if required_degraded else "complete",
+        "classes": ["merge_request_metadata", "forge_discussions", "external_records"],
+        "policy_digest": "c" * 64,
+        "per_source": {"forge:gitlab_discussions": "complete"},
+        "degradation_counts": {
+            "invalid": 0,
+            "limit": 0,
+            "unavailable": 1 if required_degraded else 0,
+        },
+        "required_degraded": required_degraded,
+        "mutable_admitted": mutable,
+        "tool_usage": {"context_get": 0, "context_list": 0},
+    }
+    receipt["mcp"]["capabilities"][0]["tools"] = [
+        "ocr_toolkit_evidence",
+        "context_list",
+        "context_get",
+    ]
+    return receipt
 
 
 class ApprovalSettingTests(unittest.TestCase):
@@ -173,12 +208,52 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v3(context_state="degraded", author_id=41),
+            receipt_v4(context_state="degraded", author_id=41),
         )
 
         self.assertFalse(decision.eligible)
         self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
         self.assertEqual(decision.result.reason, "the selected review context was degraded")
+
+    def test_publication_dlp_filtered_receipt_is_valid_but_never_eligible(self) -> None:
+        receipt = receipt_v4()
+        receipt["publication"] = {
+            "dlp": "filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 1, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "clean",
+                "selected": 2,
+                "completed": 2,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [finding()],
+            [],
+            0,
+            receipt,
+        )
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(decision.result.status, approval.ApprovalStatus.NOT_ELIGIBLE)
+        self.assertEqual(
+            decision.result.reason,
+            "publication DLP filtered the complete review result",
+        )
 
     def test_complete_metadata_and_external_mcp_have_independent_approval_effects(self) -> None:
         complete_metadata = approval.evaluate_approval_policy(
@@ -187,10 +262,10 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v3(context_state="complete", author_id=41),
+            receipt_v4(context_state="complete", author_id=41),
         )
         external = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v3(external=True)
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v4(external=True)
         )
 
         self.assertTrue(complete_metadata.eligible)
@@ -199,8 +274,48 @@ class ApprovalPolicyTests(unittest.TestCase):
             external.result.reason, "external MCP was configured for a comment-only review"
         )
 
+    def test_enriched_zero_record_can_approve_but_mutable_or_required_degradation_cannot(
+        self,
+    ) -> None:
+        complete = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, enriched_receipt()
+        )
+        mutable = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            enriched_receipt(mutable=True),
+        )
+        degraded = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            complete_outcome(),
+            [],
+            [],
+            0,
+            enriched_receipt(required_degraded=True),
+        )
+
+        self.assertTrue(complete.eligible)
+        self.assertEqual(mutable.result.reason, "mutable review context was admitted")
+        self.assertEqual(degraded.result.reason, "the selected review context was degraded")
+
+    def test_optional_context_mutation_remains_visible_without_becoming_required_failure(
+        self,
+    ) -> None:
+        receipt = enriched_receipt()
+        receipt["context"]["per_source"] = {"forge:gitlab_discussions": "mutated"}
+        receipt["context"]["degradation_counts"]["invalid"] = 1
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+
+        self.assertTrue(decision.eligible)
+
     def test_receipt_accepts_ocr_compatible_non_identifier_tool_names(self) -> None:
-        metadata = receipt_v3(external=True)
+        metadata = receipt_v4(external=True)
         metadata["mcp"]["capabilities"][1]["tools"] = ["repo.search", "records/read"]
 
         decision = approval.evaluate_approval_policy(
@@ -229,15 +344,15 @@ class ApprovalPolicyTests(unittest.TestCase):
             "the review-time approval receipt predates current eligibility controls",
         )
 
-    def test_missing_or_malformed_v3_receipt_fails_closed(self) -> None:
-        cases: list[Any] = [None, {"schema_version": 3}]
+    def test_missing_or_malformed_v4_receipt_fails_closed(self) -> None:
+        cases: list[Any] = [None, {"schema_version": 4}]
         for mutate in (
             lambda value: value["context"].update({"state": "complete"}),
             lambda value: value["review"].update({"source_sha": "invalid"}),
             lambda value: value["mcp"].update({"usage": {"unknown": 1}}),
             lambda value: value["evidence"].update({"used": False}),
         ):
-            candidate = receipt_v3()
+            candidate = receipt_v4()
             mutate(candidate)
             cases.append(candidate)
         for metadata in cases:
@@ -251,43 +366,43 @@ class ApprovalPolicyTests(unittest.TestCase):
                     "the review-time approval receipt is missing or invalid",
                 )
 
-    def test_impossible_v3_capability_and_evidence_states_fail_closed(self) -> None:
+    def test_impossible_v4_capability_and_evidence_states_fail_closed(self) -> None:
         cases: list[dict[str, Any]] = []
 
-        builtin_remote = receipt_v3()
+        builtin_remote = receipt_v4()
         builtin_remote["mcp"]["capabilities"][0]["transport"] = "remote"
         cases.append(builtin_remote)
 
-        external_builtin = receipt_v3(external=True)
+        external_builtin = receipt_v4(external=True)
         external_builtin["mcp"]["capabilities"][1]["transport"] = "builtin"
         cases.append(external_builtin)
 
-        wrong_builtin_tool = receipt_v3()
+        wrong_builtin_tool = receipt_v4()
         wrong_builtin_tool["mcp"]["capabilities"][0]["tools"] = ["other_read"]
         cases.append(wrong_builtin_tool)
 
-        duplicate_tool = receipt_v3(external=True)
+        duplicate_tool = receipt_v4(external=True)
         duplicate_tool["mcp"]["capabilities"][1]["tools"] = ["ocr_toolkit_evidence"]
         cases.append(duplicate_tool)
 
-        too_many_tools = receipt_v3(external=True)
+        too_many_tools = receipt_v4(external=True)
         too_many_tools["mcp"]["capabilities"][1]["tools"] = [
             f"tool_{index}" for index in range(129)
         ]
         cases.append(too_many_tools)
 
-        usage_mismatch = receipt_v3()
+        usage_mismatch = receipt_v4()
         usage_mismatch["mcp"]["usage"] = {}
         cases.append(usage_mismatch)
 
-        usage_overflow = receipt_v3()
+        usage_overflow = receipt_v4()
         usage_overflow["mcp"]["usage"] = {"ocr_toolkit_evidence": 1_000_000_001}
         cases.append(usage_overflow)
 
-        missing_author = receipt_v3(author_id=None)
+        missing_author = receipt_v4(author_id=None)
         cases.append(missing_author)
 
-        mandatory_mismatch = receipt_v3()
+        mandatory_mismatch = receipt_v4()
         mandatory_mismatch["evidence"] = {"mandatory": False, "used": True}
         cases.append(mandatory_mismatch)
 
@@ -667,7 +782,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         settings.post_mode.cache_clear()
 
     def test_receipt_identity_is_atomic_for_summary_and_approval(self) -> None:
-        valid = receipt_v3(author_id=41)
+        valid = receipt_v4(author_id=41)
         self.assertEqual(workflow.approval_receipt_identity(valid), ("a" * 40, 41))
 
         for mutate in (
@@ -675,7 +790,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             lambda value: value["review"].update({"mr_author_id": None}),
             lambda value: value["review"].update({"mr_author_id": True}),
         ):
-            candidate = receipt_v3(author_id=41)
+            candidate = receipt_v4(author_id=41)
             mutate(candidate)
             with self.subTest(candidate=candidate):
                 self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))

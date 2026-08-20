@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -15,6 +16,7 @@ from typing import Any
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_RESULT_KEY,
     OcrResultMalformed,
@@ -29,6 +31,7 @@ from ocr_toolkit.posting.approval import (
     ApprovalStatus,
     evaluate_approval_policy,
     provisional_approval_result,
+    publication_dlp_state,
 )
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -41,10 +44,12 @@ from ocr_toolkit.posting.formatting import (
     format_inline_comment,
     format_mcp_usage_summary,
     format_omitted_comments_summary,
+    format_publication_dlp_details,
     format_reviewer_guide,
     format_token_usage_summary,
     format_tool_calls_summary,
     inline_code,
+    publication_dlp_signal,
     summarize_result,
 )
 from ocr_toolkit.posting.gitlab import (
@@ -59,6 +64,7 @@ from ocr_toolkit.posting.gitlab import (
 )
 from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
 from ocr_toolkit.posting.markers import (
+    SETUP_PENDING_MARKER,
     annotate_comment_fingerprints,
     build_summary_run_marker,
     is_own_bot_note,
@@ -73,6 +79,9 @@ from ocr_toolkit.posting.snapshot import (
     cleanup_drafts_created_by_this_run,
     collect_previous_bot_comment_refs,
     delete_previous_bot_comments_if_collected,
+    delete_previous_setup_notes,
+    delete_previous_summary_notes,
+    filter_previously_published_comments,
     filter_suppressed_comments,
     posting_failure_exit,
     print_posting_failure_banner,
@@ -85,6 +94,12 @@ from ocr_toolkit.posting.suggestions import (
     safe_repository_path,
 )
 from ocr_toolkit.posting.transaction import PostingTransaction
+from ocr_toolkit.pre_execution import (
+    PROTECTED_TARGET_RULE_PATH_PENDING,
+    PreExecutionStatus,
+    PreExecutionStatusError,
+    read_pre_execution_status,
+)
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
@@ -137,7 +152,7 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 3:
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 4:
         return "", None
     review = toolkit_metadata.get("review")
     if not isinstance(review, dict):
@@ -590,6 +605,23 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         print_posting_failure_banner()
         return 1
 
+    toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
+    publication = (
+        toolkit_metadata.get("publication") if isinstance(toolkit_metadata, dict) else None
+    )
+    publication_state = (
+        publication_dlp_state(publication)
+        if isinstance(toolkit_metadata, dict) and toolkit_metadata.get("schema_version") == 4
+        else "legacy"
+    )
+    if publication_state is None:
+        return invalid_ocr_schema_exit(
+            config,
+            "receipt v4 publication state is invalid",
+            intro="OCR result publication policy state could not be validated.",
+            title="**Open Code Review publication policy error**",
+        )
+
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
@@ -661,6 +693,23 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             f"Suppressed {suppressed_count} OCR comment(s) at locations resolved or "
             "suppressed by the reviewer."
         )
+    carried_forward_count = 0
+    if publication_state == "filtered":
+        comments, carried_forward_count = filter_previously_published_comments(
+            comments, previous_bot_comment_refs
+        )
+        if carried_forward_count:
+            print(
+                f"Preserved {carried_forward_count} matching finding(s) from the previous "
+                "OCR review instead of publishing duplicates."
+            )
+    dlp_signal = publication_dlp_signal(publication, carried_forward_comments=carried_forward_count)
+    dlp_details = format_publication_dlp_details(dlp_signal)
+    if dlp_signal is not None:
+        print(
+            "OCR toolkit telemetry event: "
+            + json.dumps(dlp_signal, sort_keys=True, separators=(",", ":"))
+        )
 
     publishable_comment_count = len(comments)
     publish_limit = max_post_comments()
@@ -708,6 +757,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 tool_calls_summary=tool_calls_summary,
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
+                publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
                 mr_head_sha=mr_head_sha(),
@@ -893,6 +943,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_commit,
@@ -950,6 +1001,7 @@ def finalize_previous_review_state(
 
     if outcome.kind == "partial":
         print("OCR coverage is partial; preserving previous review comments until a complete run.")
+        delete_previous_summary_notes(config, previous_refs)
     else:
         delete_previous_bot_comments_if_collected(config, previous_refs)
     resolve_requested_discussions(config, previous_refs)
@@ -1154,6 +1206,20 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
     instead of a confusing negative number.
     """
 
+    try:
+        status_path = repository_artifacts().pre_execution_status
+        source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
+        diff_base_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
+        status = read_pre_execution_status(
+            status_path,
+            expected_diff_base_sha=diff_base_sha,
+            expected_source_sha=source_sha,
+        )
+    except (OSError, PreExecutionStatusError, RuntimeError):
+        status = None
+    if status is not None:
+        return post_pre_execution_status(config, status)
+
     transaction = PostingTransaction()
     details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
     details = read_stderr_excerpt(stderr_path) if details_enabled else ""
@@ -1186,6 +1252,44 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
     if not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
 
+    return 1 if strict_posting() else 0
+
+
+def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
+    """Render static toolkit text for one already hostile-validated closed outcome."""
+
+    if status.reason != PROTECTED_TARGET_RULE_PATH_PENDING:
+        raise ValueError("unsupported pre-execution status")
+    previous_refs = collect_previous_bot_comment_refs(config)
+    if previous_refs is None:
+        print("Cannot collect previous OCR setup notes reliably.", file=sys.stderr)
+        return 1 if strict_posting() else 0
+    transaction = PostingTransaction()
+    heading = (
+        "**⏳ Open Code Review setup is pending**"
+        if post_emoji()
+        else "**Open Code Review setup is pending**"
+    )
+    body = (
+        "This merge request adds the repository rules file configured for Open Code Review. "
+        "Open Code Review did not run because this file was not present in the protected-target "
+        "commit captured for this pipeline. This is expected while the rules path is being "
+        "introduced. Once valid rules are available at this path in the protected target branch, "
+        "subsequent merge requests can run a full review.\n\n"
+        "No review findings were produced. Previous Open Code Review comments were preserved."
+    )
+    response = post_review_note_bounded(
+        config,
+        heading,
+        f"{SETUP_PENDING_MARKER}\n{body}",
+        transaction,
+    )
+    if response is None:
+        print("Failed to create OCR setup-pending note.", file=sys.stderr)
+        return posting_failure_exit(config, None, transaction)
+    if not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
+    delete_previous_setup_notes(config, previous_refs)
     return 1 if strict_posting() else 0
 
 

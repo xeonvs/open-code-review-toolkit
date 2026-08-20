@@ -27,6 +27,7 @@ from ocr_toolkit.evidence.artifacts import (
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.project import (
     DEFAULT_BOOTSTRAP_MAX_CHARS,
+    MANDATORY_EVIDENCE_INSTRUCTION,
     render_bootstrap,
     render_json,
 )
@@ -230,6 +231,12 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.change_category" for record in store.records)
+    assert bootstrap.startswith("# Required evidence call\n")
+    instruction = bootstrap.index("ocr_toolkit_evidence(action=summary)")
+    assert instruction < bootstrap.index(base_sha)
+    assert "small/self-contained diffs" in bootstrap
+    assert "preflight self-query does not count" in bootstrap
+    assert "zero calls are rejected" in bootstrap
     assert "# Repository evidence bootstrap" in bootstrap
     assert "Untrusted repository data" in bootstrap
     assert f"- base: `{base_sha}`" in bootstrap
@@ -239,8 +246,8 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert "action=list" in bootstrap
     assert "action=get" in bootstrap
     assert "changed.txt" not in bootstrap
-    assert DEFAULT_BOOTSTRAP_MAX_CHARS == 2_000
-    assert len(bootstrap) <= 2_000
+    assert DEFAULT_BOOTSTRAP_MAX_CHARS == 2_300
+    assert len(bootstrap) <= 2_300
     assert serialized == store.to_json()
 
 
@@ -419,6 +426,9 @@ def test_bootstrap_truncation_is_explicit() -> None:
     assert len(bootstrap) <= 400
     assert len(bootstrap.encode("utf-8")) <= 1024
     assert "bootstrap truncated" in bootstrap
+    assert bootstrap.startswith("# Required evidence call\n")
+    assert "ocr_toolkit_evidence(action=summary)" in bootstrap
+    assert "zero calls are rejected" in bootstrap
 
 
 def test_bootstrap_neutralizes_untrusted_diagnostic_markdown() -> None:
@@ -844,12 +854,13 @@ def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> 
         )
     )
 
-    bootstrap = render_bootstrap(store, max_chars=1024)
+    bootstrap = render_bootstrap(store, max_chars=1_300)
 
     assert "`` services/`review text`/AGENTS.md ``" in bootstrap
     assert "`` services/`review text`/** ``" in bootstrap
     clipped = render_bootstrap(store, max_chars=256)
-    assert clipped.endswith(
-        "> Evidence bootstrap truncated; query `ocr_toolkit_evidence` for details.\n"
-    )
+    assert clipped.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
+    assert clipped.endswith("> Bootstrap truncated.\n")
+    assert len(clipped) <= 256
+    assert len(clipped.encode("utf-8")) <= 1024
     assert not any(line.count("``") == 1 for line in clipped.splitlines())

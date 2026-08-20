@@ -150,6 +150,69 @@ def _positive_id(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
+def _sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(char in "0123456789abcdef" for char in value)
+    )
+
+
+def publication_dlp_state(value: Any) -> str | None:
+    """Validate the exact v4 passed or filtered publication receipt."""
+
+    if value == {"dlp": "passed"}:
+        return "passed"
+    if not isinstance(value, dict) or set(value) != {
+        "dlp",
+        "reason_counts",
+        "retained",
+        "omitted",
+        "original",
+    }:
+        return None
+    if value.get("dlp") != "filtered":
+        return None
+    reason_counts = value.get("reason_counts")
+    retained = value.get("retained")
+    omitted = value.get("omitted")
+    original = value.get("original")
+    if (
+        not isinstance(reason_counts, dict)
+        or set(reason_counts)
+        != {"forbidden", "invalid_text", "laundering", "limit", "pii", "secret"}
+        or any(
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for count in reason_counts.values()
+        )
+        or not any(reason_counts.values())
+        or not isinstance(retained, dict)
+        or set(retained) != {"comments", "warnings"}
+        or not isinstance(omitted, dict)
+        or set(omitted) != {"comments", "warnings", "fields"}
+        or any(
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for counts in (retained, omitted)
+            for count in counts.values()
+        )
+        or not isinstance(original, dict)
+        or set(original) != {"outcome", "selected", "completed", "reused", "failed", "waived"}
+        or original.get("outcome") not in {"clean", "warning", "partial", "failed", "skipped"}
+        or any(
+            not isinstance(original.get(field), int)
+            or isinstance(original.get(field), bool)
+            or not 0 <= original[field] <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for field in ("selected", "completed", "reused", "failed", "waived")
+        )
+    ):
+        return None
+    return "filtered"
+
+
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     """Return the closed review-time receipt blocker for automatic approval."""
 
@@ -157,14 +220,16 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if not isinstance(toolkit_metadata, dict):
         return invalid
     schema_version = toolkit_metadata.get("schema_version")
-    if schema_version in {1, 2}:
+    if schema_version in {1, 2, 3}:
         return "the review-time approval receipt predates current eligibility controls"
-    if schema_version != 3 or set(toolkit_metadata) != {
+    if schema_version != 4 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
         "mcp",
         "evidence",
+        "publication",
+        "cleanup",
     }:
         return invalid
 
@@ -177,18 +242,73 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
 
     context = toolkit_metadata.get("context")
-    if not isinstance(context, dict) or set(context) != {"mode", "state", "classes"}:
+    if not isinstance(context, dict) or set(context) != {
+        "mode",
+        "state",
+        "classes",
+        "policy_digest",
+        "per_source",
+        "degradation_counts",
+        "required_degraded",
+        "mutable_admitted",
+        "tool_usage",
+    }:
         return invalid
     mode = context.get("mode")
     state = context.get("state")
     classes = context.get("classes")
-    expected_classes = [] if mode == "off" else ["merge_request_metadata"]
+    expected_classes = {
+        "off": [],
+        "metadata": ["merge_request_metadata"],
+        "enriched": ["merge_request_metadata", "forge_discussions", "external_records"],
+    }.get(mode)
+    policy_digest = context.get("policy_digest")
+    per_source = context.get("per_source")
+    degradation = context.get("degradation_counts")
+    required_degraded = context.get("required_degraded")
+    mutable_admitted = context.get("mutable_admitted")
+    context_usage = context.get("tool_usage")
     if (
-        mode not in {"off", "metadata"}
+        mode not in {"off", "metadata", "enriched"}
         or state not in {"disabled", "complete", "degraded"}
         or classes != expected_classes
         or (mode == "off" and state != "disabled")
-        or (mode == "metadata" and state == "disabled")
+        or (mode in {"metadata", "enriched"} and state == "disabled")
+        or (mode == "enriched") != _sha256(policy_digest)
+        or not isinstance(per_source, dict)
+        or len(per_source) > 64
+        or any(
+            not isinstance(source, str)
+            or not source
+            or len(source) > 256
+            or source_state not in {"complete", "partial", "unavailable", "mutated"}
+            for source, source_state in per_source.items()
+        )
+        or not isinstance(degradation, dict)
+        or set(degradation) != {"invalid", "limit", "unavailable"}
+        or any(
+            not isinstance(count, int) or isinstance(count, bool) or not 0 <= count <= 1_000_000
+            for count in degradation.values()
+        )
+        or not isinstance(required_degraded, bool)
+        or not isinstance(mutable_admitted, bool)
+        or not isinstance(context_usage, dict)
+        or set(context_usage) != {"context_get", "context_list"}
+        or any(
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for count in context_usage.values()
+        )
+    ):
+        return invalid
+    if mode != "enriched" and (
+        policy_digest is not None
+        or per_source
+        or any(degradation.values())
+        or required_degraded
+        or mutable_admitted
+        or any(context_usage.values())
     ):
         return invalid
 
@@ -228,7 +348,15 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             or len(set(tools)) != len(tools)
             or any(tool in tool_owners for tool in tools)
             or (server == builtin_server) != (transport == "builtin")
-            or (server == builtin_server and tools != [builtin_server])
+            or (
+                server == builtin_server
+                and tools
+                != (
+                    [builtin_server, "context_list", "context_get"]
+                    if mode == "enriched"
+                    else [builtin_server]
+                )
+            )
         ):
             return invalid
         servers.add(server)
@@ -247,20 +375,34 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
 
     evidence = toolkit_metadata.get("evidence")
-    if not isinstance(evidence, dict) or set(evidence) != {"mandatory", "used"}:
+    if not isinstance(evidence, dict) or set(evidence) != {"mandatory", "used", "calls"}:
         return invalid
     mandatory = evidence.get("mandatory")
     used = evidence.get("used")
-    evidence_called = usage.get(builtin_server, 0) > 0
+    evidence_calls = evidence.get("calls")
+    evidence_called = isinstance(evidence_calls, int) and evidence_calls > 0
     if (
         not isinstance(mandatory, bool)
         or not isinstance(used, bool)
+        or not isinstance(evidence_calls, int)
+        or isinstance(evidence_calls, bool)
+        or not 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
         or used is not evidence_called
         or (mandatory and not used)
+        or usage.get(builtin_server, 0) != evidence_calls + sum(context_usage.values())
     ):
         return invalid
-    if context.get("state") == "degraded":
+    publication = toolkit_metadata.get("publication")
+    cleanup = toolkit_metadata.get("cleanup")
+    publication_state = publication_dlp_state(publication)
+    if publication_state is None or cleanup != {"result": "passed"}:
+        return invalid
+    if publication_state == "filtered":
+        return "publication DLP filtered the complete review result"
+    if context.get("state") == "degraded" or required_degraded:
         return "the selected review context was degraded"
+    if mutable_admitted:
+        return "mutable review context was admitted"
     if external:
         return "external MCP was configured for a comment-only review"
     return ""

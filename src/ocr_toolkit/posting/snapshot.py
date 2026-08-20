@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,9 +25,14 @@ from ocr_toolkit.posting.markers import (
     author_id_from_note,
     comment_fingerprint,
     comment_fingerprint_candidates,
+    finding_fingerprints_from_marked_body,
     fingerprint_from_marker,
+    has_setup_pending_marker,
+    has_summary_run_marker,
     is_diff_note,
     is_own_bot_note,
+    legacy_comment_fingerprint,
+    line_based_comment_fingerprint,
 )
 from ocr_toolkit.posting.settings import post_mode, strict_posting
 from ocr_toolkit.posting.transaction import PostingTransaction
@@ -51,6 +57,14 @@ class BotCommentRefs:
     # Fingerprints from past resolved, human-touched, or explicitly suppressed
     # comments. Matching findings are dropped regardless of ordinary line shifts.
     suppressed_fingerprints: set[str] = field(default_factory=set)
+    # Every finding already visible in the previous OCR review. A partial
+    # publication preserves those notes and suppresses matching duplicates.
+    published_fingerprints: set[str] = field(default_factory=set)
+    published_fingerprint_counts: dict[str, int] = field(default_factory=dict)
+    summary_plain_note_ids: list[int] = field(default_factory=list)
+    summary_draft_note_ids: list[int] = field(default_factory=list)
+    setup_plain_note_ids: list[int] = field(default_factory=list)
+    setup_draft_note_ids: list[int] = field(default_factory=list)
     # Discussions that the bot should resolve after successful posting.
     discussions_to_resolve: list[str] = field(default_factory=list)
 
@@ -101,6 +115,44 @@ def filter_suppressed_comments(
                 continue
         kept.append(comment)
 
+    return kept, dropped
+
+
+def filter_previously_published_comments(
+    comments: Sequence[dict[str, Any]], previous_refs: BotCommentRefs | None
+) -> tuple[list[dict[str, Any]], int]:
+    """Avoid duplicating prior findings when a partial review preserves old notes."""
+
+    if previous_refs is None or (
+        not previous_refs.published_fingerprints and not previous_refs.published_fingerprint_counts
+    ):
+        return list(comments), 0
+    available = Counter(previous_refs.published_fingerprint_counts)
+    for fingerprint in previous_refs.published_fingerprints:
+        if available[fingerprint] == 0:
+            available[fingerprint] = 1
+    kept: list[dict[str, Any]] = []
+    dropped = 0
+    for comment in comments:
+        ordered_candidates = (
+            comment.get("_ocr_fingerprint"),
+            comment_fingerprint(comment),
+            line_based_comment_fingerprint(comment),
+            legacy_comment_fingerprint(comment),
+        )
+        matched = next(
+            (
+                fingerprint
+                for fingerprint in ordered_candidates
+                if isinstance(fingerprint, str) and available[fingerprint] > 0
+            ),
+            None,
+        )
+        if matched is not None:
+            available[matched] -= 1
+            dropped += 1
+        else:
+            kept.append(comment)
     return kept, dropped
 
 
@@ -210,6 +262,12 @@ def process_discussion_for_refs(
     if not bot_notes:
         return
 
+    refs.published_fingerprints.update(fingerprints)
+    for fingerprint in fingerprints:
+        refs.published_fingerprint_counts[fingerprint] = (
+            refs.published_fingerprint_counts.get(fingerprint, 0) + 1
+        )
+
     reviewer_command = reviewer_command_in_thread(config, notes)
     inline_key = None
     first_note = bot_notes[0]
@@ -294,6 +352,16 @@ def collect_previous_bot_comment_refs(
         refs.all_plain_note_ids.append(note_id)
         if is_own_bot_note(config, note, body_field="body"):
             refs.plain_note_ids.append(note_id)
+            if has_summary_run_marker(str(note.get("body") or "")):
+                refs.summary_plain_note_ids.append(note_id)
+            if has_setup_pending_marker(str(note.get("body") or "")):
+                refs.setup_plain_note_ids.append(note_id)
+            fingerprints = finding_fingerprints_from_marked_body(str(note.get("body") or ""))
+            refs.published_fingerprints.update(fingerprints)
+            for fingerprint in fingerprints:
+                refs.published_fingerprint_counts[fingerprint] = (
+                    refs.published_fingerprint_counts.get(fingerprint, 0) + 1
+                )
 
     draft_notes: list[Any] = []
     if post_mode() == "draft":
@@ -311,6 +379,16 @@ def collect_previous_bot_comment_refs(
         refs.all_draft_note_ids.append(note_id)
         if is_own_bot_note(config, note, body_field="note"):
             refs.draft_note_ids.append(note_id)
+            if has_summary_run_marker(str(note.get("note") or "")):
+                refs.summary_draft_note_ids.append(note_id)
+            if has_setup_pending_marker(str(note.get("note") or "")):
+                refs.setup_draft_note_ids.append(note_id)
+            fingerprints = finding_fingerprints_from_marked_body(str(note.get("note") or ""))
+            refs.published_fingerprints.update(fingerprints)
+            for fingerprint in fingerprints:
+                refs.published_fingerprint_counts[fingerprint] = (
+                    refs.published_fingerprint_counts.get(fingerprint, 0) + 1
+                )
 
     return refs
 
@@ -350,6 +428,34 @@ def delete_previous_bot_comments_if_collected(
         return
 
     delete_collected_bot_comments(config, refs)
+
+
+def delete_previous_summary_notes(config: GitLabConfig, refs: BotCommentRefs) -> None:
+    """Replace stale summaries after partial publication while retaining findings."""
+
+    deleted = 0
+    for note_id in refs.summary_plain_note_ids:
+        if delete_plain_note(config, note_id):
+            deleted += 1
+    for note_id in refs.summary_draft_note_ids:
+        if delete_draft_note(config, note_id):
+            deleted += 1
+    if deleted:
+        print(f"Deleted {deleted} previous OCR summary note(s).")
+
+
+def delete_previous_setup_notes(config: GitLabConfig, refs: BotCommentRefs) -> None:
+    """Replace only stale setup-pending notes while preserving prior reviews."""
+
+    deleted = 0
+    for note_id in refs.setup_plain_note_ids:
+        if delete_plain_note(config, note_id):
+            deleted += 1
+    for note_id in refs.setup_draft_note_ids:
+        if delete_draft_note(config, note_id):
+            deleted += 1
+    if deleted:
+        print(f"Deleted {deleted} previous OCR setup-pending note(s).")
 
 
 def rollback_current_run_comments(

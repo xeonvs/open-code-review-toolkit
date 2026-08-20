@@ -1,0 +1,114 @@
+"""Closed immutable data contracts for bounded review context."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+POLICY_SCHEMA = "ocr.review-context-policy/v1"
+STORE_SCHEMA = "ocr.context-store/v1"
+REQUEST_SCHEMA = "ocr.context-adapter-request/v1"
+RESPONSE_SCHEMA = "ocr.context-adapter-response/v1"
+ACCOUNT_CLASSES = frozenset({"user", "automation", "system", "toolkit_bot"})
+RESOURCE_CLASSES = frozenset({"issue", "document"})
+PROJECTION_FIELDS = frozenset(
+    {
+        "descriptor",
+        "text",
+        "state",
+        "author_class",
+        "author_pseudonym",
+        "anchor",
+        "resolved",
+        "outdated",
+        "created_at",
+        "updated_at",
+        "count",
+        "digest",
+        "version",
+        "expiry",
+    }
+)
+RETENTION_FIELDS = frozenset({"state", "count", "digest", "version", "expiry"})
+
+
+class ContextContractError(ValueError):
+    """One closed context contract was malformed or impossible."""
+
+
+@dataclass(frozen=True, slots=True)
+class TextBudgets:
+    """Apply independent text units to one source or record."""
+
+    max_chars: int
+    max_bytes: int
+    max_lines: int
+
+
+@dataclass(frozen=True, slots=True)
+class AggregateBudgets(TextBudgets):
+    """Apply aggregate count and time bounds independently of text units."""
+
+    max_records: int
+    timeout_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ContextProjections:
+    """Separate acquisition, model, publication, and retention fields."""
+
+    retrieve: tuple[str, ...]
+    model: tuple[str, ...]
+    publish: tuple[str, ...]
+    retain: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DiscussionPolicy:
+    """Select one bounded GitLab discussion snapshot."""
+
+    required: bool
+    account_classes: tuple[str, ...]
+    include_resolved: bool
+    include_outdated: bool
+    max_age_seconds: int
+    max_threads: int
+    max_replies_per_thread: int
+    max_items: int
+    budgets: TextBudgets
+    projections: ContextProjections
+
+
+@dataclass(frozen=True, slots=True)
+class RecognizerPolicy:
+    """Hold one fixed toolkit-authored candidate grammar."""
+
+    type: str
+    prefix: str | None = None
+    origin: str | None = None
+    path_prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReferencePolicy:
+    """Bind one operator adapter selection to a protected grammar and limits."""
+
+    adapter: str
+    tenant: str
+    resource_class: str
+    recognizer: RecognizerPolicy
+    required: bool
+    max_records: int
+    max_age_seconds: int
+    budgets: TextBudgets
+    projections: ContextProjections
+
+
+@dataclass(frozen=True, slots=True)
+class ContextPolicy:
+    """Represent the complete validated protected-target policy."""
+
+    schema_version: str
+    budgets: AggregateBudgets
+    forge_discussions: DiscussionPolicy | None
+    references: tuple[ReferencePolicy, ...]
+    digest: str

@@ -32,6 +32,22 @@ Historical wording is evidence, not a specification. Rebuild a capability matrix
 
 When a failure recurs, classify its cause before changing guidance: add or repair the canonical requirement when it is missing or conflicting, correct startup selection when it was not loaded, and otherwise add or repair the concrete subsystem control. Add a pitfalls entry only for a distinct reusable incident class with historical evidence; the catalogue itself does not own the correction.
 
+## Long-running command waits
+
+Wait for a long-running local command through one completion-driven waiter when the execution environment exposes a persistent process or session identity. The waiter stays attached until exit, cancellation, or the command's overall deadline and returns as soon as that terminal state occurs. Internal infrastructure waits must not yield periodic empty observations back to the model: repeated model-driven `status`, terminal, or process polls add tool results and task history without changing a decision. The waiter is a completion signal, never the only copy of command output or a required result: its transport or model-facing output can be truncated, discarded after completion, or lost with the session.
+
+Keep the wait bounded and diagnosable:
+
+- assign an overall command deadline and preserve a cancellation path; terminate and clean up owned child processes when either is reached;
+- before starting the process, choose explicit ignored owner-only paths outside any transient directory that the command cleans up, remove or reject stale owned artifacts, and have the process atomically publish every result required for later validation;
+- redirect potentially large stdout and stderr to ignored private files and preserve them until their focused inspection is complete; return from the waiter only the exit status, elapsed time, artifact paths, digests, and a bounded diagnostic tail or structured summary;
+- validate the persisted artifact's type, ownership/permissions, size, completion marker or exact schema, and digest before trusting it; a missing or invalid artifact is a failed/inconclusive run, not permission to reconstruct the result from a truncated waiter transcript;
+- retain enough process or session identity to distinguish completion from a lost waiter, but do not expose credentials, inherited environment, unbounded logs, or result bodies through the waiter;
+- let the outer wait return immediately on process completion even when its maximum deadline is much longer; and
+- inspect full logs only after a concrete failure makes a focused range relevant.
+
+Use periodic polling only when no completion notification or persistent waiter exists, when the process can require interactive input, or when intermediate state can change an authorized operational decision. In that fallback, choose an interval proportionate to expected duration, suppress unchanged observations, and increase the interval for stable work. Delete preserved private artifacts only after the relevant evidence has been extracted and verified. This discipline reduces redundant model turns and context growth; it does not waive required monitoring, validation evidence, timeouts, cleanup, or the cost of analyzing the eventual result, and it makes no exact subscription-billing claim.
+
 ## Local validation
 
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
@@ -68,6 +84,14 @@ Pure policy contracts, accepted-decision parsing, safe scope matching, and guida
 The `evidence/store/` package is the persistence boundary. `contracts.py` owns versions, kinds, limits, and errors; `values.py` owns recursive redaction and value normalization; `core.py` owns in-memory admission, ordering, and serialization; `atomic.py` owns owner-only replacement; and `readback.py` owns hostile envelope decoding and cross-reference reconstruction. `EvidenceStore.read()` and `write()` stay thin delegates, and the package facade preserves the supported `EvidenceStore`, `EvidenceStoreError`, and `EvidenceStoreLimits` imports. Readback must not import the concrete core implementation back or bypass its admission and policy-binding controls.
 
 Parser changes need legacy-format, duplicate-ID, malformed-field, unknown-field, scope, date, applicability, precedence, rename, unsafe-object, multibyte-boundary, and redaction fixtures. New policy values require exact kind-specific persisted schemas, snapshot/provenance correlation, and impossible-state rejection. Select applicable guidance before content reads and isolate policy truncation from unrelated evidence domains. Repository guidance is untrusted evidence and must never become executable instructions or an authorization channel; bootstrap renderers must use shared delimiter-aware Markdown helpers for repository-derived values.
+
+## Extending bounded review context
+
+`src/ocr_toolkit/context/` is independent from `ocr_toolkit.evidence`: contracts and normalization point downward; protected policy and fixed recognizers are pure; `adapters.py` owns exact stdio/HTTPS transport; `broker.py` composes authorization, DLP, limits, and admission; `store.py` owns separate atomic hostile-read persistence and handle binding; `mcp.py` serves only the committed local store. `providers/gitlab_discussions.py` owns forge pagination, stable repeated snapshots, provider account classification, and run-local pseudonyms. `review_runner.py` is the sole orchestration owner that combines repository evidence and context into one OCR execution.
+
+A new context source must keep provider acquisition before OCR, use the existing `authorize_and_resolve` protocol and `issue|document` classes unless a separately reviewed common-contract change is required, and enter the same broker/store/handle/MCP/publication/cleanup lifecycle. Do not add vendor tool schemas, model-loop network, arbitrary identifiers/URLs, a second store budget charged to evidence, or a second OCR/model pass. Schema discriminators on policy, protocol, store, status, and receipt boundaries prevent cross-contract interpretation; ephemeral M5 state has no migration path.
+
+Boundary evidence must cross the production owner with a real Git repository, child process, local TLS peer, atomic file, stdio MCP client, installed artifact, or actual OCR as appropriate. Keep unavailable outcomes uniform across denial/not-found/foreign-tenant cases, and preserve explicit non-claims for adapter truth, broader service credentials, host compromise, semantic paraphrase, and model judgment. Update the public [bounded-context contract](review-context.md), threat model, test-evidence matrix, strategy, roadmap status, and Towncrier fragments whenever this lifecycle changes.
 
 ## Extending framework evidence
 

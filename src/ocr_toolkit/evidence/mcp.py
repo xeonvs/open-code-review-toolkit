@@ -6,12 +6,21 @@ import base64
 import hashlib
 import json
 import sys
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO, cast
 
 from ocr_toolkit import __version__
+from ocr_toolkit.context.mcp import (
+    GET_TOOL,
+    LIST_TOOL,
+    ContextMCPError,
+    call_context_tool,
+    tool_definitions,
+)
+from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
@@ -389,7 +398,9 @@ def _error(request_id: object, code: int, message: str) -> dict[str, object]:
     return response
 
 
-def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | None:
+def handle_request(
+    store: EvidenceStore, raw: object, context_store: ContextStore | None = None
+) -> dict[str, object] | None:
     """Handle one validated JSON-RPC request or notification."""
 
     if not isinstance(raw, dict) or raw.get("jsonrpc") != "2.0":
@@ -419,18 +430,33 @@ def handle_request(store: EvidenceStore, raw: object) -> dict[str, object] | Non
     if method == "ping":
         return _success(request_id, {})
     if method == "tools/list":
-        return _success(request_id, {"tools": [_tool_definition()]})
+        tools = [_tool_definition()]
+        if context_store is not None:
+            tools.extend(tool_definitions())
+        return _success(request_id, {"tools": tools})
     if method == "tools/call":
-        if not isinstance(params, dict) or params.get("name") != TOOL_NAME:
+        if not isinstance(params, dict):
             return _error(request_id, -32602, "Invalid tool call")
-        try:
-            result = call_tool(store, params.get("arguments", {}))
-        except EvidenceMCPError as exc:
-            return _success(
-                request_id,
-                {"content": [{"type": "text", "text": str(exc)}], "isError": True},
-            )
-        return _success(request_id, result)
+        name = params.get("name")
+        if name == TOOL_NAME:
+            try:
+                result = call_tool(store, params.get("arguments", {}))
+            except EvidenceMCPError as exc:
+                return _success(
+                    request_id,
+                    {"content": [{"type": "text", "text": str(exc)}], "isError": True},
+                )
+            return _success(request_id, result)
+        if context_store is not None and isinstance(name, str) and name in {LIST_TOOL, GET_TOOL}:
+            try:
+                result = call_context_tool(context_store, str(name), params.get("arguments", {}))
+            except ContextMCPError as exc:
+                return _success(
+                    request_id,
+                    {"content": [{"type": "text", "text": str(exc)}], "isError": True},
+                )
+            return _success(request_id, result)
+        return _error(request_id, -32602, "Invalid tool call")
     return _error(request_id, -32601, "Method not found")
 
 
@@ -451,7 +477,15 @@ def _bounded_lines(stdin: TextIO) -> Iterator[str]:
         yield line
 
 
-def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> int:
+def serve(
+    store_path: Path,
+    stdin: TextIO = sys.stdin,
+    stdout: TextIO = sys.stdout,
+    *,
+    context_path: Path | None = None,
+    context_run_id: str = "",
+    context_policy_digest: str = "",
+) -> int:
     """Serve newline-delimited MCP JSON-RPC until the client closes stdin."""
 
     try:
@@ -459,6 +493,18 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
     except (OSError, EvidenceStoreError) as exc:
         print(f"Cannot load evidence store: {exc}", file=sys.stderr)
         return 2
+    context_store = None
+    if context_path is not None:
+        try:
+            context_store = ContextStore.read(
+                context_path,
+                expected_run_id=context_run_id,
+                expected_policy_digest=context_policy_digest,
+                now=int(time.time()),
+            )
+        except (OSError, ValueError) as exc:
+            print(f"Cannot load context store: {exc}", file=sys.stderr)
+            return 2
     for line in _bounded_lines(stdin):
         has_request_id = True
         if not line or len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
@@ -470,7 +516,7 @@ def serve(store_path: Path, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdo
                 response = _error(None, -32700, "Parse error")
             else:
                 has_request_id = isinstance(request, dict) and "id" in request
-                response = handle_request(store, request)
+                response = handle_request(store, request, context_store)
         if response is None or not has_request_id:
             continue
         serialized = json.dumps(response, separators=(",", ":"), ensure_ascii=False)

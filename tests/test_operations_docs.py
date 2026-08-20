@@ -174,11 +174,13 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v3" in configuration
-    assert "Receipt v1/v2" in configuration
-    assert "Receipt v1/v2" in operations
+    assert "receipt v4" in configuration
+    assert "Receipt v1-v3" in configuration
+    assert "Receipt v1-v3" in operations
     assert "complete `metadata` context" in operations.lower()
-    assert "Every configured external MCP" in configuration
+    assert "Every configured direct external MCP" in configuration
+    assert "required context degradation" in operations
+    assert "admitted mutable context" in operations
     assert "absolute HTTPS `url`" in configuration
     assert "sole stdio exception" in configuration
 
@@ -191,9 +193,10 @@ def test_production_bot_recipes_and_062_migration_are_public() -> None:
         "Context-free automatic approval",
         "Bounded metadata-aware automatic approval",
         "Metadata-aware comment-only operation",
-        "Future enriched context",
-        "Operator-reviewed external MCP",
+        "Protected enriched context",
+        "Operator-reviewed direct external MCP",
         "### Migration from 0.6.2",
+        "### Migration from 0.6.3 to 0.7.0",
         "Receipt v1/v2 results remain comment-readable",
         "retry-on-absence",
     ):
@@ -202,6 +205,7 @@ def test_production_bot_recipes_and_062_migration_are_public() -> None:
     assert 'OCR_REVIEW_CONTEXT_MODE: "enriched"' in gitlab
     assert 'OCR_AUTO_APPROVE: "false"' in gitlab
     assert "SYNTHETIC_MCP_AUTH_HEADER" in gitlab
+    assert "SYNTHETIC_ADAPTER_AUTHORIZATION" in gitlab
     assert "server-side tenant/object/field/operation authorization" in gitlab
 
 

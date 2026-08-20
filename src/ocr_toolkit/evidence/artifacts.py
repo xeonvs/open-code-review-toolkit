@@ -16,6 +16,8 @@ class EvidenceArtifacts:
     store: Path
     bootstrap: Path
     policy_rules: Path
+    context_store: Path
+    pre_execution_status: Path
 
 
 def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
@@ -28,6 +30,8 @@ def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
         store=directory / "evidence.json",
         bootstrap=directory / "bootstrap.md",
         policy_rules=directory / "policy-rules.json",
+        context_store=directory / "context.json",
+        pre_execution_status=directory / "pre-execution-status.json",
     )
 
 
