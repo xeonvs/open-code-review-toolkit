@@ -215,7 +215,7 @@ def test_public_bounded_context_recipes_match_runtime_schemas() -> None:
     assert remote[0].url == ("https://context-proxy.example.invalid/v1/authorize-and-resolve")
 
 
-def test_public_docs_describe_the_active_m5_boundary() -> None:
+def test_public_docs_describe_the_established_m5_boundary() -> None:
     bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
     configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
     gitlab = (PROJECT_ROOT / "docs" / "gitlab.md").read_text(encoding="utf-8")
@@ -241,8 +241,10 @@ def test_public_docs_describe_the_active_m5_boundary() -> None:
     for document in (configuration, gitlab, operations, security):
         assert "receipt v4" in document
         assert "review-context.md" in document
-    assert "M5 is in progress toward stable v0.7.0 delivery" in strategy
-    assert "M5 Bounded review-context enrichment<br/>in progress" in roadmap
+    assert "M5 is established in v0.7.0" in strategy
+    assert "M5 Bounded review-context enrichment<br/>established" in roadmap
+    assert "protected release workflow" in roadmap
+    assert "independent registry/GitHub readback" in roadmap
     assert "complete BL-023 broker remains planned" not in roadmap
 
 

@@ -1,3 +1,32 @@
+## 0.7.0 - 2026-08-20
+
+### 🚀 Features
+
+- Target checksum-verified Open Code Review 1.9.8 after qualifying 1.9.7 through 1.9.8. ([#108](https://github.com/xeonvs/open-code-review-toolkit/issues/108))
+- Qualify Open Code Review 1.9.7 capabilities and their toolkit, runtime, and CI impact as the contiguous baseline for the recommended 1.9.8 release. ([#109](https://github.com/xeonvs/open-code-review-toolkit/issues/109))
+- Require an OCR-recorded `ocr_toolkit_evidence(action=summary)` call before accepting every completed non-skipped review. ([#111](https://github.com/xeonvs/open-code-review-toolkit/issues/111))
+- Add protected-policy bounded review enrichment with stable GitLab discussions, authorized stdio or HTTPS adapter records, opaque local context handles, publication DLP, isolated OCR sessions, receipt v4, and conservative approval gates. DLP atomically destroys rejected values: unsafe publication sinks yield an explicit safe partial review, while private-only fields are sanitized without losing a still-valid manifest or safe findings. Filtered runs preserve prior findings, match duplicates one-for-one, block approval, and emit closed summary/log signals for optional alerting. ([#112](https://github.com/xeonvs/open-code-review-toolkit/issues/112))
+
+### 🐛 Bug Fixes
+
+- Publish a closed protected-target setup-pending result when a merge request safely introduces the configured repository-owned OCR rules path, without trusting source contents or exposing private diagnostics. ([#107](https://github.com/xeonvs/open-code-review-toolkit/issues/107))
+- Preserve useful review output when DLP rejects only part of an OCR result: unsafe publication units become an explicit safe partial review, while unsafe private-only fields are atomically sanitized without discarding the original manifest or safe findings. Retain prior findings without duplicate reposting, count repeated fingerprints correctly, replace repeated setup-pending notes, avoid PII false positives for SHA/build identifiers, and bind DLP inspection, projection, receipt attachment, and result replacement to one inode-checked operation.
+
+  Harden the new bounded-context boundaries found during final real-OCR review: reject malformed URL authorities, cursors, mixed-type adapter configuration, recursive stores, hidden HTML/entity output, changed duplicate objects, and repository-owned OCR executables; cover stdio request delivery with the adapter deadline; apply admission budgets after authorization and deduplication; stop GitLab pagination at the protected thread bound; and preserve the mandatory evidence instruction under the smallest supported bootstrap budget. ([#112](https://github.com/xeonvs/open-code-review-toolkit/issues/112))
+
+### 📖 Documentation
+
+- Document context modes, policy and proxy schemas, adapter authorization, completeness, handles, publication and retention boundaries, cleanup, migration, and synthetic deployment recipes. ([#112](https://github.com/xeonvs/open-code-review-toolkit/issues/112))
+
+### 🧩 Rules
+
+- Preserve unknown GitLab CI effective values across unresolved `extends` and includes unless an explicit local override or bounded compiled fact proves them. ([#110](https://github.com/xeonvs/open-code-review-toolkit/issues/110))
+
+### Security
+
+- Close publication-source laundering and local execution paths in M5 by scanning decoded HTML source before rendered-text stripping, accepting marker identities only in toolkit-owned note preambles, bounding stdio request delivery, and refusing relative or repository-owned OCR executable resolution. Unsafe private-only OCR fields are redacted in the atomic result transform and emit the same closed receipt, summary, and log signal without retaining rejected values or locations. ([#112](https://github.com/xeonvs/open-code-review-toolkit/issues/112))
+
+
 ## 0.6.3 - 2026-08-18
 
 ### 🚀 Features

@@ -6,6 +6,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.7.0` | [M5 bounded review-context enrichment](releases.md#plan-toolkit-0-7-0) | Protected policy, GitLab discussions, provider-neutral adapters, context store and handles, fixed context tools, OCR-session containment, safe-partial publication DLP, receipt v4, setup diagnostics, GitLab CI uncertainty, OCR 1.9.8 qualification, adversarial boundary remediation, and stable-delivery handoff. |
 | `v0.6.3` | [Context approval and GitLab write reconciliation](releases.md#plan-toolkit-0-6-3) | Bounded MR context and receipt-v3 approval, GitLab-MR external-MCP restrictions, ambiguous inline-create reconciliation, OCR 1.9.6 qualification, capped local OCR and MCP profiling, protected feature merge, and stable-delivery handoff. |
 | `v0.6.2` | [OCR 1.9.5 and explicit review budgets](releases.md#plan-toolkit-0-6-2) | OCR 1.9.5 qualification, explicit aggregate review budget, backlog reconciliation, anti-mock evidence, development provenance verification, and isolated registry-verifier state. |
 | `v0.6.1` | [Protected-target policy and bounded MR intent](releases.md#plan-toolkit-0-6-1) | Protected-target rules, changed-template priority, bounded invocation context, OCR 1.9.4 qualification, anti-mock evidence audit, bootstrap remediation, and stable-delivery handoff. |
