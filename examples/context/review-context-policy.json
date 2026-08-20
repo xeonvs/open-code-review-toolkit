@@ -1,0 +1,53 @@
+{
+  "schema_version": "ocr.review-context-policy/v1",
+  "budgets": {
+    "max_records": 32,
+    "max_chars": 48000,
+    "max_bytes": 96000,
+    "max_lines": 1200,
+    "timeout_ms": 15000
+  },
+  "forge_discussions": {
+    "required": false,
+    "account_classes": ["automation", "user"],
+    "include_resolved": false,
+    "include_outdated": false,
+    "max_age_seconds": 2592000,
+    "max_threads": 20,
+    "max_replies_per_thread": 10,
+    "max_items": 100,
+    "budgets": {
+      "max_chars": 12000,
+      "max_bytes": 24000,
+      "max_lines": 300
+    },
+    "projections": {
+      "retrieve": ["descriptor", "digest", "expiry", "state", "text", "version"],
+      "model": ["descriptor", "state", "text"],
+      "publish": ["descriptor", "state"],
+      "retain": ["digest", "expiry", "state", "version"]
+    }
+  },
+  "references": [
+    {
+      "adapter": "tracker",
+      "tenant": "engineering",
+      "resource_class": "issue",
+      "recognizer": {"type": "issue_key", "prefix": "DEMO"},
+      "required": true,
+      "max_records": 8,
+      "max_age_seconds": 31536000,
+      "budgets": {
+        "max_chars": 4000,
+        "max_bytes": 8000,
+        "max_lines": 100
+      },
+      "projections": {
+        "retrieve": ["descriptor", "digest", "expiry", "state", "text", "version"],
+        "model": ["descriptor", "state", "text"],
+        "publish": ["descriptor", "state"],
+        "retain": ["digest", "expiry", "state", "version"]
+      }
+    }
+  ]
+}

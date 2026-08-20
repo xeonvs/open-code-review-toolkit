@@ -23,6 +23,7 @@ from ocr_toolkit.context.contracts import (
     ContextPolicy,
     DiscussionPolicy,
     ReferencePolicy,
+    TextBudgets,
 )
 from ocr_toolkit.context.dlp import check_text, normalize_text
 from ocr_toolkit.context.recognizers import ReferenceCandidate
@@ -80,6 +81,7 @@ def _normalized_record(
     record: Mapping[str, object],
     *,
     policy: ReferencePolicy,
+    forbidden: tuple[str, ...],
 ) -> Mapping[str, object] | None:
     result: dict[str, object] = {}
     for field in policy.projections.retrieve:
@@ -87,13 +89,20 @@ def _normalized_record(
             continue
         value = record[field]
         if field == "text":
-            checked = check_text(value, budgets=policy.budgets)
+            checked = check_text(value, budgets=policy.budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 return None
             result[field] = checked.text
         elif field in {"descriptor", "state", "author_class", "author_pseudonym", "version"}:
             normalized = normalize_text(value)
             if normalized is None or not normalized or len(normalized) > 512:
+                return None
+            checked = check_text(
+                normalized,
+                budgets=TextBudgets(max_chars=512, max_bytes=2_048, max_lines=1),
+                forbidden=forbidden,
+            )
+            if not checked.admitted:
                 return None
             if field == "descriptor" and normalized != policy.resource_class:
                 return None
@@ -123,6 +132,13 @@ def _normalized_record(
             if "path" in value:
                 path = normalize_text(value["path"])
                 if path is None or not path or len(path) > 512 or len(path.encode()) > 2_048:
+                    return None
+                checked = check_text(
+                    path,
+                    budgets=TextBudgets(max_chars=512, max_bytes=2_048, max_lines=1),
+                    forbidden=forbidden,
+                )
+                if not checked.admitted:
                     return None
                 anchor["path"] = path
             if "line" in value:
@@ -194,6 +210,8 @@ def acquire_external_records(
     run_id: str,
     now: int,
     environment: Mapping[str, str],
+    forbidden: tuple[str, ...] = (),
+    deadline: float | None = None,
     invoke: Callable[..., AdapterResponse] = authorize_and_resolve,
 ) -> BrokerResult:
     """Authorize, normalize, DLP-check, and prepare all external records."""
@@ -206,7 +224,9 @@ def acquire_external_records(
     total_chars = total_bytes = total_lines = 0
     seen: set[tuple[str, str, str, str]] = set()
     started_requests = 0
-    deadline = time.monotonic() + policy.budgets.timeout_ms / 1000
+    acquisition_deadline = (
+        time.monotonic() + policy.budgets.timeout_ms / 1000 if deadline is None else deadline
+    )
     for reference in policy.references:
         source = f"reference:{reference.adapter}:{reference.tenant}:{reference.resource_class}"
         config = configs.get(reference.adapter)
@@ -247,7 +267,7 @@ def acquire_external_records(
             degradation_counts["limit"] += 1
             required_degraded = required_degraded or reference.required
             continue
-        remaining_ms = int((deadline - time.monotonic()) * 1000)
+        remaining_ms = int((acquisition_deadline - time.monotonic()) * 1000)
         if remaining_ms < 100:
             completeness[source] = "partial"
             degradation_counts["limit"] += 1
@@ -292,7 +312,7 @@ def acquire_external_records(
             degradation_counts["invalid"] += 1
             required_degraded = required_degraded or reference.required
             continue
-        normalized = _normalized_record(response.record, policy=reference)
+        normalized = _normalized_record(response.record, policy=reference, forbidden=forbidden)
         if normalized is None:
             completeness[source] = "unavailable"
             degradation_counts["invalid"] += 1

@@ -107,6 +107,22 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def configured_secret_values(
+    configs: tuple[AdapterConfig, ...], environment: Mapping[str, str]
+) -> tuple[str, ...]:
+    """Return exact operator-projected values for admission and publication DLP."""
+
+    names = {
+        name
+        for config in configs
+        for name in (
+            *config.env_from,
+            *(environment_name for _header, environment_name in config.headers_from),
+        )
+    }
+    return tuple(sorted({environment[name] for name in names if environment.get(name)}))
+
+
 def _set_response_timeout(response: Any, timeout: float) -> None:
     """Best-effort apply the remaining aggregate deadline to the next socket read."""
 
@@ -393,6 +409,8 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
         os.chmod(directory, 0o700)
         child_environment["HOME"] = directory
         child_environment["TMPDIR"] = directory
+        process: subprocess.Popen[bytes] | None = None
+        readers: tuple[threading.Thread, ...] = ()
         try:
             process = subprocess.Popen(
                 [command, *config.args],
@@ -477,9 +495,16 @@ def _stdio(config: AdapterConfig, request: AdapterRequest, environment: Mapping[
         except ContextAdapterError:
             raise
         except (BrokenPipeError, OSError, subprocess.TimeoutExpired) as exc:
-            if "process" in locals() and process.poll() is None:
+            if process is not None and process.poll() is None:
                 terminate(process)
             raise ContextAdapterError("stdio adapter failed") from exc
+        except BaseException:
+            if process is not None and process.poll() is None:
+                terminate(process)
+            for reader in readers:
+                reader.join(timeout=5)
+            raise
+    assert process is not None
     if process.returncode != 0:
         _ = redact_sensitive(stderr[:MAX_STDERR_BYTES].decode("utf-8", errors="replace"))
         raise ContextAdapterError("stdio adapter failed")

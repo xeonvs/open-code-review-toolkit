@@ -1940,6 +1940,22 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertNotIn("unused_optional", summary)
         self.assertNotIn("file_read", summary)
 
+    def test_mcp_usage_summary_reads_receipt_v4_inventory(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 4,
+                "mcp": {
+                    "capabilities": [],
+                    "usage": {"ocr_toolkit_evidence": 3},
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- MCP used: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+        )
+
     def test_mcp_usage_summary_omits_zero_usage(self) -> None:
         self.assertEqual(
             posting_formatting.format_mcp_usage_summary(

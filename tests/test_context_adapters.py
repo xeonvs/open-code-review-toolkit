@@ -22,6 +22,7 @@ from ocr_toolkit.context.adapters import (
     AdapterResponse,
     ContextAdapterError,
     authorize_and_resolve,
+    configured_secret_values,
     parse_adapter_config,
 )
 from ocr_toolkit.context.broker import CandidateSelection, acquire_external_records
@@ -382,6 +383,56 @@ def test_broker_enforces_operator_tenant_dlp_and_required_degradation() -> None:
     )
     assert wrong_tenant.records == ()
     assert wrong_tenant.completeness == {"reference:tracker:engineering:issue": "unavailable"}
+
+
+def test_broker_blocks_exact_neutrally_named_adapter_secret() -> None:
+    policy = parse_policy(encoded_policy())
+    reference = policy.references[0]
+    config = stdio_config()
+    environment = {"SYNTHETIC_ADAPTER_MODE": "valid"}
+    secrets = configured_secret_values((config,), environment)
+
+    def invoke(
+        _config: AdapterConfig,
+        adapter_request: AdapterRequest,
+        *,
+        environment: object,
+    ) -> AdapterResponse:
+        del environment
+        return AdapterResponse(
+            status="admitted",
+            canonical_object="tenant-object-secret",
+            version="version-1",
+            expiry=200,
+            record={
+                "descriptor": "issue",
+                "digest": "a" * 64,
+                "expiry": 200,
+                "state": "open",
+                "text": f"adapter returned {secrets[0]}",
+                "version": "version-1",
+            },
+        )
+
+    result = acquire_external_records(
+        policy=policy,
+        adapters=[config],
+        selections=[
+            CandidateSelection(
+                policy=reference,
+                candidate=ReferenceCandidate("issue", "DEMO-7", "issue_key"),
+            )
+        ],
+        run_id=RUN_ID,
+        now=100,
+        environment=environment,
+        forbidden=secrets,
+        invoke=invoke,
+    )
+
+    assert secrets == ("valid",)
+    assert result.records == ()
+    assert result.degradation_counts["invalid"] == 1
 
 
 def test_optional_adapter_degradation_never_claims_required_failure() -> None:

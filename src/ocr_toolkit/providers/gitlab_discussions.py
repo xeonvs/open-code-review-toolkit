@@ -161,11 +161,12 @@ def _snapshot_once(
     run_id: str,
     policy: DiscussionPolicy,
     now: int,
+    deadline: float,
+    forbidden: tuple[str, ...],
 ) -> DiscussionSnapshot:
     token = environment.get("GITLAB_API_TOKEN", "").strip()
     api_root = _api_root(environment)
     project = urllib.parse.quote(project_id, safe="")
-    deadline = time.monotonic() + min(30.0, max(0.1, policy.max_items / 10))
     pages: list[object] = []
     page = "1"
     for _ in range(MAX_PAGES):
@@ -246,7 +247,7 @@ def _snapshot_once(
             ):
                 omitted += 1
                 continue
-            checked = check_text(note.get("body"), budgets=policy.budgets)
+            checked = check_text(note.get("body"), budgets=policy.budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 omitted += 1
                 continue
@@ -310,6 +311,8 @@ def acquire_discussions(
     run_id: str,
     policy: DiscussionPolicy,
     now: int,
+    deadline: float | None = None,
+    forbidden: tuple[str, ...] = (),
 ) -> DiscussionSnapshot:
     """Accept only two identical bounded ordered snapshots of the validated MR."""
 
@@ -319,6 +322,11 @@ def acquire_discussions(
         or SHA_RE.fullmatch(source_sha) is None
     ):
         raise GitLabProviderError("GitLab discussion identity is invalid")
+    acquisition_deadline = (
+        time.monotonic() + min(30.0, max(0.1, policy.max_items / 10))
+        if deadline is None
+        else deadline
+    )
     first = _snapshot_once(
         environment,
         project_id=project_id,
@@ -327,6 +335,8 @@ def acquire_discussions(
         run_id=run_id,
         policy=policy,
         now=now,
+        deadline=acquisition_deadline,
+        forbidden=forbidden,
     )
     second = _snapshot_once(
         environment,
@@ -336,6 +346,8 @@ def acquire_discussions(
         run_id=run_id,
         policy=policy,
         now=now,
+        deadline=acquisition_deadline,
+        forbidden=forbidden,
     )
     if first.digest != second.digest:
         return DiscussionSnapshot(state="mutated", records=(), digest=second.digest, omitted=0)

@@ -1,6 +1,6 @@
 # GitLab review operations
 
-This guide is for developers and CI operators who connect Open Code Review Toolkit to a GitLab merge-request pipeline and need to understand what happens after the first review. Installation and the [production bot recipes](gitlab.md#production-bot-configuration) remain in `gitlab.md`; the complete environment contract is in [configuration.md](configuration.md).
+This guide is for developers and CI operators who connect Open Code Review Toolkit to a GitLab merge-request pipeline and need to understand what happens after the first review. Installation and the [production bot recipes](gitlab.md#production-bot-configuration) remain in `gitlab.md`; the complete environment contract is in [configuration.md](configuration.md), and enriched acquisition is in [bounded review context](review-context.md).
 
 ## What one review run publishes
 
@@ -39,7 +39,7 @@ The outcome wording distinguishes skipped, complete, complete-with-warnings, inc
 ## Automatic approval lifecycle
 
 `OCR_AUTO_APPROVE=true` is the default. Approval is a separate transaction only
-after every current review note publishes. A review is eligible only with exact closed receipt v3, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, no configured external MCP, non-degraded selected context, and at most three findings. Receipt v1/v2 remains readable for comments but never authorizes approval. Receipt v3 binds reviewed source/policy SHA, merge-request author ID, context mode/state, bounded configured MCP inventory and positive use, and mandatory evidence state. Complete `metadata` context and the built-in evidence MCP do not independently block approval; degraded metadata and every configured external MCP do. Every finding must have
+after every current review note publishes. A review is eligible only with exact closed receipt v4, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, no configured direct external MCP, no degraded metadata, no required context degradation, no admitted mutable context, and at most three findings. Receipt v1-v3 remains readable for comments but never authorizes current approval guarantees. Receipt v4 binds reviewed source/policy SHA, merge-request author ID, context mode/state, bounded configured MCP inventory and positive use, per-source completeness/degradation, admitted-mutable state, fixed context-tool use, mandatory evidence state, publication DLP, and cleanup. Complete `metadata` context, complete zero-record enrichment, and the built-in evidence/context MCP do not independently block approval. Every finding must have
 severity exactly `low` and category exactly `style`, `documentation`, or
 `maintainability`. A complete zero-finding review is eligible. Four findings,
 malformed metadata, or any other severity/category are not eligible.
@@ -122,7 +122,9 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 ## OCR diagnostics
 
-Run OCR through `ocr-ci review --result PATH --stderr PATH -- ...`. This wrapper does not post to GitLab: it creates private artifacts and, on failure, prints only a bounded redacted stderr excerpt to the runner log. Pass the paths and captured exit code to `ocr-ci post` afterward. Set `OCR_POST_ERROR_DETAILS=1` only when that safe excerpt should also appear in the merge-request failure note.
+Run OCR through `ocr-ci review --result PATH --stderr PATH -- ...`. This wrapper does not post to GitLab: it creates private artifacts, acquires enriched context before OCR when selected, runs OCR in an isolated owner-only home, validates the complete output, and removes context/session/configuration data. On ordinary failure it prints only a bounded redacted stderr excerpt to the runner log. Pass the paths and captured exit code to `ocr-ci post` afterward. Set `OCR_POST_ERROR_DETAILS=1` only when that safe excerpt should also appear in the merge-request failure note. Publication-DLP uncertainty or cleanup uncertainty blocks ordinary result publication and uses only static toolkit-authored failure wording.
+
+One protected-target setup case has a narrower outcome. When the merge request introduces the configured repository-owned OCR rules path and that exact path is absent from both immutable policy-side baselines, `review` verifies only that the source object is a bounded regular blob, writes a closed private status, and stops before OCR. `post` hostile-validates that status against the current source and diff-base identities and can publish the static setup-pending message. It never reads source contents as policy, never includes the path or stderr, and never replaces a previous valid review on malformed, stale, unsafe, or mismatched status. `OCR_POST_EMOJI=false` removes the heading emoji; `OCR_POST_ERROR_DETAILS` does not add detail to this outcome.
 
 ## GitLab identity and permissions
 

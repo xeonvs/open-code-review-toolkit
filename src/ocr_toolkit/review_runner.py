@@ -6,10 +6,12 @@ import json
 import os
 import secrets
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -19,7 +21,11 @@ from pathlib import Path
 from ocr_toolkit import configure, mcp_config
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
-from ocr_toolkit.context.adapters import ContextAdapterError, parse_adapter_config
+from ocr_toolkit.context.adapters import (
+    ContextAdapterError,
+    configured_secret_values,
+    parse_adapter_config,
+)
 from ocr_toolkit.context.broker import (
     BrokerResult,
     CandidateSelection,
@@ -85,6 +91,39 @@ DEFAULT_DIAGNOSTIC_CHARS = 4_000
 
 class ReviewRunnerError(Exception):
     """The local OCR review process could not be started safely."""
+
+
+def _install_termination_handlers() -> dict[int, object]:
+    """Translate default process termination into an unwind through private cleanup."""
+
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    previous_handlers: dict[int, object] = {}
+
+    def interrupt(signum: int, _frame: object) -> None:
+        raise ReviewRunnerError(f"OCR review interrupted by signal {signum}")
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        previous = signal.getsignal(signum)
+        if previous not in {signal.SIG_DFL, signal.default_int_handler}:
+            continue
+        try:
+            signal.signal(signum, interrupt)
+        except (OSError, ValueError):
+            continue
+        previous_handlers[int(signum)] = previous
+    return previous_handlers
+
+
+def _restore_termination_handlers(previous_handlers: dict[int, object]) -> None:
+    """Restore every process handler replaced for one review invocation."""
+
+    for signum, previous in previous_handlers.items():
+        try:
+            signal.signal(signum, previous)  # type: ignore[arg-type]
+        except (OSError, ValueError):
+            # Cleanup must still run if the host changes signal ownership mid-review.
+            continue
 
 
 @dataclass(frozen=True, slots=True)
@@ -573,6 +612,33 @@ def _bounded_combined_records(
     return admitted, limited_sources
 
 
+def _select_reference_candidates(
+    policy: ContextPolicy, candidate_texts: list[str]
+) -> list[CandidateSelection]:
+    """Bind each distinct syntax candidate to its independent protected source."""
+
+    selections: list[CandidateSelection] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for reference in policy.references:
+        for text in candidate_texts:
+            for candidate in recognize(
+                text,
+                resource_class=reference.resource_class,
+                policy=reference.recognizer,
+            ):
+                key = (
+                    reference.adapter,
+                    reference.tenant,
+                    reference.resource_class,
+                    candidate.recognizer,
+                    candidate.value,
+                )
+                if key not in seen:
+                    seen.add(key)
+                    selections.append(CandidateSelection(reference, candidate))
+    return selections
+
+
 def _prepare_enrichment(
     identity: ReviewIdentity,
     artifacts: EvidenceArtifacts,
@@ -587,12 +653,15 @@ def _prepare_enrichment(
         raise ReviewRunnerError("enriched review context requires validated MR metadata")
     policy = load_protected_policy(reader.read_blob, policy_sha=identity.policy_sha)
     now = int(time.time())
+    acquisition_deadline = time.monotonic() + policy.budgets.timeout_ms / 1000
     run_id = secrets.token_urlsafe(24)
     completeness: dict[str, str] = {}
     degradation = {"invalid": 0, "limit": 0, "unavailable": 0}
     required_degraded = False
     pending: list[PendingContextRecord] = []
     candidate_texts = list(_context_texts(identity.context))
+    adapters = parse_adapter_config(os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON"))
+    adapter_secrets = configured_secret_values(adapters, os.environ)
     if policy.forge_discussions is not None:
         discussion_policy = policy.forge_discussions
         source = "forge:gitlab_discussions"
@@ -605,6 +674,8 @@ def _prepare_enrichment(
                 run_id=run_id,
                 policy=discussion_policy,
                 now=now,
+                deadline=acquisition_deadline,
+                forbidden=adapter_secrets,
             )
         except GitLabProviderError:
             completeness[source] = "unavailable"
@@ -623,20 +694,7 @@ def _prepare_enrichment(
                 )
             )
             candidate_texts.extend(record.body for record in snapshot.records)
-    selections: list[CandidateSelection] = []
-    seen_candidates: set[tuple[str, str, str, str]] = set()
-    for reference in policy.references:
-        for text in candidate_texts:
-            for candidate in recognize(
-                text,
-                resource_class=reference.resource_class,
-                policy=reference.recognizer,
-            ):
-                key = (reference.adapter, reference.tenant, candidate.recognizer, candidate.value)
-                if key not in seen_candidates:
-                    seen_candidates.add(key)
-                    selections.append(CandidateSelection(reference, candidate))
-    adapters = parse_adapter_config(os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON"))
+    selections = _select_reference_candidates(policy, candidate_texts)
     external: BrokerResult = acquire_external_records(
         policy=policy,
         adapters=adapters,
@@ -644,6 +702,8 @@ def _prepare_enrichment(
         run_id=run_id,
         now=now,
         environment=os.environ,
+        forbidden=adapter_secrets,
+        deadline=acquisition_deadline,
     )
     pending.extend(external.records)
     completeness.update(external.completeness)
@@ -688,7 +748,7 @@ def _prepare_enrichment(
                     stack.extend(nested)
                 elif isinstance(nested, str) and nested:
                     forbidden_values.append(nested)
-    forbidden = tuple(forbidden_values)
+    forbidden = (*adapter_secrets, *forbidden_values)
     receipt = EnrichmentReceipt(
         policy_digest=policy.digest,
         completeness=dict(sorted(completeness.items())),
@@ -750,6 +810,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     cleanup_error: OSError | None = None
     exit_code = 2
     enrichment: EnrichmentReceipt | None = None
+    previous_handlers = _install_termination_handlers()
     try:
         try:
             _write_isolated_runtime_config()
@@ -838,6 +899,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
                     pass
                 raise
     finally:
+        _restore_termination_handlers(previous_handlers)
         try:
             remove_private_artifact(artifacts.context_store)
         except OSError as exc:

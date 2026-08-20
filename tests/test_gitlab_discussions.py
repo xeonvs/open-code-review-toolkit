@@ -19,7 +19,7 @@ from ocr_toolkit.context.broker import prepare_discussion_records
 from ocr_toolkit.context.contracts import DiscussionPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.providers.gitlab import GitLabProviderError
-from ocr_toolkit.providers.gitlab_discussions import acquire_discussions
+from ocr_toolkit.providers.gitlab_discussions import DiscussionSnapshot, acquire_discussions
 from tests.test_context_policy import encoded_policy, policy_value
 
 SOURCE_SHA = "a" * 40
@@ -258,6 +258,24 @@ def test_discussions_reject_mutated_pagination_and_unknown_actor(tmp_path: Path)
     assert unknown.omitted == 1
 
 
+def test_discussions_apply_exact_configured_secret_dlp(tmp_path: Path) -> None:
+    with gitlab_peer(tmp_path) as api_root:
+        snapshot = acquire_discussions(
+            environment(api_root),
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=SOURCE_SHA,
+            run_id="synthetic_run_0001",
+            policy=discussion_policy(),
+            now=1_787_209_200,
+            forbidden=("First synthetic reply",),
+        )
+
+    assert snapshot.state == "partial"
+    assert [record.body for record in snapshot.records] == ["Automation reply"]
+    assert snapshot.omitted == 1
+
+
 def test_discussions_bind_validated_project_mr_and_source_identity(tmp_path: Path) -> None:
     with gitlab_peer(tmp_path) as api_root:
         with pytest.raises(GitLabProviderError, match="identity"):
@@ -280,3 +298,31 @@ def test_discussions_bind_validated_project_mr_and_source_identity(tmp_path: Pat
                 policy=discussion_policy(),
                 now=1_787_209_200,
             )
+
+
+def test_discussions_reuse_one_caller_owned_deadline_for_both_snapshots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deadlines: list[float] = []
+
+    def snapshot_once(*_args: object, deadline: float, **_kwargs: object) -> DiscussionSnapshot:
+        deadlines.append(deadline)
+        return DiscussionSnapshot(state="complete", records=(), digest="a" * 64, omitted=0)
+
+    monkeypatch.setattr(
+        "ocr_toolkit.providers.gitlab_discussions._snapshot_once",
+        snapshot_once,
+    )
+    snapshot = acquire_discussions(
+        environment("https://gitlab.example.invalid/api/v4"),
+        project_id="7",
+        merge_request_iid="9",
+        source_sha=SOURCE_SHA,
+        run_id="synthetic_run_0001",
+        policy=discussion_policy(),
+        now=1_787_209_200,
+        deadline=123.5,
+    )
+
+    assert snapshot.state == "complete"
+    assert deadlines == [123.5, 123.5]

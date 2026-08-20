@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from ocr_toolkit import review_runner
+from ocr_toolkit.context.contracts import RecognizerPolicy
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from tests.support import patched_attr, patched_env
@@ -27,6 +29,42 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     context_mode="off",
     context=None,
 )
+
+
+def test_default_termination_signal_is_translated_for_cleanup() -> None:
+    previous = review_runner._install_termination_handlers()
+    try:
+        handler = signal.getsignal(signal.SIGTERM)
+        assert callable(handler)
+        with pytest.raises(review_runner.ReviewRunnerError, match="interrupted by signal"):
+            handler(signal.SIGTERM, None)
+    finally:
+        review_runner._restore_termination_handlers(previous)
+
+
+def test_reference_candidate_dedup_preserves_independent_resource_classes() -> None:
+    """The same explicit value may select distinct protected issue/document sources."""
+
+    references = tuple(
+        SimpleNamespace(
+            adapter="knowledge",
+            tenant="engineering",
+            resource_class=resource_class,
+            recognizer=RecognizerPolicy(type="explicit"),
+        )
+        for resource_class in ("issue", "document")
+    )
+    policy = SimpleNamespace(references=references)
+
+    selections = review_runner._select_reference_candidates(  # type: ignore[arg-type]
+        policy,
+        ["[[context:issue:shared]] [[context:document:shared]]"],
+    )
+
+    assert [selection.policy.resource_class for selection in selections] == [
+        "issue",
+        "document",
+    ]
 
 
 def test_evidence_mcp_self_query_exercises_all_read_actions() -> None:

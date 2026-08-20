@@ -1,0 +1,11 @@
+[
+  {
+    "name": "tracker",
+    "type": "stdio",
+    "tenants": ["engineering"],
+    "resource_classes": ["issue"],
+    "command": "/opt/ocr-context-proxy/bin/ocr-context-proxy",
+    "args": ["--stdio"],
+    "env_from": ["SYNTHETIC_ADAPTER_TOKEN"]
+  }
+]

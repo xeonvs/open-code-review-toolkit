@@ -488,7 +488,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
         or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return ""
-    if toolkit_metadata.get("schema_version") == 3:
+    if toolkit_metadata.get("schema_version") in {3, 4}:
         mcp = toolkit_metadata.get("mcp")
         mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
     else:

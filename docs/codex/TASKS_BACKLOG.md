@@ -18,7 +18,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
 | M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
 | OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
-| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and adds future M5 parsers, handles, schemas, and hostile adapter responses to its candidate inventory. |
+| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established M5 parsers, handles, schemas, and hostile adapter responses in its candidate inventory. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion and snapshot capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Activated and removed from inactive work | Owner authorization on 2026-08-20 moves the complete release-required v0.7.0 lifecycle, including #107-#111, to `PLANS.md`. Stable delivery will reconcile the durable roadmap and archive. |
@@ -113,8 +113,8 @@ Telemetry is intentionally outside M1 and M5. OCR owns token, cost, budget, prov
 - **Roadmap theme:** M7 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
 - **Activation trigger:** Not met: named targets, bounded CI resources, corpus ownership, and backend criteria across Python 3.12-3.14 are not agreed.
-- **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and future M5 parser/protocol boundaries.
-- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers and future M5 policy parsers, recognizers, handle codec, broker schema, and hostile adapter responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
+- **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
+- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus M5 policy parsers, recognizers, handle codec, broker schema, and hostile adapter responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
 - **Exclusions:** Unbounded CI, production data, blanket fuzzing, or a runtime dependency.
 - **Validation:** Reproducible smoke campaign and minimized-corpus replay.

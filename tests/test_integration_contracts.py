@@ -6,6 +6,8 @@ import ast
 import json
 import re
 
+from ocr_toolkit.context.adapters import parse_adapter_config
+from ocr_toolkit.context.policy import parse_policy
 from tests.support import HELPER_DIR, PROJECT_ROOT
 
 
@@ -195,6 +197,53 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "Pin the exact recommended Open Code Review release" in security
     assert "when: manual" in workflow
     assert "env -u OCR_LLM_TOKEN" in workflow
+
+
+def test_public_bounded_context_recipes_match_runtime_schemas() -> None:
+    example_root = PROJECT_ROOT / "examples" / "context"
+    policy_raw = (example_root / "review-context-policy.json").read_bytes()
+    policy = parse_policy(policy_raw)
+    stdio = parse_adapter_config((example_root / "adapters-stdio.json").read_text(encoding="utf-8"))
+    remote = parse_adapter_config(
+        (example_root / "adapters-remote.json").read_text(encoding="utf-8")
+    )
+
+    assert policy.schema_version == "ocr.review-context-policy/v1"
+    assert policy.references[0].adapter == "tracker"
+    assert stdio[0].name == "tracker" and stdio[0].type == "stdio"
+    assert remote[0].name == "knowledge" and remote[0].type == "remote"
+    assert remote[0].url == ("https://context-proxy.example.invalid/v1/authorize-and-resolve")
+
+
+def test_public_docs_describe_the_active_m5_boundary() -> None:
+    bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
+    configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    gitlab = (PROJECT_ROOT / "docs" / "gitlab.md").read_text(encoding="utf-8")
+    operations = (PROJECT_ROOT / "docs" / "operations.md").read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    strategy = (PROJECT_ROOT / "docs" / "engineering" / "toolkit_strategy.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = (PROJECT_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+
+    for contract in (
+        "ocr.review-context-policy/v1",
+        "ocr.context-adapter-request/v1",
+        "ocr.context-adapter-response/v1",
+        "context_list",
+        "context_get",
+        "receipt v4",
+        "schema_version",
+        "no upgrade path",
+        "semantic paraphrase",
+    ):
+        assert contract in bounded
+    for document in (configuration, gitlab, operations, security):
+        assert "receipt v4" in document
+        assert "review-context.md" in document
+    assert "M5 is in progress toward stable v0.7.0 delivery" in strategy
+    assert "M5 Bounded review-context enrichment<br/>in progress" in roadmap
+    assert "complete BL-023 broker remains planned" not in roadmap
 
 
 def test_gitlab_example_does_not_inline_python_helpers() -> None:
