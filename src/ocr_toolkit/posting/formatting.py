@@ -47,7 +47,11 @@ from ocr_toolkit.posting.settings import (
     post_emoji,
     post_mode,
 )
-from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
+from ocr_toolkit.posting.suggestions import (
+    SuggestionDecision,
+    SuggestionState,
+    safe_repository_path,
+)
 from ocr_toolkit.result_usage import normalize_token_usage
 
 OCR_FINDING_CATEGORIES = {
@@ -726,6 +730,39 @@ def guide_comment_snippet(comment: dict[str, Any]) -> str:
     return excerpt
 
 
+def _guide_comment_rank(comment: dict[str, Any], ordinal: int) -> tuple[object, ...]:
+    """Return the closed deterministic priority key for one published finding."""
+
+    severity = clean_text(comment.get("severity") or comment.get("priority")).casefold()
+    category = clean_text(comment.get("category")).casefold()
+    raw_path = comment.get("path")
+    path = raw_path if isinstance(raw_path, str) and safe_repository_path(raw_path) else None
+    start = line_number(comment.get("start_line") or comment.get("line"))
+    end = line_number(comment.get("end_line") or comment.get("line")) or start
+    valid_range = start > 0 and end >= start
+    raw_fingerprint = comment.get("_ocr_fingerprint")
+    fingerprint = (
+        raw_fingerprint
+        if isinstance(raw_fingerprint, str)
+        and re.fullmatch(r"[0-9a-f]{32}", raw_fingerprint)
+        else None
+    )
+    canonical = json.dumps(comment, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return (
+        OCR_FINDING_SEVERITY_ORDER.index(severity)
+        if severity in OCR_FINDING_SEVERITY_ORDER
+        else len(OCR_FINDING_SEVERITY_ORDER),
+        OCR_FINDING_CATEGORY_ORDER.index(category)
+        if category in OCR_FINDING_CATEGORY_ORDER
+        else len(OCR_FINDING_CATEGORY_ORDER),
+        (0, path) if path is not None else (1, ""),
+        (0, start, end) if valid_range else (1, 0, 0),
+        (0, fingerprint) if fingerprint is not None else (1, ""),
+        canonical,
+        ordinal,
+    )
+
+
 def format_reviewer_guide(
     comments: Sequence[dict[str, Any]],
     omitted_count: int,
@@ -779,7 +816,11 @@ def format_reviewer_guide(
             f"- Visibility: {omitted_count} finding(s) omitted by `OCR_MAX_POST_COMMENTS`; rerun with a higher limit if needed."
         )
 
-    guide_comments = list(comments[:MAX_REVIEWER_GUIDE_COMMENTS])
+    ranked_comments = sorted(
+        enumerate(comments),
+        key=lambda item: _guide_comment_rank(item[1], item[0]),
+    )
+    guide_comments = [comment for _, comment in ranked_comments[:MAX_REVIEWER_GUIDE_COMMENTS]]
     if guide_comments:
         lines.append("")
         lines.append("### Recommended focus areas")

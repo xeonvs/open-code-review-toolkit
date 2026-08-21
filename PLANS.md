@@ -127,7 +127,7 @@ after the ordinary stable release and independent external readback complete.
 4. [x] Implement owner-only evidence-action receipts, parent reconciliation,
    closed normalized usage-accounting tests, and public
    operator documentation.
-5. [ ] Implement deterministic guide ranking with malformed-metadata, stable
+5. [x] Implement deterministic guide ranking with malformed-metadata, stable
    tie, truncation, and Markdown-safety tests while preserving finding flow.
 6. [ ] Qualify/adopt OCR 1.9.9 from workflow evidence, adapt toolkit-managed
    background handling, update pins/evidence/docs/tests/changelog, and close the
@@ -210,3 +210,8 @@ after the ordinary stable release and independent external readback complete.
   reconciliation, and missing, malformed, raced, or mismatched receipts remain
   explicitly unavailable. Focused validation passed with 318 tests and 141
   subtests; focused Ruff and `git diff --check` passed.
+- Deterministic Recommended focus ranking for #117 is complete locally. It
+  sorts only a copied published-finding sequence before the existing guide cap,
+  preserves discussion order and other posting semantics, and covers malformed
+  metadata, case-sensitive paths, occurrence fingerprints, truncation, stable
+  output, and existing Markdown neutralization.

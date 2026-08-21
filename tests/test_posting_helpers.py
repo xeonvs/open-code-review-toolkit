@@ -2383,6 +2383,72 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("## Security review focus", guide)
         self.assertIn("**Security signal:**", guide)
 
+    def test_reviewer_guide_ranks_only_its_published_copy(self) -> None:
+        comments = [
+            {"severity": "medium", "category": "test", "path": "z.py", "line": 3,
+             "content": "medium test"},
+            {"severity": "high", "category": "bug", "path": "b.py", "line": 2,
+             "content": "high bug"},
+            {"severity": "high", "category": "security", "path": "a.py", "line": 1,
+             "content": "high security"},
+            {"severity": "low", "category": "maintainability", "path": "c.py", "line": 4,
+             "content": "low maintenance"},
+        ]
+        original = [dict(comment) for comment in comments]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertEqual(comments, original)
+        self.assertLess(guide.index("high security"), guide.index("high bug"))
+        self.assertLess(guide.index("high bug"), guide.index("medium test"))
+        self.assertLess(guide.index("medium test"), guide.index("low maintenance"))
+
+    def test_reviewer_guide_sorts_malformed_metadata_after_known_location(self) -> None:
+        comments = [
+            {"severity": "high", "category": "security", "path": "../bad", "line": -1,
+             "content": "malformed"},
+            {"severity": "high", "category": "security", "path": "A.py", "start_line": 4,
+             "content": "known first", "_ocr_fingerprint": "b" * 32},
+            {"severity": "HIGH", "category": "SECURITY", "path": "a.py", "line": 4,
+             "content": "lowercase path", "_ocr_fingerprint": "a" * 32},
+        ]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertLess(guide.index("known first"), guide.index("lowercase path"))
+        self.assertLess(guide.index("lowercase path"), guide.index("malformed"))
+
+    def test_reviewer_guide_uses_occurrence_fingerprint_as_stable_tiebreaker(self) -> None:
+        comments = [
+            {"severity": "high", "category": "bug", "path": "same.py", "line": 7,
+             "content": "fingerprint b", "_ocr_fingerprint": "b" * 32},
+            {"severity": "high", "category": "bug", "path": "same.py", "line": 7,
+             "content": "fingerprint a", "_ocr_fingerprint": "a" * 32},
+        ]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertLess(guide.index("fingerprint a"), guide.index("fingerprint b"))
+
+    def test_reviewer_guide_applies_cap_after_stable_ranking(self) -> None:
+        comments = [
+            {"severity": "low", "category": "style", "path": f"z{index}.py", "line": 1,
+             "content": f"low-{index}"}
+            for index in range(posting_formatting.MAX_REVIEWER_GUIDE_COMMENTS)
+        ]
+        comments.append(
+            {"severity": "critical", "category": "security", "path": "critical.py", "line": 1,
+             "content": "must appear"}
+        )
+
+        first = posting_formatting.format_reviewer_guide(comments, 0)
+        second = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertEqual(first, second)
+        self.assertIn("must appear", first)
+        self.assertNotIn(f"low-{posting_formatting.MAX_REVIEWER_GUIDE_COMMENTS - 1}", first)
+        self.assertIn("... and 1 more published finding(s).", first)
+
     def test_reviewer_guide_snippet_is_markdown_neutral(self) -> None:
         guide = posting_formatting.format_reviewer_guide(
             [
