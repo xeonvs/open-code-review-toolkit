@@ -181,7 +181,12 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             ],
             "usage": {"ocr_toolkit_evidence": 2},
         },
-        "evidence": {"mandatory": True, "used": True, "calls": 2},
+        "evidence": {
+            "mandatory": True,
+            "used": True,
+            "calls": 2,
+            "actions": {"state": "unavailable"},
+        },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
@@ -192,6 +197,43 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
     )
     with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
         review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
+
+
+def test_evidence_action_attribution_is_verified_only_on_exact_reconciliation(
+    tmp_path: Path,
+) -> None:
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    cases = (
+        ({"summary": 1, "list": 1, "get": 0}, "verified"),
+        ({"summary": 1, "list": 0, "get": 0}, "unavailable"),
+        (None, "unavailable"),
+    )
+    for index, (counts, expected) in enumerate(cases):
+        result = tmp_path / f"case-{index}.json"
+        result.write_text(
+            json.dumps(
+                {
+                    "status": "success",
+                    "tool_calls": {"total": 2, "by_tool": {"ocr_toolkit_evidence": 2}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            DEFAULT_IDENTITY,
+            evidence_action_counts=counts,
+        )
+        actions = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]["evidence"][
+            "actions"
+        ]
+        assert actions["state"] == expected
 
 
 def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
@@ -244,7 +286,12 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             ],
             "usage": {"ocr_toolkit_evidence": 1},
         },
-        "evidence": {"mandatory": True, "used": True, "calls": 1},
+        "evidence": {
+            "mandatory": True,
+            "used": True,
+            "calls": 1,
+            "actions": {"state": "unavailable"},
+        },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
@@ -825,6 +872,7 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
         "mandatory": False,
         "used": False,
         "calls": 0,
+        "actions": {"state": "unavailable"},
     }
     assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
 

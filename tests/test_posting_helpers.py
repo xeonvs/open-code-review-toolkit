@@ -923,7 +923,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(notes[0][1].count("## Open Code Review"), 1)
         self.assertIn("✅ **Review complete — no findings**", notes[0][1])
         self.assertNotIn("\nNo findings", notes[0][1])
-        self.assertNotIn("MCP used", notes[0][1])
+        self.assertNotIn("verified MCP calls", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
 
     def test_skipped_review_without_message_posts_neutral_outcome(self) -> None:
@@ -2166,12 +2166,14 @@ class PostingSummaryTests(unittest.TestCase):
                     "documentation": 1,
                     "unused_optional": 0,
                 }},
+                "evidence": {"actions": {"state": "unavailable"}},
             }
         )
 
         self.assertEqual(
             summary,
-            "- MCP used: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)\n"
+            "- built-in evidence actions: unavailable",
         )
         self.assertNotIn("unused_optional", summary)
         self.assertNotIn("file_read", summary)
@@ -2184,12 +2186,36 @@ class PostingSummaryTests(unittest.TestCase):
                     "capabilities": [],
                     "usage": {"ocr_toolkit_evidence": 3},
                 },
+                "evidence": {"actions": {"state": "unavailable"}},
             }
         )
 
         self.assertEqual(
             summary,
-            "- MCP used: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)\n"
+            "- built-in evidence actions: unavailable",
+        )
+
+    def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 5,
+                "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
+                "evidence": {
+                    "actions": {
+                        "state": "verified",
+                        "summary": 1,
+                        "list": 2,
+                        "get": 1,
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
+            "- built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
     def test_mcp_usage_summary_rejects_pre_v5_receipt(self) -> None:

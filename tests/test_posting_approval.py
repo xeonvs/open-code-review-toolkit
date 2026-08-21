@@ -80,7 +80,12 @@ def receipt_v5(
             "capabilities": capabilities,
             "usage": {"ocr_toolkit_evidence": 1},
         },
-        "evidence": {"mandatory": True, "used": True, "calls": 1},
+        "evidence": {
+            "mandatory": True,
+            "used": True,
+            "calls": 1,
+            "actions": {"state": "unavailable"},
+        },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
@@ -275,6 +280,26 @@ class ApprovalPolicyTests(unittest.TestCase):
         )
 
         self.assertTrue(decision.eligible)
+
+    def test_evidence_action_attribution_does_not_change_approval_eligibility(self) -> None:
+        receipt = receipt_v5()
+        receipt["evidence"]["actions"] = {
+            "state": "verified",
+            "summary": 1,
+            "list": 0,
+            "get": 0,
+        }
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertTrue(decision.eligible)
+
+        receipt["evidence"]["actions"]["summary"] = 0
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertFalse(decision.eligible)
+        self.assertIn("receipt is missing or invalid", decision.result.reason)
 
     def test_complete_metadata_and_external_mcp_have_independent_approval_effects(self) -> None:
         complete_metadata = approval.evaluate_approval_policy(

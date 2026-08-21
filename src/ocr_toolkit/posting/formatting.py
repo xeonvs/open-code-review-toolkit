@@ -470,7 +470,7 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
     if total == 0:
         return ""
 
-    line = f"- tool calls: {total} total"
+    line = f"- all OCR tool calls: {total} total"
     if not entries:
         return line
 
@@ -508,7 +508,21 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     if not used:
         return ""
     details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
-    return f"- MCP used: {len(used)} server(s) ({details})"
+    lines = [f"- verified MCP calls: {len(used)} server(s) ({details})"]
+    evidence = toolkit_metadata.get("evidence")
+    actions = evidence.get("actions") if isinstance(evidence, dict) else None
+    if actions == {"state": "unavailable"}:
+        lines.append("- built-in evidence actions: unavailable")
+    elif (
+        isinstance(actions, dict)
+        and actions.get("state") == "verified"
+        and set(actions) == {"state", "summary", "list", "get"}
+    ):
+        lines.append(
+            "- built-in evidence actions: "
+            + ", ".join(f"{action}: {actions[action]}" for action in ("summary", "list", "get"))
+        )
+    return "\n".join(lines)
 
 
 def publication_dlp_signal(

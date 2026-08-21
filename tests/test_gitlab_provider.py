@@ -816,9 +816,20 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             ],
             "usage": {"ocr_toolkit_evidence": 3},
         },
-        "evidence": {"mandatory": True, "used": True, "calls": 3},
+        "evidence": {
+            "mandatory": True,
+            "used": True,
+            "calls": 3,
+            "actions": {
+                "state": "verified",
+                "summary": 1,
+                "list": 2,
+                "get": 0,
+            },
+        },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
+    assert not artifacts.action_receipt.exists()
     for path in (artifacts.store, artifacts.bootstrap, artifacts.policy_rules, result, stderr):
         assert path.stat().st_mode & 0o777 == 0o600

@@ -124,7 +124,7 @@ after the ordinary stable release and independent external readback complete.
 3. [x] Implement receipt v5 and canonical publication/approval projection;
    remove only result receipt/posting v1-v4 compatibility and add private-safe
    regression coverage and documentation.
-4. [ ] Implement owner-only evidence-action receipts, parent reconciliation,
+4. [x] Implement owner-only evidence-action receipts, parent reconciliation,
    closed normalized usage-accounting tests, and public
    operator documentation.
 5. [ ] Implement deterministic guide ranking with malformed-metadata, stable
@@ -203,4 +203,10 @@ after the ordinary stable release and independent external readback complete.
   warning-object DLP covers rendering, coverage, and billing consumers; focused
   validation passed with 286 tests and 141 subtests. The shared closed token
   normalizer is present because canonical projection must compare the exact
-  telemetry that #116 will render; evidence-action attribution remains pending.
+  telemetry that #116 renders.
+- Evidence-action attribution for #116 is complete locally: the built-in MCP
+  records only completed closed-enum action counts in an owner-only atomic
+  receipt, the parent removes it and publishes counts only after exact OCR-total
+  reconciliation, and missing, malformed, raced, or mismatched receipts remain
+  explicitly unavailable. Focused validation passed with 318 tests and 141
+  subtests; focused Ruff and `git diff --check` passed.

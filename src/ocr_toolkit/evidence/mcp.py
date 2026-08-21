@@ -21,6 +21,7 @@ from ocr_toolkit.context.mcp import (
     tool_definitions,
 )
 from ocr_toolkit.context.store import ContextStore
+from ocr_toolkit.evidence.actions import record_action
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
@@ -399,7 +400,11 @@ def _error(request_id: object, code: int, message: str) -> dict[str, object]:
 
 
 def handle_request(
-    store: EvidenceStore, raw: object, context_store: ContextStore | None = None
+    store: EvidenceStore,
+    raw: object,
+    context_store: ContextStore | None = None,
+    *,
+    action_receipt_path: Path | None = None,
 ) -> dict[str, object] | None:
     """Handle one validated JSON-RPC request or notification."""
 
@@ -446,6 +451,13 @@ def handle_request(
                     request_id,
                     {"content": [{"type": "text", "text": str(exc)}], "isError": True},
                 )
+            if action_receipt_path is not None:
+                arguments = params.get("arguments", {})
+                action = arguments.get("action") if isinstance(arguments, dict) else None
+                try:
+                    record_action(action_receipt_path, action)
+                except (OSError, ValueError):
+                    pass
             return _success(request_id, result)
         if context_store is not None and isinstance(name, str) and name in {LIST_TOOL, GET_TOOL}:
             try:
@@ -482,6 +494,7 @@ def serve(
     stdin: TextIO = sys.stdin,
     stdout: TextIO = sys.stdout,
     *,
+    action_receipt_path: Path | None = None,
     context_path: Path | None = None,
     context_run_id: str = "",
     context_policy_digest: str = "",
@@ -516,7 +529,12 @@ def serve(
                 response = _error(None, -32700, "Parse error")
             else:
                 has_request_id = isinstance(request, dict) and "id" in request
-                response = handle_request(store, request, context_store)
+                response = handle_request(
+                    store,
+                    request,
+                    context_store,
+                    action_receipt_path=action_receipt_path,
+                )
         if response is None or not has_request_id:
             continue
         serialized = json.dumps(response, separators=(",", ":"), ensure_ascii=False)

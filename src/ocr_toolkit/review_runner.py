@@ -38,6 +38,7 @@ from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
 from ocr_toolkit.context.policy import load_protected_policy
 from ocr_toolkit.context.recognizers import recognize
 from ocr_toolkit.context.store import ContextStore, ContextStoreError, PendingContextRecord
+from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS, read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
     prepare_artifact_directory,
@@ -248,6 +249,7 @@ def _review_receipt(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
+    evidence_action_counts: dict[str, int] | None = None,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -308,6 +310,16 @@ def _review_receipt(
     evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_used:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+    action_attribution: dict[str, object] = {"state": "unavailable"}
+    if (
+        evidence_action_counts is not None
+        and set(evidence_action_counts) == set(EVIDENCE_ACTIONS)
+        and sum(evidence_action_counts.values()) == evidence_calls
+    ):
+        action_attribution = {
+            "state": "verified",
+            **{action: evidence_action_counts[action] for action in EVIDENCE_ACTIONS},
+        }
     capabilities = [
         {
             "server": capability.server,
@@ -366,6 +378,7 @@ def _review_receipt(
             "mandatory": outcome.requires_evidence_mcp,
             "used": evidence_used,
             "calls": evidence_calls,
+            "actions": action_attribution,
         },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
@@ -765,6 +778,7 @@ def _finalize_ocr_result(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None,
+    evidence_action_counts: dict[str, int] | None = None,
     *,
     forbidden: tuple[str, ...],
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
@@ -781,7 +795,13 @@ def _finalize_ocr_result(
         nonlocal filtered, publication, usage
         if TOOLKIT_RESULT_KEY in payload:
             raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
-        metadata = _review_receipt(payload, composition, identity, enrichment)
+        metadata = _review_receipt(
+            payload,
+            composition,
+            identity,
+            enrichment,
+            evidence_action_counts,
+        )
         projected, publication, filtered = _publication_projection(
             payload, forbidden=forbidden, allowed_tools=allowed_tools
         )
@@ -804,6 +824,7 @@ def _record_ocr_result_mcp_usage(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
+    evidence_action_counts: dict[str, int] | None = None,
 ) -> dict[str, int]:
     """Verify MCP use and bind the closed review-time receipt to the result."""
 
@@ -812,6 +833,7 @@ def _record_ocr_result_mcp_usage(
         composition,
         identity,
         enrichment,
+        evidence_action_counts,
         forbidden=(),
     )
     if filtered:
@@ -1246,6 +1268,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     try:
         prepare_artifact_directory(artifacts)
         remove_private_artifact(artifacts.pre_execution_status)
+        remove_private_artifact(artifacts.action_receipt)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
     refs = _immutable_review_refs(_review_refs(ocr_args))
@@ -1261,6 +1284,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     usage: dict[str, int] = {}
     publication_filtered = False
     publication: dict[str, object] = {"state": "passed"}
+    evidence_action_counts: dict[str, int] | None = None
     previous_handlers = _install_termination_handlers()
     try:
         try:
@@ -1340,6 +1364,12 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     finally:
         previous_mask = _block_termination_signals()
         try:
+            if exit_code == 0:
+                evidence_action_counts = read_action_receipt(artifacts.action_receipt)
+            try:
+                remove_private_artifact(artifacts.action_receipt)
+            except OSError as exc:
+                cleanup_error = exc
             try:
                 remove_private_artifact(artifacts.context_store)
             except OSError as exc:
@@ -1363,6 +1393,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
                         composition,
                         identity,
                         enrichment,
+                        evidence_action_counts,
                         forbidden=forbidden,
                     )
                 except ReviewRunnerError:

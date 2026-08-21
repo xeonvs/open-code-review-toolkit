@@ -20,6 +20,7 @@ from ocr_toolkit.evidence import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.mcp import (
     MAX_REQUEST_BYTES,
     PROTOCOL_VERSION,
@@ -407,6 +408,34 @@ def test_initialized_notification_and_post_handshake_operations() -> None:
     assert called is not None
     assert called["result"].get("isError", False) is False
     assert called["result"]["content"][0]["type"] == "text"
+
+
+def test_server_records_only_completed_model_time_evidence_actions(tmp_path: Path) -> None:
+    receipt = tmp_path / "actions.json"
+    successful = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+        },
+        action_receipt_path=receipt,
+    )
+    failed = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "get", "id": "invalid"}},
+        },
+        action_receipt_path=receipt,
+    )
+
+    assert successful and successful["result"].get("isError", False) is False
+    assert failed and failed["result"].get("isError", False) is True
+    assert read_action_receipt(receipt) == {"summary": 1, "list": 0, "get": 0}
 
 
 def test_notifications_never_receive_json_rpc_responses() -> None:

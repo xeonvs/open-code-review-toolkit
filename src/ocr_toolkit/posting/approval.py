@@ -393,11 +393,17 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
 
     evidence = toolkit_metadata.get("evidence")
-    if not isinstance(evidence, dict) or set(evidence) != {"mandatory", "used", "calls"}:
+    if not isinstance(evidence, dict) or set(evidence) != {
+        "mandatory",
+        "used",
+        "calls",
+        "actions",
+    }:
         return invalid
     mandatory = evidence.get("mandatory")
     used = evidence.get("used")
     evidence_calls = evidence.get("calls")
+    evidence_actions = evidence.get("actions")
     evidence_called = isinstance(evidence_calls, int) and evidence_calls > 0
     if (
         not isinstance(mandatory, bool)
@@ -408,6 +414,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         or used is not evidence_called
         or (mandatory and not used)
         or usage.get(builtin_server, 0) != evidence_calls + sum(context_usage.values())
+        or not _valid_evidence_actions(evidence_actions, evidence_calls)
     ):
         return invalid
     publication = toolkit_metadata.get("publication")
@@ -424,3 +431,23 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if external:
         return "external MCP was configured for a comment-only review"
     return ""
+
+
+def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
+    """Validate verified counts or an explicit unavailable attribution state."""
+
+    if value == {"state": "unavailable"}:
+        return True
+    if not isinstance(value, dict) or set(value) != {"state", "summary", "list", "get"}:
+        return False
+    counts = [value.get(action) for action in ("summary", "list", "get")]
+    return bool(
+        value.get("state") == "verified"
+        and all(
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for count in counts
+        )
+        and sum(counts) == evidence_calls
+    )
