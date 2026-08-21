@@ -152,7 +152,7 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 4:
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 5:
         return "", None
     review = toolkit_metadata.get("review")
     if not isinstance(review, dict):
@@ -609,15 +609,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     publication = (
         toolkit_metadata.get("publication") if isinstance(toolkit_metadata, dict) else None
     )
-    publication_state = (
-        publication_dlp_state(publication)
-        if isinstance(toolkit_metadata, dict) and toolkit_metadata.get("schema_version") == 4
-        else "legacy"
-    )
+    if toolkit_metadata is None:
+        publication_state = "direct"
+    elif isinstance(toolkit_metadata, dict) and toolkit_metadata.get("schema_version") == 5:
+        publication_state = publication_dlp_state(publication)
+    else:
+        publication_state = None
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,
-            "receipt v4 publication state is invalid",
+            "receipt v5 publication state is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -694,7 +695,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             "suppressed by the reviewer."
         )
     carried_forward_count = 0
-    if publication_state == "filtered":
+    if publication_state == "publication-filtered":
         comments, carried_forward_count = filter_previously_published_comments(
             comments, previous_bot_comment_refs
         )

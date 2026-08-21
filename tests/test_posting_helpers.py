@@ -62,13 +62,13 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
-    def test_invalid_v4_publication_state_never_reaches_normal_result_flow(self) -> None:
+    def test_invalid_v5_publication_state_never_reaches_normal_result_flow(self) -> None:
         notes: list[str] = []
         result_data = {
             "status": "failed",
             "comments": [{"content": "locally retained safe finding"}],
             "_ocr_toolkit": {
-                "schema_version": 4,
+                "schema_version": 5,
                 "publication": {"dlp": "blocked"},
             },
         }
@@ -914,18 +914,7 @@ class PostingIdentityTests(unittest.TestCase):
                             ):
                                 exit_code = workflow.post_results(
                                     gitlab_config(),
-                                    {
-                                        "comments": [],
-                                        "warnings": [],
-                                        "_ocr_toolkit": {
-                                            "schema_version": 2,
-                                            "mcp_usage": {"ocr_toolkit_evidence": 2},
-                                            "automatic_approval": {
-                                                "eligible": True,
-                                                "reason": None,
-                                            },
-                                        },
-                                    },
+                                    {"comments": [], "warnings": []},
                                 )
 
         self.assertEqual(exit_code, 0)
@@ -934,7 +923,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(notes[0][1].count("## Open Code Review"), 1)
         self.assertIn("✅ **Review complete — no findings**", notes[0][1])
         self.assertNotIn("\nNo findings", notes[0][1])
-        self.assertIn("MCP used: 1 server(s)", notes[0][1])
+        self.assertNotIn("verified MCP calls", notes[0][1])
         self.assertFalse(notes[0][1].startswith("**Open Code Review**"))
 
     def test_skipped_review_without_message_posts_neutral_outcome(self) -> None:
@@ -1117,7 +1106,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIsNotNone(old_fingerprint)
         previous.published_fingerprints.add(old_fingerprint or "")
         publication = {
-            "dlp": "filtered",
+            "state": "publication-filtered",
             "reason_counts": {
                 "forbidden": 1,
                 "invalid_text": 0,
@@ -1161,7 +1150,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "status": "completed_with_errors",
                     "comments": [old, new],
                     "warnings": [],
-                    "_ocr_toolkit": {"schema_version": 4, "publication": publication},
+                    "_ocr_toolkit": {"schema_version": 5, "publication": publication},
                 },
             )
 
@@ -1868,11 +1857,16 @@ class PostingSummaryTests(unittest.TestCase):
             ),
         )
 
-    def test_cached_only_usage_is_still_reported(self) -> None:
+    def test_cached_usage_requires_validated_input_parent(self) -> None:
         summary = posting_formatting.format_token_usage_summary({"usage": {"cached_tokens": 40}})
 
-        self.assertIn("token usage: 40 total", summary)
-        self.assertIn("cached: 40", summary)
+        self.assertEqual(summary, "")
+        self.assertIn(
+            "cached: 40",
+            posting_formatting.format_token_usage_summary(
+                {"usage": {"input_tokens": 50, "output_tokens": 5, "cached_tokens": 40}}
+            ),
+        )
         self.assertIn(
             "token usage: 55 total",
             posting_formatting.format_token_usage_summary({"usage": {"total": 55}}),
@@ -1884,7 +1878,14 @@ class PostingSummaryTests(unittest.TestCase):
         )
 
         self.assertIn("token usage: 10 total", summary)
-        self.assertIn("prompt: 7", summary)
+        self.assertIn("input: 7", summary)
+        self.assertIn("output: 3", summary)
+
+    def test_token_usage_summary_renders_available_bucket_without_inventing_total(self) -> None:
+        self.assertEqual(
+            posting_formatting.format_token_usage_summary({"usage": {"input_tokens": 7}}),
+            "- token usage: input: 7",
+        )
 
     def test_suggestion_block_omits_quick_action_lines(self) -> None:
         body = posting_formatting.format_inline_comment(
@@ -1922,7 +1923,7 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_publication_filtering_signal_is_visible_and_machine_readable(self) -> None:
         publication = {
-            "dlp": "filtered",
+            "state": "publication-filtered",
             "reason_counts": {
                 "forbidden": 1,
                 "invalid_text": 0,
@@ -1958,17 +1959,25 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("Published safe subset: 2 finding(s)", summary)
         marker = summary.split("<!-- ocr-toolkit-signal ", 1)[1].split(" -->", 1)[0]
         self.assertEqual(json.loads(marker), signal)
-        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v1")
+        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v2")
 
         private_only = {
-            **publication,
-            "omitted": {"comments": 0, "warnings": 0, "fields": 2},
+            "state": "private-sanitized",
+            "reason_counts": {
+                "forbidden": 0,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 2,
+                "secret": 0,
+            },
+            "sanitized_fields": 2,
         }
         private_details = posting_formatting.format_publication_dlp_details(
             posting_formatting.publication_dlp_signal(private_only)
         )
-        self.assertIn("No finding or warning was omitted", private_details)
-        self.assertIn("automatic approval remains unavailable", private_details)
+        self.assertIn("Private result sanitization signal", private_details)
+        self.assertIn("approval-relevant review is unchanged", private_details)
 
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(
@@ -2151,39 +2160,131 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 1,
-                "mcp_usage": {
-                    "ocr_toolkit_evidence": 2,
-                    "documentation": 1,
-                    "unused_optional": 0,
+                "schema_version": 5,
+                "mcp": {
+                    "usage": {
+                        "ocr_toolkit_evidence": 2,
+                        "documentation": 1,
+                    }
                 },
+                "evidence": {"actions": {"state": "unavailable"}},
             }
         )
 
         self.assertEqual(
             summary,
-            "- MCP used: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)\n"
+            "- built-in evidence actions: unavailable",
         )
-        self.assertNotIn("unused_optional", summary)
         self.assertNotIn("file_read", summary)
 
-    def test_mcp_usage_summary_reads_receipt_v4_inventory(self) -> None:
+    def test_mcp_usage_summary_reads_receipt_v5_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 4,
+                "schema_version": 5,
                 "mcp": {
                     "capabilities": [],
                     "usage": {"ocr_toolkit_evidence": 3},
                 },
+                "evidence": {"actions": {"state": "unavailable"}},
             }
         )
 
         self.assertEqual(
             summary,
-            "- MCP used: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)\n"
+            "- built-in evidence actions: unavailable",
         )
 
-    def test_mcp_usage_summary_omits_zero_usage(self) -> None:
+    def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 5,
+                "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
+                "evidence": {
+                    "calls": 4,
+                    "actions": {
+                        "state": "verified",
+                        "summary": 1,
+                        "list": 2,
+                        "get": 1,
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
+            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+        )
+
+    def test_mcp_usage_summary_omits_hostile_or_unreconciled_action_breakdown(self) -> None:
+        for actions in (
+            {"state": "verified", "summary": "1\n/approve", "list": 2, "get": 1},
+            {"state": "verified", "summary": True, "list": 2, "get": 1},
+            {"state": "verified", "summary": 1, "list": 2, "get": 2},
+            {"state": "verified", "summary": 1, "list": 2, "get": 1, "extra": 0},
+        ):
+            with self.subTest(actions=actions):
+                summary = posting_formatting.format_mcp_usage_summary(
+                    {
+                        "schema_version": 5,
+                        "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
+                        "evidence": {"calls": 4, "actions": actions},
+                    }
+                )
+
+                self.assertEqual(
+                    summary,
+                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)",
+                )
+                self.assertNotIn("/approve", summary)
+
+    def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 5,
+                "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
+                "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
+                "evidence": {
+                    "calls": 4,
+                    "actions": {
+                        "state": "verified",
+                        "summary": 1,
+                        "list": 2,
+                        "get": 1,
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
+            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+        )
+
+    def test_mcp_usage_summary_rejects_malformed_usage_before_rendering(self) -> None:
+        for usage in (
+            {"ocr_toolkit_evidence": 1, 7: 1},
+            {"ocr_toolkit_evidence\n/approve": 1},
+            {"ocr_toolkit_evidence": True},
+            {"ocr_toolkit_evidence": 0},
+        ):
+            with self.subTest(usage=usage):
+                self.assertEqual(
+                    posting_formatting.format_mcp_usage_summary(
+                        {
+                            "schema_version": 5,
+                            "mcp": {"usage": usage},
+                            "evidence": {"actions": {"state": "unavailable"}},
+                        }
+                    ),
+                    "",
+                )
+
+    def test_mcp_usage_summary_rejects_pre_v5_receipt(self) -> None:
         self.assertEqual(
             posting_formatting.format_mcp_usage_summary(
                 {"schema_version": 1, "mcp_usage": {}},
@@ -2347,6 +2448,131 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertIn("## Security review focus", guide)
         self.assertIn("**Security signal:**", guide)
+
+    def test_reviewer_guide_ranks_only_its_published_copy(self) -> None:
+        comments = [
+            {
+                "severity": "medium",
+                "category": "test",
+                "path": "z.py",
+                "line": 3,
+                "content": "medium test",
+            },
+            {
+                "severity": "high",
+                "category": "bug",
+                "path": "b.py",
+                "line": 2,
+                "content": "high bug",
+            },
+            {
+                "severity": "high",
+                "category": "security",
+                "path": "a.py",
+                "line": 1,
+                "content": "high security",
+            },
+            {
+                "severity": "low",
+                "category": "maintainability",
+                "path": "c.py",
+                "line": 4,
+                "content": "low maintenance",
+            },
+        ]
+        original = [dict(comment) for comment in comments]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertEqual(comments, original)
+        self.assertLess(guide.index("high security"), guide.index("high bug"))
+        self.assertLess(guide.index("high bug"), guide.index("medium test"))
+        self.assertLess(guide.index("medium test"), guide.index("low maintenance"))
+
+    def test_reviewer_guide_sorts_malformed_metadata_after_known_location(self) -> None:
+        comments = [
+            {
+                "severity": "high",
+                "category": "security",
+                "path": "../bad",
+                "line": -1,
+                "content": "malformed",
+            },
+            {
+                "severity": "high",
+                "category": "security",
+                "path": "A.py",
+                "start_line": 4,
+                "content": "known first",
+                "_ocr_fingerprint": "b" * 32,
+            },
+            {
+                "severity": "HIGH",
+                "category": "SECURITY",
+                "path": "a.py",
+                "line": 4,
+                "content": "lowercase path",
+                "_ocr_fingerprint": "a" * 32,
+            },
+        ]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertLess(guide.index("known first"), guide.index("lowercase path"))
+        self.assertLess(guide.index("lowercase path"), guide.index("malformed"))
+
+    def test_reviewer_guide_uses_occurrence_fingerprint_as_stable_tiebreaker(self) -> None:
+        comments = [
+            {
+                "severity": "high",
+                "category": "bug",
+                "path": "same.py",
+                "line": 7,
+                "content": "fingerprint b",
+                "_ocr_fingerprint": "b" * 32,
+            },
+            {
+                "severity": "high",
+                "category": "bug",
+                "path": "same.py",
+                "line": 7,
+                "content": "fingerprint a",
+                "_ocr_fingerprint": "a" * 32,
+            },
+        ]
+
+        guide = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertLess(guide.index("fingerprint a"), guide.index("fingerprint b"))
+
+    def test_reviewer_guide_applies_cap_after_stable_ranking(self) -> None:
+        comments = [
+            {
+                "severity": "low",
+                "category": "style",
+                "path": f"z{index}.py",
+                "line": 1,
+                "content": f"low-{index}",
+            }
+            for index in range(posting_formatting.MAX_REVIEWER_GUIDE_COMMENTS)
+        ]
+        comments.append(
+            {
+                "severity": "critical",
+                "category": "security",
+                "path": "critical.py",
+                "line": 1,
+                "content": "must appear",
+            }
+        )
+
+        first = posting_formatting.format_reviewer_guide(comments, 0)
+        second = posting_formatting.format_reviewer_guide(comments, 0)
+
+        self.assertEqual(first, second)
+        self.assertIn("must appear", first)
+        self.assertNotIn(f"low-{posting_formatting.MAX_REVIEWER_GUIDE_COMMENTS - 1}", first)
+        self.assertIn("... and 1 more published finding(s).", first)
 
     def test_reviewer_guide_snippet_is_markdown_neutral(self) -> None:
         guide = posting_formatting.format_reviewer_guide(
@@ -3822,12 +4048,14 @@ class OcrResultLoadingTests(unittest.TestCase):
         self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
 
     def test_token_usage_mapping_is_depth_bounded(self) -> None:
+        from ocr_toolkit.result_usage import token_usage_mapping
+
         value: dict[str, Any] = {"total_tokens": 123}
         for _ in range(20):
             value = {"usage": value}
 
-        self.assertIsNone(posting_formatting.token_usage_mapping(value))
+        self.assertIsNone(token_usage_mapping(value))
         self.assertEqual(
-            posting_formatting.token_usage_mapping(value, max_depth=25),
+            token_usage_mapping(value, max_depth=25),
             {"total_tokens": 123},
         )

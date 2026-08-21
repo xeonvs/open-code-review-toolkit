@@ -41,7 +41,7 @@ def finding(category: Any = "style", severity: Any = "low") -> dict[str, Any]:
     return {"category": category, "severity": severity}
 
 
-def receipt_v4(
+def receipt_v5(
     *, context_state: str = "disabled", external: bool = False, author_id: int | None = 41
 ) -> dict[str, Any]:
     """Return one closed synthetic review-time receipt."""
@@ -59,7 +59,7 @@ def receipt_v4(
             {"server": "documentation", "transport": "remote", "tools": ["docs_read"]}
         )
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -80,8 +80,13 @@ def receipt_v4(
             "capabilities": capabilities,
             "usage": {"ocr_toolkit_evidence": 1},
         },
-        "evidence": {"mandatory": True, "used": True, "calls": 1},
-        "publication": {"dlp": "passed"},
+        "evidence": {
+            "mandatory": True,
+            "used": True,
+            "calls": 1,
+            "actions": {"state": "unavailable"},
+        },
+        "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
 
@@ -102,14 +107,14 @@ def eligibility(
         comments or [],
         warnings or [],
         omitted,
-        receipt_v4(),
+        receipt_v5(),
     )
 
 
 def enriched_receipt(*, mutable: bool = False, required_degraded: bool = False) -> dict[str, Any]:
-    """Return one v4 local-store-only enrichment receipt."""
+    """Return one v5 local-store-only enrichment receipt."""
 
-    receipt = receipt_v4()
+    receipt = receipt_v5()
     receipt["context"] = {
         "mode": "enriched",
         "state": "degraded" if required_degraded else "complete",
@@ -208,7 +213,7 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v4(context_state="degraded", author_id=41),
+            receipt_v5(context_state="degraded", author_id=41),
         )
 
         self.assertFalse(decision.eligible)
@@ -216,9 +221,9 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertEqual(decision.result.reason, "the selected review context was degraded")
 
     def test_publication_dlp_filtered_receipt_is_valid_but_never_eligible(self) -> None:
-        receipt = receipt_v4()
+        receipt = receipt_v5()
         receipt["publication"] = {
-            "dlp": "filtered",
+            "state": "publication-filtered",
             "reason_counts": {
                 "forbidden": 1,
                 "invalid_text": 0,
@@ -255,6 +260,47 @@ class ApprovalPolicyTests(unittest.TestCase):
             "publication DLP filtered the complete review result",
         )
 
+    def test_private_only_sanitization_keeps_existing_approval_gates(self) -> None:
+        receipt = receipt_v5()
+        receipt["publication"] = {
+            "state": "private-sanitized",
+            "reason_counts": {
+                "forbidden": 0,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 1,
+                "secret": 0,
+            },
+            "sanitized_fields": 1,
+        }
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+
+        self.assertTrue(decision.eligible)
+
+    def test_evidence_action_attribution_does_not_change_approval_eligibility(self) -> None:
+        receipt = receipt_v5()
+        receipt["evidence"]["actions"] = {
+            "state": "verified",
+            "summary": 1,
+            "list": 0,
+            "get": 0,
+        }
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertTrue(decision.eligible)
+
+        receipt["evidence"]["actions"]["summary"] = 0
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertFalse(decision.eligible)
+        self.assertIn("receipt is missing or invalid", decision.result.reason)
+
     def test_complete_metadata_and_external_mcp_have_independent_approval_effects(self) -> None:
         complete_metadata = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
@@ -262,10 +308,10 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v4(context_state="complete", author_id=41),
+            receipt_v5(context_state="complete", author_id=41),
         )
         external = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v4(external=True)
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v5(external=True)
         )
 
         self.assertTrue(complete_metadata.eligible)
@@ -315,7 +361,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertTrue(decision.eligible)
 
     def test_receipt_accepts_ocr_compatible_non_identifier_tool_names(self) -> None:
-        metadata = receipt_v4(external=True)
+        metadata = receipt_v5(external=True)
         metadata["mcp"]["capabilities"][1]["tools"] = ["repo.search", "records/read"]
 
         decision = approval.evaluate_approval_policy(
@@ -328,31 +374,33 @@ class ApprovalPolicyTests(unittest.TestCase):
             "external MCP was configured for a comment-only review",
         )
 
-    def test_historical_v1_receipt_is_readable_but_not_approval_eligible(self) -> None:
-        decision = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True),
-            complete_outcome(),
-            [],
-            [],
-            0,
-            {"schema_version": 1, "mcp_usage": {"ocr_toolkit_evidence": 1}},
-        )
+    def test_every_pre_v5_receipt_is_rejected(self) -> None:
+        for version in range(1, 5):
+            with self.subTest(version=version):
+                decision = approval.evaluate_approval_policy(
+                    settings.BooleanSetting(True),
+                    complete_outcome(),
+                    [],
+                    [],
+                    0,
+                    {"schema_version": version, "mcp_usage": {"ocr_toolkit_evidence": 1}},
+                )
 
-        self.assertFalse(decision.eligible)
-        self.assertEqual(
-            decision.result.reason,
-            "the review-time approval receipt predates current eligibility controls",
-        )
+                self.assertFalse(decision.eligible)
+                self.assertEqual(
+                    decision.result.reason,
+                    "the review-time approval receipt is missing or invalid",
+                )
 
-    def test_missing_or_malformed_v4_receipt_fails_closed(self) -> None:
-        cases: list[Any] = [None, {"schema_version": 4}]
+    def test_missing_or_malformed_v5_receipt_fails_closed(self) -> None:
+        cases: list[Any] = [None, {"schema_version": 5}]
         for mutate in (
             lambda value: value["context"].update({"state": "complete"}),
             lambda value: value["review"].update({"source_sha": "invalid"}),
             lambda value: value["mcp"].update({"usage": {"unknown": 1}}),
             lambda value: value["evidence"].update({"used": False}),
         ):
-            candidate = receipt_v4()
+            candidate = receipt_v5()
             mutate(candidate)
             cases.append(candidate)
         for metadata in cases:
@@ -366,43 +414,43 @@ class ApprovalPolicyTests(unittest.TestCase):
                     "the review-time approval receipt is missing or invalid",
                 )
 
-    def test_impossible_v4_capability_and_evidence_states_fail_closed(self) -> None:
+    def test_impossible_v5_capability_and_evidence_states_fail_closed(self) -> None:
         cases: list[dict[str, Any]] = []
 
-        builtin_remote = receipt_v4()
+        builtin_remote = receipt_v5()
         builtin_remote["mcp"]["capabilities"][0]["transport"] = "remote"
         cases.append(builtin_remote)
 
-        external_builtin = receipt_v4(external=True)
+        external_builtin = receipt_v5(external=True)
         external_builtin["mcp"]["capabilities"][1]["transport"] = "builtin"
         cases.append(external_builtin)
 
-        wrong_builtin_tool = receipt_v4()
+        wrong_builtin_tool = receipt_v5()
         wrong_builtin_tool["mcp"]["capabilities"][0]["tools"] = ["other_read"]
         cases.append(wrong_builtin_tool)
 
-        duplicate_tool = receipt_v4(external=True)
+        duplicate_tool = receipt_v5(external=True)
         duplicate_tool["mcp"]["capabilities"][1]["tools"] = ["ocr_toolkit_evidence"]
         cases.append(duplicate_tool)
 
-        too_many_tools = receipt_v4(external=True)
+        too_many_tools = receipt_v5(external=True)
         too_many_tools["mcp"]["capabilities"][1]["tools"] = [
             f"tool_{index}" for index in range(129)
         ]
         cases.append(too_many_tools)
 
-        usage_mismatch = receipt_v4()
+        usage_mismatch = receipt_v5()
         usage_mismatch["mcp"]["usage"] = {}
         cases.append(usage_mismatch)
 
-        usage_overflow = receipt_v4()
+        usage_overflow = receipt_v5()
         usage_overflow["mcp"]["usage"] = {"ocr_toolkit_evidence": 1_000_000_001}
         cases.append(usage_overflow)
 
-        missing_author = receipt_v4(author_id=None)
+        missing_author = receipt_v5(author_id=None)
         cases.append(missing_author)
 
-        mandatory_mismatch = receipt_v4()
+        mandatory_mismatch = receipt_v5()
         mandatory_mismatch["evidence"] = {"mandatory": False, "used": True}
         cases.append(mandatory_mismatch)
 
@@ -782,7 +830,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         settings.post_mode.cache_clear()
 
     def test_receipt_identity_is_atomic_for_summary_and_approval(self) -> None:
-        valid = receipt_v4(author_id=41)
+        valid = receipt_v5(author_id=41)
         self.assertEqual(workflow.approval_receipt_identity(valid), ("a" * 40, 41))
 
         for mutate in (
@@ -790,7 +838,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             lambda value: value["review"].update({"mr_author_id": None}),
             lambda value: value["review"].update({"mr_author_id": True}),
         ):
-            candidate = receipt_v4(author_id=41)
+            candidate = receipt_v5(author_id=41)
             mutate(candidate)
             with self.subTest(candidate=candidate):
                 self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))

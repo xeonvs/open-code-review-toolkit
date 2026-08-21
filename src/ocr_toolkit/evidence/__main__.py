@@ -15,8 +15,10 @@ def main() -> int:
     parser.add_argument("--context-run-id", default="")
     parser.add_argument("--context-policy-digest", default="")
     arguments = parser.parse_args()
+    artifacts = repository_artifacts()
     return serve(
-        repository_artifacts().store,
+        artifacts.store,
+        action_receipt_path=artifacts.action_receipt,
         context_path=arguments.context_store,
         context_run_id=arguments.context_run_id,
         context_policy_digest=arguments.context_policy_digest,

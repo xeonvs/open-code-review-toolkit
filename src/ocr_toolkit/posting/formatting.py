@@ -17,7 +17,12 @@ from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
 from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.ocr_result import SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
+from ocr_toolkit.ocr_result import (
+    MAX_TOOLKIT_MCP_USAGE_COUNT,
+    MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
+    TOOLKIT_MCP_SERVER_NAME_RE,
+)
 from ocr_toolkit.posting.approval import (
     ApprovalResult,
     approval_summary_line,
@@ -47,7 +52,12 @@ from ocr_toolkit.posting.settings import (
     post_emoji,
     post_mode,
 )
-from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
+from ocr_toolkit.posting.suggestions import (
+    SuggestionDecision,
+    SuggestionState,
+    safe_repository_path,
+)
+from ocr_toolkit.result_usage import normalize_token_usage
 
 OCR_FINDING_CATEGORIES = {
     "bug",
@@ -469,7 +479,7 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
     if total == 0:
         return ""
 
-    line = f"- tool calls: {total} total"
+    line = f"- all OCR tool calls: {total} total"
     if not entries:
         return line
 
@@ -493,47 +503,85 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
         or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return ""
-    if toolkit_metadata.get("schema_version") in {3, 4}:
-        mcp = toolkit_metadata.get("mcp")
-        mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
-    else:
-        mcp_usage = toolkit_metadata.get("mcp_usage")
-    if not isinstance(mcp_usage, dict):
+    mcp = toolkit_metadata.get("mcp")
+    mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
+    if (
+        not isinstance(mcp_usage, dict)
+        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
+        or any(
+            not isinstance(server, str)
+            or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for server, count in mcp_usage.items()
+        )
+    ):
         return ""
-    used: list[tuple[str, int]] = []
-    for raw_server, raw_count in sorted(mcp_usage.items()):
-        server = clean_text(raw_server)
-        count = nonnegative_int(raw_count)
-        if not server or count is None or count <= 0:
-            continue
-        used.append((server, count))
+    used = sorted(mcp_usage.items())
     if not used:
         return ""
     details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
-    return f"- MCP used: {len(used)} server(s) ({details})"
+    lines = [f"- verified MCP calls: {len(used)} server(s) ({details})"]
+    evidence = toolkit_metadata.get("evidence")
+    actions = evidence.get("actions") if isinstance(evidence, dict) else None
+    if actions == {"state": "unavailable"}:
+        lines.append("- built-in evidence actions: unavailable")
+    elif isinstance(actions, dict) and set(actions) == {"state", "summary", "list", "get"}:
+        action_counts = [actions[action] for action in ("summary", "list", "get")]
+        evidence_calls = evidence.get("calls") if isinstance(evidence, dict) else None
+        if not (
+            actions.get("state") == "verified"
+            and all(
+                isinstance(count, int)
+                and not isinstance(count, bool)
+                and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                for count in action_counts
+            )
+            and isinstance(evidence_calls, int)
+            and not isinstance(evidence_calls, bool)
+            and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            and sum(action_counts) == evidence_calls
+        ):
+            return "\n".join(lines)
+        lines.append(
+            "- built-in evidence actions: "
+            + ", ".join(f"{action}: {actions[action]}" for action in ("summary", "list", "get"))
+        )
+    return "\n".join(lines)
 
 
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact filtered receipt."""
+    """Return one low-cardinality signal from an exact v5 DLP receipt."""
 
+    state = publication_dlp_state(publication)
     if (
-        publication_dlp_state(publication) != "filtered"
+        state not in {"private-sanitized", "publication-filtered"}
         or not isinstance(carried_forward_comments, int)
         or isinstance(carried_forward_comments, bool)
         or carried_forward_comments < 0
+        or (state == "private-sanitized" and carried_forward_comments != 0)
     ):
         return None
-    return {
-        "schema_version": "ocr.publication-dlp-signal/v1",
-        "state": "filtered",
+    signal: dict[str, Any] = {
+        "schema_version": "ocr.publication-dlp-signal/v2",
+        "state": state,
         "reason_counts": dict(publication["reason_counts"]),
-        "retained": dict(publication["retained"]),
-        "omitted": dict(publication["omitted"]),
-        "original": dict(publication["original"]),
-        "carried_forward_comments": carried_forward_comments,
     }
+    if state == "private-sanitized":
+        signal["sanitized_fields"] = publication["sanitized_fields"]
+    else:
+        signal.update(
+            {
+                "retained": dict(publication["retained"]),
+                "omitted": dict(publication["omitted"]),
+                "original": dict(publication["original"]),
+                "carried_forward_comments": carried_forward_comments,
+            }
+        )
+    return signal
 
 
 def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
@@ -541,18 +589,31 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
 
     if signal is None:
         return ""
+    marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
+    if signal["state"] == "private-sanitized":
+        return "\n".join(
+            [
+                "<details>",
+                "<summary>Private result sanitization signal</summary>",
+                "",
+                (
+                    f"Redacted {signal['sanitized_fields']} non-rendered result field(s). "
+                    "The canonical published and approval-relevant review is unchanged."
+                ),
+                "",
+                f"<!-- ocr-toolkit-signal {marker} -->",
+                "",
+                "</details>",
+            ]
+        )
     retained = signal["retained"]
     omitted = signal["omitted"]
     carried = signal["carried_forward_comments"]
-    marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
     completeness = (
         "One or more publication units were omitted, so this review is partial and cannot "
         "authorize automatic approval."
         if omitted["comments"] or omitted["warnings"]
-        else (
-            "No finding or warning was omitted, but result fields were sanitized; automatic "
-            "approval remains unavailable."
-        )
+        else "The canonical publication or approval projection changed, so automatic approval remains unavailable."
     )
     return "\n".join(
         [
@@ -574,126 +635,21 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
     )
 
 
-TOKEN_USAGE_KEYS = (
-    "usage",
-    "token_usage",
-    "tokenUsage",
-    "token_usage_summary",
-    "tokenUsageSummary",
-)
-
-
-TOKEN_USAGE_CONTAINER_KEYS = (
-    *TOKEN_USAGE_KEYS,
-    "summary",
-    "project_summary",
-    "metadata",
-    "stats",
-    "statistics",
-)
-
-
-TOKEN_TOTAL_KEYS = ("total_tokens", "totalTokens", "tokens", "total")
-
-
-TOKEN_EXPLICIT_TOTAL_KEYS = ("total_tokens", "totalTokens", "tokens")
-
-
-TOKEN_PROMPT_KEYS = (
-    "prompt_tokens",
-    "input_tokens",
-    "promptTokens",
-    "inputTokens",
-    "prompt",
-    "input",
-)
-
-
-TOKEN_COMPLETION_KEYS = (
-    "completion_tokens",
-    "output_tokens",
-    "completionTokens",
-    "outputTokens",
-    "completion",
-    "output",
-)
-
-
-TOKEN_CACHED_KEYS = (
-    "cached_tokens",
-    "cache_read_input_tokens",
-    "cachedInputTokens",
-    "cacheReadInputTokens",
-)
-
-
-def first_nonnegative_int(mapping: dict[str, Any], keys: Sequence[str]) -> int | None:
-    """Return the first non-negative integer from known OCR usage keys."""
-
-    for key in keys:
-        value = nonnegative_int(mapping.get(key))
-        if value is not None:
-            return value
-    return None
-
-
-def token_usage_mapping(
-    value: Any, max_depth: int = 8, *, explicit_container: bool = False
-) -> dict[str, Any] | None:
-    """Find the first dict-shaped token usage object in OCR result metadata."""
-
-    if max_depth <= 0:
-        return None
-
-    if isinstance(value, dict):
-        if any(
-            key in value
-            for key in (TOKEN_TOTAL_KEYS if explicit_container else TOKEN_EXPLICIT_TOTAL_KEYS)
-            + TOKEN_PROMPT_KEYS
-            + TOKEN_COMPLETION_KEYS
-            + TOKEN_CACHED_KEYS
-        ):
-            return value
-        for key in TOKEN_USAGE_CONTAINER_KEYS:
-            nested = value.get(key)
-            if isinstance(nested, dict):
-                found = token_usage_mapping(
-                    nested,
-                    max_depth=max_depth - 1,
-                    explicit_container=key in TOKEN_USAGE_KEYS,
-                )
-                if found is not None:
-                    return found
-    return None
-
-
 def format_token_usage_summary(result: dict[str, Any]) -> str:
     """Return one bounded MR summary line for structured OCR token usage."""
 
-    usage = token_usage_mapping(result)
+    usage = normalize_token_usage(result)
     if usage is None:
         return ""
 
-    total = first_nonnegative_int(usage, TOKEN_TOTAL_KEYS)
-    prompt = first_nonnegative_int(usage, TOKEN_PROMPT_KEYS)
-    completion = first_nonnegative_int(usage, TOKEN_COMPLETION_KEYS)
-    cached = first_nonnegative_int(usage, TOKEN_CACHED_KEYS)
-
-    if total is None and (prompt is not None or completion is not None):
-        total = (prompt or 0) + (completion or 0)
-    if total is None and cached is not None:
-        total = cached
-    if total is None:
-        return ""
-
+    total = usage.get("total")
     details: list[str] = []
-    if prompt is not None:
-        details.append(f"prompt: {prompt}")
-    if completion is not None:
-        details.append(f"completion: {completion}")
-    if cached is not None:
-        details.append(f"cached: {cached}")
+    for bucket in ("input", "output", "cached", "reasoning", "other"):
+        if (count := usage.get(bucket)) is not None and count > 0:
+            details.append(f"{bucket}: {count}")
 
+    if total is None:
+        return f"- token usage: {', '.join(details)}" if details else ""
     line = f"- token usage: {total} total"
     if details:
         line += f" ({', '.join(details)})"
@@ -796,6 +752,38 @@ def guide_comment_snippet(comment: dict[str, Any]) -> str:
     return excerpt
 
 
+def _guide_comment_rank(comment: dict[str, Any], ordinal: int) -> tuple[object, ...]:
+    """Return the closed deterministic priority key for one published finding."""
+
+    severity = clean_text(comment.get("severity") or comment.get("priority")).casefold()
+    category = clean_text(comment.get("category")).casefold()
+    raw_path = comment.get("path")
+    path = raw_path if isinstance(raw_path, str) and safe_repository_path(raw_path) else None
+    start = line_number(comment.get("start_line") or comment.get("line"))
+    end = line_number(comment.get("end_line") or comment.get("line")) or start
+    valid_range = start > 0 and end >= start
+    raw_fingerprint = comment.get("_ocr_fingerprint")
+    fingerprint = (
+        raw_fingerprint
+        if isinstance(raw_fingerprint, str) and re.fullmatch(r"[0-9a-f]{32}", raw_fingerprint)
+        else None
+    )
+    canonical = json.dumps(comment, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return (
+        OCR_FINDING_SEVERITY_ORDER.index(severity)
+        if severity in OCR_FINDING_SEVERITY_ORDER
+        else len(OCR_FINDING_SEVERITY_ORDER),
+        OCR_FINDING_CATEGORY_ORDER.index(category)
+        if category in OCR_FINDING_CATEGORY_ORDER
+        else len(OCR_FINDING_CATEGORY_ORDER),
+        (0, path) if path is not None else (1, ""),
+        (0, start, end) if valid_range else (1, 0, 0),
+        (0, fingerprint) if fingerprint is not None else (1, ""),
+        canonical,
+        ordinal,
+    )
+
+
 def format_reviewer_guide(
     comments: Sequence[dict[str, Any]],
     omitted_count: int,
@@ -849,7 +837,11 @@ def format_reviewer_guide(
             f"- Visibility: {omitted_count} finding(s) omitted by `OCR_MAX_POST_COMMENTS`; rerun with a higher limit if needed."
         )
 
-    guide_comments = list(comments[:MAX_REVIEWER_GUIDE_COMMENTS])
+    ranked_comments = sorted(
+        enumerate(comments),
+        key=lambda item: _guide_comment_rank(item[1], item[0]),
+    )
+    guide_comments = [comment for _, comment in ranked_comments[:MAX_REVIEWER_GUIDE_COMMENTS]]
     if guide_comments:
         lines.append("")
         lines.append("### Recommended focus areas")

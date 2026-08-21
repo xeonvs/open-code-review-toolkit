@@ -215,7 +215,7 @@ def test_all_omitted_fields_remain_queryable_without_becoming_admitted_intent() 
     }
 
 
-def test_receipt_v1_and_v2_are_comment_readable_but_never_approval_authority() -> None:
+def test_receipt_v1_and_v2_are_rejected_by_current_approval_authority() -> None:
     for receipt in (
         {"schema_version": 1, "mcp_usage": {"ocr_toolkit_evidence": 1}},
         {
@@ -226,5 +226,5 @@ def test_receipt_v1_and_v2_are_comment_readable_but_never_approval_authority() -
     ):
         assert (
             automatic_approval_metadata_reason(receipt)
-            == "the review-time approval receipt predates current eligibility controls"
+            == "the review-time approval receipt is missing or invalid"
         )

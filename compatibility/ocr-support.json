@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.8",
-  "recommended_version": "1.9.8",
+  "monitoring_floor": "1.9.9",
+  "recommended_version": "1.9.9",
   "releases": [
     {
       "assets": [
@@ -1032,6 +1032,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.8",
       "status": "tested",
       "version": "1.9.8"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "27ef6bec85dfc680c34ab5dcf04dfbc66b889899c84972da7e1a44c65fcf719d",
+          "size": 57483184
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "271daa462c46c514ac535ae48f9d840cb58e450897e4e66297294188071efefa",
+          "size": 54559186
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "52f993c615a6b456cb1c36fc135fec6b8da19cb88da7f305bd2726c3d72f1cf0",
+          "size": 55746722
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "0094ae1930ec7012927a03c73963d931b6e240b4734fe7f6ba6ca4bad9b0bb5b",
+          "size": 52494498
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "1e3457bc575e6189afe332110d22e78cbd53afd01658f226b0ed55024f943961",
+          "size": 57204736
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "c68710179a36178a3288140fa7bc20bb29da6137ce4a4843589a4484a1dfa49a",
+          "size": 53203456
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "18fb696608f0528258fdab95001deda285f7214814e1bdd00d02a96346dd3ed0",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.9.json",
+      "evidence_sha256": "b83317b72384febf62b2aa74817ecdabcd5af021a9a5036b9295478f3d5457bb",
+      "human_conclusion": "Compatible after hosted checksum-verified Linux qualification, reviewed adjacent upstream source, and checksum-verified Darwin arm64 qualification evidence. OCR 1.9.9 makes background-file take precedence over inline background, so the toolkit now rejects both caller background inputs and remains the sole background-file owner. Distinct static main-loop stop reasons remain within the existing failed-item reason contract and are covered through result retention, publication projection, DLP, and posting diagnostics. Provider tool-choice test expansion does not change a consumed wire contract.",
+      "published_at": "2026-08-21T07:49:58Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.9",
+      "status": "tested",
+      "version": "1.9.9"
     }
   ],
   "schema_version": 1,
