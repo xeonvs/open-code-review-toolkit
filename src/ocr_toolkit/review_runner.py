@@ -919,11 +919,15 @@ def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
 
 
 def _reject_owned_background(args: list[str]) -> None:
-    """Reject caller attempts to replace the toolkit-owned bootstrap file."""
+    """Reject caller attempts to compete with the toolkit-owned bootstrap."""
 
-    if _option_values(args, "--background-file"):
+    background_files = _option_values(args, "--background-file")
+    backgrounds = _option_values(args, "--background")
+    if background_files or backgrounds:
+        option = "--background-file" if background_files else "--background"
         raise ReviewRunnerError(
-            "--background-file is managed by ocr-ci review; use --background for extra context"
+            f"{option} is managed by ocr-ci review; repository evidence and selected context "
+            "must use toolkit-owned inputs"
         )
 
 

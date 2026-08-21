@@ -1392,9 +1392,24 @@ def test_immutable_ref_rewrite_preserves_non_diff_ocr_options() -> None:
     ) == ["--format", "json", "--max-comments=20"]
 
 
-def test_review_rejects_caller_owned_background_file() -> None:
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--background", "inline"],
+        ["--background=inline"],
+        ["--background-file", "other.md"],
+        ["--background-file=other.md"],
+    ],
+)
+def test_review_rejects_caller_owned_background(arguments: list[str]) -> None:
     with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci"):
-        review_runner._reject_owned_background(["--background-file", "other.md"])
+        review_runner._reject_owned_background(arguments)
+
+
+@pytest.mark.parametrize("option", ["--background", "--background-file"])
+def test_review_rejects_missing_caller_background_value(option: str) -> None:
+    with pytest.raises(review_runner.ReviewRunnerError, match="requires a value"):
+        review_runner._reject_owned_background([option])
 
 
 def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) -> None:

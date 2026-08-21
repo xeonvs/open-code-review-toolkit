@@ -116,6 +116,7 @@ Reviewed Go MCP behavior continues to initialize and discover multiple tools in 
 | 1.9.7 mirror-aware upstream installers | Toolkit neither installs nor downloads OCR | Version/checksum pin only | None |
 | 1.9.8 Bedrock/SigV4 provider | Not selected or configured by the toolkit | None; no new toolkit credential boundary | None |
 | 1.9.8 native severity in upstream skill | Toolkit already consumes tolerant structured severity/category result fields | No schema or posting change | None |
+| 1.9.9 background precedence and named main-loop stops | Toolkit rejects both caller background inputs and owns the sole background file; failed-item reasons remain bounded untrusted diagnostics | No manifest schema change; retain/DLP/post the static reason through existing boundaries | Split and `--flag=value` rejection plus failed-reason projection tests |
 | 1.9.8 JSON/SARIF human-audience progress on stderr | Toolkit invokes `--audience agent` and consumes the result file | No logging or parsing change | None |
 
 This chain therefore has no CI behavior change beyond its OCR version and asset digest pins. A future qualification that changes CI behavior must carry a separate Towncrier entry naming that impact.

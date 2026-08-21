@@ -129,7 +129,7 @@ after the ordinary stable release and independent external readback complete.
    operator documentation.
 5. [x] Implement deterministic guide ranking with malformed-metadata, stable
    tie, truncation, and Markdown-safety tests while preserving finding flow.
-6. [ ] Qualify/adopt OCR 1.9.9 from workflow evidence, adapt toolkit-managed
+6. [x] Qualify/adopt OCR 1.9.9 from workflow evidence, adapt toolkit-managed
    background handling, update pins/evidence/docs/tests/changelog, and close the
    human checklist in #118 through the protected feature PR.
 7. [ ] Complete logical signed local commits with per-commit self-review. Audit
@@ -215,3 +215,10 @@ after the ordinary stable release and independent external readback complete.
   preserves discussion order and other posting semantics, and covers malformed
   metadata, case-sensitive paths, occurrence fingerprints, truncation, stable
   output, and existing Markdown neutralization.
+- OCR 1.9.9 adoption for #118 is complete locally from workflow run
+  `32476604710` and its canonical evidence artifact. Version/checksum pins and
+  compatibility evidence are promoted; both caller background options are
+  rejected in split and equals forms; named main-loop stop reasons are covered
+  through result projection, DLP, and posting diagnostics. Focused validation
+  passed with 353 tests and 93 subtests; Ruff, manifest validation, and
+  `git diff --check` passed. The one allowed local OCR run remains unused.
