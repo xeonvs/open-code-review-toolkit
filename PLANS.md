@@ -222,3 +222,9 @@ after the ordinary stable release and independent external readback complete.
   through result projection, DLP, and posting diagnostics. Focused validation
   passed with 353 tests and 93 subtests; Ruff, manifest validation, and
   `git diff --check` passed. The one allowed local OCR run remains unused.
+- The pre-security tail audit is complete: all five local feature commits are
+  signed, the working tree is clean, issues #115-#118 remain open/assigned in
+  milestone v0.7.1, draft PR #119 still points only to the published plan head,
+  required changelog fragments are present, active OCR pins and evidence agree,
+  and the aggregate owner-focused contract set passed with 476 tests and 164
+  subtests. No partial implementation tail was found.
