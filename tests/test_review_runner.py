@@ -158,7 +158,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 4,
+        "schema_version": 5,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
         "context": {
             "mode": "off",
@@ -182,7 +182,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             "usage": {"ocr_toolkit_evidence": 2},
         },
         "evidence": {"mandatory": True, "used": True, "calls": 2},
-        "publication": {"dlp": "passed"},
+        "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
 
@@ -221,7 +221,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 4,
+        "schema_version": 5,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
@@ -245,7 +245,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             "usage": {"ocr_toolkit_evidence": 1},
         },
         "evidence": {"mandatory": True, "used": True, "calls": 1},
-        "publication": {"dlp": "passed"},
+        "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
 
@@ -264,7 +264,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         safe_payload, forbidden=forbidden, allowed_tools=frozenset()
     )
     assert projected is safe_payload
-    assert publication == {"dlp": "passed"}
+    assert publication == {"state": "passed"}
     assert blocked is False
 
     excerpt_payload: dict[str, object] = {
@@ -277,7 +277,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         allowed_tools=frozenset(),
     )
     assert projected["comments"] == []
-    assert publication["dlp"] == "filtered"
+    assert publication["state"] == "publication-filtered"
     assert blocked is True
 
     for text in (
@@ -305,7 +305,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
             hostile_payload, forbidden=forbidden, allowed_tools=frozenset()
         )
         assert projected["comments"] == []
-        assert publication["dlp"] == "filtered"
+        assert publication["state"] == "publication-filtered"
         assert blocked is True
         assert text not in json.dumps(projected)
 
@@ -319,7 +319,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         allowed_tools=frozenset(),
     )
     assert projected["comments"] == []
-    assert publication["dlp"] == "filtered"
+    assert publication["state"] == "publication-filtered"
     assert publication["reason_counts"]["limit"] == 1
     assert blocked is True
 
@@ -381,7 +381,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
 
     assert usage == {"ocr_toolkit_evidence": 1}
     assert blocked is True
-    assert publication["dlp"] == "filtered"
+    assert publication["state"] == "publication-filtered"
     assert publication["reason_counts"] == {
         "forbidden": 1,
         "invalid_text": 0,
@@ -460,7 +460,7 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
     )
 
     assert projected is payload
-    assert publication == {"dlp": "passed"}
+    assert publication == {"state": "passed"}
     assert blocked is False
 
     payload["locations"] = [
@@ -474,9 +474,9 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
         forbidden=(),
         allowed_tools=frozenset({"ocr_toolkit_evidence"}),
     )
-    assert blocked is True
-    assert publication["dlp"] == "filtered"
-    assert publication["omitted"] == {"comments": 0, "warnings": 0, "fields": 2}
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert publication["sanitized_fields"] == 2
     assert projected["status"] == "complete"
     assert projected["locations"] == [{"private_diagnostic": "ocr-redacted-000001"}]
     assert projected["comments"] == payload["comments"]
@@ -488,7 +488,7 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
         allowed_tools=frozenset({"ocr_toolkit_evidence"}),
     )
     assert blocked is True
-    assert publication["dlp"] == "filtered"
+    assert publication["state"] == "publication-filtered"
     assert projected["status"] == "completed_with_errors"
     assert "manifest" not in projected
     assert projected["comments"] == payload["comments"]
@@ -506,9 +506,156 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
         allowed_tools=frozenset({"ocr_toolkit_evidence"}),
     )
     assert blocked is True
-    assert publication["dlp"] == "filtered"
+    assert publication["state"] == "publication-filtered"
     assert publication["omitted"] == {"comments": 1, "warnings": 0, "fields": 1}
+
+
+def test_private_sanitization_ignores_unknown_usage_keys_but_not_supported_buckets() -> None:
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 3,
+            "provider_private_label": "synthetic@example.invalid",
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset({"ocr_toolkit_evidence"})
+    )
+
+    assert publication["state"] == "private-sanitized"
+    assert blocked is False
+    assert projected["usage"] == {
+        "input_tokens": 12,
+        "output_tokens": 3,
+        "provider_private_label": "ocr-redacted-000001",
+    }
+
+    payload["usage"] = {
+        "input_tokens": 12,
+        "output_tokens": 3,
+        "cached_tokens": "synthetic@example.invalid",
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset({"ocr_toolkit_evidence"})
+    )
+    assert publication["state"] == "publication-filtered"
+    assert blocked is True
+    assert "usage" not in projected
     assert projected["comments"] == []
+
+
+def test_warning_objects_are_conservatively_publication_relevant() -> None:
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [
+            {
+                "message": "Safe bounded warning.",
+                "provider_private_label": "synthetic@example.invalid",
+            }
+        ],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset({"ocr_toolkit_evidence"})
+    )
+
+    assert publication["state"] == "publication-filtered"
+    assert blocked is True
+    assert projected["warnings"] == []
+    assert "synthetic@example.invalid" not in json.dumps(projected)
+
+    payload["warnings"] = [
+        {
+            "message": "Safe bounded warning.",
+            "error": {"detail": "Authorization: Bearer synthetic-secret-token"},
+        }
+    ]
+    projected, publication, blocked = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset({"ocr_toolkit_evidence"})
+    )
+    assert publication["state"] == "publication-filtered"
+    assert blocked is True
+    assert "synthetic-secret-token" not in json.dumps(projected)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("message", "Authorization: Bearer synthetic-secret-token"),
+        ("warnings", ["private warning detail"]),
+        (
+            "tool_calls",
+            {"total": 1, "by_tool": {"private-tool-name": 1}},
+        ),
+    ],
+)
+def test_unsafe_displayed_result_units_are_partial(
+    field: str, value: object
+) -> None:
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+    }
+    payload[field] = value
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private warning detail", "private-tool-name"),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+
+    assert publication["state"] == "publication-filtered"
+    assert blocked is True
+    serialized = json.dumps(projected)
+    assert "synthetic-secret-token" not in serialized
+    assert "private warning detail" not in serialized
+    assert "private-tool-name" not in serialized
+
+
+def test_unsafe_manifest_failure_detail_is_partial_and_destroyed() -> None:
+    payload: dict[str, object] = {
+        "status": "partial",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "partial",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}, {"item_id": "safe-b"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [
+                    {
+                        "item_id": "safe-b",
+                        "path": "src/private.py",
+                        "classification": "provider",
+                        "reason": "private failure detail",
+                    }
+                ],
+                "waived": [],
+            },
+        },
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private failure detail",),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+
+    assert publication["state"] == "publication-filtered"
+    assert blocked is True
+    assert "manifest" not in projected
+    assert "private failure detail" not in json.dumps(projected)
 
 
 def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_manifest(
@@ -562,9 +709,9 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
 
     persisted = json.loads(result.read_text(encoding="utf-8"))
     assert usage == {"ocr_toolkit_evidence": 1}
-    assert blocked is True
-    assert publication["dlp"] == "filtered"
-    assert publication["omitted"] == {"comments": 0, "warnings": 0, "fields": 1}
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert publication["sanitized_fields"] == 1
     assert persisted["status"] == "complete"
     assert persisted["manifest"]["terminal_state"] == "complete"
     assert persisted["comments"][0]["content"].startswith("Guard the empty")
@@ -1292,7 +1439,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             lambda *_args, **_kwargs: (
                 events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
                 False,
-                {"dlp": "passed"},
+                {"state": "passed"},
             ),
         ),
         patched_attr(review_runner, "_resolve_ocr_binary", lambda: "/synthetic/ocr"),

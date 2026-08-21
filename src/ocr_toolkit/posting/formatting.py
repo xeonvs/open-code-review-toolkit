@@ -48,6 +48,7 @@ from ocr_toolkit.posting.settings import (
     post_mode,
 )
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
+from ocr_toolkit.result_usage import normalize_token_usage
 
 OCR_FINDING_CATEGORIES = {
     "bug",
@@ -493,11 +494,8 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
         or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return ""
-    if toolkit_metadata.get("schema_version") in {3, 4}:
-        mcp = toolkit_metadata.get("mcp")
-        mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
-    else:
-        mcp_usage = toolkit_metadata.get("mcp_usage")
+    mcp = toolkit_metadata.get("mcp")
+    mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
     if not isinstance(mcp_usage, dict):
         return ""
     used: list[tuple[str, int]] = []
@@ -516,24 +514,34 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact filtered receipt."""
+    """Return one low-cardinality signal from an exact v5 DLP receipt."""
 
+    state = publication_dlp_state(publication)
     if (
-        publication_dlp_state(publication) != "filtered"
+        state not in {"private-sanitized", "publication-filtered"}
         or not isinstance(carried_forward_comments, int)
         or isinstance(carried_forward_comments, bool)
         or carried_forward_comments < 0
+        or (state == "private-sanitized" and carried_forward_comments != 0)
     ):
         return None
-    return {
-        "schema_version": "ocr.publication-dlp-signal/v1",
-        "state": "filtered",
+    signal = {
+        "schema_version": "ocr.publication-dlp-signal/v2",
+        "state": state,
         "reason_counts": dict(publication["reason_counts"]),
-        "retained": dict(publication["retained"]),
-        "omitted": dict(publication["omitted"]),
-        "original": dict(publication["original"]),
-        "carried_forward_comments": carried_forward_comments,
     }
+    if state == "private-sanitized":
+        signal["sanitized_fields"] = publication["sanitized_fields"]
+    else:
+        signal.update(
+            {
+                "retained": dict(publication["retained"]),
+                "omitted": dict(publication["omitted"]),
+                "original": dict(publication["original"]),
+                "carried_forward_comments": carried_forward_comments,
+            }
+        )
+    return signal
 
 
 def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
@@ -541,18 +549,31 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
 
     if signal is None:
         return ""
+    marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
+    if signal["state"] == "private-sanitized":
+        return "\n".join(
+            [
+                "<details>",
+                "<summary>Private result sanitization signal</summary>",
+                "",
+                (
+                    f"Redacted {signal['sanitized_fields']} non-rendered result field(s). "
+                    "The canonical published and approval-relevant review is unchanged."
+                ),
+                "",
+                f"<!-- ocr-toolkit-signal {marker} -->",
+                "",
+                "</details>",
+            ]
+        )
     retained = signal["retained"]
     omitted = signal["omitted"]
     carried = signal["carried_forward_comments"]
-    marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
     completeness = (
         "One or more publication units were omitted, so this review is partial and cannot "
         "authorize automatic approval."
         if omitted["comments"] or omitted["warnings"]
-        else (
-            "No finding or warning was omitted, but result fields were sanitized; automatic "
-            "approval remains unavailable."
-        )
+        else "The canonical publication or approval projection changed, so automatic approval remains unavailable."
     )
     return "\n".join(
         [
@@ -574,126 +595,21 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
     )
 
 
-TOKEN_USAGE_KEYS = (
-    "usage",
-    "token_usage",
-    "tokenUsage",
-    "token_usage_summary",
-    "tokenUsageSummary",
-)
-
-
-TOKEN_USAGE_CONTAINER_KEYS = (
-    *TOKEN_USAGE_KEYS,
-    "summary",
-    "project_summary",
-    "metadata",
-    "stats",
-    "statistics",
-)
-
-
-TOKEN_TOTAL_KEYS = ("total_tokens", "totalTokens", "tokens", "total")
-
-
-TOKEN_EXPLICIT_TOTAL_KEYS = ("total_tokens", "totalTokens", "tokens")
-
-
-TOKEN_PROMPT_KEYS = (
-    "prompt_tokens",
-    "input_tokens",
-    "promptTokens",
-    "inputTokens",
-    "prompt",
-    "input",
-)
-
-
-TOKEN_COMPLETION_KEYS = (
-    "completion_tokens",
-    "output_tokens",
-    "completionTokens",
-    "outputTokens",
-    "completion",
-    "output",
-)
-
-
-TOKEN_CACHED_KEYS = (
-    "cached_tokens",
-    "cache_read_input_tokens",
-    "cachedInputTokens",
-    "cacheReadInputTokens",
-)
-
-
-def first_nonnegative_int(mapping: dict[str, Any], keys: Sequence[str]) -> int | None:
-    """Return the first non-negative integer from known OCR usage keys."""
-
-    for key in keys:
-        value = nonnegative_int(mapping.get(key))
-        if value is not None:
-            return value
-    return None
-
-
-def token_usage_mapping(
-    value: Any, max_depth: int = 8, *, explicit_container: bool = False
-) -> dict[str, Any] | None:
-    """Find the first dict-shaped token usage object in OCR result metadata."""
-
-    if max_depth <= 0:
-        return None
-
-    if isinstance(value, dict):
-        if any(
-            key in value
-            for key in (TOKEN_TOTAL_KEYS if explicit_container else TOKEN_EXPLICIT_TOTAL_KEYS)
-            + TOKEN_PROMPT_KEYS
-            + TOKEN_COMPLETION_KEYS
-            + TOKEN_CACHED_KEYS
-        ):
-            return value
-        for key in TOKEN_USAGE_CONTAINER_KEYS:
-            nested = value.get(key)
-            if isinstance(nested, dict):
-                found = token_usage_mapping(
-                    nested,
-                    max_depth=max_depth - 1,
-                    explicit_container=key in TOKEN_USAGE_KEYS,
-                )
-                if found is not None:
-                    return found
-    return None
-
-
 def format_token_usage_summary(result: dict[str, Any]) -> str:
     """Return one bounded MR summary line for structured OCR token usage."""
 
-    usage = token_usage_mapping(result)
+    usage = normalize_token_usage(result)
     if usage is None:
         return ""
 
-    total = first_nonnegative_int(usage, TOKEN_TOTAL_KEYS)
-    prompt = first_nonnegative_int(usage, TOKEN_PROMPT_KEYS)
-    completion = first_nonnegative_int(usage, TOKEN_COMPLETION_KEYS)
-    cached = first_nonnegative_int(usage, TOKEN_CACHED_KEYS)
-
-    if total is None and (prompt is not None or completion is not None):
-        total = (prompt or 0) + (completion or 0)
-    if total is None and cached is not None:
-        total = cached
-    if total is None:
-        return ""
-
+    total = usage.get("total")
     details: list[str] = []
-    if prompt is not None:
-        details.append(f"prompt: {prompt}")
-    if completion is not None:
-        details.append(f"completion: {completion}")
-    if cached is not None:
-        details.append(f"cached: {cached}")
+    for bucket in ("input", "output", "cached", "reasoning", "other"):
+        if (count := usage.get(bucket)) is not None and count > 0:
+            details.append(f"{bucket}: {count}")
 
+    if total is None:
+        return f"- token usage: {', '.join(details)}" if details else ""
     line = f"- token usage: {total} total"
     if details:
         line += f" ({', '.join(details)})"

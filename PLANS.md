@@ -100,9 +100,14 @@ after the ordinary stable release and independent external readback complete.
 - The first signed commit activates this plan and tracking truth. It is pushed
   once to open a draft feature PR. No later commit is pushed until all local
   implementation, bounded review, and final gates finish.
-- After implementation there is at most one justified Codex Security diff scan,
-  followed by repairs and a full self-review; then exactly one local OCR 1.9.9
-  review, repairs, and a second full self-review without another OCR or Codex
+- After implementation and an explicit audit of all plan, issue, documentation,
+  test, and changelog tails, there is at most one justified Codex Security diff
+  scan, followed by repairs and a full self-review. Before the single local OCR
+  1.9.9 review, evaluate whether repository-owned OCR review rules and a narrow
+  suppressor are justified for permanent toolkit-local use. Add maintained
+  files, tests, and instructions only when repository evidence supports them;
+  otherwise record the no-change decision. Then run OCR once, repair its
+  findings, and perform a second full self-review without another OCR or Codex
   Security run.
 - If hosted checks after the final feature push require a code change, stop and
   request authorization for another push. Squash merge remains human-gated.
@@ -114,9 +119,9 @@ after the ordinary stable release and independent external readback complete.
 
 1. [x] Reconcile live `main`, issues #115-#118, milestone v0.7.1, OCR 1.9.9
    release metadata, workflow qualification, and competing automation state.
-2. [ ] Commit and push this active plan, open the draft feature PR, assign it to
+2. [x] Commit and push this active plan, open the draft feature PR, assign it to
    `xeonvs`, and record its URL without pushing another plan-only commit.
-3. [ ] Implement receipt v5 and canonical publication/approval projection;
+3. [x] Implement receipt v5 and canonical publication/approval projection;
    remove only result receipt/posting v1-v4 compatibility and add private-safe
    regression coverage and documentation.
 4. [ ] Implement owner-only evidence-action receipts, parent reconciliation,
@@ -127,12 +132,17 @@ after the ordinary stable release and independent external readback complete.
 6. [ ] Qualify/adopt OCR 1.9.9 from workflow evidence, adapt toolkit-managed
    background handling, update pins/evidence/docs/tests/changelog, and close the
    human checklist in #118 through the protected feature PR.
-7. [ ] Complete logical signed local commits with per-commit self-review, then
-   run the single permitted Codex Security diff scan if the finished security
-   boundary warrants it; fix every validated finding.
-8. [ ] Perform the first complete aggregate self-review, run exactly one local
-   OCR 1.9.9 review, fix its actionable findings, and perform the second complete
-   aggregate self-review without rerunning OCR or Codex Security.
+7. [ ] Complete logical signed local commits with per-commit self-review. Audit
+   every plan, issue, documentation, test, and changelog tail and repair partial
+   closure before running the single permitted Codex Security diff scan if the
+   finished security boundary warrants it; fix every validated finding.
+8. [ ] Perform the first complete aggregate self-review. Decide from the actual
+   integrated review contract and false-positive evidence whether permanent
+   repository-owned OCR rules and a narrow suppressor are warranted; if so, add
+   their files, tests, and future-maintenance instructions, otherwise record the
+   no-change decision. Then run exactly one local OCR 1.9.9 review, fix its
+   actionable findings, and perform the second complete aggregate self-review
+   without rerunning OCR or Codex Security.
 9. [ ] Run focused contracts plus deterministic quality, privacy, dependency,
    workflow, package, two-build reproducibility, clean Python 3.12-3.14 install,
    CLI, and complete-history Gitleaks gates; update this plan to exact feature
@@ -181,7 +191,16 @@ after the ordinary stable release and independent external readback complete.
   `a8930cbb923bd618b783e9204e2fe01d81252635`.
 - Issues #115, #116, #117, and #118 are open, assigned to `xeonvs`, and attached
   to open milestone v0.7.1.
-- Resume by creating the first signed plan commit on
-  `feature/v0.7.1-result-semantics`, pushing it, and opening the draft feature
-  PR. After that push, keep every remaining implementation commit local until
-  the final feature push gate.
+- Signed plan commit `f0f2f600f5d35017f291961c6fa78a02e0f62e3f` opened
+  assigned draft PR [#119](https://github.com/xeonvs/open-code-review-toolkit/pull/119).
+  The published branch remains exactly at that commit; keep every implementation
+  commit local until the final feature push gate.
+- Historical failed Actions run `32477387526`, whose Gitleaks alert came from
+  token-shaped plan prose rather than a credential, was deleted after the branch
+  history was rewritten; run `32477938275` passed on the published plan head.
+- Receipt-v5 implementation is complete locally: pre-v5 toolkit receipts are
+  rejected while receipt-less direct posting remains supported; conservative
+  warning-object DLP covers rendering, coverage, and billing consumers; focused
+  validation passed with 286 tests and 141 subtests. The shared closed token
+  normalizer is present because canonical projection must compare the exact
+  telemetry that #116 will render; evidence-action attribution remains pending.

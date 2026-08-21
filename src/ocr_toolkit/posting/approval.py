@@ -159,34 +159,42 @@ def _sha256(value: Any) -> bool:
 
 
 def publication_dlp_state(value: Any) -> str | None:
-    """Validate the exact v4 passed or filtered publication receipt."""
+    """Validate the exact v5 publication-policy receipt."""
 
-    if value == {"dlp": "passed"}:
+    if value == {"state": "passed"}:
         return "passed"
+    if not isinstance(value, dict):
+        return None
+    if value.get("state") == "private-sanitized":
+        if set(value) != {"state", "reason_counts", "sanitized_fields"}:
+            return None
+        reason_counts = value.get("reason_counts")
+        sanitized_fields = value.get("sanitized_fields")
+        if (
+            not _valid_dlp_reason_counts(reason_counts)
+            or not any(reason_counts.values())
+            or not isinstance(sanitized_fields, int)
+            or isinstance(sanitized_fields, bool)
+            or not 0 < sanitized_fields <= MAX_TOOLKIT_MCP_USAGE_COUNT
+        ):
+            return None
+        return "private-sanitized"
     if not isinstance(value, dict) or set(value) != {
-        "dlp",
+        "state",
         "reason_counts",
         "retained",
         "omitted",
         "original",
     }:
         return None
-    if value.get("dlp") != "filtered":
+    if value.get("state") != "publication-filtered":
         return None
     reason_counts = value.get("reason_counts")
     retained = value.get("retained")
     omitted = value.get("omitted")
     original = value.get("original")
     if (
-        not isinstance(reason_counts, dict)
-        or set(reason_counts)
-        != {"forbidden", "invalid_text", "laundering", "limit", "pii", "secret"}
-        or any(
-            not isinstance(count, int)
-            or isinstance(count, bool)
-            or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-            for count in reason_counts.values()
-        )
+        not _valid_dlp_reason_counts(reason_counts)
         or not any(reason_counts.values())
         or not isinstance(retained, dict)
         or set(retained) != {"comments", "warnings"}
@@ -210,7 +218,20 @@ def publication_dlp_state(value: Any) -> str | None:
         )
     ):
         return None
-    return "filtered"
+    return "publication-filtered"
+
+
+def _valid_dlp_reason_counts(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == {"forbidden", "invalid_text", "laundering", "limit", "pii", "secret"}
+        and all(
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for count in value.values()
+        )
+    )
 
 
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
@@ -219,10 +240,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = "the review-time approval receipt is missing or invalid"
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    schema_version = toolkit_metadata.get("schema_version")
-    if schema_version in {1, 2, 3}:
-        return "the review-time approval receipt predates current eligibility controls"
-    if schema_version != 4 or set(toolkit_metadata) != {
+    if toolkit_metadata.get("schema_version") != 5 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
@@ -397,7 +415,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     publication_state = publication_dlp_state(publication)
     if publication_state is None or cleanup != {"result": "passed"}:
         return invalid
-    if publication_state == "filtered":
+    if publication_state == "publication-filtered":
         return "publication DLP filtered the complete review result"
     if context.get("state") == "degraded" or required_degraded:
         return "the selected review context was degraded"

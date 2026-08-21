@@ -174,9 +174,9 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v4" in configuration
-    assert "Receipt v1-v3" in configuration
-    assert "Receipt v1-v3" in operations
+    assert "receipt v5" in configuration
+    assert "Receipt v1-v4" in configuration
+    assert "Receipt v1-v4" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
@@ -197,7 +197,7 @@ def test_production_bot_recipes_and_062_migration_are_public() -> None:
         "Operator-reviewed direct external MCP",
         "### Migration from 0.6.2",
         "### Migration from 0.6.3 to 0.7.0",
-        "Receipt v1/v2 results remain comment-readable",
+        "Current v0.7.1 posting rejects every pre-v5 receipt",
         "retry-on-absence",
     ):
         assert phrase in gitlab

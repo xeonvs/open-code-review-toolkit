@@ -71,6 +71,7 @@ from ocr_toolkit.ocr_result import (
     OcrResultTooLarge,
     transform_ocr_result,
 )
+from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
@@ -86,6 +87,7 @@ from ocr_toolkit.providers.gitlab import (
 )
 from ocr_toolkit.providers.gitlab_discussions import acquire_discussions
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 
 STDERR_PROBE_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
@@ -365,7 +367,7 @@ def _review_receipt(
             "used": evidence_used,
             "calls": evidence_calls,
         },
-        "publication": {"dlp": "passed"},
+        "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
 
@@ -608,13 +610,80 @@ def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[
     return {"total": total, "by_tool": dict(sorted(projected.items()))}
 
 
+def _canonical_result_projection(payload: dict[str, object]) -> bytes:
+    """Serialize every publication and approval input into one closed comparison."""
+
+    outcome = parse_result_outcome(payload)
+    comments = payload.get("comments", [])
+    warnings = payload.get("warnings", [])
+    if not isinstance(comments, list) or not isinstance(warnings, list):
+        raise OcrResultContractError("finding and warning collections must be lists")
+    if any(not isinstance(comment, dict) for comment in comments):
+        raise OcrResultContractError("every finding must be an object")
+    normalized_usage = normalize_token_usage(payload)
+    if token_usage_mapping(payload) is not None and normalized_usage is None:
+        raise OcrResultContractError("token telemetry is malformed or contradictory")
+    projected_comments = [
+        {key: value for key, value in comment.items() if key in QUARANTINE_COMMENT_FIELDS}
+        if isinstance(comment, dict)
+        else comment
+        for comment in comments
+    ]
+    tool_calls = payload.get("tool_calls")
+    projected_tool_calls: object
+    if isinstance(tool_calls, dict):
+        total = tool_calls.get("total")
+        by_tool = tool_calls.get("by_tool")
+        projected_tool_calls = {
+            "total": total,
+            "by_tool": (
+                dict(sorted(by_tool.items())) if isinstance(by_tool, dict) else by_tool
+            ),
+        }
+    else:
+        projected_tool_calls = tool_calls
+    projection = {
+        "outcome": {
+            "status": outcome.status,
+            "kind": outcome.kind,
+            "message": "" if payload.get("message") is None else str(payload["message"]).strip(),
+            "budget_exceeded": outcome.budget_exceeded,
+            "manifest_present": outcome.manifest_present,
+            "selected": outcome.selected_count,
+            "completed": outcome.completed_count,
+            "reused": outcome.reused_count,
+            "failed": outcome.failed_count,
+            "waived": outcome.waived_count,
+            "failed_items": [
+                {
+                    "item_id": failure.item_id,
+                    "path": failure.path,
+                    "classification": failure.classification,
+                    "reason": failure.reason,
+                }
+                for failure in outcome.failed_items
+            ],
+        },
+        "comments": projected_comments,
+        "warnings": [ocr_warning_text(warning) for warning in warnings],
+        "tool_calls": projected_tool_calls,
+        "token_usage": normalized_usage,
+    }
+    try:
+        return json.dumps(
+            projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise OcrResultContractError("canonical publication projection is malformed") from exc
+
+
 def _publication_projection(
     payload: dict[str, object],
     *,
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return the original result or a DLP-safe partial publication result."""
+    """Return a DLP-safe result plus one exact v5 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
@@ -625,10 +694,20 @@ def _publication_projection(
         payload, budgets=budgets, matcher=matcher
     )
     if not sink_reasons and not private_reasons:
-        return payload, {"dlp": "passed"}, False
+        return payload, {"state": "passed"}, False
 
+    try:
+        original_projection = _canonical_result_projection(payload)
+    except OcrResultContractError:
+        original_projection = None
     outcome = parse_result_outcome(payload)
-    if sink_reasons:
+    publication_changed = bool(sink_reasons)
+    if not publication_changed:
+        try:
+            publication_changed = original_projection != _canonical_result_projection(sanitized)
+        except OcrResultContractError:
+            publication_changed = True
+    if publication_changed:
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
             payload.get("comments"), budgets=budgets, matcher=matcher
         )
@@ -649,29 +728,19 @@ def _publication_projection(
             ),
         }
     else:
-        projected = sanitized
-        comments = payload.get("comments") if isinstance(payload.get("comments"), list) else []
-        warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
-        omitted_comments = omitted_warnings = omitted_fields = 0
-        try:
-            parse_result_outcome(projected)
-        except OcrResultContractError:
-            projected = {
-                "status": "completed_with_errors",
-                "message": (
-                    "Retention policy sanitized private OCR fields that were required for the "
-                    "complete result contract. Safe findings may still be published, but the "
-                    "result must be treated as partial."
-                ),
-                "comments": comments,
-                "warnings": warnings,
-                "tool_calls": _closed_tool_calls(
-                    payload.get("tool_calls"), allowed_tools=allowed_tools
-                ),
-            }
+        reasons = sink_reasons + private_reasons
+        return (
+            sanitized,
+            {
+                "state": "private-sanitized",
+                "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
+                "sanitized_fields": redacted_fields,
+            },
+            False,
+        )
     reasons = sink_reasons + private_reasons
     publication: dict[str, object] = {
-        "dlp": "filtered",
+        "state": "publication-filtered",
         "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
         "retained": {"comments": len(comments), "warnings": len(warnings)},
         "omitted": {
@@ -702,7 +771,7 @@ def _finalize_ocr_result(
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
     filtered = False
-    publication: dict[str, object] = {"dlp": "passed"}
+    publication: dict[str, object] = {"state": "passed"}
     usage: dict[str, int] = {}
     allowed_tools = frozenset(
         tool for capability in composition.capabilities for tool in capability.tools
@@ -1191,7 +1260,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     enrichment: EnrichmentReceipt | None = None
     usage: dict[str, int] = {}
     publication_filtered = False
-    publication: dict[str, object] = {"dlp": "passed"}
+    publication: dict[str, object] = {"state": "passed"}
     previous_handlers = _install_termination_handlers()
     try:
         try:
@@ -1324,7 +1393,15 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
             counts = publication.get("reason_counts")
             closed_counts = counts if isinstance(counts, dict) else {}
             print(
-                "OCR publication DLP: filtered; safe sanitized result retained "
+                "OCR publication DLP: publication-filtered; safe partial result retained "
+                + " ".join(f"{reason}={closed_counts.get(reason, 0)}" for reason in DLP_REASONS),
+                file=sys.stderr,
+            )
+        elif publication.get("state") == "private-sanitized":
+            counts = publication.get("reason_counts")
+            closed_counts = counts if isinstance(counts, dict) else {}
+            print(
+                "OCR publication DLP: private-sanitized; canonical publication unchanged "
                 + " ".join(f"{reason}={closed_counts.get(reason, 0)}" for reason in DLP_REASONS),
                 file=sys.stderr,
             )

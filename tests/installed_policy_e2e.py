@@ -294,7 +294,7 @@ This source-only decision must not replace target policy.
     assert unknown_response["result"]["isError"] is True
     assert "unsupported tool argument" in unknown_response["result"]["content"][0]["text"]
     assert summary["base"] == base and summary["head"] == head
-    assert summary["schema_version"] == 4
+    assert summary["schema_version"] == 5
     assert summary["policy"] == {
         "accepted_decisions": 1,
         "guidance_documents": 3,
