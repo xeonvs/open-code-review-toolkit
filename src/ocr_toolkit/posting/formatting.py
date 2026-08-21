@@ -765,8 +765,7 @@ def _guide_comment_rank(comment: dict[str, Any], ordinal: int) -> tuple[object, 
     raw_fingerprint = comment.get("_ocr_fingerprint")
     fingerprint = (
         raw_fingerprint
-        if isinstance(raw_fingerprint, str)
-        and re.fullmatch(r"[0-9a-f]{32}", raw_fingerprint)
+        if isinstance(raw_fingerprint, str) and re.fullmatch(r"[0-9a-f]{32}", raw_fingerprint)
         else None
     )
     canonical = json.dumps(comment, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

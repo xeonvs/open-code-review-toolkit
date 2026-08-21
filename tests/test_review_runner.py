@@ -643,9 +643,7 @@ def test_warning_objects_are_conservatively_publication_relevant() -> None:
         ),
     ],
 )
-def test_unsafe_displayed_result_units_are_partial(
-    field: str, value: object
-) -> None:
+def test_unsafe_displayed_result_units_are_partial(field: str, value: object) -> None:
     payload: dict[str, object] = {
         "status": "success",
         "comments": [],

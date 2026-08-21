@@ -649,9 +649,7 @@ def _canonical_result_projection(payload: dict[str, object]) -> bytes:
         by_tool = tool_calls.get("by_tool")
         projected_tool_calls = {
             "total": total,
-            "by_tool": (
-                dict(sorted(by_tool.items())) if isinstance(by_tool, dict) else by_tool
-            ),
+            "by_tool": (dict(sorted(by_tool.items())) if isinstance(by_tool, dict) else by_tool),
         }
     else:
         projected_tool_calls = tool_calls
