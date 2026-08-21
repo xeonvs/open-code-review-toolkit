@@ -132,15 +132,20 @@ after the ordinary stable release and independent external readback complete.
 6. [x] Qualify/adopt OCR 1.9.9 from workflow evidence, adapt toolkit-managed
    background handling, update pins/evidence/docs/tests/changelog, and close the
    human checklist in #118 through the protected feature PR.
-7. [ ] Complete logical signed local commits with per-commit self-review. Audit
+7. [x] Complete logical signed local commits with per-commit self-review. Audit
    every plan, issue, documentation, test, and changelog tail and repair partial
    closure before running the single permitted Codex Security diff scan if the
    finished security boundary warrants it; fix every validated finding.
-8. [ ] Perform the first complete aggregate self-review. Decide from the actual
+8. [x] Perform the first complete aggregate self-review. Decide from the actual
    integrated review contract and false-positive evidence whether permanent
    repository-owned OCR rules and a narrow suppressor are warranted; if so, add
    their files, tests, and future-maintenance instructions, otherwise record the
-   no-change decision. Then run exactly one local OCR 1.9.9 review, fix its
+   no-change decision. The one confirmed hostile receipt-rendering finding is
+   repaired and regression-covered. Permanent local-only rules or a suppressor
+   are not added: the protected target already owns the public OCR rules, the
+   tracked `AGENTS.md` owns repository guidance through the evidence MCP, OCR
+   1.9.9 has no suppressor input, and no repeated false-positive class justifies
+   a second policy surface. Run exactly one local OCR 1.9.9 review, fix its
    actionable findings, and perform the second complete aggregate self-review
    without rerunning OCR or Codex Security.
 9. [ ] Run focused contracts plus deterministic quality, privacy, dependency,
@@ -228,3 +233,24 @@ after the ordinary stable release and independent external readback complete.
   required changelog fragments are present, active OCR pins and evidence agree,
   and the aggregate owner-focused contract set passed with 476 tests and 164
   subtests. No partial implementation tail was found.
+- The single Codex Security diff scan `a00e8e45-c012-4ed7-9106-392ebb32a367`
+  reviewed all 13 prepared security-relevant files in the exact
+  `a8930cbb...8b99694` range and found no reportable vulnerability. This
+  allowance is consumed and will not be rerun.
+- The first complete aggregate self-review passed its owner-focused tests with
+  463 tests and 164 subtests and found one hostile-read defect before receipt
+  validation: malformed evidence-action values could enter Markdown, while
+  malformed mixed-key MCP usage could raise during sorting. Formatting now
+  requires the same bounded server/count vocabulary used by receipt v5 and
+  renders action attribution only when its three bounded integer counts exactly
+  reconcile with the receipt's built-in evidence call count. Hostile values,
+  booleans, extras, mismatches, mixed keys, unsafe names, zero counts, and
+  context-tool coexistence have focused regression coverage; the repaired
+  posting/approval/review-runner set passes with 247 tests and 149 subtests,
+  plus Ruff and `git diff --check`.
+- Permanent toolkit-local OCR rule and suppressor files are intentionally not
+  introduced. `examples/gitlab/rules.json` is the protected, documented public
+  rule owner and tracked `AGENTS.md` is already admitted as scoped repository
+  guidance through the built-in evidence MCP. OCR 1.9.9 exposes no suppressor
+  input, and the completed first review produced no repeated false-positive
+  class that would justify another maintained policy schema or instructions.

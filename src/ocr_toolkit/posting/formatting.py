@@ -17,7 +17,12 @@ from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
 from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.ocr_result import SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
+from ocr_toolkit.ocr_result import (
+    MAX_TOOLKIT_MCP_USAGE_COUNT,
+    MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
+    TOOLKIT_MCP_SERVER_NAME_RE,
+)
 from ocr_toolkit.posting.approval import (
     ApprovalResult,
     approval_summary_line,
@@ -500,15 +505,20 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
         return ""
     mcp = toolkit_metadata.get("mcp")
     mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
-    if not isinstance(mcp_usage, dict):
+    if (
+        not isinstance(mcp_usage, dict)
+        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
+        or any(
+            not isinstance(server, str)
+            or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            for server, count in mcp_usage.items()
+        )
+    ):
         return ""
-    used: list[tuple[str, int]] = []
-    for raw_server, raw_count in sorted(mcp_usage.items()):
-        server = clean_text(raw_server)
-        count = nonnegative_int(raw_count)
-        if not server or count is None or count <= 0:
-            continue
-        used.append((server, count))
+    used = sorted(mcp_usage.items())
     if not used:
         return ""
     details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
@@ -517,11 +527,23 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     actions = evidence.get("actions") if isinstance(evidence, dict) else None
     if actions == {"state": "unavailable"}:
         lines.append("- built-in evidence actions: unavailable")
-    elif (
-        isinstance(actions, dict)
-        and actions.get("state") == "verified"
-        and set(actions) == {"state", "summary", "list", "get"}
-    ):
+    elif isinstance(actions, dict) and set(actions) == {"state", "summary", "list", "get"}:
+        action_counts = [actions[action] for action in ("summary", "list", "get")]
+        evidence_calls = evidence.get("calls") if isinstance(evidence, dict) else None
+        if not (
+            actions.get("state") == "verified"
+            and all(
+                isinstance(count, int)
+                and not isinstance(count, bool)
+                and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                for count in action_counts
+            )
+            and isinstance(evidence_calls, int)
+            and not isinstance(evidence_calls, bool)
+            and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            and sum(action_counts) == evidence_calls
+        ):
+            return "\n".join(lines)
         lines.append(
             "- built-in evidence actions: "
             + ", ".join(f"{action}: {actions[action]}" for action in ("summary", "list", "get"))

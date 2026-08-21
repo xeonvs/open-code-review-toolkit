@@ -2164,7 +2164,6 @@ class PostingSummaryTests(unittest.TestCase):
                 "mcp": {"usage": {
                     "ocr_toolkit_evidence": 2,
                     "documentation": 1,
-                    "unused_optional": 0,
                 }},
                 "evidence": {"actions": {"state": "unavailable"}},
             }
@@ -2175,7 +2174,6 @@ class PostingSummaryTests(unittest.TestCase):
             "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)\n"
             "- built-in evidence actions: unavailable",
         )
-        self.assertNotIn("unused_optional", summary)
         self.assertNotIn("file_read", summary)
 
     def test_mcp_usage_summary_reads_receipt_v5_inventory(self) -> None:
@@ -2202,6 +2200,7 @@ class PostingSummaryTests(unittest.TestCase):
                 "schema_version": 5,
                 "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
                 "evidence": {
+                    "calls": 4,
                     "actions": {
                         "state": "verified",
                         "summary": 1,
@@ -2217,6 +2216,71 @@ class PostingSummaryTests(unittest.TestCase):
             "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
             "- built-in evidence actions: summary: 1, list: 2, get: 1",
         )
+
+    def test_mcp_usage_summary_omits_hostile_or_unreconciled_action_breakdown(self) -> None:
+        for actions in (
+            {"state": "verified", "summary": "1\n/approve", "list": 2, "get": 1},
+            {"state": "verified", "summary": True, "list": 2, "get": 1},
+            {"state": "verified", "summary": 1, "list": 2, "get": 2},
+            {"state": "verified", "summary": 1, "list": 2, "get": 1, "extra": 0},
+        ):
+            with self.subTest(actions=actions):
+                summary = posting_formatting.format_mcp_usage_summary(
+                    {
+                        "schema_version": 5,
+                        "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
+                        "evidence": {"calls": 4, "actions": actions},
+                    }
+                )
+
+                self.assertEqual(
+                    summary,
+                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)",
+                )
+                self.assertNotIn("/approve", summary)
+
+    def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            {
+                "schema_version": 5,
+                "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
+                "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
+                "evidence": {
+                    "calls": 4,
+                    "actions": {
+                        "state": "verified",
+                        "summary": 1,
+                        "list": 2,
+                        "get": 1,
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
+            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+        )
+
+    def test_mcp_usage_summary_rejects_malformed_usage_before_rendering(self) -> None:
+        for usage in (
+            {"ocr_toolkit_evidence": 1, 7: 1},
+            {"ocr_toolkit_evidence\n/approve": 1},
+            {"ocr_toolkit_evidence": True},
+            {"ocr_toolkit_evidence": 0},
+        ):
+            with self.subTest(usage=usage):
+                self.assertEqual(
+                    posting_formatting.format_mcp_usage_summary(
+                        {
+                            "schema_version": 5,
+                            "mcp": {"usage": usage},
+                            "evidence": {"actions": {"state": "unavailable"}},
+                        }
+                    ),
+                    "",
+                )
 
     def test_mcp_usage_summary_rejects_pre_v5_receipt(self) -> None:
         self.assertEqual(
