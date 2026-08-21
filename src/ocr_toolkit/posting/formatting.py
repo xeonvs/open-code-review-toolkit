@@ -565,7 +565,7 @@ def publication_dlp_signal(
         or (state == "private-sanitized" and carried_forward_comments != 0)
     ):
         return None
-    signal = {
+    signal: dict[str, Any] = {
         "schema_version": "ocr.publication-dlp-signal/v2",
         "state": state,
         "reason_counts": dict(publication["reason_counts"]),

@@ -136,18 +136,17 @@ after the ordinary stable release and independent external readback complete.
    every plan, issue, documentation, test, and changelog tail and repair partial
    closure before running the single permitted Codex Security diff scan if the
    finished security boundary warrants it; fix every validated finding.
-8. [ ] Perform the first complete aggregate self-review. Decide from the actual
+8. [x] Perform the first complete aggregate self-review. Decide from the actual
    integrated review contract and false-positive evidence whether permanent
    repository-owned OCR rules and a narrow suppressor are warranted; if so, add
    their files, tests, and future-maintenance instructions, otherwise record the
-   no-change decision. The one confirmed hostile receipt-rendering finding is
-   repaired and regression-covered. Permanent local-only rules or a suppressor
-   are not added: the protected target already owns the public OCR rules, the
-   tracked `AGENTS.md` owns repository guidance through the evidence MCP, OCR
-   1.9.9 has no suppressor input, and no repeated false-positive class justifies
-   a second policy surface. The one local OCR 1.9.9 review is complete; repair
-   its actionable root-cause finding, then perform the second complete aggregate
-   self-review without rerunning OCR or Codex Security.
+   no-change decision. Repair every confirmed finding, run the one local OCR
+   1.9.9 review, and perform the second complete aggregate self-review without
+   rerunning OCR or Codex Security. Both reviews and the OCR-driven remediation
+   are complete. Permanent local-only rules or a suppressor are not added: the
+   protected target already owns the public OCR rules, tracked `AGENTS.md` owns
+   repository guidance through the evidence MCP, OCR 1.9.9 has no suppressor
+   input, and no repeated false-positive class justifies a second policy surface.
 9. [ ] Run focused contracts plus deterministic quality, privacy, dependency,
    workflow, package, two-build reproducibility, clean Python 3.12-3.14 install,
    CLI, and complete-history Gitleaks gates; update this plan to exact feature
@@ -226,13 +225,13 @@ after the ordinary stable release and independent external readback complete.
   rejected in split and equals forms; named main-loop stop reasons are covered
   through result projection, DLP, and posting diagnostics. Focused validation
   passed with 353 tests and 93 subtests; Ruff, manifest validation, and
-  `git diff --check` passed. The one allowed local OCR run remains unused.
-- The pre-security tail audit is complete: all five local feature commits are
-  signed, the working tree is clean, issues #115-#118 remain open/assigned in
-  milestone v0.7.1, draft PR #119 still points only to the published plan head,
-  required changelog fragments are present, active OCR pins and evidence agree,
-  and the aggregate owner-focused contract set passed with 476 tests and 164
-  subtests. No partial implementation tail was found.
+  `git diff --check` passed.
+- The pre-security tail audit completed at the five-feature-commit checkpoint:
+  issues #115-#118 remained open/assigned in milestone v0.7.1, draft PR #119
+  still pointed only to the published plan head, required changelog fragments
+  were present, active OCR pins and evidence agreed, and the aggregate
+  owner-focused contract set passed with 476 tests and 164 subtests. No partial
+  implementation tail was found at that checkpoint.
 - The single Codex Security diff scan `a00e8e45-c012-4ed7-9106-392ebb32a367`
   reviewed all 13 prepared security-relevant files in the exact
   `a8930cbb...8b99694` range and found no reportable vulnerability. This
@@ -265,3 +264,13 @@ after the ordinary stable release and independent external readback complete.
   replace transaction through an owner-only regular single-link sibling lock,
   cleans that lock at both review boundaries, and directly tests concurrent
   preservation plus symlink/hard-link rejection. OCR is not rerun.
+- The second complete aggregate self-review is complete. It rechecked the full
+  branch after the OCR-driven race repair and found that hostile receipt reads
+  still needed descriptor-bound no-follow/nonblocking open plus `fstat`
+  enforcement for regular, single-link, owner-only files; it also found one
+  full-mypy inference annotation and two documentation truth gaps. Those findings
+  are corrected with focused symlink, hard-link, FIFO, and permission coverage.
+  The broad owner suite passed with 469 tests and 172 subtests before the final
+  corrections; the corrected focused aggregate passed with 294 tests and 149
+  subtests, full mypy reported no issues in 99 source files, Ruff passed, and
+  `git diff --check` passed. No OCR or Codex Security rerun was performed.

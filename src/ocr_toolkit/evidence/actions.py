@@ -64,11 +64,27 @@ def _validated_counts(value: Any) -> dict[str, int] | None:
 def read_action_receipt(path: Path) -> dict[str, int] | None:
     """Read one bounded receipt or return unavailable for any unsafe shape."""
 
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        flags |= os.O_NONBLOCK
+    descriptor = -1
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(MAX_ACTION_RECEIPT_BYTES + 1)
+        descriptor = os.open(path, flags)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) & 0o077
+        ):
+            return None
+        raw = os.read(descriptor, MAX_ACTION_RECEIPT_BYTES + 1)
     except OSError:
         return None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     if len(raw) > MAX_ACTION_RECEIPT_BYTES:
         return None
     try:
@@ -85,7 +101,13 @@ def record_action(path: Path, action: object) -> None:
         raise ValueError("evidence action is outside the closed receipt enum")
     with _serialized_receipt_update(path):
         counts = read_action_receipt(path)
-        if path.exists() and counts is None:
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            exists = False
+        else:
+            exists = True
+        if exists and counts is None:
             raise ValueError("evidence action receipt is malformed")
         if counts is None:
             counts = dict.fromkeys(EVIDENCE_ACTIONS, 0)

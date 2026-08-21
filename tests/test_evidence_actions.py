@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -92,3 +93,32 @@ def test_action_receipt_rejects_unsafe_lock_file(tmp_path: Path, unsafe: str) ->
 
     assert not path.exists()
     assert target.read_text(encoding="utf-8") == "sentinel"
+
+
+@pytest.mark.parametrize("unsafe", ["symlink", "hardlink", "fifo", "permissions"])
+def test_action_receipt_rejects_unsafe_existing_file(tmp_path: Path, unsafe: str) -> None:
+    path = tmp_path / "actions.json"
+    target = tmp_path / "outside"
+    payload = json.dumps(
+        {
+            "schema_version": "ocr.evidence-action-receipt/v1",
+            "actions": {"summary": 1, "list": 0, "get": 0},
+        }
+    )
+    target.write_text(payload, encoding="utf-8")
+    if unsafe == "symlink":
+        path.symlink_to(target)
+    elif unsafe == "hardlink":
+        path.hardlink_to(target)
+    elif unsafe == "fifo":
+        path.unlink(missing_ok=True)
+        os.mkfifo(path)
+    else:
+        path.write_text(payload, encoding="utf-8")
+        path.chmod(0o644)
+
+    assert read_action_receipt(path) is None
+    with pytest.raises(ValueError, match="malformed"):
+        record_action(path, "summary")
+
+    assert target.read_text(encoding="utf-8") == payload

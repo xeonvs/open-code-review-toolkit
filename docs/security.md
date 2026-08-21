@@ -80,7 +80,7 @@ Ansible Galaxy requirements use the same immutable-object boundary. Relative inc
 
 ## M5 bounded enrichment boundary
 
-The v0.7.0 implementation extends the v0.6.3 selector/approval foundation with protected policy, stable GitLab discussions, deterministic recognizers, provider-neutral adapters, a separate context store, opaque handles, fixed context tools, publication DLP, isolated OCR sessions, and receipt v4. The public [bounded review-context contract](review-context.md), engineering [M5 checkpoint](engineering/m5_context_contracts.md), and [test-evidence matrix](engineering/test_evidence_matrix.md) distinguish deterministic production-owner evidence from the final real-OCR and stable-release gates.
+The v0.7.0 implementation extended the v0.6.3 selector/approval foundation with protected policy, stable GitLab discussions, deterministic recognizers, provider-neutral adapters, a separate context store, opaque handles, fixed context tools, publication DLP, isolated OCR sessions, and receipt v4. Receipt v5 now supersedes that result/posting contract without changing the established M5 acquisition boundary. The public [bounded review-context contract](review-context.md), engineering [M5 checkpoint](engineering/m5_context_contracts.md), and [test-evidence matrix](engineering/test_evidence_matrix.md) distinguish deterministic production-owner evidence from the final real-OCR and stable-release gates.
 
 ### Data flow and trust transitions
 
