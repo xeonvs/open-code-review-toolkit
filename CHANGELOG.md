@@ -1,3 +1,20 @@
+## 0.7.1 - 2026-08-21
+
+### 🚀 Features
+
+- Expose semantically distinct all-OCR tool totals, verified MCP-server calls, reconciled count-only `summary`/`list`/`get` evidence actions, and closed provider-neutral token buckets without publishing arguments or provider payloads. ([#116](https://github.com/xeonvs/open-code-review-toolkit/issues/116))
+- Recommended focus areas now ranks already-published findings deterministically by severity, category, safe repository location, and stable identity before applying its existing display cap. ([#117](https://github.com/xeonvs/open-code-review-toolkit/issues/117))
+- Target checksum-verified Open Code Review 1.9.9 after adapting toolkit-owned background handling and qualifying named main-loop failure reasons. ([#118](https://github.com/xeonvs/open-code-review-toolkit/issues/118))
+
+### 📖 Documentation
+
+- Correct the v0.7.0 release-note classification and document how qualified OCR maintenance, compatibility-driven fixes, adopted upstream capabilities, rules changes, and CI impact receive distinct changelog categories. ([#114](https://github.com/xeonvs/open-code-review-toolkit/issues/114))
+
+### Security
+
+- Introduce receipt v5 with distinct `passed`, `private-sanitized`, and `publication-filtered` states. Private-only redaction may continue through existing approval gates only when the canonical publication and approval projection is byte-equivalent; changed, malformed, or incomparable projections remain partial and ineligible. ([#115](https://github.com/xeonvs/open-code-review-toolkit/issues/115))
+
+
 ## 0.7.0 - 2026-08-20
 
 ### 🚀 Features

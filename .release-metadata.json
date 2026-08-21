@@ -1,11 +1,10 @@
 {
   "issues": [
-    107,
-    108,
-    109,
-    110,
-    111
+    115,
+    116,
+    117,
+    118
   ],
   "schema_version": "ocr-toolkit.release-authorization/v1",
-  "version": "0.7.0"
+  "version": "0.7.1"
 }
