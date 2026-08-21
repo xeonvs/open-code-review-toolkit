@@ -136,7 +136,7 @@ after the ordinary stable release and independent external readback complete.
    every plan, issue, documentation, test, and changelog tail and repair partial
    closure before running the single permitted Codex Security diff scan if the
    finished security boundary warrants it; fix every validated finding.
-8. [x] Perform the first complete aggregate self-review. Decide from the actual
+8. [ ] Perform the first complete aggregate self-review. Decide from the actual
    integrated review contract and false-positive evidence whether permanent
    repository-owned OCR rules and a narrow suppressor are warranted; if so, add
    their files, tests, and future-maintenance instructions, otherwise record the
@@ -145,9 +145,9 @@ after the ordinary stable release and independent external readback complete.
    are not added: the protected target already owns the public OCR rules, the
    tracked `AGENTS.md` owns repository guidance through the evidence MCP, OCR
    1.9.9 has no suppressor input, and no repeated false-positive class justifies
-   a second policy surface. Run exactly one local OCR 1.9.9 review, fix its
-   actionable findings, and perform the second complete aggregate self-review
-   without rerunning OCR or Codex Security.
+   a second policy surface. The one local OCR 1.9.9 review is complete; repair
+   its actionable root-cause finding, then perform the second complete aggregate
+   self-review without rerunning OCR or Codex Security.
 9. [ ] Run focused contracts plus deterministic quality, privacy, dependency,
    workflow, package, two-build reproducibility, clean Python 3.12-3.14 install,
    CLI, and complete-history Gitleaks gates; update this plan to exact feature
@@ -254,3 +254,14 @@ after the ordinary stable release and independent external readback complete.
   guidance through the built-in evidence MCP. OCR 1.9.9 exposes no suppressor
   input, and the completed first review produced no repeated false-positive
   class that would justify another maintained policy schema or instructions.
+- The single local OCR 1.9.9 review completed all 14 selected non-test files in
+  5m18s with no warning or failed coverage, 15 verified built-in evidence calls,
+  and one reported security concern. Its proposed approval-policy change is not
+  accepted because #116 explicitly requires unavailable attribution to remain
+  visible and non-authoritative rather than become a new approval blocker.
+  However, the observed unavailable state exposed a real sibling race: separate
+  OCR MCP processes could read the same action totals and atomically replace one
+  another's increment. The correction serializes each private read-increment-
+  replace transaction through an owner-only regular single-link sibling lock,
+  cleans that lock at both review boundaries, and directly tests concurrent
+  preservation plus symlink/hard-link rejection. OCR is not rerun.

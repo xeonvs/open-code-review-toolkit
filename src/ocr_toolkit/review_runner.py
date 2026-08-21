@@ -1273,6 +1273,7 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         prepare_artifact_directory(artifacts)
         remove_private_artifact(artifacts.pre_execution_status)
         remove_private_artifact(artifacts.action_receipt)
+        remove_private_artifact(artifacts.action_receipt_lock)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
     refs = _immutable_review_refs(_review_refs(ocr_args))
@@ -1374,6 +1375,10 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
                 remove_private_artifact(artifacts.action_receipt)
             except OSError as exc:
                 cleanup_error = exc
+            try:
+                remove_private_artifact(artifacts.action_receipt_lock)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
             try:
                 remove_private_artifact(artifacts.context_store)
             except OSError as exc:

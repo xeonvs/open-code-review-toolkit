@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import json
 import stat
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import pytest
 
 from ocr_toolkit.evidence.actions import read_action_receipt, record_action
+
+
+def _record_repeated_actions(path: str, action: str, count: int) -> None:
+    """Exercise the production lock from an independent worker process."""
+
+    for _ in range(count):
+        record_action(Path(path), action)
 
 
 def test_action_receipt_is_closed_atomic_private_and_count_only(tmp_path: Path) -> None:
@@ -52,3 +60,35 @@ def test_unknown_action_is_rejected_without_creating_receipt(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="closed"):
         record_action(path, "search")
     assert not path.exists()
+
+
+def test_action_receipt_serializes_concurrent_completed_calls(tmp_path: Path) -> None:
+    path = tmp_path / "actions.json"
+    work = [(str(path), action, 20) for action in ("summary", "list", "get") for _ in range(4)]
+
+    with ProcessPoolExecutor(max_workers=12) as executor:
+        futures = [executor.submit(_record_repeated_actions, *item) for item in work]
+        for future in futures:
+            future.result()
+
+    assert read_action_receipt(path) == {"summary": 80, "list": 80, "get": 80}
+    lock_path = path.with_name(f".{path.name}.lock")
+    assert stat.S_IMODE(lock_path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("unsafe", ["symlink", "hardlink"])
+def test_action_receipt_rejects_unsafe_lock_file(tmp_path: Path, unsafe: str) -> None:
+    path = tmp_path / "actions.json"
+    lock_path = path.with_name(f".{path.name}.lock")
+    target = tmp_path / "outside"
+    target.write_text("sentinel", encoding="utf-8")
+    if unsafe == "symlink":
+        lock_path.symlink_to(target)
+    else:
+        lock_path.hardlink_to(target)
+
+    with pytest.raises(OSError, match=r"unsafe|symbolic link"):
+        record_action(path, "summary")
+
+    assert not path.exists()
+    assert target.read_text(encoding="utf-8") == "sentinel"

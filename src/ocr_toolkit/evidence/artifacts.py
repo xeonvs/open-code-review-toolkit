@@ -19,6 +19,7 @@ class EvidenceArtifacts:
     context_store: Path
     pre_execution_status: Path
     action_receipt: Path
+    action_receipt_lock: Path
 
 
 def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
@@ -34,6 +35,7 @@ def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
         context_store=directory / "context.json",
         pre_execution_status=directory / "pre-execution-status.json",
         action_receipt=directory / "evidence-actions.json",
+        action_receipt_lock=directory / ".evidence-actions.json.lock",
     )
 
 
