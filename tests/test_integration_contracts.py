@@ -188,7 +188,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "`Russian` is one example" in docs
     assert "ocr-ci preflight" in workflow
     assert "ocr-ci configure" in workflow
-    assert "uv run pytest tests" in workflow
+    assert "uv run pytest tests" not in workflow
     assert "--background-file" not in workflow
     assert 'set -- "$@" --background ' not in workflow
     assert "review-background.md" not in workflow

@@ -27,6 +27,9 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.enterContext(cleared_env("OCR_USE_ANTHROPIC"))
+
     def test_composition_readback_preserves_independent_registry_entries(self) -> None:
         composition = mcp_config.MCPComposition(
             payload={
@@ -219,7 +222,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
             ),
         ):
             updates = ocr_configure.build_config_updates()
@@ -232,7 +234,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="http://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(
                 ocr_configure.OCRRuntimeConfigError, "OCR_LLM_URL must be an absolute HTTPS URL"
@@ -245,7 +246,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://user:password@gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(
                 ocr_configure.OCRRuntimeConfigError, "without embedded credentials"
@@ -258,7 +258,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example:not-a-port/v1/responses",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(ocr_configure.OCRRuntimeConfigError, "absolute HTTPS URL"):
                 ocr_configure.build_config_updates()
@@ -269,7 +268,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_AUTH_HEADER="authorization",
             OCR_LLM_EXTRA_HEADERS='{"X-Workspace":"review"}',
             OCR_LLM_EXTRA_BODY='{"temperature":0}',
@@ -294,7 +292,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_AUTH_HEADER="",
         ):
             updates = ocr_configure.build_config_updates()
@@ -308,7 +305,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_AUTH_HEADER="Authorization",
                 OCR_LLM_EXTRA_HEADERS='{"authorization":"other-token"}',
             ),
@@ -325,28 +321,32 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
             OCR_LLM_PROTOCOL="openai-responses",
-            OCR_USE_ANTHROPIC="false",
         ):
             updates = ocr_configure.build_config_updates()
 
         self.assertEqual(updates["llm.protocol"], "openai-responses")
         self.assertFalse(updates["llm.use_anthropic"])
 
-    def test_runtime_config_rejects_conflicting_protocol_modes(self) -> None:
-        with (
-            patched_env(
-                OCR_REVIEW_LANGUAGE="English",
-                OCR_LLM_URL="https://gateway.example/v1/responses",
-                OCR_LLM_TOKEN="llm-secret",
-                OCR_LLM_MODEL="openai/gpt-test",
-                OCR_LLM_PROTOCOL="openai-responses",
-                OCR_USE_ANTHROPIC="true",
-            ),
-            self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
-        ):
-            ocr_configure.build_config_updates()
+    def test_runtime_config_rejects_removed_anthropic_switch_with_migration(self) -> None:
+        for legacy_value in ("", "false", "true"):
+            with (
+                self.subTest(legacy_value=legacy_value),
+                patched_env(
+                    OCR_REVIEW_LANGUAGE="English",
+                    OCR_LLM_URL="https://gateway.example/v1/responses",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="openai/gpt-test",
+                    OCR_LLM_PROTOCOL="openai-responses",
+                    OCR_USE_ANTHROPIC=legacy_value,
+                ),
+                self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
+            ):
+                ocr_configure.build_config_updates()
 
-        self.assertIn("conflicts", str(ctx.exception))
+            self.assertEqual(
+                str(ctx.exception),
+                "OCR_USE_ANTHROPIC was removed; set OCR_LLM_PROTOCOL=anthropic explicitly",
+            )
 
     def test_runtime_config_requires_core_llm_env(self) -> None:
         with (
@@ -355,7 +355,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
         ):
@@ -369,7 +368,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_HEADERS='{"X-Test":"bad\\nvalue"}',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -382,7 +380,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_HEADERS='{"X-Test":{"bad":true}}',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -395,7 +392,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_BODY='["bad"]',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -409,7 +405,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
             OCR_LLM_PROTOCOL="openai",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_EXTRA_BODY="{}",
         ):
             updates = ocr_configure.build_config_updates()
@@ -422,7 +417,7 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="anthropic/claude-test",
-            OCR_USE_ANTHROPIC="true",
+            OCR_LLM_PROTOCOL="anthropic",
             OCR_ANTHROPIC_DISABLE_THINKING="true",
             OCR_LLM_EXTRA_BODY='{"temperature":0}',
         ):
@@ -440,7 +435,7 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="anthropic/claude-test",
-                OCR_USE_ANTHROPIC="true",
+                OCR_LLM_PROTOCOL="anthropic",
                 OCR_ANTHROPIC_DISABLE_THINKING="true",
                 OCR_LLM_EXTRA_BODY='{"thinking":{"type":"enabled"}}',
             ),
