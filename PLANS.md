@@ -37,8 +37,8 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `REQ-002` (`done`): created v0.8.0 sub-issues #124, #125, and #123, attached them to #120, and appended/read back the coordination checklist without changing #120's core contract. Covered by `WQ-02`.
 - `REQ-003` (`done`): implemented policy v1/v2 compatibility, a non-configurable remediation policy type, private store v2, and a fixed model-only safe remediation projection with a new closed MCP resource class. Covered by `WQ-03`.
 - `REQ-004` (`done`): added a shared validated live `GET /user` identity owner and derive mutually exclusive generic discussions plus verified remediation bundles from one twice-read bounded snapshot; identity, edit, delete, reorder, and pagination drift fail closed as `mutated`. Covered by `WQ-04`.
-- `REQ-005` (`pending`): apply budgets and DLP before atomic storage, add MCP/bootstrap/receipt/cleanup integration, and preserve posting suppression, fingerprints, human ownership, resolve rollback, and receipt v5. Covered by `WQ-05`.
-- `REQ-006` (`pending`): apply DLP to every untrusted MR-derived text path, including title, description, generic discussions, remediation roots/replies, and adapter/reference content, before private-store or bootstrap admission. Keep each source's DLP admission/degradation isolated from receipt-based approval: safe non-remediation context must not block approval, DLP rejection cannot enable approval, and admitted remediation always forces comment-only. Covered by `WQ-05` and `WQ-06`.
+- `REQ-005` (`done`): apply budgets and DLP before atomic storage, add MCP/bootstrap/receipt/cleanup integration, and preserve posting suppression, fingerprints, human ownership, resolve rollback, and receipt v5. Covered by `WQ-05`.
+- `REQ-006` (`done`): apply DLP to every untrusted MR-derived text path, including title, description, generic discussions, remediation roots/replies, and adapter/reference content, before private-store or bootstrap admission. Keep each source's DLP admission/degradation isolated from receipt-based approval: safe non-remediation context must not block approval, DLP rejection cannot enable approval, and admitted remediation always forces comment-only. Covered by `WQ-05` and `WQ-06`.
 - `REQ-007` (`pending`): support exact whole-reply mention commands for the live bot username with slash-command parity and closed negative cases. Covered by `WQ-06`.
 - `REQ-008` (`pending`): remove `OCR_GITLAB_BOT_USER_ID`; reject `OCR_USE_ANTHROPIC` with migration guidance; remove example `OCR_RUN_HELPER_TESTS` and unsupported documentation-only variables while retaining active controls and redaction sentinels. Covered by `WQ-07`.
 - `REQ-009` (`pending`): publish a complete environment-variable/default contract separated by runtime, GitLab predefined, example-local, and dynamic adapter inputs, protected by an exact-set contract test. Covered by `WQ-07`.
@@ -88,6 +88,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - Mention actions use the correct spellings `suppress` and `resolve`; `supress` is ignored.
 - Do not create a future `retest` issue.
 - DLP must protect all untrusted MR-derived text, including title, description, every discussion class, remediation roots/replies, and dynamic adapter/reference content, without interfering with safe auto-approval; admitted remediation itself remains an independent comment-only condition.
+- Provider-neutral context contracts must remain reusable for a future GitHub adapter: GitLab transport, pagination, identity, and posting stay behind GitLab modules, while the broker consumes only normalized protocols/records.
 
 #### Completed Baseline State
 
@@ -104,7 +105,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `WQ-02` (`done`): pushed only the signed planning commit, opened Draft PR #122, created and attached three milestone sub-issues, and appended/read back #120's coordination checklist. No further push is allowed until `WQ-10`.
 - `WQ-03` (`done`): added policy v1/v2, remediation policy types, context-store v2, fixed model-only nested projection, `remediation_thread` MCP resource filtering, and architecture/threat-contract updates; focused tests and slice review passed.
 - `WQ-04` (`done`): implemented shared validated live identity, one bounded double snapshot, root verification by live bot ID plus exact fingerprint marker, remediation grouping/generic exclusion, command exclusion, and mutation/pagination semantics; focused and adversarial tests passed.
-- `WQ-05` (`in_progress`): pre-storage DLP/budgets, atomic store/MCP/bootstrap/receipt/cleanup lifecycle, comment-only and auto-approval independence tests; signed commit.
+- `WQ-05` (`done`): added provider-neutral forge origins and normalized remediation views, repeated DLP before store, provider DLP rejection accounting, one-snapshot runner composition, nested aggregate budgets, fixed bootstrap non-authority guidance, receipt-v5 comment-only semantics only for admitted remediation, metadata DLP hostile readback, and an import-boundary test; 176 focused tests plus 71 subtests, Ruff, MyPy, slice review, and diff checks passed.
 - `WQ-06` (`pending`): exact mention parser, live username plumbing, newest-command parity and negatives; focused tests and signed commit.
 - `WQ-07` (`pending`): runtime environment cleanup, complete configuration tables, exact supported-set/default contract tests, and example helper-test removal; signed commit.
 - `WQ-08` (`pending`): mode-oriented examples, moved recipes, Accepted decisions consumption walkthrough, GitLab/review-context documentation, user-facing terminology cleanup; signed commit.
@@ -122,11 +123,13 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - DLP rejection affects only the admission/degradation state of the untrusted source being inspected. It cannot turn a review into approval; safe MR metadata, generic discussions, and adapter/reference context must not themselves disable otherwise valid receipt-based auto-approval.
 - Any successfully admitted remediation record forces comment-only even when its text is safe.
 - Stable publication remains deferred until external real-path qualification on the exact feature tree.
+- Generic `ocr_toolkit.context` modules must not import `providers.gitlab*`; GitLab produces the common discussion/remediation views at the composition edge. A future GitHub implementation may satisfy the same views without inheriting GitLab API or identity semantics.
 
 #### Verification
 
 - Planning/coordination: inspect branch base, signed commit, remote Draft PR state, sub-issue parent relations, milestone assignments, and #120 checklist readback.
 - Contracts/store/MCP: focused policy, store, broker, MCP, receipt, runner, posting-approval, cleanup, and installed-artifact tests with a controlled subprocess peer.
+- Architecture: an import-boundary test proves generic context contracts/broker/store/MCP do not depend on GitLab provider modules; a non-GitLab fake view must project through the same remediation broker contract.
 - Provider/adversarial: stable and mutated double snapshots; edit/delete/reorder/pagination drift; thread/reply/item/age/text bounds; prompt injection; Unicode, Markdown, and HTML laundering; PII/secrets across MR title, description, generic discussions, remediation roots/replies, and dynamic context; fake bot roots; system/automation events; conflicting/oversized replies.
 - Commands: slash/mention parity; mixed-case username/action; whitespace boundary; typo, prose, code blocks, wrong mention, bot/system reply, and non-toolkit-owned discussion negatives; newest recognized human command wins.
 - Approval safety: DLP-clean MR title/description, generic discussions, and dynamic context without admitted remediation preserve existing receipt-based auto-approval; any admitted remediation forces comment-only; a DLP-rejected source cannot enable approval; posting suppression/fingerprint/human ownership/resolve rollback remain unchanged.
@@ -157,7 +160,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 
 #### Resume Point
 
-Continue at `WQ-05`: add the fixed remediation-to-pending-record broker projection, compose both snapshot sources in `review_runner`, preserve receipt v5 closed accounting, force comment-only on any admitted remediation bundle, strengthen bootstrap non-authority guidance and cleanup, then prove safe non-remediation DLP does not block otherwise eligible auto-approval while rejected/admitted remediation cannot enable it; pass the slice commit gate and do not push.
+Continue at `WQ-06`: connect the exact slash/mention parser to the posting snapshot using the authenticated live username, preserve newest-recognized-human-command semantics, add `@mr.bot suppress|resolve` parity and closed negative cases, pass the slice commit gate, and do not push.
 
 #### Plan Fidelity Check
 

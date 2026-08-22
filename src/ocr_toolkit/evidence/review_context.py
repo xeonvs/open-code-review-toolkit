@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ocr_toolkit.common.redaction import redact_env_secret_values, redact_sensitive
+from ocr_toolkit.context.contracts import TextBudgets
+from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.evidence.model import (
     Confidence,
     EvidenceRecord,
@@ -158,6 +160,20 @@ def _redacted(value: str) -> str:
     return redact_env_secret_values(redact_sensitive(value))
 
 
+def _dlp_admitted(value: str, limit: TextLimit) -> bool:
+    """Apply the common private-context DLP contract after complete-field redaction."""
+
+    checked = check_text(
+        value,
+        budgets=TextBudgets(
+            max_chars=limit.chars,
+            max_bytes=limit.bytes,
+            max_lines=limit.lines,
+        ),
+    )
+    return checked.admitted and checked.text == value
+
+
 def _text_field(value: object, limit: TextLimit) -> dict[str, object]:
     """Admit one complete field or record only its closed omission status."""
 
@@ -173,6 +189,8 @@ def _text_field(value: object, limit: TextLimit) -> dict[str, object]:
     redacted = _redacted(normalized)
     if not _within(redacted, limit):
         return {"status": "omitted_redaction_limit", "value": None}
+    if not _dlp_admitted(redacted, limit):
+        return {"status": "omitted_invalid", "value": None}
     return {"status": "admitted", "value": redacted}
 
 
@@ -193,7 +211,7 @@ def _labels_field(value: object) -> dict[str, object]:
             omitted += 1
             continue
         redacted = _redacted(normalized)
-        if not _within(redacted, LABEL_LIMIT):
+        if not _within(redacted, LABEL_LIMIT) or not _dlp_admitted(redacted, LABEL_LIMIT):
             omitted += 1
             continue
         identity = redacted.casefold()
@@ -296,7 +314,7 @@ def _validate_text_field(value: object, limit: TextLimit) -> None:
             or not _within(text, limit)
         ):
             raise ValueError("merge-request admitted text field is invalid")
-        if _redacted(text) != text:
+        if _redacted(text) != text or not _dlp_admitted(text, limit):
             raise ValueError("merge-request admitted text field is not fully redacted")
     elif text is not None:
         raise ValueError("merge-request omitted text field must not contain a value")
@@ -358,6 +376,7 @@ def validate_merge_request_context(value: object) -> None:
             and _normalized_text(item) == item
             and _within(item, LABEL_LIMIT)
             and _redacted(item) == item
+            and _dlp_admitted(item, LABEL_LIMIT)
             for item in values
         )
         or len({item.casefold() for item in values}) != len(values)

@@ -62,6 +62,7 @@ class DiscussionSnapshot:
     records: tuple[DiscussionRecord, ...]
     digest: str
     omitted: int
+    dlp_rejected: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +196,7 @@ def _project_discussions(
     toolkit_bot_id = raw.identity.user_id
     records: list[DiscussionRecord] = []
     omitted = raw.pagination_omitted
+    dlp_rejected = 0
     total_chars = total_bytes = total_lines = 0
     for thread_index, thread in enumerate(pages):
         if thread_index >= policy.max_threads:
@@ -259,6 +261,7 @@ def _project_discussions(
             checked = check_text(note.get("body"), budgets=policy.budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 omitted += 1
+                dlp_rejected += 1
                 continue
             body_chars = len(checked.text)
             body_bytes = len(checked.text.encode())
@@ -299,12 +302,19 @@ def _project_discussions(
         "source_sha": source_sha,
         "state": state,
         "omitted": omitted,
+        "dlp_rejected": dlp_rejected,
         "records": [record.digest for record in records],
     }
     digest = hashlib.sha256(
         json.dumps(snapshot_body, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    return DiscussionSnapshot(state=state, records=tuple(records), digest=digest, omitted=omitted)
+    return DiscussionSnapshot(
+        state=state,
+        records=tuple(records),
+        digest=digest,
+        omitted=omitted,
+        dlp_rejected=dlp_rejected,
+    )
 
 
 def acquire_gitlab_context(
@@ -354,12 +364,24 @@ def acquire_gitlab_context(
     if first.digest != second.digest:
         return GitLabContextSnapshot(
             discussions=(
-                DiscussionSnapshot(state="mutated", records=(), digest=second.digest, omitted=0)
+                DiscussionSnapshot(
+                    state="mutated",
+                    records=(),
+                    digest=second.digest,
+                    omitted=0,
+                    dlp_rejected=0,
+                )
                 if discussion_policy is not None
                 else None
             ),
             remediation_threads=(
-                RemediationSnapshot(state="mutated", records=(), digest=second.digest, omitted=0)
+                RemediationSnapshot(
+                    state="mutated",
+                    records=(),
+                    digest=second.digest,
+                    omitted=0,
+                    dlp_rejected=0,
+                )
                 if remediation_policy is not None
                 else None
             ),

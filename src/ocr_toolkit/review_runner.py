@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
+from collections.abc import Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
 from io import BufferedWriter
@@ -30,14 +31,21 @@ from ocr_toolkit.context.adapters import (
 from ocr_toolkit.context.broker import (
     BrokerResult,
     CandidateSelection,
+    ContextOrigin,
     acquire_external_records,
     prepare_discussion_records,
+    prepare_remediation_records,
 )
 from ocr_toolkit.context.contracts import ContextContractError, ContextPolicy, TextBudgets
 from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
 from ocr_toolkit.context.policy import load_protected_policy
 from ocr_toolkit.context.recognizers import recognize
-from ocr_toolkit.context.store import ContextStore, ContextStoreError, PendingContextRecord
+from ocr_toolkit.context.store import (
+    ContextRecord,
+    ContextStore,
+    ContextStoreError,
+    PendingContextRecord,
+)
 from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS, read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
@@ -86,7 +94,7 @@ from ocr_toolkit.providers.gitlab import (
     invocation_identifiers,
     is_merge_request_environment,
 )
-from ocr_toolkit.providers.gitlab_discussions import acquire_discussions
+from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 
@@ -1090,11 +1098,29 @@ def _bounded_combined_records(
     chars = bytes_count = lines = 0
     limited_sources: set[str] = set()
     for record in records:
-        text = record.projections.get("model", {}).get("text", "")
-        text = text if isinstance(text, str) else ""
-        next_chars = chars + len(text)
-        next_bytes = bytes_count + len(text.encode())
-        next_lines = lines + (text.count("\n") + 1 if text else 0)
+        model = record.projections.get("model", {})
+        texts: list[str] = []
+        text = model.get("text")
+        if isinstance(text, str):
+            texts.append(text)
+        remediation = model.get("remediation_thread")
+        if isinstance(remediation, dict):
+            root = remediation.get("root")
+            root_text = root.get("text") if isinstance(root, dict) else None
+            if isinstance(root_text, str):
+                texts.append(root_text)
+            replies = remediation.get("replies")
+            if isinstance(replies, list):
+                for reply in replies:
+                    reply_text = reply.get("text") if isinstance(reply, dict) else None
+                    if isinstance(reply_text, str):
+                        texts.append(reply_text)
+        record_chars = sum(len(value) for value in texts)
+        record_bytes = sum(len(value.encode()) for value in texts)
+        record_lines = sum(value.count("\n") + 1 for value in texts)
+        next_chars = chars + record_chars
+        next_bytes = bytes_count + record_bytes
+        next_lines = lines + record_lines
         if (
             len(admitted) >= policy.budgets.max_records
             or next_chars > policy.budgets.max_chars
@@ -1106,6 +1132,14 @@ def _bounded_combined_records(
         admitted.append(record)
         chars, bytes_count, lines = next_chars, next_bytes, next_lines
     return admitted, limited_sources
+
+
+def _remediation_mutable_admitted(records: Sequence[ContextRecord]) -> bool:
+    """Report only admitted remediation as the receipt-v5 comment-only condition."""
+
+    return any(
+        record.mutable and record.resource_class == "remediation_thread" for record in records
+    )
 
 
 def _select_reference_candidates(
@@ -1158,38 +1192,101 @@ def _prepare_enrichment(
     candidate_texts = list(_context_texts(identity.context))
     adapters = parse_adapter_config(os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON"))
     adapter_secrets = configured_secret_values(adapters, os.environ)
-    if policy.forge_discussions is not None:
-        discussion_policy = policy.forge_discussions
-        source = "forge:gitlab_discussions"
+    discussion_policy = policy.forge_discussions
+    remediation_policy = policy.remediation_threads
+    discussion_origin = ContextOrigin(
+        source="forge:gitlab_discussions", adapter="gitlab", tenant="project"
+    )
+    remediation_origin = ContextOrigin(
+        source="forge:gitlab_remediation_threads", adapter="gitlab", tenant="project"
+    )
+    if discussion_policy is not None or remediation_policy is not None:
         try:
-            snapshot = acquire_discussions(
+            snapshot = acquire_gitlab_context(
                 os.environ,
                 project_id=identity.context.project_id,
                 merge_request_iid=identity.context.merge_request_iid,
                 source_sha=identity.source_sha,
                 run_id=run_id,
-                policy=discussion_policy,
+                discussion_policy=discussion_policy,
+                remediation_policy=remediation_policy,
                 now=now,
                 deadline=acquisition_deadline,
                 forbidden=adapter_secrets,
             )
         except GitLabProviderError:
-            completeness[source] = "unavailable"
-            degradation["unavailable"] += 1
-            required_degraded = discussion_policy.required
+            for origin, source_policy in (
+                (discussion_origin, discussion_policy),
+                (remediation_origin, remediation_policy),
+            ):
+                if source_policy is None:
+                    continue
+                completeness[origin.source] = "unavailable"
+                degradation["unavailable"] += 1
+                required_degraded = required_degraded or source_policy.required
         else:
-            completeness[source] = snapshot.state
-            if snapshot.state != "complete":
-                degradation["invalid" if snapshot.state == "mutated" else "limit"] += 1
-                required_degraded = required_degraded or discussion_policy.required
-            pending.extend(
-                prepare_discussion_records(
-                    snapshot.records,
+            if discussion_policy is not None and snapshot.discussions is not None:
+                discussion_snapshot = snapshot.discussions
+                completeness[discussion_origin.source] = discussion_snapshot.state
+                if discussion_snapshot.state != "complete":
+                    if discussion_snapshot.state == "mutated":
+                        degradation["invalid"] += 1
+                    else:
+                        if discussion_snapshot.omitted > discussion_snapshot.dlp_rejected:
+                            degradation["limit"] += 1
+                        degradation["invalid"] += discussion_snapshot.dlp_rejected
+                    required_degraded = required_degraded or discussion_policy.required
+                    required_degraded = (
+                        required_degraded or discussion_snapshot.dlp_rejected > 0
+                    )
+                discussion_records = prepare_discussion_records(
+                    discussion_snapshot.records,
                     policy=discussion_policy,
+                    origin=discussion_origin,
                     expiry=now + 3_600,
+                    forbidden=adapter_secrets,
                 )
-            )
-            candidate_texts.extend(record.body for record in snapshot.records)
+                if len(discussion_records) != len(discussion_snapshot.records):
+                    completeness[discussion_origin.source] = "partial"
+                    degradation["invalid"] += (
+                        len(discussion_snapshot.records) - len(discussion_records)
+                    )
+                    # A DLP/shape rejection cannot silently make automatic approval eligible.
+                    required_degraded = True
+                pending.extend(discussion_records)
+                candidate_texts.extend(
+                    text
+                    for record in discussion_records
+                    if isinstance((text := record.projections["model"].get("text")), str)
+                )
+            if remediation_policy is not None and snapshot.remediation_threads is not None:
+                remediation_snapshot = snapshot.remediation_threads
+                completeness[remediation_origin.source] = remediation_snapshot.state
+                if remediation_snapshot.state != "complete":
+                    if remediation_snapshot.state == "mutated":
+                        degradation["invalid"] += 1
+                    else:
+                        if remediation_snapshot.omitted > remediation_snapshot.dlp_rejected:
+                            degradation["limit"] += 1
+                        degradation["invalid"] += remediation_snapshot.dlp_rejected
+                    required_degraded = required_degraded or remediation_policy.required
+                    required_degraded = (
+                        required_degraded or remediation_snapshot.dlp_rejected > 0
+                    )
+                remediation_records = prepare_remediation_records(
+                    remediation_snapshot.records,
+                    policy=remediation_policy,
+                    origin=remediation_origin,
+                    expiry=now + 3_600,
+                    forbidden=adapter_secrets,
+                )
+                if len(remediation_records) != len(remediation_snapshot.records):
+                    completeness[remediation_origin.source] = "partial"
+                    degradation["invalid"] += (
+                        len(remediation_snapshot.records) - len(remediation_records)
+                    )
+                    required_degraded = True
+                pending.extend(remediation_records)
     selections = _select_reference_candidates(policy, candidate_texts)
     external: BrokerResult = acquire_external_records(
         policy=policy,
@@ -1216,6 +1313,8 @@ def _prepare_enrichment(
         }
         if policy.forge_discussions is not None and policy.forge_discussions.required:
             required_sources.add("forge:gitlab_discussions")
+        if policy.remediation_threads is not None and policy.remediation_threads.required:
+            required_sources.add("forge:gitlab_remediation_threads")
         required_degraded = required_degraded or bool(limited_sources & required_sources)
         for source in limited_sources:
             completeness[source] = "partial"
@@ -1250,7 +1349,7 @@ def _prepare_enrichment(
         completeness=dict(sorted(completeness.items())),
         degradation_counts=dict(sorted(degradation.items())),
         required_degraded=required_degraded,
-        mutable_admitted=any(record.mutable for record in context_store.records),
+        mutable_admitted=_remediation_mutable_admitted(context_store.records),
         forbidden_publication=forbidden,
     )
     return (

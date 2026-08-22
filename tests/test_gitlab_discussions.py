@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from ocr_toolkit.context.broker import prepare_discussion_records
+from ocr_toolkit.context.broker import ContextOrigin, prepare_discussion_records
 from ocr_toolkit.context.contracts import DiscussionPolicy, RemediationThreadPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.posting.markers import build_marker
@@ -281,6 +281,11 @@ def test_discussions_cross_real_tls_twice_preserve_order_and_hide_display_identi
     pending = prepare_discussion_records(
         snapshot.records,
         policy=discussion_policy(),
+        origin=ContextOrigin(
+            source="forge:gitlab_discussions",
+            adapter="gitlab",
+            tenant="project",
+        ),
         expiry=1_777_003_600,
     )
     assert len(pending) == 3
@@ -359,6 +364,7 @@ def test_discussions_apply_exact_configured_secret_dlp(tmp_path: Path) -> None:
     assert snapshot.state == "partial"
     assert [record.body for record in snapshot.records] == ["Automation reply"]
     assert snapshot.omitted == 1
+    assert snapshot.dlp_rejected == 1
 
 
 def test_one_snapshot_builds_exclusive_verified_remediation_bundle(tmp_path: Path) -> None:
@@ -448,6 +454,7 @@ def test_remediation_dlp_rejection_retains_no_reply_value(tmp_path: Path) -> Non
     assert snapshot.remediation_threads is not None
     assert snapshot.remediation_threads.state == "partial"
     assert snapshot.remediation_threads.records == ()
+    assert snapshot.remediation_threads.dlp_rejected == 1
     assert blocked not in repr(snapshot)
 
 

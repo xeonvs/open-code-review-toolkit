@@ -61,6 +61,7 @@ class RemediationSnapshot:
     records: tuple[RemediationThreadRecord, ...]
     digest: str
     omitted: int
+    dlp_rejected: int
 
 
 def _toolkit_root(
@@ -118,6 +119,7 @@ def project_remediation_threads(
         if _toolkit_root(thread, raw.identity) is not None
     )
     omitted = raw.pagination_omitted
+    dlp_rejected = 0
     total_items = total_chars = total_bytes = total_lines = 0
     for thread_index, thread in enumerate(raw.threads):
         root_identity = _toolkit_root(thread, raw.identity)
@@ -146,6 +148,7 @@ def project_remediation_threads(
             budgets=policy.budgets,
             forbidden=forbidden,
         )
+        root_dlp_rejected = not checked_root.admitted or not visible_checked.admitted
         if (
             created_at is None
             or updated_at is None
@@ -161,6 +164,7 @@ def project_remediation_threads(
             or not visible_checked.text
         ):
             omitted += 1
+            dlp_rejected += int(root_dlp_rejected)
             continue
 
         replies: list[RemediationReply] = []
@@ -223,6 +227,7 @@ def project_remediation_threads(
             ):
                 thread_partial = True
                 omitted += 1
+                dlp_rejected += int(not checked.admitted)
                 continue
             account, author_id = classified
             replies.append(
@@ -303,6 +308,7 @@ def project_remediation_threads(
         "source_sha": source_sha,
         "state": state,
         "omitted": omitted,
+        "dlp_rejected": dlp_rejected,
         "records": [record.digest for record in records],
     }
     digest = hashlib.sha256(
@@ -314,6 +320,7 @@ def project_remediation_threads(
             records=tuple(records),
             digest=digest,
             omitted=omitted,
+            dlp_rejected=dlp_rejected,
         ),
         verified_roots,
     )
