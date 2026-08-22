@@ -21,8 +21,10 @@ from ocr_toolkit.context.adapters import (
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
     ContextPolicy,
+    ContextProjections,
     DiscussionPolicy,
     ReferencePolicy,
+    RemediationThreadPolicy,
     TextBudgets,
 )
 from ocr_toolkit.context.dlp import check_text, normalize_text
@@ -50,6 +52,15 @@ class BrokerResult:
     required_degraded: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ContextOrigin:
+    """Name one provider composition edge without coupling the broker to its API."""
+
+    source: str
+    adapter: str
+    tenant: str
+
+
 class DiscussionView(Protocol):
     """Expose only normalized discussion fields needed for store projection."""
 
@@ -63,6 +74,31 @@ class DiscussionView(Protocol):
     resolved: bool
     outdated: bool
     anchor: Mapping[str, object]
+    version: str
+    digest: str
+
+
+class RemediationReplyView(Protocol):
+    """Expose one provider-normalized reply in a verified remediation thread."""
+
+    order: int
+    author_class: str
+    author_pseudonym: str
+    body: str
+    created_at: int
+    updated_at: int
+
+
+class RemediationThreadView(Protocol):
+    """Expose only the common verified remediation bundle contract."""
+
+    root_author_pseudonym: str
+    root_body: str
+    anchor_state: str
+    replies: Sequence[RemediationReplyView]
+    completeness: str
+    resolved_count: int
+    outdated_count: int
     version: str
     digest: str
 
@@ -82,16 +118,18 @@ def _project(
 def _normalized_record(
     record: Mapping[str, object],
     *,
-    policy: ReferencePolicy,
+    budgets: TextBudgets,
+    projections: ContextProjections,
+    resource_class: str,
     forbidden: tuple[str, ...],
 ) -> Mapping[str, object] | None:
     result: dict[str, object] = {}
-    for field in policy.projections.retrieve:
+    for field in projections.retrieve:
         if field not in record:
             continue
         value = record[field]
         if field == "text":
-            checked = check_text(value, budgets=policy.budgets, forbidden=forbidden)
+            checked = check_text(value, budgets=budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 return None
             result[field] = checked.text
@@ -106,7 +144,7 @@ def _normalized_record(
             )
             if not checked.admitted:
                 return None
-            if field == "descriptor" and normalized != policy.resource_class:
+            if field == "descriptor" and normalized != resource_class:
                 return None
             if field == "state" and STATE_RE.fullmatch(normalized) is None:
                 return None
@@ -160,7 +198,9 @@ def prepare_discussion_records(
     records: Sequence[DiscussionView],
     *,
     policy: DiscussionPolicy,
+    origin: ContextOrigin,
     expiry: int,
+    forbidden: tuple[str, ...] = (),
 ) -> tuple[PendingContextRecord, ...]:
     """Project provider-normalized discussions into the common private store contract."""
 
@@ -181,12 +221,27 @@ def prepare_discussion_records(
             "version": record.version,
             "expiry": expiry,
         }
-        retrieved = _project(value, policy.projections.retrieve)
+        retrieved = _normalized_record(
+            value,
+            budgets=policy.budgets,
+            projections=policy.projections,
+            resource_class="discussion",
+            forbidden=forbidden,
+        )
+        if (
+            retrieved is None
+            or not isinstance(record.digest, str)
+            or SHA256_RE.fullmatch(record.digest) is None
+            or normalize_text(record.version) != record.version
+            or not record.version
+            or len(record.version) > 512
+        ):
+            continue
         pending.append(
             PendingContextRecord(
-                source="forge:gitlab_discussions",
-                adapter="gitlab",
-                tenant="project",
+                source=origin.source,
+                adapter=origin.adapter,
+                tenant=origin.tenant,
                 canonical_object=hashlib.sha256(f"discussion:{record.digest}".encode()).hexdigest(),
                 resource_class="issue",
                 descriptor="discussion",
@@ -194,6 +249,125 @@ def prepare_discussion_records(
                     "model": _project(retrieved, policy.projections.model),
                     "publish": _project(retrieved, policy.projections.publish),
                     "retain": _project(retrieved, policy.projections.retain),
+                },
+                version=record.version,
+                digest=record.digest,
+                mutable=True,
+                expiry=expiry,
+            )
+        )
+    return tuple(pending)
+
+
+def prepare_remediation_records(
+    records: Sequence[RemediationThreadView],
+    *,
+    policy: RemediationThreadPolicy,
+    origin: ContextOrigin,
+    expiry: int,
+    forbidden: tuple[str, ...] = (),
+) -> tuple[PendingContextRecord, ...]:
+    """DLP-check normalized remediation views and build the fixed private projection."""
+
+    pending: list[PendingContextRecord] = []
+    for record in records:
+        root = check_text(record.root_body, budgets=policy.budgets, forbidden=forbidden)
+        if (
+            not root.admitted
+            or root.text != record.root_body
+            or PSEUDONYM_RE.fullmatch(record.root_author_pseudonym) is None
+            or record.anchor_state not in {"current", "outdated", "unpositioned"}
+            or record.completeness not in {"complete", "partial"}
+            or not isinstance(record.digest, str)
+            or SHA256_RE.fullmatch(record.digest) is None
+            or normalize_text(record.version) != record.version
+            or not record.version
+            or len(record.version) > 512
+            or not isinstance(record.resolved_count, int)
+            or isinstance(record.resolved_count, bool)
+            or not isinstance(record.outdated_count, int)
+            or isinstance(record.outdated_count, bool)
+            or record.resolved_count < 0
+            or record.outdated_count < 0
+        ):
+            continue
+        replies: list[dict[str, object]] = []
+        valid = True
+        for expected_order, reply in enumerate(record.replies):
+            checked = check_text(reply.body, budgets=policy.budgets, forbidden=forbidden)
+            if (
+                reply.order != expected_order
+                or reply.author_class not in policy.account_classes
+                or reply.author_class == "toolkit_bot"
+                or PSEUDONYM_RE.fullmatch(reply.author_pseudonym) is None
+                or not checked.admitted
+                or checked.text != reply.body
+                or not isinstance(reply.created_at, int)
+                or isinstance(reply.created_at, bool)
+                or not isinstance(reply.updated_at, int)
+                or isinstance(reply.updated_at, bool)
+                or reply.created_at < 0
+                or reply.updated_at < reply.created_at
+                or reply.updated_at > expiry
+            ):
+                valid = False
+                break
+            replies.append(
+                {
+                    "order": reply.order,
+                    "author_class": reply.author_class,
+                    "author_pseudonym": reply.author_pseudonym,
+                    "text": checked.text,
+                    "created_at": reply.created_at,
+                    "updated_at": reply.updated_at,
+                }
+            )
+        if (
+            not valid
+            or not replies
+            or len(replies) > policy.max_replies_per_thread
+            or record.resolved_count > len(replies) + 1
+            or record.outdated_count > len(replies) + 1
+            or (record.anchor_state == "outdated" and record.outdated_count < 1)
+        ):
+            continue
+        remediation = {
+            "root": {
+                "text": root.text,
+                "author_pseudonym": record.root_author_pseudonym,
+            },
+            "anchor_state": record.anchor_state,
+            "replies": replies,
+            "completeness": record.completeness,
+            "counts": {
+                "replies": len(replies),
+                "resolved": record.resolved_count,
+                "outdated": record.outdated_count,
+            },
+        }
+        pending.append(
+            PendingContextRecord(
+                source=origin.source,
+                adapter=origin.adapter,
+                tenant=origin.tenant,
+                canonical_object=hashlib.sha256(
+                    f"remediation:{record.digest}".encode()
+                ).hexdigest(),
+                resource_class="remediation_thread",
+                descriptor="remediation_thread",
+                projections={
+                    "model": {
+                        "descriptor": "remediation_thread",
+                        "remediation_thread": remediation,
+                    },
+                    "publish": {"descriptor": "remediation_thread"},
+                    "retain": {
+                        "state": record.completeness,
+                        "count": len(replies),
+                        "digest": record.digest,
+                        "version": record.version,
+                        "expiry": expiry,
+                    },
                 },
                 version=record.version,
                 digest=record.digest,
@@ -316,7 +490,13 @@ def acquire_external_records(
             degradation_counts["invalid"] += 1
             required_degraded = required_degraded or reference.required
             continue
-        normalized = _normalized_record(response.record, policy=reference, forbidden=forbidden)
+        normalized = _normalized_record(
+            response.record,
+            budgets=reference.budgets,
+            projections=reference.projections,
+            resource_class=reference.resource_class,
+            forbidden=forbidden,
+        )
         if normalized is None:
             completeness[source] = "unavailable"
             degradation_counts["invalid"] += 1

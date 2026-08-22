@@ -5,9 +5,14 @@ from __future__ import annotations
 import ast
 import json
 import re
+from datetime import date
+
+import pytest
 
 from ocr_toolkit.context.adapters import parse_adapter_config
 from ocr_toolkit.context.policy import parse_policy
+from ocr_toolkit.evidence.policy import parse_accepted_decisions
+from ocr_toolkit.mcp_config import parse_mcp_servers
 from tests.support import HELPER_DIR, PROJECT_ROOT
 
 
@@ -188,7 +193,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "`Russian` is one example" in docs
     assert "ocr-ci preflight" in workflow
     assert "ocr-ci configure" in workflow
-    assert "uv run pytest tests" in workflow
+    assert "uv run pytest tests" not in workflow
     assert "--background-file" not in workflow
     assert 'set -- "$@" --background ' not in workflow
     assert "review-background.md" not in workflow
@@ -199,20 +204,62 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "env -u OCR_LLM_TOKEN" in workflow
 
 
-def test_public_bounded_context_recipes_match_runtime_schemas() -> None:
-    example_root = PROJECT_ROOT / "examples" / "context"
-    policy_raw = (example_root / "review-context-policy.json").read_bytes()
-    policy = parse_policy(policy_raw)
+def test_public_bounded_context_recipes_match_runtime_schemas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    example_root = PROJECT_ROOT / "examples" / "gitlab" / "context"
+    adapter_policy = parse_policy((example_root / "policy-adapters.json").read_bytes())
+    discussion_policy = parse_policy((example_root / "policy-discussions.json").read_bytes())
     stdio = parse_adapter_config((example_root / "adapters-stdio.json").read_text(encoding="utf-8"))
     remote = parse_adapter_config(
         (example_root / "adapters-remote.json").read_text(encoding="utf-8")
     )
 
-    assert policy.schema_version == "ocr.review-context-policy/v1"
-    assert policy.references[0].adapter == "tracker"
+    assert adapter_policy.schema_version == "ocr.review-context-policy/v2"
+    assert adapter_policy.remediation_threads is not None
+    assert adapter_policy.remediation_threads.account_classes == ("automation", "system", "user")
+    assert adapter_policy.references[0].adapter == "tracker"
+    assert discussion_policy.schema_version == "ocr.review-context-policy/v2"
+    assert discussion_policy.remediation_threads is not None
+    assert discussion_policy.references == ()
     assert stdio[0].name == "tracker" and stdio[0].type == "stdio"
-    assert remote[0].name == "knowledge" and remote[0].type == "remote"
+    assert remote[0].name == "tracker" and remote[0].type == "remote"
     assert remote[0].url == ("https://context-proxy.example.invalid/v1/authorize-and-resolve")
+    assert adapter_policy.references[0].adapter == stdio[0].name == remote[0].name
+
+    mode_root = PROJECT_ROOT / "examples" / "gitlab" / "modes"
+    adapter_recipe = (mode_root / "enriched-adapters.gitlab-ci.yml").read_text(encoding="utf-8")
+    adapter_json = adapter_recipe.split("OCR_REVIEW_CONTEXT_ADAPTERS_JSON: >-\n", 1)[
+        1
+    ].splitlines()[0]
+    adapter_config = parse_adapter_config(adapter_json.strip())
+    assert adapter_config[0].name == "tracker" and adapter_config[0].type == "remote"
+
+    direct_recipe = (mode_root / "direct-mcp.gitlab-ci.yml").read_text(encoding="utf-8")
+    direct_json = direct_recipe.split("OCR_MCP_SERVERS_JSON: >-\n", 1)[1].splitlines()[0]
+    monkeypatch.setenv("REVIEW_EVIDENCE_MCP_AUTHORIZATION", "example-test-secret")
+    direct_config = parse_mcp_servers(direct_json.strip(), profile="gitlab_mr")
+    assert direct_config[0].name == "review_evidence"
+    assert direct_config[0].transport == "remote"
+    assert direct_config[0].tools == ["read_review_evidence"]
+
+
+def test_public_accepted_decisions_recipe_matches_runtime_parser() -> None:
+    recipe = (PROJECT_ROOT / "examples" / "gitlab" / "accepted-decisions.md").read_text(
+        encoding="utf-8"
+    )
+    parsed = parse_accepted_decisions(
+        recipe,
+        changed_paths=("services/api/routes.py", "src/client/generated/client.py"),
+        today=date(2026, 8, 22),
+    )
+
+    assert parsed.diagnostics == ()
+    assert [decision.decision_id for decision in parsed.decisions] == [
+        "generated-client-timeout",
+        "staged-api-removal",
+    ]
+    assert all(decision.applicability == "applicable" for decision in parsed.decisions)
 
 
 def test_public_docs_describe_the_established_m5_boundary() -> None:
@@ -228,21 +275,26 @@ def test_public_docs_describe_the_established_m5_boundary() -> None:
 
     for contract in (
         "ocr.review-context-policy/v1",
+        "ocr.review-context-policy/v2",
+        "ocr.context-store/v2",
         "ocr.context-adapter-request/v1",
         "ocr.context-adapter-response/v1",
         "context_list",
         "context_get",
         "receipt v5",
         "schema_version",
-        "no upgrade path",
+        "no store or receipt migration path",
         "semantic paraphrase",
     ):
         assert contract in bounded
     for document in (configuration, gitlab, operations, security):
         assert "receipt v5" in document
         assert "review-context.md" in document
-    assert "M5 is established in v0.7.0" in strategy
-    assert "M5 Bounded review-context enrichment<br/>established" in roadmap
+    assert "M5's foundation is established in v0.7.0" in strategy
+    assert "M5 Bounded review-context enrichment<br/>established / in progress" in roadmap
+    assert "DLP-clean metadata, generic discussions, and adapter records" in strategy
+    assert "v0.8.0 remediation/provider-neutral extension remains in progress" in roadmap
+    assert "release-deferred until external qualification" in roadmap
     assert "protected release workflow" in roadmap
     assert "independent registry/GitHub readback" in roadmap
     assert "complete BL-023 broker remains planned" not in roadmap

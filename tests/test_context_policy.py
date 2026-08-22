@@ -63,6 +63,23 @@ def encoded_policy(value: dict[str, object] | None = None) -> bytes:
     return json.dumps(value or policy_value(), sort_keys=True).encode("utf-8")
 
 
+def remediation_policy_value() -> dict[str, object]:
+    value = policy_value()
+    value["schema_version"] = "ocr.review-context-policy/v2"
+    value["remediation_threads"] = {
+        "required": False,
+        "account_classes": ["automation", "user"],
+        "include_resolved": True,
+        "include_outdated": False,
+        "max_age_seconds": 2592000,
+        "max_threads": 10,
+        "max_replies_per_thread": 8,
+        "max_items": 80,
+        "budgets": {"max_chars": 12000, "max_bytes": 24000, "max_lines": 300},
+    }
+    return value
+
+
 def git(root: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -87,6 +104,40 @@ def test_policy_parser_accepts_exact_protected_contract() -> None:
         "state",
         "version",
     )
+
+
+def test_policy_v2_adds_fixed_remediation_threads_without_changing_v1() -> None:
+    legacy = parse_policy(encoded_policy())
+    current = parse_policy(encoded_policy(remediation_policy_value()))
+
+    assert legacy.schema_version == "ocr.review-context-policy/v1"
+    assert legacy.remediation_threads is None
+    assert current.schema_version == "ocr.review-context-policy/v2"
+    assert current.remediation_threads is not None
+    assert current.remediation_threads.account_classes == ("automation", "user")
+    assert current.remediation_threads.max_replies_per_thread == 8
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update({"schema_version": "ocr.review-context-policy/v1"}),
+        lambda value: value["remediation_threads"].update({"projections": {}}),
+        lambda value: value["remediation_threads"].update(
+            {"account_classes": ["toolkit_bot", "user"]}
+        ),
+        lambda value: value["references"][0].update(
+            {"resource_class": "remediation_thread", "recognizer": {"type": "explicit"}}
+        ),
+    ],
+)
+def test_policy_rejects_remediation_authority_expansion(mutation: object) -> None:
+    value = remediation_policy_value()
+    assert callable(mutation)
+    mutation(value)
+
+    with pytest.raises(ContextContractError):
+        parse_policy(encoded_policy(value))
 
 
 def test_protected_loader_uses_only_exact_policy_sha_and_path() -> None:

@@ -1,0 +1,5 @@
+variables:
+  OCR_REVIEW_CONTEXT_MODE: "metadata"
+  OCR_AUTO_APPROVE: "true"
+  OCR_REVIEW_CONTEXT_ADAPTERS_JSON: "[]"
+  OCR_MCP_SERVERS_JSON: "{}"

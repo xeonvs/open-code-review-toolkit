@@ -1,0 +1,6 @@
+variables:
+  OCR_REVIEW_CONTEXT_MODE: "metadata"
+  OCR_AUTO_APPROVE: "false"
+  OCR_REVIEW_CONTEXT_ADAPTERS_JSON: "[]"
+  OCR_MCP_SERVERS_JSON: >-
+    {"review_evidence":{"type":"remote","url":"https://review-evidence.example.invalid/v1/mcp","headers_from":{"Authorization":"REVIEW_EVIDENCE_MCP_AUTHORIZATION"},"tools":["read_review_evidence"]}}

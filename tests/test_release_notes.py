@@ -46,6 +46,49 @@ def test_towncrier_categories_preserve_conditional_release_contract() -> None:
     }
 
 
+def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
+    feature = (ROOT / "changelog.d" / "120.feature.md").read_text(encoding="utf-8")
+    mention = (ROOT / "changelog.d" / "125.feature.md").read_text(encoding="utf-8")
+    maintenance = (ROOT / "changelog.d" / "124.maintenance.md").read_text(encoding="utf-8")
+    examples = (ROOT / "changelog.d" / "124.doc.md").read_text(encoding="utf-8")
+    navigation = (ROOT / "changelog.d" / "123.doc.md").read_text(encoding="utf-8")
+
+    for label in ("**Added:**", "**Changed:**", "**Migration:**"):
+        assert label in feature
+    for contract in (
+        "ocr.review-context-policy/v1",
+        "ocr.review-context-policy/v2",
+        "ocr.context-store/v2",
+        "remediation_threads",
+        "remediation_thread",
+        "DLP-clean metadata, generic discussions, and adapter records",
+    ):
+        assert contract in feature
+
+    assert "@<live-bot-username> suppress" in mention
+    assert "@<live-bot-username> resolve" in mention
+    assert "GitLab `GET /user`" in mention
+
+    for removed_name in (
+        "OCR_GITLAB_BOT_USER_ID",
+        "OCR_USE_ANTHROPIC",
+        "OCR_RUN_HELPER_TESTS",
+        "OCR_LLM_SUPPORTS_FUNCTION_CALLING",
+        "OCR_LLM_SUPPORTS_REASONING",
+        "OCR_CONFIG_PATH",
+    ):
+        assert removed_name in maintenance
+    assert maintenance.count("**Removed:**") == 4
+    assert "OCR_LLM_PROTOCOL=anthropic" in maintenance
+    assert "default `openai`" in maintenance
+
+    assert "examples/context/" in examples
+    assert "examples/gitlab/context/" in examples
+    assert ".opencodereview/review-context-policy.json" in examples
+    for path in ("docs/README.md", "docs/codex/README.md", "docs/engineering/README.md"):
+        assert path in navigation
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

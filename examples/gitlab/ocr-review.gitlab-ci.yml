@@ -20,7 +20,6 @@ variables:
   # OCR_POST_BADGES: "shields"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
-  OCR_RUN_HELPER_TESTS: "false"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"
   # Reviews default to English. To request another language, for example Russian, set:
@@ -72,7 +71,6 @@ open_code_review:
       --dest /tmp --requirement /tmp/ocr-toolkit-requirement.txt
     - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/${OCR_TOOLKIT_WHEEL}" | sha256sum --check --strict
     - pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"
-    - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"

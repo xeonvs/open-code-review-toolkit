@@ -2,32 +2,88 @@
 
 Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
 
-## OCR and LLM
+## Toolkit runtime variables
 
-| Variable | Purpose |
-| --- | --- |
-| `OCR_LLM_URL` | OpenAI-compatible chat or responses endpoint. |
-| `OCR_LLM_MODEL` | Exact model identifier passed to OCR. |
-| `OCR_REVIEW_LANGUAGE` | Single review language used by OCR configuration. Defaults to `English`; another explicit language such as `Russian` is optional. |
-| `OCR_LLM_TOKEN` | LLM credential. Never written into generated context. |
-| `OCR_LLM_AUTH_HEADER` | Optional authorization header name; defaults to `Authorization`. |
-| `OCR_LLM_EXTRA_HEADERS` | Optional JSON object of additional string headers. |
-| `OCR_LLM_SUPPORTS_FUNCTION_CALLING` | Boolean capability flag. |
-| `OCR_LLM_SUPPORTS_REASONING` | Boolean capability flag. |
-| `OCR_MAX_TOKENS_BUDGET` | Optional non-negative aggregate input-plus-output token ceiling passed to `ocr review`; `0` (default) is unlimited. |
-| `OCR_LLM_VALIDATE_MODEL` | `true`, `false`, or `auto`; defaults to `false`. |
-| `OCR_LLM_MODELS_URL` | Explicit `/models` metadata URL. |
-| `OCR_LLM_ALLOWED_MODELS` | Optional comma-separated offline allowlist for `auto` validation. |
-| `OCR_CONFIG_PATH` | Override the OCR JSON config path. |
-| `OCR_REVIEW_CONTEXT_MODE` | Closed review-context selector: empty/`off` (default), `metadata`, or protected-policy `enriched`. |
-| `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Exact environment-only allowlist for M5 stdio or remote HTTPS context adapters. It is separate from direct MCP configuration. |
+These are the complete supported toolkit-owned runtime inputs. `Required` is scoped to the command or mode named in the behavior column; an unrelated command does not require the variable.
 
-## MCP
+| Variable | Source / owner | Required | Exact default | Behavior |
+| --- | --- | --- | --- | --- |
+| `OCR_LLM_URL` | Operator / `ocr-ci configure` | Yes for review | None | Absolute HTTPS LLM endpoint passed to OCR. |
+| `OCR_LLM_TOKEN` | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
+| `OCR_LLM_MODEL` | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
+| `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
+| `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
+| `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
+| `OCR_LLM_EXTRA_BODY` | Operator / `ocr-ci configure` | No | Unset | JSON object merged into the OCR LLM request configuration. |
+| `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
+| `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
+| `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
+| `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute `/models` metadata URL when validation is enabled. |
+| `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
+| `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration. |
+| `OCR_TELEMETRY_CONTENT_LOGGING` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR content logging; keep disabled for private review data. |
+| `OCR_TELEMETRY_EXPORTER` | Operator / `ocr-ci configure` | No | Empty string | Exporter name written only when telemetry is enabled. |
+| `OCR_TELEMETRY_OTLP_ENDPOINT` | Operator / `ocr-ci configure` | No | Unset | OTLP endpoint written only when telemetry is enabled and the value is non-empty. |
+| `OCR_REVIEW_CONTEXT_MODE` | Operator / review launcher | No | `off` | Closed selector: `off`, `metadata`, or protected-policy `enriched`. |
+| `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Operator / context broker | No | Empty list | Exact allowlist of bounded stdio or remote HTTPS context adapters. |
+| `OCR_MCP_SERVERS_JSON` | Operator / MCP composition | No | Empty object | JSON mapping of direct bounded stdio or Streamable HTTP MCP definitions. |
+| `OCR_MCP_REPLACE` | Operator / MCP composition | No | `false` | Boolean; replace inherited OCR MCP entries instead of merging by name. |
+| `OCR_POST_MODE` | Operator / posting | No | `draft` | `draft` is normal transactional publication; `direct` is the emergency fallback. |
+| `OCR_STRICT_POSTING` | Operator / posting | No | `false` | Boolean; make posting failures fail the job when enabled. |
+| `OCR_POST_EMOJI` | Operator / formatting | No | `true` | Boolean; controls toolkit-added emoji only. |
+| `OCR_POST_BADGES` | Operator / formatting | No | `text` | `text` or `shields`; invalid values fail back to private-safe `text`. |
+| `OCR_AUTO_APPROVE` | Operator / approval | No | `true` | Boolean; invalid values fail closed to disabled. Receipt and evidence gates remain authoritative. |
+| `OCR_MAX_POST_COMMENTS` | Operator / posting | No | `50` | Non-negative individual-comment limit, capped at `200`. |
+| `OCR_MAX_RESULT_BYTES` | Operator / result loader | No | `2000000` | Positive result byte limit, capped at `20000000`. |
+| `OCR_POST_ERROR_DETAILS` | Operator / posting | No | Unset (disabled) | Only exact `1` admits the bounded redacted OCR stderr excerpt into a failure note. |
+| `OCR_EXIT_CODE` | Review job handoff / posting | No | `0` | OCR process exit code passed from `ocr-ci review` to `ocr-ci post`. |
 
-| Variable | Purpose |
-| --- | --- |
-| `OCR_MCP_SERVERS_JSON` | JSON object mapping names to bounded stdio or native Streamable HTTP definitions. |
-| `OCR_MCP_REPLACE` | Replace configured MCP servers when true; otherwise merge by server name. |
+`OCR_USE_ANTHROPIC` is not a compatibility alias in 0.8.0. Any presence fails configuration with an explicit request to set `OCR_LLM_PROTOCOL=anthropic`, preventing a stale false value from silently selecting the default OpenAI protocol.
+
+`OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used only for the isolated OCR home and binary lookup; `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+
+## GitLab and provider variables
+
+GitLab supplies the `CI_*` values in merge-request pipelines. The operator supplies the dedicated API token.
+
+| Variable | Source / owner | Required | Exact default | Behavior |
+| --- | --- | --- | --- | --- |
+| `GITLAB_API_TOKEN` | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
+| `CI_API_V4_URL` | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
+| `CI_SERVER_URL` | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
+| `CI_PROJECT_ID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric project identity used for provider APIs and receipts. |
+| `CI_MERGE_REQUEST_IID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric merge-request identity and mode signal. |
+| `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | GitLab predefined | Yes for the recommended review range | Falls back to `CI_COMMIT_SHA` only where explicitly documented | Exact reviewed source head used by the review, receipt, and posting revalidation. |
+| `CI_MERGE_REQUEST_DIFF_BASE_SHA` | GitLab predefined | Yes for the recommended review range | None | Exact merge-request diff base passed to OCR and evidence collection. |
+| `CI_COMMIT_SHA` | GitLab predefined | No | None | Fallback head identity when the MR-specific source SHA is unavailable; it does not replace the diff base. |
+| `CI_PIPELINE_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
+| `CI_JOB_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
+| `CI_PIPELINE_SOURCE` | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
+
+## Example-local variables
+
+These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell or pipeline controls, not additional toolkit configuration.
+
+| Variable | Source / owner | Required | Exact default | Behavior |
+| --- | --- | --- | --- | --- |
+| `OCR_VERSION` | Example pipeline | Yes | `v1.9.9` | Checksum-pinned recommended OCR binary release. |
+| `OCR_SHA256` | Example pipeline | Yes | `52f993c615a6b456cb1c36fc135fec6b8da19cb88da7f305bd2726c3d72f1cf0` | Expected Linux AMD64 OCR binary digest. |
+| `OCR_TOOLKIT_VERSION` | Example pipeline | Yes | `0.7.1` | Exact toolkit wheel release installed by the current published example. |
+| `OCR_TOOLKIT_CHECKSUMS_URL` | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
+| `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
+| `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
+| `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
+
+## Dynamic adapter and MCP inputs
+
+| Variable | Source / owner | Required | Exact default | Behavior |
+| --- | --- | --- | --- | --- |
+| Names declared by adapter `env_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Inject an adapter environment value by exact variable name; missing names fail closed. |
+| Names declared by adapter `headers_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Supply a remote adapter header without persisting its secret value in configuration. |
+| Names declared by MCP `env_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Inject a local-profile stdio MCP environment value by exact variable name. |
+| Names declared by MCP `headers_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Supply a remote MCP header by reference for OCR expansion at connection time. |
+
+## MCP composition and trust boundary
 
 OCR receives every MCP as an independent named entry in its `mcp_servers` registry. The toolkit always installs the fixed `ocr_toolkit_evidence` entry; each configured external MCP is an optional sibling with a non-empty explicit tool-name allowlist. Reserved names and cross-server tool collisions fail closed, so an external server cannot shadow mandatory evidence.
 
@@ -37,11 +93,11 @@ A GitLab-MR external server therefore looks like:
 
 ```json
 {
-  "bounded_reference": {
+  "review_evidence": {
     "type": "remote",
-    "url": "https://mcp.synthetic.invalid/v1",
-    "headers_from": {"Authorization": "SYNTHETIC_MCP_AUTH_HEADER"},
-    "tools": ["read_admitted_record"]
+    "url": "https://review-evidence.example.invalid/v1/mcp",
+    "headers_from": {"Authorization": "REVIEW_EVIDENCE_MCP_AUTHORIZATION"},
+    "tools": ["read_review_evidence"]
   }
 }
 ```
@@ -56,9 +112,9 @@ An unavailable optional server or tool/protocol error can degrade while OCR cont
 
 `OCR_REVIEW_CONTEXT_MODE` is parsed before provider acquisition or OCR execution. Missing, empty, and `off` select identity-only acquisition: the provider still validates the source SHA, protected target identity, and positive merge-request author ID needed by policy and approval, but title, description, labels, and source branch are not normalized or stored. `metadata` requires a validated GitLab merge-request environment and admits only the existing bounded title, description, label, and optional source-branch projection. Every field reports a closed status; metadata is `complete` only when every selected field is absent or admitted. Invalid, over-limit, collision, redaction-limit, or partial states are `degraded`.
 
-`enriched` requires a validated GitLab merge request and a valid `.opencodereview/review-context-policy.json` read only from the captured protected-target policy SHA. It adds policy-selected GitLab discussions and adapter records through a separate private store and fixed `context_list`/`context_get` tools. A source policy cannot expand access; missing or invalid protected policy fails before OCR. `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` is an exact operator allowlist, and protected policy may only narrow it. See [Bounded review context](review-context.md) for the complete policy, stdio/HTTPS proxy protocol, projections, handles, DLP, completeness, receipt, and cleanup contracts.
+`enriched` requires a validated GitLab merge request and a valid `.opencodereview/review-context-policy.json` read only from the captured protected-target policy SHA. It adds policy-selected generic GitLab discussions, verified remediation threads, and adapter records through a separate private store and fixed `context_list`/`context_get` tools. A source policy cannot expand access; missing or invalid protected policy fails before OCR. `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` is an exact operator allowlist, and protected policy may only narrow it. See [Bounded review context](review-context.md) for policy v1/v2 compatibility, the stdio/HTTPS proxy protocol, fixed remediation projection, handles, DLP, completeness, receipt, and cleanup contracts.
 
-Complete metadata remains untrusted invocation evidence but does not independently block approval. Degraded metadata does. Required enriched-source degradation and every admitted mutable discussion or external record also block approval; optional degradation remains visible and cannot prove absence. A complete enriched run with zero admitted mutable records may pass the remaining gates. No context mode can change policy, suppression, posting authority, credentials, or approval thresholds.
+Complete DLP-admitted metadata, generic discussions, and dynamic records remain untrusted evidence but do not independently block approval. Degraded metadata, any DLP rejection, required enriched-source degradation, and every admitted remediation thread do block approval; optional non-DLP degradation remains visible and cannot prove absence. A complete enriched run without admitted remediation may pass the remaining receipt and evidence gates. No context mode can change policy, suppression, posting authority, credentials, or approval thresholds.
 
 ## GitLab CI inputs
 
@@ -71,7 +127,7 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 `OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
 
 `OCR_MAX_TOKENS_BUDGET` is an operator-owned cost ceiling for one diff review,
-not a quality profile or telemetry setting. The synthetic GitLab example passes
+not a quality profile or telemetry setting. The complete GitLab pipeline passes
 it directly to the recommended OCR's `--max-tokens-budget`; leave it at `0` for
 unlimited review. When a positive ceiling stops dispatch, OCR preserves completed
 findings and reports the unreviewed files as budget-attributed failed coverage.
@@ -104,8 +160,8 @@ The initial policy is fixed: zero findings, or at most three findings whose
 severity is exactly `low` and category is exactly `style`, `documentation`, or
 `maintainability`, are eligible. Missing, unknown, differently cased, or
 non-string metadata blocks approval, as do warnings, failed or waived coverage,
-partial/budget outcomes, any receipt other than v5, degraded selected metadata, any configured direct external MCP, required context degradation, admitted mutable context,
-and findings omitted by `OCR_MAX_POST_COMMENTS`. For receipt v5, complete metadata, complete zero-record enrichment, private-only sanitization, and the built-in evidence/context MCP are not blockers. GitLab posting also revalidates the receipt-bound source SHA and author ID, and skips without writing when the author changed or the toolkit user authored the merge request. There are intentionally no
+partial/budget outcomes, any receipt other than v5, degraded selected metadata, any configured direct external MCP, required context degradation, a DLP-rejected selected source, admitted remediation context,
+and findings omitted by `OCR_MAX_POST_COMMENTS`. For receipt v5, complete metadata, complete non-remediation enrichment, private-only sanitization, and the built-in evidence/context MCP are not blockers. GitLab posting also revalidates the receipt-bound source SHA and author ID, and skips without writing when the author changed or the toolkit user authored the merge request. There are intentionally no
 environment variables for policy thresholds or category lists in this release.
 
 `ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
@@ -122,7 +178,7 @@ Evidence-store schema v2 includes closed `framework.detected` (`repository.frame
 
 Implementation-wise, package and automation metadata is normalized by the internal `ocr_toolkit.evidence.ecosystems` source-adapter layer before framework plugins consume it. This is not a user-configurable runtime plugin namespace: adapter registration, bounded immutable reads, storage, and MCP serving remain toolkit-owned closed contracts.
 
-The synthetic GitLab `rules.json` uses additive `include` entries for `.j2`, `.jinja`, `.jinja2`, `.twig`, and conventional Ansible-role template paths because the [recommended OCR](compatibility.md) does not review those extensions by default. Explicit excludes still win. The matching Jinja/Twig rules are review guidance; they do not execute or render templates, infer runtime variables, or replace evidence completeness.
+The GitLab `rules.json` example uses additive `include` entries for `.j2`, `.jinja`, `.jinja2`, `.twig`, and conventional Ansible-role template paths because the [recommended OCR](compatibility.md) does not review those extensions by default. Explicit excludes still win. The matching Jinja/Twig rules are review guidance; they do not execute or render templates, infer runtime variables, or replace evidence completeness.
 
 Evidence-store schema v4 retains v1-v3 readback and adds a distinct immutable policy snapshot without relabelling the forge diff base. Current structured decisions and guidance bind to the policy SHA while applicability remains bound to the unchanged base-to-head changed paths. Schema v3 keeps its historical base-bound policy semantics, schema v2 text-only records retain explicit legacy provenance, and schema v1 remains readable with unknown completeness. Framework plugins publish `framework.declaration`, `framework.resolution`, `framework.configuration`, and `template.inventory` scopes. Supported malformed or omitted manifests, source-item limits, configuration/template output limits, unsafe template object types, local Go replacements, and isolated provider failures all prevent a false completeness claim. Only `complete` coverage permits a missing positive fact to support an absence claim; absent, `partial`, `runtime-dependent`, and `unavailable` coverage mean unknown. Schema-v1 stores remain readable but are explicitly treated as having unknown completeness. The Ansible adopter recognizes static, plugin-based, and executable inventory sources without execution and models the recursive role `defaults/main/` and `vars/main/` loader surface verified for ansible-core 2.17 through the current 2.x loader contract. Unsupported later loader behavior or bounded read/parser failures degrade coverage rather than becoming false completeness.
 
@@ -132,7 +188,7 @@ The review step writes exact closed receipt v5 inside the private result only af
 
 ### Accepted project decisions
 
-Use `.opencodereview/accepted-decisions.md` for reviewed target-branch tradeoffs that should be available as contextual evidence. Each H2 section is one decision. Existing heading-and-rationale entries remain valid; optional metadata adds explicit applicability and maintenance information:
+Use `.opencodereview/accepted-decisions.md` for reviewed target-branch tradeoffs that should be available as contextual evidence. Each H2 section is one decision. Existing heading-and-rationale entries remain valid; optional metadata adds explicit applicability and maintenance information. A complete copyable file is available at [`examples/gitlab/accepted-decisions.md`](../examples/gitlab/accepted-decisions.md):
 
 ```markdown
 ## generated-client-timeout
@@ -149,7 +205,15 @@ The generated client keeps the provider timeout so regeneration stays reproducib
 
 The optional inline convention `# ocr-accept: generated-client-timeout` can still connect a rationale to code for human readers, but it is not a source-code parser or marker authority. Accepted decisions are not static-analysis exemptions, unconditional suppression, or permission to ignore unrelated findings. `Category` and `Owner` are descriptive. `Review after` is a strict ISO date: the decision is surfaced as stale from that UTC date but remains visible until maintainers review or remove it.
 
-Only the immutable target/base document is policy evidence. Source-branch edits never create authority. The compact bootstrap contains bounded summaries only for applicable decisions; full redacted rationale, provenance, scope, applicability, and staleness remain queryable through the built-in `ocr_toolkit_evidence` MCP. Reviewers should continue to use `/ocr suppress` or `/ocr resolve` for a concrete GitLab discussion.
+Only the immutable target/base document is policy evidence. Source-branch edits never create authority. The compact bootstrap contains bounded summaries only for applicable decisions; full redacted rationale, provenance, scope, applicability, and staleness remain queryable through the built-in `ocr_toolkit_evidence` MCP. Reviewers should continue to use `/ocr suppress`, `/ocr resolve`, or their exact live-bot mention equivalents for a concrete GitLab discussion.
+
+Usage happens in a later merge request. First merge the decision document to the protected target branch. When a later change touches a matching scope, the bootstrap lists the applicable decision ID and instructs OCR to use the evidence MCP. OCR lists the protected records with:
+
+```json
+{"action":"list","kind":"repository.accepted_decision","ref":"policy"}
+```
+
+It then passes the stable `id` returned by `list` to `{"action":"get","id":"<id>"}` and compares the full rationale with the current code and test evidence. A matching decision may explain a deliberate tradeoff, but it cannot suppress a finding, grant an action, or prove that the current implementation still satisfies the rationale.
 
 ### Target project guidance
 

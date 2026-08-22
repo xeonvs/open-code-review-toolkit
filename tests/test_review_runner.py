@@ -17,10 +17,16 @@ from types import SimpleNamespace
 import pytest
 
 from ocr_toolkit import review_runner
+from ocr_toolkit.context.broker import BrokerResult
 from ocr_toolkit.context.contracts import RecognizerPolicy
+from ocr_toolkit.context.policy import parse_policy
+from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
+from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifacts
+from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from tests.support import patched_attr, patched_env
+from tests.test_context_policy import encoded_policy, remediation_policy_value
 
 DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
@@ -29,6 +35,47 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     context_mode="off",
     context=None,
 )
+
+
+def enriched_identity() -> review_runner.ReviewIdentity:
+    """Return one provider-normalized enriched-review identity."""
+
+    context = normalize_merge_request_context(
+        provider="gitlab",
+        project_id="7",
+        merge_request_iid="9",
+        source_sha="a" * 40,
+        title="Validate current behavior",
+        description="Review the implementation and its tests.",
+        labels=["review"],
+        source_branch="feature/context",
+    )
+    return review_runner.ReviewIdentity(
+        source_sha="a" * 40,
+        policy_sha="b" * 40,
+        mr_author_id=41,
+        context_mode="enriched",
+        context=context,
+    )
+
+
+def configure_enrichment_test(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    provider_acquire: object,
+    external_acquire: object,
+) -> EvidenceArtifacts:
+    """Install only the composition-edge fakes shared by enrichment tests."""
+
+    policy = parse_policy(encoded_policy(remediation_policy_value()))
+    artifacts = repository_artifacts(tmp_path)
+    artifacts.directory.mkdir(mode=0o700)
+    monkeypatch.setattr(review_runner, "load_protected_policy", lambda *_args, **_kwargs: policy)
+    monkeypatch.setattr(review_runner, "acquire_gitlab_context", provider_acquire)
+    monkeypatch.setattr(review_runner, "acquire_external_records", external_acquire)
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    return artifacts
 
 
 def test_default_termination_signal_is_translated_for_cleanup() -> None:
@@ -65,6 +112,158 @@ def test_reference_candidate_dedup_preserves_independent_resource_classes() -> N
         "issue",
         "document",
     ]
+
+
+def test_enrichment_composes_one_provider_snapshot_without_remediation_reference_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = enriched_identity()
+    discussion = SimpleNamespace(
+        thread=0,
+        reply=0,
+        author_class="user",
+        author_pseudonym="actor-0123456789abcdef",
+        body="Investigate DEMO-7 before merge.",
+        created_at=100,
+        updated_at=110,
+        resolved=False,
+        outdated=False,
+        anchor={"path": "src/review.py", "line": 8},
+        version="110",
+        digest="c" * 64,
+    )
+    remediation_reply = SimpleNamespace(
+        order=0,
+        author_class="user",
+        author_pseudonym="actor-fedcba9876543210",
+        body="DEMO-99 is claimed to be fixed; verify the current code.",
+        created_at=120,
+        updated_at=130,
+    )
+    remediation = SimpleNamespace(
+        root_author_pseudonym="actor-0123456789abcdef",
+        root_body="Finding DEMO-99: validate the command before execution.",
+        anchor_state="current",
+        replies=(remediation_reply,),
+        completeness="complete",
+        resolved_count=0,
+        outdated_count=0,
+        version="130",
+        digest="d" * 64,
+    )
+    snapshot = SimpleNamespace(
+        discussions=SimpleNamespace(state="complete", records=(discussion,)),
+        remediation_threads=SimpleNamespace(state="complete", records=(remediation,)),
+    )
+    calls = 0
+    selected: list[str] = []
+
+    def acquire(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        return snapshot
+
+    def external(**kwargs: object) -> BrokerResult:
+        selections = kwargs["selections"]
+        assert isinstance(selections, list)
+        selected.extend(selection.candidate.value for selection in selections)
+        return BrokerResult((), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False)
+
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=acquire,
+        external_acquire=external,
+    )
+
+    context_config, receipt = review_runner._prepare_enrichment(
+        identity,
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert calls == 1
+    assert selected == ["DEMO-7"]
+    assert context_config is not None and receipt is not None
+    assert receipt.mutable_admitted is True
+    assert receipt.required_degraded is False
+    restored = ContextStore.read(
+        artifacts.context_store,
+        expected_run_id=context_config.run_id,
+        expected_policy_digest=context_config.policy_digest,
+        now=0,
+    )
+    assert [record.resource_class for record in restored.records] == [
+        "issue",
+        "remediation_thread",
+    ]
+    assert review_runner._remediation_mutable_admitted(restored.records) is True
+    assert (
+        review_runner._remediation_mutable_admitted(
+            tuple(record for record in restored.records if record.resource_class == "issue")
+        )
+        is False
+    )
+    serialized = artifacts.context_store.read_text(encoding="utf-8")
+    assert "DEMO-7" in serialized
+    assert "DEMO-99" in serialized
+    assert "gitlab" in serialized
+    assert "must-not-survive" not in serialized
+
+
+def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = enriched_identity()
+    snapshot = SimpleNamespace(
+        discussions=SimpleNamespace(
+            state="partial",
+            records=(),
+            omitted=1,
+            dlp_rejected=1,
+        ),
+        remediation_threads=SimpleNamespace(state="complete", records=()),
+    )
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: snapshot,
+        external_acquire=lambda **_kwargs: BrokerResult(
+            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
+        ),
+    )
+
+    _context_config, receipt = review_runner._prepare_enrichment(
+        identity,
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert receipt is not None
+    assert receipt.required_degraded is True
+    assert receipt.mutable_admitted is False
+    assert receipt.completeness["forge:gitlab_discussions"] == "partial"
+    assert receipt.degradation_counts == {"invalid": 1, "limit": 0, "unavailable": 0}
+
+
+def test_combined_context_budget_counts_nested_remediation_text() -> None:
+    from dataclasses import replace
+
+    from ocr_toolkit.context.policy import parse_policy
+    from tests.test_context_policy import encoded_policy, remediation_policy_value
+    from tests.test_context_store import remediation_pending
+
+    policy = parse_policy(encoded_policy(remediation_policy_value()))
+    policy = replace(
+        policy,
+        budgets=replace(policy.budgets, max_chars=32, max_bytes=64, max_lines=10),
+    )
+    record = remediation_pending()
+
+    admitted, limited = review_runner._bounded_combined_records([record], policy)
+
+    assert admitted == []
+    assert limited == {record.source}
 
 
 def test_evidence_mcp_self_query_exercises_all_read_actions() -> None:

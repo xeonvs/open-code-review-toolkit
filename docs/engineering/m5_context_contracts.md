@@ -12,11 +12,11 @@ OCR performs one review and one model loop. The toolkit does not run contextual 
 
 The only policy path is `.opencodereview/review-context-policy.json`. It is read as a bounded regular immutable Git blob from the captured protected-target policy SHA. A working-tree or source-branch file, symlink, submodule, missing/unsafe object, invalid UTF-8, duplicate JSON key, oversized input, unknown field/version, or impossible projection is rejected. Explicit `enriched` mode without a valid policy fails before OCR.
 
-The exact top-level schema is:
+Policy v1 remains accepted for existing discussion/reference configurations. Policy v2 is additive and is required only when `remediation_threads` is selected:
 
 ```json
 {
-  "schema_version": "ocr.review-context-policy/v1",
+  "schema_version": "ocr.review-context-policy/v2",
   "budgets": {
     "max_records": 32,
     "max_chars": 48000,
@@ -25,15 +25,18 @@ The exact top-level schema is:
     "timeout_ms": 15000
   },
   "forge_discussions": {},
+  "remediation_threads": {},
   "references": []
 }
 ```
 
 `forge_discussions` is optional and exact-schema. When present it contains `required`, `account_classes`, `include_resolved`, `include_outdated`, `max_age_seconds`, `max_threads`, `max_replies_per_thread`, `max_items`, source `budgets`, and `projections`. Account classes are the closed set `user`, `automation`, `system`, and `toolkit_bot`; an unknown class makes that record unavailable.
 
+`remediation_threads` is optional only in v2. It has the same required/account/resolution/age/thread/reply/item/text-budget bounds but no configurable projection. `toolkit_bot` is not a reply allowlist choice: the root is independently required to match the live authenticated bot identity and a valid toolkit marker/fingerprint, while admitted replies use only explicitly selected non-toolkit account classes. The fixed model projection is one thread object containing a DLP-checked root with a run-local actor identity, a closed anchor state, ordered DLP-checked pseudonymized replies, closed completeness, and bounded reply/resolved/outdated counts. Policy v1 rejects this field rather than silently ignoring it.
+
 Each reference entry contains `adapter`, `tenant`, `resource_class`, `recognizer`, `required`, `max_records`, `max_age_seconds`, source text budgets, and `projections`. Resource classes are `issue` and `document`. Recognizers are exact toolkit grammars: protected-prefix issue keys, exact protected HTTPS origin/path prefix, or an explicit bounded reference form. User-configurable regular expressions and repository-wide text search are absent.
 
-Every source uses the exact projection object:
+Generic discussions and reference sources use the exact projection object:
 
 ```json
 {
@@ -44,7 +47,7 @@ Every source uses the exact projection object:
 }
 ```
 
-The allowed field vocabulary is closed per projection. `model`, `publish`, and `retain` must each be subsets of `retrieve`; retention additionally rejects text, upstream identifiers, URLs, commands, transport data, personal display data, and raw payloads. A policy with neither discussions nor references is invalid.
+The allowed field vocabulary is closed per generic projection. `model`, `publish`, and `retain` must each be subsets of `retrieve`; retention additionally rejects text, upstream identifiers, URLs, commands, transport data, personal display data, and raw payloads. Remediation's nested projection cannot be selected by generic discussions or reference adapters and cannot appear in publish or retain projections. A policy with none of generic discussions, remediation threads, or references is invalid.
 
 ## Protected rules-path setup outcome
 
@@ -78,7 +81,7 @@ Stdio uses a clean environment, isolated owner-only working/home directory, boun
 
 ## Context store and handles
 
-The private artifact is `ocr.context-store/v1`. It is written owner-only through atomic replacement and read back as hostile input. The envelope binds store/run/policy identity, creation/expiry, completeness, records, handle index, and a canonical digest. Symlink, non-regular file, extra hard link, unsafe permissions, oversize, duplicate/colliding key, partial replacement, impossible projection, record/index mismatch, and stale identity fail closed.
+The private artifact is `ocr.context-store/v2`. It is written owner-only through atomic replacement and read back as hostile input. The envelope binds store/run/policy identity, creation/expiry, completeness, records, handle index, and a canonical digest. Symlink, non-regular file, extra hard link, unsafe permissions, oversize, duplicate/colliding key, partial replacement, impossible projection, record/index mismatch, and stale identity fail closed. Store v2 adds the `remediation_thread` resource class and its fixed nested model projection; generic adapter resource classes remain only `issue` and `document`.
 
 A handle is `ctx1_` plus 32 random bytes encoded as unpadded base64url. It is minted only after a completely normalized, retrieval-DLP-checked record is committed. Private mapping binds run, adapter, tenant, canonical object digest, resource class, allowed projections, version/digest, policy digest, expiry, and record. A caller-supplied upstream ID or URL is never accepted as a handle.
 
@@ -86,7 +89,7 @@ A handle is `ctx1_` plus 32 random bytes encoded as unpadded base64url. It is mi
 
 `off` and `metadata` expose only `ocr_toolkit_evidence`. `enriched` exposes exactly `ocr_toolkit_evidence`, `context_list`, and `context_get` from the same built-in stdio process.
 
-`context_list` accepts only closed source/resource-class filters, an opaque store-bound cursor, and a bounded page size. It returns minted handles, safe descriptors, per-source completeness, and the next cursor. `context_get` accepts exactly one minted handle and returns only its policy-admitted model projection from the committed local store. Invalid arguments, arbitrary identifiers, wrong-run/policy, expired or missing handles are rejected before record access. Neither tool performs network, subprocess, search, write, or provider operations.
+`context_list` accepts only closed source/resource-class filters (`issue`, `document`, or `remediation_thread`), an opaque store-bound cursor, and a bounded page size. It returns minted handles, safe descriptors, per-source completeness, and the next cursor. `context_get` accepts exactly one minted handle and returns only its policy-admitted model projection from the committed local store. For remediation it returns no raw GitLab identity or provider object: only run-local actors, DLP-checked root/replies, closed anchor/completeness state, and bounded counts. Invalid arguments, arbitrary identifiers, wrong-run/policy, expired or missing handles are rejected before record access. Neither tool performs network, subprocess, search, write, or provider operations.
 
 The bootstrap requires a model-recorded `ocr_toolkit_evidence(action=summary)` call before analysis. Toolkit preflight self-query never satisfies this requirement.
 
@@ -102,7 +105,7 @@ Receipt schema `ocr.toolkit-receipt/v5` stores only closed review/policy identit
 
 Schema versions protect serialized trust boundaries; they are not a database-retention promise. The review result crosses from the review process/job to hostile posting readback, so its version prevents an older field set from inheriting newer approval guarantees. Policy and adapter versions similarly bind independent producers/consumers. Ephemeral evidence/context stores accept only their exact current schema and intentionally have no migration or upgrade path.
 
-Automatic approval preserves every existing manifest, coverage, warning, omission, finding, exact-SHA, author, provider, and self-approval gate. Required-source degradation and any admitted mutable discussion/external record block approval. Optional degradation is visible and cannot prove source absence. A complete enriched run with zero admitted mutable records is not blocked solely because enriched mode was selected.
+Automatic approval preserves every existing manifest, coverage, warning, omission, finding, exact-SHA, author, provider, and self-approval gate. Required-source degradation and any admitted remediation thread block approval. Optional non-DLP degradation is visible and cannot prove source absence. DLP-clean title, description, generic discussion, and adapter context do not block approval solely because they were inspected. DLP rejection degrades its source and can never restore or enable approval. Remediation admission is an independent comment-only condition regardless of the reply's wording.
 
 ## Capability decision for OCR 1.9.8
 

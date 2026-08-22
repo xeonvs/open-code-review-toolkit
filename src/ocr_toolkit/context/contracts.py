@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-POLICY_SCHEMA = "ocr.review-context-policy/v1"
-STORE_SCHEMA = "ocr.context-store/v1"
+POLICY_SCHEMA_V1 = "ocr.review-context-policy/v1"
+POLICY_SCHEMA_V2 = "ocr.review-context-policy/v2"
+POLICY_SCHEMAS = frozenset({POLICY_SCHEMA_V1, POLICY_SCHEMA_V2})
+POLICY_SCHEMA = POLICY_SCHEMA_V2
+STORE_SCHEMA = "ocr.context-store/v2"
 REQUEST_SCHEMA = "ocr.context-adapter-request/v1"
 RESPONSE_SCHEMA = "ocr.context-adapter-response/v1"
 ACCOUNT_CLASSES = frozenset({"user", "automation", "system", "toolkit_bot"})
-RESOURCE_CLASSES = frozenset({"issue", "document"})
+REFERENCE_RESOURCE_CLASSES = frozenset({"issue", "document"})
+RESOURCE_CLASSES = frozenset({*REFERENCE_RESOURCE_CLASSES, "remediation_thread"})
 PROJECTION_FIELDS = frozenset(
     {
         "descriptor",
@@ -28,6 +32,8 @@ PROJECTION_FIELDS = frozenset(
         "expiry",
     }
 )
+REMEDIATION_MODEL_FIELD = "remediation_thread"
+STORE_PROJECTION_FIELDS = frozenset({*PROJECTION_FIELDS, REMEDIATION_MODEL_FIELD})
 RETENTION_FIELDS = frozenset({"state", "count", "digest", "version", "expiry"})
 
 
@@ -79,6 +85,21 @@ class DiscussionPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class RemediationThreadPolicy:
+    """Select verified toolkit-owned GitLab remediation threads."""
+
+    required: bool
+    account_classes: tuple[str, ...]
+    include_resolved: bool
+    include_outdated: bool
+    max_age_seconds: int
+    max_threads: int
+    max_replies_per_thread: int
+    max_items: int
+    budgets: TextBudgets
+
+
+@dataclass(frozen=True, slots=True)
 class RecognizerPolicy:
     """Hold one fixed toolkit-authored candidate grammar."""
 
@@ -110,5 +131,6 @@ class ContextPolicy:
     schema_version: str
     budgets: AggregateBudgets
     forge_discussions: DiscussionPolicy | None
+    remediation_threads: RemediationThreadPolicy | None
     references: tuple[ReferencePolicy, ...]
     digest: str

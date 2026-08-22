@@ -44,6 +44,53 @@ def pending(
     )
 
 
+def remediation_pending(*, expiry: int = 200) -> PendingContextRecord:
+    root = "Finding: validate the command argument before execution."
+    reply = "The current branch adds the missing validation and regression test."
+    digest = hashlib.sha256(f"{root}\n{reply}".encode()).hexdigest()
+    return PendingContextRecord(
+        source="forge_remediation",
+        adapter="gitlab",
+        tenant="current_project",
+        canonical_object=f"thread-{digest}",
+        resource_class="remediation_thread",
+        descriptor="remediation_thread",
+        projections={
+            "model": {
+                "descriptor": "remediation_thread",
+                "remediation_thread": {
+                    "root": {"text": root, "author_pseudonym": "actor-0123456789abcdef"},
+                    "anchor_state": "current",
+                    "replies": [
+                        {
+                            "order": 0,
+                            "author_class": "user",
+                            "author_pseudonym": "actor-fedcba9876543210",
+                            "text": reply,
+                            "created_at": 110,
+                            "updated_at": 120,
+                        }
+                    ],
+                    "completeness": "complete",
+                    "counts": {"replies": 1, "resolved": 0, "outdated": 0},
+                },
+            },
+            "publish": {"descriptor": "remediation_thread", "state": "admitted"},
+            "retain": {
+                "count": 1,
+                "digest": digest,
+                "expiry": expiry,
+                "state": "admitted",
+                "version": "v1",
+            },
+        },
+        version="v1",
+        digest=digest,
+        mutable=True,
+        expiry=expiry,
+    )
+
+
 def commit(path: Path, **kwargs: object) -> ContextStore:
     parameters = {
         "run_id": RUN_ID,
@@ -83,6 +130,74 @@ def test_context_store_commits_owner_only_and_resolves_only_minted_handle(tmp_pa
     for wrong in ("DEMO-1", "https://example.invalid/1", "ctx1_short"):
         with pytest.raises(ContextStoreError, match="unavailable"):
             store.get(wrong, run_id=RUN_ID, policy_digest=POLICY_DIGEST, now=150)
+
+    assert json.loads(path.read_text(encoding="utf-8"))["schema_version"] == (
+        "ocr.context-store/v2"
+    )
+
+
+def test_context_store_admits_only_fixed_remediation_projection(tmp_path: Path) -> None:
+    path = tmp_path / "context-store.json"
+    store = commit(
+        path,
+        completeness={"forge_remediation": "complete"},
+        records=[remediation_pending()],
+    )
+    record = store.records[0]
+    model = record.projections["model"]
+
+    assert record.resource_class == "remediation_thread"
+    assert set(model) == {"descriptor", "remediation_thread"}
+    assert model["remediation_thread"]["replies"][0]["order"] == 0  # type: ignore[index]
+    serialized = path.read_text(encoding="utf-8")
+    assert "current_project" in serialized
+    assert "@" not in serialized
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda thread: thread.update({"provider_id": "raw-7"}),
+        lambda thread: thread["counts"].update({"replies": 0}),
+        lambda thread: thread["replies"][0].update({"order": 1}),
+        lambda thread: thread["replies"][0].update({"author_class": "toolkit_bot"}),
+        lambda thread: thread["root"].update({"text": "person@example.invalid"}),
+        lambda thread: thread.update({"anchor_state": "outdated"}),
+    ],
+)
+def test_context_store_rejects_hostile_remediation_projection(
+    tmp_path: Path, mutation: object
+) -> None:
+    path = tmp_path / "context-store.json"
+    candidate = remediation_pending()
+    thread = candidate.projections["model"]["remediation_thread"]
+    assert callable(mutation) and isinstance(thread, dict)
+    mutation(thread)
+
+    with pytest.raises(ContextStoreError, match="remediation"):
+        commit(
+            path,
+            completeness={"forge_remediation": "complete"},
+            records=[candidate],
+        )
+    assert not path.exists()
+
+
+def test_context_store_keeps_remediation_projection_model_only(tmp_path: Path) -> None:
+    path = tmp_path / "context-store.json"
+    remediation = remediation_pending()
+    remediation.projections["publish"]["remediation_thread"] = remediation.projections["model"][
+        "remediation_thread"
+    ]
+    with pytest.raises(ContextStoreError, match="placement"):
+        commit(path, records=[remediation])
+
+    generic = pending()
+    generic.projections["model"]["remediation_thread"] = remediation_pending().projections["model"][
+        "remediation_thread"
+    ]
+    with pytest.raises(ContextStoreError, match="placement"):
+        commit(path, records=[generic])
 
 
 def test_context_store_rejects_wrong_run_policy_expiry_and_replay(tmp_path: Path) -> None:

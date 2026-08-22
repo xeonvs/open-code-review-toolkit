@@ -59,7 +59,9 @@ def cleared_env(*names: str) -> Iterator[None]:
                 os.environ[name] = value
 
 
-def gitlab_config(current_user_id: int | None = 7) -> gitlab.GitLabConfig:
+def gitlab_config(
+    current_user_id: int | None = 7, current_username: str | None = "ocr_bot"
+) -> gitlab.GitLabConfig:
     """Return a minimal GitLab config for posting tests."""
 
     return gitlab.GitLabConfig(
@@ -69,4 +71,5 @@ def gitlab_config(current_user_id: int | None = 7) -> gitlab.GitLabConfig:
         api_token="token",
         auth_header="PRIVATE-TOKEN",
         current_user_id=current_user_id,
+        current_username=current_username,
     )

@@ -4,23 +4,36 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
-from ocr_toolkit.context.contracts import DiscussionPolicy
-from ocr_toolkit.context.dlp import check_text, normalize_text
+from ocr_toolkit.context.contracts import DiscussionPolicy, RemediationThreadPolicy
+from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.providers.gitlab import GitLabProviderError, _api_root, _numeric_identifier
+from ocr_toolkit.providers.gitlab_context import (
+    SHA_RE,
+    RawGitLabSnapshot,
+    anchor,
+    author_class,
+    pseudonym,
+    timestamp,
+)
+from ocr_toolkit.providers.gitlab_identity import (
+    GitLabIdentityError,
+    fetch_current_user_identity,
+)
+from ocr_toolkit.providers.gitlab_remediation import (
+    RemediationSnapshot,
+    project_remediation_threads,
+)
 
 MAX_PAGE_BYTES = 512 * 1024
 MAX_PAGES = 10
-SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +62,15 @@ class DiscussionSnapshot:
     records: tuple[DiscussionRecord, ...]
     digest: str
     omitted: int
+    dlp_rejected: int
+
+
+@dataclass(frozen=True, slots=True)
+class GitLabContextSnapshot:
+    """Return mutually exclusive projections from one stable provider snapshot."""
+
+    discussions: DiscussionSnapshot | None
+    remediation_threads: RemediationSnapshot | None
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -101,71 +123,23 @@ def _read_page(url: str, token: str, *, deadline: float) -> tuple[object, str]:
         raise GitLabProviderError("GitLab discussions are not valid bounded JSON") from exc
 
 
-def _timestamp(value: object) -> int | None:
-    if not isinstance(value, str) or len(value) > 64:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return None
-    return int(parsed.astimezone(timezone.utc).timestamp())
-
-
-def _author_class(
-    note: Mapping[str, object], author: Mapping[str, object], *, toolkit_bot_id: int | None
-) -> tuple[str, int] | None:
-    author_id = author.get("id")
-    if not isinstance(author_id, int) or isinstance(author_id, bool) or author_id <= 0:
-        return None
-    if note.get("system") is True:
-        return "system", author_id
-    if toolkit_bot_id is not None and author_id == toolkit_bot_id:
-        return "toolkit_bot", author_id
-    if author.get("bot") is True:
-        return "automation", author_id
-    if author.get("state") in {None, "active", "blocked"} and author.get("bot") in {None, False}:
-        return "user", author_id
-    return None
-
-
-def _anchor(position: object, *, source_sha: str) -> tuple[Mapping[str, object], bool, bool]:
-    if position is None:
-        return {}, False, False
-    if not isinstance(position, Mapping):
-        return {}, False, True
-    result: dict[str, object] = {}
-    path = position.get("new_path") or position.get("old_path")
-    normalized = normalize_text(path)
-    if normalized and len(normalized) <= 512 and len(normalized.encode()) <= 2_048:
-        result["path"] = normalized
-    line = position.get("new_line") or position.get("old_line")
-    if isinstance(line, int) and not isinstance(line, bool) and 0 < line <= 10_000_000:
-        result["line"] = line
-    head_sha = position.get("head_sha")
-    if head_sha is not None and (
-        not isinstance(head_sha, str) or SHA_RE.fullmatch(head_sha) is None
-    ):
-        return {}, False, True
-    outdated = isinstance(head_sha, str) and head_sha != source_sha
-    return result, outdated, bool(position.get("position_type") == "text" and not result)
-
-
-def _snapshot_once(
+def _read_raw_snapshot(
     environment: Mapping[str, str],
     *,
     project_id: str,
     merge_request_iid: str,
-    source_sha: str,
-    run_id: str,
-    policy: DiscussionPolicy,
-    now: int,
+    max_threads: int,
     deadline: float,
-    forbidden: tuple[str, ...],
-) -> DiscussionSnapshot:
+) -> RawGitLabSnapshot:
     token = environment.get("GITLAB_API_TOKEN", "").strip()
     api_root = _api_root(environment)
+    try:
+        identity = fetch_current_user_identity(
+            api_root,
+            lambda url: _read_page(url, token, deadline=deadline)[0],
+        )
+    except GitLabIdentityError as exc:
+        raise GitLabProviderError("authenticated GitLab identity is unavailable") from exc
     project = urllib.parse.quote(project_id, safe="")
     pages: list[object] = []
     unfetched = 0
@@ -182,7 +156,7 @@ def _snapshot_once(
         pages.extend(payload)
         if not next_page:
             break
-        if len(pages) >= policy.max_threads:
+        if len(pages) >= max_threads:
             # The provider proves at least one more page exists. The policy does
             # not authorize fetching it once the admitted thread bound is full.
             unfetched = 1
@@ -192,10 +166,37 @@ def _snapshot_once(
         page = next_page
     else:
         raise GitLabProviderError("GitLab discussions exceed the page limit")
-    toolkit_raw = environment.get("OCR_GITLAB_BOT_USER_ID", "").strip()
-    toolkit_bot_id = int(toolkit_raw) if toolkit_raw.isdecimal() and int(toolkit_raw) > 0 else None
+    raw_body = {
+        "identity": {"id": identity.user_id, "username": identity.username},
+        "pagination_omitted": unfetched,
+        "threads": pages,
+    }
+    digest = hashlib.sha256(
+        json.dumps(raw_body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return RawGitLabSnapshot(
+        identity=identity,
+        threads=tuple(pages),
+        pagination_omitted=unfetched,
+        digest=digest,
+    )
+
+
+def _project_discussions(
+    raw: RawGitLabSnapshot,
+    *,
+    source_sha: str,
+    run_id: str,
+    policy: DiscussionPolicy,
+    now: int,
+    forbidden: tuple[str, ...],
+    excluded_threads: frozenset[int] = frozenset(),
+) -> DiscussionSnapshot:
+    pages = raw.threads
+    toolkit_bot_id = raw.identity.user_id
     records: list[DiscussionRecord] = []
-    omitted = unfetched
+    omitted = raw.pagination_omitted
+    dlp_rejected = 0
     total_chars = total_bytes = total_lines = 0
     for thread_index, thread in enumerate(pages):
         if thread_index >= policy.max_threads:
@@ -203,6 +204,8 @@ def _snapshot_once(
             break
         if not isinstance(thread, Mapping):
             omitted += 1
+            continue
+        if thread_index in excluded_threads:
             continue
         notes = thread.get("notes")
         if not isinstance(notes, list):
@@ -221,7 +224,7 @@ def _snapshot_once(
                 continue
             author = note.get("author")
             classified = (
-                _author_class(note, author, toolkit_bot_id=toolkit_bot_id)
+                author_class(note, author, toolkit_bot_id=toolkit_bot_id)
                 if isinstance(author, Mapping)
                 else None
             )
@@ -229,8 +232,8 @@ def _snapshot_once(
                 omitted += 1
                 continue
             created_at, updated_at = (
-                _timestamp(note.get("created_at")),
-                _timestamp(note.get("updated_at")),
+                timestamp(note.get("created_at")),
+                timestamp(note.get("updated_at")),
             )
             if (
                 created_at is None
@@ -245,7 +248,9 @@ def _snapshot_once(
                 omitted += 1
                 continue
             resolved = note.get("resolved") is True
-            anchor, outdated, anchor_invalid = _anchor(note.get("position"), source_sha=source_sha)
+            note_anchor, outdated, anchor_invalid = anchor(
+                note.get("position"), source_sha=source_sha
+            )
             if (
                 anchor_invalid
                 or (resolved and not policy.include_resolved)
@@ -256,6 +261,7 @@ def _snapshot_once(
             checked = check_text(note.get("body"), budgets=policy.budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 omitted += 1
+                dlp_rejected += 1
                 continue
             body_chars = len(checked.text)
             body_bytes = len(checked.text.encode())
@@ -271,22 +277,19 @@ def _snapshot_once(
             total_bytes += body_bytes
             total_lines += body_lines
             account_class, author_id = classified
-            pseudonym = (
-                "actor-"
-                + hashlib.sha256(f"{run_id}:{account_class}:{author_id}".encode()).hexdigest()[:16]
-            )
+            actor_pseudonym = pseudonym(run_id, account_class, author_id)
             version = str(updated_at)
             value = {
                 "thread": thread_index,
                 "reply": reply_index,
                 "author_class": account_class,
-                "author_pseudonym": pseudonym,
+                "author_pseudonym": actor_pseudonym,
                 "body": checked.text,
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "resolved": resolved,
                 "outdated": outdated,
-                "anchor": dict(anchor),
+                "anchor": dict(note_anchor),
                 "version": version,
             }
             digest = hashlib.sha256(
@@ -295,17 +298,122 @@ def _snapshot_once(
             records.append(DiscussionRecord(digest=digest, **value))
     state = "partial" if omitted else "complete"
     snapshot_body = {
-        "project_id": project_id,
-        "merge_request_iid": merge_request_iid,
+        "raw_digest": raw.digest,
         "source_sha": source_sha,
         "state": state,
         "omitted": omitted,
+        "dlp_rejected": dlp_rejected,
         "records": [record.digest for record in records],
     }
     digest = hashlib.sha256(
         json.dumps(snapshot_body, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    return DiscussionSnapshot(state=state, records=tuple(records), digest=digest, omitted=omitted)
+    return DiscussionSnapshot(
+        state=state,
+        records=tuple(records),
+        digest=digest,
+        omitted=omitted,
+        dlp_rejected=dlp_rejected,
+    )
+
+
+def acquire_gitlab_context(
+    environment: Mapping[str, str],
+    *,
+    project_id: str,
+    merge_request_iid: str,
+    source_sha: str,
+    run_id: str,
+    discussion_policy: DiscussionPolicy | None,
+    remediation_policy: RemediationThreadPolicy | None,
+    now: int,
+    deadline: float | None = None,
+    forbidden: tuple[str, ...] = (),
+) -> GitLabContextSnapshot:
+    """Project one twice-read stable bounded GitLab snapshot without duplication."""
+
+    if (
+        project_id != _numeric_identifier(environment, "CI_PROJECT_ID")
+        or merge_request_iid != _numeric_identifier(environment, "CI_MERGE_REQUEST_IID")
+        or SHA_RE.fullmatch(source_sha) is None
+        or (discussion_policy is None and remediation_policy is None)
+    ):
+        raise GitLabProviderError("GitLab discussion identity is invalid")
+    policies = tuple(
+        policy for policy in (discussion_policy, remediation_policy) if policy is not None
+    )
+    max_threads = max(policy.max_threads for policy in policies)
+    max_items = max(policy.max_items for policy in policies)
+    acquisition_deadline = (
+        time.monotonic() + min(30.0, max(0.1, max_items / 10)) if deadline is None else deadline
+    )
+    first = _read_raw_snapshot(
+        environment,
+        project_id=project_id,
+        merge_request_iid=merge_request_iid,
+        max_threads=max_threads,
+        deadline=acquisition_deadline,
+    )
+    second = _read_raw_snapshot(
+        environment,
+        project_id=project_id,
+        merge_request_iid=merge_request_iid,
+        max_threads=max_threads,
+        deadline=acquisition_deadline,
+    )
+    if first.digest != second.digest:
+        return GitLabContextSnapshot(
+            discussions=(
+                DiscussionSnapshot(
+                    state="mutated",
+                    records=(),
+                    digest=second.digest,
+                    omitted=0,
+                    dlp_rejected=0,
+                )
+                if discussion_policy is not None
+                else None
+            ),
+            remediation_threads=(
+                RemediationSnapshot(
+                    state="mutated",
+                    records=(),
+                    digest=second.digest,
+                    omitted=0,
+                    dlp_rejected=0,
+                )
+                if remediation_policy is not None
+                else None
+            ),
+        )
+    remediation: RemediationSnapshot | None = None
+    excluded_threads: frozenset[int] = frozenset()
+    if remediation_policy is not None:
+        remediation, excluded_threads = project_remediation_threads(
+            second,
+            source_sha=source_sha,
+            run_id=run_id,
+            policy=remediation_policy,
+            now=now,
+            forbidden=forbidden,
+        )
+    discussions = (
+        _project_discussions(
+            second,
+            source_sha=source_sha,
+            run_id=run_id,
+            policy=discussion_policy,
+            now=now,
+            forbidden=forbidden,
+            excluded_threads=excluded_threads,
+        )
+        if discussion_policy is not None
+        else None
+    )
+    return GitLabContextSnapshot(
+        discussions=discussions,
+        remediation_threads=remediation,
+    )
 
 
 def acquire_discussions(
@@ -320,41 +428,19 @@ def acquire_discussions(
     deadline: float | None = None,
     forbidden: tuple[str, ...] = (),
 ) -> DiscussionSnapshot:
-    """Accept only two identical bounded ordered snapshots of the validated MR."""
+    """Compatibility entry point for the generic discussion-only source."""
 
-    if (
-        project_id != _numeric_identifier(environment, "CI_PROJECT_ID")
-        or merge_request_iid != _numeric_identifier(environment, "CI_MERGE_REQUEST_IID")
-        or SHA_RE.fullmatch(source_sha) is None
-    ):
-        raise GitLabProviderError("GitLab discussion identity is invalid")
-    acquisition_deadline = (
-        time.monotonic() + min(30.0, max(0.1, policy.max_items / 10))
-        if deadline is None
-        else deadline
-    )
-    first = _snapshot_once(
+    result = acquire_gitlab_context(
         environment,
         project_id=project_id,
         merge_request_iid=merge_request_iid,
         source_sha=source_sha,
         run_id=run_id,
-        policy=policy,
+        discussion_policy=policy,
+        remediation_policy=None,
         now=now,
-        deadline=acquisition_deadline,
+        deadline=deadline,
         forbidden=forbidden,
     )
-    second = _snapshot_once(
-        environment,
-        project_id=project_id,
-        merge_request_iid=merge_request_iid,
-        source_sha=source_sha,
-        run_id=run_id,
-        policy=policy,
-        now=now,
-        deadline=acquisition_deadline,
-        forbidden=forbidden,
-    )
-    if first.digest != second.digest:
-        return DiscussionSnapshot(state="mutated", records=(), digest=second.digest, omitted=0)
-    return second
+    assert result.discussions is not None
+    return result.discussions

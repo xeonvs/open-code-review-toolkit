@@ -195,10 +195,14 @@ class PostingIdentityTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIsNone(markers.author_id_from_note({"author": {"id": value}}))
 
-        with patched_attr(gitlab, "api_request_url", lambda *_args, **_kwargs: {"id": 7}):
+        with patched_attr(
+            gitlab,
+            "api_request_url",
+            lambda *_args, **_kwargs: {"id": 7, "username": "ocr_bot"},
+        ):
             self.assertEqual(
-                gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN"),
-                7,
+                gitlab.fetch_posting_identity("https://gitlab.example", "token", "PRIVATE-TOKEN"),
+                (7, "ocr_bot"),
             )
         for value in (True, 0, -1, "7", 7.0, None):
             with (
@@ -208,8 +212,11 @@ class PostingIdentityTests(unittest.TestCase):
                 ),
                 redirect_stderr(io.StringIO()),
             ):
-                self.assertIsNone(
-                    gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN")
+                self.assertEqual(
+                    gitlab.fetch_posting_identity(
+                        "https://gitlab.example", "token", "PRIVATE-TOKEN"
+                    ),
+                    (None, None),
                 )
 
     def test_posting_identity_consumers_reject_bool_and_nonpositive_ids(self) -> None:
@@ -410,6 +417,34 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr skip"))
         self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr keep"))
 
+    def test_live_bot_mention_command_supports_gitlab_username_punctuation(self) -> None:
+        cases = {
+            "@mr.bot resolve": "resolve",
+            "  @MR.BOT   SUPPRESS\n \t": "suppress",
+            "/ocr resolve": "resolve",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual(
+                    markers.reviewer_command_from_body(body, bot_username="mr.bot"),
+                    expected,
+                )
+
+    def test_live_bot_mention_command_rejects_non_exact_replies(self) -> None:
+        rejected = (
+            "@mr.bot supress",
+            "@mr.bot resolve please",
+            "Please @mr.bot resolve",
+            "```\n@mr.bot resolve\n```",
+            "@other.bot resolve",
+            "@mrXbot resolve",
+            "@mr.bot retest",
+        )
+        for body in rejected:
+            with self.subTest(body=body):
+                self.assertIsNone(markers.reviewer_command_from_body(body, bot_username="mr.bot"))
+        self.assertIsNone(markers.reviewer_command_from_body("@mr.bot resolve", bot_username=None))
+
     def test_suppress_command_preserves_open_discussion_and_suppresses_finding(self) -> None:
         refs = snapshot.BotCommentRefs()
         fingerprint = "a" * FINGERPRINT_LEN
@@ -457,12 +492,57 @@ class PostingIdentityTests(unittest.TestCase):
 
     def test_latest_human_lifecycle_command_wins(self) -> None:
         notes = [
-            {"body": "/ocr resolve", "author": {"id": 8}},
+            {"body": "@mr.bot resolve", "author": {"id": 8}},
             {"body": "/ocr suppress", "author": {"id": 9}},
-            {"body": "/ocr resolve", "author": {"id": 7}},
+            {"body": "@mr.bot resolve", "author": {"id": 7}},
+            {"body": "@mr.bot resolve", "author": {"id": 10}, "system": True},
         ]
 
-        self.assertEqual(snapshot.reviewer_command_in_thread(gitlab_config(), notes), "suppress")
+        self.assertEqual(
+            snapshot.reviewer_command_in_thread(gitlab_config(current_username="mr.bot"), notes),
+            "suppress",
+        )
+
+    def test_mention_commands_require_a_toolkit_owned_discussion(self) -> None:
+        fingerprint = "e" * FINGERPRINT_LEN
+        config = gitlab_config(current_username="mr.bot")
+        for action in ("suppress", "resolve"):
+            with self.subTest(action=action):
+                owned = snapshot.BotCommentRefs()
+                discussion_id = f"owned-{action}"
+                snapshot.process_discussion_for_refs(
+                    config,
+                    owned,
+                    discussion_id,
+                    [
+                        {
+                            "id": 10,
+                            "body": build_marker(fingerprint) + "\nbody",
+                            "author": {"id": 7},
+                            "position": {"new_path": "file.py", "new_line": 10},
+                        },
+                        {"id": 11, "body": f"@mr.bot {action}", "author": {"id": 8}},
+                    ],
+                )
+
+                self.assertEqual(
+                    owned.discussions_to_resolve,
+                    [discussion_id] if action == "resolve" else [],
+                )
+                self.assertEqual(owned.suppressed_fingerprints, {fingerprint})
+
+        foreign = snapshot.BotCommentRefs()
+        snapshot.process_discussion_for_refs(
+            config,
+            foreign,
+            "foreign-discussion",
+            [
+                {"id": 20, "body": "ordinary root", "author": {"id": 8}},
+                {"id": 21, "body": "@mr.bot resolve", "author": {"id": 9}},
+            ],
+        )
+
+        self.assertEqual(foreign, snapshot.BotCommentRefs())
 
     def test_legacy_command_is_an_ordinary_human_reply(self) -> None:
         refs = snapshot.BotCommentRefs()
@@ -3672,7 +3752,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("token must not be sent to HTTP"),
             ):
                 config = gitlab.load_gitlab_config()
@@ -3688,7 +3768,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("invalid origin must not receive the token"),
             ):
                 config = gitlab.load_gitlab_config()

@@ -106,6 +106,27 @@ def test_context_round_trips_through_real_store_and_mcp_without_bootstrap_text(
     assert "Branch alone cannot establish intent" in bootstrap
 
 
+def test_context_bootstrap_limits_remediation_to_current_evidence_hypotheses() -> None:
+    from types import SimpleNamespace
+
+    bootstrap = render_bootstrap(
+        EvidenceStore(),
+        capabilities=(
+            SimpleNamespace(
+                server="ocr_toolkit_evidence",
+                tools=("ocr_toolkit_evidence", "context_list", "context_get"),
+                builtin=True,
+            ),
+        ),
+        max_chars=3_000,
+    )
+
+    assert "use them only to locate claims" in bootstrap
+    assert "re-checked against current code and test evidence" in bootstrap
+    assert "cannot change severity" in bootstrap
+    assert "authorize approval" in bootstrap
+
+
 def test_normalizer_applies_complete_field_multibyte_line_control_and_label_bounds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -147,6 +168,30 @@ def test_redaction_expansion_omits_complete_field_instead_of_storing_a_prefix() 
         "status": "omitted_redaction_limit",
         "value": None,
     }
+
+
+def test_metadata_dlp_omits_pii_across_text_and_label_fields() -> None:
+    context = _context(
+        title="Contact reviewer@example.invalid",
+        description="Call +420 123 456 789 before release",
+        labels=["safe-label", "owner@example.invalid"],
+        source_branch="feature/validated-context",
+    )
+
+    assert context.fields["title"] == {"status": "omitted_invalid", "value": None}
+    assert context.fields["description"] == {"status": "omitted_invalid", "value": None}
+    assert context.fields["labels"] == {
+        "status": "partial",
+        "values": ["safe-label"],
+        "omitted_count": 1,
+    }
+    assert context.fields["source_branch"] == {
+        "status": "admitted",
+        "value": "feature/validated-context",
+    }
+    assert context.state == "degraded"
+    assert "reviewer@example.invalid" not in repr(context)
+    assert "+420 123 456 789" not in repr(context)
 
 
 def test_hostile_persisted_context_revalidates_schema_provenance_sha_and_redaction(

@@ -24,7 +24,7 @@ toolkit reads the exact reviewed head blob and requires `existing_code` to
 match the stated inclusive line range before it renders a replacement fence.
 For this comparison CRLF and CR are normalized to LF and one optional terminal
 newline is ignored. The replacement must describe one contiguous edit: a
-synthetic ellipsis bridge, unified-diff-prefixed text, unsafe Markdown fence,
+fabricated ellipsis bridge, unified-diff-prefixed text, unsafe Markdown fence,
 quick action, invalid range, or unavailable source suppresses only the
 actionable fence. The explanatory finding remains visible with a bounded reason
 that does not reproduce repository content. Exact no-op suggestions are also
@@ -39,7 +39,7 @@ The outcome wording distinguishes skipped, complete, complete-with-warnings, inc
 ## Automatic approval lifecycle
 
 `OCR_AUTO_APPROVE=true` is the default. Approval is a separate transaction only
-after every current review note publishes. A review is eligible only with exact closed receipt v5, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, no configured direct external MCP, no degraded metadata, no required context degradation, no admitted mutable context, and at most three findings. Receipt v1-v4 is rejected by posting and approval. Receipt v5 binds reviewed source/policy SHA, merge-request author ID, context mode/state, bounded configured MCP inventory and positive use, per-source completeness/degradation, admitted-mutable state, fixed context-tool use, mandatory evidence state, publication DLP, and cleanup. `private-sanitized` remains eligible only when its canonical publication/approval projection is byte-equivalent; `publication-filtered` is partial and ineligible. Complete `metadata` context, complete zero-record enrichment, and the built-in evidence/context MCP do not independently block approval. Every finding must have
+after every current review note publishes. A review is eligible only with exact closed receipt v5, a supported complete manifest, no warnings, failures, waivers, token-budget stop, or omitted findings, no configured direct external MCP, no degraded metadata, no DLP-rejected selected source, no required context degradation, no admitted remediation context, and at most three findings. Receipt v1-v4 is rejected by posting and approval. Receipt v5 binds reviewed source/policy SHA, merge-request author ID, context mode/state, bounded configured MCP inventory and positive use, per-source completeness/degradation, admitted-mutable state, fixed context-tool use, mandatory evidence state, publication DLP, and cleanup. The receipt's admitted-mutable state is the comment-only signal for an admitted remediation thread; DLP-clean metadata, generic discussions, and adapter records do not set it. `private-sanitized` remains eligible only when its canonical publication/approval projection is byte-equivalent; `publication-filtered` is partial and ineligible. Complete `metadata` context, complete non-remediation enrichment, and the built-in evidence/context MCP do not independently block approval. Every finding must have
 severity exactly `low` and category exactly `style`, `documentation`, or
 `maintainability`. A complete zero-finding review is eligible. Four findings,
 malformed metadata, or any other severity/category are not eligible.
@@ -97,12 +97,14 @@ Reply inside an OCR-created discussion with exactly one command. Commands are ca
 
 | Command | Discussion after the command | Matching finding on future runs |
 | --- | --- | --- |
-| `/ocr suppress` | Remains open | Suppressed |
-| `/ocr resolve` | Resolved after the next successful posting transaction | Suppressed |
+| `/ocr suppress` or `@<live-bot-username> suppress` | Remains open | Suppressed |
+| `/ocr resolve` or `@<live-bot-username> resolve` | Resolved after the next successful posting transaction | Suppressed |
 | Ordinary human reply | Remains in its current state and becomes human-owned | Matching position or fingerprint suppressed |
 | GitLab Resolve action | Resolved | Suppressed |
 
-The command is applied when the next pipeline reads the discussion. `/ocr resolve` waits until all notes created for the current review have published successfully before resolving the old discussion. A failed run therefore does not close it prematurely.
+The mention form uses the username returned by authenticated `GET /user`; no configured username is trusted. A GitLab username may contain punctuation, so a bot named `mr.bot` accepts the exact reply `@mr.bot resolve`. A typo such as `supress`, a different mention, or `@mr.bot retest` is not a lifecycle command.
+
+The command is applied when the next pipeline reads the discussion. `/ocr resolve` and its mention equivalent wait until all notes created for the current review have published successfully before resolving the old discussion. A failed run therefore does not close it prematurely. The toolkit does not receive comment events, so use GitLab's retry UI/API for a no-commit rerun; a comment-triggered rerun requires a separately deployed Note Hook receiver.
 
 `/ocr keep` and `/ocr skip` were removed in 0.2.0 and are not aliases. An existing reply containing an old command still counts as an ordinary human reply: its conversation is preserved and matching future findings remain suppressed, but it does not request automatic resolution.
 
@@ -130,7 +132,7 @@ One protected-target setup case has a narrower outcome. When the merge request i
 
 Use a dedicated project access token with `api` scope and at least the Developer role. Store it in `GITLAB_API_TOKEN`. The toolkit needs to read merge-request notes, discussions, diff refs, approval state, and the current token identity; create and delete its own notes or drafts; publish drafts; resolve discussions requested by reviewers; and, unless opted out, approve as that dedicated identity. GitLab must separately consider the identity eligible under the project's approval rules.
 
-The toolkit calls `GET /user` before posting and refuses to write if it cannot identify the token owner. It treats a note as bot-owned only when both the invisible OCR marker and the actual GitLab author ID match. Text that merely imitates an OCR marker is not enough to claim or delete another user's note.
+The toolkit calls `GET /user` before posting and refuses to write if it cannot identify the token owner. It treats a note as bot-owned only when both the invisible OCR marker and the actual GitLab author ID match, and uses the same validated live identity's username for mention commands. Text that merely imitates an OCR marker is not enough to claim or delete another user's note.
 
 ## Reruns, failures, and fallback notes
 

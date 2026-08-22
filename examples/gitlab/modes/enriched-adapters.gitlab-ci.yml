@@ -1,0 +1,7 @@
+variables:
+  # Pair with context/policy-adapters.json and a protected tracker credential.
+  OCR_REVIEW_CONTEXT_MODE: "enriched"
+  OCR_AUTO_APPROVE: "false"
+  OCR_REVIEW_CONTEXT_ADAPTERS_JSON: >-
+    [{"name":"tracker","type":"remote","tenants":["engineering"],"resource_classes":["issue"],"url":"https://context-proxy.example.invalid/v1/authorize-and-resolve","headers_from":{"Authorization":"TRACKER_CONTEXT_AUTHORIZATION"}}]
+  OCR_MCP_SERVERS_JSON: "{}"
