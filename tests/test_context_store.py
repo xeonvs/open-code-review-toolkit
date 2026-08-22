@@ -162,7 +162,7 @@ def test_context_store_admits_only_fixed_remediation_projection(tmp_path: Path) 
         lambda thread: thread["replies"][0].update({"order": 1}),
         lambda thread: thread["replies"][0].update({"author_class": "toolkit_bot"}),
         lambda thread: thread["root"].update({"text": "person@example.invalid"}),
-        lambda thread: thread["counts"].update({"outdated": 1}),
+        lambda thread: thread.update({"anchor_state": "outdated"}),
     ],
 )
 def test_context_store_rejects_hostile_remediation_projection(

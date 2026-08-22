@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.posting.gitlab_identity import valid_discussion_id
 from ocr_toolkit.posting.payloads import (
     build_marked_note_body,
     note_body_budget,
@@ -31,6 +30,11 @@ from ocr_toolkit.posting.settings import (
     post_mode,
 )
 from ocr_toolkit.posting.transaction import PostingTransaction
+from ocr_toolkit.providers.gitlab_identity import (
+    GitLabIdentityError,
+    fetch_current_user_identity,
+    valid_discussion_id,
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,7 @@ class GitLabConfig:
     api_token: str
     auth_header: str
     current_user_id: int | None
+    current_username: str | None
 
     @property
     def api_base(self) -> str:
@@ -406,21 +411,20 @@ def print_user_id_failure_banner(reason: str) -> None:
     print(banner, file=sys.stderr)
 
 
-def fetch_current_user_id(server_url: str, api_token: str, auth_header: str) -> int | None:
-    """Return authenticated GitLab user id, or None if it cannot be resolved."""
+def fetch_posting_identity(
+    server_url: str, api_token: str, auth_header: str
+) -> tuple[int | None, str | None]:
+    """Return the validated live GitLab id and username, or a closed failure."""
 
-    url = f"{server_url}/api/v4/user"
-    result = api_request_url(url, api_token, auth_header, method="GET")
-
-    if not isinstance(result, dict):
-        print_user_id_failure_banner("GET /user returned no JSON object")
-        return None
-
-    raw_user_id = result.get("id")
-    if isinstance(raw_user_id, int) and not isinstance(raw_user_id, bool) and raw_user_id > 0:
-        return raw_user_id
-    print_user_id_failure_banner("GET /user response has no valid id field")
-    return None
+    try:
+        identity = fetch_current_user_identity(
+            f"{server_url}/api/v4",
+            lambda url: api_request_url(url, api_token, auth_header, method="GET"),
+        )
+    except GitLabIdentityError as exc:
+        print_user_id_failure_banner(str(exc))
+        return None, None
+    return identity.user_id, identity.username
 
 
 def load_gitlab_config() -> GitLabConfig | None:
@@ -468,7 +472,7 @@ def load_gitlab_config() -> GitLabConfig | None:
         return None
 
     auth_header = "PRIVATE-TOKEN"
-    current_user_id = fetch_current_user_id(server_url, api_token, auth_header)
+    current_user_id, current_username = fetch_posting_identity(server_url, api_token, auth_header)
 
     return GitLabConfig(
         server_url=server_url,
@@ -477,6 +481,7 @@ def load_gitlab_config() -> GitLabConfig | None:
         api_token=api_token,
         auth_header=auth_header,
         current_user_id=current_user_id,
+        current_username=current_username,
     )
 
 

@@ -31,6 +31,24 @@ OCR_REPLY_COMMAND_RE = re.compile(
 FINGERPRINT_LEN = 32  # hex characters (= 16 raw bytes from blake2b)
 
 
+def reviewer_command_from_body(body: object, *, bot_username: str | None) -> str | None:
+    """Parse one exact slash or live-bot mention lifecycle command."""
+
+    if not isinstance(body, str):
+        return None
+    slash = OCR_REPLY_COMMAND_RE.fullmatch(body)
+    if slash is not None:
+        return slash.group(1).lower()
+    if bot_username is None:
+        return None
+    mention = re.fullmatch(
+        rf"(?i)[ \t]*@{re.escape(bot_username)}[ \t]+(suppress|resolve)"
+        rf"[ \t]*(?:\r?\n[ \t]*)*",
+        body,
+    )
+    return mention.group(1).lower() if mention is not None else None
+
+
 def build_write_marker(write_id: str) -> str:
     """Render one independent create-attempt correlation marker."""
 

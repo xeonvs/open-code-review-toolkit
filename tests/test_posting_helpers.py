@@ -195,10 +195,14 @@ class PostingIdentityTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIsNone(markers.author_id_from_note({"author": {"id": value}}))
 
-        with patched_attr(gitlab, "api_request_url", lambda *_args, **_kwargs: {"id": 7}):
+        with patched_attr(
+            gitlab,
+            "api_request_url",
+            lambda *_args, **_kwargs: {"id": 7, "username": "ocr_bot"},
+        ):
             self.assertEqual(
-                gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN"),
-                7,
+                gitlab.fetch_posting_identity("https://gitlab.example", "token", "PRIVATE-TOKEN"),
+                (7, "ocr_bot"),
             )
         for value in (True, 0, -1, "7", 7.0, None):
             with (
@@ -208,8 +212,11 @@ class PostingIdentityTests(unittest.TestCase):
                 ),
                 redirect_stderr(io.StringIO()),
             ):
-                self.assertIsNone(
-                    gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN")
+                self.assertEqual(
+                    gitlab.fetch_posting_identity(
+                        "https://gitlab.example", "token", "PRIVATE-TOKEN"
+                    ),
+                    (None, None),
                 )
 
     def test_posting_identity_consumers_reject_bool_and_nonpositive_ids(self) -> None:
@@ -3672,7 +3679,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("token must not be sent to HTTP"),
             ):
                 config = gitlab.load_gitlab_config()
@@ -3688,7 +3695,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("invalid origin must not receive the token"),
             ):
                 config = gitlab.load_gitlab_config()

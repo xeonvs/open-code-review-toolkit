@@ -227,12 +227,16 @@ def _remediation_projection(value: object) -> Mapping[str, object]:
         "replies": _bounded_projection_integer(
             counts.get("replies"), maximum=MAX_REMEDIATION_REPLIES
         ),
-        "resolved": _bounded_projection_integer(counts.get("resolved"), maximum=1),
-        "outdated": _bounded_projection_integer(counts.get("outdated"), maximum=1),
+        "resolved": _bounded_projection_integer(
+            counts.get("resolved"), maximum=MAX_REMEDIATION_REPLIES + 1
+        ),
+        "outdated": _bounded_projection_integer(
+            counts.get("outdated"), maximum=MAX_REMEDIATION_REPLIES + 1
+        ),
     }
     if normalized_counts["replies"] != len(normalized_replies):
         raise ContextStoreError("remediation reply count is inconsistent")
-    if normalized_counts["outdated"] != int(anchor_state == "outdated"):
+    if anchor_state == "outdated" and normalized_counts["outdated"] < 1:
         raise ContextStoreError("remediation outdated count is inconsistent")
     return {
         "root": normalized_root,
