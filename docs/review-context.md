@@ -1,14 +1,14 @@
 # Bounded review context
 
-Open Code Review Toolkit can enrich one validated GitLab merge-request review with bounded merge-request metadata, GitLab discussions, and records resolved by operator-managed adapters. Enrichment is a single pre-OCR acquisition phase. OCR remains the only review engine, and its model loop can read only committed local handles through the toolkit's existing built-in MCP process.
+Open Code Review Toolkit can enrich one validated forge review with bounded merge-request metadata, discussions, verified remediation history, and records resolved by operator-managed adapters. GitLab is the current provider implementation; acquisition normalizes into provider-neutral broker views before storage. Enrichment is a single pre-OCR phase. OCR remains the only review engine, and its model loop can read only committed local handles through the toolkit's existing built-in MCP process.
 
 ## Modes and lifecycle
 
 `OCR_REVIEW_CONTEXT_MODE` is a closed selector:
 
 - Empty or `off` validates immutable review and posting identities but does not normalize or persist mutable merge-request text.
-- `metadata` additionally admits bounded title, description, labels, and source-branch text. This preserves the v0.6.3 behavior.
-- `enriched` requires a validated GitLab merge-request environment and a valid protected-target policy. It includes the same metadata projection, a stable bounded GitLab discussion snapshot when selected, and policy-recognized external records. Missing or invalid policy stops the review before OCR.
+- `metadata` additionally admits bounded title, description, labels, and source-branch text.
+- `enriched` requires a validated GitLab merge-request environment and a valid protected-target policy. It includes the same metadata projection, a stable bounded GitLab discussion snapshot, verified toolkit-owned remediation threads, and policy-recognized external records when selected. Missing or invalid policy stops the review before OCR.
 
 The lifecycle is fixed: capture the protected-target SHA; load policy from that immutable object; acquire and authorize records; normalize, DLP-check, and atomically commit the private context store; run one OCR review in an isolated home; serve only local handles; remove session, adapter, and context artifacts; then validate/project the complete OCR result and attach receipt v5 through one inode-checked atomic replacement. A cleanup or publication-validation failure blocks ordinary result publication.
 
@@ -16,11 +16,11 @@ The lifecycle is fixed: capture the protected-target SHA; load policy from that 
 
 The only policy path is `.opencodereview/review-context-policy.json`. The toolkit reads it as a bounded regular Git blob from the captured protected-target policy SHA. A source-branch or working-tree copy has no authority. Missing, symlink, submodule, oversized, invalid UTF-8, duplicate-key, unknown-field, unknown-version, or impossible-projection input fails closed.
 
-The following complete synthetic policy selects GitLab discussions and issue keys with protected prefix `DEMO`:
+The following complete v2 policy selects generic GitLab discussions, verified toolkit remediation threads, and issue keys with protected prefix `DEMO`:
 
 ```json
 {
-  "schema_version": "ocr.review-context-policy/v1",
+  "schema_version": "ocr.review-context-policy/v2",
   "budgets": {
     "max_records": 32,
     "max_chars": 48000,
@@ -47,6 +47,21 @@ The following complete synthetic policy selects GitLab discussions and issue key
       "model": ["descriptor", "state", "text"],
       "publish": ["descriptor", "state"],
       "retain": ["digest", "expiry", "state", "version"]
+    }
+  },
+  "remediation_threads": {
+    "required": false,
+    "account_classes": ["automation", "system", "user"],
+    "include_resolved": false,
+    "include_outdated": false,
+    "max_age_seconds": 2592000,
+    "max_threads": 20,
+    "max_replies_per_thread": 10,
+    "max_items": 100,
+    "budgets": {
+      "max_chars": 12000,
+      "max_bytes": 24000,
+      "max_lines": 300
     }
   },
   "references": [
@@ -76,19 +91,38 @@ The following complete synthetic policy selects GitLab discussions and issue key
 
 The top-level aggregate budget limits independent record, character, UTF-8 byte, physical-line, and wall-time dimensions. Each source has its own text, age, item, and provider-specific limits. Hitting one limit does not silently relabel the source complete.
 
-Discussion account classes are the closed set `user`, `automation`, `system`, and `toolkit_bot`. GitLab classifies accounts before storage and replaces display identity with a run-local pseudonym. Name, username, email, avatar/profile URL, and raw provider IDs are never model fields.
+Discussion account classes are the closed set `user`, `automation`, `system`, and `toolkit_bot`. GitLab classifies accounts before storage and replaces display identity with a run-local pseudonym. Remediation reply classes cannot include `toolkit_bot`; the separately verified root owns the toolkit-bot role. Name, username, email, avatar/profile URL, and raw provider IDs are never model fields.
+
+### Choosing a discussion policy
+
+The runtime always reads the fixed protected-target path `.opencodereview/review-context-policy.json`; the filenames under `examples/gitlab/context/` are templates to copy to that path, not alternative runtime paths.
+
+| Review need | Start from | Keep these selectors | Adapter configuration |
+| --- | --- | --- | --- |
+| Ordinary MR conversation only | `policy-discussions.json` | `forge_discussions`; remove `remediation_threads` | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
+| Earlier OCR finding plus human remediation replies only | `policy-discussions.json` | `remediation_threads`; remove `forge_discussions` | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
+| Both ordinary conversation and remediation history | `policy-discussions.json` | Keep both selectors | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
+| Discussions plus authorized issue/document records | `policy-adapters.json` | Keep the needed discussion selectors and references | Supply one matching reviewed adapter allowlist |
+
+Use policy v1 unchanged only when an existing project needs generic discussions or references and does not need remediation history. Choose policy v2 for any `remediation_threads` selector; v2 may also select generic discussions and references.
+
+Start each discussion source with `required: false`. Set it to `true` only when the review must treat an unavailable, mutated, DLP-rejected, or bounded-partial source as a blocking loss of required evidence. `required` does not mean that at least one matching thread must exist: a stable complete snapshot with zero selected threads is still complete. `include_resolved` and `include_outdated` should remain false unless historical or stale anchors are intentionally relevant. Keep `account_classes` to the smallest set needed; `remediation_threads.account_classes` applies to replies and cannot include `toolkit_bot`.
+
+Generic `forge_discussions` can include non-toolkit conversations and its policy-controlled model projection. `remediation_threads` includes only roots verified against the live bot ID and toolkit marker/fingerprint, then returns the root and ordered replies through a fixed non-configurable model projection. A verified remediation root is excluded from generic discussions even when both selectors are enabled.
+
+Safely admitted generic discussions do not independently disable automatic approval. Any admitted remediation thread does, because its text is historical review evidence rather than proof that current code is fixed. Any DLP rejection blocks approval regardless of `required`; optional non-DLP degradation stays visible but cannot prove absence. The public enriched mode recipes set `OCR_AUTO_APPROVE=false` while operators qualify these distinctions.
 
 References bind one operator-configured adapter, tenant alias, `issue` or `document` resource class, required/optional semantics, bounds, projections, and one toolkit-authored recognizer:
 
 - `{"type":"issue_key","prefix":"DEMO"}` recognizes keys such as `DEMO-42` with the exact protected prefix.
 - `{"type":"https_url","origin":"https://docs.example.invalid","path_prefix":"/published/"}` recognizes only HTTPS URLs at that exact origin and path prefix.
-- `{"type":"explicit"}` recognizes `[[context:issue:synthetic-record]]` or `[[context:document:synthetic-record]]` for the matching resource class.
+- `{"type":"explicit"}` recognizes `[[context:issue:rollout-record]]` or `[[context:document:architecture-note]]` for the matching resource class.
 
 Candidates are extracted only from admitted merge-request metadata and admitted discussion bodies. Recognition grants no access; every candidate still crosses adapter authorization. Configurable regular expressions, repository-wide search, arbitrary URLs, and arbitrary identifiers are not supported.
 
 Projection fields are sorted unique lists. `model`, `publish`, and `retain` must each be subsets of `retrieve`. Retention is limited to `state`, `count`, `digest`, `version`, and `expiry`; it cannot retain text, upstream identifiers, URLs, commands, transport data, or personal display data. Retrieval, model egress, publication, and retention are deliberately separate decisions.
 
-`schema_version` is not a database migration feature. Reviews and stores are ephemeral. It is retained because policy, adapter frames, private stores, pre-execution status, and review receipts cross independently produced or hostile-read serialized boundaries. The exact discriminator prevents an old or different field set from inheriting current authorization or approval meaning. Ephemeral M5 policy/store/protocol readers accept only their current exact schema and provide no upgrade path; only historical result receipts remain readable for safe comment compatibility.
+Policy `ocr.review-context-policy/v1` remains accepted for existing protected configurations and supports aggregate budgets, `forge_discussions`, and references. Policy `ocr.review-context-policy/v2` is additive and permits the optional `remediation_threads` selector; v1 rejects that field instead of interpreting it with weaker semantics. New examples use v2. This compatibility is for reviewed policy documents, not persisted runtime state: reviews and stores are ephemeral, and the private store accepts only `ocr.context-store/v2`. Adapter frames and receipt v5 likewise require their exact schema. Discriminators prevent an old or different field set from inheriting current authorization or approval meaning; there is no store or receipt migration path.
 
 ## Operator adapter allowlist
 
@@ -105,7 +139,7 @@ A stdio entry has exact common fields plus an absolute command, bounded argument
     "resource_classes": ["issue"],
     "command": "/opt/ocr-context-proxy/bin/ocr-context-proxy",
     "args": ["--stdio"],
-    "env_from": ["SYNTHETIC_ADAPTER_TOKEN"]
+    "env_from": ["TRACKER_CONTEXT_TOKEN"]
   }
 ]
 ```
@@ -117,12 +151,12 @@ A remote entry uses one absolute HTTPS endpoint and maps HTTP header names to en
 ```json
 [
   {
-    "name": "knowledge",
+    "name": "tracker",
     "type": "remote",
-    "tenants": ["published"],
-    "resource_classes": ["document"],
+    "tenants": ["engineering"],
+    "resource_classes": ["issue"],
     "url": "https://context-proxy.example.invalid/v1/authorize-and-resolve",
-    "headers_from": {"Authorization": "SYNTHETIC_ADAPTER_AUTHORIZATION"}
+    "headers_from": {"Authorization": "TRACKER_CONTEXT_AUTHORIZATION"}
   }
 ]
 ```
@@ -141,12 +175,14 @@ Unknown fields/statuses, mismatched identities, changed version/expiry, partial 
 
 The GitLab owner reads the exact validated project and merge request with bounded pagination. It does not fetch another page after the protected thread bound is filled; a provider-declared next page becomes a visible omission. It reads the ordered snapshot twice and admits records only when the identity and digest match. Reordering, edits, changed pages, invalid identity/classification, unsupported notes, or limit exhaustion remains visible as `mutated`, `partial`, or `unavailable`; it is never treated as proof that no record exists.
 
-The private `ocr.context-store/v1` is independent from the repository evidence store and its budgets. It is atomically written owner-only and hostile-read before OCR. Only a fully normalized and DLP-checked committed record receives a `ctx1_` handle containing 32 random bytes encoded as unpadded base64url. The private mapping binds run, policy digest, adapter, tenant, canonical object, resource class, projections, version/digest, and expiry. It is not an encoded upstream ID.
+A remediation bundle begins only at a toolkit-owned root whose author ID equals the live authenticated bot and whose body contains a valid toolkit marker and finding fingerprint. That root and its selected human/automation/system replies become one opaque record. Recognized slash or live-username mention commands are lifecycle control and are excluded from model text. A verified root selected as remediation is not duplicated in generic discussions, and none of its replies participates in external-reference discovery. Remediation text can locate a claim for re-checking against current code and tests; it cannot change severity, prove a fix, suppress or resolve a finding, issue a command, or authorize approval.
+
+The private `ocr.context-store/v2` is independent from the repository evidence store and its budgets. It is atomically written owner-only and hostile-read before OCR. Only a fully normalized and DLP-checked committed record receives a `ctx1_` handle containing 32 random bytes encoded as unpadded base64url. The private mapping binds run, policy digest, adapter, tenant, canonical object, resource class, projections, version/digest, and expiry. It is not an encoded upstream ID.
 
 In `off` and `metadata`, the built-in MCP exposes only `ocr_toolkit_evidence`. In `enriched`, it exposes exactly `ocr_toolkit_evidence`, `context_list`, and `context_get`:
 
-- `context_list` accepts only optional `resource_class`, admitted `source`, `page_size` from 1 through 20, and an opaque cursor. It returns safe descriptors, minted handles, expiry, mutability, per-source completeness, and a next cursor.
-- `context_get` accepts exactly one listed `ctx1_` handle and returns only the record's protected `model` projection.
+- `context_list` accepts only optional `resource_class`, admitted `source`, `page_size` from 1 through 20, and an opaque cursor. Resource classes are `issue`, `document`, and `remediation_thread`. It returns safe descriptors, minted handles, expiry, mutability, per-source completeness, and a next cursor.
+- `context_get` accepts exactly one listed `ctx1_` handle and returns only the record's protected `model` projection. A remediation record contains one DLP-checked root, safe anchor state, ordered pseudonymized replies, closed completeness, and reply/resolved/outdated counts. It never contains a raw provider identity or object.
 
 Both tools read the already committed local store. They have no network, subprocess, search, arbitrary URL/ID, traversal, or write path. Invalid, expired, wrong-run, wrong-policy, missing, or non-minted handles fail before record access. OCR must still record at least one `ocr_toolkit_evidence(action=summary)` call; context calls do not satisfy that requirement.
 
@@ -160,7 +196,7 @@ The summary contains distinct private-sanitization and publication-filtering det
 
 Receipt v5 stores only closed review/policy identities, context mode, per-source completeness and degradation counts, admitted-mutable state, fixed evidence/context tool-use counts, publication-DLP result, and cleanup result. It does not store context text, provider IDs, URLs, commands, arguments, headers, adapter results, personal display data, or transport diagnostics. Receipt v1-v4 is rejected; ephemeral results have no migration path.
 
-Every existing manifest, coverage, warning, omission, finding, source-SHA, author, provider, and self-approval gate remains. Required-source degradation and any admitted mutable discussion or external record make the run ineligible. Optional degradation is visible and cannot prove absence. A complete enriched run with zero admitted mutable records is not blocked solely by the selected mode. Direct operator MCP is a separate privileged boundary and remains comment-only.
+Every existing manifest, coverage, warning, omission, finding, source-SHA, author, provider, and self-approval gate remains. Degraded selected metadata, a DLP-rejected selected source, required-source degradation, and any admitted remediation record make the run ineligible. DLP-clean generic discussions and adapter records do not independently block approval; optional non-DLP degradation remains visible and cannot prove absence. A complete enriched run without admitted remediation is not blocked solely by the selected mode. Direct operator MCP is a separate privileged boundary and remains comment-only.
 
 OCR runs under a fresh owner-only isolated `HOME` containing only validated toolkit-generated configuration. Context acquisition is complete before that process starts; adapter/provider network paths are not exposed through its model tools. The toolkit removes OCR session/configuration, context store, and adapter scratch data after success, failure, or interruption. Termination is deferred across cleanup and atomic result projection so a completed raw result cannot replace the validated partial-result/receipt boundary. v0.7.0 has no raw debug-retention exception.
 
@@ -168,4 +204,4 @@ OCR runs under a fresh owner-only isolated `HOME` containing only validated tool
 
 Use dedicated least-privilege service identities and an AI-readable corpus. The proxy must enforce tenant, object, operation, and field authorization for every request; successful authentication or an allowlisted hostname is insufficient. The toolkit cannot make a lying adapter truthful, constrain a broader upstream credential, protect same-owner artifacts from host compromise, reverse model egress, detect arbitrary semantic paraphrase, or make model judgment deterministic.
 
-The complete synthetic files under [`examples/context/`](../examples/context/) are safe starting points. Direct external MCP and brokered adapters are different trust boundaries: direct MCP exposes provider-owned tool schemas and model-selected arguments, while M5 adapters acquire records before OCR and expose only toolkit-minted local handles.
+The complete files under [`examples/gitlab/context/`](../examples/gitlab/context/) are safe starting points with placeholder hosts and credential names. Direct external MCP and brokered adapters are different trust boundaries: direct MCP exposes provider-owned tool schemas and model-selected arguments, while adapters acquire records before OCR and expose only toolkit-minted local handles.

@@ -1,127 +1,88 @@
 # GitLab integration
 
-The toolkit's first provider adapter posts review results to GitLab merge requests. The example is intended for trusted contributors because merge-request code and repository guidance are untrusted input even when the posting token is protected. Start with a manual job, validate results, and only then consider automatic execution.
+GitLab is the toolkit's first forge provider. The provider layer owns GitLab API identity, merge-request snapshots, discussions, notes, approval writes, and pagination semantics; the evidence, context broker, DLP, store, MCP, and review lifecycle remain provider-neutral. Merge-request code, metadata, discussions, and repository guidance are untrusted even when CI credentials are protected.
 
 ## Installation
 
-Install `open-code-review-toolkit` from PyPI. The example obtains the expected toolkit wheel digest from the matching immutable GitHub Release, then uses pip hash-checking and a local install. Install Open Code Review separately and use the exact recommended version and asset checksum from the [compatibility manifest](../compatibility/ocr-support.json); the synthetic CI example carries the corresponding executable pin. The package never downloads OCR.
+Install `open-code-review-toolkit` from PyPI and install Open Code Review separately. Use the exact recommended OCR version and asset checksum from the [compatibility manifest](../compatibility/ocr-support.json); the toolkit package never downloads OCR.
 
-Copy and adapt [the synthetic CI example](../examples/gitlab/ocr-review.gitlab-ci.yml). Its rules pack explicitly includes Jinja (`.j2`, `.jinja`, `.jinja2`), extensionless conventional Ansible-role templates, and Twig (`.twig`) because the recommended OCR does not select those extensions by default; project `exclude` entries still take precedence. Keep the lint stage before the AI review stage so failed project checks block review. The example downloads a pinned toolkit wheel with bounded retries/timeouts, verifies its SHA-256 before a local `--no-deps` install, generates a private evidence store plus one compact bootstrap, and passes the bootstrap once with `--background-file`.
+Start with the [complete checksum-pinned pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml), then choose one configuration from the [GitLab mode matrix](../examples/gitlab/README.md). The pipeline keeps the repository's lint/test stage ahead of AI review, installs the toolkit wheel with hash verification, runs preflight and configuration, performs one production `ocr-ci review`, and makes `ocr-ci post` the sole GitLab write boundary. The rules pack adds Jinja, conventional Ansible-role templates, and Twig to the recommended OCR file selection; project exclusions still win.
 
-## Required secrets
+## Required configuration
 
-- `GITLAB_API_TOKEN`: a dedicated bot token with only the project/API permissions required to read the merge request, create/update its comments, and approve when `OCR_AUTO_APPROVE` is enabled.
-- `OCR_LLM_TOKEN`: the LLM gateway credential used by OCR.
-- `OCR_SHA256`: the trusted checksum for the pinned OCR binary asset.
+The complete variable inventory, owner, requirement, exact default, and behavior are in [Environment configuration](configuration.md). The principal secrets are:
 
-Store secrets as masked, protected CI variables. Do not place them in YAML, command arguments, evidence artifacts, or the generated bootstrap. Posting deliberately does not accept a GitLab job token.
+- `GITLAB_API_TOKEN`: a dedicated bot token with the minimum project/API permissions needed for the selected reads and writes;
+- `OCR_LLM_TOKEN`: the LLM gateway credential used by OCR;
+- adapter or direct-MCP credentials named by reviewed `env_from` or `headers_from` entries.
 
-`OCR_REVIEW_LANGUAGE` is an optional non-secret OCR configuration setting and defaults to `English`. Set an explicit language name only when localized review output is required; `Russian` is one example.
+The public pipeline stores the OCR binary checksum as the non-secret `OCR_SHA256` pin. Store actual credentials as masked, protected CI variables; do not place their values in YAML, command arguments, repository evidence, or the generated bootstrap. GitLab job tokens are not accepted for posting.
 
-`OCR_MAX_TOKENS_BUDGET` is an optional non-secret aggregate review ceiling. Its default `0` is unlimited; a positive value can intentionally stop dispatch and yield a partial review with completed findings plus explicit budget-failed coverage. It is a separate operator control, not a named quality profile, and a budget-stopped run cannot automatically approve.
+`OCR_REVIEW_LANGUAGE` defaults to `English`; `Russian` is one example of an explicit review language. `OCR_MAX_TOKENS_BUDGET` defaults to `0`, meaning unlimited; a positive budget may stop dispatch and produce an explicitly partial, automatic-approval-ineligible review.
+
+## Choose one operating mode
+
+`OCR_REVIEW_CONTEXT_MODE` selects `off`, `metadata`, or `enriched`; the mode recipes pair that selector with the appropriate approval, adapter, and direct-MCP controls.
+
+| Mode | Context admitted to OCR | Network/tool boundary | Approval posture |
+| --- | --- | --- | --- |
+| [Identity only](../examples/gitlab/modes/identity-only.gitlab-ci.yml) | No MR title, description, labels, source branch, or discussion text | GitLab identity/policy reads before OCR | May approve when every deterministic gate passes |
+| [Metadata](../examples/gitlab/modes/metadata.gitlab-ci.yml) | Bounded MR title, description, labels, and source branch | GitLab reads before OCR | May approve when DLP and every other gate pass |
+| [Enriched discussions](../examples/gitlab/modes/enriched-discussions.gitlab-ci.yml) | Metadata plus protected-policy generic discussions and verified remediation threads | Stable double-read GitLab snapshot before OCR | Recipe is explicitly comment-only |
+| [Enriched adapters](../examples/gitlab/modes/enriched-adapters.gitlab-ci.yml) | Metadata plus protected-policy discussion and adapter records | Fixed authorize-and-resolve protocol before OCR | Recipe is explicitly comment-only |
+| [Direct MCP](../examples/gitlab/modes/direct-mcp.gitlab-ci.yml) | Metadata plus model-selected external tool results | Reviewed remote HTTPS MCP during OCR | Always comment-only |
+
+The [bounded-context recipes](../examples/gitlab/context/) contain the protected policy plus local and remote adapter allowlists. Use the [discussion-policy decision guide](review-context.md#choosing-a-discussion-policy) to select generic discussions, verified remediation history, both, or a policy that also requires adapters. Copy the chosen template to `.opencodereview/review-context-policy.json` and merge it into the protected target branch before selecting `enriched`; a source-branch copy cannot expand authority. Missing or invalid policy stops before OCR. DLP rejection and required-source degradation block approval. Safely admitted metadata, generic discussions, and adapter records do not themselves block approval, but every admitted remediation thread does. The enriched recipes nevertheless disable approval explicitly so an operator can qualify the exact policy and source behavior before choosing a narrower approval posture.
+
+Direct external MCP is a different and more privileged boundary. GitLab MR execution accepts it only as remote HTTPS. Tool names, descriptions, schemas, model-chosen arguments, and results enter OCR and its private session. Use dedicated least-privilege credentials and service-side tenant/object/field/operation authorization. Do not expose generic search, arbitrary URL or identifier fetch, writes, workflow tools, or broad service credentials.
 
 ## Production bot configuration
 
-Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the documented reads, notes, drafts, discussion management, and optional approval; GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative. Keep the GitLab, LLM, and optional MCP credentials masked and protected, and restrict the job to trusted pipelines that can access them. Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`; enable strict posting or approval only after the project has reviewed the published results, bot role, approval rules, and source-branch threat boundary.
+Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the selected reads, notes, drafts, discussion management, and optional approval. GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative.
 
-Keep result, stderr, evidence, OCR configuration, context stores, adapter scratch space, and OCR session files private to the runner and out of public artifacts. `metadata` sends bounded author-controlled title, description, labels, and optional source branch into OCR; it remains untrusted model input. `enriched` can additionally send protected-policy projections of discussions and external records, but provider identifiers and schemas remain outside the model. Direct external MCP descriptions, schemas, arguments, and results enter the model/session and are a separate privileged boundary. Use dedicated least-privilege credentials, server-side tenant/object/field/operation authorization, bounded responses, and service-side audit controls. Do not expose generic search, arbitrary identifier/URL fetch, writes, approval/comment/workflow tools, or broad credentials. Server-authored names, schemas, descriptions, and annotations do not prove that a direct tool is read-only.
+Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, adapter scratch space, and OCR sessions private to the runner and out of public artifacts.
 
-Choose one explicit operating recipe:
-
-1. **Context-free automatic approval:** admit no mutable MR text and configure no external MCP.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "off"
-   OCR_AUTO_APPROVE: "true"
-   OCR_MCP_SERVERS_JSON: "{}"
-   ```
-
-2. **Bounded metadata-aware automatic approval:** admit the existing bounded MR fields. Approval remains possible only when metadata is complete and every other deterministic gate passes.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "metadata"
-   OCR_AUTO_APPROVE: "true"
-   OCR_MCP_SERVERS_JSON: "{}"
-   ```
-
-3. **Metadata-aware comment-only operation:** use bounded MR intent without granting approval authority.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "metadata"
-   OCR_AUTO_APPROVE: "false"
-   OCR_MCP_SERVERS_JSON: "{}"
-   ```
-
-4. **Protected enriched context:** install the protected-target policy and configure only the operator adapters it selects. Admitted mutable records make this run comment-only even if `OCR_AUTO_APPROVE` remains true; setting it false makes the intended deployment boundary explicit.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "enriched"
-   OCR_AUTO_APPROVE: "false"
-   OCR_REVIEW_CONTEXT_ADAPTERS_JSON: >-
-     [{"name":"tracker","type":"remote","tenants":["engineering"],"resource_classes":["issue"],"url":"https://context-proxy.example.invalid/v1/authorize-and-resolve","headers_from":{"Authorization":"SYNTHETIC_ADAPTER_AUTHORIZATION"}}]
-   ```
-
-   Copy and review the synthetic [protected policy and adapter recipes](../examples/context/). Missing/invalid policy or required-source degradation stops or blocks the run as documented; optional degradation remains visible. A complete zero-record enriched run is not ineligible solely because the mode was selected.
-
-5. **Discussion-only protected enrichment:** select `forge_discussions` in the protected policy and leave the operator adapter array empty.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "enriched"
-   OCR_AUTO_APPROVE: "false"
-   OCR_REVIEW_CONTEXT_ADAPTERS_JSON: "[]"
-   ```
-
-6. **Operator-reviewed direct external MCP:** GitLab MR execution accepts direct external MCP only as remote HTTPS. Keep the bot explicitly comment-only and store `SYNTHETIC_MCP_AUTH_HEADER` as a masked/protected variable carrying a dedicated service credential. This does not use the M5 broker or opaque handles.
-
-   ```yaml
-   OCR_REVIEW_CONTEXT_MODE: "metadata"
-   OCR_AUTO_APPROVE: "false"
-   OCR_MCP_SERVERS_JSON: >-
-     {"bounded_reference":{"type":"remote","url":"https://mcp.synthetic.invalid/v1","headers_from":{"Authorization":"SYNTHETIC_MCP_AUTH_HEADER"},"tools":["read_admitted_record"]}}
-   ```
-
-The [bounded review-context guide](review-context.md) owns policy, adapter protocol, handle, completeness, DLP, retention, and cleanup contracts. The [configuration reference](configuration.md) owns environment inputs, direct MCP, receipt fields, and bounds. The [operations guide](operations.md) owns posting transactions, failure behavior, and approval outcomes.
-
-### Migration from 0.6.2
-
-Toolkit 0.6.3 changes an unset context selector to identity-only `off`. Set `OCR_REVIEW_CONTEXT_MODE=metadata` explicitly to retain the bounded MR title/description/labels/source-branch context previously collected by the ordinary GitLab path. Do not set `enriched`; it is reserved and rejected rather than treated as a compatibility alias.
-
-Historically, receipt v1/v2 results remained comment-readable but could not authorize approval; toolkit v0.6.3 produced receipt v3. Current v0.7.1 posting rejects every pre-v5 receipt, so rerun the review before posting. Existing approvals are never removed. A changed MR author or a bot-authored MR skips approval without writing. Any configured external MCP remains comment-only, so set `OCR_AUTO_APPROVE=false` to make that intent explicit. GitLab MR external stdio configuration is rejected; migrate it to a reviewed remote HTTPS service with environment-backed credentials, while explicit developer-local stdio remains available outside the validated GitLab-MR path.
-
-Ambiguous position-bearing inline creates can now recover only from exactly one complete author-bound marker match. This requires no operator setting and never introduces retry-on-absence or fallback after unresolved ambiguity. Existing finding markers, suppression decisions, human ownership, and previous-review retention remain compatible.
-
-### Migration from 0.6.3 to 0.7.0
-
-`off` and `metadata` retain their v0.6.3 acquisition semantics. Existing pipelines need no context configuration change unless they intentionally adopt enrichment. Receipt v1-v4 is no longer accepted by posting; rerun with v0.7.1 to produce receipt v5.
-
-To adopt `enriched`, first merge `.opencodereview/review-context-policy.json` into the protected target branch, then configure the operator-side `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` allowlist and credentials. Never test policy expansion from the merge-request branch: that file is ignored for authority. Start comment-only, verify per-source completeness and adapter authorization, and only consider automatic approval for policies that can complete with no admitted mutable record.
-
-The review now runs OCR under an isolated owner-only home and removes its session/configuration plus context artifacts on every outcome. If a project previously relied on OCR session files surviving the job, keep that workflow outside `ocr-ci review`; v0.7.0 deliberately has no secure-debug retention switch. Direct `OCR_MCP_SERVERS_JSON` remains a separate privileged/comment-only feature and is not migrated automatically to the broker.
+The toolkit authenticates the token owner with live `GET /user`. No configured bot ID or username is trusted. The returned ID owns note/fingerprint checks; the validated username owns exact mention-command parsing.
 
 ## Operating model
 
-`ocr-ci preflight` validates the installed OCR version, GitLab access, and configured LLM model. `configure` resolves `OCR_REVIEW_LANGUAGE`. `ocr-ci review` verifies the exact reviewed source SHA, captures the current protected target SHA, and keeps those policy and forge diff identities separate. Repository-owned OCR rules plus accepted decisions and project guidance come from that immutable policy commit; OCR still reviews the original diff-base-to-source-head range. Explicit absolute rule paths outside the repository remain operator-owned.
+`ocr-ci preflight` validates OCR compatibility, GitLab access, and optional model metadata. `ocr-ci configure` writes the isolated OCR configuration. `ocr-ci review` captures the exact source head and protected-target policy SHA, collects immutable repository evidence, acquires selected provider/context data, applies DLP and budgets, runs OCR once under an owner-only isolated home, validates the result, cleans private state, and attaches receipt v5. `ocr-ci post` hostile-reads that receipt rather than reconstructing configuration from a later environment.
 
-`OCR_REVIEW_CONTEXT_MODE` controls whether mutable merge-request data enters review context. Empty or `off` is the default and performs identity-only acquisition: source SHA, protected target identity, and merge-request author ID are still validated, while title, description, labels, and source branch do not enter normalization or storage. `metadata` admits only those bounded author-controlled fields. Treat admitted intent as a claim to compare with the diff, never an instruction or authority; source-branch text alone is a weaker hint and cannot establish rollout intent. Complete metadata remains eligible for deterministic approval policy, while any degraded field state blocks approval.
+`off` still validates the source SHA, protected target, merge-request author, and live bot identity while withholding mutable MR text. `metadata` admits only bounded DLP-checked title, description, labels, and optional source branch. Treat those fields as claims to compare with the diff, never as instructions, policy, or proof.
 
-`enriched` first requires the exact protected-target policy. GitLab discussions are read twice as one bounded ordered snapshot; mutation and omissions stay visible. References are recognized only in admitted metadata and discussion bodies, then authorized by an operator proxy before an opaque local handle is minted. The model can list/get committed handles through the existing toolkit MCP but cannot search the provider or submit an arbitrary identifier/URL. Required degradation and admitted mutable context block approval; optional degradation cannot prove absence.
+`enriched` loads the protected policy and may add one stable GitLab discussion snapshot, verified toolkit-owned remediation threads, and adapter-authorized records. Generic discussion and remediation projections are mutually exclusive for a toolkit-owned root. Remediation roots require both the authenticated live bot ID and a valid toolkit marker/fingerprint. Raw GitLab IDs, usernames, provider objects, and rejected values are not stored or returned. The model sees only opaque local handles; it cannot search GitLab or submit an arbitrary provider ID or URL.
 
-`ocr-ci review` owns evidence collection, private artifacts, compact bootstrap, context acquisition, isolated OCR execution, publication validation, cleanup, and the complete MCP registry. In a validated GitLab MR path, direct external MCP entries must be remote HTTPS; local developer execution may retain explicit stdio processes. Existing OCR configuration is revalidated so it cannot bypass that profile. The fixed toolkit-owned stdio process exposes mandatory evidence and, only in enriched mode, the two fixed context tools. After OCR succeeds, `review` validates mandatory evidence use, publication DLP, and cleanup, then atomically binds receipt v5 to the private result. `post` hostile-reads that receipt instead of reconstructing configuration. Private-only sanitization is signalled separately and leaves the published review unchanged; any changed or incomparable canonical publication/approval projection is partial and ineligible. Every configured direct external MCP remains comment-only; brokered adapters are governed separately by per-record mutability and degradation.
+Remediation text is untrusted review history. It may locate a claim that OCR must re-check against current code and tests, but it cannot change severity, prove a fix, suppress or resolve a finding, issue a lifecycle command, or authorize approval. Any admitted remediation record therefore makes the review comment-only. DLP-clean non-remediation context does not independently disable an otherwise eligible receipt; a DLP rejection cannot make approval easier.
 
-When a merge request introduces one normalized repository-owned OCR rules path that is absent from both the diff base and captured protected-target policy commit but exists as a bounded regular blob at the exact source head, `review` stops before OCR. `post` may render only the static toolkit-authored setup-pending message. It never reads or trusts the source rule content as policy, never appends stderr to that recognized outcome, and falls back to the generic failure for malformed, stale, unsafe, or identity-mismatched private status.
+When a merge request introduces a repository-owned OCR rules path absent from both trusted baselines, `review` stops before OCR and `post` may publish only the static setup-pending message after hostile identity validation. The source file never becomes policy evidence for its own merge request.
 
-`ocr-ci post` also manages conservative automatic approval by default. After all
-current notes publish, it waits for GitLab diff and approval synchronization,
-verifies the current MR head and author against the receipt-bound identities, skips self-approval when the toolkit user authored the MR, submits that exact SHA only when all gates pass, and confirms the authenticated toolkit user's approval plus the unchanged SHA and non-bot author through bounded post-write readback. Set `OCR_AUTO_APPROVE=false` for a comment-only bot or before upgrading
-an integration whose approval rules have not granted the bot permission. This
-transaction is add-only: an ineligible or disabled later run never removes an
-existing approval. Configure GitLab's own reset or invalidation policy if
-approvals must be withdrawn after the source branch changes.
+## Reviewer commands and no-commit reruns
 
-Repeated reviews have a reviewer-controlled lifecycle rather than appending the same notes indefinitely. Untouched OCR-only notes are replaced after a successful run, human-touched discussions are preserved, and `/ocr suppress` or `/ocr resolve` controls future matching findings. Read [GitLab review operations](operations.md) for the complete state machine, deduplication boundaries, posting modes, permissions, limits, and failure semantics.
+Inside a toolkit-owned discussion, a human non-system reply may contain exactly one lifecycle command:
 
-For a deliberate project-wide tradeoff that should be supplied to every review, add a narrowly scoped entry to `.opencodereview/accepted-decisions.md` in an earlier reviewed merge request. The [configuration reference](configuration.md#accepted-project-decisions) documents its `ocr-accept` marker convention, prompt-level semantics, and self-whitelisting guard.
+- `/ocr suppress` or `@<live-bot-username> suppress` keeps the discussion open and suppresses the matching finding;
+- `/ocr resolve` or `@<live-bot-username> resolve` suppresses the finding and resolves the discussion after the next successful posting transaction.
 
-OCR is configured through its `openai-responses` provider. Run the review through `ocr-ci review` so failed OCR stderr is retained privately and a bounded redacted diagnostic appears in the runner log. This command never posts; `ocr-ci post` remains the explicit GitLab write boundary. MCP tools are supplied with `OCR_MCP_SERVERS_JSON`; GitLab MR external entries are remote HTTPS only, while explicit stdio commands are limited to the developer-local execution profile.
+Commands are case-insensitive and allow surrounding whitespace only. For a bot named `mr.bot`, `@mr.bot resolve` is valid. Prose, code blocks, `supress`, another mention, `retest`, bot replies, system notes, and commands outside a toolkit-owned discussion are ignored. If several recognized human commands exist, the newest wins. See [GitLab review operations](operations.md#reviewer-commands) for the state machine.
 
-Use merge-request source and base SHAs, not a merge-result commit, when choosing the reviewed range. Keep the self-test job manual. See [docs/security.md](security.md) for trust boundaries and [docs/configuration.md](configuration.md) for every input.
+The toolkit is CI-only and does not receive a GitLab comment event by itself, so `@bot retest` is not supported. To rerun without a commit, use GitLab's [Retry UI/API](https://docs.gitlab.com/ci/jobs/#retry-jobs). Creating a new merge-request pipeline is also available through the [merge-request pipeline API](https://docs.gitlab.com/api/merge_requests/#create-merge-request-pipeline). A deployment that wants comment-triggered reruns needs a separate authenticated and authorized [Note Hook receiver](https://docs.gitlab.com/user/project/integrations/webhook_events/); that receiver is outside this toolkit's trust and lifecycle boundary.
+
+## Accepted project decisions in a later merge request
+
+Copy [`examples/gitlab/accepted-decisions.md`](../examples/gitlab/accepted-decisions.md) to `.opencodereview/accepted-decisions.md` and merge it through an earlier reviewed change. In a later merge request that touches a matching scope, the protected-target collector marks the decision applicable and the bootstrap lists its decision ID and scope.
+
+OCR can then inspect the actual protected decision through the built-in `ocr_toolkit_evidence` tool:
+
+```json
+{"action":"list","kind":"repository.accepted_decision","ref":"policy"}
+```
+
+The returned record contains a stable `id`. OCR retrieves that exact record with:
+
+```json
+{"action":"get","id":"<id returned by list>"}
+```
+
+The rationale is evidence to compare with current code, tests, and applicability, not a suppression or authorization rule. A decision added or changed by the current source branch is excluded. The full format, scope grammar, staleness, and authority limits are in [Accepted project decisions](configuration.md#accepted-project-decisions).
+
+Use merge-request source and base SHAs, not a merge-result commit, for the reviewed range. Keep the self-test job manual. See [Security and trust model](security.md), [Environment configuration](configuration.md), and [Bounded review context](review-context.md) for the exact contracts.

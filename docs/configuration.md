@@ -93,11 +93,11 @@ A GitLab-MR external server therefore looks like:
 
 ```json
 {
-  "bounded_reference": {
+  "review_evidence": {
     "type": "remote",
-    "url": "https://mcp.synthetic.invalid/v1",
-    "headers_from": {"Authorization": "SYNTHETIC_MCP_AUTH_HEADER"},
-    "tools": ["read_admitted_record"]
+    "url": "https://review-evidence.example.invalid/v1/mcp",
+    "headers_from": {"Authorization": "REVIEW_EVIDENCE_MCP_AUTHORIZATION"},
+    "tools": ["read_review_evidence"]
   }
 }
 ```
@@ -112,7 +112,7 @@ An unavailable optional server or tool/protocol error can degrade while OCR cont
 
 `OCR_REVIEW_CONTEXT_MODE` is parsed before provider acquisition or OCR execution. Missing, empty, and `off` select identity-only acquisition: the provider still validates the source SHA, protected target identity, and positive merge-request author ID needed by policy and approval, but title, description, labels, and source branch are not normalized or stored. `metadata` requires a validated GitLab merge-request environment and admits only the existing bounded title, description, label, and optional source-branch projection. Every field reports a closed status; metadata is `complete` only when every selected field is absent or admitted. Invalid, over-limit, collision, redaction-limit, or partial states are `degraded`.
 
-`enriched` requires a validated GitLab merge request and a valid `.opencodereview/review-context-policy.json` read only from the captured protected-target policy SHA. It adds policy-selected GitLab discussions and adapter records through a separate private store and fixed `context_list`/`context_get` tools. A source policy cannot expand access; missing or invalid protected policy fails before OCR. `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` is an exact operator allowlist, and protected policy may only narrow it. See [Bounded review context](review-context.md) for the complete policy, stdio/HTTPS proxy protocol, projections, handles, DLP, completeness, receipt, and cleanup contracts.
+`enriched` requires a validated GitLab merge request and a valid `.opencodereview/review-context-policy.json` read only from the captured protected-target policy SHA. It adds policy-selected generic GitLab discussions, verified remediation threads, and adapter records through a separate private store and fixed `context_list`/`context_get` tools. A source policy cannot expand access; missing or invalid protected policy fails before OCR. `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` is an exact operator allowlist, and protected policy may only narrow it. See [Bounded review context](review-context.md) for policy v1/v2 compatibility, the stdio/HTTPS proxy protocol, fixed remediation projection, handles, DLP, completeness, receipt, and cleanup contracts.
 
 Complete DLP-admitted metadata, generic discussions, and dynamic records remain untrusted evidence but do not independently block approval. Degraded metadata, any DLP rejection, required enriched-source degradation, and every admitted remediation thread do block approval; optional non-DLP degradation remains visible and cannot prove absence. A complete enriched run without admitted remediation may pass the remaining receipt and evidence gates. No context mode can change policy, suppression, posting authority, credentials, or approval thresholds.
 
@@ -127,7 +127,7 @@ Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_M
 `OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
 
 `OCR_MAX_TOKENS_BUDGET` is an operator-owned cost ceiling for one diff review,
-not a quality profile or telemetry setting. The synthetic GitLab example passes
+not a quality profile or telemetry setting. The complete GitLab pipeline passes
 it directly to the recommended OCR's `--max-tokens-budget`; leave it at `0` for
 unlimited review. When a positive ceiling stops dispatch, OCR preserves completed
 findings and reports the unreviewed files as budget-attributed failed coverage.
@@ -161,7 +161,7 @@ severity is exactly `low` and category is exactly `style`, `documentation`, or
 `maintainability`, are eligible. Missing, unknown, differently cased, or
 non-string metadata blocks approval, as do warnings, failed or waived coverage,
 partial/budget outcomes, any receipt other than v5, degraded selected metadata, any configured direct external MCP, required context degradation, a DLP-rejected selected source, admitted remediation context,
-and findings omitted by `OCR_MAX_POST_COMMENTS`. For receipt v5, complete metadata, complete zero-record enrichment, private-only sanitization, and the built-in evidence/context MCP are not blockers. GitLab posting also revalidates the receipt-bound source SHA and author ID, and skips without writing when the author changed or the toolkit user authored the merge request. There are intentionally no
+and findings omitted by `OCR_MAX_POST_COMMENTS`. For receipt v5, complete metadata, complete non-remediation enrichment, private-only sanitization, and the built-in evidence/context MCP are not blockers. GitLab posting also revalidates the receipt-bound source SHA and author ID, and skips without writing when the author changed or the toolkit user authored the merge request. There are intentionally no
 environment variables for policy thresholds or category lists in this release.
 
 `ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
@@ -178,7 +178,7 @@ Evidence-store schema v2 includes closed `framework.detected` (`repository.frame
 
 Implementation-wise, package and automation metadata is normalized by the internal `ocr_toolkit.evidence.ecosystems` source-adapter layer before framework plugins consume it. This is not a user-configurable runtime plugin namespace: adapter registration, bounded immutable reads, storage, and MCP serving remain toolkit-owned closed contracts.
 
-The synthetic GitLab `rules.json` uses additive `include` entries for `.j2`, `.jinja`, `.jinja2`, `.twig`, and conventional Ansible-role template paths because the [recommended OCR](compatibility.md) does not review those extensions by default. Explicit excludes still win. The matching Jinja/Twig rules are review guidance; they do not execute or render templates, infer runtime variables, or replace evidence completeness.
+The GitLab `rules.json` example uses additive `include` entries for `.j2`, `.jinja`, `.jinja2`, `.twig`, and conventional Ansible-role template paths because the [recommended OCR](compatibility.md) does not review those extensions by default. Explicit excludes still win. The matching Jinja/Twig rules are review guidance; they do not execute or render templates, infer runtime variables, or replace evidence completeness.
 
 Evidence-store schema v4 retains v1-v3 readback and adds a distinct immutable policy snapshot without relabelling the forge diff base. Current structured decisions and guidance bind to the policy SHA while applicability remains bound to the unchanged base-to-head changed paths. Schema v3 keeps its historical base-bound policy semantics, schema v2 text-only records retain explicit legacy provenance, and schema v1 remains readable with unknown completeness. Framework plugins publish `framework.declaration`, `framework.resolution`, `framework.configuration`, and `template.inventory` scopes. Supported malformed or omitted manifests, source-item limits, configuration/template output limits, unsafe template object types, local Go replacements, and isolated provider failures all prevent a false completeness claim. Only `complete` coverage permits a missing positive fact to support an absence claim; absent, `partial`, `runtime-dependent`, and `unavailable` coverage mean unknown. Schema-v1 stores remain readable but are explicitly treated as having unknown completeness. The Ansible adopter recognizes static, plugin-based, and executable inventory sources without execution and models the recursive role `defaults/main/` and `vars/main/` loader surface verified for ansible-core 2.17 through the current 2.x loader contract. Unsupported later loader behavior or bounded read/parser failures degrade coverage rather than becoming false completeness.
 
@@ -188,7 +188,7 @@ The review step writes exact closed receipt v5 inside the private result only af
 
 ### Accepted project decisions
 
-Use `.opencodereview/accepted-decisions.md` for reviewed target-branch tradeoffs that should be available as contextual evidence. Each H2 section is one decision. Existing heading-and-rationale entries remain valid; optional metadata adds explicit applicability and maintenance information:
+Use `.opencodereview/accepted-decisions.md` for reviewed target-branch tradeoffs that should be available as contextual evidence. Each H2 section is one decision. Existing heading-and-rationale entries remain valid; optional metadata adds explicit applicability and maintenance information. A complete copyable file is available at [`examples/gitlab/accepted-decisions.md`](../examples/gitlab/accepted-decisions.md):
 
 ```markdown
 ## generated-client-timeout
@@ -205,7 +205,15 @@ The generated client keeps the provider timeout so regeneration stays reproducib
 
 The optional inline convention `# ocr-accept: generated-client-timeout` can still connect a rationale to code for human readers, but it is not a source-code parser or marker authority. Accepted decisions are not static-analysis exemptions, unconditional suppression, or permission to ignore unrelated findings. `Category` and `Owner` are descriptive. `Review after` is a strict ISO date: the decision is surfaced as stale from that UTC date but remains visible until maintainers review or remove it.
 
-Only the immutable target/base document is policy evidence. Source-branch edits never create authority. The compact bootstrap contains bounded summaries only for applicable decisions; full redacted rationale, provenance, scope, applicability, and staleness remain queryable through the built-in `ocr_toolkit_evidence` MCP. Reviewers should continue to use `/ocr suppress` or `/ocr resolve` for a concrete GitLab discussion.
+Only the immutable target/base document is policy evidence. Source-branch edits never create authority. The compact bootstrap contains bounded summaries only for applicable decisions; full redacted rationale, provenance, scope, applicability, and staleness remain queryable through the built-in `ocr_toolkit_evidence` MCP. Reviewers should continue to use `/ocr suppress`, `/ocr resolve`, or their exact live-bot mention equivalents for a concrete GitLab discussion.
+
+Usage happens in a later merge request. First merge the decision document to the protected target branch. When a later change touches a matching scope, the bootstrap lists the applicable decision ID and instructs OCR to use the evidence MCP. OCR lists the protected records with:
+
+```json
+{"action":"list","kind":"repository.accepted_decision","ref":"policy"}
+```
+
+It then passes the stable `id` returned by `list` to `{"action":"get","id":"<id>"}` and compares the full rationale with the current code and test evidence. A matching decision may explain a deliberate tradeoff, but it cannot suppress a finding, grant an action, or prove that the current implementation still satisfies the rationale.
 
 ### Target project guidance
 

@@ -1,0 +1,47 @@
+{
+  "schema_version": "ocr.review-context-policy/v2",
+  "budgets": {
+    "max_records": 24,
+    "max_chars": 24000,
+    "max_bytes": 48000,
+    "max_lines": 600,
+    "timeout_ms": 15000
+  },
+  "forge_discussions": {
+    "required": false,
+    "account_classes": ["automation", "user"],
+    "include_resolved": false,
+    "include_outdated": false,
+    "max_age_seconds": 2592000,
+    "max_threads": 20,
+    "max_replies_per_thread": 10,
+    "max_items": 100,
+    "budgets": {
+      "max_chars": 12000,
+      "max_bytes": 24000,
+      "max_lines": 300
+    },
+    "projections": {
+      "retrieve": ["descriptor", "digest", "expiry", "state", "text", "version"],
+      "model": ["descriptor", "state", "text"],
+      "publish": ["descriptor", "state"],
+      "retain": ["digest", "expiry", "state", "version"]
+    }
+  },
+  "remediation_threads": {
+    "required": false,
+    "account_classes": ["automation", "system", "user"],
+    "include_resolved": false,
+    "include_outdated": false,
+    "max_age_seconds": 2592000,
+    "max_threads": 20,
+    "max_replies_per_thread": 10,
+    "max_items": 100,
+    "budgets": {
+      "max_chars": 12000,
+      "max_bytes": 24000,
+      "max_lines": 300
+    }
+  },
+  "references": []
+}

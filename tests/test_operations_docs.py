@@ -8,6 +8,7 @@ OPERATIONS = PROJECT_ROOT / "docs" / "operations.md"
 GITLAB_GUIDE = PROJECT_ROOT / "docs" / "gitlab.md"
 CONFIGURATION = PROJECT_ROOT / "docs" / "configuration.md"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
+GITLAB_EXAMPLES = PROJECT_ROOT / "examples" / "gitlab"
 CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 
 
@@ -69,6 +70,9 @@ def test_operations_guide_documents_lifecycle_contract() -> None:
     assert "Publish succeeds" in operations
     assert "`/ocr suppress`" in operations
     assert "`/ocr resolve`" in operations
+    assert "`@<live-bot-username> suppress`" in operations
+    assert "`@<live-bot-username> resolve`" in operations
+    assert "`@mr.bot resolve`" in operations
     assert "OCR_POST_MODE=draft" in operations
     assert "OCR_STRICT_POSTING=true" in operations
     assert "Developer role" in operations
@@ -180,33 +184,83 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
-    assert "admitted mutable context" in operations
+    assert "admitted remediation context" in operations
     assert "absolute HTTPS `url`" in configuration
     assert "sole stdio exception" in configuration
 
 
-def test_production_bot_recipes_and_062_migration_are_public() -> None:
+def test_production_bot_modes_and_current_contract_are_public() -> None:
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
 
     for phrase in (
         "## Production bot configuration",
-        "Context-free automatic approval",
-        "Bounded metadata-aware automatic approval",
-        "Metadata-aware comment-only operation",
-        "Protected enriched context",
-        "Operator-reviewed direct external MCP",
-        "### Migration from 0.6.2",
-        "### Migration from 0.6.3 to 0.7.0",
-        "Current v0.7.1 posting rejects every pre-v5 receipt",
-        "retry-on-absence",
+        "## Choose one operating mode",
+        "Identity only",
+        "Metadata",
+        "Enriched discussions",
+        "Enriched adapters",
+        "Direct MCP",
+        "live `GET /user`",
+        "@mr.bot resolve",
+        "Retry UI/API",
+        "Note Hook receiver",
     ):
         assert phrase in gitlab
-    assert gitlab.count('OCR_REVIEW_CONTEXT_MODE: "metadata"') >= 3
-    assert 'OCR_REVIEW_CONTEXT_MODE: "enriched"' in gitlab
-    assert 'OCR_AUTO_APPROVE: "false"' in gitlab
-    assert "SYNTHETIC_MCP_AUTH_HEADER" in gitlab
-    assert "SYNTHETIC_ADAPTER_AUTHORIZATION" in gitlab
-    assert "server-side tenant/object/field/operation authorization" in gitlab
+    assert "Migration from" not in gitlab
+    assert "service-side tenant/object/field/operation authorization" in gitlab
+    assert "#choosing-a-discussion-policy" in gitlab
+    for phrase in (
+        "### Choosing a discussion policy",
+        "Ordinary MR conversation only",
+        "Earlier OCR finding plus human remediation replies only",
+        "Both ordinary conversation and remediation history",
+        "Discussions plus authorized issue/document records",
+        "required: false",
+        "zero selected threads is still complete",
+    ):
+        assert phrase in bounded
+
+    mode_root = GITLAB_EXAMPLES / "modes"
+    expected_modes = {
+        "direct-mcp.gitlab-ci.yml",
+        "enriched-adapters.gitlab-ci.yml",
+        "enriched-discussions.gitlab-ci.yml",
+        "identity-only.gitlab-ci.yml",
+        "metadata.gitlab-ci.yml",
+    }
+    assert {path.name for path in mode_root.glob("*.yml")} == expected_modes
+    for mode in expected_modes:
+        recipe = (mode_root / mode).read_text(encoding="utf-8")
+        assert recipe.startswith("variables:\n")
+        assert "OCR_REVIEW_CONTEXT_MODE" in recipe
+        assert "OCR_AUTO_APPROVE" in recipe
+
+
+def test_examples_and_current_public_docs_use_product_oriented_language() -> None:
+    current_documents = (
+        README,
+        CONFIGURATION,
+        GITLAB_GUIDE,
+        OPERATIONS,
+        PROJECT_ROOT / "docs" / "review-context.md",
+    )
+    example_files = tuple(path for path in GITLAB_EXAMPLES.rglob("*") if path.is_file())
+    for path in (*current_documents, *example_files):
+        assert "synthetic" not in path.read_text(encoding="utf-8").casefold(), path
+
+
+def test_accepted_decision_example_is_shown_in_a_later_review_flow() -> None:
+    example = (GITLAB_EXAMPLES / "accepted-decisions.md").read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+
+    assert "## generated-client-timeout" in example
+    assert "Scope: src/client/generated/**" in example
+    for document in (configuration, gitlab):
+        assert '"action":"list","kind":"repository.accepted_decision","ref":"policy"' in document
+        assert '"action":"get","id":"<id' in document
+        assert "later merge request" in document
 
 
 def test_inline_create_reconciliation_contract_is_bounded_and_nonretrying() -> None:
