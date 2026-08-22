@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import venv
 from pathlib import Path
 
 import pytest
@@ -110,33 +111,20 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
     """Prove both package paths under hostile imports, private state, and stdio MCP."""
 
     git_binary = shutil.which("git")
-    uv_binary = shutil.which("uv")
     assert git_binary is not None
-    assert uv_binary is not None
     for label, artifact in zip(("wheel", "sdist"), installed_artifacts, strict=True):
         root = tmp_path / label
         root.mkdir(mode=0o700)
         environment = root / "venv"
-        _run(
-            [uv_binary, "venv", "--python", sys.executable, str(environment)],
-            cwd=root,
-        )
+        venv.EnvBuilder(with_pip=True).create(environment)
         binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
         python = binary_directory / ("python.exe" if os.name == "nt" else "python")
         cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
         _run(
-            [
-                uv_binary,
-                "pip",
-                "install",
-                "--python",
-                str(python),
-                "--no-deps",
-                str(artifact),
-            ],
+            [str(python), "-m", "pip", "install", "--no-deps", str(artifact)],
             cwd=root,
         )
-        _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)
+        _run([str(python), "-m", "pip", "check"], cwd=root)
         installed_version = _run(
             [str(python), "-I", "-c", "import ocr_toolkit; print(ocr_toolkit.__version__)"],
             cwd=root,

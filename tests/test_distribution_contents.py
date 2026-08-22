@@ -59,15 +59,7 @@ def test_built_wheel_contains_evidence_packages_without_flat_module_shims(
 
     output = tmp_path / "dist"
     subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "build",
-            "--no-isolation",
-            "--wheel",
-            "--outdir",
-            str(output),
-        ],
+        [sys.executable, "-m", "build", "--wheel", "--outdir", str(output)],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
