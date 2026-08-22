@@ -21,7 +21,6 @@ from ocr_toolkit.posting.gitlab import (
     discussion_id as parse_discussion_id,
 )
 from ocr_toolkit.posting.markers import (
-    OCR_REPLY_COMMAND_RE,
     author_id_from_note,
     comment_fingerprint,
     comment_fingerprint_candidates,
@@ -33,6 +32,7 @@ from ocr_toolkit.posting.markers import (
     is_own_bot_note,
     legacy_comment_fingerprint,
     line_based_comment_fingerprint,
+    reviewer_command_from_body,
 )
 from ocr_toolkit.posting.settings import post_mode, strict_posting
 from ocr_toolkit.posting.transaction import PostingTransaction
@@ -203,9 +203,11 @@ def reviewer_command_in_thread(config: GitLabConfig, notes: Sequence[Any]) -> st
         if note.get("system"):
             continue
 
-        body = str(note.get("body") or "")
-        for match in OCR_REPLY_COMMAND_RE.finditer(body):
-            found = match.group(1).lower()
+        command = reviewer_command_from_body(
+            note.get("body"), bot_username=config.current_username
+        )
+        if command is not None:
+            found = command
 
     return found
 

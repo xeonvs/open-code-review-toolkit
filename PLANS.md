@@ -39,7 +39,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `REQ-004` (`done`): added a shared validated live `GET /user` identity owner and derive mutually exclusive generic discussions plus verified remediation bundles from one twice-read bounded snapshot; identity, edit, delete, reorder, and pagination drift fail closed as `mutated`. Covered by `WQ-04`.
 - `REQ-005` (`done`): apply budgets and DLP before atomic storage, add MCP/bootstrap/receipt/cleanup integration, and preserve posting suppression, fingerprints, human ownership, resolve rollback, and receipt v5. Covered by `WQ-05`.
 - `REQ-006` (`done`): apply DLP to every untrusted MR-derived text path, including title, description, generic discussions, remediation roots/replies, and adapter/reference content, before private-store or bootstrap admission. Keep each source's DLP admission/degradation isolated from receipt-based approval: safe non-remediation context must not block approval, DLP rejection cannot enable approval, and admitted remediation always forces comment-only. Covered by `WQ-05` and `WQ-06`.
-- `REQ-007` (`pending`): support exact whole-reply mention commands for the live bot username with slash-command parity and closed negative cases. Covered by `WQ-06`.
+- `REQ-007` (`done`): support exact whole-reply mention commands for the live bot username with slash-command parity and closed negative cases. Covered by `WQ-06`.
 - `REQ-008` (`pending`): remove `OCR_GITLAB_BOT_USER_ID`; reject `OCR_USE_ANTHROPIC` with migration guidance; remove example `OCR_RUN_HELPER_TESTS` and unsupported documentation-only variables while retaining active controls and redaction sentinels. Covered by `WQ-07`.
 - `REQ-009` (`pending`): publish a complete environment-variable/default contract separated by runtime, GitLab predefined, example-local, and dynamic adapter inputs, protected by an exact-set contract test. Covered by `WQ-07`.
 - `REQ-010` (`pending`): reorganize GitLab examples by mode, relocate context recipes, remove user-facing `synthetic` labels, and demonstrate Accepted project decisions creation and later evidence list/get use. Covered by `WQ-08`.
@@ -106,7 +106,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `WQ-03` (`done`): added policy v1/v2, remediation policy types, context-store v2, fixed model-only nested projection, `remediation_thread` MCP resource filtering, and architecture/threat-contract updates; focused tests and slice review passed.
 - `WQ-04` (`done`): implemented shared validated live identity, one bounded double snapshot, root verification by live bot ID plus exact fingerprint marker, remediation grouping/generic exclusion, command exclusion, and mutation/pagination semantics; focused and adversarial tests passed.
 - `WQ-05` (`done`): added provider-neutral forge origins and normalized remediation views, repeated DLP before store, provider DLP rejection accounting, one-snapshot runner composition, nested aggregate budgets, fixed bootstrap non-authority guidance, receipt-v5 comment-only semantics only for admitted remediation, metadata DLP hostile readback, and an import-boundary test; 176 focused tests plus 71 subtests, Ruff, MyPy, slice review, and diff checks passed.
-- `WQ-06` (`pending`): exact mention parser, live username plumbing, newest-command parity and negatives; focused tests and signed commit.
+- `WQ-06` (`done`): connected the exact slash/mention parser to the posting snapshot with the authenticated live username; verified `@mr.bot suppress|resolve`, newest-recognized-human precedence, toolkit-owned-root scoping, and bot/system/typo/prose/code/wrong-mention/retest negatives; 171 focused tests plus 90 subtests, Ruff, MyPy, slice review, and diff checks passed.
 - `WQ-07` (`pending`): runtime environment cleanup, complete configuration tables, exact supported-set/default contract tests, and example helper-test removal; signed commit.
 - `WQ-08` (`pending`): mode-oriented examples, moved recipes, Accepted decisions consumption walkthrough, GitLab/review-context documentation, user-facing terminology cleanup; signed commit.
 - `WQ-09` (`pending`): three managed navigation indexes, cross-link/README/strategy/roadmap/Towncrier reconciliation, index audit; signed commit.
@@ -160,7 +160,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 
 #### Resume Point
 
-Continue at `WQ-06`: connect the exact slash/mention parser to the posting snapshot using the authenticated live username, preserve newest-recognized-human-command semantics, add `@mr.bot suppress|resolve` parity and closed negative cases, pass the slice commit gate, and do not push.
+Continue at `WQ-07`: remove obsolete environment semantics and example helper-test controls, rebuild the exact categorized environment/default contract with regression coverage, pass the slice commit gate, and do not push.
 
 #### Plan Fidelity Check
 
