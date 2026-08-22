@@ -38,6 +38,47 @@ def test_readme_and_gitlab_guide_link_to_operations() -> None:
     assert "## How reviews evolve" in readme
 
 
+def test_documentation_indexes_route_to_canonical_owners() -> None:
+    docs_index = (PROJECT_ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    codex_index = (PROJECT_ROOT / "docs" / "codex" / "README.md").read_text(encoding="utf-8")
+    engineering_index = (PROJECT_ROOT / "docs" / "engineering" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    readme = README.read_text(encoding="utf-8")
+
+    for index in (docs_index, codex_index, engineering_index):
+        assert index.count("<!-- engineering-workflow:index:start -->") == 1
+        assert index.count("<!-- engineering-workflow:index:end -->") == 1
+
+    for relative_path in (
+        "configuration.md",
+        "gitlab.md",
+        "operations.md",
+        "review-context.md",
+        "security.md",
+        "development.md",
+        "release.md",
+        "engineering/README.md",
+        "codex/README.md",
+    ):
+        assert relative_path in docs_index
+    for phrase in ("PLANS.md", "TASKS_BACKLOG.md", "AGENT_EXECUTION_PITFALLS.md"):
+        assert phrase in codex_index
+    for phrase in (
+        "toolkit_strategy.md",
+        "project_principles.md",
+        "m5_context_contracts.md",
+        "evidence_migration_matrix.md",
+        "test_evidence_matrix.md",
+        "execution_history/README.md",
+    ):
+        assert phrase in engineering_index
+
+    assert "not a second source" in codex_index
+    assert "without duplicating their rules" in engineering_index
+    assert "docs/README.md" in readme
+
+
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
     """Keep conduct reports private and separate from public issue intake."""
 

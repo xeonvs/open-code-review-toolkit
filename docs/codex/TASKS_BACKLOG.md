@@ -99,7 +99,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Dependencies:** Established evidence, snapshot/delta, scoped-completeness, static-plugin, and built-in MCP contracts.
 - **Activation trigger:** A real repository need identifies a missing ecosystem/framework and supplies safe synthetic fixtures and deterministic semantics.
 - **Goal:** Extend coverage without accumulating shallow detectors.
-- **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public synthetic examples.
+- **Scoped deliverables:** Implement one coherent ecosystem or framework pack per activation, with provenance, bounds, source/target deltas, documentation, and public operational examples using safe placeholders.
 - **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
 - **Exclusions:** Checkbox coverage, network resolution, runtime execution, or unrelated bundles.
 - **Validation:** Pack fixtures plus common evidence/bootstrap/MCP contracts.
