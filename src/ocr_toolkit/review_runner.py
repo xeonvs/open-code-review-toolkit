@@ -1236,9 +1236,7 @@ def _prepare_enrichment(
                             degradation["limit"] += 1
                         degradation["invalid"] += discussion_snapshot.dlp_rejected
                     required_degraded = required_degraded or discussion_policy.required
-                    required_degraded = (
-                        required_degraded or discussion_snapshot.dlp_rejected > 0
-                    )
+                    required_degraded = required_degraded or discussion_snapshot.dlp_rejected > 0
                 discussion_records = prepare_discussion_records(
                     discussion_snapshot.records,
                     policy=discussion_policy,
@@ -1248,8 +1246,8 @@ def _prepare_enrichment(
                 )
                 if len(discussion_records) != len(discussion_snapshot.records):
                     completeness[discussion_origin.source] = "partial"
-                    degradation["invalid"] += (
-                        len(discussion_snapshot.records) - len(discussion_records)
+                    degradation["invalid"] += len(discussion_snapshot.records) - len(
+                        discussion_records
                     )
                     # A DLP/shape rejection cannot silently make automatic approval eligible.
                     required_degraded = True
@@ -1270,9 +1268,7 @@ def _prepare_enrichment(
                             degradation["limit"] += 1
                         degradation["invalid"] += remediation_snapshot.dlp_rejected
                     required_degraded = required_degraded or remediation_policy.required
-                    required_degraded = (
-                        required_degraded or remediation_snapshot.dlp_rejected > 0
-                    )
+                    required_degraded = required_degraded or remediation_snapshot.dlp_rejected > 0
                 remediation_records = prepare_remediation_records(
                     remediation_snapshot.records,
                     policy=remediation_policy,
@@ -1282,8 +1278,8 @@ def _prepare_enrichment(
                 )
                 if len(remediation_records) != len(remediation_snapshot.records):
                     completeness[remediation_origin.source] = "partial"
-                    degradation["invalid"] += (
-                        len(remediation_snapshot.records) - len(remediation_records)
+                    degradation["invalid"] += len(remediation_snapshot.records) - len(
+                        remediation_records
                     )
                     required_degraded = True
                 pending.extend(remediation_records)

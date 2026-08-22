@@ -203,9 +203,7 @@ def reviewer_command_in_thread(config: GitLabConfig, notes: Sequence[Any]) -> st
         if note.get("system"):
             continue
 
-        command = reviewer_command_from_body(
-            note.get("body"), bot_username=config.current_username
-        )
+        command = reviewer_command_from_body(note.get("body"), bot_username=config.current_username)
         if command is not None:
             found = command
 

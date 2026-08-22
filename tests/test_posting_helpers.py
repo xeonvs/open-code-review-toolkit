@@ -442,12 +442,8 @@ class PostingIdentityTests(unittest.TestCase):
         )
         for body in rejected:
             with self.subTest(body=body):
-                self.assertIsNone(
-                    markers.reviewer_command_from_body(body, bot_username="mr.bot")
-                )
-        self.assertIsNone(
-            markers.reviewer_command_from_body("@mr.bot resolve", bot_username=None)
-        )
+                self.assertIsNone(markers.reviewer_command_from_body(body, bot_username="mr.bot"))
+        self.assertIsNone(markers.reviewer_command_from_body("@mr.bot resolve", bot_username=None))
 
     def test_suppress_command_preserves_open_discussion_and_suppresses_finding(self) -> None:
         refs = snapshot.BotCommentRefs()
@@ -503,9 +499,7 @@ class PostingIdentityTests(unittest.TestCase):
         ]
 
         self.assertEqual(
-            snapshot.reviewer_command_in_thread(
-                gitlab_config(current_username="mr.bot"), notes
-            ),
+            snapshot.reviewer_command_in_thread(gitlab_config(current_username="mr.bot"), notes),
             "suppress",
         )
 
