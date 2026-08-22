@@ -11,9 +11,10 @@ from urllib.parse import urlsplit
 
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
-    POLICY_SCHEMA,
+    POLICY_SCHEMA_V1,
+    POLICY_SCHEMAS,
     PROJECTION_FIELDS,
-    RESOURCE_CLASSES,
+    REFERENCE_RESOURCE_CLASSES,
     RETENTION_FIELDS,
     AggregateBudgets,
     ContextContractError,
@@ -22,6 +23,7 @@ from ocr_toolkit.context.contracts import (
     DiscussionPolicy,
     RecognizerPolicy,
     ReferencePolicy,
+    RemediationThreadPolicy,
     TextBudgets,
 )
 
@@ -151,6 +153,61 @@ def _discussion(value: object) -> DiscussionPolicy:
     )
 
 
+def _remediation_threads(value: object) -> RemediationThreadPolicy:
+    item = _object(
+        value,
+        keys=frozenset(
+            {
+                "required",
+                "account_classes",
+                "include_resolved",
+                "include_outdated",
+                "max_age_seconds",
+                "max_threads",
+                "max_replies_per_thread",
+                "max_items",
+                "budgets",
+            }
+        ),
+        label="remediation_threads",
+    )
+    classes = item.get("account_classes")
+    if (
+        not isinstance(classes, list)
+        or not classes
+        or classes != sorted(set(classes))
+        or any(not isinstance(value, str) or value not in ACCOUNT_CLASSES for value in classes)
+        or "toolkit_bot" in classes
+    ):
+        raise ContextContractError("remediation_threads.account_classes is invalid")
+    return RemediationThreadPolicy(
+        required=_boolean(item.get("required"), label="remediation_threads.required"),
+        account_classes=tuple(classes),
+        include_resolved=_boolean(
+            item.get("include_resolved"), label="remediation_threads.include_resolved"
+        ),
+        include_outdated=_boolean(
+            item.get("include_outdated"), label="remediation_threads.include_outdated"
+        ),
+        max_age_seconds=_integer(
+            item.get("max_age_seconds"), minimum=0, maximum=31_536_000, label="remediation age"
+        ),
+        max_threads=_integer(
+            item.get("max_threads"), minimum=1, maximum=100, label="remediation threads"
+        ),
+        max_replies_per_thread=_integer(
+            item.get("max_replies_per_thread"),
+            minimum=1,
+            maximum=100,
+            label="remediation replies",
+        ),
+        max_items=_integer(
+            item.get("max_items"), minimum=2, maximum=500, label="remediation items"
+        ),
+        budgets=_text_budgets(item.get("budgets"), label="remediation_threads.budgets"),
+    )
+
+
 def _recognizer(value: object, *, resource_class: str) -> RecognizerPolicy:
     item = _object(
         value,
@@ -232,7 +289,7 @@ def _reference(value: object) -> ReferencePolicy:
         raise ContextContractError("reference adapter name is invalid")
     if not isinstance(tenant, str) or NAME_RE.fullmatch(tenant) is None:
         raise ContextContractError("reference tenant alias is invalid")
-    if not isinstance(resource_class, str) or resource_class not in RESOURCE_CLASSES:
+    if not isinstance(resource_class, str) or resource_class not in REFERENCE_RESOURCE_CLASSES:
         raise ContextContractError("reference resource class is invalid")
     return ReferencePolicy(
         adapter=adapter,
@@ -265,11 +322,22 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         raise ContextContractError("context policy is not valid JSON") from exc
     root = _object(
         payload,
-        keys=frozenset({"schema_version", "budgets", "forge_discussions", "references"}),
+        keys=frozenset(
+            {
+                "schema_version",
+                "budgets",
+                "forge_discussions",
+                "remediation_threads",
+                "references",
+            }
+        ),
         label="context policy",
     )
-    if root.get("schema_version") != POLICY_SCHEMA:
+    schema_version = root.get("schema_version")
+    if schema_version not in POLICY_SCHEMAS:
         raise ContextContractError("context policy schema version is unsupported")
+    if schema_version == POLICY_SCHEMA_V1 and "remediation_threads" in root:
+        raise ContextContractError("context policy v1 cannot select remediation threads")
     budgets_value = _object(
         root.get("budgets"),
         keys=frozenset({"max_records", "max_chars", "max_bytes", "max_lines", "timeout_ms"}),
@@ -293,6 +361,9 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         ),
     )
     discussion = _discussion(root["forge_discussions"]) if "forge_discussions" in root else None
+    remediation = (
+        _remediation_threads(root["remediation_threads"]) if "remediation_threads" in root else None
+    )
     references_value = root.get("references", [])
     if (
         not isinstance(references_value, list)
@@ -304,15 +375,16 @@ def parse_policy(raw: bytes) -> ContextPolicy:
     identities = [(item.adapter, item.tenant, item.resource_class) for item in references]
     if len(identities) != len(set(identities)):
         raise ContextContractError("context policy references collide")
-    if discussion is None and not references:
+    if discussion is None and remediation is None and not references:
         raise ContextContractError("context policy must select at least one source")
     canonical = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
     return ContextPolicy(
-        schema_version=POLICY_SCHEMA,
+        schema_version=str(schema_version),
         budgets=budgets,
         forge_discussions=discussion,
+        remediation_threads=remediation,
         references=references,
         digest=hashlib.sha256(canonical).hexdigest(),
     )

@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit import mcp_config
-from ocr_toolkit.context.mcp import ContextMCPError, call_context_tool
+from ocr_toolkit.context.mcp import ContextMCPError, call_context_tool, tool_definitions
 from ocr_toolkit.evidence.mcp import TOOL_NAME, handle_request
-from tests.test_context_store import POLICY_DIGEST, RUN_ID, commit, pending
+from tests.test_context_store import POLICY_DIGEST, RUN_ID, commit, pending, remediation_pending
 from tests.test_evidence_mcp import _store
 
 
@@ -58,6 +58,39 @@ def test_context_tools_list_and_get_only_minted_handles(tmp_path: Path) -> None:
     )
     assert malformed is not None
     assert malformed["result"]["isError"] is True  # type: ignore[index]
+
+
+def test_context_tools_expose_fixed_remediation_resource_without_provider_identity(
+    tmp_path: Path,
+) -> None:
+    store = commit(
+        tmp_path / "context.json",
+        completeness={"forge_remediation": "complete"},
+        records=[remediation_pending()],
+    )
+    listed = payload(
+        call_context_tool(
+            store,
+            "context_list",
+            {"resource_class": "remediation_thread"},
+            now=150,
+        )
+    )
+    handle = listed["records"][0]["handle"]
+    fetched = payload(call_context_tool(store, "context_get", {"handle": handle}, now=150))
+    serialized = json.dumps((listed, fetched), sort_keys=True)
+
+    assert fetched["resource_class"] == "remediation_thread"
+    assert fetched["record"]["remediation_thread"]["counts"] == {
+        "outdated": 0,
+        "replies": 1,
+        "resolved": 0,
+    }
+    assert "current_project" not in serialized
+    assert "thread-" not in serialized
+    assert "provider_id" not in serialized
+    resource_schema = tool_definitions()[0]["inputSchema"]["properties"]["resource_class"]  # type: ignore[index]
+    assert resource_schema["enum"] == ["document", "issue", "remediation_thread"]
 
 
 def test_context_tools_enforce_live_expiry_and_colon_source_cursor(tmp_path: Path) -> None:
