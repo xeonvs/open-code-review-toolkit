@@ -1973,36 +1973,36 @@ class PostingWorkflowTests(unittest.TestCase):
     def test_parse_error_preserves_previous_review_and_respects_strict_mode(self) -> None:
         """Preserve prior review state and apply strictness after result parse failure."""
 
-        with tempfile.TemporaryDirectory() as tmp:
-            stderr_path = Path(tmp) / "stderr.log"
-            secret = "parse-secret-value"
-            stderr_path.write_text(f"token={secret}\n/merge\n", encoding="utf-8")
+        stderr_path = Path("unused-stderr.log")
+        read_paths: list[Path] = []
 
-            for details, strict, expected in (("0", "false", 0), ("1", "true", 1)):
-                notes: list[str] = []
+        def safe_excerpt(path: Path) -> str:
+            read_paths.append(path)
+            return "token=***\n/merge"
 
-                def capture(
-                    _config: Any, _title: str, body: str, _transaction: PostingTransaction
-                ) -> dict[str, int]:
-                    notes.append(body)
-                    return {"id": 1}
+        for details, strict, expected in (("0", "false", 0), ("1", "true", 1)):
+            notes: list[str] = []
 
-                with (
-                    self.subTest(details=details, strict=strict),
-                    patched_env(
-                        OCR_POST_ERROR_DETAILS=details,
-                        OCR_STRICT_POSTING=strict,
-                        OCR_LLM_TOKEN=secret,
-                    ),
-                    patched_attr(workflow, "post_review_note_bounded", capture),
-                    patched_attr(workflow, "finalize_posting", lambda *_args: True),
-                ):
-                    exit_code = workflow.post_parse_error(gitlab_config(), stderr_path)
+            def capture(
+                _config: Any, _title: str, body: str, _transaction: PostingTransaction
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
 
-                self.assertEqual(exit_code, expected)
-                self.assertNotIn(secret, notes[0])
-                self.assertNotIn("\n/merge", notes[0])
-                self.assertEqual("token=***" in notes[0], details == "1")
+            with (
+                self.subTest(details=details, strict=strict),
+                patched_env(OCR_POST_ERROR_DETAILS=details, OCR_STRICT_POSTING=strict),
+                patched_attr(workflow, "read_stderr_excerpt", safe_excerpt),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_parse_error(gitlab_config(), stderr_path)
+
+            self.assertEqual(exit_code, expected)
+            self.assertNotIn("\n/merge", notes[0])
+            self.assertEqual("token=***" in notes[0], details == "1")
+
+        self.assertEqual(read_paths, [stderr_path])
 
     def test_missing_result_failure_is_distinct_and_preserves_previous_review(self) -> None:
         """Report a missing result distinctly without deleting the prior review."""
