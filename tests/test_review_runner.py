@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 from contextlib import redirect_stderr
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -25,6 +26,8 @@ from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore
 from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifacts
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
+from ocr_toolkit.posting import approval, settings
+from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import patched_attr, patched_env
 from tests.test_context_policy import encoded_policy, remediation_policy_value
 
@@ -246,8 +249,161 @@ def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
     assert receipt.degradation_counts == {"invalid": 1, "limit": 0, "unavailable": 0}
 
 
+def test_mixed_context_states_produce_exact_closed_degradation_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Project mixed source failures into exact closed degradation counts."""
+
+    identity = enriched_identity()
+    snapshot = SimpleNamespace(
+        discussions=SimpleNamespace(
+            state="mutated",
+            records=(),
+            omitted=0,
+            dlp_rejected=0,
+        ),
+        remediation_threads=SimpleNamespace(
+            state="partial",
+            records=(),
+            omitted=2,
+            dlp_rejected=1,
+        ),
+    )
+    external = BrokerResult(
+        (),
+        {"reference:tracker:engineering:issue": "unavailable"},
+        {"invalid": 2, "limit": 3, "unavailable": 1},
+        False,
+    )
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: snapshot,
+        external_acquire=lambda **_kwargs: external,
+    )
+
+    context_config, receipt = review_runner._prepare_enrichment(
+        identity,
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert context_config is not None and receipt is not None
+    assert receipt.completeness == {
+        "forge:gitlab_discussions": "mutated",
+        "forge:gitlab_remediation_threads": "partial",
+        "reference:tracker:engineering:issue": "unavailable",
+    }
+    assert receipt.degradation_counts == {"invalid": 4, "limit": 4, "unavailable": 1}
+    assert receipt.required_degraded is True
+    assert receipt.mutable_admitted is False
+    assert "dlp_rejected" not in artifacts.context_store.read_text(encoding="utf-8")
+
+
+def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does_not() -> None:
+    """Keep safe MR context approval-neutral and remediation comment-only."""
+
+    identity = enriched_identity()
+    payload: dict[str, object] = {
+        "status": "complete",
+        "comments": [],
+        "warnings": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "item-1"}],
+                "completed": [{"item_id": "item-1"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+        "tool_calls": {
+            "total": 3,
+            "by_tool": {
+                "ocr_toolkit_evidence": 1,
+                "context_list": 1,
+                "context_get": 1,
+            },
+        },
+    }
+    composition = MCPComposition(
+        payload={},
+        capabilities=(
+            MCPCapability(
+                "ocr_toolkit_evidence",
+                ("ocr_toolkit_evidence", "context_list", "context_get"),
+                True,
+            ),
+        ),
+        external_servers=(),
+        secret_values=(),
+    )
+    safe_enrichment = review_runner.EnrichmentReceipt(
+        policy_digest="c" * 64,
+        completeness={
+            "forge:gitlab_discussions": "complete",
+            "reference:tracker:engineering:issue": "complete",
+        },
+        degradation_counts={"invalid": 0, "limit": 0, "unavailable": 0},
+        required_degraded=False,
+        mutable_admitted=False,
+        forbidden_publication=(
+            "Validate current behavior",
+            "Review the implementation and its tests.",
+        ),
+    )
+
+    metadata = review_runner._review_receipt(
+        payload,
+        composition,
+        identity,
+        safe_enrichment,
+    )
+    metadata["schema_version"] = 5
+    eligible = approval.evaluate_approval_policy(
+        settings.BooleanSetting(True),
+        parse_result_outcome(payload),
+        [],
+        [],
+        0,
+        metadata,
+    )
+
+    assert eligible.eligible is True
+    assert metadata["context"]["per_source"] == safe_enrichment.completeness  # type: ignore[index]
+    assert metadata["context"]["tool_usage"] == {  # type: ignore[index]
+        "context_get": 1,
+        "context_list": 1,
+    }
+    assert "Validate current behavior" not in repr(metadata)
+    assert "Review the implementation and its tests." not in repr(metadata)
+
+    for changed, expected_reason in (
+        (replace(safe_enrichment, mutable_admitted=True), "mutable review context was admitted"),
+        (
+            replace(safe_enrichment, required_degraded=True),
+            "the selected review context was degraded",
+        ),
+    ):
+        blocked = review_runner._review_receipt(payload, composition, identity, changed)
+        blocked["schema_version"] = 5
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            parse_result_outcome(payload),
+            [],
+            [],
+            0,
+            blocked,
+        )
+        assert decision.eligible is False
+        assert decision.result.reason == expected_reason
+
+
 def test_combined_context_budget_counts_nested_remediation_text() -> None:
-    from dataclasses import replace
+    """Charge nested remediation text against the combined context budget."""
 
     from ocr_toolkit.context.policy import parse_policy
     from tests.test_context_policy import encoded_policy, remediation_policy_value

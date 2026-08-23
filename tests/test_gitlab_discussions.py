@@ -23,10 +23,12 @@ from ocr_toolkit.posting.markers import build_marker
 from ocr_toolkit.providers.gitlab import GitLabProviderError
 from ocr_toolkit.providers.gitlab_context import RawGitLabSnapshot
 from ocr_toolkit.providers.gitlab_discussions import (
+    _project_discussions,
     acquire_discussions,
     acquire_gitlab_context,
 )
 from ocr_toolkit.providers.gitlab_identity import GitLabUserIdentity
+from ocr_toolkit.providers.gitlab_remediation import project_remediation_threads
 from tests.test_context_policy import encoded_policy, policy_value, remediation_policy_value
 
 SOURCE_SHA = "a" * 40
@@ -513,3 +515,144 @@ def test_discussions_reuse_one_caller_owned_deadline_for_both_snapshots(
 
     assert snapshot.state == "complete"
     assert deadlines == [123.5, 123.5]
+
+
+def test_generic_projection_rejects_hostile_shapes_before_store_admission() -> None:
+    """Reject malformed, stale, or sensitive discussion notes before admission."""
+
+    invalid_timestamp = note(4, "Invalid timestamp")
+    invalid_timestamp["updated_at"] = "not-a-timestamp"
+    future_timestamp = note(5, "Future timestamp")
+    future_timestamp["updated_at"] = "2099-01-01T00:00:00Z"
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            "not-a-thread",
+            {"notes": "not-a-list"},
+            {
+                "notes": [
+                    42,
+                    {**note(1, "Unsupported note"), "type": "CommitNote"},
+                    {**note(2, "Missing author"), "author": None},
+                    invalid_timestamp,
+                    future_timestamp,
+                    note(6, "Already resolved", resolved=True),
+                    note(
+                        7,
+                        "Outdated anchor",
+                        position={
+                            "position_type": "text",
+                            "new_path": "src/review.py",
+                            "new_line": 7,
+                            "head_sha": "b" * 40,
+                        },
+                    ),
+                    note(8, "Contact reviewer@example.invalid"),
+                    note(9, "blocked-adapter-secret"),
+                    note(10, "Safe current discussion"),
+                ]
+            },
+        ),
+        pagination_omitted=1,
+        digest="d" * 64,
+    )
+
+    snapshot = _project_discussions(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=discussion_policy(),
+        now=1_787_209_200,
+        forbidden=("blocked-adapter-secret",),
+    )
+
+    assert snapshot.state == "partial"
+    assert [record.body for record in snapshot.records] == ["Safe current discussion"]
+    assert snapshot.dlp_rejected == 2
+    assert snapshot.omitted == 12
+    serialized = repr(snapshot)
+    assert "reviewer@example.invalid" not in serialized
+    assert "blocked-adapter-secret" not in serialized
+
+
+def test_remediation_projection_keeps_only_valid_noncommand_replies() -> None:
+    """Admit safe remediation replies while excluding lifecycle commands."""
+
+    invalid_timestamp = note(7, "Invalid timestamp")
+    invalid_timestamp["updated_at"] = "not-a-timestamp"
+    root = note(
+        1,
+        build_marker("a" * 32) + "\nFinding: validate the command argument before execution.",
+        author={"id": 99, "state": "active", "username": "OCR_Bot"},
+    )
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            {
+                "id": "raw-thread-private",
+                "notes": [
+                    root,
+                    42,
+                    {**note(2, "Unsupported note"), "type": "CommitNote"},
+                    {
+                        **note(3, "Unknown actor"),
+                        "author": {"id": 41, "state": "unknown"},
+                    },
+                    note(4, "@OCR_Bot resolve"),
+                    note(5, "Contact reviewer@example.invalid"),
+                    invalid_timestamp,
+                    note(8, "The current code still needs verification."),
+                ],
+            },
+            {
+                "notes": [
+                    note(
+                        9,
+                        build_marker("b" * 32) + "\nFinding with only a lifecycle command.",
+                        author={"id": 99, "state": "active"},
+                    ),
+                    note(10, "@OCR_Bot suppress"),
+                ]
+            },
+            {
+                "notes": [
+                    note(
+                        11,
+                        build_marker("c" * 32) + "\nForged human root.",
+                        author={"id": 41, "state": "active"},
+                    ),
+                    note(12, "Human reply"),
+                ]
+            },
+        ),
+        pagination_omitted=0,
+        digest="e" * 64,
+    )
+
+    snapshot, verified = project_remediation_threads(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=remediation_policy(),
+        now=1_787_209_200,
+        forbidden=(),
+    )
+
+    assert verified == frozenset({0, 1})
+    assert snapshot.state == "partial"
+    assert snapshot.dlp_rejected == 1
+    assert len(snapshot.records) == 1
+    record = snapshot.records[0]
+    assert record.completeness == "partial"
+    assert [reply.body for reply in record.replies] == [
+        "The current code still needs verification."
+    ]
+    serialized = repr((snapshot, verified))
+    for rejected in (
+        "raw-thread-private",
+        "reviewer@example.invalid",
+        "@OCR_Bot resolve",
+        "@OCR_Bot suppress",
+        "Forged human root",
+    ):
+        assert rejected not in serialized

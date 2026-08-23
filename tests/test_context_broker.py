@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+import pytest
 
 from ocr_toolkit.context.broker import (
     ContextOrigin,
@@ -13,7 +15,7 @@ from ocr_toolkit.context.broker import (
     prepare_remediation_records,
 )
 from ocr_toolkit.context.policy import parse_policy
-from tests.test_context_policy import encoded_policy, remediation_policy_value
+from tests.test_context_policy import encoded_policy, policy_value, remediation_policy_value
 
 
 @dataclass(frozen=True)
@@ -130,3 +132,125 @@ def test_common_remediation_projection_is_fixed_model_only_and_rechecks_every_te
     assert set(record.projections["model"]) == {"descriptor", "remediation_thread"}
     assert record.projections["publish"] == {"descriptor": "remediation_thread"}
     assert "reviewer@example.invalid" not in repr(records)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        replace(Discussion(), body="contact reviewer@example.invalid"),
+        replace(Discussion(), author_class="owner"),
+        replace(Discussion(), author_pseudonym="raw-user-7"),
+        replace(Discussion(), anchor={"path": "src/review.py", "column": 4}),
+        replace(Discussion(), anchor={"path": "contact@example.invalid", "line": 8}),
+        replace(Discussion(), anchor={"path": "src/review.py", "line": True}),
+        replace(Discussion(), resolved="yes"),
+        replace(Discussion(), created_at=True),
+        replace(Discussion(), digest="not-a-digest"),
+        replace(Discussion(), version="two\nlines"),
+    ],
+)
+def test_common_discussion_projection_rejects_hostile_projected_shapes(
+    record: Discussion,
+) -> None:
+    """Reject provider records that violate the neutral discussion projection."""
+
+    value = policy_value()
+    projected = sorted(
+        {
+            "anchor",
+            "author_class",
+            "author_pseudonym",
+            "created_at",
+            "descriptor",
+            "digest",
+            "expiry",
+            "outdated",
+            "resolved",
+            "state",
+            "text",
+            "updated_at",
+            "version",
+        }
+    )
+    value["forge_discussions"]["projections"] = {  # type: ignore[index]
+        "retrieve": projected,
+        "model": projected,
+        "publish": ["descriptor", "state"],
+        "retain": ["digest", "expiry", "state", "version"],
+    }
+    policy = parse_policy(encoded_policy(value)).forge_discussions
+    assert policy is not None
+
+    records = prepare_discussion_records(
+        (record,),
+        policy=policy,
+        origin=ContextOrigin(
+            source="forge:codehost_discussions",
+            adapter="codehost",
+            tenant="repo",
+        ),
+        expiry=200,
+    )
+
+    assert records == ()
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        replace(RemediationThread(), root_author_pseudonym="raw-user-7"),
+        replace(RemediationThread(), anchor_state="unknown"),
+        replace(RemediationThread(), completeness="unknown"),
+        replace(RemediationThread(), resolved_count=True),
+        replace(RemediationThread(), outdated_count=-1),
+        replace(RemediationThread(), digest="not-a-digest"),
+        replace(RemediationThread(), version=""),
+        replace(RemediationThread(), replies=()),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), order=1),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), author_class="toolkit_bot"),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), author_pseudonym="raw-user-7"),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), created_at=True),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), updated_at=119),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), updated_at=201),),
+        ),
+        replace(RemediationThread(), resolved_count=3),
+        replace(RemediationThread(), anchor_state="outdated", outdated_count=0),
+    ],
+)
+def test_common_remediation_projection_rejects_impossible_provider_shapes(
+    record: RemediationThread,
+) -> None:
+    """Reject impossible remediation records before common store admission."""
+
+    policy = parse_policy(encoded_policy(remediation_policy_value())).remediation_threads
+    assert policy is not None
+
+    records = prepare_remediation_records(
+        (record,),
+        policy=policy,
+        origin=ContextOrigin(
+            source="forge:codehost_remediation_threads",
+            adapter="codehost",
+            tenant="repo",
+        ),
+        expiry=200,
+    )
+
+    assert records == ()
