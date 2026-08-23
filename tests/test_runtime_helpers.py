@@ -1123,6 +1123,39 @@ class PreflightTests(unittest.TestCase):
         ):
             preflight.validate_ocr_binary()
 
+    def test_validate_ocr_binary_bounds_execution_and_redacts_failures(self) -> None:
+        """Bound OCR version probes and redact timeout and process failures."""
+
+        secret = "binary-secret-value"
+
+        def timeout(*_args: Any, **_kwargs: Any) -> None:
+            raise subprocess.TimeoutExpired(["ocr", "--version"], 10, stderr=secret)
+
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+            patched_attr(preflight.subprocess, "run", timeout),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight.validate_ocr_binary()
+
+        self.assertNotIn(secret, str(ctx.exception))
+        self.assertIn("Cannot run", str(ctx.exception))
+
+        completed = subprocess.CompletedProcess(
+            args=["ocr", "--version"], returncode=23, stdout="", stderr=secret
+        )
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+            patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight.validate_ocr_binary()
+
+        self.assertNotIn(secret, str(ctx.exception))
+        self.assertIn("exited 23", str(ctx.exception))
+
     def test_validate_ocr_binary_rejects_version_prefix_collision(self) -> None:
         completed = subprocess.CompletedProcess(
             args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.170\n", stderr=""
@@ -1320,6 +1353,107 @@ class PreflightTests(unittest.TestCase):
 
         self.assertEqual(payload["data"][0]["id"], "model")
         self.assertEqual(read_limits, [64 * 1024, 64 * 1024])
+
+    def test_request_json_retries_bounded_get_failures(self) -> None:
+        """Retry transient GET responses within the shared attempt and delay bounds."""
+
+        attempts = 0
+        sleeps: list[float] = []
+
+        class FakeResponse:
+            def __init__(self) -> None:
+                self.sent = False
+
+            def __enter__(self) -> FakeResponse:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, _limit: int) -> bytes:
+                if self.sent:
+                    return b""
+                self.sent = True
+                return b'{"ok":true}'
+
+        def fake_open(request: Any, **_kwargs: Any) -> Any:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    503,
+                    "Unavailable",
+                    hdrs=None,
+                    fp=io.BytesIO(b"temporary"),
+                )
+            return FakeResponse()
+
+        with (
+            patched_attr(preflight.URL_OPENER, "open", fake_open),
+            patched_attr(preflight.time, "sleep", sleeps.append),
+        ):
+            payload = preflight._request_json("https://gateway.example/v1/models", {})
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(attempts, 2)
+        self.assertEqual(sleeps, [1.0])
+
+    def test_request_json_retries_transport_failure_only_three_times(self) -> None:
+        """Stop transport retries at the fixed bound and redact diagnostics."""
+
+        attempts = 0
+        sleeps: list[float] = []
+        secret = "transport-secret-value"
+
+        def fake_open(_request: Any, **_kwargs: Any) -> Any:
+            nonlocal attempts
+            attempts += 1
+            raise OSError(f"connection failed token={secret}")
+
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.URL_OPENER, "open", fake_open),
+            patched_attr(preflight.time, "sleep", sleeps.append),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight._request_json("https://gateway.example/v1/models", {})
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleeps, [1.0, 1.0])
+        self.assertNotIn(secret, str(ctx.exception))
+
+    def test_validate_gitlab_access_uses_authenticated_identity_and_mr_reads(self) -> None:
+        """Validate GitLab access through authenticated identity and MR reads."""
+
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        def fake_request(url: str, headers: dict[str, str]) -> dict[str, Any]:
+            calls.append((url, headers))
+            return {}
+
+        with (
+            patched_env(
+                GITLAB_API_TOKEN="gitlab-secret",
+                CI_PROJECT_ID="group/project",
+                CI_MERGE_REQUEST_IID="17",
+                CI_API_V4_URL="https://gitlab.example/api/v4/",
+            ),
+            patched_attr(preflight, "_request_json", fake_request),
+        ):
+            preflight.validate_gitlab_access()
+
+        self.assertEqual(
+            [url for url, _headers in calls],
+            [
+                "https://gitlab.example/api/v4/user",
+                "https://gitlab.example/api/v4/projects/group%2Fproject",
+                "https://gitlab.example/api/v4/projects/group%2Fproject/merge_requests/17",
+            ],
+        )
+        self.assertTrue(
+            all(headers == {"PRIVATE-TOKEN": "gitlab-secret"} for _url, headers in calls)
+        )
 
     def test_request_json_rejects_oversized_success_body(self) -> None:
         class FakeResponse:
