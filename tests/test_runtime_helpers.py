@@ -627,6 +627,160 @@ class MCPConfigTests(unittest.TestCase):
         with self.assertRaises(mcp_config.MCPConfigError):
             mcp_config.parse_mcp_servers(raw)
 
+    def test_parse_mcp_servers_rejects_malformed_registry_shapes(self) -> None:
+        """Reject ambiguous registry, server, transport, and tool-list shapes."""
+
+        cases: tuple[object, ...] = (
+            [],
+            {"servers": {}},
+            {"documentation": "bridge"},
+            {"documentation": {"name": "source", "command": "bridge"}},
+            {"servers": ["bridge"]},
+            {"servers": [{"name": "bad name", "command": "bridge"}]},
+            {
+                "servers": [
+                    {"name": "duplicate", "command": "bridge", "tools": ["read"]},
+                    {"name": "duplicate", "command": "bridge", "tools": ["search"]},
+                ]
+            },
+            {"servers": [{"name": "bridge", "type": "socket", "tools": ["read"]}]},
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": "read"}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": ["read"] * (mcp_config.MAX_MCP_TOOLS + 1),
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": [7]}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": ["x" * (mcp_config.MAX_MCP_STRING_CHARS + 1)],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": []}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": [mcp_config.TOOL_NAME],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": ["read"], "setup": 7}]},
+            {"servers": [{"name": "bridge", "command": "", "tools": ["read"]}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "x" * (mcp_config.MAX_MCP_STRING_CHARS + 1),
+                        "tools": ["read"],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": ["read"], "args": {}}]},
+        )
+        cases += (
+            {
+                f"server-{index}": {"command": "bridge", "tools": [f"read-{index}"]}
+                for index in range(mcp_config.MAX_MCP_SERVERS + 1)
+            },
+        )
+
+        for payload in cases:
+            with self.subTest(payload=payload), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "profile"):
+            mcp_config.parse_mcp_servers("{}", profile="unknown")
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "valid JSON"):
+            mcp_config.parse_mcp_servers("{")
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "exceeds"):
+            mcp_config.parse_mcp_servers("x" * (mcp_config.MAX_MCP_CONFIG_BYTES + 1))
+
+    def test_stdio_environment_rejects_ambiguous_or_unbounded_assignments(self) -> None:
+        """Admit stdio environment only from bounded, distinct variable mappings."""
+
+        base: dict[str, object] = {
+            "name": "bridge",
+            "command": "bridge",
+            "tools": ["read"],
+        }
+        cases = (
+            {"env": []},
+            {"env_from": []},
+            {"env": {"bad-name": "value"}},
+            {"env": {"MODE": 7}},
+            {"env": {"MODE": "x" * mcp_config.MAX_MCP_STRING_CHARS}},
+            {"env_from": {"bad-name": "MCP_TOKEN"}},
+            {"env": {"TOKEN": "literal"}, "env_from": {"TOKEN": "MCP_TOKEN"}},
+            {"env_from": {"TOKEN": "bad-name"}},
+            {"env": {f"VALUE_{index}": "safe" for index in range(mcp_config.MAX_MCP_ENV + 1)}},
+        )
+        with patched_env(MCP_TOKEN="provider-secret"):
+            for fields in cases:
+                payload = {"servers": [{**base, **fields}]}
+                with self.subTest(fields=fields), self.assertRaises(mcp_config.MCPConfigError):
+                    mcp_config.parse_mcp_servers(json.dumps(payload))
+
+    def test_remote_headers_reject_ambiguous_or_unbounded_mappings(self) -> None:
+        """Admit remote headers only from bounded HTTP-safe distinct mappings."""
+
+        base: dict[str, object] = {
+            "name": "remote",
+            "type": "remote",
+            "url": "https://mcp.invalid/v1",
+            "tools": ["read"],
+        }
+        cases = (
+            {"headers": []},
+            {"headers_from": []},
+            {"headers": {"Bad Header": "value"}},
+            {"headers": {"X-Mode": "safe", "x-mode": "duplicate"}},
+            {"headers": {"X-Mode": 7}},
+            {"headers": {"X-Mode": ""}},
+            {"headers_from": {"Authorization": "bad-name"}},
+            {
+                "headers": {
+                    f"X-Value-{index}": "safe" for index in range(mcp_config.MAX_MCP_HEADERS + 1)
+                }
+            },
+        )
+        for fields in cases:
+            payload = {"servers": [{**base, **fields}]}
+            with self.subTest(fields=fields), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
+
+    def test_remote_url_rejects_invalid_bounds_and_ports(self) -> None:
+        """Require one bounded absolute HTTPS endpoint with a valid port."""
+
+        for url in (
+            None,
+            "",
+            "https://mcp.invalid/" + "x" * mcp_config.MAX_MCP_URL_CHARS,
+            "https://mcp.invalid:invalid/v1",
+            "https://mcp.invalid:70000/v1",
+        ):
+            payload = {
+                "servers": [
+                    {
+                        "name": "remote",
+                        "type": "remote",
+                        "url": url,
+                        "tools": ["read"],
+                    }
+                ]
+            }
+            with self.subTest(url=url), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
+
     def test_parse_rejects_missing_env_from_secret(self) -> None:
         raw = json.dumps(
             {
@@ -1177,6 +1331,21 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("non-HTTPS URL", str(ctx.exception))
         self.assertNotIn("secret-value", str(ctx.exception))
 
+    def test_request_json_rejects_invalid_headers_before_transport(self) -> None:
+        """Reject malformed header names and values before any network call."""
+
+        for headers in ({"Bad Header": "value"}, {"X-Test": "value\r\ninjected"}):
+            with (
+                self.subTest(headers=headers),
+                patched_attr(
+                    preflight.URL_OPENER,
+                    "open",
+                    lambda *_args, **_kwargs: self.fail("invalid header reached transport"),
+                ),
+                self.assertRaises(preflight.PreflightError, msg=str(headers)),
+            ):
+                preflight._request_json("https://gateway.example/v1/models", headers)
+
     def test_request_json_allows_plain_http_without_credentials(self) -> None:
         class FakeResponse:
             headers = {"Content-Length": "2"}
@@ -1354,6 +1523,58 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(payload["data"][0]["id"], "model")
         self.assertEqual(read_limits, [64 * 1024, 64 * 1024])
 
+    def test_request_json_returns_none_for_empty_and_rejects_malformed_json(self) -> None:
+        """Distinguish an empty response from a malformed JSON response."""
+
+        class FakeResponse:
+            def __init__(self, body: bytes) -> None:
+                self.body = body
+                self.sent = False
+
+            def __enter__(self) -> FakeResponse:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, _limit: int) -> bytes:
+                if self.sent:
+                    return b""
+                self.sent = True
+                return self.body
+
+        for body, expected in ((b"", None), (b"not-json", preflight.PreflightError)):
+            with (
+                self.subTest(body=body),
+                patched_attr(
+                    preflight.URL_OPENER,
+                    "open",
+                    lambda *_args, value=body, **_kwargs: FakeResponse(value),
+                ),
+            ):
+                if expected is None:
+                    self.assertIsNone(
+                        preflight._request_json("https://gateway.example/v1/models", {})
+                    )
+                else:
+                    with self.assertRaises(expected):
+                        preflight._request_json("https://gateway.example/v1/models", {})
+
+    def test_request_json_deadline_expires_before_transport(self) -> None:
+        """Stop an expired request before opening a network connection."""
+
+        ticks = iter((0.0, float(preflight.HTTP_TIMEOUT_SECONDS + 1)))
+        with (
+            patched_attr(preflight.time, "monotonic", lambda: next(ticks)),
+            patched_attr(
+                preflight.URL_OPENER,
+                "open",
+                lambda *_args, **_kwargs: self.fail("expired request reached transport"),
+            ),
+            self.assertRaisesRegex(preflight.PreflightError, "timed out"),
+        ):
+            preflight._request_json("https://gateway.example/v1/models", {})
+
     def test_request_json_retries_bounded_get_failures(self) -> None:
         """Retry transient GET responses within the shared attempt and delay bounds."""
 
@@ -1454,6 +1675,26 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(
             all(headers == {"PRIVATE-TOKEN": "gitlab-secret"} for _url, headers in calls)
         )
+
+    def test_validate_gitlab_access_requires_token_and_merge_request_identity(self) -> None:
+        """Require both authentication and merge-request identity for GitLab access."""
+
+        for values, message in (
+            (
+                {"GITLAB_API_TOKEN": "", "CI_PROJECT_ID": "7", "CI_MERGE_REQUEST_IID": "9"},
+                "GITLAB_API_TOKEN",
+            ),
+            (
+                {"GITLAB_API_TOKEN": "token", "CI_PROJECT_ID": "", "CI_MERGE_REQUEST_IID": ""},
+                "CI_PROJECT_ID",
+            ),
+        ):
+            with (
+                self.subTest(values=values),
+                patched_env(**values),
+                self.assertRaisesRegex(preflight.PreflightError, message),
+            ):
+                preflight.validate_gitlab_access()
 
     def test_request_json_rejects_oversized_success_body(self) -> None:
         class FakeResponse:
