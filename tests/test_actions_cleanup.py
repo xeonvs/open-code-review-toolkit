@@ -97,7 +97,7 @@ def test_artifact_plan_uses_seven_day_handoff_window() -> None:
     assert [candidate.object_id for candidate in plan] == [10, 12]
 
 
-def test_log_plan_preserves_release_logs_longer_and_all_run_metadata() -> None:
+def test_log_plan_preserves_release_logs_longer_and_bounds_retries() -> None:
     module = load_script()
     now = datetime(2026, 8, 3, tzinfo=UTC)
     runs = [
@@ -134,6 +134,129 @@ def test_log_plan_preserves_release_logs_longer_and_all_run_metadata() -> None:
     assert [candidate.object_id for candidate in scheduled_plan] == [20]
     assert all(candidate.kind == "log" and candidate.size_bytes == 0 for candidate in plan)
     assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/20/logs")
+
+
+def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None:
+    module = load_script()
+    now = datetime(2026, 8, 23, tzinfo=UTC)
+    runs = [
+        {
+            "id": 30,
+            "name": "TestPyPI development build",
+            "status": "completed",
+            "created_at": "2026-08-08T00:00:00Z",
+        },
+        {
+            "id": 31,
+            "name": "TestPyPI preview",
+            "status": "completed",
+            "created_at": "2026-08-10T00:00:00Z",
+        },
+        {
+            "id": 32,
+            "name": "CI",
+            "status": "completed",
+            "created_at": "2026-07-23T00:00:00Z",
+        },
+        {
+            "id": 33,
+            "name": "Release",
+            "status": "completed",
+            "created_at": "2026-06-23T00:00:00Z",
+        },
+        {
+            "id": 34,
+            "name": "CI",
+            "status": "in_progress",
+            "created_at": "2026-06-01T00:00:00Z",
+        },
+    ]
+
+    plan = module.plan_run_cleanup(runs, now)
+
+    assert [candidate.object_id for candidate in plan] == [30, 32, 33]
+    assert all(candidate.kind == "run" for candidate in plan)
+    assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/30")
+
+
+def test_recent_run_listing_shards_more_than_ten_aggregate_pages_by_utc_day() -> None:
+    module = load_script()
+    calls: list[str] = []
+
+    def listed(_repository: str, endpoint: str, field: str, _token: str) -> list[dict[str, object]]:
+        assert field == "workflow_runs"
+        shard = len(calls)
+        calls.append(endpoint)
+        return [{"id": shard * 100 + index + 1} for index in range(100)]
+
+    with patched_attr(module, "_list_paginated", listed):
+        runs = module._list_recent_completed_runs(
+            "synthetic/repository",
+            "synthetic-token",
+            start=datetime(2026, 8, 1, tzinfo=UTC),
+            end=datetime(2026, 8, 11, tzinfo=UTC),
+        )
+
+    assert len(runs) == 1_100
+    assert calls[0].endswith("created=2026-08-01")
+    assert calls[-1].endswith("created=2026-08-11")
+
+
+def test_each_run_day_retains_the_ten_page_fail_closed_bound() -> None:
+    module = load_script()
+
+    with patched_attr(
+        module,
+        "_api_json",
+        lambda _url, _token: {"workflow_runs": [{"id": index} for index in range(100)]},
+    ):
+        with pytest.raises(module.CleanupError, match="exceeded 10 pages"):
+            module._list_paginated(
+                "synthetic/repository",
+                "actions/runs?status=completed&created=2026-08-23",
+                "workflow_runs",
+                "synthetic-token",
+            )
+
+
+def test_recent_run_listing_rejects_overlap_and_oversized_windows() -> None:
+    module = load_script()
+
+    with patched_attr(module, "_list_paginated", lambda *_args: [{"id": 1}]):
+        with pytest.raises(module.CleanupError, match="shards overlap"):
+            module._list_recent_completed_runs(
+                "synthetic/repository",
+                "synthetic-token",
+                start=datetime(2026, 8, 1, tzinfo=UTC),
+                end=datetime(2026, 8, 2, tzinfo=UTC),
+            )
+
+    with pytest.raises(module.CleanupError, match="window is invalid or oversized"):
+        module._list_recent_completed_runs(
+            "synthetic/repository",
+            "synthetic-token",
+            start=datetime(2026, 1, 1, tzinfo=UTC),
+            end=datetime(2026, 8, 23, tzinfo=UTC),
+        )
+
+
+def test_collect_plan_prefers_run_deletion_over_redundant_log_deletion() -> None:
+    module = load_script()
+    now = datetime(2026, 8, 23, tzinfo=UTC)
+    runs = [
+        {
+            "id": 40,
+            "name": "TestPyPI development build",
+            "status": "completed",
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+    ]
+
+    with patched_attr(module, "_list_paginated", lambda *_args: []):
+        with patched_attr(module, "_list_recent_completed_runs", lambda *_args, **_kwargs: runs):
+            plan = module.collect_plan("synthetic/repository", "synthetic-token", now)
+
+    assert [(candidate.kind, candidate.object_id) for candidate in plan] == [("run", 40)]
 
 
 def test_delete_is_idempotent_when_log_archive_is_already_absent() -> None:

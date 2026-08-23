@@ -50,6 +50,7 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
     feature = (ROOT / "changelog.d" / "120.feature.md").read_text(encoding="utf-8")
     mention = (ROOT / "changelog.d" / "125.feature.md").read_text(encoding="utf-8")
     maintenance = (ROOT / "changelog.d" / "124.maintenance.md").read_text(encoding="utf-8")
+    actions_maintenance = (ROOT / "changelog.d" / "120.maintenance.md").read_text(encoding="utf-8")
     examples = (ROOT / "changelog.d" / "124.doc.md").read_text(encoding="utf-8")
     navigation = (ROOT / "changelog.d" / "123.doc.md").read_text(encoding="utf-8")
 
@@ -81,6 +82,15 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
     assert maintenance.count("**Removed:**") == 4
     assert "OCR_LLM_PROTOCOL=anthropic" in maintenance
     assert "default `openai`" in maintenance
+
+    assert "ten-page fail-closed limit per shard" in actions_maintenance
+    for retention in (
+        "TestPyPI development/preview runs after 14 days",
+        "ordinary runs after 30 days",
+        "stable `Release` runs after 60 days",
+    ):
+        assert retention in actions_maintenance
+    assert "active and newer runs remain untouched" in actions_maintenance
 
     assert "examples/context/" in examples
     assert "examples/gitlab/context/" in examples

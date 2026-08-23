@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Release 0.8.0: remediation threads, GitLab commands, and documentation
 
-- Status: `implementation-complete; external qualification pending`
+- Status: `maintenance correction complete locally; external qualification pending`
 - Release classification: `release-required`
 - Target stable version: `0.8.0`
 - Stable delivery state: `release-deferred`
@@ -30,6 +30,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - Reorganize GitLab examples around supported operating modes, move context recipes beneath them, and demonstrate both creation and later consumption of Accepted project decisions.
 - Remove obsolete GitLab migration prose, add three navigation-only documentation indexes, and reconcile README, strategy, roadmap, and release notes.
 - Create three v0.8.0 sub-issues beneath GitHub issue #120 and keep #120, its sub-issues, milestone, and Draft PR open until stable external reconciliation.
+- Repair Actions storage maintenance after live run 32624698380 proved that more than ten aggregate pages of recent completed runs exceed the collector bound. Preserve a ten-page fail-closed limit per UTC day, delete completed TestPyPI development/preview runs after 14 days, ordinary workflow runs after 30 days, and stable Release runs after 60 days, then reconcile the current backlog without touching active or fresh runs.
 
 #### Requirement Traceability
 
@@ -48,6 +49,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `REQ-013` (`done`): completed focused, adversarial, artifact, quality, secret, manifest, release-draft, reproducibility, and clean-install validation without a separate Codex Security scan or any real local LLM call. Covered by every work item and `WQ-10`.
 - `REQ-014` (`pending`): leave implementation in a Draft PR at the exact final feature head with stable release deferred until external qualification; perform no merge, stable publication, issue closure, or milestone closure. Covered by `WQ-10` and `WQ-11`.
 - `REQ-015` (`done`): made the v0.8.0 release-note delta equally actionable for a production-integration agent and a human operator: categorized each outcome by effect, explicitly labelled additions, changes, removals, defaults, and migrations, and named exact public symbols and replacements. Removed environment variables have a separate `maintenance` fragment. Covered by `WQ-07` and `WQ-09`.
+- `REQ-016` (`in_progress`): make scheduled Actions maintenance tolerate more than ten aggregate recent-run pages without weakening bounded pagination, introduce conservative completed-run retention, execute one verified backlog reconciliation, and requalify hosted CI. Covered by `WQ-12`.
 
 #### Explicit Non-Goals
 
@@ -111,8 +113,9 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `WQ-07` (`done`): removed obsolete environment and production helper-test semantics, made `OCR_USE_ANTHROPIC` fail with explicit protocol migration, published complete categorized variable/default tables, added a source/docs/example exact inventory owner, and recorded durable operator/automation release-note guidance; 354 focused tests plus 116 subtests, Ruff, MyPy, slice review, and diff checks passed; signed commit.
 - `WQ-08` (`done`): added a mode matrix and focused recipes, moved and split context policies by discussion/adapter need, documented policy selection and approval effects, added an Accepted decisions creation/consumption walkthrough, removed obsolete migration prose and user-facing terminology, and passed 225 focused tests plus 26 subtests, Ruff, MyPy, slice review, and diff checks; signed commit.
 - `WQ-09` (`done`): added three managed navigation indexes, reconciled cross-links/README/strategy/roadmap and public-example terminology, rendered agent/human-readable feature/maintenance/documentation Towncrier fragments, and passed 47 focused tests, Ruff, MyPy, local-link checks, Towncrier draft, the engineering-workflow 0.8.1 index audit, slice review, and diff checks; signed commit.
-- `WQ-10` (`in_progress`): holistic requirement/privacy/architecture/documentation self-review and the complete local validation matrix are green; evidence-backed environment/harness corrections passed the same signed commit gates, and this plan now records implementation-complete/external-qualification-pending truth. Remaining actions are the single final feature push and hosted CI observation.
+- `WQ-10` (`done`): holistic requirement/privacy/architecture/documentation self-review and the complete local validation matrix passed; the final signed feature push moved Draft PR #122 to exact head `a196408`, and all 13 hosted CI/security/build checks passed without corrective changes.
 - `WQ-11` (`pending`): external owner supplies qualification receipt bound to the exact feature commit/tree; after evidence, verify runtime-tree identity, update lifecycle state, ready and merge the exact reviewed head, reconcile TestPyPI development publication, and proceed through the normal `release/v0.8.0` lifecycle.
+- `WQ-12` (`in_progress`): diagnosed scheduled Actions maintenance run 32624698380 and reproduced its deterministic aggregate ten-page failure in manual attempt 2; implemented UTC-day sharding plus TestPyPI 14-day, ordinary 30-day, and stable Release 60-day completed-run retention; validated and executed the live cleanup plan. Remaining actions are final diff/self-review, one signed correction commit, push to Draft PR #122, hosted dry-run of the corrected maintenance workflow, and exact-head CI.
 
 #### Locked Decisions
 
@@ -124,6 +127,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - DLP rejection affects only the admission/degradation state of the untrusted source being inspected. It cannot turn a review into approval; safe MR metadata, generic discussions, and adapter/reference context must not themselves disable otherwise valid receipt-based auto-approval.
 - Any successfully admitted remediation record forces comment-only even when its text is safe.
 - Stable publication remains deferred until external real-path qualification on the exact feature tree.
+- Actions maintenance retains a ten-page cap per collection shard. Scheduled workflow-run acquisition uses a closed UTC-day window; completed TestPyPI development/preview runs are retained for 14 days, ordinary runs for 30 days, and stable Release runs for 60 days. Active runs and newer completed runs are never deletion candidates.
 - Generic `ocr_toolkit.context` modules must not import `providers.gitlab*`; GitLab produces the common discussion/remediation views at the composition edge. A future GitHub implementation may satisfy the same views without inheriting GitLab API or identity semantics.
 
 #### Verification
@@ -155,6 +159,10 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `2026-08-22`: `scripts/gitleaks.sh` passed with the repository-pinned Gitleaks 8.24.3 obtained only in a temporary directory from the official archive after verifying SHA-256 `b90f13bb8c90ab72083d9b0c842e39dafb82c0e5c3f872f407366b7a58909013`; no global installation changed and no findings were reported. `uv lock --check`, `scripts/ocr_compat.py validate`, the Towncrier 0.8.0 draft, and `pip-audit` also passed; pip-audit reported no known dependency vulnerabilities and only the expected local-project registry skip.
 - `2026-08-22`: two clean `0.8.0.dev0` builds were byte-identical: wheel SHA-256 `11059a9a56e049fe420ac784126dfcc75b3d08d5b2470f9f53d44dfe7ea3b7eb` and sdist SHA-256 `03d18b3d8ac88294c4e542203299ffe5dc7c0d2e88e359fb26e48710681fb6cf`. Twine passed, and hash-locked wheel and sdist installs each passed `pip check`, isolated version import, `ocr-ci --version`, and `ocr-ci --help` on Python 3.12, 3.13, and 3.14.
 - `2026-08-22`: holistic diff review passed requirements, privacy, architecture, documentation, omission, and trust-boundary reconciliation. Policy v1 is accepted only for published configuration compatibility while the private store has only schema v2; generic context modules do not import GitLab providers; remediation content remains model-only and comment-only; safe non-remediation MR context preserves approval eligibility; DLP rejection fails closed; exact slash/mention lifecycle parsing retains `@mr.bot resolve`; removed inputs occur only in rejection/migration/tests/history contracts. `git diff --check` passed and every feature-branch commit contains its SSH signature header (local trust display still requires an `allowedSignersFile`). No OCR binary, LLM endpoint, model peer, user `HOME`, credentials, or global OCR installation was used or changed.
+- `2026-08-23`: scheduled Actions maintenance run 32624698380 failed because 1,015 completed runs inside its 44-day bounded window filled all ten 100-item aggregate pages. Manual attempt 2 on unchanged `main` head `42f7b9d` reproduced the same `workflow_runs exceeded 10 pages` failure, excluding a transient runner or network explanation.
+- `2026-08-23`: the maintenance correction keeps ten pages as a fail-closed per-UTC-day bound and permits more than ten aggregate pages across the closed 74-day lookback. Tests cover 1,100 records across 11 shards, a full ten-page single-day rejection, non-overlapping run identities, exact TestPyPI/ordinary/Release retention, active-run exclusion, and elimination of redundant log deletion when a run itself is due. Focused tests, Ruff, MyPy, documentation/release-note contracts, `git diff --check`, lock/OCR-manifest checks, and Towncrier draft passed.
+- `2026-08-23`: canonical CPython 3.14.7 `scripts/quality.sh check` passed 1,067 tests plus 203 subtests at 82.66% coverage, including Bandit. Checksum-verified repository-pinned Gitleaks 8.24.3 also passed without changing the global 8.30.1 installation.
+- `2026-08-23`: the new code produced a read-only live plan of 697 objects, then deleted exactly 697 with zero already absent: 4 stale caches, 76 expired/old artifacts, 407 due log archives, and 210 completed runs selected by the 14/30/60-day policy. Completed-run count fell from 1,015 to 805; 80 fresh artifacts and three retained caches remained. The post-cleanup dry-run contained no run, artifact, or cache candidate; it reselected 407 log IDs only because GitHub does not expose log-archive absence and the existing 14-day idempotent retry window intentionally retries them as 404-safe candidates.
 
 #### Risks And Recovery
 
@@ -168,7 +176,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 
 #### Resume Point
 
-Continue at the publication tail of `WQ-10`: make the one final feature push, verify Draft PR #122 resolves to the exact signed feature head, and wait for required hosted CI. If it is green, stop with the Draft PR and all release issues open at `WQ-11`; external OCR 1.9.9 plus LLM qualification is the next authorized resume condition.
+Continue at the publication tail of `WQ-12`: complete final diff/self-review, make the signed correction commit, push it to Draft PR #122, dispatch the corrected workflow manually in dry-run mode on the feature ref, and wait for exact-head hosted CI. Then return to `WQ-11`; external OCR 1.9.9 plus LLM qualification remains the next product-release resume condition.
 
 #### Plan Fidelity Check
 

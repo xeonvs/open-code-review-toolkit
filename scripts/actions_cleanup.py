@@ -20,13 +20,19 @@ HTTP_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 10
 PER_PAGE = 100
+MAX_RUN_SHARD_DAYS = 90
 MAX_NAME_CHARS = 512
 ARTIFACT_RETENTION_DAYS = 7
 ORDINARY_LOG_RETENTION_DAYS = 14
 RELEASE_LOG_RETENTION_DAYS = 30
 LOG_RETRY_WINDOW_DAYS = 14
+TESTPYPI_RUN_RETENTION_DAYS = 14
+ORDINARY_RUN_RETENTION_DAYS = 30
+RELEASE_RUN_RETENTION_DAYS = 60
+RUN_LIST_GRACE_DAYS = 14
 MAIN_REF = "refs/heads/main"
 RELEASE_WORKFLOWS = {"Release", "TestPyPI development build"}
+TESTPYPI_WORKFLOWS = {"TestPyPI development build", "TestPyPI preview"}
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -236,6 +242,36 @@ def plan_log_cleanup(
     return sorted(candidates, key=lambda item: item.object_id)
 
 
+def plan_run_cleanup(runs: list[dict[str, Any]], now: datetime) -> list[CleanupCandidate]:
+    """Remove completed run metadata only after its class-specific retention window."""
+
+    now_utc = now.astimezone(UTC)
+    candidates: list[CleanupCandidate] = []
+    for run in runs:
+        if run.get("status") != "completed":
+            continue
+        name = _bounded_name(run.get("name"), "run.name")
+        if name == "Release":
+            retention_days = RELEASE_RUN_RETENTION_DAYS
+        elif name in TESTPYPI_WORKFLOWS:
+            retention_days = TESTPYPI_RUN_RETENTION_DAYS
+        else:
+            retention_days = ORDINARY_RUN_RETENTION_DAYS
+        created_at = _timestamp(run.get("created_at"), "run.created_at")
+        if now_utc - created_at < timedelta(days=retention_days):
+            continue
+        candidates.append(
+            CleanupCandidate(
+                kind="run",
+                object_id=_positive_id(run.get("id"), "run.id"),
+                name=name,
+                size_bytes=0,
+                reason=f"completed run is older than {retention_days} days",
+            )
+        )
+    return sorted(candidates, key=lambda item: item.object_id)
+
+
 def _api_json(url: str, token: str) -> dict[str, Any]:
     """Read one bounded GitHub Actions JSON response."""
 
@@ -271,7 +307,7 @@ def _api_json(url: str, token: str) -> dict[str, Any]:
 
 
 def _list_paginated(repository: str, endpoint: str, field: str, token: str) -> list[dict[str, Any]]:
-    """Read at most ten pages from one repository Actions collection."""
+    """Read at most ten pages from one repository Actions collection shard."""
 
     values: list[dict[str, Any]] = []
     for page in range(1, MAX_PAGES + 1):
@@ -291,6 +327,39 @@ def _list_paginated(repository: str, endpoint: str, field: str, token: str) -> l
             break
     else:
         _fail(f"GitHub Actions listing for {field!r} exceeded {MAX_PAGES} pages")
+    return values
+
+
+def _list_recent_completed_runs(
+    repository: str,
+    token: str,
+    *,
+    start: datetime,
+    end: datetime,
+) -> list[dict[str, Any]]:
+    """List a closed UTC-day range while retaining the per-shard page bound."""
+
+    start_date = start.astimezone(UTC).date()
+    end_date = end.astimezone(UTC).date()
+    days = (end_date - start_date).days + 1
+    if not 1 <= days <= MAX_RUN_SHARD_DAYS:
+        _fail("GitHub Actions run listing window is invalid or oversized")
+    values: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for offset in range(days):
+        day = start_date + timedelta(days=offset)
+        page_values = _list_paginated(
+            repository,
+            f"actions/runs?status=completed&created={day.isoformat()}",
+            "workflow_runs",
+            token,
+        )
+        for item in page_values:
+            run_id = _positive_id(item.get("id"), "run.id")
+            if run_id in seen:
+                _fail("GitHub Actions daily run shards overlap")
+            seen.add(run_id)
+            values.append(item)
     return values
 
 
@@ -334,6 +403,8 @@ def cleanup_url(repository: str, candidate: CleanupCandidate) -> str:
         suffix = f"actions/artifacts/{candidate.object_id}"
     elif candidate.kind == "log":
         suffix = f"actions/runs/{candidate.object_id}/logs"
+    elif candidate.kind == "run":
+        suffix = f"actions/runs/{candidate.object_id}"
     else:
         _fail(f"unsupported cleanup kind: {candidate.kind}")
     return f"https://api.github.com/repos/{repository}/{suffix}"
@@ -350,17 +421,31 @@ def collect_plan(
 
     caches = _list_paginated(repository, "actions/caches", "actions_caches", token)
     artifacts = _list_paginated(repository, "actions/artifacts", "artifacts", token)
-    runs_endpoint = "actions/runs?status=completed"
-    if not include_all_old_logs:
-        earliest = (
-            now.astimezone(UTC) - timedelta(days=RELEASE_LOG_RETENTION_DAYS + LOG_RETRY_WINDOW_DAYS)
-        ).date()
-        runs_endpoint += f"&created=%3E%3D{earliest.isoformat()}"
-    runs = _list_paginated(repository, runs_endpoint, "workflow_runs", token)
+    if include_all_old_logs:
+        runs = _list_paginated(repository, "actions/runs?status=completed", "workflow_runs", token)
+    else:
+        lookback_days = max(
+            RELEASE_LOG_RETENTION_DAYS + LOG_RETRY_WINDOW_DAYS,
+            RELEASE_RUN_RETENTION_DAYS + RUN_LIST_GRACE_DAYS,
+        )
+        runs = _list_recent_completed_runs(
+            repository,
+            token,
+            start=now.astimezone(UTC) - timedelta(days=lookback_days),
+            end=now,
+        )
+    run_candidates = plan_run_cleanup(runs, now)
+    run_candidate_ids = {candidate.object_id for candidate in run_candidates}
+    log_candidates = [
+        candidate
+        for candidate in plan_log_cleanup(runs, now, include_all_old=include_all_old_logs)
+        if candidate.object_id not in run_candidate_ids
+    ]
     return [
         *plan_cache_cleanup(caches),
         *plan_artifact_cleanup(artifacts, now),
-        *plan_log_cleanup(runs, now, include_all_old=include_all_old_logs),
+        *log_candidates,
+        *run_candidates,
     ]
 
 
@@ -408,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
                     already_absent += 1
             print(
                 f"Deleted {deleted} Actions storage object(s); {already_absent} were already "
-                "absent; run metadata was preserved."
+                "absent; only policy-selected completed runs removed their metadata."
             )
         return 0
     except CleanupError as exc:

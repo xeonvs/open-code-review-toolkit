@@ -387,7 +387,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "ocr.run-manifest/v1" in policy
 
 
-def test_actions_storage_maintenance_preserves_run_metadata() -> None:
+def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "actions-maintenance.yml").read_text(
         encoding="utf-8"
     )
@@ -403,4 +403,8 @@ def test_actions_storage_maintenance_preserves_run_metadata() -> None:
     assert "trap-caching: false" in codeql
     assert "CODEQL_OVERLAY_DATABASE_MODE: none" in codeql
     assert "separately controlled v4 overlay-database mode are disabled" in development
-    assert "never workflow runs or check metadata" in development
+    assert "TestPyPI development/preview runs after 14 days" in development
+    assert "ordinary completed runs after 30 days" in development
+    assert "stable Release runs after 60 days" in development
+    assert "active and newer runs remain untouched" in development
+    assert "fail-closed ten-page limit per day" in development
