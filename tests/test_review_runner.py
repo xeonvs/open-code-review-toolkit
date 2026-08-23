@@ -795,6 +795,53 @@ def test_private_sanitization_ignores_unknown_usage_keys_but_not_supported_bucke
     assert projected["comments"] == []
 
 
+def test_stage_grouped_retry_report_is_private_and_approval_projection_neutral() -> None:
+    payload: dict[str, object] = {
+        "status": "complete",
+        "comments": [{"path": "src/safe.py", "content": "Keep the validated branch."}],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+    baseline = review_runner._canonical_result_projection(payload)
+    payload["retry_report"] = {
+        "schema_version": "ocr.llm-retry-report/v1",
+        "requests": [
+            {
+                "review_stage": "Core review",
+                "file_path": "private@example.invalid",
+                "provider_detail": "Authorization: Bearer private-retry-token",
+            }
+        ],
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert review_runner._canonical_result_projection(projected) == baseline
+    serialized = json.dumps(projected)
+    assert "private@example.invalid" not in serialized
+    assert "private-retry-token" not in serialized
+    assert projected["status"] == "complete"
+    assert projected["comments"] == payload["comments"]
+
+
 def test_warning_objects_are_conservatively_publication_relevant() -> None:
     payload: dict[str, object] = {
         "status": "success",

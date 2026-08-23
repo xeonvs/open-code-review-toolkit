@@ -183,7 +183,7 @@ def test_budget_flag_requires_matching_manifest_failure() -> None:
 
 
 def test_additive_retry_report_does_not_change_outcome_semantics() -> None:
-    """Keep OCR 1.9.3 retry observability outside the review-health contract."""
+    """Keep retry-report presentation outside the review-health contract."""
 
     result = manifest_result(
         "complete",
@@ -194,10 +194,19 @@ def test_additive_retry_report_does_not_change_outcome_semantics() -> None:
         "schema_version": "ocr.llm-retry-report/v1",
         "total_requests": 2,
         "retried_requests": 1,
-        "requests": [{"file_path": "private/example.py"}],
+        "requests": [
+            {
+                "file_path": "private/example.py",
+                "task_type": "main_task",
+                "review_stage": "Core review",
+                "outcome": "recovered",
+            }
+        ],
     }
 
     outcome = parse_result_outcome(result)
 
     assert outcome.kind == "clean"
     assert outcome.manifest_present
+    assert outcome.selected_count == 1
+    assert outcome.completed_count == 1

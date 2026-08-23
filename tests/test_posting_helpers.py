@@ -831,7 +831,8 @@ class PostingIdentityTests(unittest.TestCase):
                     "comments": [],
                     "retry_report": {
                         "schema_version": "ocr.llm-retry-report/v1",
-                        "provider": "synthetic-provider",
+                        "review_stage": "Core review",
+                        "provider": "private-provider",
                         "file_path": "private/example.py",
                     },
                 },
@@ -840,7 +841,8 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         published = "\n".join(notes)
         self.assertNotIn("retry_report", published)
-        self.assertNotIn("synthetic-provider", published)
+        self.assertNotIn("Core review", published)
+        self.assertNotIn("private-provider", published)
         self.assertNotIn("private/example.py", published)
 
     def test_invalid_inline_position_falls_back_without_rollback(self) -> None:

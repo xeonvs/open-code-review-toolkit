@@ -373,6 +373,16 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "git push --force-with-lease" in workflow
     assert workflow.count("upsert-issue") == 1
     assert "gh issue create" not in workflow
+    assert 'f"{fragment_number}.maintenance.md"' in qualifier
+    assert 'f"{fragment_number}.feature.md"' not in qualifier
+    for contract in (
+        "OCR 1.9.9 — inherited predecessor",
+        "OCR 1.9.10 — toolkit 0.8.0 target",
+        "ocr.llm-retry-report/v1",
+        "not toolkit telemetry",
+        "Deploy toolkit 0.8.0 directly with OCR 1.9.10",
+    ):
+        assert contract in policy
     assert "--search" not in workflow
     assert "git push origin main" not in workflow
     assert "gh pr merge" not in workflow

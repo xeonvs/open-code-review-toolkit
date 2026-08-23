@@ -53,6 +53,7 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
     actions_maintenance = (ROOT / "changelog.d" / "120.maintenance.md").read_text(encoding="utf-8")
     examples = (ROOT / "changelog.d" / "124.doc.md").read_text(encoding="utf-8")
     navigation = (ROOT / "changelog.d" / "123.doc.md").read_text(encoding="utf-8")
+    ocr_maintenance = (ROOT / "changelog.d" / "126.maintenance.md").read_text(encoding="utf-8")
 
     for label in ("**Added:**", "**Changed:**", "**Migration:**"):
         assert label in feature
@@ -97,6 +98,24 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
     assert ".opencodereview/review-context-policy.json" in examples
     for path in ("docs/README.md", "docs/codex/README.md", "docs/engineering/README.md"):
         assert path in navigation
+
+    for heading in (
+        "OCR 1.9.9 — inherited",
+        "OCR 1.9.10 — changed",
+        "Telemetry",
+        "Deployment/Migration",
+    ):
+        assert heading in ocr_maintenance
+    for contract in (
+        "toolkit 0.8.0 does not require installing or requalifying this predecessor",
+        "ocr.llm-retry-report/v1",
+        "ocr.run-manifest/v1",
+        "does not ingest it as telemetry",
+        "Install OCR 1.9.10 directly",
+        "Do not install OCR 1.9.9 as an intermediate step",
+        "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
+    ):
+        assert contract in ocr_maintenance
 
 
 def test_extracts_only_the_exact_release_section() -> None:
