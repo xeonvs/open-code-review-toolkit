@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -78,10 +80,13 @@ from ocr_toolkit.ocr_result import (
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
+    inspect_ocr_result,
     transform_ocr_result,
 )
 from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
+    BACKGROUND_CHARACTER_LIMIT_REASON,
+    BACKGROUND_FILE_SIZE_LIMIT_REASON,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
     PreExecutionStatus,
@@ -99,8 +104,25 @@ from ocr_toolkit.result_contract import OcrResultContractError, parse_result_out
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 
 STDERR_PROBE_BYTES = 64 * 1024
+BACKGROUND_PREVIEW_STDERR_BYTES = 64 * 1024
 DEFAULT_DIAGNOSTIC_CHARS = 4_000
 DLP_REASONS = ("forbidden", "invalid_text", "laundering", "limit", "pii", "secret")
+PRIVATE_DLP_DECISIONS_SCHEMA = "ocr.private-dlp-decisions/v1"
+PRIVATE_DLP_MAX_DECISIONS = 1_000
+PRIVATE_DLP_MAX_PATH_DEPTH = 32
+PRIVATE_DLP_PATH_SEGMENT_BUDGETS = TextBudgets(max_chars=256, max_bytes=1_024, max_lines=1)
+BACKGROUND_SOFT_WARNING_RE = re.compile(
+    r"\[ocr\] --background-file content is ([0-9]{1,12}) characters, exceeding the "
+    r"recommended ([0-9]{1,12}) \(continuing but review quality might be impacted\)\n?\Z"
+)
+BACKGROUND_HARD_CHARACTER_RE = re.compile(
+    r"Error: background content is ([0-9]{1,12}) characters, exceeding the hard limit of "
+    r"([0-9]{1,12}) \(aborting\)\n?\Z"
+)
+BACKGROUND_HARD_FILE_RE = re.compile(
+    r'Error: background file "[^"\r\n]+" is ([0-9]{1,12}) bytes, exceeding the maximum '
+    r"of ([0-9]{1,12}) bytes; please provide a smaller file\n?\Z"
+)
 QUARANTINE_COMMENT_FIELDS = frozenset(
     {
         "category",
@@ -121,6 +143,24 @@ QUARANTINE_COMMENT_FIELDS = frozenset(
 
 class ReviewRunnerError(Exception):
     """The local OCR review process could not be started safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class BackgroundQualification:
+    """Carry one toolkit-authored warning derived from installed OCR output."""
+
+    warning: str | None = None
+
+
+class BackgroundQualificationRejected(ReviewRunnerError):
+    """Carry only a closed installed-OCR background rejection."""
+
+    def __init__(self, *, reason: str, actual: int, limit: int, unit: str) -> None:
+        super().__init__("installed OCR rejected the review background before model execution")
+        self.reason = reason
+        self.actual = actual
+        self.limit = limit
+        self.unit = unit
 
 
 def _install_termination_handlers() -> dict[int, object]:
@@ -415,6 +455,123 @@ def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatch
             if not checked.admitted:
                 reasons[checked.reason] += 1
     return reasons
+
+
+def _private_dlp_decisions(
+    payload: dict[str, object], *, forbidden: tuple[str, ...]
+) -> dict[str, object]:
+    """Attribute rejected DLP values without retaining their content."""
+
+    budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
+    matcher = ForbiddenMatcher.compile(forbidden)
+    decisions: list[dict[str, object]] = []
+    rejected = 0
+
+    def bounded_path(path: tuple[object, ...], component: object) -> tuple[object, ...]:
+        if len(path) < PRIVATE_DLP_MAX_PATH_DEPTH:
+            return (*path, component)
+        return (*path[: PRIVATE_DLP_MAX_PATH_DEPTH - 1], "<truncated-path>")
+
+    def add_decision(decision: dict[str, object]) -> None:
+        nonlocal rejected
+        rejected += 1
+        if len(decisions) < PRIVATE_DLP_MAX_DECISIONS:
+            decisions.append(decision)
+
+    stack: list[tuple[object, tuple[object, ...]]] = [(payload, ())]
+    while stack:
+        value, path = stack.pop()
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                checked_key = check_text(
+                    key,
+                    budgets=PRIVATE_DLP_PATH_SEGMENT_BUDGETS,
+                    publication=True,
+                    forbidden_matcher=matcher,
+                )
+                safe_key = key if checked_key.admitted else "<rejected-key>"
+                child_path = bounded_path(path, safe_key)
+                if not checked_key.admitted:
+                    encoded = key.encode("utf-8")
+                    add_decision(
+                        {
+                            "path": list(child_path),
+                            "scope": "key",
+                            "action": "reject-key",
+                            "reason": checked_key.reason,
+                            "detector": checked_key.detector,
+                            "value_type": "string",
+                            "characters": len(key),
+                            "bytes": len(encoded),
+                            "lines": key.count("\n") + 1,
+                            "sha256": hashlib.sha256(encoded).hexdigest(),
+                        }
+                    )
+                stack.append((nested, child_path))
+            continue
+        if isinstance(value, list):
+            stack.extend((nested, bounded_path(path, index)) for index, nested in enumerate(value))
+            continue
+        if not isinstance(value, str):
+            continue
+        checked = check_text(
+            value,
+            budgets=budgets,
+            publication=True,
+            forbidden_matcher=matcher,
+        )
+        if checked.admitted:
+            continue
+        encoded = value.encode("utf-8")
+        add_decision(
+            {
+                "path": list(path),
+                "scope": "value",
+                "action": "reject-value",
+                "reason": checked.reason,
+                "detector": checked.detector,
+                "value_type": "string",
+                "characters": len(value),
+                "bytes": len(encoded),
+                "lines": value.count("\n") + 1,
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+            }
+        )
+    return {
+        "schema_version": PRIVATE_DLP_DECISIONS_SCHEMA,
+        "truncated": rejected > len(decisions),
+        "omitted_decisions": rejected - len(decisions),
+        "decisions": sorted(
+            decisions,
+            key=lambda item: json.dumps(item["path"], separators=(",", ":")),
+        ),
+    }
+
+
+def _write_private_dlp_decisions(
+    result_path: Path,
+    artifact_path: Path,
+    *,
+    forbidden: tuple[str, ...],
+) -> None:
+    """Write the local-only pre-publication DLP attribution sidecar."""
+
+    try:
+        payload = inspect_ocr_result(result_path)
+        if not isinstance(payload, dict):
+            raise OcrResultMalformed("OCR result JSON must be an object")
+        decisions = _private_dlp_decisions(payload, forbidden=forbidden)
+        write_private_bytes(
+            artifact_path,
+            json.dumps(
+                decisions,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8"),
+        )
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError) as exc:
+        raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
 def _publication_sinks(payload: dict[str, object]) -> list[object]:
@@ -787,6 +944,7 @@ def _finalize_ocr_result(
     evidence_action_counts: dict[str, int] | None = None,
     *,
     forbidden: tuple[str, ...],
+    toolkit_warnings: tuple[str, ...] = (),
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -801,6 +959,23 @@ def _finalize_ocr_result(
         nonlocal filtered, publication, usage
         if TOOLKIT_RESULT_KEY in payload:
             raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
+        warnings = payload.get("warnings", [])
+        if not isinstance(warnings, list):
+            raise OcrResultMalformed("OCR result warnings must be a list")
+        warning_texts = {ocr_warning_text(warning) for warning in warnings}
+        appended_warnings: list[str] = []
+        for warning in toolkit_warnings:
+            if warning in warning_texts:
+                continue
+            warning_texts.add(warning)
+            appended_warnings.append(warning)
+        payload = {
+            **payload,
+            "warnings": [
+                *warnings,
+                *appended_warnings,
+            ],
+        }
         metadata = _review_receipt(
             payload,
             composition,
@@ -935,6 +1110,213 @@ def _reject_owned_background(args: list[str]) -> None:
             f"{option} is managed by ocr-ci review; repository evidence and selected context "
             "must use toolkit-owned inputs"
         )
+    if any(
+        argument in {"--preview", "-p"} or argument.startswith("--preview=") for argument in args
+    ):
+        raise ReviewRunnerError(
+            "--preview is managed by ocr-ci review as a pre-model background qualification"
+        )
+
+
+def _read_bounded_artifact(path: Path, *, limit: int, label: str) -> bytes:
+    """Read one process artifact through a fixed regular-file byte boundary."""
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(path, flags)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_size > limit:
+            raise ReviewRunnerError(f"OCR background preview {label} is unsafe")
+        chunks: list[bytes] = []
+        remaining = limit + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        if len(payload) > limit:
+            raise ReviewRunnerError(f"OCR background preview {label} exceeds its byte limit")
+        return payload
+    except OSError as exc:
+        raise ReviewRunnerError(f"OCR background preview {label} is unavailable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQualification:
+    """Classify only exact installed-OCR background warning and rejection forms."""
+
+    try:
+        text = stderr.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ReviewRunnerError("OCR background preview returned invalid diagnostics") from exc
+    lines = [line for line in text.splitlines(keepends=True) if line.strip()]
+    soft_matches = [
+        match for line in lines if (match := BACKGROUND_SOFT_WARNING_RE.fullmatch(line)) is not None
+    ]
+    hard_character = BACKGROUND_HARD_CHARACTER_RE.fullmatch(text)
+    hard_file = BACKGROUND_HARD_FILE_RE.fullmatch(text)
+    if returncode == 0:
+        if len(soft_matches) != len(lines) or len(soft_matches) > 1:
+            raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
+        if not soft_matches:
+            return BackgroundQualification()
+        actual, limit = (int(value) for value in soft_matches[0].groups())
+        if not 0 < limit < actual:
+            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+        return BackgroundQualification(
+            warning=(
+                f"Installed OCR reported a {actual}-character review background above its "
+                f"recommended {limit}-character threshold; review continued."
+            )
+        )
+    if hard_character is not None:
+        actual, limit = (int(value) for value in hard_character.groups())
+        if not 0 < limit < actual:
+            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+        raise BackgroundQualificationRejected(
+            reason=BACKGROUND_CHARACTER_LIMIT_REASON,
+            actual=actual,
+            limit=limit,
+            unit="characters",
+        )
+    if hard_file is not None:
+        actual, limit = (int(value) for value in hard_file.groups())
+        if not 0 < limit < actual:
+            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+        raise BackgroundQualificationRejected(
+            reason=BACKGROUND_FILE_SIZE_LIMIT_REASON,
+            actual=actual,
+            limit=limit,
+            unit="bytes",
+        )
+    raise ReviewRunnerError("OCR background preview failed without a supported diagnostic")
+
+
+def _qualify_review_background(
+    ocr_args: list[str], *, ocr_binary: str, session_home: Path
+) -> BackgroundQualification:
+    """Ask the installed qualified OCR to classify the exact production background."""
+
+    preview_directory = Path(tempfile.mkdtemp(prefix="background-preview-", dir=session_home))
+    preview_directory.chmod(0o700)
+    stdout_path = preview_directory / "stdout.json"
+    stderr_path = preview_directory / "stderr.log"
+    previous_umask = os.umask(0o077)
+    try:
+        try:
+            with ExitStack() as stack:
+                stdout_file = stack.enter_context(
+                    _open_private_artifact(stdout_path, "background preview stdout")
+                )
+                stderr_file = stack.enter_context(
+                    _open_private_artifact(stderr_path, "background preview stderr")
+                )
+                completed = subprocess.run(
+                    [ocr_binary, "review", *ocr_args, "--preview"],
+                    check=False,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                )
+        except OSError as exc:
+            raise ReviewRunnerError(f"could not execute OCR background preview: {exc}") from exc
+        _read_bounded_artifact(stdout_path, limit=2_000_000, label="stdout")
+        stderr = _read_bounded_artifact(
+            stderr_path, limit=BACKGROUND_PREVIEW_STDERR_BYTES, label="stderr"
+        )
+        return _parse_background_preview(returncode=completed.returncode, stderr=stderr)
+    finally:
+        os.umask(previous_umask)
+        try:
+            shutil.rmtree(preview_directory)
+        except OSError as exc:
+            raise ReviewRunnerError("OCR background preview cleanup failed") from exc
+
+
+def _run_background_qualified_review(
+    result_path: Path,
+    stderr_path: Path,
+    production_args: list[str],
+    *,
+    ocr_binary: str,
+    session_home: Path,
+    artifacts: EvidenceArtifacts,
+    refs: ReviewRefs,
+    identity: ReviewIdentity,
+) -> tuple[int, BackgroundQualification]:
+    """Run the model review only after installed OCR accepts its background."""
+
+    try:
+        qualification = _qualify_review_background(
+            production_args,
+            ocr_binary=ocr_binary,
+            session_home=session_home,
+        )
+    except BackgroundQualificationRejected as exc:
+        try:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=exc.reason,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=identity.policy_sha,
+                    actual=exc.actual,
+                    limit=exc.limit,
+                    unit=exc.unit,
+                ),
+            )
+        except PreExecutionStatusError as status_exc:
+            raise ReviewRunnerError(
+                "OCR background rejection status could not be persisted safely"
+            ) from status_exc
+        print(
+            "OCR background qualification: rejected by installed OCR "
+            f"actual={exc.actual} limit={exc.limit} unit={exc.unit}; "
+            "model review did not run",
+            file=sys.stderr,
+        )
+        return 2, BackgroundQualification()
+    if qualification.warning is not None:
+        print(
+            f"OCR background qualification warning: {qualification.warning}",
+            file=sys.stderr,
+        )
+    return (
+        run_review(
+            result_path,
+            stderr_path,
+            production_args,
+            ocr_binary=ocr_binary,
+        ),
+        qualification,
+    )
+
+
+def _prepare_review_output_artifacts(result_path: Path, stderr_path: Path) -> None:
+    """Validate and empty public handoff artifacts before the preview gate."""
+
+    if result_path.absolute() == stderr_path.absolute():
+        raise ReviewRunnerError("result and stderr paths must be different")
+    for path, label in ((result_path, "result"), (stderr_path, "stderr")):
+        if path.is_symlink():
+            raise ReviewRunnerError(f"{label} path must not be a symlink: {path}")
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    previous_umask = os.umask(0o077)
+    try:
+        with ExitStack() as stack:
+            result_file = stack.enter_context(_open_private_artifact(result_path, "result"))
+            stderr_file = stack.enter_context(_open_private_artifact(stderr_path, "stderr"))
+            if os.path.samestat(os.fstat(result_file.fileno()), os.fstat(stderr_file.fileno())):
+                raise ReviewRunnerError("result and stderr paths must be different")
+    finally:
+        os.umask(previous_umask)
 
 
 def _replace_rule_argument(args: list[str], old_value: str, new_value: str) -> list[str]:
@@ -1381,10 +1763,12 @@ def run_evidence_review(
         remove_private_artifact(artifacts.pre_execution_status)
         remove_private_artifact(artifacts.action_receipt)
         remove_private_artifact(artifacts.action_receipt_lock)
+        remove_private_artifact(artifacts.dlp_decisions)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
     refs = _immutable_review_refs(_review_refs(ocr_args))
     _reject_owned_background(ocr_args)
+    _prepare_review_output_artifacts(result_path, stderr_path)
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
     previous_home = os.environ.get("HOME")
     session_home = Path(tempfile.mkdtemp(prefix="ocr-toolkit-session-"))
@@ -1397,6 +1781,7 @@ def run_evidence_review(
     publication_filtered = False
     publication: dict[str, object] = {"state": "passed"}
     evidence_action_counts: dict[str, int] | None = None
+    background_qualification = BackgroundQualification()
     preserve_authorized = False
     previous_handlers = _install_termination_handlers()
     try:
@@ -1463,19 +1848,25 @@ def run_evidence_review(
             f"servers={len(composition.capabilities)} mandatory={TOOL_NAME} self_query=summary",
             file=sys.stderr,
         )
-        exit_code = run_review(
+        production_args = [
+            "--from",
+            refs.base,
+            "--to",
+            refs.head,
+            *_without_diff_options(effective_ocr_args),
+            "--background-file",
+            str(artifacts.bootstrap),
+        ]
+        ocr_binary = _resolve_ocr_binary()
+        exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
-            [
-                "--from",
-                refs.base,
-                "--to",
-                refs.head,
-                *_without_diff_options(effective_ocr_args),
-                "--background-file",
-                str(artifacts.bootstrap),
-            ],
-            ocr_binary=_resolve_ocr_binary(),
+            production_args,
+            ocr_binary=ocr_binary,
+            session_home=session_home,
+            artifacts=artifacts,
+            refs=refs,
+            identity=identity,
         )
     finally:
         previous_mask = _block_termination_signals()
@@ -1515,6 +1906,11 @@ def run_evidence_review(
                         enrichment,
                         evidence_action_counts,
                         forbidden=forbidden,
+                        toolkit_warnings=(
+                            (background_qualification.warning,)
+                            if background_qualification.warning is not None
+                            else ()
+                        ),
                     )
                 except ReviewRunnerError:
                     try:
@@ -1522,6 +1918,15 @@ def run_evidence_review(
                     except OSError:
                         pass
                     raise
+            if cleanup_error is None and exit_code == 0 and preserve_authorized:
+                forbidden = (*composition.secret_values,)
+                if enrichment is not None:
+                    forbidden += enrichment.forbidden_publication
+                _write_private_dlp_decisions(
+                    result_path,
+                    artifacts.dlp_decisions,
+                    forbidden=forbidden,
+                )
         finally:
             _restore_termination_handlers(previous_handlers)
             _restore_signal_mask(previous_mask)

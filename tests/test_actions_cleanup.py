@@ -144,13 +144,13 @@ def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None
             "id": 30,
             "name": "TestPyPI development build",
             "status": "completed",
-            "created_at": "2026-08-08T00:00:00Z",
+            "created_at": "2026-08-01T00:00:00Z",
         },
         {
             "id": 31,
             "name": "TestPyPI preview",
             "status": "completed",
-            "created_at": "2026-08-10T00:00:00Z",
+            "created_at": "2026-08-08T00:00:00Z",
         },
         {
             "id": 32,
@@ -170,13 +170,19 @@ def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None
             "status": "in_progress",
             "created_at": "2026-06-01T00:00:00Z",
         },
+        {
+            "id": 35,
+            "name": "TestPyPI development build",
+            "status": "completed",
+            "created_at": "2026-07-23T00:00:00Z",
+        },
     ]
 
     plan = module.plan_run_cleanup(runs, now)
 
-    assert [candidate.object_id for candidate in plan] == [30, 32, 33]
+    assert [candidate.object_id for candidate in plan] == [31, 32, 33, 35]
     assert all(candidate.kind == "run" for candidate in plan)
-    assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/30")
+    assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/31")
 
 
 def test_recent_run_listing_shards_more_than_ten_aggregate_pages_by_utc_day() -> None:

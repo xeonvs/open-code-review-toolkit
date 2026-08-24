@@ -9,7 +9,7 @@ import json
 import time
 from collections.abc import Mapping
 
-from ocr_toolkit.context.contracts import RESOURCE_CLASSES
+from ocr_toolkit.context.contracts import STORE_RESOURCE_CLASSES
 from ocr_toolkit.context.store import HANDLE_RE, ContextStore
 
 LIST_TOOL = "context_list"
@@ -105,7 +105,7 @@ def call_context_tool(
             raise ContextMCPError("context_list arguments are invalid")
         resource_class = arguments.get("resource_class")
         if resource_class is not None and (
-            not isinstance(resource_class, str) or resource_class not in RESOURCE_CLASSES
+            not isinstance(resource_class, str) or resource_class not in STORE_RESOURCE_CLASSES
         ):
             raise ContextMCPError("resource_class is invalid")
         source = arguments.get("source")
@@ -200,7 +200,10 @@ def tool_definitions() -> list[dict[str, object]]:
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "resource_class": {"type": "string", "enum": sorted(RESOURCE_CLASSES)},
+                    "resource_class": {
+                        "type": "string",
+                        "enum": sorted(STORE_RESOURCE_CLASSES),
+                    },
                     "source": {"type": "string", "maxLength": 256},
                     "page_size": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE},
                     "cursor": {"type": "string", "maxLength": 256},

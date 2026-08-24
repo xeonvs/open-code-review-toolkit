@@ -254,7 +254,11 @@ def plan_run_cleanup(runs: list[dict[str, Any]], now: datetime) -> list[CleanupC
         if name == "Release":
             retention_days = RELEASE_RUN_RETENTION_DAYS
         elif name in TESTPYPI_WORKFLOWS:
-            retention_days = TESTPYPI_RUN_RETENTION_DAYS
+            retention_days = (
+                max(TESTPYPI_RUN_RETENTION_DAYS, RELEASE_LOG_RETENTION_DAYS)
+                if name in RELEASE_WORKFLOWS
+                else TESTPYPI_RUN_RETENTION_DAYS
+            )
         else:
             retention_days = ORDINARY_RUN_RETENTION_DAYS
         created_at = _timestamp(run.get("created_at"), "run.created_at")

@@ -142,6 +142,27 @@ def test_adapter_config_rejects_mixed_and_unhashable_list_items(
         parse_adapter_config(json.dumps([config]))
 
 
+def test_adapter_boundary_rejects_internal_remediation_resource_class() -> None:
+    """Keep the internal store class outside operator adapter authority."""
+
+    config_value = {
+        "name": "tracker",
+        "type": "stdio",
+        "tenants": ["engineering"],
+        "resource_classes": ["remediation_thread"],
+        "command": sys.executable,
+        "args": [],
+        "env_from": [],
+    }
+    with pytest.raises(ContextAdapterError):
+        parse_adapter_config(json.dumps([config_value]))
+
+    hostile_config = replace(stdio_config(), resource_classes=("remediation_thread",))
+    hostile_request = replace(request(), resource_class="remediation_thread")
+    with pytest.raises(ContextAdapterError, match="not authorized"):
+        authorize_and_resolve(hostile_config, hostile_request, environment={})
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -471,6 +492,62 @@ def test_broker_blocks_exact_neutrally_named_adapter_secret() -> None:
     assert secrets == ("valid",)
     assert result.records == ()
     assert result.degradation_counts["invalid"] == 1
+
+
+def test_broker_rechecks_publishable_adapter_text_for_laundering() -> None:
+    """Do not let private-safe text bypass publication-specific DLP."""
+
+    value = policy_value()
+    projection = value["references"][0]["projections"]  # type: ignore[index]
+    projection["publish"] = ["descriptor", "state", "text"]
+    policy = parse_policy(encoded_policy(value))
+    reference = policy.references[0]
+
+    def acquire(text: str) -> BrokerResult:
+        def invoke(
+            _config: AdapterConfig,
+            _request: AdapterRequest,
+            *,
+            environment: object,
+        ) -> AdapterResponse:
+            del environment
+            return AdapterResponse(
+                status="admitted",
+                canonical_object="tenant-object-7",
+                version="version-1",
+                expiry=200,
+                record={
+                    "descriptor": "issue",
+                    "digest": "a" * 64,
+                    "expiry": 200,
+                    "state": "open",
+                    "text": text,
+                    "version": "version-1",
+                },
+            )
+
+        return acquire_external_records(
+            policy=policy,
+            adapters=[stdio_config()],
+            selections=[
+                CandidateSelection(
+                    policy=reference,
+                    candidate=ReferenceCandidate("issue", "DEMO-7", "issue_key"),
+                )
+            ],
+            run_id=RUN_ID,
+            now=100,
+            environment={},
+            invoke=invoke,
+        )
+
+    safe = acquire("A bounded plain-text adapter record.")
+    assert safe.records[0].projections["publish"]["text"].startswith("A bounded")
+
+    rejected = acquire("See [internal details](https://example.invalid/private).")
+    assert rejected.records == ()
+    assert rejected.completeness == {"reference:tracker:engineering:issue": "unavailable"}
+    assert rejected.degradation_counts["invalid"] == 1
 
 
 def test_optional_adapter_degradation_never_claims_required_failure() -> None:

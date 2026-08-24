@@ -11,8 +11,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-STATUS_SCHEMA = "ocr.pre-execution-status/v1"
+STATUS_SCHEMA = "ocr.pre-execution-status/v2"
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
+BACKGROUND_CHARACTER_LIMIT_REASON = "ocr_background_character_limit"
+BACKGROUND_FILE_SIZE_LIMIT_REASON = "ocr_background_file_size_limit"
+BACKGROUND_REASONS = {
+    BACKGROUND_CHARACTER_LIMIT_REASON: "characters",
+    BACKGROUND_FILE_SIZE_LIMIT_REASON: "bytes",
+}
 MAX_STATUS_BYTES = 2_048
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -23,13 +29,16 @@ class PreExecutionStatusError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class PreExecutionStatus:
-    """Carry no display data, only one closed reason and immutable identities."""
+    """Carry only closed numeric facts and immutable review identities."""
 
     schema_version: str
     reason: str
     diff_base_sha: str
     source_sha: str
     policy_sha: str
+    actual: int | None = None
+    limit: int | None = None
+    unit: str | None = None
 
 
 def _sha(value: str) -> bool:
@@ -37,13 +46,23 @@ def _sha(value: str) -> bool:
 
 
 def _validate(status: PreExecutionStatus) -> None:
+    if status.schema_version != STATUS_SCHEMA or any(
+        not _sha(value) for value in (status.diff_base_sha, status.source_sha, status.policy_sha)
+    ):
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason == PROTECTED_TARGET_RULE_PATH_PENDING:
+        if any(value is not None for value in (status.actual, status.limit, status.unit)):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
+    expected_unit = BACKGROUND_REASONS.get(status.reason)
     if (
-        status.schema_version != STATUS_SCHEMA
-        or status.reason != PROTECTED_TARGET_RULE_PATH_PENDING
-        or any(
-            not _sha(value)
-            for value in (status.diff_base_sha, status.source_sha, status.policy_sha)
-        )
+        expected_unit is None
+        or status.unit != expected_unit
+        or not isinstance(status.actual, int)
+        or isinstance(status.actual, bool)
+        or not isinstance(status.limit, int)
+        or isinstance(status.limit, bool)
+        or not 0 < status.limit < status.actual
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
 
@@ -182,9 +201,21 @@ def read_pre_execution_status(
             "diff_base_sha",
             "source_sha",
             "policy_sha",
+            "actual",
+            "limit",
+            "unit",
         }:
             raise PreExecutionStatusError("pre-execution status fields are invalid")
-        if any(not isinstance(item, str) for item in value.values()):
+        if any(
+            not isinstance(value.get(key), str)
+            for key in (
+                "schema_version",
+                "reason",
+                "diff_base_sha",
+                "source_sha",
+                "policy_sha",
+            )
+        ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         status = PreExecutionStatus(**value)
         _validate(status)

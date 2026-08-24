@@ -102,6 +102,31 @@ def test_common_discussion_projection_uses_explicit_provider_origin_and_rechecks
     assert "private adapter value" not in repr(records)
 
 
+def test_common_discussion_publish_text_gets_publication_specific_dlp() -> None:
+    value = policy_value()
+    projection = value["forge_discussions"]["projections"]  # type: ignore[index]
+    projection["publish"] = ["descriptor", "state", "text"]
+    policy = parse_policy(encoded_policy(value)).forge_discussions
+    assert policy is not None
+    origin = ContextOrigin(source="forge:codehost_discussions", adapter="codehost", tenant="repo")
+
+    records = prepare_discussion_records(
+        (
+            Discussion(body="Safe publication text."),
+            Discussion(
+                body="See [private destination](https://example.invalid/private).",
+                digest="c" * 64,
+            ),
+        ),
+        policy=policy,
+        origin=origin,
+        expiry=200,
+    )
+
+    assert len(records) == 1
+    assert records[0].projections["publish"]["text"] == "Safe publication text."
+
+
 def test_common_remediation_projection_is_fixed_model_only_and_rechecks_every_text() -> None:
     policy = parse_policy(encoded_policy(remediation_policy_value())).remediation_threads
     assert policy is not None

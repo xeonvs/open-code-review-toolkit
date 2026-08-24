@@ -369,6 +369,35 @@ def test_discussions_apply_exact_configured_secret_dlp(tmp_path: Path) -> None:
     assert snapshot.dlp_rejected == 1
 
 
+def test_discussion_text_budget_is_omitted_without_dlp_rejection() -> None:
+    """Keep a per-record size limit distinct from invalid DLP content."""
+
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=({"notes": [note(1, "Bounded but too long for this policy.")]},),
+        pagination_omitted=0,
+        digest="b" * 64,
+    )
+    policy = replace(
+        discussion_policy(),
+        budgets=replace(discussion_policy().budgets, max_chars=12),
+    )
+
+    snapshot = _project_discussions(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=policy,
+        now=1_787_209_200,
+        forbidden=(),
+    )
+
+    assert snapshot.state == "partial"
+    assert snapshot.records == ()
+    assert snapshot.omitted == 1
+    assert snapshot.dlp_rejected == 0
+
+
 def test_generic_thread_bound_ignores_exclusive_remediation_roots() -> None:
     """Count only non-exclusive discussions against the generic thread bound."""
 
@@ -764,3 +793,40 @@ def test_remediation_projection_keeps_only_valid_noncommand_replies() -> None:
         "Forged human root",
     ):
         assert rejected not in serialized
+
+
+def test_verified_command_only_root_is_excluded_without_claiming_omission() -> None:
+    """A lifecycle command is not remediation evidence or degraded evidence."""
+
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            {
+                "notes": [
+                    note(
+                        1,
+                        build_marker("d" * 32) + "\nFinding reserved for lifecycle control.",
+                        author={"id": 99, "state": "active"},
+                    ),
+                    note(2, "@OCR_Bot resolve"),
+                ]
+            },
+        ),
+        pagination_omitted=0,
+        digest="f" * 64,
+    )
+
+    snapshot, verified = project_remediation_threads(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=remediation_policy(),
+        now=1_787_209_200,
+        forbidden=(),
+    )
+
+    assert verified == frozenset({0})
+    assert snapshot.state == "complete"
+    assert snapshot.records == ()
+    assert snapshot.omitted == 0
+    assert snapshot.dlp_rejected == 0

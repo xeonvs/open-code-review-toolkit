@@ -816,6 +816,72 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     assert persisted["_ocr_toolkit"]["publication"] == publication
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
+
+
+def test_background_preview_warning_is_atomically_finalized_and_blocks_approval(
+    tmp_path: Path,
+) -> None:
+    """Make an installed-OCR soft warning visible to summary and approval owners."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "comments": [],
+                "warnings": [],
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "coverage": {
+                        "selected": [{"item_id": "synthetic-item"}],
+                        "completed": [{"item_id": "synthetic-item"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    warning = (
+        "Installed OCR reported a 2100-character review background above its recommended "
+        "2000-character threshold; review continued."
+    )
+
+    _usage, blocked, publication = review_runner._finalize_ocr_result(
+        result,
+        composition,
+        replace(DEFAULT_IDENTITY, mr_author_id=41),
+        None,
+        forbidden=(),
+        toolkit_warnings=(warning, warning),
+    )
+
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert persisted["warnings"] == [warning]
+    assert publication == {"state": "passed"}
+    assert blocked is False
+    outcome = parse_result_outcome(persisted)
+    eligibility = approval.evaluate_approval_policy(
+        settings.BooleanSetting(enabled=True, valid=True),
+        outcome,
+        [],
+        persisted["warnings"],
+        0,
+        persisted["_ocr_toolkit"],
+    )
+    assert eligibility.eligible is False
+    assert eligibility.result.reason == "the OCR review reported warnings"
     serialized = result.read_text(encoding="utf-8")
     assert "private discussion sentence" not in serialized
     assert "synthetic@example.invalid" not in serialized
@@ -1164,6 +1230,59 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     assert persisted["comments"][0]["content"].startswith("Guard the empty")
     assert persisted["locations"] == [{"diagnostic": "ocr-redacted-000001"}]
     assert "synthetic@example.invalid" not in result.read_text(encoding="utf-8")
+
+
+def test_private_dlp_sidecar_attributes_technical_false_positive_without_raw_value(
+    tmp_path: Path,
+) -> None:
+    technical_id = "12345678-1234-5678-1234-123456789012"
+    result = tmp_path / "result.json"
+    sidecar = tmp_path / "private-dlp-decisions.json"
+    result.write_text(
+        json.dumps(
+            {
+                "session_id": technical_id,
+                "manifest": {"run_id": technical_id},
+                "status": "complete",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    review_runner._write_private_dlp_decisions(result, sidecar, forbidden=())
+
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    decisions = payload["decisions"]
+    assert payload["schema_version"] == "ocr.private-dlp-decisions/v1"
+    assert [item["path"] for item in decisions] == [["manifest", "run_id"], ["session_id"]]
+    assert {item["reason"] for item in decisions} == {"pii"}
+    assert {item["detector"] for item in decisions} == {"phone:normalized"}
+    assert len({item["sha256"] for item in decisions}) == 1
+    assert {item["action"] for item in decisions} == {"reject-value"}
+    assert payload["truncated"] is False
+    assert payload["omitted_decisions"] == 0
+    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
+    assert technical_id not in sidecar.read_text(encoding="utf-8")
+
+
+def test_private_dlp_sidecar_bounds_hostile_paths_and_decision_count() -> None:
+    """Bound local diagnostics even when a hostile result rejects every value."""
+
+    technical_id = "12345678-1234-5678-1234-123456789012"
+    nested: dict[str, object] = {
+        str(index): technical_id for index in range(review_runner.PRIVATE_DLP_MAX_DECISIONS + 5)
+    }
+    for _index in range(review_runner.PRIVATE_DLP_MAX_PATH_DEPTH + 5):
+        nested = {"bounded": nested}
+    payload = review_runner._private_dlp_decisions(nested, forbidden=())
+
+    decisions = payload["decisions"]
+    assert isinstance(decisions, list)
+    assert len(decisions) == review_runner.PRIVATE_DLP_MAX_DECISIONS
+    assert payload["truncated"] is True
+    assert payload["omitted_decisions"] == 5
+    assert all(len(item["path"]) <= review_runner.PRIVATE_DLP_MAX_PATH_DEPTH for item in decisions)
+    assert any("<truncated-path>" in item["path"] for item in decisions)
 
 
 def test_resolve_ocr_binary_rejects_relative_and_repository_owned_path_entries(
@@ -1812,6 +1931,205 @@ def test_review_rejects_missing_caller_background_value(option: str) -> None:
         review_runner._reject_owned_background([option])
 
 
+@pytest.mark.parametrize("argument", ["--preview", "-p", "--preview=true"])
+def test_review_rejects_caller_owned_preview(argument: str) -> None:
+    """Reserve preview for the toolkit's installed-OCR background gate."""
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="pre-model"):
+        review_runner._reject_owned_background([argument])
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stderr", "warning", "rejection"),
+    [
+        (0, b"", None, None),
+        (
+            0,
+            b"[ocr] --background-file content is 2001 characters, exceeding the recommended "
+            b"2000 (continuing but review quality might be impacted)\n",
+            "2001-character review background above its recommended 2000-character threshold",
+            None,
+        ),
+        (
+            1,
+            b"Error: background content is 8001 characters, exceeding the hard limit of 8000 "
+            b"(aborting)\n",
+            None,
+            ("ocr_background_character_limit", 8_001, 8_000, "characters"),
+        ),
+        (
+            1,
+            b'Error: background file "/private/synthetic/background.md" is 1048577 bytes, '
+            b"exceeding the maximum of 1048576 bytes; please provide a smaller file\n",
+            None,
+            ("ocr_background_file_size_limit", 1_048_577, 1_048_576, "bytes"),
+        ),
+    ],
+)
+def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
+    returncode: int,
+    stderr: bytes,
+    warning: str | None,
+    rejection: tuple[str, int, int, str] | None,
+) -> None:
+    """Keep paths and raw OCR diagnostics outside the public qualification result."""
+
+    if rejection is None:
+        result = review_runner._parse_background_preview(returncode=returncode, stderr=stderr)
+        assert warning is None or warning in result.warning  # type: ignore[operator]
+        if warning is None:
+            assert result.warning is None
+        return
+    with pytest.raises(review_runner.BackgroundQualificationRejected) as raised:
+        review_runner._parse_background_preview(returncode=returncode, stderr=stderr)
+    error = raised.value
+    assert (error.reason, error.actual, error.limit, error.unit) == rejection
+    assert "private" not in str(error)
+    assert "background.md" not in str(error)
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stderr"),
+    [
+        (1, b"provider token rejected\n"),
+        (0, b"prefix [ocr] --background-file content is 2001 characters\n"),
+        (
+            1,
+            b'Error: background file "/private/value\npath" is 9 bytes, exceeding the maximum '
+            b"of 8 bytes; please provide a smaller file\n",
+        ),
+        (
+            0,
+            b"[ocr] --background-file content is 2000 characters, exceeding the recommended "
+            b"2000 (continuing but review quality might be impacted)\n",
+        ),
+        (0, b"\xff"),
+    ],
+)
+def test_background_preview_parser_rejects_near_misses(returncode: int, stderr: bytes) -> None:
+    """Fail closed when OCR output is not one exact supported background diagnostic."""
+
+    with pytest.raises(review_runner.ReviewRunnerError):
+        review_runner._parse_background_preview(returncode=returncode, stderr=stderr)
+
+
+def test_background_preview_uses_exact_production_argv_and_cleans_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run installed OCR preview without provider/model execution or retained output."""
+
+    session_home = tmp_path / "home"
+    session_home.mkdir(mode=0o700)
+    argv_seen: list[str] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        argv_seen.extend(argv)
+        kwargs["stdout"].write(b'{"files":[]}\n')  # type: ignore[union-attr]
+        kwargs["stderr"].write(  # type: ignore[union-attr]
+            b"[ocr] --background-file content is 2100 characters, exceeding the recommended "
+            b"2000 (continuing but review quality might be impacted)\n"
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(review_runner.subprocess, "run", fake_run)
+    production_args = [
+        "--from",
+        "a" * 40,
+        "--to",
+        "b" * 40,
+        "--rule",
+        "/private/rules.json",
+        "--format",
+        "json",
+        "--background-file",
+        "/private/bootstrap.md",
+    ]
+
+    result = review_runner._qualify_review_background(
+        production_args,
+        ocr_binary="/private/ocr",
+        session_home=session_home,
+    )
+
+    assert argv_seen == ["/private/ocr", "review", *production_args, "--preview"]
+    assert result.warning is not None
+    assert list(session_home.iterdir()) == []
+
+
+def test_hard_background_rejection_persists_status_without_running_model_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stop between preview and actual OCR when installed OCR rejects the background."""
+
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    session_home = tmp_path / "home"
+    session_home.mkdir(mode=0o700)
+
+    def reject(*_args: object, **_kwargs: object) -> review_runner.BackgroundQualification:
+        raise review_runner.BackgroundQualificationRejected(
+            reason="ocr_background_character_limit",
+            actual=8_001,
+            limit=8_000,
+            unit="characters",
+        )
+
+    model_calls: list[str] = []
+    monkeypatch.setattr(review_runner, "_qualify_review_background", reject)
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_args, **_kwargs: model_calls.append("called") or 0,
+    )
+
+    exit_code, qualification = review_runner._run_background_qualified_review(
+        tmp_path / "result.json",
+        tmp_path / "stderr.log",
+        ["--from", "a" * 40, "--to", "b" * 40, "--background-file", "bootstrap.md"],
+        ocr_binary="/private/ocr",
+        session_home=session_home,
+        artifacts=artifacts,
+        refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
+        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+    )
+
+    assert exit_code == 2
+    assert qualification.warning is None
+    assert model_calls == []
+    persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
+    assert persisted == {
+        "actual": 8_001,
+        "diff_base_sha": "a" * 40,
+        "limit": 8_000,
+        "policy_sha": "c" * 40,
+        "reason": "ocr_background_character_limit",
+        "schema_version": "ocr.pre-execution-status/v2",
+        "source_sha": "b" * 40,
+        "unit": "characters",
+    }
+
+
+def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
+    tmp_path: Path,
+) -> None:
+    """Prevent stale OCR output from being posted when preview fails first."""
+
+    result = tmp_path / "artifacts" / "result.json"
+    stderr = tmp_path / "artifacts" / "stderr.log"
+    result.parent.mkdir()
+    result.write_text("stale result", encoding="utf-8")
+    stderr.write_text("stale stderr", encoding="utf-8")
+    result.chmod(0o644)
+    stderr.chmod(0o644)
+
+    review_runner._prepare_review_output_artifacts(result, stderr)
+
+    assert result.read_bytes() == b""
+    assert stderr.read_bytes() == b""
+    assert stat.S_IMODE(result.stat().st_mode) == 0o600
+    assert stat.S_IMODE(stderr.stat().st_mode) == 0o600
+
+
 @pytest.mark.parametrize("preserve_private_artifacts", [False, True])
 def test_evidence_review_prepares_internal_context_before_ocr(
     tmp_path: Path, preserve_private_artifacts: bool
@@ -1825,6 +2143,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     review_runner.prepare_artifact_directory(artifacts)
     artifacts.pre_execution_status.write_text("stale", encoding="utf-8")
     artifacts.pre_execution_status.chmod(0o600)
+    artifacts.dlp_decisions.write_text("stale", encoding="utf-8")
+    artifacts.dlp_decisions.chmod(0o600)
 
     class Store:
         head = SimpleNamespace(commit_sha="b" * 40)
@@ -1855,7 +2175,12 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     def run(result: Path, stderr: Path, args: list[str], **_kwargs: object) -> int:
         session_homes.append(Path(os.environ["HOME"]))
         events.append(("ocr", result, stderr, args))
+        result.write_text(json.dumps({"status": "complete"}), encoding="utf-8")
         return 0
+
+    def qualify(args: list[str], **_kwargs: object) -> review_runner.BackgroundQualification:
+        events.append(("preview", args))
+        return review_runner.BackgroundQualification()
 
     with (
         patched_attr(
@@ -1911,6 +2236,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             ),
         ),
         patched_attr(review_runner, "_resolve_ocr_binary", lambda: "/synthetic/ocr"),
+        patched_attr(review_runner, "_qualify_review_background", qualify),
         patched_attr(review_runner, "run_review", run),
     ):
         result = review_runner.run_evidence_review(
@@ -1939,8 +2265,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     assert events[4] == "apply"
     assert events[5] == "verify"
     assert events[6] == "self-query"
-    assert events[7][0] == "ocr"  # type: ignore[index]
-    assert events[7][3] == [  # type: ignore[index]
+    assert events[7][0] == "preview"  # type: ignore[index]
+    assert events[7][1] == [  # type: ignore[index]
         "--from",
         "a" * 40,
         "--to",
@@ -1950,11 +2276,21 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         "--background-file",
         str(artifacts.bootstrap),
     ]
+    assert events[8][0] == "ocr"  # type: ignore[index]
+    assert events[8][3] == events[7][1]  # type: ignore[index]
     if preserve_private_artifacts:
         assert "ocr-usage" not in events
+        sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
+        assert sidecar == {
+            "schema_version": "ocr.private-dlp-decisions/v1",
+            "truncated": False,
+            "omitted_decisions": 0,
+            "decisions": [],
+        }
         session_homes[0].rmdir()
     else:
-        assert events[8] == "ocr-usage"
+        assert events[9] == "ocr-usage"
+        assert not artifacts.dlp_decisions.exists()
 
 
 def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:

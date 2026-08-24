@@ -42,6 +42,8 @@ Use a dedicated bot account that is not the merge-request author. Give its proje
 
 Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, adapter scratch space, and OCR sessions private to the runner and out of public artifacts. The local-only `ocr-ci review --preserve-private-artifacts` diagnostic is rejected by the validated GitLab merge-request profile and must not be added to a CI job.
 
+Before treating the advisory job as a required gate, run `ocr llm test` with the same generated OCR configuration and protected credential path. `ocr-ci preflight` always checks that the required toolkit inputs exist and can optionally validate model metadata through `/models`, but that metadata read is not a full review request and cannot guarantee that a gateway credential, protocol, or deployment will accept the later conversation. Keep `allow_failure` only when a missing review is intentionally advisory; a green pipeline with an allowed-to-fail OCR job is not evidence that OCR produced a usable review.
+
 The toolkit authenticates the token owner with live `GET /user`. No configured bot ID or username is trusted. The returned ID owns note/fingerprint checks; the validated username owns exact mention-command parsing.
 
 ## Operating model

@@ -13,7 +13,7 @@ REQUEST_SCHEMA = "ocr.context-adapter-request/v1"
 RESPONSE_SCHEMA = "ocr.context-adapter-response/v1"
 ACCOUNT_CLASSES = frozenset({"user", "automation", "system", "toolkit_bot"})
 REFERENCE_RESOURCE_CLASSES = frozenset({"issue", "document"})
-RESOURCE_CLASSES = frozenset({*REFERENCE_RESOURCE_CLASSES, "remediation_thread"})
+STORE_RESOURCE_CLASSES = frozenset({*REFERENCE_RESOURCE_CLASSES, "remediation_thread"})
 PROJECTION_FIELDS = frozenset(
     {
         "descriptor",

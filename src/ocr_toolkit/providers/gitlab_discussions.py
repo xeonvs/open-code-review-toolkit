@@ -265,7 +265,7 @@ def _project_discussions(
             checked = check_text(note.get("body"), budgets=policy.budgets, forbidden=forbidden)
             if not checked.admitted or checked.text is None:
                 omitted += 1
-                dlp_rejected += 1
+                dlp_rejected += int(checked.reason != "limit")
                 continue
             body_chars = len(checked.text)
             body_bytes = len(checked.text.encode())

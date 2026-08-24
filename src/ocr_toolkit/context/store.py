@@ -18,9 +18,9 @@ from typing import Any
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
     REMEDIATION_MODEL_FIELD,
-    RESOURCE_CLASSES,
     RETENTION_FIELDS,
     STORE_PROJECTION_FIELDS,
+    STORE_RESOURCE_CLASSES,
     STORE_SCHEMA,
     TextBudgets,
 )
@@ -266,7 +266,7 @@ def _projection_value(field: str, value: object) -> object:
         normalized = normalize_text(value)
         if normalized != value or not normalized or len(normalized) > 512:
             raise ContextStoreError("context projection string is invalid")
-        if field == "descriptor" and normalized not in {"discussion", *RESOURCE_CLASSES}:
+        if field == "descriptor" and normalized not in {"discussion", *STORE_RESOURCE_CLASSES}:
             raise ContextStoreError("context projection descriptor is invalid")
         if field == "state" and STATE_RE.fullmatch(normalized) is None:
             raise ContextStoreError("context projection state is invalid")
@@ -392,7 +392,7 @@ def _record(value: object) -> ContextRecord:
         for value in strings.values()
     ):
         raise ContextStoreError("context record identity is invalid")
-    if strings["resource_class"] not in RESOURCE_CLASSES:
+    if strings["resource_class"] not in STORE_RESOURCE_CLASSES:
         raise ContextStoreError("context record resource class is invalid")
     if SHA256_RE.fullmatch(str(strings["digest"])) is None:
         raise ContextStoreError("context record digest is invalid")

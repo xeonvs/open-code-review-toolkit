@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from ocr_toolkit.pre_execution import (
+    BACKGROUND_CHARACTER_LIMIT_REASON,
+    BACKGROUND_FILE_SIZE_LIMIT_REASON,
     MAX_STATUS_BYTES,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
@@ -73,14 +75,39 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
         "diff_base_sha": BASE,
         "source_sha": SOURCE,
         "policy_sha": POLICY,
+        "actual": None,
+        "limit": None,
+        "unit": None,
     }
 
     variants = (
-        {**valid, "schema_version": "ocr.pre-execution-status/v2"},
+        {**valid, "schema_version": "ocr.pre-execution-status/v1"},
         {**valid, "reason": "repository supplied display text"},
         {**valid, "path": ".opencodereview/rules.json"},
         {**valid, "policy_sha": True},
         {**valid, "policy_sha": "0" * 40},
+        {**valid, "actual": 8_001},
+        {
+            **valid,
+            "reason": BACKGROUND_CHARACTER_LIMIT_REASON,
+            "actual": 8_001,
+            "limit": 8_000,
+            "unit": "bytes",
+        },
+        {
+            **valid,
+            "reason": BACKGROUND_FILE_SIZE_LIMIT_REASON,
+            "actual": True,
+            "limit": 1,
+            "unit": "bytes",
+        },
+        {
+            **valid,
+            "reason": BACKGROUND_CHARACTER_LIMIT_REASON,
+            "actual": 2_000,
+            "limit": 2_000,
+            "unit": "characters",
+        },
     )
     for payload in variants:
         path.write_text(json.dumps(payload), encoding="utf-8")
@@ -144,3 +171,42 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
             expected_diff_base_sha=BASE,
             expected_source_sha=SOURCE,
         )
+
+
+@pytest.mark.parametrize(
+    ("reason", "actual", "limit", "unit"),
+    [
+        (BACKGROUND_CHARACTER_LIMIT_REASON, 8_001, 8_000, "characters"),
+        (BACKGROUND_FILE_SIZE_LIMIT_REASON, 1_048_577, 1_048_576, "bytes"),
+    ],
+)
+def test_pre_execution_status_round_trips_closed_background_rejection(
+    tmp_path: Path, reason: str, actual: int, limit: int, unit: str
+) -> None:
+    """Persist only installed-OCR numeric facts without its path or raw diagnostic."""
+
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=reason,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=POLICY,
+        actual=actual,
+        limit=limit,
+        unit=unit,
+    )
+
+    write_pre_execution_status(path, expected)
+
+    assert (
+        read_pre_execution_status(
+            path,
+            expected_diff_base_sha=BASE,
+            expected_source_sha=SOURCE,
+        )
+        == expected
+    )
+    serialized = path.read_text(encoding="utf-8")
+    assert "background.md" not in serialized
+    assert "please provide" not in serialized

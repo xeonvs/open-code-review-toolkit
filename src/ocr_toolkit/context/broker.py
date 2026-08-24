@@ -115,6 +115,29 @@ def _project(
     return {field: record[field] for field in fields if field in record}
 
 
+def _publish_projection(
+    record: Mapping[str, object],
+    fields: Sequence[str],
+    *,
+    budgets: TextBudgets,
+    forbidden: tuple[str, ...],
+) -> dict[str, object] | None:
+    """Project publishable fields only after publication-specific text DLP."""
+
+    projected = _project(record, fields)
+    text = projected.get("text")
+    if isinstance(text, str):
+        checked = check_text(
+            text,
+            budgets=budgets,
+            publication=True,
+            forbidden=forbidden,
+        )
+        if not checked.admitted or checked.text != text:
+            return None
+    return projected
+
+
 def _normalized_record(
     record: Mapping[str, object],
     *,
@@ -237,6 +260,14 @@ def prepare_discussion_records(
             or len(record.version) > 512
         ):
             continue
+        publish = _publish_projection(
+            retrieved,
+            policy.projections.publish,
+            budgets=policy.budgets,
+            forbidden=forbidden,
+        )
+        if publish is None:
+            continue
         pending.append(
             PendingContextRecord(
                 source=origin.source,
@@ -247,7 +278,7 @@ def prepare_discussion_records(
                 descriptor="discussion",
                 projections={
                     "model": _project(retrieved, policy.projections.model),
-                    "publish": _project(retrieved, policy.projections.publish),
+                    "publish": publish,
                     "retain": _project(retrieved, policy.projections.retain),
                 },
                 version=record.version,
@@ -559,6 +590,17 @@ def acquire_external_records(
         total_chars += chars
         total_bytes += byte_count
         total_lines += lines
+        publish = _publish_projection(
+            normalized,
+            reference.projections.publish,
+            budgets=reference.budgets,
+            forbidden=forbidden,
+        )
+        if publish is None:
+            completeness[source] = "unavailable"
+            degradation_counts["invalid"] += 1
+            required_degraded = required_degraded or reference.required
+            continue
         admitted = PendingContextRecord(
             source=source,
             adapter=reference.adapter,
@@ -568,7 +610,7 @@ def acquire_external_records(
             descriptor=str(normalized.get("descriptor", reference.resource_class)),
             projections={
                 "model": _project(normalized, reference.projections.model),
-                "publish": _project(normalized, reference.projections.publish),
+                "publish": publish,
                 "retain": _project(normalized, reference.projections.retain),
             },
             version=response.version,

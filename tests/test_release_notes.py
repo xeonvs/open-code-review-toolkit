@@ -86,8 +86,8 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
 
     assert "ten-page fail-closed limit per shard" in actions_maintenance
     for retention in (
-        "TestPyPI development/preview runs after 14 days",
-        "ordinary runs after 30 days",
+        "TestPyPI preview runs after 14 days",
+        "TestPyPI development and ordinary runs after 30 days",
         "stable `Release` runs after 60 days",
     ):
         assert retention in actions_maintenance

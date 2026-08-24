@@ -18,7 +18,7 @@ This historical matrix is the completed removal gate for the pre-0.4 repository-
 | Project guidance and accepted decisions | guidance/decision facts | base may guide; changed head cannot self-authorize; failures and truncation are diagnostics | implemented and adversarially tested |
 | GitLab project/pipeline/MR identifiers | `review.ci_context` | the GitLab adapter normalizes only bounded numeric project, pipeline, job and MR identifiers; evidence core sees no arbitrary environment, URLs, refs or secrets | implemented |
 | Local installed tool versions | coverage diagnostic | deliberately removed: mutable runner state is explicitly marked `intentionally_excluded`; declared repository versions remain available | implemented intentional contract change |
-| Section byte/character planning and safe Markdown | bootstrap planner plus MCP budgets | bootstrap remains below OCR hard limit; details stay bounded/paginated in MCP; truncation explicit | implemented |
+| Section byte/character planning and safe Markdown | bootstrap planner plus MCP budgets | bootstrap stays independently bounded; installed OCR preview owns current warning/rejection thresholds; details stay bounded/paginated in MCP; truncation explicit | implemented |
 | Legacy collection warnings and failures | store/MCP/bootstrap diagnostics plus bounded preflight logs | no production collector writes ad-hoc stdout/stderr; the lifecycle renders safe diagnostics | implemented and contract-tested |
 | Per-file Git subprocess reads | bounded immutable batch reads | preflight size-checks each blob and the aggregate payload, omit individual over-limit candidates with explicit diagnostics, then read accepted candidates with a fixed process count per ref | implemented |
 

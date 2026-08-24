@@ -36,6 +36,7 @@ class DLPResult:
     admitted: bool
     text: str | None
     reason: str
+    detector: str | None = None
 
 
 def _html_decode(value: str) -> str:
@@ -182,49 +183,55 @@ def check_text(
 
     normalized = normalize_text(value)
     if normalized is None:
-        return DLPResult(False, None, "invalid_text")
+        return DLPResult(False, None, "invalid_text", "type_or_control")
     if (
         len(normalized) > budgets.max_chars
         or len(normalized.encode("utf-8")) > budgets.max_bytes
         or normalized.count("\n") + 1 > budgets.max_lines
     ):
-        return DLPResult(False, None, "limit")
+        detector = (
+            "characters"
+            if len(normalized) > budgets.max_chars
+            else "bytes"
+            if len(normalized.encode("utf-8")) > budgets.max_bytes
+            else "lines"
+        )
+        return DLPResult(False, None, "limit", detector)
     redacted = redact_env_secret_values(redact_sensitive(normalized))
     if redacted != normalized:
-        return DLPResult(False, None, "secret")
+        return DLPResult(False, None, "secret", "normalized")
     decoded = _html_decode(normalized) if publication else normalized
     displayed = _display_normalize(normalized) if publication else normalized
     source = _source_normalize(normalized) if publication else normalized
     if publication and redact_env_secret_values(redact_sensitive(displayed)) != displayed:
-        return DLPResult(False, None, "secret")
+        return DLPResult(False, None, "secret", "displayed")
     if publication and redact_env_secret_values(redact_sensitive(source)) != source:
-        return DLPResult(False, None, "secret")
-    if (
-        EMAIL_RE.search(normalized)
-        or _contains_phone(normalized)
-        or (
-            publication
-            and (
-                EMAIL_RE.search(decoded)
-                or _contains_phone(decoded)
-                or EMAIL_RE.search(displayed)
-                or _contains_phone(displayed)
-                or EMAIL_RE.search(source)
-                or _contains_phone(source)
-            )
-        )
-    ):
-        return DLPResult(False, None, "pii")
+        return DLPResult(False, None, "secret", "source")
+    pii_candidates = (("normalized", normalized),)
+    if publication:
+        pii_candidates += (("decoded", decoded), ("displayed", displayed), ("source", source))
+    for representation, candidate in pii_candidates:
+        if EMAIL_RE.search(candidate):
+            return DLPResult(False, None, "pii", f"email:{representation}")
+        if _contains_phone(candidate):
+            return DLPResult(False, None, "pii", f"phone:{representation}")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
     if matcher_reason := matcher.match_reason(normalized):
-        return DLPResult(False, None, matcher_reason)
-    if publication and (
-        MARKDOWN_DEST_RE.search(normalized)
-        or MARKDOWN_DEST_RE.search(decoded)
-        or MARKDOWN_DEST_RE.search(displayed)
-        or HTML_COMMENT_RE.search(decoded)
-        or HTML_TAG_RE.search(decoded)
-        or any(_is_display_control(character) for character in decoded)
-    ):
-        return DLPResult(False, None, "laundering")
+        return DLPResult(False, None, matcher_reason, "forbidden_matcher")
+    if publication:
+        laundering = (
+            "markdown_destination"
+            if MARKDOWN_DEST_RE.search(normalized)
+            or MARKDOWN_DEST_RE.search(decoded)
+            or MARKDOWN_DEST_RE.search(displayed)
+            else "html_comment"
+            if HTML_COMMENT_RE.search(decoded)
+            else "html_tag"
+            if HTML_TAG_RE.search(decoded)
+            else "display_control"
+            if any(_is_display_control(character) for character in decoded)
+            else None
+        )
+        if laundering is not None:
+            return DLPResult(False, None, "laundering", laundering)
     return DLPResult(True, normalized, "admitted")
