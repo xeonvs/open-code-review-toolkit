@@ -46,17 +46,12 @@ def test_towncrier_categories_preserve_conditional_release_contract() -> None:
     }
 
 
-def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
-    feature = (ROOT / "changelog.d" / "120.feature.md").read_text(encoding="utf-8")
-    mention = (ROOT / "changelog.d" / "125.feature.md").read_text(encoding="utf-8")
-    maintenance = (ROOT / "changelog.d" / "124.maintenance.md").read_text(encoding="utf-8")
-    actions_maintenance = (ROOT / "changelog.d" / "120.maintenance.md").read_text(encoding="utf-8")
-    examples = (ROOT / "changelog.d" / "124.doc.md").read_text(encoding="utf-8")
-    navigation = (ROOT / "changelog.d" / "123.doc.md").read_text(encoding="utf-8")
-    ocr_maintenance = (ROOT / "changelog.d" / "126.maintenance.md").read_text(encoding="utf-8")
+def test_080_release_notes_are_actionable_for_operators_and_automation() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.0")
 
     for label in ("**Added:**", "**Changed:**", "**Migration:**"):
-        assert label in feature
+        assert label in notes
     for contract in (
         "ocr.review-context-policy/v1",
         "ocr.review-context-policy/v2",
@@ -65,11 +60,11 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
         "remediation_thread",
         "DLP-clean metadata, generic discussions, and adapter records",
     ):
-        assert contract in feature
+        assert contract in notes
 
-    assert "@<live-bot-username> suppress" in mention
-    assert "@<live-bot-username> resolve" in mention
-    assert "GitLab `GET /user`" in mention
+    assert "@<live-bot-username> suppress" in notes
+    assert "@<live-bot-username> resolve" in notes
+    assert "GitLab `GET /user`" in notes
 
     for removed_name in (
         "OCR_GITLAB_BOT_USER_ID",
@@ -79,25 +74,25 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
         "OCR_LLM_SUPPORTS_REASONING",
         "OCR_CONFIG_PATH",
     ):
-        assert removed_name in maintenance
-    assert maintenance.count("**Removed:**") == 4
-    assert "OCR_LLM_PROTOCOL=anthropic" in maintenance
-    assert "default `openai`" in maintenance
+        assert removed_name in notes
+    assert notes.count("**Removed:**") == 4
+    assert "OCR_LLM_PROTOCOL=anthropic" in notes
+    assert "default `openai`" in notes
 
-    assert "ten-page fail-closed limit per shard" in actions_maintenance
+    assert "ten-page fail-closed limit per shard" in notes
     for retention in (
         "TestPyPI preview runs after 14 days",
         "TestPyPI development and ordinary runs after 30 days",
         "stable `Release` runs after 60 days",
     ):
-        assert retention in actions_maintenance
-    assert "active and newer runs remain untouched" in actions_maintenance
+        assert retention in notes
+    assert "active and newer runs remain untouched" in notes
 
-    assert "examples/context/" in examples
-    assert "examples/gitlab/context/" in examples
-    assert ".opencodereview/review-context-policy.json" in examples
+    assert "examples/context/" in notes
+    assert "examples/gitlab/context/" in notes
+    assert ".opencodereview/review-context-policy.json" in notes
     for path in ("docs/README.md", "docs/codex/README.md", "docs/engineering/README.md"):
-        assert path in navigation
+        assert path in notes
 
     for heading in (
         "OCR 1.9.9 — inherited",
@@ -105,7 +100,7 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
         "Telemetry",
         "Deployment/Migration",
     ):
-        assert heading in ocr_maintenance
+        assert heading in notes
     for contract in (
         "toolkit 0.8.0 does not require installing or requalifying this predecessor",
         "ocr.llm-retry-report/v1",
@@ -115,7 +110,7 @@ def test_080_fragments_are_actionable_for_operators_and_automation() -> None:
         "Do not install OCR 1.9.9 as an intermediate step",
         "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
     ):
-        assert contract in ocr_maintenance
+        assert contract in notes
 
 
 def test_extracts_only_the_exact_release_section() -> None:

@@ -1,3 +1,87 @@
+## 0.8.0 - 2026-08-24
+
+### 🚀 Features
+
+- Extends bounded review context while preserving existing policy documents:
+
+  - **Added:** `ocr.review-context-policy/v2` accepts optional `remediation_threads`; `context_list`/`context_get` expose admitted records as opaque `remediation_thread` resources from the ephemeral `ocr.context-store/v2`.
+  - **Added:** the checksum-pinned GitLab example exposes `OCR_MAX_TOOLS` with default `30`, matching OCR 1.9.10, and passes it explicitly to each review so integrations can raise the per-file tool-round bound deliberately.
+  - **Changed:** rollout guidance separates optional `/models` metadata validation from `ocr llm test` connectivity and from a completed review, and warns that an allowed-to-fail OCR job can leave a pipeline green without usable review evidence.
+  - **Changed:** a remediation root now requires the authenticated live bot ID plus a valid toolkit marker/fingerprint, is excluded from generic discussion and reference projections, and always makes the review comment-only. DLP-clean metadata, generic discussions, and adapter records do not independently block automatic approval; DLP rejection and required-source degradation remain blocking.
+  - **Migration:** existing `ocr.review-context-policy/v1` documents remain accepted for generic discussions and references. Use policy v2 only when selecting `remediation_threads`; ephemeral stores are rebuilt per run and have no migration step.
+
+  ([#120](https://github.com/xeonvs/open-code-review-toolkit/issues/120))
+- Adds live-username lifecycle commands without changing slash-command semantics:
+
+  - **Added:** reviewer lifecycle commands accept exact whole replies `@<live-bot-username> suppress` and `@<live-bot-username> resolve`, using the username returned by authenticated GitLab `GET /user`.
+  - **Changed:** existing `/ocr suppress` and `/ocr resolve` behavior is unchanged; typo, prose, code-block, wrong-user, bot/system, `retest`, and non-toolkit-discussion replies remain non-commands, and the newest recognized human command wins.
+
+  ([#125](https://github.com/xeonvs/open-code-review-toolkit/issues/125))
+
+### 🐛 Bug Fixes
+
+- Malformed context policies, provider projections, and persisted remediation counts now fail closed at their owned contract boundaries; exclusive GitLab discussion/remediation limits and omitted reply counts now reflect only the applicable records. Operator adapters cannot request the internal remediation resource class, publishable discussion/reference text gets publication-specific DLP, and per-record text limits remain budget omissions rather than invalid-content failures.
+  Toolkit-generated OCR background is now qualified by the installed, preflight-supported OCR executable under `review --preview` before model execution, with the exact production refs, rules, and selection inputs. OCR remains the sole owner of its current thresholds: a recognized soft warning enters the CI log and finalized result summary, while a recognized hard character/file-size rejection produces only an identity-bound closed numeric failure summary. Unknown preview failures remain generic and fail closed; detailed evidence stays available through the built-in MCP, and explicit truncation preserves the mandatory evidence-call instruction.
+  Ordinary reviews now remove toolkit-generated evidence, bootstrap, protected rules, context, action receipts, and local DLP diagnostics after both OCR success and failure; only the closed static pre-execution status remains available for the posting handoff when OCR rejects input before model execution.
+  If OCR rejects a generated background and preview cleanup also fails, the closed OCR rejection now remains available to the static posting handoff; a cleanup-only failure still blocks model execution and publication. Provider compatibility entry points also convert impossible missing projections into explicit closed errors instead of relying on runtime assertions.
+  Repeated `scripts/quality.sh coverage|check` invocations now replace their own log before running, so a current result cannot include stale output from an earlier interrupted or failed invocation. ([#120](https://github.com/xeonvs/open-code-review-toolkit/issues/120))
+
+### 🛠 Maintenance
+
+- **Changed:** Actions storage maintenance now shards its bounded completed-run lookup by UTC day, retaining the ten-page fail-closed limit per shard. It removes completed TestPyPI preview runs after 14 days, TestPyPI development and ordinary runs after 30 days, and stable `Release` runs after 60 days; active and newer runs remain untouched. A run is no longer removed before the longer log-retention promise for its workflow. No operator migration is required. ([#120](https://github.com/xeonvs/open-code-review-toolkit/issues/120))
+- Removes obsolete environment and example-only configuration surface:
+
+  - **Removed:** `OCR_GITLAB_BOT_USER_ID`; bot ID and username now come only from authenticated GitLab `GET /user`, with no replacement variable.
+  - **Removed:** compatibility alias `OCR_USE_ANTHROPIC`; set `OCR_LLM_PROTOCOL=anthropic`. Any presence of the removed alias now fails configuration instead of silently falling back to the default `openai` protocol.
+  - **Removed:** example-only `OCR_RUN_HELPER_TESTS`; run repository tests in the normal lint/test job, not the production review job.
+  - **Removed:** documentation-only `OCR_LLM_SUPPORTS_FUNCTION_CALLING`, `OCR_LLM_SUPPORTS_REASONING`, and `OCR_CONFIG_PATH`; these had no supported runtime semantics and have no replacement.
+
+  ([#124](https://github.com/xeonvs/open-code-review-toolkit/issues/124))
+- **OCR 1.9.9 — inherited**
+
+  Toolkit 0.7.1 already qualified OCR 1.9.9. Its background-ownership and bounded main-loop diagnostic contracts remain inherited evidence; toolkit 0.8.0 does not require installing or requalifying this predecessor.
+
+  **OCR 1.9.10 — changed**
+
+  - **Changed:** toolkit preflight and `examples/gitlab/ocr-review.gitlab-ci.yml` now accept/pin only OCR 1.9.10 instead of 1.9.9. The Linux amd64 binary is pinned to SHA-256 `359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c`.
+  - **Changed:** OCR terminal retry diagnostics are grouped by review stage. Structured `ocr.llm-retry-report/v1`, the review result, and `ocr.run-manifest/v1` remain unchanged; `ocr scan` background-wait/resume fixes and the VS Code merge-file change do not affect the toolkit's `ocr review` path.
+
+  **Telemetry**
+
+  The retry report remains private OCR diagnostics. Toolkit 0.8.0 does not ingest it as telemetry or use it for DLP admission, receipts, finding severity, review outcome, or automatic approval.
+
+  **Deployment/Migration**
+
+  Install OCR 1.9.10 directly for toolkit 0.8.0 and update the verified binary checksum. Do not install OCR 1.9.9 as an intermediate step. Any other OCR version fails toolkit preflight.
+
+  ([#126](https://github.com/xeonvs/open-code-review-toolkit/issues/126))
+- **Coverage and boundary gates**
+
+  - **Changed:** the combined branch-aware coverage floor increases from 70% to 85%.
+  - **Added:** CI and `scripts/quality.sh coverage`/`check` enforce four risk-group floors after the same test run: result/preflight and GitLab posting transactions at 80%; review/context/DLP/approval and MCP/provider/policy/result contracts at 85%.
+  - **Added:** fault tests cover bounded result and HTTP parsing, atomic replacement, GitLab read/write retry separation, exact publication and rollback identities, context admission/DLP/approval independence, and provider-neutral discussion contracts.
+
+  No new coverage configuration format or standalone parser is introduced. Deployment agents should run the existing quality wrapper; a group failure identifies the trust boundary that needs regression coverage rather than permitting the combined percentage to mask it.
+
+  ([#127](https://github.com/xeonvs/open-code-review-toolkit/issues/127))
+
+### 📖 Documentation
+
+- **Added:** navigation-only indexes at `docs/README.md`, `docs/codex/README.md`, and `docs/engineering/README.md` route users and maintainers to existing canonical contracts without changing their ownership. ([#123](https://github.com/xeonvs/open-code-review-toolkit/issues/123))
+- Reworks the GitLab operator documentation for direct deployment:
+
+  - **Added:** `examples/gitlab/README.md` selects identity-only, metadata, enriched-discussion, enriched-adapter, or direct-MCP operation and documents automatic-approval posture.
+  - **Added:** the environment reference lists every supported variable with owner, requirement, exact default, and behavior; the discussion-policy guide explains when to select generic discussions, verified remediation history, both, or adapters.
+  - **Added:** `examples/gitlab/accepted-decisions.md` and the later-merge-request `ocr_toolkit_evidence` `list`/`get` walkthrough show both creation and use of accepted decisions.
+  - **Migration:** context recipes moved from `examples/context/` to `examples/gitlab/context/` and split into `policy-discussions.json` and `policy-adapters.json`; the runtime protected-target path remains `.opencodereview/review-context-policy.json`.
+
+  ([#124](https://github.com/xeonvs/open-code-review-toolkit/issues/124))
+
+### Security
+
+- `ocr-ci review --preserve-private-artifacts` can retain owner-only OCR session/context state for local diagnosis without creating a posting receipt. It also writes a bounded, value-free `ocr.private-dlp-decisions/v1` sidecar with JSON path, detector subtype, size units, SHA-256, and explicit truncation counts so operators can diagnose conservative false-positive classes locally. Ordinary and validated GitLab merge-request execution never retain this attribution; the latter rejects the flag before OCR starts and keeps deterministic cleanup mandatory. ([#120](https://github.com/xeonvs/open-code-review-toolkit/issues/120))
+
+
 ## 0.7.1 - 2026-08-21
 
 ### 🚀 Features

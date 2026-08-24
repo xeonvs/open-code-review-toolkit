@@ -16,6 +16,8 @@ from ocr_toolkit.ocr_result import max_result_bytes
 from ocr_toolkit.posting import settings
 from tests.support import PROJECT_ROOT
 
+STABLE_TOOLKIT_VERSION = (PROJECT_ROOT / ".release-version").read_text(encoding="utf-8").strip()
+
 RUNTIME_DEFAULTS = {
     "OCR_LLM_URL": "None",
     "OCR_LLM_TOKEN": "None",
@@ -67,7 +69,7 @@ GITLAB_DEFAULTS = {
 EXAMPLE_DEFAULTS = {
     "OCR_VERSION": "v1.9.10",
     "OCR_SHA256": "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
-    "OCR_TOOLKIT_VERSION": "0.7.1",
+    "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
     "OCR_TOOLKIT_WHEEL_SHA256": "Matching value from `SHA256SUMS`",
@@ -260,7 +262,7 @@ def test_example_local_defaults_match_the_pipeline() -> None:
     for name, value in {
         "OCR_VERSION": "v1.9.10",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
-        "OCR_TOOLKIT_VERSION": "0.7.1",
+        "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "30",
         "OCR_MAX_TOKENS_BUDGET": "0",
     }.items():
