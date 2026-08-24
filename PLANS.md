@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Release 0.8.1: completion cap and safe LLM provider failures
 
-Status: active, `release-required`. Target stable version: `0.8.1`.
+Status: implementation complete, local exact-head validation pending; `release-required`. Target stable version: `0.8.1`.
 
 #### Outcome and scope
 
@@ -39,7 +39,7 @@ Status: active, `release-required`. Target stable version: `0.8.1`.
 - Push the complete feature history to the Draft PR, wait for hosted checks, address evidence-driven failures through the same commit gate, then mark ready and merge through protected review.
 - Verify the deterministic TestPyPI development build, then prepare and merge the protected `Release v0.8.1` PR. Monitor stable TestPyPI/PyPI publication, tag, immutable GitHub Release, provenance, attestations, supported-Python installs, and immutable receipt; close tracked issues only after independent external reconciliation.
 
-Resume point: run the complete local release-readiness matrix, perform the overall requirements/privacy/data-flow self-review, then push the complete signed feature history to Draft PR #131.
+Resume point: run the complete local release-readiness matrix against this plan-reconciled head, then push the complete signed feature history to Draft PR #131 and wait for hosted checks.
 
 #### Current implementation evidence
 
