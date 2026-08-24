@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from ocr_toolkit import config_writer, mcp_config, preflight
+from ocr_toolkit import config_writer, mcp_config, preflight, provider_config
 from ocr_toolkit import configure as ocr_configure
 from tests.support import (
     cleared_env,
@@ -265,7 +265,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_updates_parse_headers_body_and_language(self) -> None:
         with patched_env(
             OCR_REVIEW_LANGUAGE="English",
-            OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+            OCR_LLM_URL="https://gateway.example",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
             OCR_LLM_AUTH_HEADER="authorization",
@@ -326,6 +326,108 @@ class MCPConfigTests(unittest.TestCase):
 
         self.assertEqual(updates["llm.protocol"], "openai-responses")
         self.assertFalse(updates["llm.use_anthropic"])
+        self.assertEqual(updates["llm.url"], "https://gateway.example/v1")
+
+    def test_provider_config_normalizes_roots_endpoints_and_query(self) -> None:
+        cases = (
+            ("openai", "https://gateway.example/v1/", "https://gateway.example/v1"),
+            (
+                "openai",
+                "https://gateway.example/v1/chat/completions/",
+                "https://gateway.example/v1",
+            ),
+            (
+                "openai-responses",
+                "https://gateway.example/v1/responses",
+                "https://gateway.example/v1",
+            ),
+            (
+                "anthropic",
+                "https://gateway.example/proxy/v1/messages",
+                "https://gateway.example/proxy",
+            ),
+        )
+        for protocol, raw_url, expected_root in cases:
+            with self.subTest(protocol=protocol, raw_url=raw_url):
+                config = provider_config.provider_config_from_environment(
+                    {"OCR_LLM_PROTOCOL": protocol, "OCR_LLM_URL": raw_url}
+                )
+
+            self.assertEqual(config.api_root_url, expected_root)
+            self.assertEqual(config.inference_url, expected_root)
+            self.assertEqual(config.models_url, f"{expected_root}/models")
+
+        queried = provider_config.provider_config_from_environment(
+            {
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_LLM_URL": "https://gateway.example/v1/chat/completions?tenant=review",
+            }
+        )
+        self.assertEqual(queried.api_root_url, "https://gateway.example/v1")
+        self.assertEqual(queried.inference_url, "https://gateway.example/v1?tenant=review")
+        self.assertIsNone(queried.models_url)
+        with self.assertRaisesRegex(provider_config.ProviderConfigError, "OCR_LLM_MODELS_URL"):
+            queried.require_models_url()
+
+    def test_provider_config_uses_explicit_models_url_for_queried_inference(self) -> None:
+        config = provider_config.provider_config_from_environment(
+            {
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_LLM_URL": "https://gateway.example/v1?tenant=review",
+                "OCR_LLM_MODELS_URL": "https://metadata.example/catalog?tenant=review",
+            }
+        )
+
+        self.assertEqual(
+            config.models_url,
+            "https://metadata.example/catalog?tenant=review",
+        )
+
+    def test_provider_config_rejects_protocol_mismatched_terminal_endpoints(self) -> None:
+        cases = (
+            ("openai", "https://gateway.example/v1/responses"),
+            ("openai", "https://gateway.example/v1/messages"),
+            ("openai-responses", "https://gateway.example/v1/chat/completions"),
+            ("anthropic", "https://gateway.example/v1/responses"),
+        )
+        for protocol, url in cases:
+            with (
+                self.subTest(protocol=protocol, url=url),
+                self.assertRaisesRegex(
+                    provider_config.ProviderConfigError,
+                    "terminal endpoint conflicts with OCR_LLM_PROTOCOL",
+                ),
+            ):
+                provider_config.provider_config_from_environment(
+                    {"OCR_LLM_PROTOCOL": protocol, "OCR_LLM_URL": url}
+                )
+
+    def test_provider_config_rejects_fragments_and_hides_secret_fields_from_repr(self) -> None:
+        for name in ("OCR_LLM_URL", "OCR_LLM_MODELS_URL"):
+            with (
+                self.subTest(name=name),
+                self.assertRaisesRegex(provider_config.ProviderConfigError, "fragment"),
+            ):
+                provider_config.provider_config_from_environment(
+                    {
+                        "OCR_LLM_PROTOCOL": "openai",
+                        name: "https://gateway.example/v1#private",
+                    }
+                )
+
+        config = provider_config.provider_config_from_environment(
+            {
+                "OCR_LLM_EXTRA_HEADERS": '{"X-Secret":"private-header"}',
+                "OCR_LLM_EXTRA_BODY": '{"private-body":"value"}',
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_LLM_TOKEN": "private-token",
+                "OCR_LLM_URL": "https://gateway.example/v1",
+            }
+        )
+        rendered = repr(config)
+        self.assertNotIn("private-token", rendered)
+        self.assertNotIn("private-header", rendered)
+        self.assertNotIn("private-body", rendered)
 
     def test_runtime_config_rejects_removed_anthropic_switch_with_migration(self) -> None:
         for legacy_value in ("", "false", "true"):
@@ -485,7 +587,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_merges_anthropic_disable_thinking_with_extra_body(self) -> None:
         with patched_env(
             OCR_REVIEW_LANGUAGE="English",
-            OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+            OCR_LLM_URL="https://gateway.example",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="anthropic/claude-test",
             OCR_LLM_PROTOCOL="anthropic",
@@ -1505,6 +1607,7 @@ class PreflightTests(unittest.TestCase):
         with patched_env(
             OCR_LLM_MODELS_URL="",
             OCR_LLM_API_BASE_REMOVED="",
+            OCR_LLM_PROTOCOL="openai-responses",
             OCR_LLM_URL="https://gateway.example/v1/responses",
         ):
             self.assertEqual(preflight._models_url(), "https://gateway.example/v1/models")

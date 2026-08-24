@@ -5,14 +5,13 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any
-from urllib.parse import urlsplit
 
 from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
 from ocr_toolkit.provider_config import (
     ProviderConfigError,
-    request_controls_from_environment,
+    provider_config_from_environment,
 )
 
 
@@ -28,44 +27,18 @@ def _bool_env(name: str) -> bool:
     return _env(name).lower() == "true"
 
 
-def _required_env(name: str) -> str:
-    value = _env(name)
-    if not value:
-        raise OCRRuntimeConfigError(f"{name} is required")
-    return value
-
-
 def build_config_updates() -> dict[str, Any]:
     """Build OCR config updates from already-normalized CI environment."""
 
     review_language = resolve_review_language()
-    llm_url = _required_env("OCR_LLM_URL")
-    llm_token = _required_env("OCR_LLM_TOKEN")
     try:
-        parsed_llm_url = urlsplit(llm_url)
-        parsed_llm_port = parsed_llm_url.port
-        parsed_llm_hostname = parsed_llm_url.hostname
-        parsed_llm_username = parsed_llm_url.username
-        parsed_llm_password = parsed_llm_url.password
-    except ValueError as exc:
-        raise OCRRuntimeConfigError(
-            "OCR_LLM_URL must be an absolute HTTPS URL without embedded credentials"
-        ) from exc
-    if (
-        parsed_llm_url.scheme.lower() != "https"
-        or not parsed_llm_hostname
-        or (parsed_llm_port is None and parsed_llm_url.netloc.endswith(":"))
-        or parsed_llm_username is not None
-        or parsed_llm_password is not None
-    ):
-        raise OCRRuntimeConfigError(
-            "OCR_LLM_URL must be an absolute HTTPS URL without embedded credentials"
-        )
-    llm_model = _required_env("OCR_LLM_MODEL")
-    try:
-        request_controls = request_controls_from_environment()
+        provider = provider_config_from_environment()
+        llm_url = provider.require_inference_url()
+        llm_token = provider.require_token()
+        llm_model = provider.require_model()
     except ProviderConfigError as exc:
         raise OCRRuntimeConfigError(str(exc)) from exc
+    request_controls = provider.request_controls
 
     updates: dict[str, Any] = {
         "language": review_language,

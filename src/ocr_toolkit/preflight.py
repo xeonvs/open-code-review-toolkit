@@ -15,11 +15,15 @@ import urllib.request
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.provider_config import (
+    HEADER_NAME_RE,
+    ProviderConfigError,
+    provider_config_from_environment,
+)
 
 HTTP_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BODY_BYTES = 2_000_000
 RESPONSE_READ_CHUNK_BYTES = 64 * 1024
-HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
@@ -209,63 +213,10 @@ def validate_ocr_binary() -> None:
 
 
 def _models_url() -> str:
-    explicit_url = _env("OCR_LLM_MODELS_URL")
-    if explicit_url:
-        return explicit_url
-
-    base = ""
-    llm_url = _env("OCR_LLM_URL")
-    if not base:
-        normalized_llm_url = llm_url.rstrip("/")
-        for endpoint in ("/chat/completions", "/responses"):
-            if normalized_llm_url.endswith(endpoint):
-                base = normalized_llm_url[: -len(endpoint)]
-                break
-        else:
-            if normalized_llm_url.endswith("/v1"):
-                base = normalized_llm_url
-
-    if not base:
-        raise PreflightError(
-            "Cannot derive LLM /models URL; set OCR_LLM_MODELS_URL or "
-            "set OCR_LLM_VALIDATE_MODEL=false"
-        )
-    return f"{base.rstrip('/')}/models"
-
-
-def _parse_extra_headers(value: str) -> dict[str, str]:
-    """Parse optional OCR LLM extra headers JSON for preflight metadata calls."""
-
-    if not value.strip():
-        return {}
     try:
-        payload = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise PreflightError("OCR_LLM_EXTRA_HEADERS must be a JSON object") from exc
-    if not isinstance(payload, dict):
-        raise PreflightError("OCR_LLM_EXTRA_HEADERS must be a JSON object")
-
-    headers: dict[str, str] = {}
-    for key, header_value in payload.items():
-        if not isinstance(key, str) or not HEADER_NAME_RE.fullmatch(key.strip()):
-            raise PreflightError("OCR_LLM_EXTRA_HEADERS contains an invalid header name")
-        if not isinstance(header_value, str):
-            raise PreflightError("OCR_LLM_EXTRA_HEADERS contains a non-string header value")
-        if "\r" in header_value or "\n" in header_value:
-            raise PreflightError("OCR_LLM_EXTRA_HEADERS contains an invalid header value")
-        headers[key.strip()] = header_value
-    return headers
-
-
-def _llm_headers(token: str) -> dict[str, str]:
-    """Build the same auth/header set used by OCR's llm.* configuration."""
-
-    auth_header = _env("OCR_LLM_AUTH_HEADER", "Authorization") or "Authorization"
-    if not HEADER_NAME_RE.fullmatch(auth_header):
-        raise PreflightError("OCR_LLM_AUTH_HEADER is not a valid HTTP header name")
-    headers = _parse_extra_headers(_env("OCR_LLM_EXTRA_HEADERS"))
-    headers[auth_header] = f"Bearer {token}"
-    return headers
+        return provider_config_from_environment().require_models_url()
+    except ProviderConfigError as exc:
+        raise PreflightError(str(exc)) from exc
 
 
 def _context_length(model: dict[str, Any]) -> int:
@@ -320,9 +271,11 @@ def _validate_allowed_model(model_id: str) -> bool:
 def validate_llm_model() -> None:
     """Verify the selected model exists in OpenAI-compatible metadata."""
 
-    model_id = _env("OCR_LLM_MODEL")
-    if not model_id:
-        raise PreflightError("OCR_LLM_MODEL is required")
+    try:
+        provider = provider_config_from_environment()
+        model_id = provider.require_model()
+    except ProviderConfigError as exc:
+        raise PreflightError(str(exc)) from exc
     allowlist_matched = _validate_allowed_model(model_id)
 
     validate_mode = _env("OCR_LLM_VALIDATE_MODEL", "false").lower()
@@ -332,15 +285,15 @@ def validate_llm_model() -> None:
     if validate_mode not in {"true", "1", "yes", "on", "auto"}:
         raise PreflightError("OCR_LLM_VALIDATE_MODEL must be true, false, or auto")
 
-    token = _env("OCR_LLM_TOKEN")
-    if not token:
-        raise PreflightError("OCR_LLM_TOKEN is required")
-    headers = _llm_headers(token)
+    try:
+        headers = provider.request_headers()
+    except ProviderConfigError as exc:
+        raise PreflightError(str(exc)) from exc
 
     print("Validating OCR model against LLM gateway metadata")
     try:
-        models_url = _models_url()
-    except PreflightError as exc:
+        models_url = provider.require_models_url()
+    except ProviderConfigError as exc:
         if validate_mode == "auto" and allowlist_matched:
             print(
                 "OCR LLM /models URL unavailable; continuing because "
@@ -348,7 +301,7 @@ def validate_llm_model() -> None:
                 file=sys.stderr,
             )
             return
-        raise
+        raise PreflightError(str(exc)) from exc
     try:
         payload = _request_json(models_url, headers)
     except PreflightError as exc:

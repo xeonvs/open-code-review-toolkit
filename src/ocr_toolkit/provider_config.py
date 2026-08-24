@@ -6,8 +6,9 @@ import json
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 POSITIVE_DECIMAL_RE = re.compile(r"^[1-9][0-9]*$")
@@ -17,6 +18,11 @@ COMPLETION_TOKEN_FIELDS = {
     "anthropic": "max_tokens",
     "openai": "max_completion_tokens",
     "openai-responses": "max_output_tokens",
+}
+TERMINAL_ENDPOINTS = {
+    "anthropic": "/v1/messages",
+    "openai": "/chat/completions",
+    "openai-responses": "/responses",
 }
 
 
@@ -30,8 +36,58 @@ class ProviderRequestControls:
 
     protocol: str
     auth_header: str
-    extra_headers: dict[str, str]
-    extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] = field(repr=False)
+    extra_body: dict[str, Any] | None = field(repr=False)
+
+
+@dataclass(frozen=True)
+class ProviderConfig:
+    """Canonical provider configuration shared by configure and preflight."""
+
+    inference_url: str | None
+    api_root_url: str | None
+    models_url: str | None
+    model: str | None
+    token: str | None = field(repr=False)
+    request_controls: ProviderRequestControls = field(repr=False)
+
+    def require_inference_url(self) -> str:
+        """Return the normalized OCR API root or reject missing review configuration."""
+
+        if self.inference_url is None:
+            raise ProviderConfigError("OCR_LLM_URL is required")
+        return self.inference_url
+
+    def require_model(self) -> str:
+        """Return the configured model identifier."""
+
+        if self.model is None:
+            raise ProviderConfigError("OCR_LLM_MODEL is required")
+        return self.model
+
+    def require_token(self) -> str:
+        """Return the configured provider credential without rendering it."""
+
+        if self.token is None:
+            raise ProviderConfigError("OCR_LLM_TOKEN is required")
+        return self.token
+
+    def require_models_url(self) -> str:
+        """Return the safe auxiliary URL or explain how to make it explicit."""
+
+        if self.models_url is None:
+            raise ProviderConfigError(
+                "Cannot derive LLM /models URL; set OCR_LLM_MODELS_URL or "
+                "set OCR_LLM_VALIDATE_MODEL=false"
+            )
+        return self.models_url
+
+    def request_headers(self) -> dict[str, str]:
+        """Return metadata-request headers with the provider credential."""
+
+        headers = dict(self.request_controls.extra_headers)
+        headers[self.request_controls.auth_header] = f"Bearer {self.require_token()}"
+        return headers
 
 
 def _env(environment: Mapping[str, str], name: str, default: str = "") -> str:
@@ -108,6 +164,64 @@ def _parse_completion_cap(value: str) -> int | None:
     return parsed
 
 
+def _parse_https_url(value: str, name: str) -> SplitResult:
+    """Parse one absolute credential-free HTTPS URL with no fragment."""
+
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise ProviderConfigError(
+            f"{name} must be an absolute HTTPS URL without embedded credentials or a fragment"
+        ) from exc
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or (port is None and parsed.netloc.endswith(":"))
+        or parsed.username is not None
+        or parsed.password is not None
+        or "#" in value
+    ):
+        raise ProviderConfigError(
+            f"{name} must be an absolute HTTPS URL without embedded credentials or a fragment"
+        )
+    return SplitResult("https", parsed.netloc, parsed.path.rstrip("/"), parsed.query, "")
+
+
+def _canonical_provider_urls(
+    llm_url: str, models_url: str, protocol: str
+) -> tuple[str | None, str | None, str | None]:
+    """Return normalized inference, API-root, and auxiliary provider URLs."""
+
+    inference: str | None = None
+    api_root: str | None = None
+    derived_models: str | None = None
+    if llm_url:
+        parsed = _parse_https_url(llm_url, "OCR_LLM_URL")
+        path = parsed.path
+        matched_protocol: str | None = None
+        for candidate, suffix in TERMINAL_ENDPOINTS.items():
+            if path.endswith(suffix):
+                matched_protocol = candidate
+                path = path[: -len(suffix)].rstrip("/")
+                break
+        if matched_protocol is not None and matched_protocol != protocol:
+            raise ProviderConfigError(
+                "OCR_LLM_URL terminal endpoint conflicts with OCR_LLM_PROTOCOL; "
+                f"use {protocol!r} endpoint semantics or provide the API root"
+            )
+        root_parts = SplitResult(parsed.scheme, parsed.netloc, path, "", "")
+        api_root = urlunsplit(root_parts)
+        inference = urlunsplit(root_parts._replace(query=parsed.query))
+        if not parsed.query:
+            derived_models = f"{api_root.rstrip('/')}/models"
+
+    explicit_models: str | None = None
+    if models_url:
+        explicit_models = urlunsplit(_parse_https_url(models_url, "OCR_LLM_MODELS_URL"))
+    return inference, api_root, explicit_models or derived_models
+
+
 def request_controls_from_environment(
     environment: Mapping[str, str] | None = None,
 ) -> ProviderRequestControls:
@@ -149,4 +263,26 @@ def request_controls_from_environment(
         auth_header=auth_header,
         extra_headers=extra_headers,
         extra_body=extra_body if explicit_body or extra_body else None,
+    )
+
+
+def provider_config_from_environment(
+    environment: Mapping[str, str] | None = None,
+) -> ProviderConfig:
+    """Build one canonical provider configuration from an environment snapshot."""
+
+    values: Mapping[str, str] = dict(os.environ) if environment is None else dict(environment)
+    request_controls = request_controls_from_environment(values)
+    inference_url, api_root_url, models_url = _canonical_provider_urls(
+        _env(values, "OCR_LLM_URL"),
+        _env(values, "OCR_LLM_MODELS_URL"),
+        request_controls.protocol,
+    )
+    return ProviderConfig(
+        inference_url=inference_url,
+        api_root_url=api_root_url,
+        models_url=models_url,
+        model=_env(values, "OCR_LLM_MODEL") or None,
+        token=_env(values, "OCR_LLM_TOKEN") or None,
+        request_controls=request_controls,
     )

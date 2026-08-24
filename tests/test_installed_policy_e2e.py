@@ -161,6 +161,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         generated_config = json.loads(
             (config_home / ".opencodereview" / "config.json").read_text(encoding="utf-8")
         )
+        assert generated_config["llm"]["url"] == "https://gateway.example/v1"
         assert generated_config["llm"]["extra_body"] == {"max_completion_tokens": 4096}
         protocol_environment = {
             "HOME": str(root / "home"),
