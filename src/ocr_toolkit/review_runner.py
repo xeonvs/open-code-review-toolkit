@@ -1748,6 +1748,27 @@ def _authorize_private_artifact_preservation(identity: ReviewIdentity, *, reques
     return requested
 
 
+def _remove_ephemeral_review_artifacts(artifacts: EvidenceArtifacts) -> None:
+    """Remove every ordinary-run private input while preserving static handoff state."""
+
+    cleanup_error: OSError | None = None
+    for path in (
+        artifacts.store,
+        artifacts.bootstrap,
+        artifacts.policy_rules,
+        artifacts.context_store,
+        artifacts.action_receipt,
+        artifacts.action_receipt_lock,
+        artifacts.dlp_decisions,
+    ):
+        try:
+            remove_private_artifact(path)
+        except OSError as exc:
+            cleanup_error = cleanup_error or exc
+    if cleanup_error is not None:
+        raise cleanup_error
+
+
 def run_evidence_review(
     result_path: Path,
     stderr_path: Path,
@@ -1875,17 +1896,9 @@ def run_evidence_review(
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
             if not preserve_authorized:
                 try:
-                    remove_private_artifact(artifacts.action_receipt)
-                except OSError as exc:
-                    cleanup_error = exc
-                try:
-                    remove_private_artifact(artifacts.action_receipt_lock)
+                    _remove_ephemeral_review_artifacts(artifacts)
                 except OSError as exc:
                     cleanup_error = cleanup_error or exc
-                try:
-                    remove_private_artifact(artifacts.context_store)
-                except OSError as exc:
-                    cleanup_error = exc
                 try:
                     shutil.rmtree(session_home)
                 except OSError as exc:

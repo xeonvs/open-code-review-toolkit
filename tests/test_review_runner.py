@@ -2130,11 +2130,14 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
     assert stat.S_IMODE(stderr.stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize("preserve_private_artifacts", [False, True])
+@pytest.mark.parametrize(
+    ("preserve_private_artifacts", "ocr_exit_code"),
+    [(False, 0), (False, 1), (True, 0)],
+)
 def test_evidence_review_prepares_internal_context_before_ocr(
-    tmp_path: Path, preserve_private_artifacts: bool
+    tmp_path: Path, preserve_private_artifacts: bool, ocr_exit_code: int
 ) -> None:
-    """Clean ordinary runs while retaining local diagnostic session state on request."""
+    """Clean ordinary success/failure while retaining requested local diagnostics."""
 
     events: list[object] = []
     session_homes: list[Path] = []
@@ -2158,6 +2161,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
 
         def write(self, path: Path) -> None:
             events.append(("write", path))
+            path.write_text("evidence", encoding="utf-8")
 
     composition = MCPComposition(
         payload={},
@@ -2175,12 +2179,17 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     def run(result: Path, stderr: Path, args: list[str], **_kwargs: object) -> int:
         session_homes.append(Path(os.environ["HOME"]))
         events.append(("ocr", result, stderr, args))
-        result.write_text(json.dumps({"status": "complete"}), encoding="utf-8")
-        return 0
+        status = "complete" if ocr_exit_code == 0 else "failed"
+        result.write_text(json.dumps({"status": status}), encoding="utf-8")
+        return ocr_exit_code
 
     def qualify(args: list[str], **_kwargs: object) -> review_runner.BackgroundQualification:
         events.append(("preview", args))
         return review_runner.BackgroundQualification()
+
+    def write_bootstrap(path: Path, content: str) -> None:
+        events.append(("bootstrap", path, content))
+        path.write_text(content, encoding="utf-8")
 
     with (
         patched_attr(
@@ -2213,11 +2222,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             lambda _composition: events.append("verify"),
         ),
         patched_attr(review_runner, "render_bootstrap", lambda *_args, **_kwargs: "bootstrap"),
-        patched_attr(
-            review_runner,
-            "write_private_text",
-            lambda path, content: events.append(("bootstrap", path, content)),
-        ),
+        patched_attr(review_runner, "write_private_text", write_bootstrap),
         patched_attr(
             review_runner,
             "evidence_summary",
@@ -2246,7 +2251,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             preserve_private_artifacts=preserve_private_artifacts,
         )
 
-    assert result == 0
+    assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1
     assert session_homes[0].exists() is preserve_private_artifacts
@@ -2280,6 +2285,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     assert events[8][3] == events[7][1]  # type: ignore[index]
     if preserve_private_artifacts:
         assert "ocr-usage" not in events
+        assert artifacts.store.exists()
+        assert artifacts.bootstrap.exists()
         sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
         assert sidecar == {
             "schema_version": "ocr.private-dlp-decisions/v1",
@@ -2289,8 +2296,39 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         }
         session_homes[0].rmdir()
     else:
-        assert events[9] == "ocr-usage"
+        if ocr_exit_code == 0:
+            assert events[9] == "ocr-usage"
+        else:
+            assert "ocr-usage" not in events
+        assert not artifacts.store.exists()
+        assert not artifacts.bootstrap.exists()
         assert not artifacts.dlp_decisions.exists()
+
+
+def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
+    tmp_path: Path,
+) -> None:
+    """Remove every private review input without deleting the posting handoff status."""
+
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    ephemeral = (
+        artifacts.store,
+        artifacts.bootstrap,
+        artifacts.policy_rules,
+        artifacts.context_store,
+        artifacts.action_receipt,
+        artifacts.action_receipt_lock,
+        artifacts.dlp_decisions,
+    )
+    for path in (*ephemeral, artifacts.pre_execution_status):
+        path.write_text("private", encoding="utf-8")
+        path.chmod(0o600)
+
+    review_runner._remove_ephemeral_review_artifacts(artifacts)
+
+    assert all(not path.exists() for path in ephemeral)
+    assert artifacts.pre_execution_status.read_text(encoding="utf-8") == "private"
 
 
 def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:
