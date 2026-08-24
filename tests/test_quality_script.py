@@ -24,7 +24,7 @@ def test_quality_script_uses_an_isolated_ignored_environment() -> None:
 
 
 def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
-    """Use one branch-aware test run followed by four scoped coverage reports."""
+    """Use one branch-aware test run and one hosted coverage owner."""
 
     script = SCRIPT.read_text(encoding="utf-8")
     workflow = CI_WORKFLOW.read_text(encoding="utf-8")
@@ -41,9 +41,26 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     assert (
         "uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85" in workflow
     )
+    assert workflow.count("coverage: true") == 1
+    assert workflow.count("coverage: false") == 4
+    assert "if: ${{ matrix.coverage }}" in workflow
+    assert "if: ${{ !matrix.coverage }}" in workflow
+    assert workflow.count("uv run pytest -q") == 1
     for command in coverage_commands:
         assert command in script
-        assert f"uv run {command}" in workflow
+        assert workflow.count(f"uv run {command}") == 1
+
+
+def test_ci_quality_job_does_not_duplicate_the_package_gate() -> None:
+    """Leave distribution construction and clean-install smoke to Build artifacts."""
+
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    quality_job = workflow.split("  quality:", 1)[1]
+
+    assert "python -m build" not in quality_job
+    assert "twine check" not in quality_job
+    assert "wheel-smoke" not in quality_job
+    assert "sdist-smoke" not in quality_job
 
 
 def test_quality_script_runs_the_bounded_bandit_gate() -> None:

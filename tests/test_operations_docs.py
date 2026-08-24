@@ -165,6 +165,43 @@ def test_aggregate_review_budget_is_explicit_and_never_looks_complete() -> None:
     assert "approximate" in configuration
 
 
+def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
+    """Keep token ownership, safe failure projection, and migration behavior explicit."""
+
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    for document in (configuration, operations, gitlab):
+        assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
+        assert "4096" in document
+        assert "OCR_MAX_TOKENS_BUDGET" in document
+        assert "/models" in document
+    for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
+        assert field in configuration
+    for phrase in (
+        "defaults to **unset**",
+        "positive decimal integer from `1` through `1000000`",
+        "exactly equal JSON integer is deduplicated",
+        "fails configuration with a migration error",
+        "The toolkit does not add an environment alias",
+    ):
+        assert phrase in configuration
+
+    for phrase in (
+        "endpoint-or-model-not-found",
+        "cost reservation from the requested output cap",
+        "not a claim that the cap was the cause",
+        "`OCR_POST_ERROR_DETAILS=1` cannot add them",
+        "the previous successful review is preserved",
+        "automatic approval is not attempted",
+    ):
+        assert phrase in operations
+    assert "closed provider-neutral reason may cross the separate strict parser" in security
+    assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
+
+
 def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:
     operations = OPERATIONS.read_text(encoding="utf-8")
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -333,6 +370,27 @@ def test_security_workflow_has_a_bounded_bandit_job() -> None:
     assert "# nosec B108" in security
 
 
+def test_protected_pr_and_scheduled_checks_do_not_repeat_on_main_push() -> None:
+    """Assign source validation to the reviewed tree and publication to main."""
+
+    workflows = PROJECT_ROOT / ".github" / "workflows"
+    for name in ("ci.yml", "build.yml", "security.yml", "codeql.yml"):
+        workflow = (workflows / name).read_text(encoding="utf-8")
+        assert "  push:" not in workflow
+        assert "pull_request:" in workflow
+
+    security = (workflows / "security.yml").read_text(encoding="utf-8")
+    codeql = (workflows / "codeql.yml").read_text(encoding="utf-8")
+    testpypi = (workflows / "testpypi.yml").read_text(encoding="utf-8")
+    release = (workflows / "release.yml").read_text(encoding="utf-8")
+
+    assert "schedule:" in security
+    assert "schedule:" in codeql
+    assert "  push:\n    branches: [main]" in testpypi
+    assert "./scripts/quality.sh check" in release
+    assert "uv run pip-audit --skip-editable" in release
+
+
 def test_threat_model_covers_remote_finding_image_boundary() -> None:
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
     policy = (PROJECT_ROOT / "SECURITY.md").read_text(encoding="utf-8")
@@ -408,8 +466,7 @@ def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:
     assert "actions: write" in workflow
     assert "scripts/actions_cleanup.py" in workflow
     assert "--execute" in workflow
-    assert "save-cache:" in ci
-    assert "refs/heads/main" in ci
+    assert "save-cache: false" in ci
     assert "trap-caching: false" in codeql
     assert "CODEQL_OVERLAY_DATABASE_MODE: none" in codeql
     assert "separately controlled v4 overlay-database mode are disabled" in development

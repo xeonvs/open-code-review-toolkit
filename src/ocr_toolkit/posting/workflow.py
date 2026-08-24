@@ -15,7 +15,6 @@ from typing import Any
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
-from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_RESULT_KEY,
@@ -37,7 +36,6 @@ from ocr_toolkit.posting.comments import (
     clean_text,
     code_text,
     comment_line,
-    compact_escaped_text,
 )
 from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
@@ -71,12 +69,11 @@ from ocr_toolkit.posting.markers import (
 )
 from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.result import (
-    llm_billing_failure_warnings,
+    llm_billing_failure_reason,
     normalize_coverage_diagnostics,
 )
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
-    cleanup_drafts_created_by_this_run,
     collect_previous_bot_comment_refs,
     delete_previous_bot_comments_if_collected,
     delete_previous_setup_notes,
@@ -100,6 +97,10 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatus,
     PreExecutionStatusError,
     read_pre_execution_status,
+)
+from ocr_toolkit.provider_failure import (
+    ProviderFailureReason,
+    provider_failure_reason,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
@@ -662,19 +663,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             token_usage_summary=token_usage_summary,
         )
 
-    billing_warnings = llm_billing_failure_warnings(warnings)
-    if billing_warnings:
+    billing_reason = llm_billing_failure_reason(warnings)
+    if billing_reason is not None:
         print(
             "OCR reported an LLM provider billing/quota failure; refusing to publish normal review notes.",
             file=sys.stderr,
         )
-        return post_llm_provider_failure(
-            config,
-            billing_warnings,
-            tool_calls_summary=tool_calls_summary,
-            mcp_usage_summary=mcp_usage_summary,
-            token_usage_summary=token_usage_summary,
-        )
+        return post_llm_provider_failure(config, billing_reason)
 
     previous_bot_comment_refs = collect_previous_bot_comment_refs(config)
     transaction = PostingTransaction()
@@ -1101,38 +1096,75 @@ def post_manifest_failure(
 
 def post_llm_provider_failure(
     config: GitLabConfig,
-    warnings: Sequence[str],
-    tool_calls_summary: str = "",
-    mcp_usage_summary: str = "",
-    token_usage_summary: str = "",
+    reason: ProviderFailureReason,
 ) -> int:
-    """Post a visible OCR provider failure and preserve previous review notes."""
+    """Render one closed provider failure without publishing private diagnostics."""
 
     transaction = PostingTransaction()
-    warning_items: list[str] = []
-    for warning in warnings[:10]:
-        safe_warning = compact_escaped_text(
-            neutralize_quick_actions(redact_sensitive(warning)),
-            1200,
-        )
-        if safe_warning:
-            warning_items.append(f"- {safe_warning}")
+    summary, remediation = {
+        ProviderFailureReason.AUTHENTICATION: (
+            "The LLM provider did not accept the configured credential.",
+            "Check the protected credential and its authentication header, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.AUTHORIZATION: (
+            "The LLM provider authenticated the request but did not authorize it.",
+            "Check the credential permissions and provider access policy, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.RATE_OR_SPENDING_LIMIT: (
+            "The LLM provider rejected the request under a rate or spending limit.",
+            "The cause may be ordinary throttling, an account or API-key spending limit, or cost reservation from the requested output cap. Retry later and check account limits. If short probes pass but a full review fails before generation, try an explicit `OCR_LLM_MAX_COMPLETION_TOKENS`, for example `4096`.",
+        ),
+        ProviderFailureReason.OVERLOADED: (
+            "The LLM provider reported that it was overloaded.",
+            "Retry later or use another already-qualified provider deployment.",
+        ),
+        ProviderFailureReason.TIMEOUT: (
+            "The LLM provider request timed out.",
+            "Check provider latency and the network path, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.NETWORK: (
+            "The LLM provider could not be reached reliably.",
+            "Check DNS, TLS, proxy, and runner connectivity, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.ENDPOINT_OR_MODEL_NOT_FOUND: (
+            "The LLM provider reported that the configured endpoint or model was not found.",
+            "Verify both the provider API root and model identifier; the safe diagnostic cannot distinguish which one was absent.",
+        ),
+        ProviderFailureReason.REQUEST_REJECTED: (
+            "The LLM provider rejected the review request.",
+            "Check the explicit protocol, endpoint shape, model contract, and request controls, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.PROVIDER_UNAVAILABLE: (
+            "The LLM provider was unavailable while processing the review.",
+            "Retry later and check the provider service status.",
+        ),
+        ProviderFailureReason.INVALID_RESPONSE: (
+            "The LLM provider returned a response that could not be consumed safely.",
+            "Check protocol compatibility and provider response health, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.CANCELLED: (
+            "The LLM provider request was cancelled before the review completed.",
+            "Check pipeline cancellation and deadline signals, then rerun when the job can complete.",
+        ),
+        ProviderFailureReason.MIXED: (
+            "The review encountered more than one provider failure category.",
+            "Inspect the private CI diagnostics, correct every provider-side failure, then rerun the pipeline.",
+        ),
+        ProviderFailureReason.UNKNOWN: (
+            "The LLM provider request failed for an unclassified safe reason.",
+            "Inspect the private CI diagnostics and provider health, then rerun the pipeline.",
+        ),
+    }[reason]
 
     body_parts = [
-        "OCR could not complete the review because the LLM provider reported a billing, quota, or balance failure.",
+        summary,
         "",
+        f"- Safe classification: `{reason.value}`.",
         "- Normal review comments were not published.",
         "- Previous OCR review comments were preserved.",
-        "- Refill or rotate the LLM token, then rerun the pipeline.",
+        "- Automatic approval was not attempted.",
+        f"- {remediation}",
     ]
-    if warning_items:
-        body_parts.extend(["", "**Provider warnings:**", *warning_items])
-    if tool_calls_summary:
-        body_parts.extend(["", tool_calls_summary])
-    if mcp_usage_summary:
-        body_parts.append(mcp_usage_summary)
-    if token_usage_summary:
-        body_parts.append(token_usage_summary)
 
     response = post_review_note_bounded(
         config,
@@ -1142,18 +1174,23 @@ def post_llm_provider_failure(
     )
     if response is None:
         print("Failed to create OCR provider-failure note.", file=sys.stderr)
-        cleanup_drafts_created_by_this_run(config, transaction)
-        print_posting_failure_banner()
-        return 1
+        return posting_failure_exit(config, None, transaction)
 
     if not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
 
-    print(
-        "Open Code Review did not complete because the LLM provider reported a billing/quota failure.",
-        file=sys.stderr,
-    )
-    return 1
+    print(f"Open Code Review provider failure: {reason.value}.", file=sys.stderr)
+    return 1 if strict_posting() else 0
+
+
+def _result_provider_failure_reason(result_path: Path) -> ProviderFailureReason | None:
+    """Hostile-read one bounded private result and return only its closed reason."""
+
+    try:
+        result = load_ocr_result(result_path)
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
+        return None
+    return provider_failure_reason(result)
 
 
 def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
@@ -1194,11 +1231,18 @@ def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
     return 1 if strict_posting() else 0
 
 
-def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) -> int:
+def post_ocr_failure(
+    config: GitLabConfig,
+    stderr_path: Path,
+    exit_code: int,
+    result_path: Path | None = None,
+) -> int:
     """Post a safe failure note when OCR exits with a non-zero status.
 
     A non-zero OCR exit code means the JSON output may be partial or misleading,
-    so this script intentionally does not publish normal review comments.
+    so this script intentionally does not publish normal review comments. A
+    bounded retry-report v1 may contribute only a closed provider-failure
+    reason; its raw diagnostics and stderr remain private.
     Previous OCR bot notes are intentionally NOT cleaned up here: the last
     valid review must remain visible until a successful run replaces it.
 
@@ -1221,6 +1265,10 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
         status = None
     if status is not None:
         return post_pre_execution_status(config, status)
+
+    reason = _result_provider_failure_reason(result_path) if result_path is not None else None
+    if reason is not None:
+        return post_llm_provider_failure(config, reason)
 
     transaction = PostingTransaction()
     details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
@@ -1342,7 +1390,7 @@ def main(argv: list[str] | None = None) -> int:
 
     exit_code = ocr_exit_code()
     if exit_code != 0:
-        return post_ocr_failure(config, stderr_path, exit_code)
+        return post_ocr_failure(config, stderr_path, exit_code, result_path)
 
     try:
         result = load_ocr_result(result_path)

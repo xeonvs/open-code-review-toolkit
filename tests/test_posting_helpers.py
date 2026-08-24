@@ -41,6 +41,7 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatus,
     write_pre_execution_status,
 )
+from ocr_toolkit.provider_failure import ProviderFailureReason
 from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
 from tests.support import (
     gitlab_config,
@@ -1483,6 +1484,174 @@ class PostingPayloadBudgetTests(unittest.TestCase):
 
 
 class PostingWorkflowTests(unittest.TestCase):
+    def test_nonzero_ocr_projects_retry_report_to_static_provider_note(self) -> None:
+        """Publish only a closed 429 reason and keep raw result and stderr data private."""
+
+        notes: list[str] = []
+        private_values = (
+            "private-provider",
+            "private-model",
+            "/private/repository/file.py",
+            "private-request-id",
+            "private-response-body",
+            "private-finding",
+            "private-stderr",
+        )
+        payload = {
+            "comments": [{"content": "private-finding"}],
+            "retry_report": {
+                "schema_version": "ocr.llm-retry-report/v1",
+                "total_requests": 1,
+                "retried_requests": 0,
+                "total_retries": 0,
+                "recovered_requests": 0,
+                "failed_requests": 1,
+                "cancelled_requests": 0,
+                "requests": [
+                    {
+                        "logical_request_id": "private-logical-id",
+                        "provider": "private-provider",
+                        "model": "private-model",
+                        "file_path": "/private/repository/file.py",
+                        "task_type": "main_task",
+                        "request_no": 1,
+                        "outcome": "failed",
+                        "attempts": [
+                            {
+                                "attempt": 1,
+                                "outcome": "error",
+                                "error_class": "rate_limited",
+                                "failure_phase": "http",
+                                "status_code": 429,
+                                "request_id": "private-request-id",
+                                "provider_body": "private-response-body",
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        def capture(
+            _config: Any, _title: str, body: str, _transaction: PostingTransaction
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result_path = Path(tmp) / "result.json"
+            stderr_path = Path(tmp) / "stderr.log"
+            result_path.write_text(json.dumps(payload), encoding="utf-8")
+            stderr_path.write_text("private-stderr\n/merge", encoding="utf-8")
+            stderr = io.StringIO()
+            with (
+                patched_env(
+                    OCR_EXIT_CODE="1",
+                    OCR_POST_ERROR_DETAILS="1",
+                    OCR_STRICT_POSTING="false",
+                ),
+                patched_attr(workflow, "load_gitlab_config", lambda: gitlab_config()),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: (_ for _ in ()).throw(RuntimeError("unavailable")),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                patched_attr(
+                    workflow,
+                    "read_stderr_excerpt",
+                    lambda *_args: self.fail("classified failure read stderr"),
+                ),
+                patched_attr(
+                    workflow,
+                    "execute_approval",
+                    lambda *_args: self.fail("provider failure reached approval"),
+                ),
+                redirect_stderr(stderr),
+            ):
+                exit_code = workflow.main([str(result_path), str(stderr_path)])
+
+        self.assertEqual(exit_code, 0)
+        published = "\n".join(notes)
+        controlled_log = stderr.getvalue()
+        self.assertIn("rate-or-spending-limit", published)
+        self.assertIn("Previous OCR review comments were preserved", published)
+        self.assertIn("Automatic approval was not attempted", published)
+        for private in private_values:
+            self.assertNotIn(private, published)
+            self.assertNotIn(private, controlled_log)
+
+    def test_malformed_retry_report_retains_generic_failure_details_path(self) -> None:
+        """Fall back to the existing generic note when private diagnostics contradict v1."""
+
+        notes: list[str] = []
+        payload = {
+            "retry_report": {
+                "schema_version": "ocr.llm-retry-report/v1",
+                "total_requests": 1,
+                "retried_requests": 0,
+                "total_retries": 0,
+                "recovered_requests": 0,
+                "failed_requests": 2,
+                "cancelled_requests": 0,
+                "requests": [],
+            }
+        }
+
+        def capture(
+            _config: Any, title: str, body: str, _transaction: PostingTransaction
+        ) -> dict[str, int]:
+            notes.append(f"{title}\n{body}")
+            return {"id": 1}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result_path = Path(tmp) / "result.json"
+            stderr_path = Path(tmp) / "stderr.log"
+            result_path.write_text(json.dumps(payload), encoding="utf-8")
+            stderr_path.write_text("safe bounded diagnostic", encoding="utf-8")
+            with (
+                patched_env(OCR_POST_ERROR_DETAILS="1", OCR_STRICT_POSTING="false"),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: (_ for _ in ()).throw(RuntimeError("unavailable")),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 1, result_path)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Open Code Review failure", notes[0])
+        self.assertIn("safe bounded diagnostic", notes[0])
+        self.assertNotIn("provider failure", notes[0].lower())
+
+    def test_legacy_billing_warning_uses_shared_provider_renderer(self) -> None:
+        """Route the pre-v1 warning shape to the same closed reason and renderer."""
+
+        reasons: list[ProviderFailureReason] = []
+        with patched_attr(
+            workflow,
+            "post_llm_provider_failure",
+            lambda _config, reason: reasons.append(reason) or 0,
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "comments": [{"content": "must not publish"}],
+                    "warnings": [
+                        {
+                            "message": "private provider response: 402 Payment Required",
+                            "provider_body": "private-response-body",
+                        }
+                    ],
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(reasons, [ProviderFailureReason.RATE_OR_SPENDING_LIMIT])
+
     def test_missing_gitlab_configuration_fails_closed(self) -> None:
         with patched_attr(workflow, "load_gitlab_config", lambda: None):
             exit_code = workflow.main([])
@@ -2036,32 +2205,34 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertNotIn("exit code", notes[0])
         self.assertIn("Previous OCR review comments were preserved", notes[0])
 
-    def test_provider_failure_redacts_hostile_warning_and_never_succeeds(self) -> None:
-        """Redact provider diagnostics and keep provider failure non-successful."""
+    def test_provider_failure_renderer_is_static_and_respects_strict_mode(self) -> None:
+        """Render only closed guidance while retaining advisory versus strict behavior."""
 
-        notes: list[str] = []
-        secret = "provider-secret-value"
+        for strict, expected in (("false", 0), ("true", 1)):
+            notes: list[str] = []
 
-        def capture(
-            _config: Any, _title: str, body: str, _transaction: PostingTransaction
-        ) -> dict[str, int]:
-            notes.append(body)
-            return {"id": 1}
+            def capture(
+                _config: Any, _title: str, body: str, _transaction: PostingTransaction
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
 
-        with (
-            patched_env(OCR_LLM_TOKEN=secret),
-            patched_attr(workflow, "post_review_note_bounded", capture),
-            patched_attr(workflow, "finalize_posting", lambda *_args: True),
-            redirect_stderr(io.StringIO()),
-        ):
-            exit_code = workflow.post_llm_provider_failure(
-                gitlab_config(), [f"token={secret}\n/merge"]
-            )
+            with (
+                self.subTest(strict=strict),
+                patched_env(OCR_STRICT_POSTING=strict),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                redirect_stderr(io.StringIO()),
+            ):
+                exit_code = workflow.post_llm_provider_failure(
+                    gitlab_config(), ProviderFailureReason.RATE_OR_SPENDING_LIMIT
+                )
 
-        self.assertEqual(exit_code, 1)
-        self.assertNotIn(secret, notes[0])
-        self.assertNotIn("\n/merge", notes[0])
-        self.assertIn(r"token=\*\*\*", notes[0])
+            self.assertEqual(exit_code, expected)
+            self.assertIn("rate-or-spending-limit", notes[0])
+            self.assertIn("cost reservation", notes[0])
+            self.assertIn("OCR_LLM_MAX_COMPLETION_TOKENS", notes[0])
+            self.assertIn("4096", notes[0])
 
     def test_previous_review_cleanup_depends_only_on_coverage_completeness(self) -> None:
         """Clean prior review state only after complete replacement coverage."""
@@ -4859,17 +5030,16 @@ class OcrResultLoadingTests(unittest.TestCase):
             {"file": "x.py", "type": "subtask_error", "message": "402 Payment Required"},
         ]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 1)
-        self.assertIn("402 Payment Required", matches[0])
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_ignores_generic_billing_text(self) -> None:
         warnings = [
             {"file": "x.py", "type": "subtask_error", "message": "billing module failed tests"}
         ]
 
-        self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
+        self.assertIsNone(result.llm_billing_failure_reason(warnings))
 
     def test_billing_classifier_tolerates_cyclic_warning_objects(self) -> None:
         """Do not recurse forever if an in-memory caller supplies a cycle."""
@@ -4877,7 +5047,7 @@ class OcrResultLoadingTests(unittest.TestCase):
         warning: dict[str, Any] = {"message": "ordinary warning"}
         warning["error"] = warning
 
-        self.assertEqual(result.llm_billing_failure_warnings([warning]), [])
+        self.assertIsNone(result.llm_billing_failure_reason([warning]))
 
     def test_billing_classifier_reads_nested_provider_error_fields(self) -> None:
         warnings = [
@@ -4887,26 +5057,23 @@ class OcrResultLoadingTests(unittest.TestCase):
             }
         ]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 1)
-        self.assertIn("insufficient_quota", matches[0])
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_matches_numeric_status_without_message(self) -> None:
         warnings = [{"file": "x.py", "status": 402, "type": "subtask_error"}]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 1)
-        self.assertIn("status: 402", matches[0])
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_matches_nested_numeric_code_without_message(self) -> None:
         warnings = [{"file": "x.py", "error": {"code": 402}}]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 1)
-        self.assertIn("code: 402", matches[0])
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_reads_embedded_provider_json_message(self) -> None:
         warnings = [
@@ -4917,11 +5084,9 @@ class OcrResultLoadingTests(unittest.TestCase):
             }
         ]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 1)
-        self.assertIn("insufficient_funds", matches[0])
-        self.assertIn("Insufficient user balance", matches[0])
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_matches_status_code_shapes(self) -> None:
         warnings = [
@@ -4931,9 +5096,9 @@ class OcrResultLoadingTests(unittest.TestCase):
             "status_code: 402",
         ]
 
-        matches = result.llm_billing_failure_warnings(warnings)
+        reason = result.llm_billing_failure_reason(warnings)
 
-        self.assertEqual(len(matches), 4)
+        self.assertEqual(reason, ProviderFailureReason.RATE_OR_SPENDING_LIMIT)
 
     def test_billing_classifier_ignores_non_billing_status_code(self) -> None:
         warnings = [
@@ -4941,7 +5106,7 @@ class OcrResultLoadingTests(unittest.TestCase):
             '{"status_code": 200, "message": "billing report generated"}',
         ]
 
-        self.assertEqual(result.llm_billing_failure_warnings(warnings), [])
+        self.assertIsNone(result.llm_billing_failure_reason(warnings))
 
     def test_token_usage_mapping_is_depth_bounded(self) -> None:
         from ocr_toolkit.result_usage import token_usage_mapping

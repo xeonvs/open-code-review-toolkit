@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-    paths: ["pyproject.toml", "uv.lock", "src/**", "scripts/install_local_artifact.py", "README.md", "LICENSE"]
 
 permissions:
   contents: read

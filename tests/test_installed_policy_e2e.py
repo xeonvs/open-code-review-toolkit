@@ -8,7 +8,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import venv
 from pathlib import Path
 
 import pytest
@@ -111,20 +110,25 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
     """Prove both package paths under hostile imports, private state, and stdio MCP."""
 
     git_binary = shutil.which("git")
+    uv_binary = shutil.which("uv")
     assert git_binary is not None
+    assert uv_binary is not None
     for label, artifact in zip(("wheel", "sdist"), installed_artifacts, strict=True):
         root = tmp_path / label
         root.mkdir(mode=0o700)
         environment = root / "venv"
-        venv.EnvBuilder(with_pip=True).create(environment)
+        _run(
+            [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
+            cwd=root,
+        )
         binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
         python = binary_directory / ("python.exe" if os.name == "nt" else "python")
         cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
         _run(
-            [str(python), "-m", "pip", "install", "--no-deps", str(artifact)],
+            [uv_binary, "pip", "install", "--python", str(python), "--no-deps", str(artifact)],
             cwd=root,
         )
-        _run([str(python), "-m", "pip", "check"], cwd=root)
+        _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)
         installed_version = _run(
             [str(python), "-I", "-c", "import ocr_toolkit; print(ocr_toolkit.__version__)"],
             cwd=root,
@@ -143,6 +147,22 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             env={"HOME": str(root), "PATH": str(binary_directory)},
         )
         assert "review" in help_text and "post" in help_text
+        config_home = root / "config-home"
+        config_environment = {
+            "HOME": str(config_home),
+            "OCR_LLM_MAX_COMPLETION_TOKENS": "4096",
+            "OCR_LLM_MODEL": "openai/gpt-test",
+            "OCR_LLM_PROTOCOL": "openai",
+            "OCR_LLM_TOKEN": "installed-test-token",
+            "OCR_LLM_URL": "https://gateway.example/v1/chat/completions",
+            "PATH": str(binary_directory),
+        }
+        _run([str(cli), "configure"], cwd=root, env=config_environment)
+        generated_config = json.loads(
+            (config_home / ".opencodereview" / "config.json").read_text(encoding="utf-8")
+        )
+        assert generated_config["llm"]["url"] == "https://gateway.example/v1"
+        assert generated_config["llm"]["extra_body"] == {"max_completion_tokens": 4096}
         protocol_environment = {
             "HOME": str(root / "home"),
             "PATH": os.pathsep.join(

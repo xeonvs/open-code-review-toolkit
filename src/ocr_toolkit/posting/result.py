@@ -17,13 +17,14 @@ from ocr_toolkit.ocr_result import (
     load_ocr_result,
 )
 from ocr_toolkit.posting.comments import clean_text, compact_escaped_text
+from ocr_toolkit.provider_failure import ProviderFailureReason
 from ocr_toolkit.result_contract import ReviewOutcome
 
 __all__ = [
     "OcrResultMalformed",
     "OcrResultMissing",
     "OcrResultTooLarge",
-    "llm_billing_failure_warnings",
+    "llm_billing_failure_reason",
     "load_ocr_result",
     "normalize_coverage_diagnostics",
     "ocr_warning_text",
@@ -199,12 +200,13 @@ def ocr_warning_text(warning: Any, *, _seen: set[int] | None = None) -> str:
     return clean_text(warning)
 
 
-def llm_billing_failure_warnings(warnings: Sequence[Any]) -> list[str]:
-    """Return OCR warnings that indicate LLM provider billing/quota failure."""
+def llm_billing_failure_reason(
+    warnings: Sequence[Any],
+) -> ProviderFailureReason | None:
+    """Map a legacy OCR billing warning to the shared safe provider reason."""
 
-    matches: list[str] = []
     for warning in warnings:
         text = ocr_warning_text(warning)
         if text and LLM_BILLING_FAILURE_RE.search(text):
-            matches.append(text)
-    return matches
+            return ProviderFailureReason.RATE_OR_SPENDING_LIMIT
+    return None

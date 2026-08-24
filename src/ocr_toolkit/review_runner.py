@@ -81,6 +81,7 @@ from ocr_toolkit.ocr_result import (
     OcrResultMissing,
     OcrResultTooLarge,
     inspect_ocr_result,
+    load_ocr_result,
     transform_ocr_result,
 )
 from ocr_toolkit.posting.result import ocr_warning_text
@@ -93,6 +94,7 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatusError,
     write_pre_execution_status,
 )
+from ocr_toolkit.provider_failure import ProviderFailureReason, provider_failure_reason
 from ocr_toolkit.providers.gitlab import (
     GitLabProviderError,
     acquire_review_snapshot,
@@ -2040,6 +2042,16 @@ def read_stderr_excerpt(stderr_path: Path, max_chars: int = DEFAULT_DIAGNOSTIC_C
     return redact_sensitive(text)[:max_chars]
 
 
+def _closed_provider_failure_reason(result_path: Path) -> ProviderFailureReason | None:
+    """Return only a validated retry-report reason from one private result artifact."""
+
+    try:
+        result = load_ocr_result(result_path)
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
+        return None
+    return provider_failure_reason(result)
+
+
 def _resolve_ocr_binary() -> str:
     """Resolve one exact executable before entering the repository-owned process cwd."""
 
@@ -2104,10 +2116,18 @@ def run_review(
 
     if completed.returncode != 0:
         print(f"Open Code Review exited with code {completed.returncode}.", file=sys.stderr)
-        excerpt = read_stderr_excerpt(stderr_path)
-        if excerpt:
-            print("Safe OCR stderr excerpt:", file=sys.stderr)
-            print(excerpt, file=sys.stderr)
+        provider_reason = _closed_provider_failure_reason(result_path)
+        if provider_reason is not None:
+            print(
+                f"OCR provider failure classified as {provider_reason.value}; "
+                "private diagnostics remain in the owner-only artifacts.",
+                file=sys.stderr,
+            )
         else:
-            print("OCR did not provide a readable stderr diagnostic.", file=sys.stderr)
+            excerpt = read_stderr_excerpt(stderr_path)
+            if excerpt:
+                print("Safe OCR stderr excerpt:", file=sys.stderr)
+                print(excerpt, file=sys.stderr)
+            else:
+                print("OCR did not provide a readable stderr diagnostic.", file=sys.stderr)
     return completed.returncode

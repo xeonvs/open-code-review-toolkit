@@ -8,17 +8,18 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `OCR_LLM_URL` | Operator / `ocr-ci configure` | Yes for review | None | Absolute HTTPS LLM endpoint passed to OCR. |
+| `OCR_LLM_URL` | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
 | `OCR_LLM_TOKEN` | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
 | `OCR_LLM_MODEL` | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
 | `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
-| `OCR_LLM_EXTRA_BODY` | Operator / `ocr-ci configure` | No | Unset | JSON object merged into the OCR LLM request configuration. |
+| `OCR_LLM_EXTRA_BODY` | Operator / `ocr-ci configure` | No | Unset | JSON object merged into the OCR LLM request configuration; completion-cap field conflicts are checked against the dedicated variable. |
+| `OCR_LLM_MAX_COMPLETION_TOKENS` | Operator / `ocr-ci configure` | No | Unset (inherits OCR) | Positive decimal integer from `1` through `1000000`; sets the protocol-specific completion/output cap without changing prompt/context or aggregate review budgets. |
 | `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
 | `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
 | `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
-| `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute `/models` metadata URL when validation is enabled. |
+| `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
 | `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration. |
 | `OCR_TELEMETRY_CONTENT_LOGGING` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR content logging; keep disabled for private review data. |
@@ -38,9 +39,25 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_POST_ERROR_DETAILS` | Operator / posting | No | Unset (disabled) | Only exact `1` admits the bounded redacted OCR stderr excerpt into a failure note. |
 | `OCR_EXIT_CODE` | Review job handoff / posting | No | `0` | OCR process exit code passed from `ocr-ci review` to `ocr-ci post`. |
 
-`OCR_USE_ANTHROPIC` is not a compatibility alias in 0.8.0. Any presence fails configuration with an explicit request to set `OCR_LLM_PROTOCOL=anthropic`, preventing a stale false value from silently selecting the default OpenAI protocol.
+Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fails configuration with an explicit request to set `OCR_LLM_PROTOCOL=anthropic`, preventing a stale false value from silently selecting the default OpenAI protocol.
 
 `OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used only for the isolated OCR home and binary lookup; `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+
+### Provider endpoint and completion-cap contract
+
+`OCR_LLM_PROTOCOL` is authoritative; the URL never selects a protocol. `OCR_LLM_URL` accepts an API root or the matching terminal endpoint: `/chat/completions` for `openai`, `/responses` for `openai-responses`, and `/v1/messages` for `anthropic`. Configure and preflight use the same normalized API root, reject a terminal endpoint belonging to another protocol, and reject credentials or fragments embedded in either provider URL. A query is preserved for inference. Because copying it to an auxiliary endpoint is ambiguous, model validation with a queried inference URL requires an explicit `OCR_LLM_MODELS_URL`.
+
+`OCR_LLM_MAX_COMPLETION_TOKENS` is optional and defaults to **unset**, which inherits the qualified OCR version's behavior. It accepts a positive decimal integer from `1` through `1000000` and writes one protocol-specific field:
+
+| `OCR_LLM_PROTOCOL` | Generated `llm.extra_body` field |
+| --- | --- |
+| `openai` | `max_completion_tokens` |
+| `openai-responses` | `max_output_tokens` |
+| `anthropic` | `max_tokens` |
+
+If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer is deduplicated. A different value, or a boolean, string, float, or null at that field, fails configuration with a migration error; remove the duplicate field or keep the same integer in both places. Other `OCR_LLM_EXTRA_BODY` members are preserved. For example, set `OCR_LLM_MAX_COMPLETION_TOKENS=4096` when a gateway accepts short probes but rejects a full review before generation because it reserves spending against the requested output cap.
+
+Toolkit 0.8.1 does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
 
 ## GitLab and provider variables
 
@@ -121,11 +138,13 @@ Complete DLP-admitted metadata, generic discussions, and dynamic records remain 
 
 Posting requires `GITLAB_API_TOKEN`, `CI_SERVER_URL`, `CI_PROJECT_ID`, and `CI_MERGE_REQUEST_IID`. Inline discussions additionally use GitLab diff refs and merge-request source/base SHA variables. `CI_COMMIT_SHA` remains distinct from the merge-request source SHA and is never assumed to identify the reviewed branch head.
 
-## Posting controls
+## Token controls
 
-`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, `OCR_POST_BADGES`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+Three independent controls must not be substituted for one another:
 
-`OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
+- `OCR_LLM_MAX_COMPLETION_TOKENS` sets the provider request's per-call completion/output cap through `llm.extra_body`; its default is unset and it does not reduce prompt input.
+- OCR's own `max_tokens`/`--max-tokens` controls its prompt/context ceiling. The toolkit does not add an environment alias or change that OCR-owned default.
+- `OCR_MAX_TOKENS_BUDGET` is an operator-owned cost ceiling for the aggregate diff review, not a quality profile or per-request limit.
 
 `OCR_MAX_TOKENS_BUDGET` is an operator-owned cost ceiling for one diff review,
 not a quality profile or telemetry setting. The complete GitLab pipeline passes
@@ -135,6 +154,12 @@ findings and reports the unreviewed files as budget-attributed failed coverage.
 The toolkit publishes that run as partial and never treats it as clean or eligible
 for automatic approval. The cap is approximate because already-running work may
 finish and OCR accounts the provider-reported input plus output tokens.
+
+## Posting controls
+
+`OCR_POST_MODE`, `OCR_STRICT_POSTING`, `OCR_EXIT_CODE`, `OCR_MAX_POST_COMMENTS`, `OCR_MAX_RESULT_BYTES`, `OCR_POST_ERROR_DETAILS`, `OCR_POST_EMOJI`, `OCR_POST_BADGES`, and `OCR_AUTO_APPROVE` control write behavior and bounded error reporting. Human replies to bot-created discussions prevent automated ownership actions on that discussion.
+
+`OCR_POST_EMOJI` defaults to `true`. Set it to `false`, `0`, `no`, or `off` to disable every emoji added by the toolkit to GitLab review-health and aggregate severity/category summaries. Inline severity/category fields remain text-only in both modes. This does not rewrite emoji already contained in upstream OCR finding text.
 
 `OCR_POST_BADGES` controls only category/severity presentation on individual
 findings. The default `text` mode renders local Markdown labels and makes no

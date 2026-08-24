@@ -614,6 +614,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
     request_count = 0
     tokens_per_request = 2
+    completion_caps: list[object] = []
 
     def do_POST(self) -> None:
         if self.path != "/v1/chat/completions":
@@ -631,6 +632,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         if not isinstance(request, dict):
             self.send_error(400)
             return
+        type(self).completion_caps.append(request.get("max_completion_tokens"))
         messages = request.get("messages")
         if not isinstance(messages, list):
             self.send_error(400)
@@ -731,6 +733,7 @@ def _stub_gateway(*, tokens_per_request: int = 2) -> Iterator[str]:
         _fail("stub gateway token usage must be at least two")
     _StubHandler.request_count = 0
     _StubHandler.tokens_per_request = tokens_per_request
+    _StubHandler.completion_caps = []
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -861,6 +864,71 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
         "partial_findings_preserved": True,
         "result": "passed",
         "selected": 3,
+    }
+
+
+def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Observe the real OCR chat-completions output cap with and without an override."""
+
+    probe_root = directory / "completion-cap-probe"
+    probe_root.mkdir()
+    git_env = _isolated_probe_environment(probe_root / "git-home")
+    repo, base, head = _synthetic_repo(probe_root, git_env)
+    observed: dict[str, int] = {}
+    for label, expected in (("inherited", 58_888), ("explicit", 4_096)):
+        env = _isolated_probe_environment(probe_root / f"{label}-home")
+        with _stub_gateway() as gateway_url:
+            env.update(
+                {
+                    "OCR_LLM_URL": gateway_url,
+                    "OCR_LLM_TOKEN": "synthetic-token",
+                    "OCR_LLM_MODEL": "synthetic-model",
+                    "OCR_LLM_PROTOCOL": "openai",
+                    "OCR_TELEMETRY_ENABLED": "false",
+                }
+            )
+            from ocr_toolkit.config_writer import write_ocr_config
+
+            llm_config: dict[str, object] = {
+                "auth_token": "synthetic-token",
+                "model": "synthetic-model",
+                "protocol": "openai",
+                "url": gateway_url,
+                "use_anthropic": False,
+            }
+            if label == "explicit":
+                llm_config["extra_body"] = {"max_completion_tokens": expected}
+            write_ocr_config(
+                {"llm": llm_config, "telemetry": {"enabled": False}},
+                Path(env["HOME"]) / ".opencodereview" / "config.json",
+            )
+            _run(
+                [
+                    str(binary),
+                    "review",
+                    "--from",
+                    base,
+                    "--to",
+                    head,
+                    "--format",
+                    "json",
+                    "--audience",
+                    "agent",
+                    "--concurrency",
+                    "1",
+                ],
+                cwd=repo,
+                env=env,
+            )
+        caps = _StubHandler.completion_caps
+        if not caps or any(value != expected for value in caps):
+            _fail(f"OCR completion-cap {label} probe expected {expected}, observed {caps!r}")
+        observed[label] = expected
+    return {
+        "explicit": observed["explicit"],
+        "inherited": observed["inherited"],
+        "result": "passed",
+        "wire_field": "max_completion_tokens",
     }
 
 
@@ -1110,6 +1178,8 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             "result": "passed",
         },
     }
+    if _version(version) >= (1, 9, 10):
+        contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
     if thinking_probe is not None:
         contracts["comment_thinking_probe"] = thinking_probe
     return contracts
