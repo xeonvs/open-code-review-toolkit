@@ -429,6 +429,22 @@ class MCPConfigTests(unittest.TestCase):
         self.assertNotIn("private-header", rendered)
         self.assertNotIn("private-body", rendered)
 
+    def test_provider_config_rejects_embedded_url_whitespace(self) -> None:
+        """Reject URL characters that urllib would otherwise silently normalize."""
+
+        for raw_url in (
+            "https://gate\nway.example/v1",
+            "https://gateway.example/v1\t/models",
+            "https://gateway.example/v1 /models",
+        ):
+            with (
+                self.subTest(raw_url=raw_url),
+                self.assertRaisesRegex(provider_config.ProviderConfigError, "absolute HTTPS URL"),
+            ):
+                provider_config.provider_config_from_environment(
+                    {"OCR_LLM_PROTOCOL": "openai", "OCR_LLM_URL": raw_url}
+                )
+
     def test_runtime_config_rejects_removed_anthropic_switch_with_migration(self) -> None:
         for legacy_value in ("", "false", "true"):
             with (
@@ -570,7 +586,7 @@ class MCPConfigTests(unittest.TestCase):
                 ocr_configure.build_config_updates()
 
     def test_runtime_config_rejects_invalid_completion_caps(self) -> None:
-        for value in ("0", "-1", "+1", "1.5", "1000001"):
+        for value in ("0", "-1", "+1", "1.5", "1000001", "9" * 5000):
             with (
                 self.subTest(value=value),
                 patched_env(

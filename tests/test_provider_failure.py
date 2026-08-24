@@ -171,6 +171,7 @@ def test_recovered_only_report_does_not_create_a_failure_reason() -> None:
         lambda report: report.update(schema_version="future"),
         lambda report: report.update(requests=[], total_requests=1, failed_requests=0),
         lambda report: report.update(failed_requests=2),
+        lambda report: report["requests"][0]["attempts"][0].update(attempt=True),
         lambda report: report["requests"][0]["attempts"][0].update(status_code=True),
         lambda report: report["requests"][0]["attempts"][0].update(error_class="future"),
         lambda report: report["requests"][0]["attempts"][0].update(

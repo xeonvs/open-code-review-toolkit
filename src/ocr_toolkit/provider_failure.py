@@ -153,7 +153,11 @@ def _request_reason(request: Mapping[str, Any]) -> ProviderFailureReason | None:
         raise RetryReportError("retry report request attempts are invalid")
     reasons: list[ProviderFailureReason | None] = []
     for index, attempt in enumerate(attempts, start=1):
-        if not isinstance(attempt, dict) or attempt.get("attempt") != index:
+        if (
+            not isinstance(attempt, dict)
+            or type(attempt.get("attempt")) is not int
+            or attempt.get("attempt") != index
+        ):
             raise RetryReportError("retry report attempt order is invalid")
         reasons.append(_attempt_reason(attempt))
     if outcome == "succeeded":

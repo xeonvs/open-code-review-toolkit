@@ -152,6 +152,10 @@ def _parse_completion_cap(value: str) -> int | None:
 
     if not value:
         return None
+    if len(value) > len(str(MAX_COMPLETION_TOKENS_LIMIT)):
+        raise ProviderConfigError(
+            f"OCR_LLM_MAX_COMPLETION_TOKENS must be at most {MAX_COMPLETION_TOKENS_LIMIT}"
+        )
     if POSITIVE_DECIMAL_RE.fullmatch(value) is None:
         raise ProviderConfigError(
             "OCR_LLM_MAX_COMPLETION_TOKENS must be a positive decimal integer"
@@ -167,6 +171,10 @@ def _parse_completion_cap(value: str) -> int | None:
 def _parse_https_url(value: str, name: str) -> SplitResult:
     """Parse one absolute credential-free HTTPS URL with no fragment."""
 
+    if any(character.isspace() for character in value):
+        raise ProviderConfigError(
+            f"{name} must be an absolute HTTPS URL without embedded credentials or a fragment"
+        )
     try:
         parsed = urlsplit(value)
         port = parsed.port
