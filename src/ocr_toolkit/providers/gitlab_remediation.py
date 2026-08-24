@@ -15,6 +15,7 @@ from ocr_toolkit.posting.markers import (
     fingerprint_from_marker,
     reviewer_command_from_body,
 )
+from ocr_toolkit.providers.gitlab import GitLabProviderError
 from ocr_toolkit.providers.gitlab_context import (
     RawGitLabSnapshot,
     anchor,
@@ -130,9 +131,11 @@ def project_remediation_threads(
             omitted += 1
             continue
         considered_threads += 1
-        assert isinstance(thread, Mapping)
+        if not isinstance(thread, Mapping):
+            raise GitLabProviderError("verified remediation thread is not an object")
         notes = thread.get("notes")
-        assert isinstance(notes, list)
+        if not isinstance(notes, list):
+            raise GitLabProviderError("verified remediation thread has no note list")
         root, _fingerprint = root_identity
         created_at = timestamp(root.get("created_at"))
         updated_at = timestamp(root.get("updated_at"))

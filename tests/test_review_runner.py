@@ -2056,6 +2056,88 @@ def test_background_preview_uses_exact_production_argv_and_cleans_artifacts(
     assert list(session_home.iterdir()) == []
 
 
+def test_background_preview_preserves_rejection_when_cleanup_also_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep OCR's structured hard rejection available to the status handoff."""
+
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    session_home = tmp_path / "home"
+    session_home.mkdir(mode=0o700)
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        kwargs["stderr"].write(  # type: ignore[union-attr]
+            b"Error: background content is 8001 characters, exceeding the hard limit of 8000 "
+            b"(aborting)\n"
+        )
+        return subprocess.CompletedProcess(argv, 1)
+
+    original_rmtree = review_runner.shutil.rmtree
+
+    def fail_after_cleanup(path: Path) -> None:
+        original_rmtree(path)
+        raise OSError("synthetic cleanup failure")
+
+    monkeypatch.setattr(review_runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(review_runner.shutil, "rmtree", fail_after_cleanup)
+    model_calls: list[str] = []
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_args, **_kwargs: model_calls.append("called") or 0,
+    )
+
+    exit_code, qualification = review_runner._run_background_qualified_review(
+        tmp_path / "result.json",
+        tmp_path / "stderr.log",
+        ["--from", "a" * 40, "--to", "b" * 40, "--background-file", "bootstrap.md"],
+        ocr_binary="/private/ocr",
+        session_home=session_home,
+        artifacts=artifacts,
+        refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
+        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+    )
+
+    assert exit_code == 2
+    assert qualification.warning is None
+    assert model_calls == []
+    persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
+    assert (persisted["actual"], persisted["limit"], persisted["unit"]) == (
+        8_001,
+        8_000,
+        "characters",
+    )
+
+
+def test_background_preview_cleanup_failure_closes_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail closed when an otherwise successful preview cannot clean its artifacts."""
+
+    session_home = tmp_path / "home"
+    session_home.mkdir(mode=0o700)
+
+    def fake_run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(argv, 0)
+
+    original_rmtree = review_runner.shutil.rmtree
+
+    def fail_after_cleanup(path: Path) -> None:
+        original_rmtree(path)
+        raise OSError("synthetic cleanup failure")
+
+    monkeypatch.setattr(review_runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(review_runner.shutil, "rmtree", fail_after_cleanup)
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="cleanup failed"):
+        review_runner._qualify_review_background(
+            ["--from", "a" * 40, "--to", "b" * 40],
+            ocr_binary="/private/ocr",
+            session_home=session_home,
+        )
+
+
 def test_hard_background_rejection_persists_status_without_running_model_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

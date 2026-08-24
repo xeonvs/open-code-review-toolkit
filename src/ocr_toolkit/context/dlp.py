@@ -184,16 +184,17 @@ def check_text(
     normalized = normalize_text(value)
     if normalized is None:
         return DLPResult(False, None, "invalid_text", "type_or_control")
+    normalized_bytes = normalized.encode("utf-8")
     if (
         len(normalized) > budgets.max_chars
-        or len(normalized.encode("utf-8")) > budgets.max_bytes
+        or len(normalized_bytes) > budgets.max_bytes
         or normalized.count("\n") + 1 > budgets.max_lines
     ):
         detector = (
             "characters"
             if len(normalized) > budgets.max_chars
             else "bytes"
-            if len(normalized.encode("utf-8")) > budgets.max_bytes
+            if len(normalized_bytes) > budgets.max_bytes
             else "lines"
         )
         return DLPResult(False, None, "limit", detector)

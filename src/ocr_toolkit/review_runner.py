@@ -1231,11 +1231,15 @@ def _qualify_review_background(
         )
         return _parse_background_preview(returncode=completed.returncode, stderr=stderr)
     finally:
+        active_error = sys.exception()
         os.umask(previous_umask)
         try:
             shutil.rmtree(preview_directory)
         except OSError as exc:
-            raise ReviewRunnerError("OCR background preview cleanup failed") from exc
+            cleanup_error = ReviewRunnerError("OCR background preview cleanup failed")
+            if active_error is not None:
+                raise active_error from cleanup_error
+            raise cleanup_error from exc
 
 
 def _run_background_qualified_review(

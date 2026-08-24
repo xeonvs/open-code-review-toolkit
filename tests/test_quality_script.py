@@ -55,6 +55,32 @@ def test_quality_script_runs_the_bounded_bandit_gate() -> None:
     assert "tests" not in command
 
 
+def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Path) -> None:
+    """Do not mix stale coverage output into a later multi-command result."""
+
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    fake_uv = binary_dir / "uv"
+    fake_uv.write_text(
+        "#!/bin/sh\nprintf 'fresh invocation: %s\\n' \"$*\"\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log = log_dir / "coverage.log"
+    log.write_text("stale invocation must disappear\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
+    environment["OCR_TOOLKIT_LOG_DIR"] = str(log_dir)
+
+    subprocess.run([str(SCRIPT), "coverage"], cwd=PROJECT_ROOT, env=environment, check=True)
+
+    output = log.read_text(encoding="utf-8")
+    assert "stale invocation" not in output
+    assert output.count("fresh invocation: run --no-sync sh -c") == 5
+
+
 def test_gitleaks_wrapper_scans_the_complete_feature_history(tmp_path: Path) -> None:
     """Match CI's first-parent, no-merge history before a branch is pushed."""
 

@@ -20,9 +20,11 @@ from ocr_toolkit.context.broker import ContextOrigin, prepare_discussion_records
 from ocr_toolkit.context.contracts import DiscussionPolicy, RemediationThreadPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.posting.markers import build_marker
+from ocr_toolkit.providers import gitlab_discussions, gitlab_remediation
 from ocr_toolkit.providers.gitlab import GitLabProviderError
 from ocr_toolkit.providers.gitlab_context import RawGitLabSnapshot
 from ocr_toolkit.providers.gitlab_discussions import (
+    GitLabContextSnapshot,
     _project_discussions,
     acquire_discussions,
     acquire_gitlab_context,
@@ -369,6 +371,29 @@ def test_discussions_apply_exact_configured_secret_dlp(tmp_path: Path) -> None:
     assert snapshot.dlp_rejected == 1
 
 
+def test_discussion_compatibility_entrypoint_rejects_missing_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raise a provider error instead of relying on an optimizable assertion."""
+
+    monkeypatch.setattr(
+        gitlab_discussions,
+        "acquire_gitlab_context",
+        lambda *_args, **_kwargs: GitLabContextSnapshot(None, None),
+    )
+
+    with pytest.raises(GitLabProviderError, match="returned no projection"):
+        acquire_discussions(
+            {},
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=SOURCE_SHA,
+            run_id="synthetic_run_0001",
+            policy=discussion_policy(),
+            now=1_787_209_200,
+        )
+
+
 def test_discussion_text_budget_is_omitted_without_dlp_rejection() -> None:
     """Keep a per-record size limit distinct from invalid DLP content."""
 
@@ -502,6 +527,39 @@ def test_remediation_thread_bound_counts_only_verified_roots() -> None:
     assert snapshot.state == "complete"
     assert snapshot.omitted == 0
     assert len(snapshot.records) == 1
+
+
+def test_remediation_projection_rejects_impossible_verified_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Turn an impossible root-helper result into an explicit provider failure."""
+
+    root = note(
+        1,
+        build_marker("a" * 32) + "\nFinding: preserve the provider invariant.",
+        author={"id": 99, "state": "active"},
+    )
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=("not-an-object",),
+        pagination_omitted=0,
+        digest="3" * 64,
+    )
+    monkeypatch.setattr(
+        gitlab_remediation,
+        "_toolkit_root",
+        lambda *_args, **_kwargs: (root, "a" * 32),
+    )
+
+    with pytest.raises(GitLabProviderError, match="not an object"):
+        project_remediation_threads(
+            raw,
+            source_sha=SOURCE_SHA,
+            run_id="bounded_run_0001",
+            policy=remediation_policy(),
+            now=1_787_209_200,
+            forbidden=(),
+        )
 
 
 def test_remediation_item_bound_counts_the_unprocessed_reply_tail() -> None:

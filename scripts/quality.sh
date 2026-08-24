@@ -7,6 +7,7 @@ mkdir -p "$log_dir"
 log_file="$log_dir/${mode}.log"
 quality_environment=${OCR_TOOLKIT_QUALITY_ENVIRONMENT:-$log_dir/venv}
 export UV_PROJECT_ENVIRONMENT="$quality_environment"
+: >"$log_file"
 
 run_logged_command() {
   quality_command=$1

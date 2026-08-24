@@ -446,5 +446,6 @@ def acquire_discussions(
         deadline=deadline,
         forbidden=forbidden,
     )
-    assert result.discussions is not None
+    if result.discussions is None:
+        raise GitLabProviderError("GitLab discussion acquisition returned no projection")
     return result.discussions
