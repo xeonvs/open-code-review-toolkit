@@ -18,7 +18,7 @@ The complete variable inventory, owner, requirement, exact default, and behavior
 
 The public pipeline stores the OCR binary checksum as the non-secret `OCR_SHA256` pin. Store actual credentials as masked, protected CI variables; do not place their values in YAML, command arguments, repository evidence, or the generated bootstrap. GitLab job tokens are not accepted for posting.
 
-`OCR_REVIEW_LANGUAGE` defaults to `English`; `Russian` is one example of an explicit review language. `OCR_MAX_TOKENS_BUDGET` defaults to `0`, meaning unlimited; a positive budget may stop dispatch and produce an explicitly partial, automatic-approval-ineligible review.
+`OCR_REVIEW_LANGUAGE` defaults to `English`; `Russian` is one example of an explicit review language. The example passes `OCR_MAX_TOOLS=30`, matching OCR 1.9.10's per-file tool-round default; increase it deliberately only when a reviewed repository needs more tool interaction. `OCR_MAX_TOKENS_BUDGET` defaults to `0`, meaning unlimited; a positive budget may stop dispatch and produce an explicitly partial, automatic-approval-ineligible review.
 
 ## Choose one operating mode
 
@@ -40,7 +40,7 @@ Direct external MCP is a different and more privileged boundary. GitLab MR execu
 
 Use a dedicated bot account that is not the merge-request author. Give its project access token `api` scope and the minimum project role needed for the selected reads, notes, drafts, discussion management, and optional approval. GitLab approval rules, Code Owners, protected branches, and reset/invalidation policy remain authoritative.
 
-Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, adapter scratch space, and OCR sessions private to the runner and out of public artifacts.
+Begin with a manual advisory job and `OCR_AUTO_APPROVE=false`. Enable strict posting or approval only after the project has reviewed published results, bot permissions, exact receipt gates, and all source-data boundaries. Keep result, stderr, evidence, generated OCR configuration, context stores, adapter scratch space, and OCR sessions private to the runner and out of public artifacts. The local-only `ocr-ci review --preserve-private-artifacts` diagnostic is rejected by the validated GitLab merge-request profile and must not be added to a CI job.
 
 The toolkit authenticates the token owner with live `GET /user`. No configured bot ID or username is trusted. The returned ID owns note/fingerprint checks; the validated username owns exact mention-command parsing.
 

@@ -198,14 +198,18 @@ def _project_discussions(
     omitted = raw.pagination_omitted
     dlp_rejected = 0
     total_chars = total_bytes = total_lines = 0
+    considered_threads = 0
     for thread_index, thread in enumerate(pages):
-        if thread_index >= policy.max_threads:
-            omitted += len(pages) - thread_index
+        if thread_index in excluded_threads:
+            continue
+        if considered_threads >= policy.max_threads:
+            omitted += sum(
+                index not in excluded_threads for index in range(thread_index, len(pages))
+            )
             break
+        considered_threads += 1
         if not isinstance(thread, Mapping):
             omitted += 1
-            continue
-        if thread_index in excluded_threads:
             continue
         notes = thread.get("notes")
         if not isinstance(notes, list):

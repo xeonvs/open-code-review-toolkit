@@ -1358,7 +1358,21 @@ def _prepare_enrichment(
     )
 
 
-def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str]) -> int:
+def _authorize_private_artifact_preservation(identity: ReviewIdentity, *, requested: bool) -> bool:
+    """Allow sensitive diagnostic retention only outside GitLab MR execution."""
+
+    if requested and identity.mr_author_id is not None:
+        raise ReviewRunnerError("private artifact preservation is available for local reviews only")
+    return requested
+
+
+def run_evidence_review(
+    result_path: Path,
+    stderr_path: Path,
+    ocr_args: list[str],
+    *,
+    preserve_private_artifacts: bool = False,
+) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
     artifacts = repository_artifacts()
@@ -1383,11 +1397,15 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     publication_filtered = False
     publication: dict[str, object] = {"state": "passed"}
     evidence_action_counts: dict[str, int] | None = None
+    preserve_authorized = False
     previous_handlers = _install_termination_handlers()
     try:
         try:
             _write_isolated_runtime_config()
             identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
+            preserve_authorized = _authorize_private_artifact_preservation(
+                identity, requested=preserve_private_artifacts
+            )
             store = collect_repository_evidence(
                 base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
             )
@@ -1462,30 +1480,30 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
     finally:
         previous_mask = _block_termination_signals()
         try:
-            if exit_code == 0:
+            if exit_code == 0 and not preserve_authorized:
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
-            try:
-                remove_private_artifact(artifacts.action_receipt)
-            except OSError as exc:
-                cleanup_error = exc
-            try:
-                remove_private_artifact(artifacts.action_receipt_lock)
-            except OSError as exc:
-                cleanup_error = cleanup_error or exc
-            try:
-                remove_private_artifact(artifacts.context_store)
-            except OSError as exc:
-                cleanup_error = exc
-            try:
-                shutil.rmtree(session_home)
-            except OSError as exc:
-                cleanup_error = cleanup_error or exc
-            finally:
-                if previous_home is None:
-                    os.environ.pop("HOME", None)
-                else:
-                    os.environ["HOME"] = previous_home
-            if cleanup_error is None and exit_code == 0:
+            if not preserve_authorized:
+                try:
+                    remove_private_artifact(artifacts.action_receipt)
+                except OSError as exc:
+                    cleanup_error = exc
+                try:
+                    remove_private_artifact(artifacts.action_receipt_lock)
+                except OSError as exc:
+                    cleanup_error = cleanup_error or exc
+                try:
+                    remove_private_artifact(artifacts.context_store)
+                except OSError as exc:
+                    cleanup_error = exc
+                try:
+                    shutil.rmtree(session_home)
+                except OSError as exc:
+                    cleanup_error = cleanup_error or exc
+            if previous_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = previous_home
+            if cleanup_error is None and exit_code == 0 and not preserve_authorized:
                 forbidden = (*composition.secret_values,)
                 if enrichment is not None:
                     forbidden += enrichment.forbidden_publication
@@ -1513,7 +1531,13 @@ def run_evidence_review(result_path: Path, stderr_path: Path, ocr_args: list[str
         except OSError:
             pass
         raise ReviewRunnerError("OCR private session cleanup failed") from cleanup_error
-    if exit_code == 0:
+    if preserve_authorized:
+        print(
+            "OCR private diagnostics retained; result is not posting-eligible "
+            f"session_home={session_home} artifact_directory={artifacts.directory}",
+            file=sys.stderr,
+        )
+    elif exit_code == 0:
         calls = usage.get(mcp_config.BUILTIN_EVIDENCE_SERVER, 0)
         if calls > 0:
             print(

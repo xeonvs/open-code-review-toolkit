@@ -71,6 +71,7 @@ EXAMPLE_DEFAULTS = {
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
     "OCR_TOOLKIT_WHEEL_SHA256": "Matching value from `SHA256SUMS`",
+    "OCR_MAX_TOOLS": "30",
     "OCR_MAX_TOKENS_BUDGET": "0",
 }
 
@@ -260,6 +261,7 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         "OCR_VERSION": "v1.9.10",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": "0.7.1",
+        "OCR_MAX_TOOLS": "30",
         "OCR_MAX_TOKENS_BUDGET": "0",
     }.items():
         assert f'{name}: "{value}"' in workflow
@@ -268,3 +270,4 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         in workflow
     )
     assert 'export OCR_TOOLKIT_WHEEL_SHA256="$(awk ' in workflow
+    assert '--max-tools "${OCR_MAX_TOOLS:-30}"' in workflow

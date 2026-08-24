@@ -369,6 +369,43 @@ def test_discussions_apply_exact_configured_secret_dlp(tmp_path: Path) -> None:
     assert snapshot.dlp_rejected == 1
 
 
+def test_generic_thread_bound_ignores_exclusive_remediation_roots() -> None:
+    """Count only non-exclusive discussions against the generic thread bound."""
+
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            {
+                "notes": [
+                    note(
+                        1,
+                        build_marker("a" * 32) + "\nFinding reserved for remediation context.",
+                        author={"id": 99, "state": "active"},
+                    ),
+                    note(2, "The branch contains a candidate correction."),
+                ]
+            },
+            {"notes": [note(3, "Independent generic discussion.")]},
+        ),
+        pagination_omitted=0,
+        digest="f" * 64,
+    )
+
+    snapshot = _project_discussions(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=replace(discussion_policy(), max_threads=1),
+        now=1_787_209_200,
+        forbidden=(),
+        excluded_threads=frozenset({0}),
+    )
+
+    assert snapshot.state == "complete"
+    assert snapshot.omitted == 0
+    assert [record.body for record in snapshot.records] == ["Independent generic discussion."]
+
+
 def test_one_snapshot_builds_exclusive_verified_remediation_bundle(tmp_path: Path) -> None:
     with gitlab_peer(tmp_path, mode="remediation") as api_root:
         snapshot = acquire_gitlab_context(
@@ -403,6 +440,77 @@ def test_one_snapshot_builds_exclusive_verified_remediation_bundle(tmp_path: Pat
     ):
         assert forbidden_value not in serialized
     assert len(DiscussionHandler.requests) == 4
+
+
+def test_remediation_thread_bound_counts_only_verified_roots() -> None:
+    """Apply the remediation thread bound after root verification."""
+
+    root = note(
+        2,
+        build_marker("a" * 32) + "\nFinding: retain the verified remediation bundle.",
+        author={"id": 99, "state": "active"},
+    )
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            {"notes": [note(1, "Ordinary generic discussion.")]},
+            {"notes": [root, note(3, "The branch now has the regression test.")]},
+        ),
+        pagination_omitted=0,
+        digest="1" * 64,
+    )
+
+    snapshot, verified = project_remediation_threads(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=replace(remediation_policy(), max_threads=1),
+        now=1_787_209_200,
+        forbidden=(),
+    )
+
+    assert verified == frozenset({1})
+    assert snapshot.state == "complete"
+    assert snapshot.omitted == 0
+    assert len(snapshot.records) == 1
+
+
+def test_remediation_item_bound_counts_the_unprocessed_reply_tail() -> None:
+    """Report every reply omitted after the aggregate item budget is exhausted."""
+
+    root = note(
+        1,
+        build_marker("a" * 32) + "\nFinding: bound the complete reply tail.",
+        author={"id": 99, "state": "active"},
+    )
+    raw = RawGitLabSnapshot(
+        identity=GitLabUserIdentity(user_id=99, username="OCR_Bot"),
+        threads=(
+            {
+                "notes": [
+                    root,
+                    note(2, "First admissible reply."),
+                    note(3, "Second reply beyond the item bound."),
+                    note(4, "Third reply beyond the item bound."),
+                ]
+            },
+        ),
+        pagination_omitted=0,
+        digest="2" * 64,
+    )
+
+    snapshot, _verified = project_remediation_threads(
+        raw,
+        source_sha=SOURCE_SHA,
+        run_id="bounded_run_0001",
+        policy=replace(remediation_policy(), max_items=2),
+        now=1_787_209_200,
+        forbidden=(),
+    )
+
+    assert snapshot.state == "partial"
+    assert snapshot.omitted == 2
+    assert [reply.body for reply in snapshot.records[0].replies] == ["First admissible reply."]
 
 
 def test_remediation_rejects_forged_root_and_identity_drift(tmp_path: Path) -> None:

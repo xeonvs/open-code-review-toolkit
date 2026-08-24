@@ -119,6 +119,33 @@ def test_policy_v2_adds_fixed_remediation_threads_without_changing_v1() -> None:
 
 
 @pytest.mark.parametrize(
+    "value",
+    [
+        {**policy_value(), "schema_version": {}},
+        {
+            **policy_value(),
+            "forge_discussions": {
+                **policy_value()["forge_discussions"],  # type: ignore[dict-item]
+                "account_classes": [{}],
+            },
+        },
+        {
+            **remediation_policy_value(),
+            "remediation_threads": {
+                **remediation_policy_value()["remediation_threads"],  # type: ignore[dict-item]
+                "account_classes": [{}],
+            },
+        },
+    ],
+)
+def test_policy_rejects_unhashable_closed_values(value: dict[str, object]) -> None:
+    """Map hostile closed-list values to the policy contract error boundary."""
+
+    with pytest.raises(ContextContractError):
+        parse_policy(encoded_policy(value))
+
+
+@pytest.mark.parametrize(
     "mutation",
     [
         lambda value: value.update({"schema_version": "ocr.review-context-policy/v1"}),

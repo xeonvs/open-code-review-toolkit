@@ -72,6 +72,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | `OCR_TOOLKIT_CHECKSUMS_URL` | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
+| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `30` | Positive maximum OCR tool-request rounds per file; the example keeps the OCR 1.9.10 default and passes it explicitly. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
 
 ## Dynamic adapter and MCP inputs
@@ -164,7 +165,7 @@ partial/budget outcomes, any receipt other than v5, degraded selected metadata, 
 and findings omitted by `OCR_MAX_POST_COMMENTS`. For receipt v5, complete metadata, complete non-remediation enrichment, private-only sanitization, and the built-in evidence/context MCP are not blockers. GitLab posting also revalidates the receipt-bound source SHA and author ID, and skips without writing when the author changed or the toolkit user authored the merge request. There are intentionally no
 environment variables for policy thresholds or category lists in this release.
 
-`ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
+`ocr-ci review --result PATH --stderr PATH -- ...` executes OCR without posting, creates private artifacts, and prints a bounded redacted stderr excerpt to the CI log when OCR fails. It accepts only a regular, single-link result artifact and, after a successful ordinary OCR process, atomically replaces that artifact with an owner-only copy containing the toolkit's bounded MCP-use receipt. For a local diagnosis only, `--preserve-private-artifacts` retains the owner-only isolated OCR home and repository-local review artifacts and leaves the OCR result without a posting receipt. The retained paths can contain repository, provider, model, tool-argument, tool-result, and credential-adjacent data: inspect them locally, never upload or post them, and delete them after diagnosis. A validated GitLab merge-request profile rejects this flag before OCR execution; CI detection variables do not authorize it. `OCR_POST_ERROR_DETAILS=1` separately opts into including the same safe stderr excerpt in the GitLab failure note; leave it unset when diagnostics should remain runner-only.
 
 ## Repository evidence
 

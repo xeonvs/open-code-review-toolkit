@@ -234,7 +234,12 @@ def _remediation_projection(value: object) -> Mapping[str, object]:
             counts.get("outdated"), maximum=MAX_REMEDIATION_REPLIES + 1
         ),
     }
-    if normalized_counts["replies"] != len(normalized_replies):
+    maximum_note_count = len(normalized_replies) + 1
+    if (
+        normalized_counts["replies"] != len(normalized_replies)
+        or normalized_counts["resolved"] > maximum_note_count
+        or normalized_counts["outdated"] > maximum_note_count
+    ):
         raise ContextStoreError("remediation reply count is inconsistent")
     if anchor_state == "outdated" and normalized_counts["outdated"] < 1:
         raise ContextStoreError("remediation outdated count is inconsistent")

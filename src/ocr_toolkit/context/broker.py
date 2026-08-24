@@ -275,6 +275,7 @@ def prepare_remediation_records(
         if (
             not root.admitted
             or root.text != record.root_body
+            or not isinstance(record.root_author_pseudonym, str)
             or PSEUDONYM_RE.fullmatch(record.root_author_pseudonym) is None
             or record.anchor_state not in {"current", "outdated", "unpositioned"}
             or record.completeness not in {"complete", "partial"}
@@ -299,6 +300,7 @@ def prepare_remediation_records(
                 reply.order != expected_order
                 or reply.author_class not in policy.account_classes
                 or reply.author_class == "toolkit_bot"
+                or not isinstance(reply.author_pseudonym, str)
                 or PSEUDONYM_RE.fullmatch(reply.author_pseudonym) is None
                 or not checked.admitted
                 or checked.text != reply.body

@@ -127,8 +127,8 @@ def _discussion(value: object) -> DiscussionPolicy:
     if (
         not isinstance(classes, list)
         or not classes
-        or classes != sorted(set(classes))
         or any(not isinstance(value, str) or value not in ACCOUNT_CLASSES for value in classes)
+        or classes != sorted(set(classes))
     ):
         raise ContextContractError("forge_discussions.account_classes is invalid")
     return DiscussionPolicy(
@@ -175,8 +175,8 @@ def _remediation_threads(value: object) -> RemediationThreadPolicy:
     if (
         not isinstance(classes, list)
         or not classes
-        or classes != sorted(set(classes))
         or any(not isinstance(value, str) or value not in ACCOUNT_CLASSES for value in classes)
+        or classes != sorted(set(classes))
         or "toolkit_bot" in classes
     ):
         raise ContextContractError("remediation_threads.account_classes is invalid")
@@ -334,7 +334,7 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         label="context policy",
     )
     schema_version = root.get("schema_version")
-    if schema_version not in POLICY_SCHEMAS:
+    if not isinstance(schema_version, str) or schema_version not in POLICY_SCHEMAS:
         raise ContextContractError("context policy schema version is unsupported")
     if schema_version == POLICY_SCHEMA_V1 and "remediation_threads" in root:
         raise ContextContractError("context policy v1 cannot select remediation threads")

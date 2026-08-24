@@ -199,6 +199,7 @@ def test_common_discussion_projection_rejects_hostile_projected_shapes(
     "record",
     [
         replace(RemediationThread(), root_author_pseudonym="raw-user-7"),
+        replace(RemediationThread(), root_author_pseudonym=None),
         replace(RemediationThread(), anchor_state="unknown"),
         replace(RemediationThread(), completeness="unknown"),
         replace(RemediationThread(), resolved_count=True),
@@ -217,6 +218,10 @@ def test_common_discussion_projection_rejects_hostile_projected_shapes(
         replace(
             RemediationThread(),
             replies=(replace(RemediationReply(), author_pseudonym="raw-user-7"),),
+        ),
+        replace(
+            RemediationThread(),
+            replies=(replace(RemediationReply(), author_pseudonym=None),),
         ),
         replace(
             RemediationThread(),

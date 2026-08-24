@@ -1812,7 +1812,12 @@ def test_review_rejects_missing_caller_background_value(option: str) -> None:
         review_runner._reject_owned_background([option])
 
 
-def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) -> None:
+@pytest.mark.parametrize("preserve_private_artifacts", [False, True])
+def test_evidence_review_prepares_internal_context_before_ocr(
+    tmp_path: Path, preserve_private_artifacts: bool
+) -> None:
+    """Clean ordinary runs while retaining local diagnostic session state on request."""
+
     events: list[object] = []
     session_homes: list[Path] = []
     original_home = os.environ.get("HOME")
@@ -1912,11 +1917,13 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
             tmp_path / "result.json",
             tmp_path / "stderr.log",
             ["--from", "base", "--to", "head", "--format", "json"],
+            preserve_private_artifacts=preserve_private_artifacts,
         )
 
     assert result == 0
     assert not artifacts.pre_execution_status.exists()
-    assert len(session_homes) == 1 and not session_homes[0].exists()
+    assert len(session_homes) == 1
+    assert session_homes[0].exists() is preserve_private_artifacts
     assert os.environ.get("HOME") == original_home
     assert events[0] == (
         "collect",
@@ -1943,4 +1950,72 @@ def test_evidence_review_prepares_internal_context_before_ocr(tmp_path: Path) ->
         "--background-file",
         str(artifacts.bootstrap),
     ]
-    assert events[8] == "ocr-usage"
+    if preserve_private_artifacts:
+        assert "ocr-usage" not in events
+        session_homes[0].rmdir()
+    else:
+        assert events[8] == "ocr-usage"
+
+
+def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:
+    """Reject diagnostic retention for a validated GitLab merge-request review."""
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="local reviews only"):
+        review_runner._authorize_private_artifact_preservation(
+            review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "off", None),
+            requested=True,
+        )
+
+    assert (
+        review_runner._authorize_private_artifact_preservation(
+            DEFAULT_IDENTITY,
+            requested=True,
+        )
+        is True
+    )
+
+
+def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Path) -> None:
+    """Reject GitLab diagnostic retention, skip OCR, and unwind the private home."""
+
+    artifacts = review_runner.repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    session_homes: list[Path] = []
+    ocr_called = False
+
+    def capture_config() -> None:
+        session_homes.append(Path(os.environ["HOME"]))
+
+    def run(*_args: object, **_kwargs: object) -> int:
+        nonlocal ocr_called
+        ocr_called = True
+        return 0
+
+    with (
+        patched_attr(
+            review_runner,
+            "_immutable_review_refs",
+            lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
+        ),
+        patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
+        patched_attr(review_runner, "_write_isolated_runtime_config", capture_config),
+        patched_attr(
+            review_runner,
+            "_prepare_policy_context",
+            lambda *_args: (
+                review_runner.ReviewIdentity("b" * 40, "a" * 40, 41, "off", None),
+                ["--from", "base", "--to", "head"],
+            ),
+        ),
+        patched_attr(review_runner, "run_review", run),
+    ):
+        with pytest.raises(review_runner.ReviewRunnerError, match="local reviews only"):
+            review_runner.run_evidence_review(
+                tmp_path / "result.json",
+                tmp_path / "stderr.log",
+                ["--from", "base", "--to", "head"],
+                preserve_private_artifacts=True,
+            )
+
+    assert not ocr_called
+    assert len(session_homes) == 1 and not session_homes[0].exists()

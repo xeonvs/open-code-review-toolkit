@@ -121,13 +121,15 @@ def project_remediation_threads(
     omitted = raw.pagination_omitted
     dlp_rejected = 0
     total_items = total_chars = total_bytes = total_lines = 0
+    considered_threads = 0
     for thread_index, thread in enumerate(raw.threads):
         root_identity = _toolkit_root(thread, raw.identity)
         if root_identity is None:
             continue
-        if thread_index >= policy.max_threads:
+        if considered_threads >= policy.max_threads:
             omitted += 1
             continue
+        considered_threads += 1
         assert isinstance(thread, Mapping)
         notes = thread.get("notes")
         assert isinstance(notes, list)
@@ -176,10 +178,10 @@ def project_remediation_threads(
             thread_partial = True
             reply_values = reply_values[: policy.max_replies_per_thread]
             omitted += len(notes) - 1 - len(reply_values)
-        for note in reply_values:
+        for reply_index, note in enumerate(reply_values):
             if total_items + 1 + len(replies) >= policy.max_items:
                 thread_partial = True
-                omitted += 1
+                omitted += len(reply_values) - reply_index
                 break
             if not isinstance(note, Mapping) or note.get("type") not in {
                 None,
