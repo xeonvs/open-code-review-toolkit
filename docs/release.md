@@ -46,7 +46,7 @@ and exact resume action.
 
 ## Development builds
 
-Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. The workflow uses TestPyPI Trusted Publishing, publishes attestations, verifies the exact `testpypi.yml` PEP 740 publisher and subjects plus bounded HTTPS downloads, and smoke-installs the exact wheel and sdist locally with `--no-deps`.
+Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. Source tests, coverage, security, CodeQL, dependency review, and the package smoke gate already bind the protected pull-request tree, so this main-push workflow does not repeat them. It owns the new boundary instead: TestPyPI Trusted Publishing, attestations, exact `testpypi.yml` PEP 740 publisher and subject verification, bounded HTTPS readback, and smoke-installation of the exact development wheel and sdist with `--no-deps`.
 
 Development builds never create tags or GitHub Releases and never publish to production PyPI. TestPyPI is public disclosure, so only reviewed pull requests may reach `main`.
 

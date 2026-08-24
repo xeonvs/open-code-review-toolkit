@@ -166,6 +166,8 @@ def test_artifact_manifest_accepts_only_complete_trusted_release() -> None:
 
 
 def test_workflow_automates_one_idempotent_development_build_per_main_run() -> None:
+    """Keep the main-push workflow focused on its public artifact boundary."""
+
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" not in workflow
@@ -176,6 +178,8 @@ def test_workflow_automates_one_idempotent_development_build_per_main_run() -> N
     assert "overwrite: true" in workflow
     assert "needs.build.outputs.publish == 'true'" in workflow
     assert "needs.publish.result == 'skipped'" in workflow
+    assert "quality.sh check" not in workflow
+    assert "pip-audit" not in workflow
 
 
 def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
@@ -251,16 +255,20 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     )
     assert "pip install --no-deps --index-url" not in verifier
     assert '"open-code-review-toolkit==${VERSION}"' not in workflow
+    assert "./scripts/quality.sh check" in workflow
+    assert "uv run pip-audit --skip-editable" in workflow
 
 
 def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
+    """Build and smoke-test packages once on every protected pull request."""
+
     workflow = BUILD_WORKFLOW.read_text(encoding="utf-8")
-    pull_request_block = workflow.split("  pull_request:", 1)[1].split("  push:", 1)[0]
+    pull_request_block = workflow.split("  pull_request:", 1)[1].split("\n\npermissions:", 1)[0]
 
     assert "pull_request:" in workflow
     assert "branches: [main]" in workflow
+    assert "  push:" not in workflow
     assert "paths:" not in pull_request_block
-    assert '"scripts/install_local_artifact.py"' in workflow
     assert "timeout-minutes: 15" in workflow
     assert "python -m build --no-isolation" in workflow
     assert workflow.count("pip install --no-deps") == 1
@@ -268,8 +276,11 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
 
 
 def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
+    """Run all five functional combinations while collecting coverage once."""
+
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
+    assert "  push:" not in workflow
     assert workflow.count('python: "3.12"') == 2
     assert workflow.count('python: "3.13"') == 1
     assert workflow.count('python: "3.14"') == 2

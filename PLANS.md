@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Release 0.8.1: completion cap and safe LLM provider failures
 
-Status: implementation complete, local exact-head validation pending; `release-required`. Target stable version: `0.8.1`.
+Status: implementation complete, final exact-head validation pending; `release-required`. Target stable version: `0.8.1`.
 
 #### Outcome and scope
 
@@ -14,6 +14,7 @@ Status: implementation complete, local exact-head validation pending; `release-r
 - Canonicalize provider URL, protocol, headers, auxiliary `/models` URL, and request-body controls in one provider-neutral runtime owner shared by `configure` and `preflight`.
 - Project private OCR retry diagnostics into a closed provider-neutral failure reason and toolkit-authored GitLab guidance. Raw provider bodies, messages, codes, URLs, models, request IDs, paths, warnings, credentials, and stderr remain private.
 - Keep OCR `1.9.10` as the exact qualified dependency. Do not promote unreleased upstream defaults or derive a completion cap from `/models` metadata.
+- Remove repeated validation that crosses no new owner or artifact boundary: one PR job owns coverage, one owns packages, protected-main TestPyPI owns development artifact publication/readback, and stable release keeps its exact trusted-boundary gates.
 
 #### Trust and data flow
 
@@ -30,6 +31,7 @@ Status: implementation complete, local exact-head validation pending; `release-r
 3. **Canonical provider configuration.** Share one provider-neutral owner between configure and preflight; cover API roots, terminal endpoints, trailing slash, query, credentials, fragments, protocol mismatch, and explicit models URL. Before commit: focused tests, URL/header/data-flow review, `git diff --check`.
 4. **Failure projection and GitLab.** Add the bounded retry-report parser, closed reason mapping, static hints, and one renderer for non-zero retry reports and existing successful-result billing/quota warnings. Cover HTTP 400/401/402/403/404/408/409/413/422/429/5xx/529, timeout, network, decode, mixed, malformed, oversized, raw-data absence, previous-review preservation, no findings/approval, and strict/advisory behavior. Before commit: focused tests, privacy/approval/rollback review, `git diff --check`.
 5. **Documentation and release handoff.** Document exact defaults, mappings, conflicts, the `4096` workaround, the three distinct token ceilings, possible provider cost reservation, and the limits of `/models`; add separate feature and bug-fix Towncrier fragments. Reconcile strategy/roadmap only where the implemented outcome changes them. Before commit: documentation/version consistency, Towncrier draft, full diff review, `git diff --check`.
+6. **Validation ownership deduplication.** Keep all five OS/Python full-test jobs but instrument coverage only on Ubuntu 3.14; keep packaging only in `Build artifacts`; stop generic workflow reruns on protected-main push; and keep TestPyPI development focused on its distinct versioned artifact/publication/readback boundary. Release-PR and post-merge stable gates remain unchanged. Update workflow contract tests, development/release guidance, issue #132, and a maintenance fragment. Before commit: focused workflow tests, trigger/check-name and trusted-boundary review, actionlint-equivalent YAML/static validation through existing tests, rendered Towncrier, and `git diff --check`.
 
 #### Validation and delivery
 
@@ -39,7 +41,7 @@ Status: implementation complete, local exact-head validation pending; `release-r
 - Push the complete feature history to the Draft PR, wait for hosted checks, address evidence-driven failures through the same commit gate, then mark ready and merge through protected review.
 - Verify the deterministic TestPyPI development build, then prepare and merge the protected `Release v0.8.1` PR. Monitor stable TestPyPI/PyPI publication, tag, immutable GitHub Release, provenance, attestations, supported-Python installs, and immutable receipt; close tracked issues only after independent external reconciliation.
 
-Resume point: run the complete local release-readiness matrix against this plan-reconciled head, then push the complete signed feature history to Draft PR #131 and wait for hosted checks.
+Resume point: run one final exact-head local gate, commit and push the reviewed validation-ownership slice, update Draft PR #131 and issue #132, then require the hosted owners to pass.
 
 #### Current implementation evidence
 
@@ -50,3 +52,4 @@ Resume point: run the complete local release-readiness matrix against this plan-
 - Provider failure projection now hostile-reads the bounded private result, validates retry-report v1 counters and terminal attempt facts, and emits only a closed provider-neutral reason. Non-zero classified runs use one static GitLab renderer, keep stderr/provider fields private, preserve the previous review, publish no findings, and never reach approval; legacy billing warnings use the same renderer. The focused gate passed Ruff, full package mypy, 302 tests, and 119 subtests.
 - Public configuration, GitLab operations, security boundaries, and the test-evidence matrix now distinguish the per-request completion cap, OCR-owned prompt/context ceiling, and aggregate review budget; document the `/models` non-claim and the safe 404/429 projection; and preserve the generic fallback boundary. Separate #130 feature and #129 bug-fix fragments enumerate added, changed, migration, privacy, deployment, and unchanged contracts. The documentation gate passed 49 tests, Ruff, `git diff --check`, and the rendered 0.8.1 Towncrier section.
 - Overall parser-boundary review found and closed three narrow fail-closed gaps before publication: completion-cap length is bounded before integer conversion, embedded URL whitespace is rejected before `urllib` normalization, and JSON booleans cannot satisfy retry attempt numbering. Ruff, full package mypy, 135 focused tests, 100 subtests, and `git diff --check` pass for the correction.
+- Issue #132 owns the user-requested validation deduplication. The retained boundaries are five full functional matrix jobs, one PR coverage owner, PR security, one PR package owner, protected-main development artifact publication/readback, release-PR review, and the unchanged post-merge stable release pipeline. Its focused workflow contract passed 46 tests and YAML parsing for all five edited workflows; the complete handoff gate passed 1,231 tests plus 306 subtests, 86.13% combined branch coverage, all four risk floors (84/82/85/87), Ruff, mypy, Bandit, lock and OCR-manifest validation, rendered Towncrier, and `git diff --check`. Live ruleset readback confirmed the required check contexts and strict protected-head policy remain aligned with the unchanged job names.

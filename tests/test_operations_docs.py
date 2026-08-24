@@ -370,6 +370,27 @@ def test_security_workflow_has_a_bounded_bandit_job() -> None:
     assert "# nosec B108" in security
 
 
+def test_protected_pr_and_scheduled_checks_do_not_repeat_on_main_push() -> None:
+    """Assign source validation to the reviewed tree and publication to main."""
+
+    workflows = PROJECT_ROOT / ".github" / "workflows"
+    for name in ("ci.yml", "build.yml", "security.yml", "codeql.yml"):
+        workflow = (workflows / name).read_text(encoding="utf-8")
+        assert "  push:" not in workflow
+        assert "pull_request:" in workflow
+
+    security = (workflows / "security.yml").read_text(encoding="utf-8")
+    codeql = (workflows / "codeql.yml").read_text(encoding="utf-8")
+    testpypi = (workflows / "testpypi.yml").read_text(encoding="utf-8")
+    release = (workflows / "release.yml").read_text(encoding="utf-8")
+
+    assert "schedule:" in security
+    assert "schedule:" in codeql
+    assert "  push:\n    branches: [main]" in testpypi
+    assert "./scripts/quality.sh check" in release
+    assert "uv run pip-audit --skip-editable" in release
+
+
 def test_threat_model_covers_remote_finding_image_boundary() -> None:
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
     policy = (PROJECT_ROOT / "SECURITY.md").read_text(encoding="utf-8")
@@ -445,8 +466,7 @@ def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:
     assert "actions: write" in workflow
     assert "scripts/actions_cleanup.py" in workflow
     assert "--execute" in workflow
-    assert "save-cache:" in ci
-    assert "refs/heads/main" in ci
+    assert "save-cache: false" in ci
     assert "trap-caching: false" in codeql
     assert "CODEQL_OVERLAY_DATABASE_MODE: none" in codeql
     assert "separately controlled v4 overlay-database mode are disabled" in development

@@ -2,8 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -20,11 +18,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, python: "3.12" }
-          - { os: ubuntu-latest, python: "3.13" }
-          - { os: ubuntu-latest, python: "3.14" }
-          - { os: macos-latest, python: "3.12" }
-          - { os: macos-latest, python: "3.14" }
+          - { os: ubuntu-latest, python: "3.12", coverage: false }
+          - { os: ubuntu-latest, python: "3.13", coverage: false }
+          - { os: ubuntu-latest, python: "3.14", coverage: true }
+          - { os: macos-latest, python: "3.12", coverage: false }
+          - { os: macos-latest, python: "3.14", coverage: false }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,12 +33,16 @@ jobs:
         with:
           version: "0.12.0"
           enable-cache: true
-          save-cache: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          save-cache: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
+      - name: Test
+        if: ${{ !matrix.coverage }}
+        run: uv run pytest -q
       - name: Test with boundary coverage gates
+        if: ${{ matrix.coverage }}
         run: |
           uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
           uv run coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=80
@@ -66,14 +68,3 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run mypy src/ocr_toolkit
-      - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
-      - run: uv run python -m build
-      - run: uv run twine check dist/*
-      - run: python -m venv /tmp/wheel-smoke && /tmp/wheel-smoke/bin/pip install dist/*.whl && /tmp/wheel-smoke/bin/ocr-ci --help
-      - run: |
-          python -m venv /tmp/sdist-smoke
-          python scripts/install_local_artifact.py \
-            --python /tmp/sdist-smoke/bin/python \
-            --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
-            --requirements /tmp/sdist-smoke-requirements.txt
-          /tmp/sdist-smoke/bin/ocr-ci --help
