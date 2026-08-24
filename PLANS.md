@@ -9,7 +9,7 @@ Use this file for active or blocked repository work. Update it before implementa
 - Status: `active`
 - Release classification: `release-required`
 - Target stable version: `0.8.0`
-- Stable delivery state: `release-deferred`
+- Stable delivery state: `external-qualification-in-progress`
 
 #### Goal
 
@@ -134,8 +134,8 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `WQ-15` (`done`): added focused fault tests at the existing private-result, parser, preflight, GitLab transport, posting transaction, strict/non-strict, and previous-review owners; covered bounded/atomic result handling, OCR process failures, bounded retry and authenticated reads, non-retried writes, exact partial publication identities, safe error projection, and coverage-dependent cleanup. The complete `artifact -> parser -> posting -> GitLab` review found no production contract defect.
 - `WQ-16` (`done`): added focused tests for `MR text -> stable snapshot -> normalization -> DLP -> budget/admission -> store/MCP -> receipt -> approval`; proved exact mixed-source counts, safe title/description/discussion/adapter auto-approval parity, remediation and required-degradation fail-closed behavior, provider-shape rejection, command exclusion, and absence of rejected/provider diagnostics. Existing hostile replay/readback, malformed policy/MCP/receipt, provider-neutral import, non-GitLab fake-provider, no-duplication, and no-remediation-reference-discovery contracts were re-run without restructuring their owners.
 - `WQ-17` (`done`): raised the combined branch-aware floor to 85% and added four ordinary scoped Coverage.py reports to the same local/hosted test run; added meaningful result/preflight/GitLab/MCP fault coverage in existing thematic owners; published a separate coverage maintenance fragment; and passed the full quality, manifest, lock, Towncrier, diff, privacy, architecture, telemetry, and data-flow review without a production-code change or test-file reorganization.
-- `WQ-18` (`in_progress`): make one final push of the complete signed local history to Draft PR #122, wait for exact-head hosted CI, and update PR #122 plus #120 with toolkit 0.8.0, OCR 1.9.10, exact commit/tree/checksum, inherited-only OCR 1.9.9 status, and the external agent's first qualification operation. Keep every release issue, milestone, and Draft state open.
-- `WQ-11` (`pending`): external owner starts from the green exact Draft head with OCR 1.9.10 and a configured LLM endpoint, then supplies a bound qualification receipt covering real `ocr review`, `context_list`/`context_get`, still-present/resolved findings, and raw-data leakage audit. Only after evidence may lifecycle work verify tree identity, ready and merge the exact head, reconcile TestPyPI development publication, and continue normal `release/v0.8.0` delivery.
+- `WQ-18` (`done`): pushed the complete signed local history to Draft PR #122, verified all 13 exact-head hosted checks, and updated PR #122 plus #120 with toolkit 0.8.0, OCR 1.9.10, exact commit/tree/checksum, inherited-only OCR 1.9.9 status, and the external qualification operation.
+- `WQ-11` (`in_progress`): on `2026-08-24` the user explicitly authorized this agent to perform the external qualification and continue through the full stable-release lifecycle. Update the PATH-effective local OCR to checksum-verified 1.9.10 without exposing the configured LLM secret; run the real production `ocr-ci review` path against the complete feature diff; inspect and repair only confirmed findings; repeat targeted validation and holistic self-review; and produce a bound receipt covering actual `context_list`/`context_get`, still-present/evidence-resolved scenarios, and raw-data leakage audit. Only after the receipt is accepted may lifecycle work verify exact tree identity, ready and merge the PR, reconcile the TestPyPI development publication, and continue normal `release/v0.8.0` delivery through immutable external readback and issue/milestone closure.
 
 #### Locked Decisions
 
@@ -197,6 +197,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 - `2026-08-23`: after rebuilding only the ignored disposable quality environment on the now-available system CPython 3.14.7, the complete installed-artifact-inclusive suite passed 1,136 tests plus 275 subtests at 85.74% combined branch coverage. The four locked groups passed at 82%, 81%, 85%, and 86%; `scripts/quality.sh check` also passed Ruff format/check, strict MyPy, and Bandit. Local and hosted workflows use the same single pytest run plus four ordinary scoped reports, `uv lock --check`, OCR manifest validation, Towncrier draft, and `git diff --check` passed, and the coverage fragment describes the new gates for both deployment agents and humans.
 - `2026-08-23`: the two preceding boundary-test commits were amended before publication so every newly introduced test has a concise contract docstring; all five affected test owners passed 356 tests plus 121 subtests before the history rewrite, both rewritten commits retain SSH signature headers, and generic docstrings/comments do not unnecessarily pin an OCR version. The final coverage slice likewise keeps every new test documented and leaves the thematic file layout unchanged.
 - `2026-08-23`: exact-head hosted CodeQL passed its analysis job but reported one high-severity clear-text-storage alert in a test that intentionally wrote an `OCR_LLM_TOKEN` redaction sentinel to a temporary stderr artifact. Production redaction and its separate real artifact/subprocess test were unaffected. The orchestration test now receives an already redacted excerpt at the reader boundary, retains details/strict/quick-action/previous-review assertions, and no longer stores a credential-classified value or suppresses the scanner.
+- `2026-08-24`: Draft PR #122 and `origin/codex/v0.8.0-remediation-threads` both resolve to signed head `6691ab56da733175fdda92502d31aab808320ec1` and tree `0c2c6ecf0f85daa7574bfe54af10fed8acb2797d`; all 13 hosted checks pass and the only review thread is resolved/outdated. The PATH-effective `/Users/xeon/.local/bin/ocr` was atomically updated from 1.9.8 to official Darwin arm64 OCR 1.9.10, and size `54576370` plus SHA-256 `c626347bafcdbf25cf058af403d16568a3a9ffa1814046ff7c9d1e6becaf60d2` match the committed compatibility manifest and GitHub Release metadata. The previous 1.9.8 binary remains as an explicit local rollback copy.
 
 #### Risks And Recovery
 
@@ -213,7 +214,7 @@ Deliver a backward-compatible, privacy-bounded remediation-thread context source
 
 #### Resume Point
 
-Continue at `WQ-18`: commit the reviewed coverage-gate slice, complete final reproducible artifact/clean-install and secret/history validation, record the exact final commit/tree/checksum handoff, push once to Draft PR #122, wait for exact-head hosted CI, and update PR #122 plus #120. Do not ready, merge, publish stable, or close issues/milestone; external qualification remains `WQ-11`.
+Continue at `WQ-11`: commit this authorization/resume checkpoint, run checksum-verified OCR 1.9.10 through the production toolkit path with the existing owner-only configured LLM gateway, retain private bounded artifacts, and inspect the complete feature-diff findings. Keep PR #122 Draft and all release issues/milestone open until the qualification receipt and any resulting corrective commits pass full local and hosted validation.
 
 #### Plan Fidelity Check
 
@@ -221,7 +222,7 @@ Continue at `WQ-18`: commit the reviewed coverage-gate slice, complete final rep
 - [x] Release-required implementation and release-deferred stable delivery are both explicit.
 - [x] GitHub writes, push ordering, commit gates, and issue/milestone non-closure are preserved.
 - [x] Full MR-text DLP coverage, auto-approval independence, comment-only remediation, identity, privacy, and mutation trust boundaries are explicit.
-- [x] Local OCR/LLM restrictions, inherited OCR 1.9.9 evidence, and exact OCR 1.9.10 target are explicit.
+- [x] Local OCR/LLM qualification authorization, inherited OCR 1.9.9 evidence, exact OCR 1.9.10 target, owner-only configuration, and secret non-disclosure are explicit.
 - [x] Meaningful boundary-test scope, non-overengineering limits, combined coverage, and four risk-group floors are explicit.
 - [x] Validation covers functional, adversarial, artifact, documentation, release, and hosted gates.
 - [x] Non-goals preserve the retest and instruction-migration decisions.
@@ -229,7 +230,7 @@ Continue at `WQ-18`: commit the reviewed coverage-gate slice, complete final rep
 
 #### Reconciliation Check
 
-- [x] Current repository head `373fc2d`, clean worktree, Draft PR #122 checks, issue/milestone baseline, workflow version, and index-audit baseline have been read back.
+- [x] Current repository and Draft PR head `6691ab5`, clean pre-resume worktree, all 13 hosted checks, issue/milestone state, review threads, workflow version, and local OCR/configuration baseline have been read back.
 - [x] The work queue preserves every logical slice and the external qualification phase.
 - [x] No existing completed work is represented as pending implementation.
 - [x] No release, merge, issue closure, or external qualification is claimed complete.
@@ -245,14 +246,14 @@ Continue at `WQ-18`: commit the reviewed coverage-gate slice, complete final rep
 
 #### Post-Close Delivery
 
-- Initial planning push and Draft PR were completed at `WQ-02`; one final implementation push and hosted CI are now in scope only at `WQ-18`.
-- External qualification, ready-for-review transition, exact-head merge, TestPyPI development reconciliation, release branch/PR, stable publication, and issue/milestone closure remain pending `WQ-11` and are not authorized before the required receipt.
+- Initial planning push, Draft PR, final implementation push, and hosted CI are complete through `WQ-18`.
+- External qualification is active under the user's `2026-08-24` authorization. Ready-for-review transition, exact-head merge, TestPyPI development reconciliation, release branch/PR, stable publication, and issue/milestone closure follow only after the required receipt is accepted and remain separately gated lifecycle states.
 - If external evidence invalidates an assumption, reopen active corrective work rather than rewriting completed validation history.
 
 #### Handoff Notes
 
 - Do not push implementation commits individually. Keep all new slices local until `WQ-17` is complete; push once at `WQ-18`.
-- Do not use local OCR for model review. Prefer the controlled subprocess peer for installed-artifact tests.
+- Use only the checksum-verified PATH-effective OCR 1.9.10 for the authorized qualification. Load endpoint/model/token from the existing owner-only OCR configuration only into the review process environment; never print, persist in the repository, or copy the credential into qualification receipts.
 - Keep OCR 1.9.9 inherited and OCR 1.9.10 changed/deployed text separate in evidence, docs, changelog, PR, and #120. The external agent starts directly with OCR 1.9.10.
 - Keep #120's existing core body and explicit non-goals intact; append coordination only and track mention behavior in its own child issue.
 - When resuming after interruption or compaction, read this plan, inspect `git status` and local/remote commit graphs, reconcile requirement/queue states, and continue from the first non-terminal queue item.
