@@ -26,6 +26,7 @@ RUNTIME_DEFAULTS = {
     "OCR_LLM_AUTH_HEADER": "Authorization",
     "OCR_LLM_EXTRA_HEADERS": "Empty object",
     "OCR_LLM_EXTRA_BODY": "Unset",
+    "OCR_LLM_MAX_COMPLETION_TOKENS": "Unset (inherits OCR)",
     "OCR_ANTHROPIC_DISABLE_THINKING": "false",
     "OCR_REVIEW_LANGUAGE": "English",
     "OCR_LLM_VALIDATE_MODEL": "false",

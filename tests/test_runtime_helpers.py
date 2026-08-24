@@ -411,6 +411,77 @@ class MCPConfigTests(unittest.TestCase):
 
         self.assertEqual(updates["llm.extra_body"], {})
 
+    def test_runtime_config_maps_completion_cap_by_protocol(self) -> None:
+        expected = {
+            "openai": "max_completion_tokens",
+            "openai-responses": "max_output_tokens",
+            "anthropic": "max_tokens",
+        }
+        for protocol, field in expected.items():
+            with (
+                self.subTest(protocol=protocol),
+                patched_env(
+                    OCR_LLM_URL="https://gateway.example/v1",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="provider/model",
+                    OCR_LLM_PROTOCOL=protocol,
+                    OCR_LLM_MAX_COMPLETION_TOKENS="4096",
+                ),
+            ):
+                updates = ocr_configure.build_config_updates()
+
+            self.assertEqual(updates["llm.extra_body"], {field: 4096})
+
+    def test_runtime_config_deduplicates_equal_completion_cap(self) -> None:
+        with patched_env(
+            OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+            OCR_LLM_TOKEN="llm-secret",
+            OCR_LLM_MODEL="openai/gpt-test",
+            OCR_LLM_PROTOCOL="openai",
+            OCR_LLM_MAX_COMPLETION_TOKENS="4096",
+            OCR_LLM_EXTRA_BODY='{"temperature":0,"max_completion_tokens":4096}',
+        ):
+            updates = ocr_configure.build_config_updates()
+
+        self.assertEqual(
+            updates["llm.extra_body"],
+            {"temperature": 0, "max_completion_tokens": 4096},
+        )
+
+    def test_runtime_config_rejects_conflicting_completion_cap(self) -> None:
+        for conflicting in (8192, 4096.0, True, None, "4096"):
+            with (
+                self.subTest(conflicting=conflicting),
+                patched_env(
+                    OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="openai/gpt-test",
+                    OCR_LLM_PROTOCOL="openai",
+                    OCR_LLM_MAX_COMPLETION_TOKENS="4096",
+                    OCR_LLM_EXTRA_BODY=json.dumps({"max_completion_tokens": conflicting}),
+                ),
+                self.assertRaisesRegex(
+                    ocr_configure.OCRRuntimeConfigError,
+                    "conflicts with OCR_LLM_EXTRA_BODY.max_completion_tokens",
+                ),
+            ):
+                ocr_configure.build_config_updates()
+
+    def test_runtime_config_rejects_invalid_completion_caps(self) -> None:
+        for value in ("0", "-1", "+1", "1.5", "1000001"):
+            with (
+                self.subTest(value=value),
+                patched_env(
+                    OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="openai/gpt-test",
+                    OCR_LLM_PROTOCOL="openai",
+                    OCR_LLM_MAX_COMPLETION_TOKENS=value,
+                ),
+                self.assertRaises(ocr_configure.OCRRuntimeConfigError),
+            ):
+                ocr_configure.build_config_updates()
+
     def test_runtime_config_merges_anthropic_disable_thinking_with_extra_body(self) -> None:
         with patched_env(
             OCR_REVIEW_LANGUAGE="English",

@@ -39,4 +39,10 @@ Status: active, `release-required`. Target stable version: `0.8.1`.
 - Push the complete feature history to the Draft PR, wait for hosted checks, address evidence-driven failures through the same commit gate, then mark ready and merge through protected review.
 - Verify the deterministic TestPyPI development build, then prepare and merge the protected `Release v0.8.1` PR. Monitor stable TestPyPI/PyPI publication, tag, immutable GitHub Release, provenance, attestations, supported-Python installs, and immutable receipt; close tracked issues only after independent external reconciliation.
 
-Resume point: create the feature branch and signed planning commit, then perform the exact OCR 1.9.10 wire probe before exposing `OCR_LLM_MAX_COMPLETION_TOKENS`.
+Resume point: complete canonical provider URL/configuration ownership, then implement the private retry-report failure projection.
+
+#### Current implementation evidence
+
+- Coordination: milestone `v0.8.1`, completion-cap issue #130, provider-diagnostics issue #129, and Draft PR #131 are open.
+- Exact OCR 1.9.10 Darwin arm64 asset SHA-256 `c626347bafcdbf25cf058af403d16568a3a9ffa1814046ff7c9d1e6becaf60d2` was verified before execution. The isolated production-config-path probe observed `max_completion_tokens=58888` when unset and `max_completion_tokens=4096` when explicitly configured; all temporary binary, config, repository, HOME, and receipt paths were removed.
+- Completion-cap parsing, protocol mapping, collision rules, environment defaults, generated config, wheel/sdist installed paths, and the reusable exact wire probe are implemented and focused-green. Resume with canonical provider URL/configuration ownership.
