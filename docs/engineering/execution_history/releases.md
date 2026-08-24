@@ -2,6 +2,49 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-1"></a>
+
+## Repository-Complete Plan: v0.8.1 completion cap and safe provider failures
+
+Status: repository work complete; protected stable release and external reconciliation pending
+Owner: Codex
+Release classification: `release-required`
+Target stable version: `0.8.1`
+Last Updated: 2026-08-24
+
+### Goal
+
+Expose a bounded protocol-aware LLM completion cap without changing OCR's prompt/context ceiling or the toolkit aggregate budget; unify provider configuration ownership; turn private OCR retry facts into safe provider-neutral GitLab guidance; and remove repeated validation that crossed no new platform, security, artifact, publication, or registry boundary.
+
+### Delivered contract
+
+- `OCR_LLM_MAX_COMPLETION_TOKENS` is optional and unset by default. It accepts positive decimal integers from `1` through `1000000` and maps to `max_completion_tokens` for `openai`, `max_output_tokens` for `openai-responses`, and `max_tokens` for `anthropic` through `llm.extra_body`.
+- An equal integer already present in `OCR_LLM_EXTRA_BODY` is deduplicated; a conflicting or non-integer owner fails closed. `/models.max_completion_tokens` is never treated as a spending policy or automatic default.
+- `configure` and `preflight` share one provider-neutral owner for explicit protocol, credential-free absolute HTTPS endpoints, headers, request-body controls, API-root normalization, terminal endpoint compatibility, and auxiliary models URL derivation.
+- On non-zero OCR exit, only a strict bounded `ocr.llm-retry-report/v1` projection may select a toolkit-authored provider-neutral GitLab note. Raw bodies, messages, codes, URLs, model and provider identities, request IDs, paths, warnings, credentials, stderr, and failed-result findings remain private.
+- Classified failures preserve the previous successful review, publish no normal findings, ignore `OCR_POST_ERROR_DETAILS`, and cannot reach automatic approval. Receipt v5, DLP, telemetry, severity, outcome, finding, and posting-transaction contracts remain unchanged.
+- All five pull-request OS/Python jobs still run the full suite. Ubuntu Python 3.14 alone owns coverage; `Build artifacts` alone owns package smoke; Security, CodeQL, and Dependency Review retain their pull-request and scheduled boundaries. Protected-main TestPyPI owns development artifact publication/provenance/readback, while release-PR and stable-release gates remain complete.
+- OCR 1.9.10 remains the exact qualified dependency. An isolated checksum-verified no-LLM wire probe observed inherited `max_completion_tokens=58888` when the toolkit setting was unset and `4096` when explicitly configured.
+
+### Validation and delivery evidence
+
+- Feature PR [#131](https://github.com/xeonvs/open-code-review-toolkit/pull/131) passed all hosted checks at reviewed head `4bfd9fc760143cb707c43aeca4f56db2a3096c13` and was squash-merged as `3f5c756ca5b6ccf62043765908fdc2cf2b29e14a`; the merge tree equals reviewed tree `4e1e8578b328666ac8c24201e0bd3635c42d5b4f`.
+- Exact feature-head local validation passed 1,231 tests plus 306 subtests at 86.13% combined branch coverage and risk groups 84/82/85/87, with Ruff, mypy, Bandit, lock, OCR manifest, Towncrier, pinned Gitleaks, and diff checks green.
+- TestPyPI development run [32766642880](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/32766642880) published and read back `0.8.1.dev68`; provenance and clean wheel/sdist installs passed. Wheel SHA-256 is `764d00835c725fa67274b48d95420bb5e3b3d0be28043dc73203cc166bad1ad0`; sdist SHA-256 is `a9faf493df1d03d0f078ad6807fc04f9dc7cdc82aafc24ac9fec30cbd9843a12`.
+- Release authorization tracks exactly open milestone issues #129, #130, and #132. The release candidate sets `.release-version=0.8.1`, `.next-version=0.8.2`, and deterministic epoch `1787598637`, one second after the feature squash merge.
+
+### Trust boundaries and non-claims
+
+- The `4096` example is an operator workaround for gateways that may reserve spending against requested output. It is not an automatic toolkit default and does not claim that a completion cap caused any particular `429`.
+- Runtime `404` remains `endpoint-or-model-not-found`; untrusted raw provider text is not used to distinguish those cases.
+- The retry report remains private OCR result data, not toolkit telemetry, a DLP input, receipt evidence, or an approval signal.
+- Removing repeated checks relies on the active strict protected-`main` ruleset and unchanged required check names. It does not remove a supported Python/OS run, security analysis, package smoke, public artifact verification, release authorization, registry readback, or stable install gate.
+- Stable TestPyPI/PyPI bytes, GitHub attestations, registry provenance, annotated `v0.8.1` tag, immutable GitHub Release and assets, `release-receipt.json`, supported-Python registry installs, Actions-owned issue receipts, issue/milestone closure, and final clean-main synchronization are not claimed by this repository checkpoint and remain post-merge external gates.
+
+### Resume point
+
+Open the exact `Release v0.8.1` PR from `release/v0.8.1`, require its unchanged exact-head hosted checks and resolved review threads, then use the protected squash merge to start stable publication. Independently verify registry/workflow/Release bytes, provenance, attestations, installs, annotated tag, immutable receipt, issue receipts, issue and milestone closure, synchronized `main`, and final scratch cleanup.
+
 <a id="plan-toolkit-0-8-0"></a>
 
 ## Repository-Complete Plan: v0.8.0 remediation threads, GitLab commands, and documentation

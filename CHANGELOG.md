@@ -1,3 +1,39 @@
+## 0.8.1 - 2026-08-24
+
+### 🚀 Features
+
+- Operators can now control the LLM request's completion/output cap independently of OCR context and aggregate review budgets:
+
+  - **Added:** optional `OCR_LLM_MAX_COMPLETION_TOKENS`, accepting decimal integers from `1` through `1000000`. Its exact default is unset, so toolkit 0.8.1 inherits the qualified OCR behavior.
+  - **Protocol mapping:** `openai` writes `llm.extra_body.max_completion_tokens`, `openai-responses` writes `max_output_tokens`, and `anthropic` writes `max_tokens`.
+  - **Migration:** an equal JSON integer already owned by `OCR_LLM_EXTRA_BODY` is deduplicated; a different or non-integer value fails configuration. Remove the duplicate field or keep the same integer in both inputs.
+  - **Deployment:** toolkit 0.8.1 remains on OCR 1.9.10. For a gateway that accepts short probes but rejects a full review before generation, try an explicit value such as `4096`; the toolkit does not derive it from `/models.max_completion_tokens`.
+  - **Unchanged:** `OCR_MAX_TOKENS_BUDGET`, OCR prompt/context `max_tokens`, receipt v5, DLP, telemetry, review outcomes, severity, findings, and approval policy are unaffected.
+
+  ([#130](https://github.com/xeonvs/open-code-review-toolkit/issues/130))
+
+### 🐛 Bug Fixes
+
+- Provider configuration and failed-review diagnostics now share one safe boundary:
+
+  - **Fixed:** `ocr-ci configure` and `ocr-ci preflight` now use the same explicit `OCR_LLM_PROTOCOL`, normalized credential-free HTTPS API root, headers, request controls, and auxiliary models URL. Protocol-mismatched terminal endpoints, embedded credentials, fragments, and ambiguous queried `/models` derivation fail closed.
+  - **Changed:** a non-zero OCR result with a valid bounded `ocr.llm-retry-report/v1` now produces a toolkit-authored provider-neutral GitLab reason and remediation hint. Runtime `404` remains `endpoint-or-model-not-found`; `429` lists throttling, spending limits, and requested-output cost reservation as possibilities without claiming which occurred.
+  - **Privacy:** classified failures ignore normal findings and raw provider/model identities, response bodies, codes/messages, request IDs, paths, warnings, and stderr. `OCR_POST_ERROR_DETAILS=1` does not override this boundary.
+  - **Unchanged:** the previous successful review is preserved, automatic approval is not attempted, and receipt v5, DLP, telemetry, severity, finding, and posting-transaction contracts do not change.
+
+  ([#129](https://github.com/xeonvs/open-code-review-toolkit/issues/129))
+
+### 🛠 Maintenance
+
+- Protected validation now assigns each repeated check to one explicit owner:
+
+  - **Changed:** all five supported OS/Python pull-request jobs still run the complete functional suite, while Ubuntu on the newest supported Python is the single owner of combined and risk-group coverage floors.
+  - **Removed:** generic `main`-push reruns of CI, package build, Security, and CodeQL; duplicate wheel/sdist construction inside the CI quality job; and duplicate source quality and dependency-audit runs inside the TestPyPI development workflow.
+  - **Unchanged:** pull-request Security, CodeQL, Dependency Review, and `Build artifacts` gates; scheduled security analysis; TestPyPI artifact publication, provenance, bounded registry readback, and clean installs; release-pull-request checks; and the complete post-merge stable-release validation.
+
+  ([#132](https://github.com/xeonvs/open-code-review-toolkit/issues/132))
+
+
 ## 0.8.0 - 2026-08-24
 
 ### 🚀 Features

@@ -113,6 +113,33 @@ def test_080_release_notes_are_actionable_for_operators_and_automation() -> None
         assert contract in notes
 
 
+def test_081_release_notes_separate_added_fixed_removed_and_unchanged_contracts() -> None:
+    """Give deployment agents an exact delta without requiring source inspection."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.1")
+
+    for label in ("**Added:**", "**Fixed:**", "**Changed:**", "**Removed:**", "**Unchanged:**"):
+        assert label in notes
+    for contract in (
+        "OCR_LLM_MAX_COMPLETION_TOKENS",
+        "unset",
+        "llm.extra_body.max_completion_tokens",
+        "max_output_tokens",
+        "max_tokens",
+        "OCR_LLM_EXTRA_BODY",
+        "/models.max_completion_tokens",
+        "endpoint-or-model-not-found",
+        "requested-output cost reservation",
+        "raw provider/model identities",
+        "automatic approval is not attempted",
+        "all five supported OS/Python",
+        "generic `main`-push reruns",
+        "complete post-merge stable-release validation",
+    ):
+        assert contract in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 
