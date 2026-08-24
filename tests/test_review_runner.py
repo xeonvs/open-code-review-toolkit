@@ -1738,6 +1738,63 @@ def test_run_review_unit_redacts_failure_from_mocked_child_output() -> None:
     assert "Authorization: ***" in output.getvalue()
 
 
+def test_run_review_keeps_classified_provider_stderr_private() -> None:
+    """Log only the closed reason when a valid private retry report exists."""
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        payload = {
+            "retry_report": {
+                "schema_version": "ocr.llm-retry-report/v1",
+                "total_requests": 1,
+                "retried_requests": 0,
+                "total_retries": 0,
+                "recovered_requests": 0,
+                "failed_requests": 1,
+                "cancelled_requests": 0,
+                "requests": [
+                    {
+                        "outcome": "failed",
+                        "provider": "private-provider",
+                        "model": "private-model",
+                        "file_path": "/private/path.py",
+                        "attempts": [
+                            {
+                                "attempt": 1,
+                                "outcome": "error",
+                                "error_class": "rate_limited",
+                                "failure_phase": "http",
+                                "status_code": 429,
+                                "request_id": "private-request-id",
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+        kwargs["stdout"].write(json.dumps(payload).encode())  # type: ignore[union-attr]
+        kwargs["stderr"].write(b"private provider body and token\n")  # type: ignore[union-attr]
+        return subprocess.CompletedProcess(argv, 1)
+
+    output = io.StringIO()
+    with (
+        TemporaryDirectory() as tmp,
+        patched_attr(review_runner.subprocess, "run", fake_run),
+        redirect_stderr(output),
+    ):
+        result_path = Path(tmp) / "result.json"
+        stderr_path = Path(tmp) / "stderr.log"
+        exit_code = review_runner.run_review(
+            result_path, stderr_path, ["--from", "base", "--to", "head"]
+        )
+
+        assert stderr_path.read_text(encoding="utf-8") == "private provider body and token\n"
+
+    assert exit_code == 1
+    assert "rate-or-spending-limit" in output.getvalue()
+    assert "private provider body" not in output.getvalue()
+    assert "private-provider" not in output.getvalue()
+
+
 @pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")
 @pytest.mark.parametrize("budget", ["0", "120000"])
 def test_run_review_crosses_real_subprocess_boundary_with_private_artifacts(
