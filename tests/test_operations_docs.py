@@ -165,6 +165,43 @@ def test_aggregate_review_budget_is_explicit_and_never_looks_complete() -> None:
     assert "approximate" in configuration
 
 
+def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
+    """Keep token ownership, safe failure projection, and migration behavior explicit."""
+
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    for document in (configuration, operations, gitlab):
+        assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
+        assert "4096" in document
+        assert "OCR_MAX_TOKENS_BUDGET" in document
+        assert "/models" in document
+    for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
+        assert field in configuration
+    for phrase in (
+        "defaults to **unset**",
+        "positive decimal integer from `1` through `1000000`",
+        "exactly equal JSON integer is deduplicated",
+        "fails configuration with a migration error",
+        "The toolkit does not add an environment alias",
+    ):
+        assert phrase in configuration
+
+    for phrase in (
+        "endpoint-or-model-not-found",
+        "cost reservation from the requested output cap",
+        "not a claim that the cap was the cause",
+        "`OCR_POST_ERROR_DETAILS=1` cannot add them",
+        "the previous successful review is preserved",
+        "automatic approval is not attempted",
+    ):
+        assert phrase in operations
+    assert "closed provider-neutral reason may cross the separate strict parser" in security
+    assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
+
+
 def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:
     operations = OPERATIONS.read_text(encoding="utf-8")
     configuration = CONFIGURATION.read_text(encoding="utf-8")

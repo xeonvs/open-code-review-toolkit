@@ -39,7 +39,7 @@ Status: active, `release-required`. Target stable version: `0.8.1`.
 - Push the complete feature history to the Draft PR, wait for hosted checks, address evidence-driven failures through the same commit gate, then mark ready and merge through protected review.
 - Verify the deterministic TestPyPI development build, then prepare and merge the protected `Release v0.8.1` PR. Monitor stable TestPyPI/PyPI publication, tag, immutable GitHub Release, provenance, attestations, supported-Python installs, and immutable receipt; close tracked issues only after independent external reconciliation.
 
-Resume point: document the completed provider configuration and safe-failure contracts, add the separate Towncrier fragments, and complete the release handoff gates.
+Resume point: run the complete local release-readiness matrix, perform the overall requirements/privacy/data-flow self-review, then push the complete signed feature history to Draft PR #131.
 
 #### Current implementation evidence
 
@@ -48,3 +48,4 @@ Resume point: document the completed provider configuration and safe-failure con
 - Completion-cap parsing, protocol mapping, collision rules, environment defaults, generated config, wheel/sdist installed paths, and the reusable exact wire probe are implemented and focused-green.
 - Canonical provider configuration now gives `configure` and `preflight` one environment snapshot and one owner for explicit protocol, API-root normalization, terminal-endpoint compatibility, secret-bearing headers, request-body controls, and auxiliary metadata URLs. Queried inference URLs require an explicit models URL; metadata-disabled preflight remains compatible.
 - Provider failure projection now hostile-reads the bounded private result, validates retry-report v1 counters and terminal attempt facts, and emits only a closed provider-neutral reason. Non-zero classified runs use one static GitLab renderer, keep stderr/provider fields private, preserve the previous review, publish no findings, and never reach approval; legacy billing warnings use the same renderer. The focused gate passed Ruff, full package mypy, 302 tests, and 119 subtests.
+- Public configuration, GitLab operations, security boundaries, and the test-evidence matrix now distinguish the per-request completion cap, OCR-owned prompt/context ceiling, and aggregate review budget; document the `/models` non-claim and the safe 404/429 projection; and preserve the generic fallback boundary. Separate #130 feature and #129 bug-fix fragments enumerate added, changed, migration, privacy, deployment, and unchanged contracts. The documentation gate passed 49 tests, Ruff, `git diff --check`, and the rendered 0.8.1 Towncrier section.
