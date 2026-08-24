@@ -27,6 +27,9 @@ from tests.support import (
 
 
 class MCPConfigTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.enterContext(cleared_env("OCR_USE_ANTHROPIC"))
+
     def test_composition_readback_preserves_independent_registry_entries(self) -> None:
         composition = mcp_config.MCPComposition(
             payload={
@@ -219,7 +222,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
             ),
         ):
             updates = ocr_configure.build_config_updates()
@@ -232,7 +234,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="http://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(
                 ocr_configure.OCRRuntimeConfigError, "OCR_LLM_URL must be an absolute HTTPS URL"
@@ -245,7 +246,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://user:password@gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(
                 ocr_configure.OCRRuntimeConfigError, "without embedded credentials"
@@ -258,7 +258,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example:not-a-port/v1/responses",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
         ):
             with self.assertRaisesRegex(ocr_configure.OCRRuntimeConfigError, "absolute HTTPS URL"):
                 ocr_configure.build_config_updates()
@@ -269,7 +268,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_AUTH_HEADER="authorization",
             OCR_LLM_EXTRA_HEADERS='{"X-Workspace":"review"}',
             OCR_LLM_EXTRA_BODY='{"temperature":0}',
@@ -294,7 +292,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_AUTH_HEADER="",
         ):
             updates = ocr_configure.build_config_updates()
@@ -308,7 +305,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_AUTH_HEADER="Authorization",
                 OCR_LLM_EXTRA_HEADERS='{"authorization":"other-token"}',
             ),
@@ -325,28 +321,32 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
             OCR_LLM_PROTOCOL="openai-responses",
-            OCR_USE_ANTHROPIC="false",
         ):
             updates = ocr_configure.build_config_updates()
 
         self.assertEqual(updates["llm.protocol"], "openai-responses")
         self.assertFalse(updates["llm.use_anthropic"])
 
-    def test_runtime_config_rejects_conflicting_protocol_modes(self) -> None:
-        with (
-            patched_env(
-                OCR_REVIEW_LANGUAGE="English",
-                OCR_LLM_URL="https://gateway.example/v1/responses",
-                OCR_LLM_TOKEN="llm-secret",
-                OCR_LLM_MODEL="openai/gpt-test",
-                OCR_LLM_PROTOCOL="openai-responses",
-                OCR_USE_ANTHROPIC="true",
-            ),
-            self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
-        ):
-            ocr_configure.build_config_updates()
+    def test_runtime_config_rejects_removed_anthropic_switch_with_migration(self) -> None:
+        for legacy_value in ("", "false", "true"):
+            with (
+                self.subTest(legacy_value=legacy_value),
+                patched_env(
+                    OCR_REVIEW_LANGUAGE="English",
+                    OCR_LLM_URL="https://gateway.example/v1/responses",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="openai/gpt-test",
+                    OCR_LLM_PROTOCOL="openai-responses",
+                    OCR_USE_ANTHROPIC=legacy_value,
+                ),
+                self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
+            ):
+                ocr_configure.build_config_updates()
 
-        self.assertIn("conflicts", str(ctx.exception))
+            self.assertEqual(
+                str(ctx.exception),
+                "OCR_USE_ANTHROPIC was removed; set OCR_LLM_PROTOCOL=anthropic explicitly",
+            )
 
     def test_runtime_config_requires_core_llm_env(self) -> None:
         with (
@@ -355,7 +355,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError) as ctx,
         ):
@@ -369,7 +368,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_HEADERS='{"X-Test":"bad\\nvalue"}',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -382,7 +380,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_HEADERS='{"X-Test":{"bad":true}}',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -395,7 +392,6 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="openai/gpt-test",
-                OCR_USE_ANTHROPIC="false",
                 OCR_LLM_EXTRA_BODY='["bad"]',
             ),
             self.assertRaises(ocr_configure.OCRRuntimeConfigError),
@@ -409,7 +405,6 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="openai/gpt-test",
             OCR_LLM_PROTOCOL="openai",
-            OCR_USE_ANTHROPIC="false",
             OCR_LLM_EXTRA_BODY="{}",
         ):
             updates = ocr_configure.build_config_updates()
@@ -422,7 +417,7 @@ class MCPConfigTests(unittest.TestCase):
             OCR_LLM_URL="https://gateway.example/v1/chat/completions",
             OCR_LLM_TOKEN="llm-secret",
             OCR_LLM_MODEL="anthropic/claude-test",
-            OCR_USE_ANTHROPIC="true",
+            OCR_LLM_PROTOCOL="anthropic",
             OCR_ANTHROPIC_DISABLE_THINKING="true",
             OCR_LLM_EXTRA_BODY='{"temperature":0}',
         ):
@@ -440,7 +435,7 @@ class MCPConfigTests(unittest.TestCase):
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
                 OCR_LLM_MODEL="anthropic/claude-test",
-                OCR_USE_ANTHROPIC="true",
+                OCR_LLM_PROTOCOL="anthropic",
                 OCR_ANTHROPIC_DISABLE_THINKING="true",
                 OCR_LLM_EXTRA_BODY='{"thinking":{"type":"enabled"}}',
             ),
@@ -631,6 +626,160 @@ class MCPConfigTests(unittest.TestCase):
 
         with self.assertRaises(mcp_config.MCPConfigError):
             mcp_config.parse_mcp_servers(raw)
+
+    def test_parse_mcp_servers_rejects_malformed_registry_shapes(self) -> None:
+        """Reject ambiguous registry, server, transport, and tool-list shapes."""
+
+        cases: tuple[object, ...] = (
+            [],
+            {"servers": {}},
+            {"documentation": "bridge"},
+            {"documentation": {"name": "source", "command": "bridge"}},
+            {"servers": ["bridge"]},
+            {"servers": [{"name": "bad name", "command": "bridge"}]},
+            {
+                "servers": [
+                    {"name": "duplicate", "command": "bridge", "tools": ["read"]},
+                    {"name": "duplicate", "command": "bridge", "tools": ["search"]},
+                ]
+            },
+            {"servers": [{"name": "bridge", "type": "socket", "tools": ["read"]}]},
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": "read"}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": ["read"] * (mcp_config.MAX_MCP_TOOLS + 1),
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": [7]}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": ["x" * (mcp_config.MAX_MCP_STRING_CHARS + 1)],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": []}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "bridge",
+                        "tools": [mcp_config.TOOL_NAME],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": ["read"], "setup": 7}]},
+            {"servers": [{"name": "bridge", "command": "", "tools": ["read"]}]},
+            {
+                "servers": [
+                    {
+                        "name": "bridge",
+                        "command": "x" * (mcp_config.MAX_MCP_STRING_CHARS + 1),
+                        "tools": ["read"],
+                    }
+                ]
+            },
+            {"servers": [{"name": "bridge", "command": "bridge", "tools": ["read"], "args": {}}]},
+        )
+        cases += (
+            {
+                f"server-{index}": {"command": "bridge", "tools": [f"read-{index}"]}
+                for index in range(mcp_config.MAX_MCP_SERVERS + 1)
+            },
+        )
+
+        for payload in cases:
+            with self.subTest(payload=payload), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
+
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "profile"):
+            mcp_config.parse_mcp_servers("{}", profile="unknown")
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "valid JSON"):
+            mcp_config.parse_mcp_servers("{")
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "exceeds"):
+            mcp_config.parse_mcp_servers("x" * (mcp_config.MAX_MCP_CONFIG_BYTES + 1))
+
+    def test_stdio_environment_rejects_ambiguous_or_unbounded_assignments(self) -> None:
+        """Admit stdio environment only from bounded, distinct variable mappings."""
+
+        base: dict[str, object] = {
+            "name": "bridge",
+            "command": "bridge",
+            "tools": ["read"],
+        }
+        cases = (
+            {"env": []},
+            {"env_from": []},
+            {"env": {"bad-name": "value"}},
+            {"env": {"MODE": 7}},
+            {"env": {"MODE": "x" * mcp_config.MAX_MCP_STRING_CHARS}},
+            {"env_from": {"bad-name": "MCP_TOKEN"}},
+            {"env": {"TOKEN": "literal"}, "env_from": {"TOKEN": "MCP_TOKEN"}},
+            {"env_from": {"TOKEN": "bad-name"}},
+            {"env": {f"VALUE_{index}": "safe" for index in range(mcp_config.MAX_MCP_ENV + 1)}},
+        )
+        with patched_env(MCP_TOKEN="provider-secret"):
+            for fields in cases:
+                payload = {"servers": [{**base, **fields}]}
+                with self.subTest(fields=fields), self.assertRaises(mcp_config.MCPConfigError):
+                    mcp_config.parse_mcp_servers(json.dumps(payload))
+
+    def test_remote_headers_reject_ambiguous_or_unbounded_mappings(self) -> None:
+        """Admit remote headers only from bounded HTTP-safe distinct mappings."""
+
+        base: dict[str, object] = {
+            "name": "remote",
+            "type": "remote",
+            "url": "https://mcp.invalid/v1",
+            "tools": ["read"],
+        }
+        cases = (
+            {"headers": []},
+            {"headers_from": []},
+            {"headers": {"Bad Header": "value"}},
+            {"headers": {"X-Mode": "safe", "x-mode": "duplicate"}},
+            {"headers": {"X-Mode": 7}},
+            {"headers": {"X-Mode": ""}},
+            {"headers_from": {"Authorization": "bad-name"}},
+            {
+                "headers": {
+                    f"X-Value-{index}": "safe" for index in range(mcp_config.MAX_MCP_HEADERS + 1)
+                }
+            },
+        )
+        for fields in cases:
+            payload = {"servers": [{**base, **fields}]}
+            with self.subTest(fields=fields), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
+
+    def test_remote_url_rejects_invalid_bounds_and_ports(self) -> None:
+        """Require one bounded absolute HTTPS endpoint with a valid port."""
+
+        for url in (
+            None,
+            "",
+            "https://mcp.invalid/" + "x" * mcp_config.MAX_MCP_URL_CHARS,
+            "https://mcp.invalid:invalid/v1",
+            "https://mcp.invalid:70000/v1",
+        ):
+            payload = {
+                "servers": [
+                    {
+                        "name": "remote",
+                        "type": "remote",
+                        "url": url,
+                        "tools": ["read"],
+                    }
+                ]
+            }
+            with self.subTest(url=url), self.assertRaises(mcp_config.MCPConfigError):
+                mcp_config.parse_mcp_servers(json.dumps(payload))
 
     def test_parse_rejects_missing_env_from_secret(self) -> None:
         raw = json.dumps(
@@ -1102,7 +1251,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.9\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.10\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
@@ -1128,6 +1277,39 @@ class PreflightTests(unittest.TestCase):
         ):
             preflight.validate_ocr_binary()
 
+    def test_validate_ocr_binary_bounds_execution_and_redacts_failures(self) -> None:
+        """Bound OCR version probes and redact timeout and process failures."""
+
+        secret = "binary-secret-value"
+
+        def timeout(*_args: Any, **_kwargs: Any) -> None:
+            raise subprocess.TimeoutExpired(["ocr", "--version"], 10, stderr=secret)
+
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+            patched_attr(preflight.subprocess, "run", timeout),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight.validate_ocr_binary()
+
+        self.assertNotIn(secret, str(ctx.exception))
+        self.assertIn("Cannot run", str(ctx.exception))
+
+        completed = subprocess.CompletedProcess(
+            args=["ocr", "--version"], returncode=23, stdout="", stderr=secret
+        )
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+            patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight.validate_ocr_binary()
+
+        self.assertNotIn(secret, str(ctx.exception))
+        self.assertIn("exited 23", str(ctx.exception))
+
     def test_validate_ocr_binary_rejects_version_prefix_collision(self) -> None:
         completed = subprocess.CompletedProcess(
             args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.170\n", stderr=""
@@ -1148,6 +1330,21 @@ class PreflightTests(unittest.TestCase):
 
         self.assertIn("non-HTTPS URL", str(ctx.exception))
         self.assertNotIn("secret-value", str(ctx.exception))
+
+    def test_request_json_rejects_invalid_headers_before_transport(self) -> None:
+        """Reject malformed header names and values before any network call."""
+
+        for headers in ({"Bad Header": "value"}, {"X-Test": "value\r\ninjected"}):
+            with (
+                self.subTest(headers=headers),
+                patched_attr(
+                    preflight.URL_OPENER,
+                    "open",
+                    lambda *_args, **_kwargs: self.fail("invalid header reached transport"),
+                ),
+                self.assertRaises(preflight.PreflightError, msg=str(headers)),
+            ):
+                preflight._request_json("https://gateway.example/v1/models", headers)
 
     def test_request_json_allows_plain_http_without_credentials(self) -> None:
         class FakeResponse:
@@ -1325,6 +1522,179 @@ class PreflightTests(unittest.TestCase):
 
         self.assertEqual(payload["data"][0]["id"], "model")
         self.assertEqual(read_limits, [64 * 1024, 64 * 1024])
+
+    def test_request_json_returns_none_for_empty_and_rejects_malformed_json(self) -> None:
+        """Distinguish an empty response from a malformed JSON response."""
+
+        class FakeResponse:
+            def __init__(self, body: bytes) -> None:
+                self.body = body
+                self.sent = False
+
+            def __enter__(self) -> FakeResponse:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, _limit: int) -> bytes:
+                if self.sent:
+                    return b""
+                self.sent = True
+                return self.body
+
+        for body, expected in ((b"", None), (b"not-json", preflight.PreflightError)):
+            with (
+                self.subTest(body=body),
+                patched_attr(
+                    preflight.URL_OPENER,
+                    "open",
+                    lambda *_args, value=body, **_kwargs: FakeResponse(value),
+                ),
+            ):
+                if expected is None:
+                    self.assertIsNone(
+                        preflight._request_json("https://gateway.example/v1/models", {})
+                    )
+                else:
+                    with self.assertRaises(expected):
+                        preflight._request_json("https://gateway.example/v1/models", {})
+
+    def test_request_json_deadline_expires_before_transport(self) -> None:
+        """Stop an expired request before opening a network connection."""
+
+        ticks = iter((0.0, float(preflight.HTTP_TIMEOUT_SECONDS + 1)))
+        with (
+            patched_attr(preflight.time, "monotonic", lambda: next(ticks)),
+            patched_attr(
+                preflight.URL_OPENER,
+                "open",
+                lambda *_args, **_kwargs: self.fail("expired request reached transport"),
+            ),
+            self.assertRaisesRegex(preflight.PreflightError, "timed out"),
+        ):
+            preflight._request_json("https://gateway.example/v1/models", {})
+
+    def test_request_json_retries_bounded_get_failures(self) -> None:
+        """Retry transient GET responses within the shared attempt and delay bounds."""
+
+        attempts = 0
+        sleeps: list[float] = []
+
+        class FakeResponse:
+            def __init__(self) -> None:
+                self.sent = False
+
+            def __enter__(self) -> FakeResponse:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, _limit: int) -> bytes:
+                if self.sent:
+                    return b""
+                self.sent = True
+                return b'{"ok":true}'
+
+        def fake_open(request: Any, **_kwargs: Any) -> Any:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    503,
+                    "Unavailable",
+                    hdrs=None,
+                    fp=io.BytesIO(b"temporary"),
+                )
+            return FakeResponse()
+
+        with (
+            patched_attr(preflight.URL_OPENER, "open", fake_open),
+            patched_attr(preflight.time, "sleep", sleeps.append),
+        ):
+            payload = preflight._request_json("https://gateway.example/v1/models", {})
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(attempts, 2)
+        self.assertEqual(sleeps, [1.0])
+
+    def test_request_json_retries_transport_failure_only_three_times(self) -> None:
+        """Stop transport retries at the fixed bound and redact diagnostics."""
+
+        attempts = 0
+        sleeps: list[float] = []
+        secret = "transport-secret-value"
+
+        def fake_open(_request: Any, **_kwargs: Any) -> Any:
+            nonlocal attempts
+            attempts += 1
+            raise OSError(f"connection failed token={secret}")
+
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(preflight.URL_OPENER, "open", fake_open),
+            patched_attr(preflight.time, "sleep", sleeps.append),
+            self.assertRaises(preflight.PreflightError) as ctx,
+        ):
+            preflight._request_json("https://gateway.example/v1/models", {})
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleeps, [1.0, 1.0])
+        self.assertNotIn(secret, str(ctx.exception))
+
+    def test_validate_gitlab_access_uses_authenticated_identity_and_mr_reads(self) -> None:
+        """Validate GitLab access through authenticated identity and MR reads."""
+
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        def fake_request(url: str, headers: dict[str, str]) -> dict[str, Any]:
+            calls.append((url, headers))
+            return {}
+
+        with (
+            patched_env(
+                GITLAB_API_TOKEN="gitlab-secret",
+                CI_PROJECT_ID="group/project",
+                CI_MERGE_REQUEST_IID="17",
+                CI_API_V4_URL="https://gitlab.example/api/v4/",
+            ),
+            patched_attr(preflight, "_request_json", fake_request),
+        ):
+            preflight.validate_gitlab_access()
+
+        self.assertEqual(
+            [url for url, _headers in calls],
+            [
+                "https://gitlab.example/api/v4/user",
+                "https://gitlab.example/api/v4/projects/group%2Fproject",
+                "https://gitlab.example/api/v4/projects/group%2Fproject/merge_requests/17",
+            ],
+        )
+        self.assertTrue(
+            all(headers == {"PRIVATE-TOKEN": "gitlab-secret"} for _url, headers in calls)
+        )
+
+    def test_validate_gitlab_access_requires_token_and_merge_request_identity(self) -> None:
+        """Require both authentication and merge-request identity for GitLab access."""
+
+        for values, message in (
+            (
+                {"GITLAB_API_TOKEN": "", "CI_PROJECT_ID": "7", "CI_MERGE_REQUEST_IID": "9"},
+                "GITLAB_API_TOKEN",
+            ),
+            (
+                {"GITLAB_API_TOKEN": "token", "CI_PROJECT_ID": "", "CI_MERGE_REQUEST_IID": ""},
+                "CI_PROJECT_ID",
+            ),
+        ):
+            with (
+                self.subTest(values=values),
+                patched_env(**values),
+                self.assertRaisesRegex(preflight.PreflightError, message),
+            ):
+                preflight.validate_gitlab_access()
 
     def test_request_json_rejects_oversized_success_body(self) -> None:
         class FakeResponse:

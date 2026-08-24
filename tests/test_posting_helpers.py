@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit import ocr_result
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.posting import comments as posting_comments
 from ocr_toolkit.posting import formatting as posting_formatting
@@ -33,6 +34,8 @@ from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
+    BACKGROUND_CHARACTER_LIMIT_REASON,
+    BACKGROUND_FILE_SIZE_LIMIT_REASON,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
     PreExecutionStatus,
@@ -195,11 +198,18 @@ class PostingIdentityTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIsNone(markers.author_id_from_note({"author": {"id": value}}))
 
-        with patched_attr(gitlab, "api_request_url", lambda *_args, **_kwargs: {"id": 7}):
+        identity_calls: list[tuple[str, str]] = []
+
+        def identity_request(url: str, _token: str, _header: str, **kwargs: Any) -> Any:
+            identity_calls.append((url, kwargs.get("method", "GET")))
+            return {"id": 7, "username": "ocr_bot"}
+
+        with patched_attr(gitlab, "api_request_url", identity_request):
             self.assertEqual(
-                gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN"),
-                7,
+                gitlab.fetch_posting_identity("https://gitlab.example", "token", "PRIVATE-TOKEN"),
+                (7, "ocr_bot"),
             )
+        self.assertEqual(identity_calls, [("https://gitlab.example/api/v4/user", "GET")])
         for value in (True, 0, -1, "7", 7.0, None):
             with (
                 self.subTest(value=value),
@@ -208,8 +218,11 @@ class PostingIdentityTests(unittest.TestCase):
                 ),
                 redirect_stderr(io.StringIO()),
             ):
-                self.assertIsNone(
-                    gitlab.fetch_current_user_id("https://gitlab.example", "token", "PRIVATE-TOKEN")
+                self.assertEqual(
+                    gitlab.fetch_posting_identity(
+                        "https://gitlab.example", "token", "PRIVATE-TOKEN"
+                    ),
+                    (None, None),
                 )
 
     def test_posting_identity_consumers_reject_bool_and_nonpositive_ids(self) -> None:
@@ -410,6 +423,34 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr skip"))
         self.assertIsNone(markers.OCR_REPLY_COMMAND_RE.search("/ocr keep"))
 
+    def test_live_bot_mention_command_supports_gitlab_username_punctuation(self) -> None:
+        cases = {
+            "@mr.bot resolve": "resolve",
+            "  @MR.BOT   SUPPRESS\n \t": "suppress",
+            "/ocr resolve": "resolve",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual(
+                    markers.reviewer_command_from_body(body, bot_username="mr.bot"),
+                    expected,
+                )
+
+    def test_live_bot_mention_command_rejects_non_exact_replies(self) -> None:
+        rejected = (
+            "@mr.bot supress",
+            "@mr.bot resolve please",
+            "Please @mr.bot resolve",
+            "```\n@mr.bot resolve\n```",
+            "@other.bot resolve",
+            "@mrXbot resolve",
+            "@mr.bot retest",
+        )
+        for body in rejected:
+            with self.subTest(body=body):
+                self.assertIsNone(markers.reviewer_command_from_body(body, bot_username="mr.bot"))
+        self.assertIsNone(markers.reviewer_command_from_body("@mr.bot resolve", bot_username=None))
+
     def test_suppress_command_preserves_open_discussion_and_suppresses_finding(self) -> None:
         refs = snapshot.BotCommentRefs()
         fingerprint = "a" * FINGERPRINT_LEN
@@ -457,12 +498,57 @@ class PostingIdentityTests(unittest.TestCase):
 
     def test_latest_human_lifecycle_command_wins(self) -> None:
         notes = [
-            {"body": "/ocr resolve", "author": {"id": 8}},
+            {"body": "@mr.bot resolve", "author": {"id": 8}},
             {"body": "/ocr suppress", "author": {"id": 9}},
-            {"body": "/ocr resolve", "author": {"id": 7}},
+            {"body": "@mr.bot resolve", "author": {"id": 7}},
+            {"body": "@mr.bot resolve", "author": {"id": 10}, "system": True},
         ]
 
-        self.assertEqual(snapshot.reviewer_command_in_thread(gitlab_config(), notes), "suppress")
+        self.assertEqual(
+            snapshot.reviewer_command_in_thread(gitlab_config(current_username="mr.bot"), notes),
+            "suppress",
+        )
+
+    def test_mention_commands_require_a_toolkit_owned_discussion(self) -> None:
+        fingerprint = "e" * FINGERPRINT_LEN
+        config = gitlab_config(current_username="mr.bot")
+        for action in ("suppress", "resolve"):
+            with self.subTest(action=action):
+                owned = snapshot.BotCommentRefs()
+                discussion_id = f"owned-{action}"
+                snapshot.process_discussion_for_refs(
+                    config,
+                    owned,
+                    discussion_id,
+                    [
+                        {
+                            "id": 10,
+                            "body": build_marker(fingerprint) + "\nbody",
+                            "author": {"id": 7},
+                            "position": {"new_path": "file.py", "new_line": 10},
+                        },
+                        {"id": 11, "body": f"@mr.bot {action}", "author": {"id": 8}},
+                    ],
+                )
+
+                self.assertEqual(
+                    owned.discussions_to_resolve,
+                    [discussion_id] if action == "resolve" else [],
+                )
+                self.assertEqual(owned.suppressed_fingerprints, {fingerprint})
+
+        foreign = snapshot.BotCommentRefs()
+        snapshot.process_discussion_for_refs(
+            config,
+            foreign,
+            "foreign-discussion",
+            [
+                {"id": 20, "body": "ordinary root", "author": {"id": 8}},
+                {"id": 21, "body": "@mr.bot resolve", "author": {"id": 9}},
+            ],
+        )
+
+        self.assertEqual(foreign, snapshot.BotCommentRefs())
 
     def test_legacy_command_is_an_ordinary_human_reply(self) -> None:
         refs = snapshot.BotCommentRefs()
@@ -751,7 +837,8 @@ class PostingIdentityTests(unittest.TestCase):
                     "comments": [],
                     "retry_report": {
                         "schema_version": "ocr.llm-retry-report/v1",
-                        "provider": "synthetic-provider",
+                        "review_stage": "Core review",
+                        "provider": "private-provider",
                         "file_path": "private/example.py",
                     },
                 },
@@ -760,7 +847,8 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         published = "\n".join(notes)
         self.assertNotIn("retry_report", published)
-        self.assertNotIn("synthetic-provider", published)
+        self.assertNotIn("Core review", published)
+        self.assertNotIn("private-provider", published)
         self.assertNotIn("private/example.py", published)
 
     def test_invalid_inline_position_falls_back_without_rollback(self) -> None:
@@ -1426,6 +1514,47 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(cached_lines, {3, 4, 20})
         self.assertEqual(len(calls), 1)
 
+    def test_changed_new_lines_failures_are_empty_and_negatively_cached(self) -> None:
+        """Fail closed once when the bounded diff cannot be read safely."""
+
+        cases = (
+            OSError("git unavailable"),
+            type("Result", (), {"returncode": 2, "stdout": ""})(),
+            type(
+                "Result",
+                (),
+                {"returncode": 0, "stdout": "x" * (workflow.MAX_REMAP_DIFF_BYTES + 1)},
+            )(),
+        )
+        for result_or_error in cases:
+            calls = 0
+
+            def run(*_args: Any, **_kwargs: Any) -> Any:
+                nonlocal calls
+                calls += 1
+                if isinstance(result_or_error, Exception):
+                    raise result_or_error
+                return result_or_error
+
+            cache: workflow.DiffLineCache = {}
+            with (
+                self.subTest(case=type(result_or_error).__name__),
+                patched_attr(workflow.subprocess, "run", run),
+            ):
+                self.assertEqual(
+                    workflow.changed_new_lines(
+                        {"base_sha": "base", "head_sha": "head"}, "file.py", cache
+                    ),
+                    set(),
+                )
+                self.assertEqual(
+                    workflow.changed_new_lines(
+                        {"base_sha": "base", "head_sha": "head"}, "file.py", cache
+                    ),
+                    set(),
+                )
+            self.assertEqual(calls, 1)
+
     def test_changed_new_paths_decodes_nul_delimited_utf8(self) -> None:
         class Result:
             returncode = 0
@@ -1445,6 +1574,39 @@ class PostingWorkflowTests(unittest.TestCase):
             paths = workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"})
 
         self.assertEqual(paths, [])
+
+    def test_changed_new_paths_failures_are_empty_and_negatively_cached(self) -> None:
+        """Fail closed once when changed-path discovery is unavailable or malformed."""
+
+        cases = (
+            OSError("git unavailable"),
+            type("Result", (), {"returncode": 2, "stdout": b""})(),
+            type("Result", (), {"returncode": 0, "stdout": b"\xff\0"})(),
+        )
+        for result_or_error in cases:
+            calls = 0
+
+            def run(*_args: Any, **_kwargs: Any) -> Any:
+                nonlocal calls
+                calls += 1
+                if isinstance(result_or_error, Exception):
+                    raise result_or_error
+                return result_or_error
+
+            cache: workflow.ChangedPathCache = {}
+            with (
+                self.subTest(case=type(result_or_error).__name__),
+                patched_attr(workflow.subprocess, "run", run),
+            ):
+                self.assertEqual(
+                    workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"}, cache),
+                    [],
+                )
+                self.assertEqual(
+                    workflow.changed_new_paths({"base_sha": "base", "head_sha": "head"}, cache),
+                    [],
+                )
+            self.assertEqual(calls, 1)
 
     def test_posting_git_reads_ignore_replacements_and_caller_overrides(self) -> None:
         with patched_env(
@@ -1511,6 +1673,114 @@ class PostingWorkflowTests(unittest.TestCase):
             calls[0][:5],
             ["git", "-c", "core.hooksPath=/dev/null", "cat-file", "-s"],
         )
+
+    def test_head_file_lines_handles_git_failures_and_preserves_line_numbers(self) -> None:
+        """Reject unreadable blobs while preserving safe source line identities."""
+
+        refs = {"head_sha": "head"}
+        cases = (
+            [OSError("git unavailable")],
+            [
+                type("Result", (), {"returncode": 0, "stdout": "20"})(),
+                type("Result", (), {"returncode": 2, "stdout": b""})(),
+            ],
+        )
+        for responses in cases:
+            values = iter(responses)
+
+            def run(*_args: Any, **_kwargs: Any) -> Any:
+                value = next(values)
+                if isinstance(value, Exception):
+                    raise value
+                return value
+
+            with (
+                self.subTest(responses=len(responses)),
+                patched_attr(workflow.subprocess, "run", run),
+            ):
+                self.assertEqual(workflow.head_file_lines(refs, "file.py"), [])
+
+        responses = iter(
+            (
+                type("Result", (), {"returncode": 0, "stdout": "40"})(),
+                type(
+                    "Result",
+                    (),
+                    {"returncode": 0, "stdout": b"first()\n\n  second()  \n"},
+                )(),
+            )
+        )
+        cache: workflow.FileLineCache = {}
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: next(responses)):
+            self.assertEqual(
+                workflow.head_file_lines(refs, "file.py", cache),
+                [(1, "first()"), (3, "  second()")],
+            )
+            self.assertEqual(
+                workflow.head_file_lines(refs, "file.py", cache),
+                [(1, "first()"), (3, "  second()")],
+            )
+
+    def test_head_file_text_uses_only_safe_bounded_git_blobs(self) -> None:
+        """Read only safe repository paths through the bounded Git blob contract."""
+
+        refs = {"head_sha": "head"}
+        cache: workflow.FileTextCache = {}
+        self.assertIsNone(workflow.head_file_text(refs, "../private", cache))
+        self.assertIsNone(workflow.head_file_text(refs, "../private", cache))
+
+        with patched_attr(
+            workflow.subprocess,
+            "run",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid size")),
+        ):
+            self.assertIsNone(workflow.head_file_text(refs, "broken.py"))
+
+        responses = iter(
+            (
+                type("Result", (), {"returncode": 0, "stdout": "8"})(),
+                type("Result", (), {"returncode": 0, "stdout": b"value=1\n"})(),
+            )
+        )
+        cache = {}
+        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: next(responses)):
+            self.assertEqual(workflow.head_file_text(refs, "safe.py", cache), "value=1\n")
+            self.assertEqual(workflow.head_file_text(refs, "safe.py", cache), "value=1\n")
+
+    def test_workflow_identity_helpers_fail_closed_on_ambiguous_values(self) -> None:
+        """Keep inline, approval, and reviewed-SHA identities unambiguous."""
+
+        self.assertEqual(workflow.inline_skip_reason(None, "file.py", 1), "missing_diff_refs")
+        self.assertEqual(workflow.inline_skip_reason({}, "", 1), "missing_path")
+        self.assertEqual(workflow.inline_skip_reason({}, "file.py", 0), "missing_line")
+        self.assertEqual(workflow.inline_skip_reason({}, "file.py", 1), "unknown")
+
+        for metadata in (
+            None,
+            {"schema_version": 4},
+            {"schema_version": 5, "review": []},
+            {
+                "schema_version": 5,
+                "review": {"source_sha": "invalid", "mr_author_id": True},
+            },
+        ):
+            with self.subTest(metadata=metadata):
+                self.assertEqual(workflow.approval_receipt_identity(metadata), ("", None))
+        self.assertEqual(
+            workflow.approval_receipt_identity(
+                {
+                    "schema_version": 5,
+                    "review": {"source_sha": "a" * 40, "mr_author_id": 41},
+                }
+            ),
+            ("a" * 40, 41),
+        )
+
+        with patched_env(
+            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="0" * 40,
+            CI_COMMIT_SHA="b" * 40,
+        ):
+            self.assertEqual(workflow.reviewed_sha(), "b" * 40)
 
     def test_coverage_diagnostics_are_deduplicated_redacted_and_fail_closed(self) -> None:
         """Count unique files while keeping malformed failure paths out of public notes."""
@@ -1702,6 +1972,127 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertIn("\\/merge", notes[0])
         self.assertNotIn("\n/merge", notes[0])
 
+    def test_parse_error_preserves_previous_review_and_respects_strict_mode(self) -> None:
+        """Preserve prior review state and apply strictness after result parse failure."""
+
+        stderr_path = Path("unused-stderr.log")
+        read_paths: list[Path] = []
+
+        def safe_excerpt(path: Path) -> str:
+            read_paths.append(path)
+            return "token=***\n/merge"
+
+        for details, strict, expected in (("0", "false", 0), ("1", "true", 1)):
+            notes: list[str] = []
+
+            def capture(
+                _config: Any, _title: str, body: str, _transaction: PostingTransaction
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
+
+            with (
+                self.subTest(details=details, strict=strict),
+                patched_env(OCR_POST_ERROR_DETAILS=details, OCR_STRICT_POSTING=strict),
+                patched_attr(workflow, "read_stderr_excerpt", safe_excerpt),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_parse_error(gitlab_config(), stderr_path)
+
+            self.assertEqual(exit_code, expected)
+            self.assertNotIn("\n/merge", notes[0])
+            self.assertEqual("token=***" in notes[0], details == "1")
+
+        self.assertEqual(read_paths, [stderr_path])
+
+    def test_missing_result_failure_is_distinct_and_preserves_previous_review(self) -> None:
+        """Report a missing result distinctly without deleting the prior review."""
+
+        notes: list[str] = []
+
+        def capture(
+            _config: Any, _title: str, body: str, _transaction: PostingTransaction
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            stderr_path = Path(tmp) / "stderr.log"
+            with (
+                patched_env(OCR_POST_ERROR_DETAILS="0"),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: (_ for _ in ()).throw(RuntimeError("unavailable")),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, -1)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("result file was missing", notes[0])
+        self.assertNotIn("exit code", notes[0])
+        self.assertIn("Previous OCR review comments were preserved", notes[0])
+
+    def test_provider_failure_redacts_hostile_warning_and_never_succeeds(self) -> None:
+        """Redact provider diagnostics and keep provider failure non-successful."""
+
+        notes: list[str] = []
+        secret = "provider-secret-value"
+
+        def capture(
+            _config: Any, _title: str, body: str, _transaction: PostingTransaction
+        ) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_env(OCR_LLM_TOKEN=secret),
+            patched_attr(workflow, "post_review_note_bounded", capture),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_llm_provider_failure(
+                gitlab_config(), [f"token={secret}\n/merge"]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertNotIn(secret, notes[0])
+        self.assertNotIn("\n/merge", notes[0])
+        self.assertIn(r"token=\*\*\*", notes[0])
+
+    def test_previous_review_cleanup_depends_only_on_coverage_completeness(self) -> None:
+        """Clean prior review state only after complete replacement coverage."""
+
+        previous = snapshot.BotCommentRefs(discussions_to_resolve=["discussion-17"])
+        calls: list[str] = []
+        partial = ReviewOutcome(status="partial", kind="partial", budget_exceeded=False)
+        complete = ReviewOutcome(status="success", kind="clean", budget_exceeded=False)
+
+        with (
+            patched_attr(
+                workflow,
+                "delete_previous_summary_notes",
+                lambda *_args: calls.append("summary"),
+            ),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: calls.append("complete"),
+            ),
+            patched_attr(
+                workflow,
+                "resolve_requested_discussions",
+                lambda *_args: calls.append("resolve"),
+            ),
+        ):
+            workflow.finalize_previous_review_state(gitlab_config(), previous, partial)
+            workflow.finalize_previous_review_state(gitlab_config(), previous, complete)
+
+        self.assertEqual(calls, ["summary", "resolve", "complete", "resolve"])
+
     def test_setup_pending_status_selects_only_static_text_and_preserves_exit_modes(self) -> None:
         for emoji, strict, expected_exit in (("true", "false", 0), ("false", "true", 1)):
             with self.subTest(emoji=emoji, strict=strict), tempfile.TemporaryDirectory() as tmp:
@@ -1823,6 +2214,73 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("result may be partial", notes[0])
         self.assertIn("generic details", notes[0])
+
+    def test_background_rejection_status_uses_only_static_numeric_summary(self) -> None:
+        """Publish installed-OCR limits without its private path or raw stderr."""
+
+        for reason, actual, limit, unit in (
+            (BACKGROUND_CHARACTER_LIMIT_REASON, 8_001, 8_000, "characters"),
+            (BACKGROUND_FILE_SIZE_LIMIT_REASON, 1_048_577, 1_048_576, "bytes"),
+        ):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                directory = root / ".review-context"
+                directory.mkdir(mode=0o700)
+                status_path = directory / "pre-execution-status.json"
+                write_pre_execution_status(
+                    status_path,
+                    PreExecutionStatus(
+                        schema_version=STATUS_SCHEMA,
+                        reason=reason,
+                        diff_base_sha="a" * 40,
+                        source_sha="b" * 40,
+                        policy_sha="c" * 40,
+                        actual=actual,
+                        limit=limit,
+                        unit=unit,
+                    ),
+                )
+                stderr_path = root / "stderr.log"
+                stderr_path.write_text(
+                    'Error: background file "/private/provider/background.md" secret-value\n',
+                    encoding="utf-8",
+                )
+                notes: list[tuple[str, str]] = []
+
+                def capture_note(
+                    _config: gitlab.GitLabConfig,
+                    title: str,
+                    body: str,
+                    _transaction: PostingTransaction,
+                ) -> dict[str, int]:
+                    notes.append((title, body))
+                    return {"id": 1}
+
+                with (
+                    patched_env(
+                        CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                        CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                        OCR_POST_ERROR_DETAILS="1",
+                    ),
+                    patched_attr(
+                        workflow,
+                        "repository_artifacts",
+                        lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                    ),
+                    patched_attr(workflow, "post_review_note_bounded", capture_note),
+                    patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                ):
+                    exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
+
+                self.assertEqual(exit_code, 0)
+                self.assertIn("background was rejected", notes[0][0])
+                self.assertIn(f"`{actual}` {unit}", notes[0][1])
+                self.assertIn(f"`{limit}` {unit}", notes[0][1])
+                self.assertIn("model review", notes[0][1])
+                self.assertIn("Previous Open Code Review comments were preserved", notes[0][1])
+                self.assertNotIn("private", notes[0][1])
+                self.assertNotIn("secret-value", notes[0][1])
+                self.assertNotIn("background.md", notes[0][1])
 
 
 class PostingSummaryTests(unittest.TestCase):
@@ -2987,6 +3445,124 @@ class PostingTransactionTests(unittest.TestCase):
         self.assertEqual(transaction.plain_note_ids, (18,))
         self.assertEqual(transaction.discussion_note_refs, (("discussion-19", 19),))
 
+    def test_partial_draft_publication_stops_at_exact_failed_identity(self) -> None:
+        """Stop draft publication at the exact identity that failed to publish."""
+
+        transaction = PostingTransaction()
+        self.assertTrue(transaction.record_draft(17))
+        self.assertTrue(transaction.record_draft(18))
+        self.assertTrue(transaction.record_draft(19))
+        published: list[int] = []
+
+        def publish(_config: Any, note_id: int) -> bool:
+            published.append(note_id)
+            return note_id != 18
+
+        settings.post_mode.cache_clear()
+        try:
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(gitlab, "publish_draft_note", publish),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertFalse(gitlab.publish_created_draft_notes(gitlab_config(), transaction))
+        finally:
+            settings.post_mode.cache_clear()
+
+        self.assertEqual(published, [17, 18])
+        self.assertEqual(transaction.draft_note_ids, (17, 18, 19))
+        self.assertEqual(transaction.consume_drafts_for_publication(), ())
+
+    def test_regular_review_note_records_only_exact_mode_specific_identity(self) -> None:
+        """Record a successful review note in only its active publication mode."""
+
+        settings.post_mode.cache_clear()
+        try:
+            draft_transaction = PostingTransaction()
+            with (
+                patched_env(OCR_POST_MODE="draft"),
+                patched_attr(gitlab, "post_draft_note", lambda *_args, **_kwargs: {"id": 17}),
+            ):
+                draft = gitlab.post_review_note(gitlab_config(), "draft body", draft_transaction)
+            self.assertEqual(draft, {"id": 17})
+            self.assertEqual(draft_transaction.draft_note_ids, (17,))
+
+            settings.post_mode.cache_clear()
+            direct_transaction = PostingTransaction()
+            with (
+                patched_env(OCR_POST_MODE="direct"),
+                patched_attr(gitlab, "post_note", lambda *_args, **_kwargs: {"id": 18}),
+            ):
+                direct = gitlab.post_review_note(gitlab_config(), "direct body", direct_transaction)
+            self.assertEqual(direct, {"id": 18})
+            self.assertEqual(direct_transaction.plain_note_ids, (18,))
+        finally:
+            settings.post_mode.cache_clear()
+
+    def test_regular_review_note_rejects_missing_malformed_and_duplicate_identity(self) -> None:
+        """Reject writes without one new exact provider-owned note identity."""
+
+        settings.post_mode.cache_clear()
+        try:
+            for mode, response in (
+                ("draft", None),
+                ("draft", {"id": "17"}),
+                ("direct", None),
+                ("direct", {"id": True}),
+            ):
+                transaction = PostingTransaction()
+                target = "post_draft_note" if mode == "draft" else "post_note"
+                with (
+                    self.subTest(mode=mode, response=response),
+                    patched_env(OCR_POST_MODE=mode),
+                    patched_attr(gitlab, target, lambda *_args, value=response, **_kwargs: value),
+                    redirect_stderr(io.StringIO()),
+                ):
+                    settings.post_mode.cache_clear()
+                    self.assertIsNone(gitlab.post_review_note(gitlab_config(), "body", transaction))
+
+            settings.post_mode.cache_clear()
+            transaction = PostingTransaction()
+            self.assertTrue(transaction.record_plain(18))
+            with (
+                patched_env(OCR_POST_MODE="direct"),
+                patched_attr(gitlab, "post_note", lambda *_args, **_kwargs: {"id": 18}),
+            ):
+                self.assertIsNone(gitlab.post_review_note(gitlab_config(), "body", transaction))
+        finally:
+            settings.post_mode.cache_clear()
+
+    def test_bounded_review_note_truncates_multibyte_body_before_posting(self) -> None:
+        """Apply the provider byte budget before posting a multibyte review note."""
+
+        bodies: list[str] = []
+
+        def capture(
+            _config: Any,
+            body: str,
+            _transaction: PostingTransaction,
+            fingerprint: str | None = None,
+        ) -> dict[str, int]:
+            self.assertEqual(fingerprint, "a" * FINGERPRINT_LEN)
+            bodies.append(body)
+            return {"id": 1}
+
+        with patched_attr(gitlab, "post_review_note", capture):
+            response = gitlab.post_review_note_bounded(
+                gitlab_config(),
+                "Review summary",
+                "ж" * (settings.MAX_NOTE_CHARS + 100),
+                PostingTransaction(),
+                fingerprint="a" * FINGERPRINT_LEN,
+            )
+
+        self.assertEqual(response, {"id": 1})
+        self.assertEqual(len(bodies), 1)
+        self.assertLessEqual(
+            len(bodies[0].encode("utf-8")),
+            payloads.note_body_budget(settings.MAX_NOTE_CHARS, "a" * FINGERPRINT_LEN),
+        )
+
 
 class GitLabSnapshotTests(unittest.TestCase):
     def test_inline_review_mints_one_write_identity_before_each_create(self) -> None:
@@ -3054,6 +3630,123 @@ class GitLabSnapshotTests(unittest.TestCase):
         ):
             with self.subTest(discussion=discussion), redirect_stderr(io.StringIO()):
                 self.assertIsNone(gitlab.created_discussion_note(discussion))
+
+    def test_diff_refs_bind_only_the_current_ci_head_and_complete_version(self) -> None:
+        """Accept diff refs only when the complete version binds to the CI head."""
+
+        versions = [
+            "invalid",
+            {
+                "head_commit_sha": "b" * 40,
+                "base_commit_sha": "base",
+                "start_commit_sha": "start",
+            },
+        ]
+        with (
+            patched_env(
+                CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                CI_COMMIT_SHA="c" * 40,
+            ),
+            patched_attr(gitlab, "api_get_paginated", lambda *_args, **_kwargs: versions),
+        ):
+            self.assertEqual(
+                gitlab.get_diff_refs(gitlab_config()),
+                {"base_sha": "base", "start_sha": "start", "head_sha": "b" * 40},
+            )
+
+        for values, response in (
+            (
+                {"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "", "CI_COMMIT_SHA": ""},
+                versions,
+            ),
+            (
+                {"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "d" * 40, "CI_COMMIT_SHA": ""},
+                versions,
+            ),
+            (
+                {"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "b" * 40, "CI_COMMIT_SHA": ""},
+                [{"head_commit_sha": "b" * 40, "base_commit_sha": ""}],
+            ),
+            (
+                {"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "b" * 40, "CI_COMMIT_SHA": ""},
+                [],
+            ),
+        ):
+            with (
+                self.subTest(values=values, response=response),
+                patched_env(**values),
+                patched_attr(
+                    gitlab,
+                    "api_get_paginated",
+                    lambda *_args, value=response, **_kwargs: value,
+                ),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertIsNone(gitlab.get_diff_refs(gitlab_config()))
+
+    def test_snapshot_cleanup_uses_only_collected_typed_identities(self) -> None:
+        """Delete only typed identities from a safely collected snapshot."""
+
+        refs = snapshot.BotCommentRefs(
+            plain_note_ids=[11, 12],
+            discussion_note_refs=[("discussion-13", 13)],
+            draft_note_ids=[14],
+            summary_plain_note_ids=[21],
+            summary_draft_note_ids=[22],
+            setup_plain_note_ids=[31],
+            setup_draft_note_ids=[32],
+        )
+        deleted: list[tuple[str, object]] = []
+
+        with (
+            patched_attr(
+                snapshot,
+                "delete_plain_note",
+                lambda _config, note_id: deleted.append(("plain", note_id)) or note_id != 12,
+            ),
+            patched_attr(
+                snapshot,
+                "delete_discussion_note",
+                lambda _config, discussion_id, note_id: (
+                    deleted.append(("discussion", (discussion_id, note_id))) or True
+                ),
+            ),
+            patched_attr(
+                snapshot,
+                "delete_draft_note",
+                lambda _config, note_id: deleted.append(("draft", note_id)) or True,
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            snapshot.delete_collected_bot_comments(gitlab_config(), refs)
+            snapshot.delete_previous_summary_notes(gitlab_config(), refs)
+            snapshot.delete_previous_setup_notes(gitlab_config(), refs)
+
+        self.assertEqual(
+            deleted,
+            [
+                ("plain", 11),
+                ("plain", 12),
+                ("discussion", ("discussion-13", 13)),
+                ("draft", 14),
+                ("plain", 21),
+                ("draft", 22),
+                ("plain", 31),
+                ("draft", 32),
+            ],
+        )
+
+        stderr = io.StringIO()
+        with (
+            redirect_stderr(stderr),
+            patched_attr(
+                snapshot,
+                "delete_collected_bot_comments",
+                lambda *_args: self.fail("unsafe snapshot reached deletion"),
+            ),
+        ):
+            snapshot.delete_previous_bot_comments_if_collected(gitlab_config(), None)
+        self.assertIn("not collected safely", stderr.getvalue())
 
     def test_create_transport_serializes_write_marker_and_validates_endpoint_identity(self) -> None:
         requests: list[tuple[str, dict[str, Any]]] = []
@@ -3251,6 +3944,72 @@ class GitLabSnapshotTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_gitlab_get_honors_bounded_retry_after_but_write_is_not_retried(self) -> None:
+        """Retry bounded reads while keeping provider writes single-attempt."""
+
+        attempts: list[str] = []
+        sleeps: list[float] = []
+
+        class Response:
+            def __init__(self) -> None:
+                self.sent = False
+
+            def __enter__(self) -> Response:
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self, _limit: int = -1) -> bytes:
+                if self.sent:
+                    return b""
+                self.sent = True
+                return b'{"ok":true}'
+
+        def open_request(request: urllib.request.Request) -> Any:
+            attempts.append(request.method)
+            if request.method == "GET" and attempts.count("GET") == 2:
+                return Response()
+            raise urllib.error.HTTPError(
+                request.full_url,
+                503,
+                "Unavailable",
+                hdrs={"Retry-After": "120"},
+                fp=io.BytesIO(b"temporary"),
+            )
+
+        with (
+            patched_attr(gitlab, "_open_gitlab_request", open_request),
+            patched_attr(gitlab.time, "sleep", sleeps.append),
+            redirect_stderr(io.StringIO()),
+        ):
+            read = gitlab.api_request_url(
+                "https://gitlab.example/api", "token", "PRIVATE-TOKEN", method="GET"
+            )
+            write = gitlab.api_request_url(
+                "https://gitlab.example/api",
+                "token",
+                "PRIVATE-TOKEN",
+                data={"body": "review"},
+                method="POST",
+            )
+
+        self.assertEqual(read, {"ok": True})
+        self.assertIsNone(write)
+        self.assertEqual(attempts, ["GET", "GET", "POST"])
+        self.assertEqual(sleeps, [60.0])
+
+    def test_retry_after_parser_accepts_seconds_dates_and_rejects_garbage(self) -> None:
+        """Bound Retry-After seconds and dates while rejecting malformed input."""
+
+        self.assertEqual(gitlab._retry_after_seconds("2.5"), 2.5)
+        self.assertEqual(gitlab._retry_after_seconds("-1"), 0.0)
+        future = gitlab._retry_after_seconds("Fri, 31 Dec 9999 23:59:59 GMT")
+        self.assertIsNotNone(future)
+        assert future is not None
+        self.assertGreater(future, 60.0)
+        self.assertIsNone(gitlab._retry_after_seconds("not-a-date"))
 
     def test_gitlab_api_unit_bounds_mocked_success_responses(self) -> None:
         read_limits: list[int] = []
@@ -3672,7 +4431,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("token must not be sent to HTTP"),
             ):
                 config = gitlab.load_gitlab_config()
@@ -3688,7 +4447,7 @@ class ApiErrorRedactionTests(unittest.TestCase):
         ):
             with patched_attr(
                 gitlab,
-                "fetch_current_user_id",
+                "fetch_posting_identity",
                 lambda *_args: self.fail("invalid origin must not receive the token"),
             ):
                 config = gitlab.load_gitlab_config()
@@ -3896,6 +4655,143 @@ class OcrResultLoadingTests(unittest.TestCase):
                 loaded = result.load_ocr_result(path)
 
         self.assertEqual(loaded, {"comments": []})
+
+    def test_result_transform_retries_short_writes_and_replaces_atomically(self) -> None:
+        """Complete short writes before atomically replacing the result artifact."""
+
+        original_write = os.write
+
+        def short_write(descriptor: int, payload: bytes) -> int:
+            return original_write(descriptor, payload[:3])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "result.json"
+            path.write_text('{"comments": []}', encoding="utf-8")
+            with patched_attr(os, "write", short_write):
+                transformed = ocr_result.transform_ocr_result(
+                    path, lambda payload: {**payload, "status": "success"}
+                )
+
+            self.assertEqual(transformed["status"], "success")
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), transformed)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(list(root.glob(".result.json.*.tmp")), [])
+
+    def test_result_transform_short_write_failure_preserves_original_and_cleans_temp(self) -> None:
+        """Preserve the original and clean temporary data after short-write failure."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "result.json"
+            original = b'{"comments": []}'
+            path.write_bytes(original)
+
+            with (
+                patched_attr(os, "write", lambda _descriptor, _payload: 0),
+                self.assertRaisesRegex(ocr_result.OcrResultMissing, "short write"),
+            ):
+                ocr_result.transform_ocr_result(path, lambda payload: payload)
+
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(root.glob(".result.json.*.tmp")), [])
+
+    def test_result_transform_detects_inode_replacement_and_keeps_replacement(self) -> None:
+        """Reject inode drift without overwriting the independently replaced result."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "result.json"
+            path.write_text('{"comments": []}', encoding="utf-8")
+
+            def replace_entry(payload: dict[str, Any]) -> dict[str, Any]:
+                path.unlink()
+                path.write_text('{"owner":"foreign"}', encoding="utf-8")
+                return payload
+
+            with self.assertRaisesRegex(ocr_result.OcrResultMissing, "changed while"):
+                ocr_result.transform_ocr_result(path, replace_entry)
+
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"owner": "foreign"})
+            self.assertEqual(list(root.glob(".result.json.*.tmp")), [])
+
+    def test_result_transform_rejects_nonobject_recursion_and_growth(self) -> None:
+        """Reject malformed transforms and output that exceeds the result budget."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.json"
+            path.write_text("[]", encoding="utf-8")
+            with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "must be an object"):
+                ocr_result.transform_ocr_result(path, lambda payload: payload)
+
+            path.write_text("{}", encoding="utf-8")
+
+            def recurse(_payload: dict[str, Any]) -> dict[str, Any]:
+                raise RecursionError("nested result")
+
+            with self.assertRaises(ocr_result.OcrResultMalformed):
+                ocr_result.transform_ocr_result(path, recurse)
+
+            with (
+                patched_env(OCR_MAX_RESULT_BYTES="32"),
+                self.assertRaises(ocr_result.OcrResultTooLarge),
+            ):
+                ocr_result.transform_ocr_result(path, lambda _payload: {"value": "x" * 40})
+
+    def test_result_replace_failure_preserves_original_and_cleans_temporary(self) -> None:
+        """Preserve the prior result and remove temporary data after replace failure."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "result.json"
+            original = b'{"comments":[]}'
+            path.write_bytes(original)
+
+            def fail_replace(*_args: Any, **_kwargs: Any) -> None:
+                raise OSError("replace unavailable")
+
+            with (
+                patched_attr(os, "replace", fail_replace),
+                self.assertRaisesRegex(ocr_result.OcrResultMissing, "could not replace"),
+            ):
+                ocr_result.transform_ocr_result(path, lambda payload: payload)
+
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(root.glob(".result.json.*.tmp")), [])
+
+    def test_toolkit_metadata_is_reserved_and_schema_owned(self) -> None:
+        """Keep toolkit metadata reserved and pin its schema at attachment time."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.json"
+            path.write_text('{"status":"success"}', encoding="utf-8")
+            transformed, metadata = ocr_result.attach_toolkit_metadata(
+                path,
+                lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
+            )
+
+            self.assertEqual(metadata["schema_version"], 5)
+            self.assertEqual(transformed["_ocr_toolkit"], metadata)
+
+            with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):
+                ocr_result.attach_toolkit_metadata(path, lambda _payload: {})
+
+    def test_result_size_configuration_is_bounded_without_echoing_input(self) -> None:
+        """Bound result-size configuration without reflecting hostile input."""
+
+        for configured, expected in (
+            ("not-an-integer", ocr_result.DEFAULT_MAX_RESULT_BYTES),
+            ("0", ocr_result.DEFAULT_MAX_RESULT_BYTES),
+            (
+                str(ocr_result.MAX_RESULT_BYTES_HARD_LIMIT + 1),
+                ocr_result.MAX_RESULT_BYTES_HARD_LIMIT,
+            ),
+        ):
+            with self.subTest(configured=configured), patched_env(OCR_MAX_RESULT_BYTES=configured):
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    self.assertEqual(ocr_result.max_result_bytes(), expected)
+                self.assertNotIn("not-an-integer", stderr.getvalue())
 
     def test_result_symlink_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -74,22 +74,16 @@ def _parse_extra_body(value: str) -> Any:
 
 
 def _llm_protocol() -> str:
-    """Resolve and validate the OCR 1.7.10 LLM wire protocol."""
+    """Resolve and validate the explicit OCR LLM wire protocol."""
 
-    protocol = _env("OCR_LLM_PROTOCOL")
-    legacy_mode = _env("OCR_USE_ANTHROPIC").lower()
-    if legacy_mode not in {"", "false", "true"}:
-        raise OCRRuntimeConfigError("OCR_USE_ANTHROPIC must be true or false when set")
-    if not protocol:
-        protocol = "anthropic" if legacy_mode == "true" else "openai"
+    if "OCR_USE_ANTHROPIC" in os.environ:
+        raise OCRRuntimeConfigError(
+            "OCR_USE_ANTHROPIC was removed; set OCR_LLM_PROTOCOL=anthropic explicitly"
+        )
+    protocol = _env("OCR_LLM_PROTOCOL", "openai") or "openai"
     if protocol not in LLM_PROTOCOLS:
         allowed = ", ".join(sorted(LLM_PROTOCOLS))
         raise OCRRuntimeConfigError(f"OCR_LLM_PROTOCOL must be one of: {allowed}")
-
-    if legacy_mode == "true" and protocol != "anthropic":
-        raise OCRRuntimeConfigError("OCR_LLM_PROTOCOL conflicts with OCR_USE_ANTHROPIC")
-    if legacy_mode == "false" and protocol == "anthropic":
-        raise OCRRuntimeConfigError("OCR_LLM_PROTOCOL conflicts with OCR_USE_ANTHROPIC")
     return protocol
 
 

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.9",
-  "recommended_version": "1.9.9",
+  "monitoring_floor": "1.9.10",
+  "recommended_version": "1.9.10",
   "releases": [
     {
       "assets": [
@@ -1083,6 +1083,57 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.9",
       "status": "tested",
       "version": "1.9.9"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "7187fc9ddde290cb02079f121a525d25c23fbc284f680422a6e76e7bea446857",
+          "size": 57496144
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "c626347bafcdbf25cf058af403d16568a3a9ffa1814046ff7c9d1e6becaf60d2",
+          "size": 54576370
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
+          "size": 55759010
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "8d28bfaaa5044c6b20fb3cdbd87f51725789f333ffa6c86588ecd280e59ae31f",
+          "size": 52494498
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "22156142747260217a992fe540dccc47786cf486be634f1e3eba3c94e1cce59c",
+          "size": 57218560
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "a33fb2836d0207e438e33e9b6f8d3ed0350fbf63110427009f1d918b57b47a4f",
+          "size": 53217280
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "24a72265a86f06108ef18fd844045c468fd1f8ee853bea6f0ac7acf9341b2fdf",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.9.10.json",
+      "evidence_sha256": "be6cee2057ed0ae4b4acca2338f019ef3137968e86ec603526d183cb22aa4ae8",
+      "human_conclusion": "Compatible after checksum-verified hosted Linux qualification and direct adjacent source review. OCR 1.9.10 changes terminal retry-report grouping only; structured ocr.llm-retry-report/v1, result, manifest, and toolkit review semantics remain unchanged and private. Background wait and safe resume checkpoint fixes apply to ocr scan, while the toolkit invokes ocr review. VS Code merge-file enumeration is outside the toolkit contract. No telemetry, receipt, DLP, severity, outcome, or approval input changes.",
+      "published_at": "2026-08-23T07:24:50Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.10",
+      "status": "tested",
+      "version": "1.9.10"
     }
   ],
   "schema_version": 1,

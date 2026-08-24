@@ -6,6 +6,6 @@
     "resource_classes": ["issue"],
     "command": "/opt/ocr-context-proxy/bin/ocr-context-proxy",
     "args": ["--stdio"],
-    "env_from": ["SYNTHETIC_ADAPTER_TOKEN"]
+    "env_from": ["TRACKER_CONTEXT_TOKEN"]
   }
 ]

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "tracker",
+    "type": "remote",
+    "tenants": ["engineering"],
+    "resource_classes": ["issue"],
+    "url": "https://context-proxy.example.invalid/v1/authorize-and-resolve",
+    "headers_from": {
+      "Authorization": "TRACKER_CONTEXT_AUTHORIZATION"
+    }
+  }
+]

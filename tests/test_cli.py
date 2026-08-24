@@ -23,6 +23,64 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["mcp-config"]).command, "mcp-config")
         self.assertEqual(parser.parse_args(["post"]).command, "post")
 
+    def test_review_parses_local_private_artifact_preservation(self) -> None:
+        parser = cli.build_parser()
+
+        args = parser.parse_args(
+            [
+                "review",
+                "--result",
+                "result.json",
+                "--stderr",
+                "ocr.log",
+                "--preserve-private-artifacts",
+                "--",
+                "--from",
+                "base",
+                "--to",
+                "head",
+            ]
+        )
+
+        self.assertTrue(args.preserve_private_artifacts)
+        self.assertEqual(args.ocr_args, ["--", "--from", "base", "--to", "head"])
+
+    def test_review_dispatch_forwards_private_artifact_preservation(self) -> None:
+        calls: list[tuple[Path, Path, list[str], bool]] = []
+
+        def run_review(
+            result: Path,
+            stderr: Path,
+            arguments: list[str],
+            *,
+            preserve_private_artifacts: bool,
+        ) -> int:
+            calls.append((result, stderr, arguments, preserve_private_artifacts))
+            return 0
+
+        with patched_attr(cli.review_runner, "run_evidence_review", run_review):
+            result = cli.main(
+                [
+                    "review",
+                    "--result",
+                    "result.json",
+                    "--stderr",
+                    "ocr.log",
+                    "--preserve-private-artifacts",
+                    "--",
+                    "--from",
+                    "base",
+                    "--to",
+                    "head",
+                ]
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            calls,
+            [(Path("result.json"), Path("ocr.log"), ["--from", "base", "--to", "head"], True)],
+        )
+
     def test_top_level_version_uses_centralized_package_metadata(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as raised:

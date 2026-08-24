@@ -95,6 +95,7 @@ from ocr_toolkit.posting.suggestions import (
 )
 from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
+    BACKGROUND_REASONS,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     PreExecutionStatus,
     PreExecutionStatusError,
@@ -1259,6 +1260,28 @@ def post_ocr_failure(config: GitLabConfig, stderr_path: Path, exit_code: int) ->
 def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
     """Render static toolkit text for one already hostile-validated closed outcome."""
 
+    if status.reason in BACKGROUND_REASONS:
+        transaction = PostingTransaction()
+        heading = (
+            "**⛔ Open Code Review background was rejected**"
+            if post_emoji()
+            else "**Open Code Review background was rejected**"
+        )
+        unit = status.unit
+        body = (
+            "The installed, preflight-qualified OCR executable rejected the generated review "
+            f"background before model execution: `{status.actual}` {unit} exceeded its current "
+            f"hard limit of `{status.limit}` {unit}.\n\n"
+            "No model review or review findings were produced. Previous Open Code Review "
+            "comments were preserved."
+        )
+        response = post_review_note_bounded(config, heading, body, transaction)
+        if response is None:
+            print("Failed to create OCR background-rejection note.", file=sys.stderr)
+            return posting_failure_exit(config, None, transaction)
+        if not finalize_posting(config, transaction):
+            return publish_failure_exit(config, transaction)
+        return 1 if strict_posting() else 0
     if status.reason != PROTECTED_TARGET_RULE_PATH_PENDING:
         raise ValueError("unsupported pre-execution status")
     previous_refs = collect_previous_bot_comment_refs(config)

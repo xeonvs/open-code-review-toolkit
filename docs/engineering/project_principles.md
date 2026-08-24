@@ -60,7 +60,7 @@ Executable integration claims additionally require clean built artifacts, restri
 
 ### Public source and disclosure
 
-Tracked public source, fixtures, examples, diagnostics intended for publication, and release artifacts contain only synthetic names, hosts, repositories, and payloads. TestPyPI is public disclosure. Local secret scanning covers unpublished feature history before its first push; private audit inputs and artifacts remain outside tracked content.
+Tracked public source, fixtures, examples, diagnostics intended for publication, and release artifacts contain only private-safe names, placeholder hosts, controlled repositories, and non-secret payloads. Public examples describe real operating behavior and are not labelled as test data. TestPyPI is public disclosure. Local secret scanning covers unpublished feature history before its first push; private audit inputs and artifacts remain outside tracked content.
 
 ### Outcome consistency
 

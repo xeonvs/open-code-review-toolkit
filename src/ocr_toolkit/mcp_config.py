@@ -253,7 +253,7 @@ def _headers(value: Any, env_from: Any, server_name: str) -> tuple[dict[str, str
                 f"servers.{server_name}.headers_from.{name} references a CI variable "
                 "containing invalid HTTP control characters"
             )
-        # OCR 1.8 expands $VARNAME when it creates the remote client. Keeping the
+        # OCR expands $VARNAME when it creates the remote client. Keeping the
         # reference avoids serializing the secret into config.json. Read the value
         # once so missing credentials fail early and downstream errors can redact it.
         result[name] = f"${source_name}"

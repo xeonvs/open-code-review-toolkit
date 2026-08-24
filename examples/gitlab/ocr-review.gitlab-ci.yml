@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.9.9"
+  OCR_VERSION: "v1.9.10"
   OCR_TOOLKIT_VERSION: "0.7.1"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "52f993c615a6b456cb1c36fc135fec6b8da19cb88da7f305bd2726c3d72f1cf0"
+  OCR_SHA256: "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on receipt-bound approval; external MCP always remains comment-only.
@@ -20,7 +20,8 @@ variables:
   # OCR_POST_BADGES: "shields"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
-  OCR_RUN_HELPER_TESTS: "false"
+  # OCR 1.9.10 default; raise deliberately for repositories that need more tool rounds.
+  OCR_MAX_TOOLS: "30"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"
   # Reviews default to English. To request another language, for example Russian, set:
@@ -72,11 +73,10 @@ open_code_review:
       --dest /tmp --requirement /tmp/ocr-toolkit-requirement.txt
     - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/${OCR_TOOLKIT_WHEEL}" | sha256sum --check --strict
     - pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"
-    - if [ "${OCR_RUN_HELPER_TESTS:-false}" = "true" ]; then uv run pytest tests; fi
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
-    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
+    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tools "${OCR_MAX_TOOLS:-30}" --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
     - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 
 open_code_review_self_test:

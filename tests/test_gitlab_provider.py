@@ -701,6 +701,9 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "assert config['llm']['url'] == 'https://llm.example.invalid/v1'\n"
         "assert config['llm']['model'] == 'synthetic-model'\n"
         "assert config['llm']['auth_token'] == 'synthetic-runtime-token'\n"
+        "if '--preview' in args:\n"
+        "    print(json.dumps({'files': []}, sort_keys=True))\n"
+        "    raise SystemExit(0)\n"
         "server = config['mcp_servers']['ocr_toolkit_evidence']\n"
         "requests = [\n"
         " {'jsonrpc':'2.0','id':1,'method':'initialize','params':"
@@ -762,7 +765,6 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         monkeypatch.setenv(name, value)
 
     from ocr_toolkit import review_runner
-    from ocr_toolkit.evidence.store import EvidenceStore
 
     with _https_gitlab(tmp_path / "tls", source_sha=head, target_sha=policy) as api_root:
         monkeypatch.setenv("CI_API_V4_URL", api_root)
@@ -783,11 +785,6 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
 
     assert exit_code == 0
     artifacts = repository_artifacts(checkout)
-    assert artifacts.policy_rules.read_text(encoding="utf-8") == policy_rules
-    store = EvidenceStore.read(artifacts.store)
-    assert store.base is not None and store.base.commit_sha == base
-    assert store.head is not None and store.head.commit_sha == head
-    assert store.policy is not None and store.policy.commit_sha == policy
     assert _git(checkout, "for-each-ref", "--format=%(refname) %(objectname)") == refs_before
     assert _git(checkout, "cat-file", "-t", policy) == "commit"
     assert _git(checkout, "status", "--short") == ""
@@ -830,6 +827,15 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
     }
-    assert not artifacts.action_receipt.exists()
-    for path in (artifacts.store, artifacts.bootstrap, artifacts.policy_rules, result, stderr):
+    for path in (
+        artifacts.store,
+        artifacts.bootstrap,
+        artifacts.policy_rules,
+        artifacts.context_store,
+        artifacts.action_receipt,
+        artifacts.action_receipt_lock,
+        artifacts.dlp_decisions,
+    ):
+        assert not path.exists()
+    for path in (result, stderr):
         assert path.stat().st_mode & 0o777 == 0o600

@@ -17,9 +17,10 @@ from typing import Any
 
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
-    PROJECTION_FIELDS,
-    RESOURCE_CLASSES,
+    REMEDIATION_MODEL_FIELD,
     RETENTION_FIELDS,
+    STORE_PROJECTION_FIELDS,
+    STORE_RESOURCE_CLASSES,
     STORE_SCHEMA,
     TextBudgets,
 )
@@ -38,6 +39,9 @@ STORE_TEXT_BUDGETS = TextBudgets(
     max_bytes=MAX_STORE_BYTES,
     max_lines=100_000,
 )
+REMEDIATION_ANCHOR_STATES = frozenset({"current", "outdated", "unpositioned"})
+REMEDIATION_COMPLETENESS = frozenset({"complete", "partial"})
+MAX_REMEDIATION_REPLIES = 100
 
 
 class ContextStoreError(ValueError):
@@ -135,9 +139,124 @@ def _mapping(value: object, label: str) -> Mapping[str, object]:
     return value
 
 
+def _bounded_projection_integer(value: object, *, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= maximum:
+        raise ContextStoreError("remediation projection integer is invalid")
+    return value
+
+
+def _remediation_text(value: object) -> str:
+    checked = check_text(value, budgets=STORE_TEXT_BUDGETS)
+    if not checked.admitted or not isinstance(checked.text, str) or checked.text != value:
+        raise ContextStoreError("remediation projection text is invalid")
+    return checked.text
+
+
+def _remediation_actor(value: object) -> str:
+    normalized = normalize_text(value)
+    if (
+        not isinstance(normalized, str)
+        or normalized != value
+        or PSEUDONYM_RE.fullmatch(normalized) is None
+    ):
+        raise ContextStoreError("remediation projection actor is invalid")
+    return normalized
+
+
+def _remediation_projection(value: object) -> Mapping[str, object]:
+    """Hostile-read the fixed model-only remediation-thread projection."""
+
+    item = _mapping(value, "remediation projection")
+    if set(item) != {"root", "anchor_state", "replies", "completeness", "counts"}:
+        raise ContextStoreError("remediation projection fields are invalid")
+    root = _mapping(item.get("root"), "remediation root")
+    if set(root) != {"text", "author_pseudonym"}:
+        raise ContextStoreError("remediation root fields are invalid")
+    normalized_root = {
+        "text": _remediation_text(root.get("text")),
+        "author_pseudonym": _remediation_actor(root.get("author_pseudonym")),
+    }
+    anchor_state = normalize_text(item.get("anchor_state"))
+    if anchor_state != item.get("anchor_state") or anchor_state not in REMEDIATION_ANCHOR_STATES:
+        raise ContextStoreError("remediation anchor state is invalid")
+    completeness = normalize_text(item.get("completeness"))
+    if completeness != item.get("completeness") or completeness not in REMEDIATION_COMPLETENESS:
+        raise ContextStoreError("remediation completeness is invalid")
+    replies = item.get("replies")
+    if not isinstance(replies, list) or not 1 <= len(replies) <= MAX_REMEDIATION_REPLIES:
+        raise ContextStoreError("remediation replies are invalid")
+    normalized_replies: list[dict[str, object]] = []
+    previous_order = -1
+    for reply_value in replies:
+        reply = _mapping(reply_value, "remediation reply")
+        if set(reply) != {
+            "order",
+            "author_class",
+            "author_pseudonym",
+            "text",
+            "created_at",
+            "updated_at",
+        }:
+            raise ContextStoreError("remediation reply fields are invalid")
+        order = _bounded_projection_integer(reply.get("order"), maximum=MAX_REMEDIATION_REPLIES)
+        author_class = normalize_text(reply.get("author_class"))
+        created_at = _bounded_projection_integer(reply.get("created_at"), maximum=2**63 - 1)
+        updated_at = _bounded_projection_integer(reply.get("updated_at"), maximum=2**63 - 1)
+        if (
+            order != previous_order + 1
+            or author_class != reply.get("author_class")
+            or author_class not in ACCOUNT_CLASSES.difference({"toolkit_bot"})
+            or updated_at < created_at
+        ):
+            raise ContextStoreError("remediation reply identity or order is invalid")
+        previous_order = order
+        normalized_replies.append(
+            {
+                "order": order,
+                "author_class": author_class,
+                "author_pseudonym": _remediation_actor(reply.get("author_pseudonym")),
+                "text": _remediation_text(reply.get("text")),
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+        )
+    counts = _mapping(item.get("counts"), "remediation counts")
+    if set(counts) != {"replies", "resolved", "outdated"}:
+        raise ContextStoreError("remediation count fields are invalid")
+    normalized_counts = {
+        "replies": _bounded_projection_integer(
+            counts.get("replies"), maximum=MAX_REMEDIATION_REPLIES
+        ),
+        "resolved": _bounded_projection_integer(
+            counts.get("resolved"), maximum=MAX_REMEDIATION_REPLIES + 1
+        ),
+        "outdated": _bounded_projection_integer(
+            counts.get("outdated"), maximum=MAX_REMEDIATION_REPLIES + 1
+        ),
+    }
+    maximum_note_count = len(normalized_replies) + 1
+    if (
+        normalized_counts["replies"] != len(normalized_replies)
+        or normalized_counts["resolved"] > maximum_note_count
+        or normalized_counts["outdated"] > maximum_note_count
+    ):
+        raise ContextStoreError("remediation reply count is inconsistent")
+    if anchor_state == "outdated" and normalized_counts["outdated"] < 1:
+        raise ContextStoreError("remediation outdated count is inconsistent")
+    return {
+        "root": normalized_root,
+        "anchor_state": anchor_state,
+        "replies": normalized_replies,
+        "completeness": completeness,
+        "counts": normalized_counts,
+    }
+
+
 def _projection_value(field: str, value: object) -> object:
     """Hostile-read one generic projection value without policy reinterpretation."""
 
+    if field == REMEDIATION_MODEL_FIELD:
+        return _remediation_projection(value)
     if field == "text":
         checked = check_text(value, budgets=STORE_TEXT_BUDGETS)
         if not checked.admitted or checked.text != value:
@@ -147,7 +266,7 @@ def _projection_value(field: str, value: object) -> object:
         normalized = normalize_text(value)
         if normalized != value or not normalized or len(normalized) > 512:
             raise ContextStoreError("context projection string is invalid")
-        if field == "descriptor" and normalized not in {"discussion", *RESOURCE_CLASSES}:
+        if field == "descriptor" and normalized not in {"discussion", *STORE_RESOURCE_CLASSES}:
             raise ContextStoreError("context projection descriptor is invalid")
         if field == "state" and STATE_RE.fullmatch(normalized) is None:
             raise ContextStoreError("context projection state is invalid")
@@ -273,7 +392,7 @@ def _record(value: object) -> ContextRecord:
         for value in strings.values()
     ):
         raise ContextStoreError("context record identity is invalid")
-    if strings["resource_class"] not in RESOURCE_CLASSES:
+    if strings["resource_class"] not in STORE_RESOURCE_CLASSES:
         raise ContextStoreError("context record resource class is invalid")
     if SHA256_RE.fullmatch(str(strings["digest"])) is None:
         raise ContextStoreError("context record digest is invalid")
@@ -291,12 +410,27 @@ def _record(value: object) -> ContextRecord:
     normalized_projections: dict[str, Mapping[str, object]] = {}
     for name, projection in projections.items():
         mapped = _mapping(projection, f"context {name} projection")
-        allowed = RETENTION_FIELDS if name == "retain" else PROJECTION_FIELDS
+        allowed = RETENTION_FIELDS if name == "retain" else STORE_PROJECTION_FIELDS
         if len(mapped) > len(allowed) or not set(mapped).issubset(allowed):
             raise ContextStoreError("context projection fields are invalid")
         normalized_projections[name] = {
             field: _projection_value(field, value) for field, value in mapped.items()
         }
+    remediation_model = REMEDIATION_MODEL_FIELD in normalized_projections["model"]
+    if (
+        REMEDIATION_MODEL_FIELD in normalized_projections["publish"]
+        or REMEDIATION_MODEL_FIELD in normalized_projections["retain"]
+        or (
+            strings["resource_class"] == "remediation_thread"
+            and (
+                strings["descriptor"] != "remediation_thread"
+                or not remediation_model
+                or set(normalized_projections["model"]) != {"descriptor", REMEDIATION_MODEL_FIELD}
+            )
+        )
+        or (strings["resource_class"] != "remediation_thread" and remediation_model)
+    ):
+        raise ContextStoreError("remediation projection placement is invalid")
     for projection in normalized_projections.values():
         if (
             ("descriptor" in projection and projection["descriptor"] != strings["descriptor"])

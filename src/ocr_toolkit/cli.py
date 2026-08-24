@@ -33,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
     review_parser.add_argument(
+        "--preserve-private-artifacts",
+        action="store_true",
+        help="Retain sensitive OCR session artifacts after a local diagnostic review.",
+    )
+    review_parser.add_argument(
         "ocr_args", nargs=argparse.REMAINDER, help="OCR review arguments after --."
     )
 
@@ -65,7 +70,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "review":
         ocr_args = args.ocr_args[1:] if args.ocr_args[:1] == ["--"] else args.ocr_args
         try:
-            return review_runner.run_evidence_review(Path(args.result), Path(args.stderr), ocr_args)
+            return review_runner.run_evidence_review(
+                Path(args.result),
+                Path(args.stderr),
+                ocr_args,
+                preserve_private_artifacts=args.preserve_private_artifacts,
+            )
         except review_runner.ReviewRunnerError as exc:
             print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2

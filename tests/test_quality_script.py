@@ -7,6 +7,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "quality.sh"
 PROJECT_ROOT = SCRIPT.parent.parent
+CI_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_quality_script_uses_an_isolated_ignored_environment() -> None:
@@ -19,7 +20,30 @@ def test_quality_script_uses_an_isolated_ignored_environment() -> None:
     assert 'uv venv --clear "$quality_environment"' in script
     assert "uv sync --locked --all-groups" in script
     assert "quality environment sync failed; last 80 lines follow" in script
-    assert script.count("uv run --no-sync") == 7
+    assert script.count("uv run --no-sync") == 6
+
+
+def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
+    """Use one branch-aware test run followed by four scoped coverage reports."""
+
+    script = SCRIPT.read_text(encoding="utf-8")
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    coverage_commands = (
+        "coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=80",
+        "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80",
+        "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp.py,src/ocr_toolkit/posting/approval.py --fail-under=85",
+        "coverage report --include=src/ocr_toolkit/mcp_config.py,src/ocr_toolkit/providers/gitlab.py,src/ocr_toolkit/providers/gitlab_context.py,src/ocr_toolkit/providers/gitlab_discussions.py,src/ocr_toolkit/providers/gitlab_remediation.py,src/ocr_toolkit/context/policy.py,src/ocr_toolkit/result_contract.py --fail-under=85",
+    )
+
+    assert script.count("pytest -q --cov=ocr_toolkit") == 1
+    assert "--cov-fail-under=85" in script
+    assert script.count("coverage report --include=") == 4
+    assert (
+        "uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85" in workflow
+    )
+    for command in coverage_commands:
+        assert command in script
+        assert f"uv run {command}" in workflow
 
 
 def test_quality_script_runs_the_bounded_bandit_gate() -> None:
@@ -29,6 +53,32 @@ def test_quality_script_runs_the_bounded_bandit_gate() -> None:
     assert "security)" in script
     assert script.count(command) == 2
     assert "tests" not in command
+
+
+def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Path) -> None:
+    """Do not mix stale coverage output into a later multi-command result."""
+
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    fake_uv = binary_dir / "uv"
+    fake_uv.write_text(
+        "#!/bin/sh\nprintf 'fresh invocation: %s\\n' \"$*\"\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log = log_dir / "coverage.log"
+    log.write_text("stale invocation must disappear\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
+    environment["OCR_TOOLKIT_LOG_DIR"] = str(log_dir)
+
+    subprocess.run([str(SCRIPT), "coverage"], cwd=PROJECT_ROOT, env=environment, check=True)
+
+    output = log.read_text(encoding="utf-8")
+    assert "stale invocation" not in output
+    assert output.count("fresh invocation: run --no-sync sh -c") == 5
 
 
 def test_gitleaks_wrapper_scans_the_complete_feature_history(tmp_path: Path) -> None:

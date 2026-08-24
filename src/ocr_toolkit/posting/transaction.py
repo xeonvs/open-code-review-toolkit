@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ocr_toolkit.posting.gitlab_identity import valid_discussion_id
+from ocr_toolkit.providers.gitlab_identity import valid_discussion_id
 
 
 @dataclass(slots=True)

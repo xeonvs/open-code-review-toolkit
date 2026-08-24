@@ -54,7 +54,7 @@ def evaluate_approval_policy(
     omitted_count: int,
     toolkit_metadata: Any = None,
 ) -> ApprovalEligibility:
-    """Evaluate the fixed v0.4.7 policy from authoritative OCR data."""
+    """Evaluate the fixed automatic-approval policy from authoritative OCR data."""
 
     if not setting.enabled:
         reason = (

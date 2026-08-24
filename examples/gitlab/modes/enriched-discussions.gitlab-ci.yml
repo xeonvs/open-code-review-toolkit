@@ -1,0 +1,6 @@
+variables:
+  # Pair with context/policy-discussions.json on the protected target branch.
+  OCR_REVIEW_CONTEXT_MODE: "enriched"
+  OCR_AUTO_APPROVE: "false"
+  OCR_REVIEW_CONTEXT_ADAPTERS_JSON: "[]"
+  OCR_MCP_SERVERS_JSON: "{}"

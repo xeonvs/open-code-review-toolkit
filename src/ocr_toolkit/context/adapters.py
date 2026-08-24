@@ -19,7 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.context.contracts import REQUEST_SCHEMA, RESOURCE_CLASSES, RESPONSE_SCHEMA
+from ocr_toolkit.context.contracts import (
+    REFERENCE_RESOURCE_CLASSES,
+    REQUEST_SCHEMA,
+    RESPONSE_SCHEMA,
+)
 
 MAX_ADAPTER_CONFIG_BYTES = 64 * 1024
 MAX_ADAPTERS = 16
@@ -197,7 +201,7 @@ def parse_adapter_config(raw: str | None) -> tuple[AdapterConfig, ...]:
         resource_classes = _names(
             item.get("resource_classes"),
             label="adapter resource classes",
-            allowed=RESOURCE_CLASSES,
+            allowed=REFERENCE_RESOURCE_CLASSES,
         )
         if kind == "stdio":
             if set(item).difference(common | {"command", "args", "env_from"}):
@@ -590,7 +594,7 @@ def authorize_and_resolve(
         or request.adapter != config.name
         or request.tenant not in config.tenants
         or request.resource_class not in config.resource_classes
-        or request.resource_class not in RESOURCE_CLASSES
+        or request.resource_class not in REFERENCE_RESOURCE_CLASSES
         or request.requested_fields != tuple(sorted(set(request.requested_fields)))
         or not 1 <= request.max_chars <= 100_000
         or not 1 <= request.max_bytes <= 400_000

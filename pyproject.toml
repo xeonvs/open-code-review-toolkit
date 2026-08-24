@@ -106,7 +106,7 @@ source = ["ocr_toolkit"]
 omit = ["src/ocr_toolkit/_version.py"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 85
 show_missing = true
 skip_covered = true
 exclude_also = [

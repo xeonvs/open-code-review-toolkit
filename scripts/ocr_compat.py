@@ -1486,7 +1486,7 @@ def prepare_update(
         source="example checksum",
     )
     changelog_dir = root / "changelog.d"
-    fragment = changelog_dir / f"{fragment_number}.feature.md"
+    fragment = changelog_dir / f"{fragment_number}.maintenance.md"
     qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
     fragment_text = (
         f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
