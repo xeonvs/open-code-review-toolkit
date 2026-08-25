@@ -1064,6 +1064,90 @@ def test_stage_grouped_retry_report_is_private_and_approval_projection_neutral()
     assert projected["comments"] == payload["comments"]
 
 
+def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path) -> None:
+    """Keep additive group and round diagnostics outside every approval authority."""
+
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    identity = replace(DEFAULT_IDENTITY, mr_author_id=41)
+    base_payload: dict[str, object] = {
+        "status": "complete",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "review-a"}],
+                "completed": [{"item_id": "review-a"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+    baseline_projection = review_runner._canonical_result_projection(base_payload)
+
+    for name, groups, expected_state in (
+        (
+            "safe",
+            [{"label": "Core behavior", "files": ["src/core.py"], "rounds": 2}],
+            "passed",
+        ),
+        (
+            "private",
+            [
+                {
+                    "label": "Contact private@example.invalid",
+                    "files": ["Authorization: Bearer private-group-token"],
+                    "rounds": 2,
+                }
+            ],
+            "private-sanitized",
+        ),
+    ):
+        result = tmp_path / f"{name}.json"
+        result.write_text(
+            json.dumps({**base_payload, "groups": groups, "review_rounds": 2}),
+            encoding="utf-8",
+        )
+
+        _usage, blocked, publication = review_runner._finalize_ocr_result(
+            result,
+            composition,
+            identity,
+            None,
+            forbidden=(),
+        )
+
+        persisted = json.loads(result.read_text(encoding="utf-8"))
+        receipt = persisted["_ocr_toolkit"]
+        assert blocked is False
+        assert publication["state"] == expected_state
+        assert review_runner._canonical_result_projection(persisted) == baseline_projection
+        assert "groups" not in receipt
+        assert "review_rounds" not in receipt
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True),
+            parse_result_outcome(persisted),
+            persisted["comments"],
+            persisted["warnings"],
+            0,
+            receipt,
+        )
+        assert decision.eligible is True
+
+    private_serialized = (tmp_path / "private.json").read_text(encoding="utf-8")
+    assert "private@example.invalid" not in private_serialized
+    assert "private-group-token" not in private_serialized
+
+
 def test_warning_objects_are_conservatively_publication_relevant() -> None:
     payload: dict[str, object] = {
         "status": "success",

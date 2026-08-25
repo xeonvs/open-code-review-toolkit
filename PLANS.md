@@ -88,7 +88,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `REQ-006` (`done`): reject caller OCR output-path controls and preserve the
   existing safe result descriptor, cleanup, and failure behavior. Covered by
   `WQ-05`.
-- `REQ-007` (`pending`): prove new group/round fields remain provider-neutral,
+- `REQ-007` (`done`): prove new group/round fields remain provider-neutral,
   private, DLP-bounded, receipt-independent, and unable to alter severity,
   findings, approval, posting, or lifecycle commands. Covered by `WQ-06`.
 - `REQ-008` (`pending`): complete the BL-017 source-to-signal audit with a
@@ -230,9 +230,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 5. `WQ-05` (`done`): validate hosted evidence, promote OCR 1.10.0, add
    `OCR_REVIEW_EFFORT=medium`, reject OCR output-path ownership, and update exact
    environment/config/installed-artifact contracts.
-6. `WQ-06` (`in_progress`): add focused groups/DLP/receipt/approval/result regressions
+6. `WQ-06` (`done`): add focused groups/DLP/receipt/approval/result regressions
    and repair only real contract violations exposed by them.
-7. `WQ-07` (`pending`): complete BL-017 audit and reconcile backlog, strategy,
+7. `WQ-07` (`in_progress`): complete BL-017 audit and reconcile backlog, strategy,
    roadmap, telemetry privacy/cardinality, and no-new-layer conclusion.
 8. `WQ-08` (`pending`): update public docs, examples, compatibility text, test
    evidence matrix, and separate Towncrier feature/bugfix/maintenance fragments.
@@ -352,6 +352,15 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   tests plus 104 subtests, installed wheel/sdist checks, Ruff, mypy, manifest
   validation, and `git diff --check` pass. Promotion also exposed and fixed the
   relative-manifest success-reporting bug in the compatibility CLI.
+- `2026-08-25`: additive OCR group labels, file lists, and round diagnostics have
+  explicit boundary regressions: safe values leave the canonical result and
+  auto-approval decision unchanged; PII and recognized secrets are sanitized in
+  the private result without becoming a publication failure; neither safe nor
+  sanitized values enter receipt v5; and receipt extensions fail closed. The 129
+  focused review/approval tests plus 71 subtests, Ruff, and `git diff --check`
+  pass. Direct mypy invocation over test files remains non-owner validation and
+  reports pre-existing test-module export errors; the repository quality owner
+  remains the final typed gate.
 
 #### Risks And Recovery
 
@@ -384,9 +393,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-06`: exercise additive OCR 1.10.0 groups/rounds through the toolkit
-result, DLP, receipt, posting, and approval boundaries; prove safe metadata is
-ignored, hostile values cannot escape, and no new field changes authority.
+Continue `WQ-07`: trace OCR group/round signals from upstream source through the
+toolkit's telemetry, receipt, logs, and operator surfaces; record the bounded
+BL-017 ownership/cardinality conclusion while preserving the activation state of
+BL-016, BL-018, BL-019, and BL-020.
 
 #### Plan Fidelity Check
 
