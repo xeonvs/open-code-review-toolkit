@@ -459,6 +459,10 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert workflow.count("upsert-issue") == 1
     assert "continue-on-error: true" in workflow
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
+    assert "QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}" in workflow
+    assert 'case "${QUALIFICATION_OUTCOME}" in' in workflow
+    assert "success) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
+    assert "failure) input=(--status /tmp/ocr-compat/status.json)" in workflow
     assert "if: ${{ !cancelled() }}" in workflow
     assert "if: ${{ always() && !cancelled() }}" in workflow
     assert "if: steps.qualify.outcome == 'failure'" in workflow

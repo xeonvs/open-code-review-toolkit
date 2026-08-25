@@ -108,13 +108,16 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          input=(--status /tmp/ocr-compat/status.json)
-          if [ -f /tmp/ocr-compat/evidence.json ]; then
-            input=(--evidence /tmp/ocr-compat/evidence.json)
-          fi
+          case "${QUALIFICATION_OUTCOME}" in
+            success) input=(--evidence /tmp/ocr-compat/evidence.json) ;;
+            failure) input=(--status /tmp/ocr-compat/status.json) ;;
+            *) echo "unsupported qualification outcome" >&2; exit 1 ;;
+          esac
+          test -f "${input[1]}"
           PYTHONPATH=src python scripts/ocr_compat.py upsert-issue \
             "${input[@]}" \
             --repository "${REPOSITORY}" \

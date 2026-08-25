@@ -9,7 +9,8 @@ Use this file for active or blocked repository work. Update it before implementa
 Status: `active`
 Owner: Codex
 Plan Origin: `direct_execution`
-Release classification: `release-required`
+Release classification: `release-deferred` (the product changes require stable
+`0.8.3`, but feature merge and publication are explicitly deferred)
 Target stable version: `0.8.3`
 Last Updated: 2026-08-25
 
@@ -109,7 +110,9 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - Local execution against a real LLM/provider is explicitly waived because this
   environment has no access; do not claim that evidence.
 - Continue the established efficient workflow: logical commits, self-review,
-  one final complete local gate, protected hosted CI, then ordinary release.
+  one final complete local gate, and protected hosted CI.
+- After the final push, keep PR #141 in Draft. Do not merge the feature branch,
+  publish development/stable artifacts, create a release PR, or release 0.8.3.
 
 #### Completed Baseline State
 
@@ -125,11 +128,11 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 
 | Work item | Status | Scope and commit boundary |
 | --- | --- | --- |
-| `WQ-01` | `in_progress` | Commit this plan, create `codex/v0.8.3-ocr-boundaries`, milestone `v0.8.3`, attach #139/#140, push once, and open a Draft PR with exact scope/non-claims |
-| `WQ-02` | `pending` | Implement #139 outcome-authoritative selection, atomic/closed status recovery, manifest-independent status upsert, tests, and `139.bugfix.md` |
-| `WQ-03` | `pending` | Implement #140 sentinel default, closed normalization handling, numeric boundary qualification/evidence, enriched/MCP integration coverage, docs, and `140.bugfix.md` |
+| `WQ-01` | `done` | Signed planning commit `85b3097`; branch `codex/v0.8.3-ocr-boundaries`; milestone `v0.8.3` #6 with #139/#140; planning push; Draft PR #141 with exact scope/non-claims |
+| `WQ-02` | `done` | #139: outcome-authoritative workflow selection; portable atomic evidence/status/issue-body handoffs; closed late-write recovery; manifest-independent status upsert; regression tests; public contract and `139.bugfix.md` |
+| `WQ-03` | `in_progress` | Implement #140 sentinel default, closed normalization handling, numeric boundary qualification/evidence, enriched/MCP integration coverage, docs, and `140.bugfix.md` |
 | `WQ-04` | `pending` | Reconcile development/public docs and all requirements; run final quality, coverage, manifest, Towncrier, Gitleaks, and complete privacy/data-flow self-review; push completed history and resolve hosted findings |
-| `WQ-05` | `pending` | Merge exact reviewed feature head, verify development publication, prepare protected `Release v0.8.3`, publish stable once authorized, and independently reconcile artifacts/provenance/tag/receipt/issues/milestone/clean main |
+| `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
 
 #### Locked Decisions
 
@@ -161,8 +164,9 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - Final feature head: `scripts/quality.sh check`, coverage floors,
   `PYTHONPATH=src python scripts/ocr_compat.py validate`, Towncrier draft,
   `scripts/gitleaks.sh`, `git diff --check`, and clean-tree confirmation.
-- Hosted: all protected feature checks, one development TestPyPI publication and
-  exact artifact/provenance/install readback. Stable release follows `docs/release.md`.
+- Hosted: all protected Draft feature checks on the exact final head. Development
+  publication, stable release, registry/provenance/install readback, and closure
+  remain deferred under `docs/release.md`.
 
 #### Latest Validation Results
 
@@ -174,6 +178,14 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   normalization target `50` is necessarily the effective loop cap.
 - No implementation, repository metadata, issue, milestone, branch, or PR write
   preceded this plan materialization.
+- Coordination completed after the signed plan commit: milestone `v0.8.3` #6,
+  #139/#140 assignment, planning head push, and Draft PR #141. The owner then
+  explicitly deferred merge and release; no publication belongs to this run.
+- #139 focused validation: 95 compatibility/workflow tests pass; Ruff and
+  `git diff --check` pass. Self-review confirms the workflow selects output from
+  `steps.qualify.outcome`, all file handoffs preserve the old baseline until an
+  atomic replace, status recovery consumes only its closed schema, raw details
+  remain private, and the restored red qualification blocks aggregation.
 
 #### Risks And Recovery
 
@@ -194,9 +206,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 
 #### Resume Point
 
-`WQ-01`: run the plan-fidelity check, create the feature branch, self-review and
-commit this plan, then create/read back milestone `v0.8.3`, attach #139/#140,
-push the planning commit, and open the Draft PR before production changes.
+`WQ-03`: add exact closed parsing for the installed OCR max-tools normalization,
+move the example default to sentinel `0`, extend numeric qualification evidence,
+and prove the enriched/MCP production caller reaches the model boundary without
+using a real model.
 
 #### Plan Fidelity Check
 
@@ -219,14 +232,16 @@ push the planning commit, and open the Draft PR before production changes.
 - [ ] All requirements and work items are terminal with current validation evidence.
 - [ ] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
 - [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
-- [ ] Development and stable artifacts are independently reconciled and issues/milestone are closed from receipts.
-- [ ] `scripts/plan_lifecycle.py check` passes and the plan is archived through the release-owned transition.
+- [ ] PR #141 remains Draft at the exact pushed head; #139/#140 and milestone `v0.8.3` remain open.
+- [ ] `scripts/plan_lifecycle.py check` passes with an exact external-review/release resume point; the active plan is not archived before deferred delivery.
 
 #### Post-Close Delivery
 
-- Feature implementation closes through a protected squash merge only after exact
-  reviewed-head checks. Stable publication remains a separate protected release PR
-  and immutable external reconciliation; readiness is not delivery.
+- This run ends at a pushed green Draft PR. Feature implementation does not close
+  through merge, and no TestPyPI/PyPI or stable publication is authorized.
+- A later owner-authorized continuation must review the exact Draft head, preserve
+  or amend the plan from current state, then use the protected feature/release
+  lifecycle. Readiness is not delivery.
 - #139/#140 and milestone `v0.8.3` remain open until stable receipt publication.
 - Final handoff must repeat that no local real-LLM/provider qualification was run
   or claimed, while identifying the exact deterministic OCR boundary evidence.

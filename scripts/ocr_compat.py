@@ -91,13 +91,17 @@ QUALIFICATION_REASONS = {
     "artifact-verification-failed",
     "contract-probe-failed",
     "evidence-write-failed",
+    "issue-body-write-failed",
+    "status-write-failed",
     "compatible",
 }
 QUALIFICATION_FAILURE_REASONS = {
     "metadata": frozenset({"metadata-invalid", "metadata-request-failed"}),
     "artifact": frozenset({"artifact-verification-failed"}),
     "contracts": frozenset({"contract-probe-failed"}),
-    "evidence": frozenset({"evidence-write-failed"}),
+    "evidence": frozenset(
+        {"evidence-write-failed", "issue-body-write-failed", "status-write-failed"}
+    ),
 }
 T = TypeVar("T")
 
@@ -172,6 +176,38 @@ def canonical_json(value: Any) -> bytes:
     """Return deterministic UTF-8 JSON bytes."""
 
     return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
+
+
+def write_atomic_bytes(path: Path, payload: bytes, *, label: str) -> None:
+    """Commit one output through a private same-directory temporary file."""
+
+    temporary: Path | None = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        temporary = Path(temporary_name)
+        with os.fdopen(descriptor, "wb") as output:
+            written = output.write(payload)
+            if written != len(payload):
+                raise OSError("short output write")
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+        temporary = None
+        if os.name != "nt":
+            directory_descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+    except OSError as exc:
+        raise CompatibilityError(f"cannot write {label}") from exc
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -1671,11 +1707,7 @@ def qualify_release(
     }
 
     def write_evidence() -> None:
-        try:
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_bytes(canonical_json(evidence))
-        except OSError as exc:
-            raise CompatibilityError("cannot write compatibility evidence") from exc
+        write_atomic_bytes(output, canonical_json(evidence), label="compatibility evidence")
 
     _qualification_stage("evidence", "evidence-write-failed", write_evidence)
     return evidence
@@ -2201,7 +2233,27 @@ def main(argv: list[str] | None = None) -> int:
     upsert_issue.add_argument("--output-number", type=Path, required=True)
     args = parser.parse_args(argv)
     manifest: dict[str, Any] | None = None
+
+    def finish_issue_upsert(
+        *, evidence: dict[str, Any] | None = None, status: dict[str, Any] | None = None
+    ) -> int:
+        issue_number = upsert_qualification_issue(
+            repository=args.repository,
+            evidence=evidence,
+            status=status,
+            run_url=args.run_url,
+        )
+        write_atomic_bytes(
+            args.output_number,
+            f"{issue_number}\n".encode(),
+            label="qualification issue number",
+        )
+        print(f"qualification issue: #{issue_number}")
+        return 0
+
     try:
+        if args.command == "upsert-issue" and args.status is not None:
+            return finish_issue_upsert(status=load_json(args.status))
         manifest = load_json(args.manifest)
         validate_manifest(manifest, args.manifest.resolve().parents[1])
         if args.command == "validate":
@@ -2240,17 +2292,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(path.resolve().relative_to(ROOT))
             return 0
         if args.command == "upsert-issue":
-            evidence = load_json(args.evidence) if args.evidence is not None else None
-            status = load_json(args.status) if args.status is not None else None
-            issue_number = upsert_qualification_issue(
-                repository=args.repository,
-                evidence=evidence,
-                status=status,
-                run_url=args.run_url,
-            )
-            args.output_number.write_text(f"{issue_number}\n", encoding="utf-8")
-            print(f"qualification issue: #{issue_number}")
-            return 0
+            assert args.evidence is not None
+            return finish_issue_upsert(evidence=load_json(args.evidence))
         if args.command == "probe-local":
             version = args.version.removeprefix("v")
             _version(version)
@@ -2279,7 +2322,15 @@ def main(argv: list[str] | None = None) -> int:
             tested_baseline_version=args.tested_baseline_version,
         )
         if args.issue_body is not None:
-            args.issue_body.write_text(render_issue(evidence), encoding="utf-8")
+            _qualification_stage(
+                "evidence",
+                "issue-body-write-failed",
+                lambda: write_atomic_bytes(
+                    args.issue_body,
+                    render_issue(evidence).encode(),
+                    label="qualification issue body",
+                ),
+            )
         if args.status_output is not None:
             status = qualification_status(
                 tag=args.tag,
@@ -2290,7 +2341,15 @@ def main(argv: list[str] | None = None) -> int:
                 phase="complete",
                 reason="compatible",
             )
-            args.status_output.write_bytes(canonical_json(status))
+            _qualification_stage(
+                "evidence",
+                "status-write-failed",
+                lambda: write_atomic_bytes(
+                    args.status_output,
+                    canonical_json(status),
+                    label="compatibility status",
+                ),
+            )
         print(f"qualified OCR {evidence['version']}: {evidence['classification']}")
         return 0
     except CompatibilityError as exc:
@@ -2311,8 +2370,11 @@ def main(argv: list[str] | None = None) -> int:
                     phase=phase,
                     reason=reason,
                 )
-                args.status_output.parent.mkdir(parents=True, exist_ok=True)
-                args.status_output.write_bytes(canonical_json(status))
+                write_atomic_bytes(
+                    args.status_output,
+                    canonical_json(status),
+                    label="compatibility status",
+                )
             except (CompatibilityError, OSError) as status_exc:
                 print(f"OCR compatibility status write failed: {status_exc}", file=sys.stderr)
         print(f"OCR compatibility qualification failed: {exc}", file=sys.stderr)
