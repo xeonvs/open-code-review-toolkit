@@ -87,7 +87,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      - name: Qualify candidate
+      - id: qualify
+        name: Qualify candidate
+        continue-on-error: true
         env:
           CANDIDATE_TAG: ${{ matrix.tag }}
           COMPARISON_VERSION: ${{ matrix.comparison_version }}
@@ -100,15 +102,21 @@ jobs:
             --comparison-version "${COMPARISON_VERSION}" \
             --tested-baseline-version "${TESTED_BASELINE_VERSION}" \
             --output /tmp/ocr-compat/evidence.json \
-            --issue-body /tmp/ocr-compat/issue.md
+            --issue-body /tmp/ocr-compat/issue.md \
+            --status-output /tmp/ocr-compat/status.json
       - name: Upsert qualification issue
+        if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          input=(--status /tmp/ocr-compat/status.json)
+          if [ -f /tmp/ocr-compat/evidence.json ]; then
+            input=(--evidence /tmp/ocr-compat/evidence.json)
+          fi
           PYTHONPATH=src python scripts/ocr_compat.py upsert-issue \
-            --evidence /tmp/ocr-compat/evidence.json \
+            "${input[@]}" \
             --repository "${REPOSITORY}" \
             --run-url "${RUN_URL}" \
             --output-number /tmp/ocr-compat/issue-number.txt
@@ -117,11 +125,15 @@ jobs:
             ''|*[!0-9]*) echo "invalid qualification issue number: ${issue}" >&2; exit 1 ;;
           esac
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() && !cancelled() }}
         with:
           name: ocr-compatibility-${{ matrix.tag }}
           path: /tmp/ocr-compat/
           if-no-files-found: error
           retention-days: 7
+      - name: Preserve qualification failure
+        if: steps.qualify.outcome == 'failure'
+        run: exit 1
 
   aggregate:
     name: assess-complete-chain

@@ -402,6 +402,8 @@ def test_threat_model_covers_remote_finding_image_boundary() -> None:
 
 
 def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
+    """Qualification retains bounded failure evidence without hiding a red job."""
+
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ocr-compatibility.yml").read_text(
         encoding="utf-8"
     )
@@ -430,6 +432,12 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "git switch -C" in workflow
     assert "git push --force-with-lease" in workflow
     assert workflow.count("upsert-issue") == 1
+    assert "continue-on-error: true" in workflow
+    assert "--status-output /tmp/ocr-compat/status.json" in workflow
+    assert "if: ${{ !cancelled() }}" in workflow
+    assert "if: ${{ always() && !cancelled() }}" in workflow
+    assert "if: steps.qualify.outcome == 'failure'" in workflow
+    assert "run: exit 1" in workflow
     assert "gh issue create" not in workflow
     assert 'f"{fragment_number}.maintenance.md"' in qualifier
     assert 'f"{fragment_number}.feature.md"' not in qualifier

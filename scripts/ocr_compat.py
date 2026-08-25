@@ -21,10 +21,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeVar
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
@@ -81,10 +81,30 @@ KNOWN_OPTIONAL_CAPABILITIES = {
     "per_run_model_override",
     "per_run_provider_override",
 }
+QUALIFICATION_STATUS_SCHEMA = "ocr-toolkit.compatibility-status/v1"
+QUALIFICATION_PHASES = {"metadata", "artifact", "contracts", "evidence", "complete"}
+QUALIFICATION_REASONS = {
+    "metadata-invalid",
+    "metadata-request-failed",
+    "artifact-verification-failed",
+    "contract-probe-failed",
+    "evidence-write-failed",
+    "compatible",
+}
+T = TypeVar("T")
 
 
 class CompatibilityError(Exception):
     """OCR compatibility metadata or qualification failed closed."""
+
+
+class QualificationStageError(CompatibilityError):
+    """Carry one closed public qualification stage alongside private detail."""
+
+    def __init__(self, message: str, *, phase: str, reason: str) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.reason = reason
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -1245,6 +1265,89 @@ def issue_plain_text(value: Any, field: str, max_chars: int = 500) -> str:
     return html.escape(cleaned, quote=False).replace("@", "@\u200b")
 
 
+def qualification_status(
+    *,
+    tag: str,
+    comparison_version: str,
+    tested_baseline_version: str,
+    result: str,
+    phase: str,
+    reason: str,
+) -> dict[str, str]:
+    """Build the closed public status retained for one qualification attempt."""
+
+    if VERSION_RE.fullmatch(tag) is None:
+        _fail("qualification status tag is invalid")
+    version = tag.removeprefix("v")
+    comparison = comparison_version.removeprefix("v")
+    baseline = tested_baseline_version.removeprefix("v")
+    _version(comparison)
+    _version(baseline)
+    if result not in {"compatible", "failed"}:
+        _fail("qualification status result is invalid")
+    if phase not in QUALIFICATION_PHASES or reason not in QUALIFICATION_REASONS:
+        _fail("qualification status phase or reason is invalid")
+    if (result == "compatible") != (phase == "complete" and reason == "compatible"):
+        _fail("qualification status result is inconsistent")
+    return {
+        "comparison_version": comparison,
+        "phase": phase,
+        "reason": reason,
+        "result": result,
+        "schema": QUALIFICATION_STATUS_SCHEMA,
+        "tag": f"v{version}",
+        "tested_baseline_version": baseline,
+        "version": version,
+    }
+
+
+def validate_qualification_status(value: dict[str, Any]) -> dict[str, str]:
+    """Reject any status that contains open-ended or inconsistent public data."""
+
+    expected_keys = {
+        "comparison_version",
+        "phase",
+        "reason",
+        "result",
+        "schema",
+        "tag",
+        "tested_baseline_version",
+        "version",
+    }
+    if set(value) != expected_keys or value.get("schema") != QUALIFICATION_STATUS_SCHEMA:
+        _fail("qualification status schema is invalid")
+    status = qualification_status(
+        tag=value.get("tag") if isinstance(value.get("tag"), str) else "",
+        comparison_version=(
+            value.get("comparison_version")
+            if isinstance(value.get("comparison_version"), str)
+            else ""
+        ),
+        tested_baseline_version=(
+            value.get("tested_baseline_version")
+            if isinstance(value.get("tested_baseline_version"), str)
+            else ""
+        ),
+        result=value.get("result") if isinstance(value.get("result"), str) else "",
+        phase=value.get("phase") if isinstance(value.get("phase"), str) else "",
+        reason=value.get("reason") if isinstance(value.get("reason"), str) else "",
+    )
+    if value.get("version") != status["version"]:
+        _fail("qualification status version is inconsistent")
+    return status
+
+
+def _qualification_stage(phase: str, reason: str, function: Callable[[], T]) -> T:
+    """Run one private qualification stage and expose only its closed identity."""
+
+    try:
+        return function()
+    except QualificationStageError:
+        raise
+    except CompatibilityError as exc:
+        raise QualificationStageError(str(exc), phase=phase, reason=reason) from exc
+
+
 def qualify_release(
     release: dict[str, Any],
     manifest: dict[str, Any],
@@ -1255,21 +1358,36 @@ def qualify_release(
 ) -> dict[str, Any]:
     """Download, verify, execute, and classify one upstream release."""
 
-    tag = release.get("tag_name")
-    if not isinstance(tag, str) or VERSION_RE.fullmatch(tag) is None:
-        _fail("candidate tag is not a stable semantic version")
-    version = tag.removeprefix("v")
-    assets = release_assets(release)
-    if os.environ.get("RUNNER_OS") != "Linux":
-        _fail("candidate execution requires a Linux runner; checksum validation is cross-platform")
+    def metadata() -> tuple[str, str, list[Asset]]:
+        tag = release.get("tag_name")
+        if not isinstance(tag, str) or VERSION_RE.fullmatch(tag) is None:
+            _fail("candidate tag is not a stable semantic version")
+        if os.environ.get("RUNNER_OS") != "Linux":
+            _fail(
+                "candidate execution requires a Linux runner; checksum validation is cross-platform"
+            )
+        return tag, tag.removeprefix("v"), release_assets(release)
+
+    tag, version, assets = _qualification_stage("metadata", "metadata-invalid", metadata)
     with tempfile.TemporaryDirectory(prefix="ocr-compat-") as temp_value:
         temp = Path(temp_value)
-        downloaded = {asset.name: _download(asset, temp) for asset in assets}
-        checksums = parse_checksum_file(downloaded["sha256sum.txt"])
-        binaries = {asset.name: asset.sha256 for asset in assets if asset.name != "sha256sum.txt"}
-        if checksums != binaries:
-            _fail("upstream checksum file and GitHub asset digests disagree")
-        contracts = run_contracts(downloaded["opencodereview-linux-amd64"], version, temp)
+
+        def artifacts() -> dict[str, Path]:
+            downloaded = {asset.name: _download(asset, temp) for asset in assets}
+            checksums = parse_checksum_file(downloaded["sha256sum.txt"])
+            binaries = {
+                asset.name: asset.sha256 for asset in assets if asset.name != "sha256sum.txt"
+            }
+            if checksums != binaries:
+                _fail("upstream checksum file and GitHub asset digests disagree")
+            return downloaded
+
+        downloaded = _qualification_stage("artifact", "artifact-verification-failed", artifacts)
+        contracts = _qualification_stage(
+            "contracts",
+            "contract-probe-failed",
+            lambda: run_contracts(downloaded["opencodereview-linux-amd64"], version, temp),
+        )
     raw_notes = release.get("body")
     notes = raw_notes if isinstance(raw_notes, str) else ""
     tested_baseline = tested_baseline_version or str(manifest["recommended_version"])
@@ -1304,8 +1422,15 @@ def qualify_release(
         "release_changes": release_changes_excerpt(notes),
         "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
     }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(canonical_json(evidence))
+
+    def write_evidence() -> None:
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(canonical_json(evidence))
+        except OSError as exc:
+            raise CompatibilityError("cannot write compatibility evidence") from exc
+
+    _qualification_stage("evidence", "evidence-write-failed", write_evidence)
     return evidence
 
 
@@ -1649,6 +1774,34 @@ def render_workflow_issue(evidence: dict[str, Any], run_url: str) -> str:
     return body
 
 
+def render_workflow_failure_issue(status: dict[str, Any], run_url: str) -> str:
+    """Render a failed attempt from closed status values, never private detail."""
+
+    checked = validate_qualification_status(status)
+    if checked["result"] != "failed":
+        _fail("failure issue requires a failed qualification status")
+    version = checked["version"]
+    return (
+        f"<!-- ocr-compat-candidate:v{version} -->\n"
+        f"## OCR v{version} compatibility qualification failed\n\n"
+        "- machine result: **failed**\n"
+        f"- closed phase: `{checked['phase']}`\n"
+        f"- closed reason: `{checked['reason']}`\n"
+        f"- current tested baseline: `v{checked['tested_baseline_version']}`\n"
+        f"- compare: https://github.com/{UPSTREAM_REPOSITORY}/compare/"
+        f"v{checked['comparison_version']}...v{version}\n"
+        f"- release: https://github.com/{UPSTREAM_REPOSITORY}/releases/tag/v{version}\n\n"
+        "The candidate was not classified as compatible. Raw process diagnostics are "
+        "not copied into this issue.\n\n"
+        f"### Workflow evidence\n\n- run: {run_url}\n\n"
+        "### Resume checklist\n\n"
+        "- [ ] Inspect the bounded workflow artifact and private job log.\n"
+        "- [ ] Correct or explicitly classify the failed compatibility boundary.\n"
+        "- [ ] Rerun the same candidate; update this issue instead of creating a duplicate.\n"
+        "- [ ] Promote only after compatible evidence and protected review.\n"
+    )
+
+
 def find_qualification_issue(repository: str, marker: str) -> int | None:
     """Find one exact marker through bounded direct issue listing, without search indexing."""
 
@@ -1699,10 +1852,19 @@ def find_qualification_issue(repository: str, marker: str) -> int | None:
     return matches[0] if matches else None
 
 
-def upsert_qualification_issue(*, repository: str, evidence: dict[str, Any], run_url: str) -> int:
+def upsert_qualification_issue(
+    *,
+    repository: str,
+    run_url: str,
+    evidence: dict[str, Any] | None = None,
+    status: dict[str, Any] | None = None,
+) -> int:
     """Create or update the sole issue owned by one OCR version marker."""
 
-    version = evidence.get("version")
+    if (evidence is None) == (status is None):
+        _fail("issue upsert requires exactly one evidence or status input")
+    record = evidence if evidence is not None else validate_qualification_status(status or {})
+    version = record.get("version")
     if not isinstance(version, str) or VERSION_RE.fullmatch(version) is None:
         _fail("qualification evidence version is invalid")
     expected_run_prefix = f"https://github.com/{repository}/actions/runs/"
@@ -1715,7 +1877,11 @@ def upsert_qualification_issue(*, repository: str, evidence: dict[str, Any], run
     issue_number = find_qualification_issue(repository, marker)
     payload: dict[str, Any] = {
         "title": f"[OCR compatibility] Qualify v{version}",
-        "body": render_workflow_issue(evidence, run_url),
+        "body": (
+            render_workflow_issue(evidence, run_url)
+            if evidence is not None
+            else render_workflow_failure_issue(status or {}, run_url)
+        ),
     }
     if issue_number is None:
         payload["labels"] = ["dependencies"]
@@ -1767,6 +1933,7 @@ def main(argv: list[str] | None = None) -> int:
     qualify.add_argument("--tested-baseline-version")
     qualify.add_argument("--output", type=Path, required=True)
     qualify.add_argument("--issue-body", type=Path)
+    qualify.add_argument("--status-output", type=Path)
     assess = subparsers.add_parser("assess-chain")
     assess.add_argument("--evidence", type=Path, action="append", required=True)
     assess.add_argument("--output", type=Path, required=True)
@@ -1779,11 +1946,14 @@ def main(argv: list[str] | None = None) -> int:
     probe_local.add_argument("--version", required=True)
     probe_local.add_argument("--output", type=Path, required=True)
     upsert_issue = subparsers.add_parser("upsert-issue")
-    upsert_issue.add_argument("--evidence", type=Path, required=True)
+    upsert_input = upsert_issue.add_mutually_exclusive_group(required=True)
+    upsert_input.add_argument("--evidence", type=Path)
+    upsert_input.add_argument("--status", type=Path)
     upsert_issue.add_argument("--repository", required=True)
     upsert_issue.add_argument("--run-url", required=True)
     upsert_issue.add_argument("--output-number", type=Path, required=True)
     args = parser.parse_args(argv)
+    manifest: dict[str, Any] | None = None
     try:
         manifest = load_json(args.manifest)
         validate_manifest(manifest, args.manifest.resolve().parents[1])
@@ -1823,10 +1993,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(path.relative_to(ROOT))
             return 0
         if args.command == "upsert-issue":
-            evidence = load_json(args.evidence)
+            evidence = load_json(args.evidence) if args.evidence is not None else None
+            status = load_json(args.status) if args.status is not None else None
             issue_number = upsert_qualification_issue(
                 repository=args.repository,
                 evidence=evidence,
+                status=status,
                 run_url=args.run_url,
             )
             args.output_number.write_text(f"{issue_number}\n", encoding="utf-8")
@@ -1844,7 +2016,12 @@ def main(argv: list[str] | None = None) -> int:
             args.output.write_bytes(canonical_json(receipt))
             print(f"local OCR {version} contract probes passed")
             return 0
-        release = _request_json(f"{UPSTREAM_API}/releases/tags/{args.tag}")
+        try:
+            release = _request_json(f"{UPSTREAM_API}/releases/tags/{args.tag}")
+        except CompatibilityError as exc:
+            raise QualificationStageError(
+                str(exc), phase="metadata", reason="metadata-request-failed"
+            ) from exc
         if not isinstance(release, dict):
             _fail("upstream tag response must be an object")
         evidence = qualify_release(
@@ -1856,9 +2033,41 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.issue_body is not None:
             args.issue_body.write_text(render_issue(evidence), encoding="utf-8")
+        if args.status_output is not None:
+            status = qualification_status(
+                tag=args.tag,
+                comparison_version=args.comparison_version or str(manifest["recommended_version"]),
+                tested_baseline_version=args.tested_baseline_version
+                or str(manifest["recommended_version"]),
+                result="compatible",
+                phase="complete",
+                reason="compatible",
+            )
+            args.status_output.write_bytes(canonical_json(status))
         print(f"qualified OCR {evidence['version']}: {evidence['classification']}")
         return 0
     except CompatibilityError as exc:
+        if args.command == "qualify" and args.status_output is not None:
+            phase = exc.phase if isinstance(exc, QualificationStageError) else "metadata"
+            reason = exc.reason if isinstance(exc, QualificationStageError) else "metadata-invalid"
+            manifest_version = (
+                str(manifest["recommended_version"])
+                if isinstance(manifest, dict) and "recommended_version" in manifest
+                else ""
+            )
+            try:
+                status = qualification_status(
+                    tag=args.tag,
+                    comparison_version=args.comparison_version or manifest_version,
+                    tested_baseline_version=args.tested_baseline_version or manifest_version,
+                    result="failed",
+                    phase=phase,
+                    reason=reason,
+                )
+                args.status_output.parent.mkdir(parents=True, exist_ok=True)
+                args.status_output.write_bytes(canonical_json(status))
+            except (CompatibilityError, OSError) as status_exc:
+                print(f"OCR compatibility status write failed: {status_exc}", file=sys.stderr)
         print(f"OCR compatibility qualification failed: {exc}", file=sys.stderr)
         return 1
 

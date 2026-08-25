@@ -365,6 +365,53 @@ def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
     assert "current tested baseline: `v1.7.16`" in body
 
 
+def test_failed_qualification_status_is_closed_and_consistent() -> None:
+    """Public failure status accepts only reviewed enum values and exact keys."""
+
+    module = load_script()
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    assert module.validate_qualification_status(status) == status
+    with pytest.raises(module.CompatibilityError, match="schema is invalid"):
+        module.validate_qualification_status({**status, "raw_error": "token=/private/path"})
+    with pytest.raises(module.CompatibilityError, match="inconsistent"):
+        module.validate_qualification_status({**status, "result": "compatible"})
+
+
+def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
+    """The issue renderer projects closed status without a raw diagnostic field."""
+
+    module = load_script()
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    body = module.render_workflow_failure_issue(
+        status,
+        "https://github.com/synthetic/repository/actions/runs/123",
+    )
+
+    assert "<!-- ocr-compat-candidate:v1.10.0 -->" in body
+    assert "closed phase: `contracts`" in body
+    assert "closed reason: `contract-probe-failed`" in body
+    assert "actions/runs/123" in body
+    assert "Raw process diagnostics are not copied" in body
+    assert "token=" not in body
+    assert "/private/" not in body
+
+
 def test_optional_capabilities_validate_additive_llm_identity() -> None:
     module = load_script()
 
@@ -523,6 +570,128 @@ def test_issue_upsert_updates_the_canonical_issue() -> None:
     assert calls[0][2] is not None
     assert calls[0][2]["state"] == "open"
     assert "fix: synthetic parser correction" in calls[0][2]["body"]
+
+
+def test_failed_qualification_upsert_updates_the_canonical_issue() -> None:
+    """A failed attempt reopens and updates the one stable candidate issue."""
+
+    module = load_script()
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    def request(
+        url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        calls.append((url, method, payload))
+        return {"number": 135}
+
+    with (
+        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 135),
+        patched_attr(module, "_issue_api_request", request),
+    ):
+        number = module.upsert_qualification_issue(
+            repository="synthetic/repository",
+            status=status,
+            run_url="https://github.com/synthetic/repository/actions/runs/123",
+        )
+
+    assert number == 135
+    assert calls[0][0].endswith("/issues/135")
+    assert calls[0][1] == "PATCH"
+    payload = calls[0][2]
+    assert payload is not None
+    assert payload["state"] == "open"
+    assert "contract-probe-failed" in payload["body"]
+    assert "token=" not in payload["body"]
+
+
+def test_qualify_cli_retains_closed_status_when_private_probe_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CLI records safe status while stderr retains the private diagnostic."""
+
+    module = load_script()
+    output = tmp_path / "evidence.json"
+    status_output = tmp_path / "status.json"
+    private_detail = "probe token=secret path=/private/workspace/result.json"
+
+    def fail_probe(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise module.QualificationStageError(
+            private_detail,
+            phase="contracts",
+            reason="contract-probe-failed",
+        )
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module, "qualify_release", fail_probe),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.10.0",
+                "--comparison-version",
+                "1.9.10",
+                "--tested-baseline-version",
+                "1.9.10",
+                "--output",
+                str(output),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "contracts"
+    assert status["reason"] == "contract-probe-failed"
+    assert status["result"] == "failed"
+    assert private_detail not in status_output.read_text(encoding="utf-8")
+    assert private_detail in captured.err
+    assert not output.exists()
+
+
+def test_qualify_cli_retains_status_when_manifest_validation_fails(tmp_path: Path) -> None:
+    """Explicit baseline inputs keep closed status available before manifest load."""
+
+    module = load_script()
+    manifest = tmp_path / "invalid-manifest.json"
+    status_output = tmp_path / "status.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+
+    result = module.main(
+        [
+            "--manifest",
+            str(manifest),
+            "qualify",
+            "--tag",
+            "v1.10.0",
+            "--comparison-version",
+            "1.9.10",
+            "--tested-baseline-version",
+            "1.9.10",
+            "--output",
+            str(tmp_path / "evidence.json"),
+            "--status-output",
+            str(status_output),
+        ]
+    )
+
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "metadata"
+    assert status["reason"] == "metadata-invalid"
 
 
 def test_qualification_requires_exact_supported_asset_matrix() -> None:

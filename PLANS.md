@@ -68,10 +68,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Requirement Traceability
 
-- `REQ-001` (`in_progress`): materialize the approved full plan first, create the
+- `REQ-001` (`done`): materialize the approved full plan first, create the
   feature branch, signed planning commit, initial push, Draft PR, milestone, and
   linked issue structure. Covered by `WQ-01` and `WQ-02`.
-- `REQ-002` (`pending`): make failed compatibility qualification produce a
+- `REQ-002` (`done`): make failed compatibility qualification produce a
   bounded status, canonical issue update, and artifact while the job remains red
   and aggregate remains blocked. Covered by `WQ-03`.
 - `REQ-003` (`pending`): adapt deterministic qualification to OCR 1.10.0 comment
@@ -220,11 +220,11 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 1. `WQ-01` (`done`): pass plan fidelity, create the feature branch, perform
    planning self-review/checks, and make the signed planning commit.
-2. `WQ-02` (`in_progress`): push planning head, open Draft PR, create/read back
+2. `WQ-02` (`done`): push planning head, open Draft PR, create/read back
    milestone and canonical/sub-issue coordination.
-3. `WQ-03` (`pending`): implement bounded failure status plus always-run issue and
+3. `WQ-03` (`done`): implement bounded failure status plus always-run issue and
    artifact handling; add workflow/CLI tests and preserve final failure outcome.
-4. `WQ-04` (`pending`): adapt the gateway and real OCR contracts for path,
+4. `WQ-04` (`in_progress`): adapt the gateway and real OCR contracts for path,
    grouping, filtering, effort rounds, budget, usage, and completion caps; push
    the signed qualification checkpoint and run hosted Linux qualification.
 5. `WQ-05` (`pending`): validate hosted evidence, promote OCR 1.10.0, add
@@ -324,6 +324,17 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `2026-08-25`: the complete schema-v2 active plan passed engineering-workflow
   `plan_lifecycle.py check`; full plan diff self-review and `git diff --check`
   passed with no product or external mutation before the planning checkpoint.
+- `2026-08-25`: signed planning commit
+  `4cc7d6427cfebd26db6ff26739f8710d4b8ae134` was pushed and opened Draft PR
+  #134. Milestone `v0.8.2` contains canonical OCR issue #135 and linked sub-issues
+  #136 (failed-qualification retention) and #137 (BL-017 audit); GitHub API
+  readback confirms all three open issues and both parent-child relationships.
+- `2026-08-25`: failed qualification now emits only the closed
+  `ocr-toolkit.compatibility-status/v1` projection to issue automation, retains
+  raw diagnostics in the private job log, always attempts canonical issue and
+  artifact handling, and explicitly restores the red job outcome. Ruff, mypy,
+  83 focused compatibility/workflow tests, YAML parsing, plan validation, and
+  `git diff --check` pass; self-review also added the pre-manifest failure path.
 
 #### Risks And Recovery
 
@@ -356,9 +367,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Finish `WQ-02`: push the signed planning head, open the Draft PR, create milestone
-`v0.8.2` plus the canonical OCR qualification issue and two bounded linked work
-items, and read back their exact coordination state before implementation.
+Continue `WQ-04`: adapt the deterministic gateway and real OCR contracts to the
+1.10.0 path, semantic grouping, filter, effort-round, budget, usage, and
+version-specific completion-cap wire behavior; then make the next signed
+checkpoint available to hosted Linux qualification.
 
 #### Plan Fidelity Check
 
