@@ -93,6 +93,12 @@ QUALIFICATION_REASONS = {
     "evidence-write-failed",
     "compatible",
 }
+QUALIFICATION_FAILURE_REASONS = {
+    "metadata": frozenset({"metadata-invalid", "metadata-request-failed"}),
+    "artifact": frozenset({"artifact-verification-failed"}),
+    "contracts": frozenset({"contract-probe-failed"}),
+    "evidence": frozenset({"evidence-write-failed"}),
+}
 T = TypeVar("T")
 
 
@@ -1528,6 +1534,8 @@ def qualification_status(
         _fail("qualification status phase or reason is invalid")
     if (result == "compatible") != (phase == "complete" and reason == "compatible"):
         _fail("qualification status result is inconsistent")
+    if result == "failed" and reason not in QUALIFICATION_FAILURE_REASONS.get(phase, frozenset()):
+        _fail("qualification status failure phase and reason are inconsistent")
     return {
         "comparison_version": comparison,
         "phase": phase,

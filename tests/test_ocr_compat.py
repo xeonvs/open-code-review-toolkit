@@ -386,6 +386,33 @@ def test_failed_qualification_status_is_closed_and_consistent() -> None:
         module.validate_qualification_status({**status, "result": "compatible"})
 
 
+@pytest.mark.parametrize(
+    ("phase", "reason"),
+    [
+        ("complete", "contract-probe-failed"),
+        ("artifact", "metadata-invalid"),
+        ("contracts", "evidence-write-failed"),
+        ("evidence", "artifact-verification-failed"),
+    ],
+)
+def test_failed_qualification_status_rejects_impossible_stage_pairs(
+    phase: str, reason: str
+) -> None:
+    """Fail closed when individually valid status enums contradict each other."""
+
+    module = load_script()
+
+    with pytest.raises(module.CompatibilityError, match="phase and reason are inconsistent"):
+        module.qualification_status(
+            tag="v1.10.0",
+            comparison_version="1.9.10",
+            tested_baseline_version="1.9.10",
+            result="failed",
+            phase=phase,
+            reason=reason,
+        )
+
+
 def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
     """The issue renderer projects closed status without a raw diagnostic field."""
 
