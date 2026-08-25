@@ -4,4 +4,236 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Work
 
-No active or blocked repository work.
+### Toolkit 0.8.3 — authoritative OCR compatibility status and numeric CLI limits
+
+Status: `active`
+Owner: Codex
+Plan Origin: `direct_execution`
+Release classification: `release-required`
+Target stable version: `0.8.3`
+Last Updated: 2026-08-25
+
+#### Goal
+
+Close #139 and #140 as one protected 0.8.3 bug-fix release: make a failed OCR
+qualification's closed status authoritative even when stale evidence or invalid
+support metadata exists, and replace the stale example-owned `OCR_MAX_TOOLS=30`
+contract with installed-OCR delegation plus behaviorally qualified numeric CLI
+boundaries. Preserve private diagnostics, aggregate-promotion blocking, the exact
+OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
+
+#### Requested Scope
+
+- Select OCR compatibility issue input from the actual qualification outcome;
+  retained evidence from a failed step must never win over its failed status.
+- Ensure every handled qualification failure after evidence creation, including
+  a late issue-body write failure, commits a closed failure status before the
+  workflow publishes the issue/artifact and restores the red job outcome.
+- Let `upsert-issue --status` validate and publish a closed status independently
+  of an invalid support manifest that the command does not consume.
+- Replace the GitLab example's release-specific max-tools value with OCR's
+  supported `0` sentinel and document the exact default as inherited from OCR.
+- Recognize only the installed OCR's closed max-tools normalization diagnostic;
+  expose a toolkit-authored operator notice without publishing raw stderr or
+  treating the diagnostic's reported minimum as proof of the effective loop cap.
+- Extend OCR qualification to exercise the behavior and effective semantics of
+  toolkit-managed numeric OCR review options at omitted/default, sentinel,
+  invalid-below-boundary, accepted-boundary, representative, and maximum edges
+  where a maximum exists. Record only bounded closed facts in evidence.
+- Add separate bug-fix changelog fragments for #139 and #140, update canonical
+  development/public contracts, and complete the protected PR and stable-release
+  lifecycle without a local real-LLM/model invocation.
+
+#### Requirement Traceability
+
+| Requirement | Source | Outcome | Work items | Verification |
+| --- | --- | --- | --- | --- |
+| `REQ-139-A` | #139 acceptance 1 | Qualification outcome, not file existence, selects evidence versus status | `WQ-02` | Workflow contract test with retained evidence and failed outcome |
+| `REQ-139-B` | #139 acceptance 2 | Late output failure produces authoritative failed status | `WQ-02` | Injected issue-body and partial/failed write tests |
+| `REQ-139-C` | #139 acceptance 3 | Status recovery does not load the support manifest | `WQ-02` | Invalid-manifest CLI recovery test |
+| `REQ-139-D` | #139 acceptance 4-6 | Issue/artifact publish before red job; aggregate blocked; projection stays closed and private-safe | `WQ-02`, `WQ-04` | Focused script/workflow tests and privacy diff review |
+| `REQ-140-A` | #140 expected behavior/scope | Public example delegates max-tools default to installed OCR | `WQ-03` | Environment, docs, and integration contract tests |
+| `REQ-140-B` | #140 acceptance 2-4 | Exact enriched/MCP preview accepts valid sentinel and handles known normalization without ambiguous/raw diagnostics | `WQ-03` | Parser negatives plus production-caller integration with controlled OCR peer |
+| `REQ-140-C` | #140 scope/acceptance 5 | Qualification records behavioral numeric boundaries and effective-value ownership | `WQ-03` | Exact OCR 1.10.0 no-model probe and evidence-schema tests |
+| `REQ-140-D` | #140 acceptance 6 | Current docs/tests avoid toolkit-release wording where OCR owns the contract | `WQ-03`, `WQ-04` | Documentation contract tests and full-text review |
+| `REQ-REL` | Repository release contract | Deliver 0.8.3 through reviewed feature and release PRs with external reconciliation | `WQ-01`, `WQ-04`, `WQ-05` | Protected checks, registries, attestations, tag, receipt, issue/milestone closure |
+
+#### Explicit Non-Goals
+
+- Do not update OCR beyond exact 1.10.0 or change its checksum-pinned evidence
+  except for additive qualification facts required by #140.
+- Do not add a toolkit prompt/context max-tokens alias, a new configuration
+  format, automatic discovery from help text, or a second compatibility service.
+- Do not infer a maximum from absent diagnostics or treat OCR's documented
+  `min 10` help text as authoritative over observed behavior.
+- Do not publish raw subprocess output, filesystem paths, provider/model data,
+  repository content, credentials, or exception strings in issues or receipts.
+- Do not change DLP, receipt v5, severity, findings, posting transactions,
+  telemetry ownership, or automatic-approval eligibility.
+- Do not run a local real LLM/model/provider review. A controlled deterministic
+  HTTP peer may exercise the OCR process boundary but is not model evidence.
+- Do not reorganize tests or production modules beyond the cohesive owners
+  directly required by these two fixes.
+
+#### Constraints
+
+- Start from clean synchronized `main` at stable `v0.8.2`; use branch prefix
+  `codex/` and signed logical commits.
+- Before each commit: focused tests, requirement/trust-boundary self-review,
+  complete staged diff review, and `git diff --check`.
+- Run `scripts/quality.sh check` and `scripts/gitleaks.sh` once on the final
+  feature head. Hosted PR checks own the full OS/Python matrix and package build;
+  do not duplicate those gates locally without a new package boundary.
+- Keep subprocess reads bounded, exact-schema status/evidence hostile on load,
+  and issue projection based only on closed enums and validated version/run IDs.
+- Preserve the user-owned environment: isolated temporary `HOME` only, no OCR
+  config/credential writes, no global OCR installation change, and full cleanup.
+
+#### Inputs And Sources
+
+- GitHub issues #139 and #140, including their complete acceptance criteria.
+- `.github/workflows/ocr-compatibility.yml`, `scripts/ocr_compat.py`,
+  `src/ocr_toolkit/review_runner.py`, current focused tests and public contracts.
+- `docs/engineering/project_principles.md` persisted/atomic-state, external-format,
+  subprocess, outcome-consistency, and integration-proof boundaries.
+- Official OCR `v1.10.0` source in `cmd/opencodereview/shared_flags.go`,
+  `cmd/opencodereview/shared.go`, and embedded `task_template.json`.
+- Isolated local OCR 1.10.0 no-model preview evidence: omitted and `0` accepted;
+  negative rejected; `1..49` report normalization to `50`; `50+` accepted; help
+  says `min 10`; embedded template owns `MAX_TOOL_REQUEST_TIMES=100` and applies
+  CLI max-tools only when it raises that template value.
+
+#### User Decisions And Answers
+
+- Take both currently open issues into active work.
+- Local execution against a real LLM/provider is explicitly waived because this
+  environment has no access; do not claim that evidence.
+- Continue the established efficient workflow: logical commits, self-review,
+  one final complete local gate, protected hosted CI, then ordinary release.
+
+#### Completed Baseline State
+
+- `main` is clean at stable merge `6dae5b3821eb7aa22c8c8d8d9c17f869278340c7`
+  and tree `ba935a1f0a7f0e6e6c899120ecdc08e3822097c4`.
+- Toolkit 0.8.2 and OCR 1.10.0 are published and reconciled; `.next-version` is
+  `0.8.3`; no active plan or open milestone existed before this activation.
+- #139 reproduces three authority/recovery gaps added by the 0.8.2 failure path.
+- #140 reproduces before any provider call because successful OCR preview stderr
+  currently accepts only the background-warning grammar.
+
+#### Current Work Queue
+
+| Work item | Status | Scope and commit boundary |
+| --- | --- | --- |
+| `WQ-01` | `in_progress` | Commit this plan, create `codex/v0.8.3-ocr-boundaries`, milestone `v0.8.3`, attach #139/#140, push once, and open a Draft PR with exact scope/non-claims |
+| `WQ-02` | `pending` | Implement #139 outcome-authoritative selection, atomic/closed status recovery, manifest-independent status upsert, tests, and `139.bugfix.md` |
+| `WQ-03` | `pending` | Implement #140 sentinel default, closed normalization handling, numeric boundary qualification/evidence, enriched/MCP integration coverage, docs, and `140.bugfix.md` |
+| `WQ-04` | `pending` | Reconcile development/public docs and all requirements; run final quality, coverage, manifest, Towncrier, Gitleaks, and complete privacy/data-flow self-review; push completed history and resolve hosted findings |
+| `WQ-05` | `pending` | Merge exact reviewed feature head, verify development publication, prepare protected `Release v0.8.3`, publish stable once authorized, and independently reconcile artifacts/provenance/tag/receipt/issues/milestone/clean main |
+
+#### Locked Decisions
+
+- Both issues belong to stable 0.8.3 and remain separate changelog entries.
+- `OCR_MAX_TOOLS` remains an optional example-local variable but defaults to
+  sentinel `0`, whose meaning is exactly “inherit installed OCR template”.
+- OCR's normalization diagnostic is a bounded installed-component fact. Its raw
+  text never crosses into result/posting/receipt; the toolkit reports only parsed
+  integers and distinguishes the reported normalization target from the actual
+  template-owned loop limit.
+- A failed qualification status is authoritative whenever the qualification step
+  outcome is failure, even if a complete evidence file also exists.
+- `upsert-issue --status` has no support-manifest dependency; evidence-driven
+  discovery, qualification, aggregation, and promotion retain manifest validation.
+- OCR remains external and pinned to 1.10.0. No local model result substitutes
+  for hosted exact-binary or deterministic controlled-peer evidence.
+
+#### Verification
+
+- #139: focused `tests/test_ocr_compat.py` and workflow-source tests covering
+  retained evidence, late write failure, invalid manifest, closed schemas,
+  publication-before-red ordering, and blocked aggregation.
+- #140: focused environment/integration/review-runner/compatibility tests covering
+  sentinel/default, normalization, duplicate/near-miss/Unicode/oversized stderr,
+  known/unknown success output, invalid non-zero diagnostics, effective-value
+  evidence, and the complete evidence/MCP production caller up to the model gate.
+- Exact installed OCR 1.10.0: isolated no-real-model boundary probe only; preserve
+  command/exit/closed diagnostics/effective counts and remove its temporary HOME.
+- Final feature head: `scripts/quality.sh check`, coverage floors,
+  `PYTHONPATH=src python scripts/ocr_compat.py validate`, Towncrier draft,
+  `scripts/gitleaks.sh`, `git diff --check`, and clean-tree confirmation.
+- Hosted: all protected feature checks, one development TestPyPI publication and
+  exact artifact/provenance/install readback. Stable release follows `docs/release.md`.
+
+#### Latest Validation Results
+
+- 2026-08-25 reconnaissance: clean synchronized `main`; workflow audit reports
+  canonical owners and complete documentation indexes; exactly #139 and #140 are
+  open; both have no milestone.
+- Isolated OCR 1.10.0 preview matrix reproduced #140 without LLM access and was
+  fully cleaned. Official tag source disproved the assumption that reported
+  normalization target `50` is necessarily the effective loop cap.
+- No implementation, repository metadata, issue, milestone, branch, or PR write
+  preceded this plan materialization.
+
+#### Risks And Recovery
+
+- A stale evidence artifact may coexist with failure status. Recovery: bind issue
+  selection to step outcome and keep aggregate dependent on the restored red job.
+- Status output itself may encounter unsafe/partial filesystem state. Recovery:
+  use a bounded same-directory atomic writer and fail the job without adopting a
+  partial status; workflow upload remains diagnostic, never promotion evidence.
+- Future OCR diagnostics may change spelling or semantics. Recovery: exact closed
+  parsing and compatibility probes fail closed; promote a new grammar only with a
+  checksum-pinned OCR release and tests.
+- The OCR help/runtime/template mismatch can mislead documentation. Recovery:
+  document sentinel ownership and observed behavior separately; never derive a
+  runtime contract from help text alone.
+- External write or hosted CI failure: preserve local commits and Draft PR, record
+  exact run evidence, fix only the demonstrated boundary, and rerun its focused
+  gate before a new signed commit.
+
+#### Resume Point
+
+`WQ-01`: run the plan-fidelity check, create the feature branch, self-review and
+commit this plan, then create/read back milestone `v0.8.3`, attach #139/#140,
+push the planning commit, and open the Draft PR before production changes.
+
+#### Plan Fidelity Check
+
+- [x] Every requested issue acceptance criterion maps to a stable requirement and work item.
+- [x] Release target, local-LLM waiver, privacy boundaries, and unchanged contracts are explicit.
+- [x] Inputs distinguish current repository behavior, official OCR source, and observed probes.
+- [x] Rejected scope and overengineering boundaries are explicit.
+- [x] Each logical commit has focused verification and self-review gates.
+- [x] External writes, hosted delivery, recovery, and exact resume state are represented.
+
+#### Reconciliation Check
+
+- [x] `PLANS.md` was inactive and the worktree was clean at activation.
+- [x] #139 and #140 are the complete open issue set and do not conflict with backlog/roadmap scope.
+- [x] Stable 0.8.2 closure remains historical and is not rewritten.
+- [x] Target 0.8.3 matches `.next-version` and no competing milestone exists.
+
+#### Closure Gate
+
+- [ ] All requirements and work items are terminal with current validation evidence.
+- [ ] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
+- [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
+- [ ] Development and stable artifacts are independently reconciled and issues/milestone are closed from receipts.
+- [ ] `scripts/plan_lifecycle.py check` passes and the plan is archived through the release-owned transition.
+
+#### Post-Close Delivery
+
+- Feature implementation closes through a protected squash merge only after exact
+  reviewed-head checks. Stable publication remains a separate protected release PR
+  and immutable external reconciliation; readiness is not delivery.
+- #139/#140 and milestone `v0.8.3` remain open until stable receipt publication.
+- Final handoff must repeat that no local real-LLM/provider qualification was run
+  or claimed, while identifying the exact deterministic OCR boundary evidence.
+
+#### Handoff Notes
+
+- Start at `WQ-01`; do not implement from an uncommitted or compressed substitute.
+- The source-level max-tools mismatch is material: reported normalization `50`
+  and embedded template default `100` are distinct facts. Preserve that distinction
+  in code, evidence, docs, changelog, issue updates, and future OCR upgrades.
