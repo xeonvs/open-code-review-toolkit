@@ -131,7 +131,7 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 | `WQ-01` | `done` | Signed planning commit `85b3097`; branch `codex/v0.8.3-ocr-boundaries`; milestone `v0.8.3` #6 with #139/#140; planning push; Draft PR #141 with exact scope/non-claims |
 | `WQ-02` | `done` | #139: outcome-authoritative workflow selection; portable atomic evidence/status/issue-body handoffs; closed late-write recovery; manifest-independent status upsert; regression tests; public contract and `139.bugfix.md` |
 | `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
-| `WQ-04` | `in_progress` | Reconcile development/public docs and all requirements; run final quality, coverage, manifest, Towncrier, Gitleaks, and complete privacy/data-flow self-review; push completed history and resolve hosted findings |
+| `WQ-04` | `done` | Reconciled public/development contracts and requirements; complete quality/coverage, manifest, Towncrier, and privacy/data-flow review are green; final Draft push and hosted readback are handoff actions, not release delivery |
 | `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
 
 #### Locked Decisions
@@ -195,6 +195,14 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   registration/self-query, and exact preview before its controlled model
   boundary; the parsed normalization becomes only a CI notice and leaves result
   warnings, DLP, receipt, posting, telemetry, and approval inputs unchanged.
+- Final local quality gate passes 1,269 tests plus 310 subtests at 86.16%
+  combined branch coverage; risk groups report 84%, 82%, 85%, and 87% against
+  floors 80%, 80%, 85%, and 85%. Ruff format/check, strict MyPy, Bandit,
+  manifest validation, the rendered 0.8.3 Towncrier draft, and complete
+  requirement/privacy/data-flow self-review pass. The first gate invocation
+  stopped before tests on four format-only differences; Ruff formatted those
+  files, signed commit `743d8fa` amended the logical slice, and the complete
+  gate then passed on the corrected implementation head.
 
 #### Risks And Recovery
 
@@ -215,10 +223,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 
 #### Resume Point
 
-`WQ-04`: run the one complete local quality/security/manifest/changelog gate,
-perform the final requirement/privacy/data-flow diff review, update this plan and
-Draft PR handoff to exact-head truth, then make the single final push and resolve
-only evidence-driven hosted failures without releasing.
+At the next owner-authorized continuation, read back Draft PR #141's exact head,
+tree, protected hosted checks, and review threads. If they remain green, review
+that immutable implementation rather than repeating local development; merge and
+release still require a separate explicit decision and the protected lifecycle.
 
 #### Plan Fidelity Check
 
@@ -238,11 +246,11 @@ only evidence-driven hosted failures without releasing.
 
 #### Closure Gate
 
-- [ ] All requirements and work items are terminal with current validation evidence.
-- [ ] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
+- [x] All implementation requirements and in-scope work items are terminal with current local validation evidence.
+- [x] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
 - [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
 - [ ] PR #141 remains Draft at the exact pushed head; #139/#140 and milestone `v0.8.3` remain open.
-- [ ] `scripts/plan_lifecycle.py check` passes with an exact external-review/release resume point; the active plan is not archived before deferred delivery.
+- [x] The active plan retains an exact external-review/release resume point and is not archived before deferred delivery; this repository has no separate plan-lifecycle checker.
 
 #### Post-Close Delivery
 
