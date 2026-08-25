@@ -113,7 +113,7 @@ semantics.
 
 #### Inputs And Sources
 
-- GitHub issues #139 and #140, including their complete acceptance criteria.
+- GitHub issues #139, #140, and #142, including their complete acceptance criteria.
 - `.github/workflows/ocr-compatibility.yml`, `scripts/ocr_compat.py`,
   `src/ocr_toolkit/review_runner.py`, current focused tests and public contracts.
 - `docs/engineering/project_principles.md` persisted/atomic-state, external-format,
@@ -165,8 +165,8 @@ semantics.
 | `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
 | `WQ-04` | `done` | Reconciled public/development contracts and requirements; complete quality/coverage, manifest, Towncrier, and privacy/data-flow review are green; final Draft push and hosted readback are handoff actions, not release delivery |
 | `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
-| `WQ-06` | `done` | #142: the existing inline formatter now shows every admitted useful non-zero counter; external MCP stays aggregated by verified server; focused hostile-value/DLP/approval tests, public operational wording, and `142.feature.md` define the activity-not-token-attribution contract |
-| `WQ-07` | `in_progress` | Complete the one final full validation and overall self-review, record exact results, update the Draft body and issue checkboxes, make one signed handoff commit plus one final push, and wait for exact-head hosted checks while keeping the PR Draft |
+| `WQ-06` | `done` | #142 feature commit `a416f37`: the existing inline formatter now shows every admitted useful non-zero counter; external MCP stays aggregated by verified server; focused hostile-value/DLP/approval tests, public operational wording, and `142.feature.md` define the activity-not-token-attribution contract |
+| `WQ-07` | `done` | One final full local gate and overall reporting/privacy/approval self-review are green; this signed handoff commit is followed by one final push, Draft/issue coordination, and exact-head hosted readback as delivery evidence rather than another repository-content change |
 
 #### Locked Decisions
 
@@ -254,15 +254,22 @@ semantics.
 - The user then approved an additive numeric tool-activity breakdown in the
   existing format. No repository or GitHub write for that new slice preceded
   this resumed-plan materialization.
-- #142 now owns the additive feature under milestone `v0.8.3`. Focused formatter,
-  posting, result-DLP, and approval validation passes 291 tests plus 133 subtests;
-  documentation/release validation passes 38 tests and the rendered Towncrier
-  draft keeps #142 under Features with #139/#140 separately under Bug Fixes.
+- #142 now owns the additive feature under milestone `v0.8.3`. The combined
+  focused formatter, posting, result-DLP, approval, documentation, and release
+  gate passes 330 tests plus 133 subtests; the rendered Towncrier draft keeps
+  #142 under Features with #139/#140 separately under Bug Fixes.
 - Feature self-review confirms only the nine compile-time native/context/evidence
   labels and bounded positive integer counts can enter the inline line. Unknown
   or dynamic names remain private, static labels cannot create DLP false
   positives, filtered projections retain safe native counts, and the aggregate
   token line plus receipt/approval authorities are unchanged.
+- Final local quality passes 1,275 tests plus 324 subtests at 86.35% combined
+  branch coverage. Risk groups pass at 84%, 82%, 86%, and 87% against floors
+  80%, 80%, 85%, and 85%; Ruff format/check, strict MyPy, and Bandit pass.
+  Lock and OCR-manifest validation, the rendered Towncrier draft,
+  checksum-verified temporary Gitleaks 8.24.3, `git diff --check`, and clean-tree
+  confirmation also pass. The global Gitleaks installation and OCR/LLM state
+  were not changed.
 
 #### Risks And Recovery
 
@@ -291,10 +298,11 @@ semantics.
 
 #### Resume Point
 
-Continue at `WQ-07`: commit the reviewed #142 feature slice, run the one final
-full local gate on that exact implementation, record its evidence in this plan,
-then make the handoff commit and single final push. Do not change the format,
-merge, or start release delivery.
+After this handoff commit, push the accumulated signed history once, update Draft
+PR #141 and #142 with the exact remote head/tree, and wait for protected hosted
+checks. If green, the next authorized agent starts from review of that immutable
+Draft head rather than repeating local development. Do not merge or start release
+delivery.
 
 #### Plan Fidelity Check
 
@@ -318,10 +326,10 @@ merge, or start release delivery.
 
 #### Closure Gate
 
-- [ ] All implementation requirements and in-scope work items are terminal with current local validation evidence.
-- [ ] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
+- [x] All implementation requirements and in-scope work items are terminal with current local validation evidence.
+- [x] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
 - [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
-- [ ] PR #141 remains Draft at the exact pushed head; #139/#140 and milestone `v0.8.3` remain open.
+- [ ] PR #141 remains Draft at the exact pushed head; #139/#140/#142 and milestone `v0.8.3` remain open.
 - [x] The active plan retains an exact external-review/release resume point and is not archived before deferred delivery; this repository has no separate plan-lifecycle checker.
 
 #### Post-Close Delivery
@@ -331,7 +339,7 @@ merge, or start release delivery.
 - A later owner-authorized continuation must review the exact Draft head, preserve
   or amend the plan from current state, then use the protected feature/release
   lifecycle. Readiness is not delivery.
-- #139/#140 and milestone `v0.8.3` remain open until stable receipt publication.
+- #139/#140/#142 and milestone `v0.8.3` remain open until stable receipt publication.
 - Final handoff must repeat that no local real-LLM/provider qualification was run
   or claimed, while identifying the exact deterministic OCR boundary evidence.
 - #142 and its feature fragment separately own the manager-facing reporting
