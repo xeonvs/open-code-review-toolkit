@@ -4,11 +4,11 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ## Active Work
 
-### Toolkit 0.8.3 — authoritative OCR compatibility status and numeric CLI limits
+### Toolkit 0.8.3 — OCR boundaries and review tool-usage visibility
 
 Status: `active`
 Owner: Codex
-Plan Origin: `direct_execution`
+Plan Origin: `resumed`
 Release classification: `release-deferred` (the product changes require stable
 `0.8.3`, but feature merge and publication are explicitly deferred)
 Target stable version: `0.8.3`
@@ -16,12 +16,16 @@ Last Updated: 2026-08-25
 
 #### Goal
 
-Close #139 and #140 as one protected 0.8.3 bug-fix release: make a failed OCR
+Close #139 and #140 and add one bounded review-usage feature as one protected
+0.8.3 release: make a failed OCR
 qualification's closed status authoritative even when stale evidence or invalid
 support metadata exists, and replace the stale example-owned `OCR_MAX_TOOLS=30`
 contract with installed-OCR delegation plus behaviorally qualified numeric CLI
-boundaries. Preserve private diagnostics, aggregate-promotion blocking, the exact
-OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
+boundaries. Extend the existing one-line GitLab technical summary so its bounded
+numeric breakdown shows the useful non-zero OCR review-tool counters rather than
+only the first six. Preserve private diagnostics, aggregate-promotion blocking,
+the exact OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval
+semantics.
 
 #### Requested Scope
 
@@ -44,6 +48,15 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - Add separate bug-fix changelog fragments for #139 and #140, update canonical
   development/public contracts, and complete the protected PR and stable-release
   lifecycle without a local real-LLM/model invocation.
+- Keep the current inline `all OCR tool calls` format while publishing every
+  admitted non-zero counter that helps explain review activity: OCR repository
+  inspection (`file_read`, `file_read_diff`, `file_find`, `code_search`), review
+  output/lifecycle (`code_comment`, `task_done`), toolkit context/evidence
+  (`ocr_toolkit_evidence`, `context_list`, `context_get`), and the already
+  verified per-server MCP summary.
+- Treat tool-call counts as operational activity only. Keep aggregate token
+  input/output/cache telemetry alongside them, but do not claim or derive
+  per-tool token consumption because OCR 1.10.0 does not provide that contract.
 
 #### Requirement Traceability
 
@@ -57,6 +70,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 | `REQ-140-B` | #140 acceptance 2-4 | Exact enriched/MCP preview accepts valid sentinel and handles known normalization without ambiguous/raw diagnostics | `WQ-03` | Parser negatives plus production-caller integration with controlled OCR peer |
 | `REQ-140-C` | #140 scope/acceptance 5 | Qualification records behavioral numeric boundaries and effective-value ownership | `WQ-03` | Exact OCR 1.10.0 no-model probe and evidence-schema tests |
 | `REQ-140-D` | #140 acceptance 6 | Current docs/tests avoid toolkit-release wording where OCR owns the contract | `WQ-03`, `WQ-04` | Documentation contract tests and full-text review |
+| `REQ-USAGE-A` | User-approved manager-facing usage summary | Existing inline technical format includes every admitted useful non-zero tool counter, deterministically ordered by count then name | `WQ-06` | Formatter and complete summary regressions with more than six tools |
+| `REQ-USAGE-B` | Result/privacy boundary | Only bounded names and integer counters cross into GitLab; arguments, results, paths, IDs, provider data, and unknown/unattributed names remain private | `WQ-06` | Hostile map/name/count, DLP, Markdown, and note-budget regressions |
+| `REQ-USAGE-C` | Honest token explanation | Tool activity appears beside aggregate token usage without percentages or per-tool token attribution | `WQ-06` | Rendering and documentation assertions |
+| `REQ-USAGE-D` | Existing trust contracts | The expanded diagnostic is not a finding, receipt proof, telemetry source, severity input, or approval signal | `WQ-06`, `WQ-07` | Posting, DLP, and approval regression review |
 | `REQ-REL` | Repository release contract | Deliver 0.8.3 through reviewed feature and release PRs with external reconciliation | `WQ-01`, `WQ-04`, `WQ-05` | Protected checks, registries, attestations, tag, receipt, issue/milestone closure |
 
 #### Explicit Non-Goals
@@ -75,6 +92,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   HTTP peer may exercise the OCR process boundary but is not model evidence.
 - Do not reorganize tests or production modules beyond the cohesive owners
   directly required by these two fixes.
+- Do not change the current one-line technical-summary layout, publish a catalog
+  of merely available tools, add per-tool token estimates/percentages, or expose
+  raw tool-call arguments, results, errors, paths, request IDs, or dynamic
+  external MCP tool names.
 
 #### Constraints
 
@@ -99,6 +120,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   subprocess, outcome-consistency, and integration-proof boundaries.
 - Official OCR `v1.10.0` source in `cmd/opencodereview/shared_flags.go`,
   `cmd/opencodereview/shared.go`, and embedded `task_template.json`.
+- Official OCR `v1.10.0` built-in registry and tools configuration: six native
+  review tools (`task_done`, `code_comment`, `file_read`, `file_read_diff`,
+  `file_find`, and `code_search`); toolkit context/evidence tools remain owned by
+  the exact MCP composition and receipt.
 - Isolated local OCR 1.10.0 no-model preview evidence: omitted and `0` accepted;
   negative rejected; `1..49` report normalization to `50`; `50+` accepted; help
   says `min 10`; embedded template owns `MAX_TOOL_REQUEST_TIMES=100` and applies
@@ -113,6 +138,9 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   one final complete local gate, and protected hosted CI.
 - After the final push, keep PR #141 in Draft. Do not merge the feature branch,
   publish development/stable artifacts, create a release PR, or release 0.8.3.
+- The accepted manager-facing question is “where did the review activity go?”:
+  preserve the current inline format, show the selected numeric counters, and
+  explicitly avoid claiming exact per-tool token attribution.
 
 #### Completed Baseline State
 
@@ -123,6 +151,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - #139 reproduces three authority/recovery gaps added by the 0.8.2 failure path.
 - #140 reproduces before any provider call because successful OCR preview stderr
   currently accepts only the background-warning grammar.
+- The previously handed-off Draft head `e5a889f` is clean and fully green across
+  protected hosted checks. Its current formatter publishes the aggregate total
+  but truncates a valid per-tool breakdown to six entries, which is insufficient
+  for the newly approved activity explanation.
 
 #### Current Work Queue
 
@@ -133,6 +165,8 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 | `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
 | `WQ-04` | `done` | Reconciled public/development contracts and requirements; complete quality/coverage, manifest, Towncrier, and privacy/data-flow review are green; final Draft push and hosted readback are handoff actions, not release delivery |
 | `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
+| `WQ-06` | `in_progress` | Create the tool-usage issue in milestone `v0.8.3`; extend the existing inline formatter to every admitted useful non-zero counter; keep external MCP aggregated by verified server; add focused boundary tests, public operational wording, and a separate feature changelog fragment |
+| `WQ-07` | `pending` | Complete focused and final validation, self-review the reporting/privacy/approval flow, update the Draft body and issue checkboxes, make one signed feature commit plus one final push, and wait for exact-head hosted checks while keeping the PR Draft |
 
 #### Locked Decisions
 
@@ -149,6 +183,12 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   discovery, qualification, aggregation, and promotion retain manifest validation.
 - OCR remains external and pinned to 1.10.0. No local model result substitutes
   for hosted exact-binary or deterministic controlled-peer evidence.
+- The existing `all OCR tool calls: N total (...)` line remains the sole OCR
+  tool-counter format. It lists admitted non-zero counters by descending count
+  and then name; no grouping, percentages, or token-allocation inference is added.
+- Built-in OCR and toolkit-owned context/evidence names may be shown as activity.
+  External dynamic MCP tools remain represented only through the existing
+  verified per-server aggregate; unknown raw names never gain public meaning.
 
 #### Verification
 
@@ -167,6 +207,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - Hosted: all protected Draft feature checks on the exact final head. Development
   publication, stable release, registry/provenance/install readback, and closure
   remain deferred under `docs/release.md`.
+- Tool-usage slice: focused formatter/posting/result-DLP/approval tests must prove
+  more than six useful counters remain visible, deterministic and bounded; raw
+  call content and unknown names remain absent; aggregate token rendering and
+  approval decisions are unchanged.
 
 #### Latest Validation Results
 
@@ -203,6 +247,13 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   stopped before tests on four format-only differences; Ruff formatted those
   files, signed commit `743d8fa` amended the logical slice, and the complete
   gate then passed on the corrected implementation head.
+- Protected hosted checks subsequently passed on exact pushed head
+  `e5a889ff2c415adc1dbce706582da5480024cc7d` and tree
+  `1b89c1a69a7014baa0199343c457e7eb69419697`; PR #141 remained Draft, #139/#140
+  acceptance boxes were checked, and both issues plus milestone stayed open.
+- The user then approved an additive numeric tool-activity breakdown in the
+  existing format. No repository or GitHub write for that new slice preceded
+  this resumed-plan materialization.
 
 #### Risks And Recovery
 
@@ -220,13 +271,21 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 - External write or hosted CI failure: preserve local commits and Draft PR, record
   exact run evidence, fix only the demonstrated boundary, and rerun its focused
   gate before a new signed commit.
+- Tool counts can be mistaken for token allocation, and one tool call can return
+  very different context volume from another. Recovery: label them only as OCR
+  tool calls, retain the separate aggregate token line, document the limitation,
+  and never compute per-tool token shares.
+- A hostile or future OCR result can add names or excessive counters. Recovery:
+  admit only the closed useful set, validate bounded integer counts, sort
+  deterministically, and omit unknown/raw entries without changing review or
+  approval state.
 
 #### Resume Point
 
-At the next owner-authorized continuation, read back Draft PR #141's exact head,
-tree, protected hosted checks, and review threads. If they remain green, review
-that immutable implementation rather than repeating local development; merge and
-release still require a separate explicit decision and the protected lifecycle.
+Continue at `WQ-06`: create the scoped GitHub issue and attach it to milestone
+`v0.8.3`, then implement the closed useful-counter projection in the existing
+formatter and its focused tests. Do not change the format, push, merge, or start
+release delivery before the new logical slice and `WQ-07` gates are complete.
 
 #### Plan Fidelity Check
 
@@ -236,6 +295,8 @@ release still require a separate explicit decision and the protected lifecycle.
 - [x] Rejected scope and overengineering boundaries are explicit.
 - [x] Each logical commit has focused verification and self-review gates.
 - [x] External writes, hosted delivery, recovery, and exact resume state are represented.
+- [x] The accepted tool list, current-format decision, token-attribution
+  non-claim, and unknown/external-tool privacy boundary are explicit.
 
 #### Reconciliation Check
 
@@ -243,11 +304,13 @@ release still require a separate explicit decision and the protected lifecycle.
 - [x] #139 and #140 are the complete open issue set and do not conflict with backlog/roadmap scope.
 - [x] Stable 0.8.2 closure remains historical and is not rewritten.
 - [x] Target 0.8.3 matches `.next-version` and no competing milestone exists.
+- [x] The new reporting slice extends the open Draft and milestone without
+  changing the completed #139/#140 contracts or deferred-release boundary.
 
 #### Closure Gate
 
-- [x] All implementation requirements and in-scope work items are terminal with current local validation evidence.
-- [x] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
+- [ ] All implementation requirements and in-scope work items are terminal with current local validation evidence.
+- [ ] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
 - [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
 - [ ] PR #141 remains Draft at the exact pushed head; #139/#140 and milestone `v0.8.3` remain open.
 - [x] The active plan retains an exact external-review/release resume point and is not archived before deferred delivery; this repository has no separate plan-lifecycle checker.
@@ -262,6 +325,10 @@ release still require a separate explicit decision and the protected lifecycle.
 - #139/#140 and milestone `v0.8.3` remain open until stable receipt publication.
 - Final handoff must repeat that no local real-LLM/provider qualification was run
   or claimed, while identifying the exact deterministic OCR boundary evidence.
+- The resumed slice needs one new feature issue and changelog fragment; #139 and
+  #140 stay checked/open and must not absorb this manager-facing reporting change.
+- Final handoff must state that tool-call counts explain review activity only;
+  exact per-tool token consumption remains unavailable in OCR 1.10.0.
 
 #### Handoff Notes
 
