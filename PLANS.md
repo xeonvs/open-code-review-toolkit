@@ -239,10 +239,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 9. `WQ-09` (`done`): checksum-verify and atomically install local Darwin arm64
    OCR 1.10.0; run version/help/no-LLM isolated contract checks and clean temporary
    artifacts with rollback on failure.
-10. `WQ-10` (`in_progress`): perform holistic requirements/privacy/architecture/data-
+10. `WQ-10` (`done`): perform holistic requirements/privacy/architecture/data-
     flow/telemetry/docs self-review and one final local quality/security/manifest/
     changelog gate; update plan to exact implementation truth and final commit.
-11. `WQ-11` (`pending`): push final signed history, wait for exact-head hosted PR
+11. `WQ-11` (`in_progress`): push final signed history, wait for exact-head hosted PR
     checks, fix only evidence-backed failures through the same commit gate, and
     perform bounded real-model exact-head qualification.
 12. `WQ-12` (`pending`): ready and merge the protected feature PR, verify the
@@ -389,6 +389,27 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   the installed-binary isolated no-LLM gateway contract passes. User
   `.opencodereview` directory metadata is byte-for-byte unchanged, rollback and
   probe artifacts were removed, and no config, credential, or HOME was edited.
+- `2026-08-25`: required inputs in the public configuration tables are now
+  bold only where the row's scoped `Required` contract applies; optional and
+  conditionally alternative inputs remain distinguishable. The exact display
+  set is protected by the environment-contract test rather than presentation-
+  blind string checks.
+- `2026-08-25`: holistic review rechecked the upstream-artifact-to-gateway-to-
+  private-result-to-DLP-to-receipt/approval flow, provider-neutral ownership,
+  compatibility failure projection, workflow permissions, documentation, and
+  release notes. It found and closed one impossible qualification-status gap by
+  binding each failed phase to its exact closed reason set; no further product,
+  privacy, approval, or telemetry defect remains.
+- `2026-08-25`: the single final local gate passes 1,256 tests plus 310
+  subtests at 86.14% combined branch coverage. Risk groups pass at 84%, 82%,
+  85%, and 87%; Ruff format/lint, strict MyPy, Bandit, checksum-pinned Gitleaks
+  8.24.3, lock resolution, OCR manifest/evidence validation, the rendered 0.8.2
+  Towncrier section, `git diff --check`, and plan lifecycle validation pass.
+  The temporary scanner archive matched SHA-256
+  `b90f13bb8c90ab72083d9b0c842e39dafb82c0e5c3f872f407366b7a58909013`
+  and was removed without changing the global 8.30.1 installation. Clean
+  package rebuild/install matrices are deliberately left to the single hosted
+  Build artifacts owner and stable release gates under the #132 validation split.
 
 #### Risks And Recovery
 
@@ -421,10 +442,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-10`: perform the holistic requirements, privacy, architecture,
-data-flow, telemetry, documentation, and external-state self-review; run the one
-canonical local quality/security/manifest/changelog gate; then reconcile the
-plan and Draft PR text at the exact signed implementation head before pushing.
+Continue `WQ-11`: commit this final reconciliation, update the Draft PR body to
+the exact implementation head/tree, push the complete signed local history once,
+wait for all hosted PR owners, and then run the bounded real-model production-
+path qualification with OCR 1.10.0 and explicit completion cap 4096.
 
 #### Plan Fidelity Check
 
