@@ -140,6 +140,38 @@ def test_081_release_notes_separate_added_fixed_removed_and_unchanged_contracts(
         assert contract in notes
 
 
+def test_082_fragments_are_actionable_for_people_and_deployment_agents() -> None:
+    """Keep added, changed, inherited, fixed, and migration outcomes distinct."""
+
+    fragments = "\n".join(
+        (ROOT / "changelog.d" / name).read_text(encoding="utf-8")
+        for name in (
+            "135.maintenance.md",
+            "135.feature.md",
+            "135.bugfix.md",
+            "136.bugfix.md",
+            "137.maintenance.md",
+        )
+    )
+
+    for phrase in (
+        "OCR 1.9.10 — inherited predecessor",
+        "max_completion_tokens=58888",
+        "OCR 1.10.0 — changed target",
+        "OCR_REVIEW_EFFORT",
+        "exact default is `medium`",
+        "max_completion_tokens=16384",
+        "Deploy toolkit 0.8.2 directly with OCR 1.10.0",
+        "do not install OCR 1.9.10 as an intermediate step",
+        "Caller `--output`/`-o` remains unsupported",
+        "compatibility-status/v1",
+        "job returns red",
+        "no-new-layer",
+        "No exporter",
+    ):
+        assert phrase in fragments
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

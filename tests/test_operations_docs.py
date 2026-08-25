@@ -10,6 +10,7 @@ CONFIGURATION = PROJECT_ROOT / "docs" / "configuration.md"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
 GITLAB_EXAMPLES = PROJECT_ROOT / "examples" / "gitlab"
 CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
+SIGNAL_OWNERSHIP = PROJECT_ROOT / "docs" / "engineering" / "review_signal_ownership.md"
 
 
 def test_readme_security_badges_link_to_repository_specific_results() -> None:
@@ -67,6 +68,7 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     for phrase in (
         "toolkit_strategy.md",
         "project_principles.md",
+        "review_signal_ownership.md",
         "m5_context_contracts.md",
         "evidence_migration_matrix.md",
         "test_evidence_matrix.md",
@@ -77,6 +79,29 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     assert "not a second source" in codex_index
     assert "without duplicating their rules" in engineering_index
     assert "docs/README.md" in readme
+
+
+def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:
+    """Keep the completed BL-017 ownership and privacy conclusion explicit."""
+
+    audit = SIGNAL_OWNERSHIP.read_text(encoding="utf-8")
+    backlog = (PROJECT_ROOT / "docs" / "codex" / "TASKS_BACKLOG.md").read_text(encoding="utf-8")
+    roadmap = (PROJECT_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "Source-to-signal matrix",
+        "Group labels are model-produced",
+        "sorted changed paths",
+        "no exporter of its own",
+        "concludes `no-new-layer`",
+        "BL-016 remains parked",
+        "BL-018 remains conditional",
+        "BL-019 and",
+        "BL-020 retain",
+    ):
+        assert phrase in audit
+    assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
+    assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
@@ -402,6 +427,8 @@ def test_threat_model_covers_remote_finding_image_boundary() -> None:
 
 
 def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
+    """Qualification retains bounded failure evidence without hiding a red job."""
+
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ocr-compatibility.yml").read_text(
         encoding="utf-8"
     )
@@ -430,15 +457,24 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "git switch -C" in workflow
     assert "git push --force-with-lease" in workflow
     assert workflow.count("upsert-issue") == 1
+    assert "continue-on-error: true" in workflow
+    assert "--status-output /tmp/ocr-compat/status.json" in workflow
+    assert "if: ${{ !cancelled() }}" in workflow
+    assert "if: ${{ always() && !cancelled() }}" in workflow
+    assert "if: steps.qualify.outcome == 'failure'" in workflow
+    assert "run: exit 1" in workflow
     assert "gh issue create" not in workflow
     assert 'f"{fragment_number}.maintenance.md"' in qualifier
     assert 'f"{fragment_number}.feature.md"' not in qualifier
     for contract in (
         "OCR 1.9.9 — inherited predecessor",
-        "OCR 1.9.10 — toolkit 0.8.0 target",
+        "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",
+        "OCR 1.10.0 — toolkit 0.8.2 target",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
-        "Deploy toolkit 0.8.0 directly with OCR 1.9.10",
+        "Deploy toolkit 0.8.2 directly with OCR 1.10.0",
+        "max_completion_tokens=16384",
+        "do not install OCR 1.9.10 as an intermediate step",
     ):
         assert contract in policy
     assert "--search" not in workflow

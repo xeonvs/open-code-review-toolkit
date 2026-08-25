@@ -151,6 +151,13 @@ The evidence engine selects applicable root and ancestor guidance before immutab
 
 Qualified OCR releases expose explicit per-run provider/model overrides, additive result identity, and an independent aggregate review budget. Toolkit v0.7.1 normalizes only closed privacy-safe token buckets and distinguishes OCR-wide tool totals from verified MCP-server and evidence-action counts; OCR remains authoritative for provider telemetry, and the toolkit adds no exporter. Direct operator settings remain the current contract. Model-profile aliases such as `economy`, `standard`, or `strong` are parked until repeated use demonstrates that aliases are needed and the owner approves a closed matrix. A profile cannot hide aggregate, per-file, or tool limits that change review completeness; those remain explicit inputs with partial coverage reported normally.
 
+The completed [BL-017 signal-ownership audit](review_signal_ownership.md) reaches
+`no-new-layer`. OCR owns provider, request, latency, cost, grouping, round, and
+tool telemetry. The toolkit owns only deterministic closed result, receipt,
+context, publication-DLP, posting, and approval projections. OCR 1.10.0 group
+keys contain changed paths and its labels are model-produced, so neither becomes
+a toolkit metric, routing input, or approval authority.
+
 Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, never changes explicit coverage controls, and never routes a merge request to a full-repository scan.
 
 ## OCR compatibility policy

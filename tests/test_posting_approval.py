@@ -414,6 +414,26 @@ class ApprovalPolicyTests(unittest.TestCase):
                     "the review-time approval receipt is missing or invalid",
                 )
 
+    def test_group_diagnostics_cannot_extend_the_closed_receipt(self) -> None:
+        """Reject OCR-owned group or round fields if they enter the approval receipt."""
+
+        for field, value in (
+            ("groups", [{"label": "core", "files": ["src/core.py"]}]),
+            ("review_rounds", 2),
+        ):
+            receipt = receipt_v5()
+            receipt[field] = value
+
+            decision = approval.evaluate_approval_policy(
+                settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+            )
+
+            self.assertFalse(decision.eligible)
+            self.assertEqual(
+                decision.result.reason,
+                "the review-time approval receipt is missing or invalid",
+            )
+
     def test_impossible_v5_capability_and_evidence_states_fail_closed(self) -> None:
         cases: list[dict[str, Any]] = []
 

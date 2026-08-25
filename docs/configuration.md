@@ -1,6 +1,6 @@
 # Environment configuration
 
-Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
+Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules. **Bold variable names are required in the command, mode, example, or declaration scope stated in their `Required` cell.**
 
 ## Toolkit runtime variables
 
@@ -8,9 +8,9 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `OCR_LLM_URL` | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
-| `OCR_LLM_TOKEN` | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
-| `OCR_LLM_MODEL` | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
+| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
+| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
+| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
 | `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
@@ -18,10 +18,11 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_LLM_MAX_COMPLETION_TOKENS` | Operator / `ocr-ci configure` | No | Unset (inherits OCR) | Positive decimal integer from `1` through `1000000`; sets the protocol-specific completion/output cap without changing prompt/context or aggregate review budgets. |
 | `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
 | `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
+| `OCR_REVIEW_EFFORT` | Operator / `ocr-ci configure` | No | `medium` | Closed OCR quality preset: `low`, `medium`, or `high`; maps to one, two, or three review rounds. |
 | `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
 | `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
-| `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration. |
+| `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration; OCR 1.10.0 spans may include path-derived group keys and model-produced labels. |
 | `OCR_TELEMETRY_CONTENT_LOGGING` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR content logging; keep disabled for private review data. |
 | `OCR_TELEMETRY_EXPORTER` | Operator / `ocr-ci configure` | No | Empty string | Exporter name written only when telemetry is enabled. |
 | `OCR_TELEMETRY_OTLP_ENDPOINT` | Operator / `ocr-ci configure` | No | Unset | OTLP endpoint written only when telemetry is enabled and the value is non-empty. |
@@ -57,7 +58,15 @@ Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fail
 
 If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer is deduplicated. A different value, or a boolean, string, float, or null at that field, fails configuration with a migration error; remove the duplicate field or keep the same integer in both places. Other `OCR_LLM_EXTRA_BODY` members are preserved. For example, set `OCR_LLM_MAX_COMPLETION_TOKENS=4096` when a gateway accepts short probes but rejects a full review before generation because it reserves spending against the requested output cap.
 
-Toolkit 0.8.1 does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
+Toolkit 0.8.2 does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
+
+The inherited value is version-owned and therefore changes with a qualified OCR upgrade. The toolkit observed `max_completion_tokens=58888` from OCR 1.9.10 and `16384` from OCR 1.10.0 when the variable was unset. Deployments that require an invariant gateway-specific cap must set `OCR_LLM_MAX_COMPLETION_TOKENS` explicitly rather than depending on either OCR default.
+
+### Review effort
+
+`OCR_REVIEW_EFFORT` defaults to `medium` and is written to OCR's root `effort` configuration key. OCR 1.10.0 maps `low`, `medium`, and `high` to one, two, and three review rounds respectively. The environment is operator-owned; merge-request text cannot change it. An explicit caller `--effort` passed after `ocr-ci review --` has normal OCR CLI precedence over the generated config, while an unknown environment value fails configuration before preview or model execution.
+
+Effort controls review depth, not the prompt/context ceiling, per-call completion cap, aggregate token budget, or per-round tool limit. Semantic grouping and filtering can add requests even at `low`; higher effort can add further rounds until OCR stops early, reaches a coverage/budget boundary, or completes the configured depth.
 
 ## GitLab and provider variables
 
@@ -65,17 +74,17 @@ GitLab supplies the `CI_*` values in merge-request pipelines. The operator suppl
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `GITLAB_API_TOKEN` | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
-| `CI_API_V4_URL` | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
-| `CI_SERVER_URL` | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
-| `CI_PROJECT_ID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric project identity used for provider APIs and receipts. |
-| `CI_MERGE_REQUEST_IID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric merge-request identity and mode signal. |
-| `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | GitLab predefined | Yes for the recommended review range | Falls back to `CI_COMMIT_SHA` only where explicitly documented | Exact reviewed source head used by the review, receipt, and posting revalidation. |
-| `CI_MERGE_REQUEST_DIFF_BASE_SHA` | GitLab predefined | Yes for the recommended review range | None | Exact merge-request diff base passed to OCR and evidence collection. |
+| **`GITLAB_API_TOKEN`** | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
+| **`CI_API_V4_URL`** | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
+| **`CI_SERVER_URL`** | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
+| **`CI_PROJECT_ID`** | GitLab predefined | Yes in merge-request mode | None | Bounded numeric project identity used for provider APIs and receipts. |
+| **`CI_MERGE_REQUEST_IID`** | GitLab predefined | Yes in merge-request mode | None | Bounded numeric merge-request identity and mode signal. |
+| **`CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`** | GitLab predefined | Yes for the recommended review range | Falls back to `CI_COMMIT_SHA` only where explicitly documented | Exact reviewed source head used by the review, receipt, and posting revalidation. |
+| **`CI_MERGE_REQUEST_DIFF_BASE_SHA`** | GitLab predefined | Yes for the recommended review range | None | Exact merge-request diff base passed to OCR and evidence collection. |
 | `CI_COMMIT_SHA` | GitLab predefined | No | None | Fallback head identity when the MR-specific source SHA is unavailable; it does not replace the diff base. |
 | `CI_PIPELINE_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
 | `CI_JOB_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
-| `CI_PIPELINE_SOURCE` | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
+| **`CI_PIPELINE_SOURCE`** | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
 
 ## Example-local variables
 
@@ -83,23 +92,23 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `OCR_VERSION` | Example pipeline | Yes | `v1.9.10` | Checksum-pinned recommended OCR binary release for toolkit 0.8.1. |
-| `OCR_SHA256` | Example pipeline | Yes | `359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c` | Expected Linux AMD64 OCR binary digest. |
-| `OCR_TOOLKIT_VERSION` | Example pipeline | Yes | `0.8.1` | Exact toolkit wheel release installed by the current published example. |
-| `OCR_TOOLKIT_CHECKSUMS_URL` | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
+| **`OCR_VERSION`** | Example pipeline | Yes | `v1.10.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.2. |
+| **`OCR_SHA256`** | Example pipeline | Yes | `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b` | Expected Linux AMD64 OCR binary digest. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.1` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
-| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `30` | Positive maximum OCR tool-request rounds per file; the example keeps the OCR 1.9.10 default and passes it explicitly. |
+| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `30` | Positive maximum OCR tool requests per review loop; the example owns and passes this bounded value explicitly. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
 
 ## Dynamic adapter and MCP inputs
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| Names declared by adapter `env_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Inject an adapter environment value by exact variable name; missing names fail closed. |
-| Names declared by adapter `headers_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Supply a remote adapter header without persisting its secret value in configuration. |
-| Names declared by MCP `env_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Inject a local-profile stdio MCP environment value by exact variable name. |
-| Names declared by MCP `headers_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Supply a remote MCP header by reference for OCR expansion at connection time. |
+| **Names declared by adapter `env_from`** | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Inject an adapter environment value by exact variable name; missing names fail closed. |
+| **Names declared by adapter `headers_from`** | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Supply a remote adapter header without persisting its secret value in configuration. |
+| **Names declared by MCP `env_from`** | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Inject a local-profile stdio MCP environment value by exact variable name. |
+| **Names declared by MCP `headers_from`** | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Supply a remote MCP header by reference for OCR expansion at connection time. |
 
 ## MCP composition and trust boundary
 
@@ -194,7 +203,7 @@ environment variables for policy thresholds or category lists in this release.
 
 ## Repository evidence
 
-`ocr-ci review` owns this lifecycle. Before OCR starts it collects the exact immutable `--from`/`--to` refs (or the parent/commit pair selected by `--commit`), writes bounded redacted schema-versioned evidence, builds OCR's MCP registry with the mandatory evidence entry plus each independently configured optional server, reads the registry back, self-queries the evidence summary/list/get contract, and supplies the matching compact bootstrap to OCR. Those parent-process preflight calls are not counted as model use. The same preflight-qualified OCR executable first receives the exact production refs, rules, selection options, and background under `review --preview`; there is no toolkit threshold setting or duplicated OCR threshold constant. An exact recognized OCR soft background warning is copied into the bounded CI log and the atomically finalized result `warnings`, which also blocks automatic approval. An exact recognized hard character/file-size rejection stops before model execution and leaves only an identity-bound numeric `ocr.pre-execution-status/v2` outcome for static GitLab reporting; the private path and raw OCR diagnostic are not published. Unknown preview failures fail closed through the generic diagnostic path, and the actual review independently revalidates the background. During OCR, the built-in MCP atomically records only completed `summary`, `list`, and `get` counts without arguments, IDs, paths, results, or content. The parent reads and removes that private receipt before cleanup and exposes the breakdown only when its total exactly matches OCR's `tool_calls.by_tool.ocr_toolkit_evidence`; missing, malformed, raced, or mismatched attribution is explicitly unavailable rather than zero. Since OCR 1.9.9, `--background-file` takes precedence over inline `--background`, so `ocr-ci review` rejects caller forms of both options, including split and `--option=value` syntax, and remains the sole owner of the bootstrap input; caller `--preview` is likewise rejected because the toolkit owns this gate. Toolkit 0.8.0 requires OCR 1.9.10; its stage-grouped terminal retry report does not enter toolkit telemetry, receipts, DLP, findings, severity, outcomes, or approval. A completed OCR review is accepted only when structured `tool_calls.by_tool` proves at least one `ocr_toolkit_evidence` call; a legitimately skipped no-supported-files review remains exempt.
+`ocr-ci review` owns this lifecycle. Before OCR starts it collects the exact immutable `--from`/`--to` refs (or the parent/commit pair selected by `--commit`), writes bounded redacted schema-versioned evidence, builds OCR's MCP registry with the mandatory evidence entry plus each independently configured optional server, reads the registry back, self-queries the evidence summary/list/get contract, and supplies the matching compact bootstrap to OCR. Those parent-process preflight calls are not counted as model use. The same preflight-qualified OCR executable first receives the exact production refs, rules, selection options, and background under `review --preview`; there is no toolkit threshold setting or duplicated OCR threshold constant. An exact recognized OCR soft background warning is copied into the bounded CI log and the atomically finalized result `warnings`, which also blocks automatic approval. An exact recognized hard character/file-size rejection stops before model execution and leaves only an identity-bound numeric `ocr.pre-execution-status/v2` outcome for static GitLab reporting; the private path and raw OCR diagnostic are not published. Unknown preview failures fail closed through the generic diagnostic path, and the actual review independently revalidates the background. During OCR, the built-in MCP atomically records only completed `summary`, `list`, and `get` counts without arguments, IDs, paths, results, or content. The parent reads and removes that private receipt before cleanup and exposes the breakdown only when its total exactly matches OCR's `tool_calls.by_tool.ocr_toolkit_evidence`; missing, malformed, raced, or mismatched attribution is explicitly unavailable rather than zero. Since OCR 1.9.9, `--background-file` takes precedence over inline `--background`, so `ocr-ci review` rejects caller forms of both options, including split and `--option=value` syntax, and remains the sole owner of the bootstrap input; caller `--preview` is likewise rejected because the toolkit owns this gate. OCR 1.10.0 adds `--output`, but `ocr-ci review` rejects its long, equals, short, and attached forms because the toolkit must remain the sole owner of the private result descriptor, atomic parsing, cleanup, and posting handoff. The 1.9.10 stage-grouped terminal retry report remains private and does not enter toolkit telemetry, receipts, DLP, findings, severity, outcomes, or approval. A completed OCR review is accepted only when structured `tool_calls.by_tool` proves at least one `ocr_toolkit_evidence` call; a legitimately skipped no-supported-files review remains exempt.
 
 The private `.review-context/evidence.json`, `.review-context/bootstrap.md`, repository-policy `.review-context/policy-rules.json`, and count-only evidence-action receipt/lock are internal implementation details, not public path configuration. Keep `.review-context/` ignored. The directory is mode `0700`, regular files are mode `0600`, and symlink, hard-link, non-regular, or unexpectedly permissive receipt targets are rejected. In GitLab MR pipelines, the provider adapter captures the current protected target SHA, fetches that exact immutable object when needed, and materializes only an in-repository `--rule` blob from it; explicit absolute rules outside the repository remain operator-owned. OCR still reviews the original forge diff-base-to-source-head range. The collector reads Git objects without checkout, does not follow repository symlinks or submodules, never executes repository content, and treats source-ref policy changes as untrusted.
 

@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.9.10"
-    assert manifest["monitoring_floor"] == "1.9.10"
+    assert manifest["recommended_version"] == "1.10.0"
+    assert manifest["monitoring_floor"] == "1.10.0"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -69,6 +69,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.9.8", "tested"),
         ("1.9.9", "tested"),
         ("1.9.10", "tested"),
+        ("1.10.0", "tested"),
     ]
 
 
@@ -153,9 +154,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.9.11")]
+    first_page = [release("1.10.1")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.9.10")]
+    second_page = [release("1.10.0")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -165,14 +166,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.9.11"]
+    assert [item["tag_name"] for item in unseen] == ["v1.10.1"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.9.11")]
+    page = [release("1.10.1")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -217,14 +218,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.9.11")])
+    matrix = module.qualification_matrix(manifest, [release("1.10.1")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.9.10",
-                "tag": "v1.9.11",
-                "tested_baseline_version": "1.9.10",
+                "comparison_version": "1.10.0",
+                "tag": "v1.10.1",
+                "tested_baseline_version": "1.10.0",
             }
         ]
     }
@@ -365,6 +366,80 @@ def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
     assert "current tested baseline: `v1.7.16`" in body
 
 
+def test_failed_qualification_status_is_closed_and_consistent() -> None:
+    """Public failure status accepts only reviewed enum values and exact keys."""
+
+    module = load_script()
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    assert module.validate_qualification_status(status) == status
+    with pytest.raises(module.CompatibilityError, match="schema is invalid"):
+        module.validate_qualification_status({**status, "raw_error": "token=/private/path"})
+    with pytest.raises(module.CompatibilityError, match="inconsistent"):
+        module.validate_qualification_status({**status, "result": "compatible"})
+
+
+@pytest.mark.parametrize(
+    ("phase", "reason"),
+    [
+        ("complete", "contract-probe-failed"),
+        ("artifact", "metadata-invalid"),
+        ("contracts", "evidence-write-failed"),
+        ("evidence", "artifact-verification-failed"),
+    ],
+)
+def test_failed_qualification_status_rejects_impossible_stage_pairs(
+    phase: str, reason: str
+) -> None:
+    """Fail closed when individually valid status enums contradict each other."""
+
+    module = load_script()
+
+    with pytest.raises(module.CompatibilityError, match="phase and reason are inconsistent"):
+        module.qualification_status(
+            tag="v1.10.0",
+            comparison_version="1.9.10",
+            tested_baseline_version="1.9.10",
+            result="failed",
+            phase=phase,
+            reason=reason,
+        )
+
+
+def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
+    """The issue renderer projects closed status without a raw diagnostic field."""
+
+    module = load_script()
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    body = module.render_workflow_failure_issue(
+        status,
+        "https://github.com/synthetic/repository/actions/runs/123",
+    )
+
+    assert "<!-- ocr-compat-candidate:v1.10.0 -->" in body
+    assert "closed phase: `contracts`" in body
+    assert "closed reason: `contract-probe-failed`" in body
+    assert "actions/runs/123" in body
+    assert "Raw process diagnostics are not copied" in body
+    assert "token=" not in body
+    assert "/private/" not in body
+
+
 def test_optional_capabilities_validate_additive_llm_identity() -> None:
     module = load_script()
 
@@ -380,6 +455,43 @@ def test_optional_capabilities_validate_additive_llm_identity() -> None:
     ]
     with pytest.raises(module.CompatibilityError, match="LLM model identity"):
         module.detect_optional_capabilities("review", {"llm": {"model": ""}})
+
+
+def test_optional_capabilities_validate_effort_and_semantic_groups() -> None:
+    """Optional capabilities remain additive, bounded, and path-complete."""
+
+    module = load_script()
+    sample = {
+        "groups": [
+            {
+                "label": "application flow",
+                "files": ["src/app.py", "tests/test_app.py"],
+            }
+        ]
+    }
+
+    capabilities = module.detect_optional_capabilities("review --effort low", sample)
+
+    assert capabilities == ["review_effort", "semantic_grouping"]
+    module._validate_file_groups(sample["groups"], {"src/app.py", "tests/test_app.py"})
+
+
+def test_semantic_groups_reject_duplicate_or_unexpected_paths() -> None:
+    """One file cannot silently appear in multiple model-produced groups."""
+
+    module = load_script()
+    duplicate = [
+        {"label": "one", "files": ["src/app.py"]},
+        {"label": "two", "files": ["src/app.py"]},
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="invalid grouped path"):
+        module._validate_file_groups(duplicate)
+    with pytest.raises(module.CompatibilityError, match="expected paths"):
+        module._validate_file_groups(
+            [{"label": "one", "files": ["src/app.py"]}],
+            {"src/app.py", "tests/test_app.py"},
+        )
 
 
 def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
@@ -525,6 +637,128 @@ def test_issue_upsert_updates_the_canonical_issue() -> None:
     assert "fix: synthetic parser correction" in calls[0][2]["body"]
 
 
+def test_failed_qualification_upsert_updates_the_canonical_issue() -> None:
+    """A failed attempt reopens and updates the one stable candidate issue."""
+
+    module = load_script()
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+    status = module.qualification_status(
+        tag="v1.10.0",
+        comparison_version="1.9.10",
+        tested_baseline_version="1.9.10",
+        result="failed",
+        phase="contracts",
+        reason="contract-probe-failed",
+    )
+
+    def request(
+        url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        calls.append((url, method, payload))
+        return {"number": 135}
+
+    with (
+        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 135),
+        patched_attr(module, "_issue_api_request", request),
+    ):
+        number = module.upsert_qualification_issue(
+            repository="synthetic/repository",
+            status=status,
+            run_url="https://github.com/synthetic/repository/actions/runs/123",
+        )
+
+    assert number == 135
+    assert calls[0][0].endswith("/issues/135")
+    assert calls[0][1] == "PATCH"
+    payload = calls[0][2]
+    assert payload is not None
+    assert payload["state"] == "open"
+    assert "contract-probe-failed" in payload["body"]
+    assert "token=" not in payload["body"]
+
+
+def test_qualify_cli_retains_closed_status_when_private_probe_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CLI records safe status while stderr retains the private diagnostic."""
+
+    module = load_script()
+    output = tmp_path / "evidence.json"
+    status_output = tmp_path / "status.json"
+    private_detail = "probe token=secret path=/private/workspace/result.json"
+
+    def fail_probe(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise module.QualificationStageError(
+            private_detail,
+            phase="contracts",
+            reason="contract-probe-failed",
+        )
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module, "qualify_release", fail_probe),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.10.0",
+                "--comparison-version",
+                "1.9.10",
+                "--tested-baseline-version",
+                "1.9.10",
+                "--output",
+                str(output),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "contracts"
+    assert status["reason"] == "contract-probe-failed"
+    assert status["result"] == "failed"
+    assert private_detail not in status_output.read_text(encoding="utf-8")
+    assert private_detail in captured.err
+    assert not output.exists()
+
+
+def test_qualify_cli_retains_status_when_manifest_validation_fails(tmp_path: Path) -> None:
+    """Explicit baseline inputs keep closed status available before manifest load."""
+
+    module = load_script()
+    manifest = tmp_path / "invalid-manifest.json"
+    status_output = tmp_path / "status.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+
+    result = module.main(
+        [
+            "--manifest",
+            str(manifest),
+            "qualify",
+            "--tag",
+            "v1.10.0",
+            "--comparison-version",
+            "1.9.10",
+            "--tested-baseline-version",
+            "1.9.10",
+            "--output",
+            str(tmp_path / "evidence.json"),
+            "--status-output",
+            str(status_output),
+        ]
+    )
+
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "metadata"
+    assert status["reason"] == "metadata-invalid"
+
+
 def test_qualification_requires_exact_supported_asset_matrix() -> None:
     module = load_script()
     candidate = release("1.7.18")
@@ -537,6 +771,40 @@ def test_qualification_requires_exact_supported_asset_matrix() -> None:
 def test_manifest_cli_validate() -> None:
     module = load_script()
     assert module.main(["--manifest", str(MANIFEST), "validate"]) == 0
+
+
+def test_prepare_update_cli_prints_relative_manifest_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repository-relative manifest remains printable after a successful update."""
+
+    module = load_script()
+    evidence = tmp_path / "evidence.json"
+    evidence.write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(PROJECT_ROOT)
+    relative_manifest = MANIFEST.relative_to(PROJECT_ROOT)
+
+    with patched_attr(
+        module,
+        "prepare_update",
+        lambda **_kwargs: [relative_manifest],
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(relative_manifest),
+                "prepare-update",
+                "--evidence",
+                str(evidence),
+                "--fragment-number",
+                "135",
+            ]
+        )
+
+    assert result == 0
+    assert str(relative_manifest) in capsys.readouterr().out
 
 
 def test_evidence_json_is_canonical() -> None:
@@ -900,11 +1168,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.11",
+        "version": "1.10.1",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.9.10",
-        "tested_baseline_version": "1.9.10",
+        "comparison_version": "1.10.0",
+        "tested_baseline_version": "1.10.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -920,11 +1188,11 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.10.0",
+        "version": "1.11.0",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.10",
-        "tested_baseline_version": "1.9.10",
+        "comparison_version": "1.10.0",
+        "tested_baseline_version": "1.10.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="explicit human review"):
@@ -936,7 +1204,7 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         )
 
 
-@pytest.mark.parametrize("version", ["1.10.0", "2.0.0"])
+@pytest.mark.parametrize("version", ["1.11.0", "2.0.0"])
 def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: str) -> None:
     """Legacy evidence cannot prove a chain across a semantic-version boundary."""
 
@@ -962,11 +1230,11 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.11.0",
+        "version": "1.12.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.9.4",
-        "tested_baseline_version": "1.9.4",
+        "comparison_version": "1.10.0",
+        "tested_baseline_version": "1.10.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
@@ -974,7 +1242,7 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=73,
-            human_conclusions={"1.11.0": "Synthetic reviewed conclusion."},
+            human_conclusions={"1.12.0": "Synthetic reviewed conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -983,11 +1251,11 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.11",
+        "version": "1.10.1",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.10",
-        "tested_baseline_version": "1.9.10",
+        "comparison_version": "1.10.0",
+        "tested_baseline_version": "1.10.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="only evidence versions"):
@@ -995,7 +1263,7 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.10.0": "Synthetic unrelated conclusion."},
+            human_conclusions={"1.10.2": "Synthetic unrelated conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -1007,11 +1275,11 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.9.11",
+        "version": "1.10.1",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.9.10",
-        "tested_baseline_version": "1.9.10",
+        "comparison_version": "1.10.0",
+        "tested_baseline_version": "1.10.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded plain text"):
@@ -1019,7 +1287,7 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.9.11": conclusion},
+            human_conclusions={"1.10.1": conclusion},
             root=PROJECT_ROOT,
         )
 

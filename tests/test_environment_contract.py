@@ -29,6 +29,7 @@ RUNTIME_DEFAULTS = {
     "OCR_LLM_MAX_COMPLETION_TOKENS": "Unset (inherits OCR)",
     "OCR_ANTHROPIC_DISABLE_THINKING": "false",
     "OCR_REVIEW_LANGUAGE": "English",
+    "OCR_REVIEW_EFFORT": "medium",
     "OCR_LLM_VALIDATE_MODEL": "false",
     "OCR_LLM_MODELS_URL": "Derived from `OCR_LLM_URL`",
     "OCR_LLM_ALLOWED_MODELS": "Empty list",
@@ -68,8 +69,8 @@ GITLAB_DEFAULTS = {
 }
 
 EXAMPLE_DEFAULTS = {
-    "OCR_VERSION": "v1.9.10",
-    "OCR_SHA256": "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
+    "OCR_VERSION": "v1.10.0",
+    "OCR_SHA256": "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
@@ -83,6 +84,25 @@ DYNAMIC_INPUTS = {
     "Names declared by adapter `headers_from`",
     "Names declared by MCP `env_from`",
     "Names declared by MCP `headers_from`",
+}
+
+REQUIRED_DISPLAY_NAMES = {
+    "OCR_LLM_URL",
+    "OCR_LLM_TOKEN",
+    "OCR_LLM_MODEL",
+    "GITLAB_API_TOKEN",
+    "CI_API_V4_URL",
+    "CI_SERVER_URL",
+    "CI_PROJECT_ID",
+    "CI_MERGE_REQUEST_IID",
+    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
+    "CI_MERGE_REQUEST_DIFF_BASE_SHA",
+    "CI_PIPELINE_SOURCE",
+    "OCR_VERSION",
+    "OCR_SHA256",
+    "OCR_TOOLKIT_VERSION",
+    "OCR_TOOLKIT_CHECKSUMS_URL",
+    *DYNAMIC_INPUTS,
 }
 
 REDACTION_ONLY = {
@@ -104,6 +124,8 @@ ENVIRONMENT_NAME_RE = re.compile(r"(?:ANTHROPIC|CI|GITLAB|OCR|OPENAI)_[A-Z0-9_]+
 
 def _display_cell(raw: str) -> str:
     value = raw.strip()
+    if value.startswith("**") and value.endswith("**"):
+        value = value[2:-2]
     if value.startswith("`") and value.endswith("`") and value.count("`") == 2:
         return value[1:-1]
     return value
@@ -185,6 +207,21 @@ def test_documented_environment_tables_are_complete_and_exact() -> None:
     assert documented_names.isdisjoint(REMOVED_PUBLIC_INPUTS | {"OCR_USE_ANTHROPIC"})
 
 
+def test_required_environment_inputs_are_visually_distinct() -> None:
+    """Bold only names whose table scope requires a supplied or predefined value."""
+
+    configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    bold_names: set[str] = set()
+    for line in configuration.splitlines():
+        if not line.startswith("|"):
+            continue
+        first_cell = line.strip("|").split("|", maxsplit=1)[0].strip()
+        if first_cell.startswith("**") and first_cell.endswith("**"):
+            bold_names.add(_display_cell(first_cell))
+
+    assert bold_names == REQUIRED_DISPLAY_NAMES
+
+
 def test_source_environment_inventory_matches_the_documented_contract() -> None:
     source_names = _literal_source_environment_names()
     # CI_PIPELINE_SOURCE belongs solely to the public example's GitLab rules.
@@ -214,6 +251,7 @@ def test_runtime_defaults_match_the_documented_contract(monkeypatch: pytest.Monk
     try:
         updates = configure.build_config_updates()
         assert updates["llm.protocol"] == "openai"
+        assert updates["effort"] == "medium"
         assert updates["llm.auth_header"] == "Authorization"
         assert updates["telemetry.enabled"] is False
         assert updates["telemetry.content_logging"] is False
@@ -261,11 +299,12 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         encoding="utf-8"
     )
     for name, value in {
-        "OCR_VERSION": "v1.9.10",
+        "OCR_VERSION": "v1.10.0",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "30",
         "OCR_MAX_TOKENS_BUDGET": "0",
+        "OCR_REVIEW_EFFORT": "medium",
     }.items():
         assert f'{name}: "{value}"' in workflow
     assert (

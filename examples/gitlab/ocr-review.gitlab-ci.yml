@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.9.10"
+  OCR_VERSION: "v1.10.0"
   OCR_TOOLKIT_VERSION: "0.8.1"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c"
+  OCR_SHA256: "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on receipt-bound approval; external MCP always remains comment-only.
@@ -20,7 +20,9 @@ variables:
   # OCR_POST_BADGES: "shields"
   OCR_LLM_VALIDATE_MODEL: "false"
   OCR_LLM_ALLOWED_MODELS: ""
-  # OCR 1.9.10 default; raise deliberately for repositories that need more tool rounds.
+  # Two review rounds by default; low and high remain explicit operator choices.
+  OCR_REVIEW_EFFORT: "medium"
+  # Bounded example cap; raise deliberately for repositories that need more tool interaction.
   OCR_MAX_TOOLS: "30"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"

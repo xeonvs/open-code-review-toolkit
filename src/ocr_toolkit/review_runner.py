@@ -1101,8 +1101,8 @@ def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
     return ReviewRefs(reader.resolve_commit(refs.base), reader.resolve_commit(refs.head))
 
 
-def _reject_owned_background(args: list[str]) -> None:
-    """Reject caller attempts to compete with the toolkit-owned bootstrap."""
+def _reject_owned_review_options(args: list[str]) -> None:
+    """Reject caller attempts to compete with toolkit-owned review artifacts."""
 
     background_files = _option_values(args, "--background-file")
     backgrounds = _option_values(args, "--background")
@@ -1117,6 +1117,16 @@ def _reject_owned_background(args: list[str]) -> None:
     ):
         raise ReviewRunnerError(
             "--preview is managed by ocr-ci review as a pre-model background qualification"
+        )
+    if any(
+        argument in {"--output", "-o"}
+        or argument.startswith("--output=")
+        or (argument.startswith("-o") and len(argument) > 2)
+        for argument in args
+    ):
+        raise ReviewRunnerError(
+            "--output is managed by ocr-ci review; OCR stdout must use the toolkit-owned "
+            "private result artifact"
         )
 
 
@@ -1794,7 +1804,7 @@ def run_evidence_review(
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
     refs = _immutable_review_refs(_review_refs(ocr_args))
-    _reject_owned_background(ocr_args)
+    _reject_owned_review_options(ocr_args)
     _prepare_review_output_artifacts(result_path, stderr_path)
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
     previous_home = os.environ.get("HOME")

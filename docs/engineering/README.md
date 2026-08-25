@@ -6,6 +6,7 @@ This index routes maintainers to canonical engineering owners without duplicatin
 - [evidence_migration_matrix.md](evidence_migration_matrix.md)
 - [m5_context_contracts.md](m5_context_contracts.md)
 - [project_principles.md](project_principles.md)
+- [review_signal_ownership.md](review_signal_ownership.md)
 - [test_evidence_matrix.md](test_evidence_matrix.md)
 - [toolkit_strategy.md](toolkit_strategy.md)
 <!-- engineering-workflow:index:end -->
@@ -14,6 +15,7 @@ This index routes maintainers to canonical engineering owners without duplicatin
 
 - [Toolkit strategy](toolkit_strategy.md) — durable product boundaries, architecture, and non-goals.
 - [Project principles](project_principles.md) — cross-cutting trust, ownership, review, and delivery invariants.
+- [Review signal ownership](review_signal_ownership.md) — completed BL-017 source-to-signal and telemetry privacy audit.
 - [Roadmap](../../ROADMAP.md) — ordered outcomes and current milestone state.
 
 ## Current contracts and evidence

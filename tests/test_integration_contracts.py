@@ -128,6 +128,7 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
     assert workflow.index("  - lint") < workflow.index("  - ai_review")
     assert 'OCR_LLM_VALIDATE_MODEL: "false"' in workflow
     assert 'OCR_MAX_TOKENS_BUDGET: "0"' in workflow
+    assert 'OCR_REVIEW_EFFORT: "medium"' in workflow
     assert 'OCR_MAX_TOOLS: "30"' in workflow
     assert '--max-tools "${OCR_MAX_TOOLS:-30}"' in review_job
     assert '--max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}"' in review_job
@@ -171,6 +172,8 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "OCR_MAX_TOKENS_BUDGET" in workflow
     assert "OCR_MAX_TOOLS" in configuration
     assert "OCR_MAX_TOOLS" in workflow
+    assert "OCR_REVIEW_EFFORT" in configuration
+    assert "OCR_REVIEW_EFFORT" in workflow
     assert "--preserve-private-artifacts" in configuration
     assert "without a posting receipt" in configuration
     assert "rejects this flag before OCR execution" in configuration
