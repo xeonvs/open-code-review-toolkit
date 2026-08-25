@@ -80,6 +80,8 @@ KNOWN_OPTIONAL_CAPABILITIES = {
     "llm_result_identity",
     "per_run_model_override",
     "per_run_provider_override",
+    "review_effort",
+    "semantic_grouping",
 }
 QUALIFICATION_STATUS_SCHEMA = "ocr-toolkit.compatibility-status/v1"
 QUALIFICATION_PHASES = {"metadata", "artifact", "contracts", "evidence", "complete"}
@@ -275,6 +277,37 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 "selected": 3,
             }:
                 _fail(f"evidence does not qualify partial review budget behavior for {version}")
+        if _version(version) >= (1, 10, 0):
+            contracts = evidence.get("contracts")
+            required_flags = (
+                contracts.get("required_review_flags") if isinstance(contracts, dict) else None
+            )
+            capabilities = (
+                contracts.get("optional_capabilities") if isinstance(contracts, dict) else None
+            )
+            if not isinstance(required_flags, list) or "--effort" not in required_flags:
+                _fail(f"evidence does not qualify the review effort flag for {version}")
+            if not isinstance(capabilities, list) or not {
+                "review_effort",
+                "semantic_grouping",
+            }.issubset(capabilities):
+                _fail(f"evidence does not qualify effort and grouping for {version}")
+            if contracts.get("semantic_grouping_probe") != {
+                "default_effort": "medium",
+                "filter_requests": 1,
+                "grouping_requests": 1,
+                "main_requests": 3,
+                "result": "passed",
+                "review_rounds": 2,
+            }:
+                _fail(f"evidence does not qualify semantic grouping behavior for {version}")
+            if contracts.get("completion_cap_probe") != {
+                "explicit": 4_096,
+                "inherited": 16_384,
+                "result": "passed",
+                "wire_field": "max_completion_tokens",
+            }:
+                _fail(f"evidence does not qualify the completion cap for {version}")
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -634,7 +667,44 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
     request_count = 0
     tokens_per_request = 2
+    grouping_tokens_per_request = 2
+    grouping_mode = "singletons"
     completion_caps: list[object] = []
+    request_stages: list[str] = []
+
+    @staticmethod
+    def _message_contents(messages: list[Any]) -> list[str]:
+        """Return only text message content from one bounded probe request."""
+
+        return [
+            content
+            for message in messages
+            if isinstance(message, dict) and isinstance((content := message.get("content")), str)
+        ]
+
+    @classmethod
+    def _grouping_files(cls, messages: list[Any]) -> list[str]:
+        """Extract the public grouping prompt's changed-file inventory."""
+
+        paths: list[str] = []
+        for content in cls._message_contents(messages):
+            for match in re.finditer(
+                r"(?m)^([^\r\n]+) \((?:ADDED|MODIFIED|DELETED|RENAMED), \+[0-9]+/-[0-9]+\)$",
+                content,
+            ):
+                candidate = match.group(1)
+                if candidate not in paths:
+                    paths.append(candidate)
+        return paths
+
+    @classmethod
+    def _review_path(cls, messages: list[Any]) -> str | None:
+        """Extract the first path from OCR's public review-files XML block."""
+
+        for content in cls._message_contents(messages):
+            if match := re.search(r'<file path="([^"\r\n]+)">', content):
+                return match.group(1)
+        return None
 
     def do_POST(self) -> None:
         if self.path != "/v1/chat/completions":
@@ -665,7 +735,21 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 function = tool.get("function") if isinstance(tool, dict) else None
                 if isinstance(function, dict) and isinstance(function.get("name"), str):
                     tool_names.add(function["name"])
-        if "approve_all_comments" in tool_names:
+        message: dict[str, Any]
+        if not tool_names:
+            paths = type(self)._grouping_files(messages)
+            if not paths:
+                self.send_error(400)
+                return
+            groups = (
+                [{"label": "compatibility-group", "files": paths}]
+                if type(self).grouping_mode == "combined"
+                else [{"label": path, "files": [path]} for path in paths]
+            )
+            message = {"role": "assistant", "content": json.dumps(groups)}
+            finish_reason = "stop"
+            stage = "grouping"
+        elif "approve_all_comments" in tool_names:
             message = {
                 "role": "assistant",
                 "content": None,
@@ -678,7 +762,9 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 ],
             }
             finish_reason = "tool_calls"
+            stage = "filter"
         else:
+            contents = type(self)._message_contents(messages)
             prior_comment = any(
                 isinstance(message, dict)
                 and any(
@@ -689,13 +775,19 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 )
                 for message in messages
             )
-            if not prior_comment:
+            later_round = any("### Previously Confirmed Findings" in item for item in contents)
+            if not prior_comment and not later_round:
+                path = type(self)._review_path(messages)
+                if path is None:
+                    self.send_error(400)
+                    return
                 arguments = json.dumps(
                     {
                         "comments": [
                             {
                                 "content": "Synthetic compatibility finding.",
                                 "existing_code": "    return 2",
+                                "path": path,
                                 "thinking": "Synthetic private compatibility reasoning.",
                                 "category": "maintainability",
                                 "severity": "low",
@@ -720,6 +812,13 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 ],
             }
             finish_reason = "tool_calls"
+            stage = "main"
+        type(self).request_stages.append(stage)
+        usage_tokens = (
+            type(self).grouping_tokens_per_request
+            if stage == "grouping"
+            else type(self).tokens_per_request
+        )
         payload = json.dumps(
             {
                 "id": f"compat-{type(self).request_count}",
@@ -727,9 +826,9 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 "model": "synthetic-model",
                 "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
                 "usage": {
-                    "prompt_tokens": type(self).tokens_per_request - 1,
+                    "prompt_tokens": usage_tokens - 1,
                     "completion_tokens": 1,
-                    "total_tokens": type(self).tokens_per_request,
+                    "total_tokens": usage_tokens,
                 },
             }
         ).encode()
@@ -746,14 +845,24 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def _stub_gateway(*, tokens_per_request: int = 2) -> Iterator[str]:
+def _stub_gateway(
+    *,
+    tokens_per_request: int = 2,
+    grouping_tokens_per_request: int = 2,
+    grouping_mode: str = "singletons",
+) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
-    if tokens_per_request < 2:
+    if tokens_per_request < 2 or grouping_tokens_per_request < 2:
         _fail("stub gateway token usage must be at least two")
+    if grouping_mode not in {"singletons", "combined"}:
+        _fail("stub gateway grouping mode is invalid")
     _StubHandler.request_count = 0
     _StubHandler.tokens_per_request = tokens_per_request
+    _StubHandler.grouping_tokens_per_request = grouping_tokens_per_request
+    _StubHandler.grouping_mode = grouping_mode
     _StubHandler.completion_caps = []
+    _StubHandler.request_stages = []
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -769,6 +878,8 @@ def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> li
     """Validate additive OCR identity fields and return observed optional capabilities."""
 
     optional_capabilities: set[str] = set()
+    if "--effort" in help_output:
+        optional_capabilities.add("review_effort")
     if "--model" in help_output:
         optional_capabilities.add("per_run_model_override")
     if "--provider" in help_output:
@@ -786,7 +897,46 @@ def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> li
         ):
             _fail("candidate full review emitted an invalid additive LLM provider identity")
         optional_capabilities.add("llm_result_identity")
+    groups = sample.get("groups")
+    if groups is not None:
+        _validate_file_groups(groups)
+        optional_capabilities.add("semantic_grouping")
     return sorted(optional_capabilities)
+
+
+def _validate_file_groups(value: Any, expected_paths: set[str] | None = None) -> None:
+    """Validate bounded additive group metadata without retaining its labels."""
+
+    if not isinstance(value, list) or not value or len(value) > 100:
+        _fail("candidate full review emitted invalid additive file groups")
+    observed: list[str] = []
+    for group in value:
+        if not isinstance(group, dict):
+            _fail("candidate full review emitted an invalid file group")
+        label = group.get("label")
+        files = group.get("files")
+        if (
+            not isinstance(label, str)
+            or not label
+            or len(label) > 500
+            or any(ord(character) < 32 for character in label)
+            or not isinstance(files, list)
+            or not files
+            or len(files) > 10
+        ):
+            _fail("candidate full review emitted an invalid file group")
+        for path in files:
+            if (
+                not isinstance(path, str)
+                or not path
+                or len(path) > 1_000
+                or any(ord(character) < 32 for character in path)
+                or path in observed
+            ):
+                _fail("candidate full review emitted an invalid grouped path")
+            observed.append(path)
+    if expected_paths is not None and set(observed) != expected_paths:
+        _fail("candidate semantic grouping did not cover the expected paths")
 
 
 def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
@@ -887,7 +1037,85 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
     }
 
 
-def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Drive one real two-file group through grouping and medium review rounds."""
+
+    root = directory / "semantic-grouping-probe"
+    root.mkdir()
+    git_env = _isolated_probe_environment(root / "git-home")
+    repo = root / "review"
+    repo.mkdir()
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+    paths = ("first.py", "second.py")
+    for path in paths:
+        (repo / path).write_text("def value():\n    return 1\n", encoding="utf-8")
+    _run(["git", "add", *paths], cwd=repo, env=git_env)
+    _run(["git", "commit", "-m", "grouping baseline"], cwd=repo, env=git_env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    for path in paths:
+        (repo / path).write_text("def value():\n    return 2\n", encoding="utf-8")
+    _run(["git", "commit", "-am", "group related changes"], cwd=repo, env=git_env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+
+    env = _isolated_probe_environment(root / "review-home")
+    with _stub_gateway(grouping_mode="combined") as gateway_url:
+        env.update(
+            {
+                "OCR_LLM_URL": gateway_url,
+                "OCR_LLM_TOKEN": "synthetic-token",
+                "OCR_LLM_MODEL": "synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_TELEMETRY_ENABLED": "false",
+            }
+        )
+        output = _run(
+            [
+                str(binary),
+                "review",
+                "--from",
+                base,
+                "--to",
+                head,
+                "--format",
+                "json",
+                "--audience",
+                "agent",
+                "--concurrency",
+                "1",
+            ],
+            cwd=repo,
+            env=env,
+        )
+        stages = list(_StubHandler.request_stages)
+    try:
+        sample = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("semantic grouping review did not emit JSON") from exc
+    if not isinstance(sample, dict):
+        _fail("semantic grouping review emitted an unsupported result object")
+    _validate_file_groups(sample.get("groups"), set(paths))
+    groups = sample["groups"]
+    if (
+        len(groups) != 1
+        or groups[0].get("label") != "compatibility-group"
+        or groups[0].get("files") != list(paths)
+    ):
+        _fail("semantic grouping review did not preserve the accepted group")
+    if stages != ["grouping", "main", "main", "filter", "main"]:
+        _fail(f"default medium review emitted an unexpected stage sequence: {stages!r}")
+    return {
+        "default_effort": "medium",
+        "filter_requests": 1,
+        "grouping_requests": 1,
+        "main_requests": 3,
+        "result": "passed",
+        "review_rounds": 2,
+    }
+
+
+def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Observe the real OCR chat-completions output cap with and without an override."""
 
     probe_root = directory / "completion-cap-probe"
@@ -895,7 +1123,8 @@ def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
     git_env = _isolated_probe_environment(probe_root / "git-home")
     repo, base, head = _synthetic_repo(probe_root, git_env)
     observed: dict[str, int] = {}
-    for label, expected in (("inherited", 58_888), ("explicit", 4_096)):
+    inherited = 16_384 if _version(version) >= (1, 10, 0) else 58_888
+    for label, expected in (("inherited", inherited), ("explicit", 4_096)):
         env = _isolated_probe_environment(probe_root / f"{label}-home")
         with _stub_gateway() as gateway_url:
             env.update(
@@ -1073,7 +1302,10 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     if re.search(rf"(?<![0-9.])v?{re.escape(version)}(?![0-9.])", version_output) is None:
         _fail(f"OCR binary did not report candidate version {version}")
     help_output = _run([str(binary), "review", "--help"], cwd=repo)
-    missing = sorted(flag for flag in REQUIRED_REVIEW_FLAGS if flag not in help_output)
+    required_review_flags = set(REQUIRED_REVIEW_FLAGS)
+    if _version(version) >= (1, 10, 0):
+        required_review_flags.add("--effort")
+    missing = sorted(flag for flag in required_review_flags if flag not in help_output)
     if missing:
         _fail(f"candidate review help is missing required flags: {', '.join(missing)}")
     preview_home = directory / "preview-home"
@@ -1128,6 +1360,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             cwd=repo,
             env=env,
         )
+        review_stages = list(_StubHandler.request_stages)
     try:
         sample = json.loads(result_output)
     except json.JSONDecodeError as exc:
@@ -1148,6 +1381,10 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     comments = sample.get("comments")
     if not isinstance(comments, list) or len(comments) != 1 or not isinstance(comments[0], dict):
         _fail("candidate full review did not emit the synthetic comment")
+    if _version(version) >= (1, 10, 0):
+        _validate_file_groups(sample.get("groups"), {"example.py"})
+        if review_stages != ["main", "main", "filter", "main"]:
+            _fail(f"default medium review emitted an unexpected stage sequence: {review_stages!r}")
     sample["future_additive_field"] = {"accepted": True}
     from ocr_toolkit.posting.comments import comment_line
     from ocr_toolkit.posting.formatting import (
@@ -1183,7 +1420,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         "review_budget_probe": _budget_result_probe(binary, directory),
         "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),
         "version_probe": "passed",
-        "required_review_flags": sorted(REQUIRED_REVIEW_FLAGS),
+        "required_review_flags": sorted(required_review_flags),
         "preview_probe": {
             "format": "json" if json_preview else "text",
             "path": "example.py",
@@ -1198,8 +1435,10 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             "result": "passed",
         },
     }
+    if _version(version) >= (1, 10, 0):
+        contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
     if _version(version) >= (1, 9, 10):
-        contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
+        contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
     if thinking_probe is not None:
         contracts["comment_thinking_probe"] = thinking_probe
     return contracts

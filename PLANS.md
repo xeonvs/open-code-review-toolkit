@@ -335,6 +335,13 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   artifact handling, and explicitly restores the red job outcome. Ruff, mypy,
   83 focused compatibility/workflow tests, YAML parsing, plan validation, and
   `git diff --check` pass; self-review also added the pre-manifest failure path.
+- `2026-08-25`: an isolated checksum-verified Darwin arm64 OCR 1.10.0 contract
+  run passed the adapted real-binary gateway: path-aware comments, one semantic
+  grouping call, two default-medium review rounds, one filter call, inherited
+  `max_completion_tokens=16384`, explicit override `4096`, the existing partial
+  budget contract, result consumers, and telemetry-off environment. The binary,
+  HOME, repositories, and receipt were temporary and removed; installed OCR and
+  user configuration remain unchanged.
 
 #### Risks And Recovery
 

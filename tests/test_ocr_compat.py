@@ -429,6 +429,43 @@ def test_optional_capabilities_validate_additive_llm_identity() -> None:
         module.detect_optional_capabilities("review", {"llm": {"model": ""}})
 
 
+def test_optional_capabilities_validate_effort_and_semantic_groups() -> None:
+    """OCR 1.10 capabilities remain additive, bounded, and path-complete."""
+
+    module = load_script()
+    sample = {
+        "groups": [
+            {
+                "label": "application flow",
+                "files": ["src/app.py", "tests/test_app.py"],
+            }
+        ]
+    }
+
+    capabilities = module.detect_optional_capabilities("review --effort low", sample)
+
+    assert capabilities == ["review_effort", "semantic_grouping"]
+    module._validate_file_groups(sample["groups"], {"src/app.py", "tests/test_app.py"})
+
+
+def test_semantic_groups_reject_duplicate_or_unexpected_paths() -> None:
+    """One file cannot silently appear in multiple model-produced groups."""
+
+    module = load_script()
+    duplicate = [
+        {"label": "one", "files": ["src/app.py"]},
+        {"label": "two", "files": ["src/app.py"]},
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="invalid grouped path"):
+        module._validate_file_groups(duplicate)
+    with pytest.raises(module.CompatibilityError, match="expected paths"):
+        module._validate_file_groups(
+            [{"label": "one", "files": ["src/app.py"]}],
+            {"src/app.py", "tests/test_app.py"},
+        )
+
+
 def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
