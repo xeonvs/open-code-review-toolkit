@@ -94,7 +94,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `REQ-008` (`done`): complete the BL-017 source-to-signal audit with a
   no-new-layer conclusion unless evidence demonstrates a separately scoped gap;
   preserve BL-016/018/019/020 activation boundaries. Covered by `WQ-07`.
-- `REQ-009` (`pending`): publish version-separated, deployment-actionable docs
+- `REQ-009` (`done`): publish version-separated, deployment-actionable docs
   and changelog text covering added, changed, rejected, inherited, telemetry,
   privacy, and migration behavior. Covered by `WQ-07` and `WQ-08`.
 - `REQ-010` (`pending`): atomically update local OCR to checksum-verified Darwin
@@ -234,9 +234,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
    and repair only real contract violations exposed by them.
 7. `WQ-07` (`done`): complete BL-017 audit and reconcile backlog, strategy,
    roadmap, telemetry privacy/cardinality, and no-new-layer conclusion.
-8. `WQ-08` (`in_progress`): update public docs, examples, compatibility text, test
+8. `WQ-08` (`done`): update public docs, examples, compatibility text, test
    evidence matrix, and separate Towncrier feature/bugfix/maintenance fragments.
-9. `WQ-09` (`pending`): checksum-verify and atomically install local Darwin arm64
+9. `WQ-09` (`in_progress`): checksum-verify and atomically install local Darwin arm64
    OCR 1.10.0; run version/help/no-LLM isolated contract checks and clean temporary
    artifacts with rollback on failure.
 10. `WQ-10` (`pending`): perform holistic requirements/privacy/architecture/data-
@@ -370,6 +370,16 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   parked, BL-018 conditional, and BL-019/BL-020 retain their activation gates.
   Documentation contracts pass 23 focused tests, Ruff, plan validation, and
   `git diff --check`.
+- `2026-08-25`: public configuration, compatibility, GitLab, operations,
+  security, example, README, and test-evidence owners now separate OCR 1.9.10's
+  inherited `58888` completion cap from the OCR 1.10.0 target's `16384`, explain
+  explicit `4096`, `medium`/two-round effort, grouping cost and telemetry,
+  private group/result authority, and rejected caller output ownership. Five
+  category-correct fragments distinguish feature, compatibility maintenance,
+  workflow/runtime fixes, audit maintenance, and direct deployment without an
+  intermediate OCR version. The rendered Towncrier 0.8.2 section and 53 focused
+  documentation/configuration/integration tests pass with Ruff and
+  `git diff --check`.
 
 #### Risks And Recovery
 
@@ -402,10 +412,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-08`: update current public configuration, compatibility, GitLab,
-operations, security, examples, test-evidence, and release-note owners with
-version-separated OCR 1.9.10/1.10.0 migration text and agent-readable added,
-changed, rejected, inherited, telemetry, privacy, and deployment outcomes.
+Continue `WQ-09`: checksum-verify the official Darwin arm64 OCR 1.10.0 asset,
+atomically replace only `/opt/homebrew/bin/ocr` with rollback on failed
+version/help/no-LLM checks, prove user OCR config metadata is unchanged, and
+remove every temporary binary, home, repository, and backup.
 
 #### Plan Fidelity Check
 
