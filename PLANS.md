@@ -91,7 +91,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `REQ-007` (`done`): prove new group/round fields remain provider-neutral,
   private, DLP-bounded, receipt-independent, and unable to alter severity,
   findings, approval, posting, or lifecycle commands. Covered by `WQ-06`.
-- `REQ-008` (`pending`): complete the BL-017 source-to-signal audit with a
+- `REQ-008` (`done`): complete the BL-017 source-to-signal audit with a
   no-new-layer conclusion unless evidence demonstrates a separately scoped gap;
   preserve BL-016/018/019/020 activation boundaries. Covered by `WQ-07`.
 - `REQ-009` (`pending`): publish version-separated, deployment-actionable docs
@@ -232,9 +232,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
    environment/config/installed-artifact contracts.
 6. `WQ-06` (`done`): add focused groups/DLP/receipt/approval/result regressions
    and repair only real contract violations exposed by them.
-7. `WQ-07` (`in_progress`): complete BL-017 audit and reconcile backlog, strategy,
+7. `WQ-07` (`done`): complete BL-017 audit and reconcile backlog, strategy,
    roadmap, telemetry privacy/cardinality, and no-new-layer conclusion.
-8. `WQ-08` (`pending`): update public docs, examples, compatibility text, test
+8. `WQ-08` (`in_progress`): update public docs, examples, compatibility text, test
    evidence matrix, and separate Towncrier feature/bugfix/maintenance fragments.
 9. `WQ-09` (`pending`): checksum-verify and atomically install local Darwin arm64
    OCR 1.10.0; run version/help/no-LLM isolated contract checks and clean temporary
@@ -361,6 +361,15 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   pass. Direct mypy invocation over test files remains non-owner validation and
   reports pre-existing test-module export errors; the repository quality owner
   remains the final typed gate.
+- `2026-08-25`: the BL-017 source-to-signal matrix maps provider, request,
+  latency, cost, tokens, grouping, rounds, tools, coverage, context, DLP,
+  posting, approval, and compatibility to their existing owners. OCR 1.10.0
+  group span names/attributes contain sorted changed paths or model-produced
+  labels, so explicitly enabled OCR telemetry is classified as repository-
+  derived and high-cardinality. The audit concludes `no-new-layer`; BL-016 stays
+  parked, BL-018 conditional, and BL-019/BL-020 retain their activation gates.
+  Documentation contracts pass 23 focused tests, Ruff, plan validation, and
+  `git diff --check`.
 
 #### Risks And Recovery
 
@@ -393,10 +402,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-07`: trace OCR group/round signals from upstream source through the
-toolkit's telemetry, receipt, logs, and operator surfaces; record the bounded
-BL-017 ownership/cardinality conclusion while preserving the activation state of
-BL-016, BL-018, BL-019, and BL-020.
+Continue `WQ-08`: update current public configuration, compatibility, GitLab,
+operations, security, examples, test-evidence, and release-note owners with
+version-separated OCR 1.9.10/1.10.0 migration text and agent-readable added,
+changed, rejected, inherited, telemetry, privacy, and deployment outcomes.
 
 #### Plan Fidelity Check
 

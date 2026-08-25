@@ -22,6 +22,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion and snapshot capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
+| Review measurement gaps (BL-017) | Completed and removed | The toolkit 0.8.2 source-to-signal audit concludes `no-new-layer`: OCR retains provider/review telemetry ownership, while toolkit receipts and count-only DLP events retain deterministic lifecycle ownership. Group labels and path-derived keys are explicitly classified as untrusted, high-cardinality upstream telemetry. |
 
 ## M3 External MCP hardening
 
@@ -60,27 +61,12 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Validation:** Profile matrix, precedence, preflight, rendering, and compatibility tests.
 - **Release classification expectation:** `release-required`.
 
-### BL-017: Audit remaining review measurement gaps
-
-- **Status:** ready
-- **Priority:** medium
-- **Roadmap theme:** M6 Profiles and quality measurement
-- **Dependencies:** Established receipt-v5 result, discussion/fingerprint, coverage, posting, normalized token, and reconciled MCP/evidence-use signals. BL-016 is not required for the audit.
-- **Activation trigger:** Met for an audit with current OCR telemetry and toolkit result-derived receipts.
-- **Upstream overlap:** OCR remains authoritative for deterministic tool rendering, provider/model identity, session correlation, diff-review usage/budgets, and request/tool latency. Toolkit v0.7.1 only validates and renders a closed privacy-safe subset plus reconciled count-only evidence use. Full-repository `scan` signals do not widen toolkit scope.
-- **Goal:** Decide whether privacy-safe toolkit telemetry is needed before implementing metrics or routing.
-- **Scoped deliverables:** Inventory OCR token, cost, budget, latency, request, tool-call, and provider/model identity alongside established review health, failed-file coverage, findings, suppression, omission, posting, MCP-use receipts, and M5 context receipts only if they exist. Document only genuinely missing lifecycle, evidence degradation, repeated-discussion, compatibility, or review-value gaps and their privacy/cardinality limits; conclude no-new-layer or create a separately scoped follow-up.
-- **Acceptance criteria:** The audit maps every signal to its authoritative source, distinguishes derived from missing data, and reaches an explicit no-new-layer or separately scoped conclusion. OCR remains authoritative for token, cost, budget, request, latency, and tool-call telemetry; toolkit receipt/summary/log events remain authoritative only for deterministic lifecycle and publication filtering. The audit adds no second context telemetry implementation and introduces an exporter only under a separately approved contract.
-- **Exclusions:** User surveillance, developer ranking, automatic routing, or mandatory external telemetry.
-- **Validation:** Representative result/discussion fixtures, privacy review, and source-to-signal matrix.
-- **Release classification expectation:** `no-release` for the audit.
-
 ### BL-018: Evaluate conservative automatic profile routing
 
 - **Status:** conditional
 - **Priority:** low
 - **Roadmap theme:** M6 Profiles and quality measurement
-- **Dependencies:** BL-016, BL-017, and an owner-approved quality/cost policy; M5 is not a dependency.
+- **Dependencies:** BL-016, the completed BL-017 ownership audit, and an owner-approved quality/cost policy; M5 is not a dependency.
 - **Activation trigger:** Representative metrics demonstrate a stable deterministic rule that improves an explicit objective without reducing safety.
 - **Goal:** Select one run-level profile conservatively from trusted bounded inputs.
 - **Scoped deliverables:** Document the decision rule, inputs, fallback, observability, and opt-out; implement only after replay evaluation and owner approval.

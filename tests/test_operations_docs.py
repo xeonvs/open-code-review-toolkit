@@ -10,6 +10,7 @@ CONFIGURATION = PROJECT_ROOT / "docs" / "configuration.md"
 GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
 GITLAB_EXAMPLES = PROJECT_ROOT / "examples" / "gitlab"
 CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
+SIGNAL_OWNERSHIP = PROJECT_ROOT / "docs" / "engineering" / "review_signal_ownership.md"
 
 
 def test_readme_security_badges_link_to_repository_specific_results() -> None:
@@ -67,6 +68,7 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     for phrase in (
         "toolkit_strategy.md",
         "project_principles.md",
+        "review_signal_ownership.md",
         "m5_context_contracts.md",
         "evidence_migration_matrix.md",
         "test_evidence_matrix.md",
@@ -77,6 +79,31 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     assert "not a second source" in codex_index
     assert "without duplicating their rules" in engineering_index
     assert "docs/README.md" in readme
+
+
+def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:
+    """Keep the completed BL-017 ownership and privacy conclusion explicit."""
+
+    audit = SIGNAL_OWNERSHIP.read_text(encoding="utf-8")
+    backlog = (PROJECT_ROOT / "docs" / "codex" / "TASKS_BACKLOG.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = (PROJECT_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "Source-to-signal matrix",
+        "Group labels are model-produced",
+        "sorted changed paths",
+        "no exporter of its own",
+        "concludes `no-new-layer`",
+        "BL-016 remains parked",
+        "BL-018 remains conditional",
+        "BL-019 and",
+        "BL-020 retain",
+    ):
+        assert phrase in audit
+    assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
+    assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
