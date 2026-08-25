@@ -1,3 +1,32 @@
+## 0.8.2 - 2026-08-25
+
+### 🚀 Features
+
+- Expose OCR 1.10.0 review depth and grouping with explicit operator ownership.
+
+  - **Added:** `OCR_REVIEW_EFFORT` is a closed `low|medium|high` setting written to OCR's root `effort` key. Its exact default is `medium`, selecting up to two review rounds; `low` selects one and `high` selects three. A caller-supplied OCR `--effort` remains the per-run override, and merge-request text cannot select it.
+  - **Changed:** OCR may semantically group related changed files and filter findings per group before additional rounds. Group labels, path-derived keys, membership, and round diagnostics remain untrusted private result data and cannot change findings, severity, fingerprints, lifecycle commands, receipt v5, toolkit telemetry, posting, or automatic approval.
+
+  ([#135](https://github.com/xeonvs/open-code-review-toolkit/issues/135))
+
+### 🐛 Bug Fixes
+
+- **Fixed:** Reject caller-owned OCR `--output`, `--output=...`, `-o`, and attached short forms before preview so the new upstream output flag cannot bypass the toolkit-owned result descriptor, atomic validation, DLP, cleanup, or posting handoff. Also make successful compatibility promotion report a caller-supplied relative manifest path without crashing after the update was written. ([#135](https://github.com/xeonvs/open-code-review-toolkit/issues/135))
+- **Fixed:** A failed OCR compatibility qualification now still updates the canonical version issue and uploads a bounded `ocr-toolkit.compatibility-status/v1` artifact before the job returns red. Public coordination receives only closed phase, reason, version, and run identity; raw exceptions remain in the private job log, and aggregate promotion stays blocked. ([#136](https://github.com/xeonvs/open-code-review-toolkit/issues/136))
+
+### 🛠 Maintenance
+
+- Qualify and promote the next OCR runtime without losing predecessor or deployment context.
+
+  - **OCR 1.9.10 — inherited predecessor:** Toolkit 0.8.0 and 0.8.1 used exact OCR 1.9.10, whose unset OpenAI completion cap was observed as `max_completion_tokens=58888`. Its checksum-pinned evidence remains unchanged; toolkit 0.8.2 does not require installing or requalifying it.
+  - **OCR 1.10.0 — changed target:** Toolkit 0.8.2 preflight and the GitLab example now require checksum-verified OCR 1.10.0. Qualification covers semantic file grouping, path-aware comments, group filtering, one/two/three review rounds, partial-budget reporting, tool/token accounting, the new `--output` flag, private git diagnostics, and the new inherited OpenAI completion cap `max_completion_tokens=16384`. Linux amd64 SHA-256 is `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b`.
+  - **Telemetry:** OCR remains authoritative for provider, request, latency, cost, grouping, round, and tool telemetry. OCR 1.10.0 group spans can contain sorted changed paths and model-produced labels; the toolkit defaults OCR telemetry off, does not ingest those values, and adds no exporter or approval/routing signal.
+  - **Deployment/Migration:** Deploy toolkit 0.8.2 directly with OCR 1.10.0; do not install OCR 1.9.10 as an intermediate step. Unset `OCR_LLM_MAX_COMPLETION_TOKENS` inherits `16384`; set an explicit value such as `4096` when a gateway-specific invariant is required. Caller `--output`/`-o` remains unsupported because `ocr-ci review --result` owns the private result lifecycle.
+
+  ([#135](https://github.com/xeonvs/open-code-review-toolkit/issues/135))
+- **Changed:** Complete the BL-017 review-signal ownership audit with a `no-new-layer` result. OCR retains provider/review telemetry ownership; toolkit receipt, context, DLP, posting, and approval projections retain deterministic lifecycle ownership. No exporter, automatic routing, developer scoring, or duplicate group/round metric schema is added. ([#137](https://github.com/xeonvs/open-code-review-toolkit/issues/137))
+
+
 ## 0.8.1 - 2026-08-24
 
 ### 🚀 Features

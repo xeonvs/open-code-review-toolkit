@@ -2,6 +2,50 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-2"></a>
+
+## Repository-Complete Plan: v0.8.2 OCR 1.10.0 and review effort
+
+Status: repository work complete; protected stable release and external reconciliation pending
+Owner: Codex
+Release classification: `release-required`
+Target stable version: `0.8.2`
+Last Updated: 2026-08-25
+
+### Goal
+
+Qualify and promote checksum-pinned OCR 1.10.0; expose explicit bounded review effort with toolkit default `medium`; retain toolkit ownership of result files, DLP, receipt v5, and approval; recover bounded compatibility evidence after a failed qualification; and complete the BL-017 review-signal ownership audit without creating a duplicate telemetry layer.
+
+### Delivered contract
+
+- Toolkit 0.8.2 preflight and the GitLab example require exact OCR 1.10.0. OCR 1.9.10 remains the tested 0.8.0/0.8.1 predecessor and is not an intermediate deployment step. Linux amd64 SHA-256 is `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b`; Darwin arm64 SHA-256 is `c8f51b17c2be193ca178ecce6b5bcc1e38a5614629fbe81c6e1c95af5ede12e4`.
+- `OCR_REVIEW_EFFORT` is the closed operator-owned `low|medium|high` control and defaults to `medium`, selecting up to two rounds. A caller `--effort` remains a per-run override; merge-request content never selects review depth.
+- OCR semantic group labels, path-derived keys, file membership, and round diagnostics remain untrusted private result data. Safe values do not block approval; DLP-sanitized private-only values do not become publication failures; none enters findings, severity, fingerprints, lifecycle commands, GitLab text, receipt v5, toolkit telemetry, posting, or automatic approval.
+- Caller-owned OCR `--output`, `--output=...`, `-o`, and attached short forms fail before preview. `ocr-ci review --result` remains the sole owner of the private descriptor, atomic validation, DLP, cleanup, receipt, and posting handoff.
+- Failed OCR compatibility qualification emits only closed `ocr-toolkit.compatibility-status/v1` phase/reason/version/run identity for issue/artifact handling, then restores the red job outcome so aggregate promotion remains blocked. Impossible phase/reason pairs fail closed; raw exceptions remain in the private job log.
+- BL-017 completed with `no-new-layer`: OCR owns provider/request/latency/cost/token/group/round/tool telemetry; toolkit owns deterministic context, DLP, receipt, posting, approval, and compatibility lifecycle signals. Explicitly enabled OCR grouping spans may contain repository-derived high-cardinality paths or model-produced labels.
+- Required configuration-table inputs are bold only according to their scoped `Required` cells. Optional, computed, conditional-alternative, and dynamic owner inputs remain distinguishable and contract-tested.
+
+### Validation and delivery evidence
+
+- Feature PR [#134](https://github.com/xeonvs/open-code-review-toolkit/pull/134) passed all 13 hosted checks at reviewed head `11b58547d9cba9523cc646c51f934c0b904dfe23` and tree `56b9286585862a071f90c5df889c0240dbb91a46`, then squash-merged as `cdc46735ba4338906d2049ff29789c1c92295d7c` with the same tree.
+- The single final local gate passed 1,256 tests plus 310 subtests at 86.14% combined branch coverage and risk groups 84/82/85/87, with Ruff, strict MyPy, Bandit, lock, OCR manifest/evidence, rendered Towncrier, pinned Gitleaks 8.24.3, diff, and plan lifecycle checks green.
+- Hosted OCR compatibility run [32825123658](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/32825123658) qualified the exact Linux artifact. The PATH-effective local Darwin arm64 OCR was atomically updated to exact 1.10.0 and passed isolated no-LLM gateway/version/help checks without modifying user config, credentials, or HOME.
+- The owner explicitly waived local LLM execution because this environment has no configured provider access. No production model/provider result, finding quality, or live gateway behavior is claimed; deterministic real-OCR wire and result-consumer qualification remains the exact evidence boundary.
+- TestPyPI development run [32829250700](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/32829250700) published and read back `0.8.2.dev70` with Trusted Publishing provenance and exact wheel/sdist installs. Wheel SHA-256 is `8ac4fe8a1b04e2472e1f31b818b97d06f35425597a6d59f51e9f0c1d6e06a9d6`; sdist SHA-256 is `fe04831bc1bb6db566ebb1131f787562150be0e7cdb5b96932fcb519aaf2e3a7`.
+- Release authorization tracks exactly open milestone issues #135, #136, and #137. The release candidate sets `.release-version=0.8.2`, `.next-version=0.8.3`, and deterministic epoch `1787648187`, one second after the feature squash merge.
+
+### Trust boundaries and non-claims
+
+- GitLab acquisition and mutation remain provider-specific. Policy, normalized context, DLP, stores, result contracts, receipts, approval, and compatibility classification remain provider-neutral and can admit a future code-host adapter without importing GitLab upward.
+- OCR 1.10.0's inherited OpenAI completion cap is observed as `16384`; OCR 1.9.10's predecessor value remains `58888`. The toolkit default stays unset, explicit `4096` remains an operator workaround, and neither `/models` nor an MR-controlled value selects a cap.
+- Receipt schema remains v5. Private group/round sanitization cannot enable approval, while partial, required-degraded, mutated, rejected, impossible, or publication-filtered state remains approval-ineligible.
+- Stable TestPyPI/PyPI bytes, GitHub attestations, registry provenance, annotated `v0.8.2` tag, immutable GitHub Release and assets, `release-receipt.json`, supported-Python registry installs, Actions-owned issue receipts, issue/milestone closure, and final clean-main synchronization are not claimed by this repository checkpoint and remain post-merge external gates.
+
+### Resume point
+
+Open the exact `Release v0.8.2` PR from `release/v0.8.2`, require its unchanged exact-head hosted checks and resolved review threads, then use the protected squash merge to start stable publication. Independently verify registry/workflow/Release bytes, provenance, attestations, installs, annotated tag, immutable receipt, issue receipts, issue and milestone closure, synchronized `main`, and final scratch cleanup. Preserve the explicit local-LLM non-claim during reconciliation.
+
 <a id="plan-toolkit-0-8-1"></a>
 
 ## Repository-Complete Plan: v0.8.1 completion cap and safe provider failures

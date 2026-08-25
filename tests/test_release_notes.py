@@ -140,19 +140,11 @@ def test_081_release_notes_separate_added_fixed_removed_and_unchanged_contracts(
         assert contract in notes
 
 
-def test_082_fragments_are_actionable_for_people_and_deployment_agents() -> None:
+def test_082_release_notes_are_actionable_for_people_and_deployment_agents() -> None:
     """Keep added, changed, inherited, fixed, and migration outcomes distinct."""
 
-    fragments = "\n".join(
-        (ROOT / "changelog.d" / name).read_text(encoding="utf-8")
-        for name in (
-            "135.maintenance.md",
-            "135.feature.md",
-            "135.bugfix.md",
-            "136.bugfix.md",
-            "137.maintenance.md",
-        )
-    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.2")
 
     for phrase in (
         "OCR 1.9.10 — inherited predecessor",
@@ -169,7 +161,7 @@ def test_082_fragments_are_actionable_for_people_and_deployment_agents() -> None
         "no-new-layer",
         "No exporter",
     ):
-        assert phrase in fragments
+        assert phrase in notes
 
 
 def test_extracts_only_the_exact_release_section() -> None:
