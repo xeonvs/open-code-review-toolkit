@@ -64,7 +64,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   acceptance, without changing the user's OCR config, credentials, or HOME.
 - Produce separate agent- and human-readable Towncrier fragments for maintenance,
   feature, and bug-fix outcomes, then run the protected 0.8.2 lifecycle through
-  exact-head qualification, merge, registry publication, and external readback.
+  exact-head hosted validation, merge, registry publication, and external readback.
 
 #### Requirement Traceability
 
@@ -101,9 +101,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   arm64 1.10.0 and pass isolated no-LLM checks without modifying user config.
   Covered by `WQ-09`.
 - `REQ-011` (`pending`): complete focused and one final full local validation,
-  exact-head hosted PR checks, a bounded real-model production-path review, and
-  the protected 0.8.2 release/readback lifecycle without restoring validation
-  duplication removed by #132. Covered by `WQ-10` through `WQ-12`.
+  exact-head hosted PR checks, record the owner-waived local LLM non-claim, and
+  complete the protected 0.8.2 release/readback lifecycle without restoring
+  validation duplication removed by #132. Covered by `WQ-10` through `WQ-12`.
 
 #### Explicit Non-Goals
 
@@ -151,10 +151,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - Receipt schema stays v5. Existing DLP distinction between private sanitization
   and publication filtering, partial-review approval blocking, posting rollback,
   fingerprinting, and human ownership must remain intact.
-- The real-model exact-head qualification uses the existing owner-configured
-  provider only after local and hosted deterministic gates are green, with
-  `OCR_LLM_MAX_COMPLETION_TOKENS=4096`; absence or failure of that environment
-  changes the release state to `release-deferred` rather than weakening gates.
+- A real-model exact-head qualification may use only an owner-configured provider
+  with `OCR_LLM_MAX_COMPLETION_TOKENS=4096`; the user explicitly waived this
+  local gate because the current environment has no provider access. Preserve
+  the non-claim instead of substituting Codex credentials or model output.
 
 #### Inputs And Sources
 
@@ -196,6 +196,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - Preserve efficient validation ownership from #132 instead of repeating the
   full suite locally, on every push, after main merge, and again without a new
   trust boundary.
+- Skip the local LLM-backed review in this environment. This owner waiver removes
+  the release blocker but does not convert deterministic OCR compatibility or
+  hosted CI evidence into a claim about a production model/provider response.
 
 #### Completed Baseline State
 
@@ -242,10 +245,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 10. `WQ-10` (`done`): perform holistic requirements/privacy/architecture/data-
     flow/telemetry/docs self-review and one final local quality/security/manifest/
     changelog gate; update plan to exact implementation truth and final commit.
-11. `WQ-11` (`in_progress`): push final signed history, wait for exact-head hosted PR
+11. `WQ-11` (`done`): push final signed history, wait for exact-head hosted PR
     checks, fix only evidence-backed failures through the same commit gate, and
-    perform bounded real-model exact-head qualification.
-12. `WQ-12` (`pending`): ready and merge the protected feature PR, verify the
+    record the user-waived local LLM qualification as an explicit non-claim.
+12. `WQ-12` (`in_progress`): ready and merge the protected feature PR, verify the
     TestPyPI development artifact, execute protected release/v0.8.2, independently
     reconcile PyPI/TestPyPI/provenance/tag/GitHub Release/receipt/install state,
     close issues and milestone through release automation, archive this plan with
@@ -297,7 +300,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   `scripts/ocr_compat.py validate`, Towncrier draft, `git diff --check`, and the
   repository privacy scan. Do not repeat clean multi-Python installs locally
   because hosted Build artifacts and release gates own that boundary.
-- Hosted/delivery: all required feature-PR checks, exact-head real-model review,
+- Hosted/delivery: all required feature-PR checks, explicit local-model non-claim,
   protected merge, TestPyPI development build/provenance/install readback,
   protected stable release, immutable registry/GitHub/tag/receipt readback, and
   supported-Python install verification.
@@ -410,6 +413,14 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   and was removed without changing the global 8.30.1 installation. Clean
   package rebuild/install matrices are deliberately left to the single hosted
   Build artifacts owner and stable release gates under the #132 validation split.
+- `2026-08-25`: exact pushed head
+  `c9df0cb087a84efd978a88477d49930799f1af04` and tree
+  `6c4fb8c2acd4ecbe72aee0682fb25a31956350f2` pass all 13 hosted PR checks,
+  including Linux/macOS Python 3.12-3.14, the single package owner, CodeQL,
+  dependency review/audit, Bandit, secrets, and coverage quality. The task and
+  macOS launch environments expose no OCR/OpenAI/Anthropic provider variables
+  and the owner OCR home contains no config file. The user therefore explicitly
+  waived local LLM execution; no production-model behavior is claimed.
 
 #### Risks And Recovery
 
@@ -432,20 +443,20 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   before rename, retain the old executable inside the atomic transaction, restore
   it on any failed check, use isolated HOME for probes, and compare user config
   metadata before/after without reading or rewriting credential values.
-- Risk: live provider qualification remains unavailable or fails under gateway
-  policy. Recovery: keep Draft PR and release issues open, record exact head and
-  deterministic evidence, set release `release-deferred`, and resume only from a
-  configured environment with explicit cap 4096.
+- Risk: the waived live-provider run leaves a model-behavior evidence gap.
+  Recovery: retain the explicit non-claim in plan/PR/release notes and rely only
+  on deterministic real-OCR wire checks plus protected hosted/release gates;
+  never describe these as a production provider review.
 - Risk: validation duplication returns. Recovery: follow #132 ownership, use
   focused local checks per slice and one final full gate, and retain repetition
   only where PR, platform, artifact, release, or registry boundaries differ.
 
 #### Resume Point
 
-Continue `WQ-11`: commit this final reconciliation, update the Draft PR body to
-the exact implementation head/tree, push the complete signed local history once,
-wait for all hosted PR owners, and then run the bounded real-model production-
-path qualification with OCR 1.10.0 and explicit completion cap 4096.
+Continue `WQ-12`: commit and push the owner-waiver reconciliation, wait for the
+new exact plan-only head checks, ready and merge protected feature PR #134,
+verify its TestPyPI development publication, and prepare the protected
+`release/v0.8.2` PR according to `docs/release.md`.
 
 #### Plan Fidelity Check
 
@@ -457,8 +468,8 @@ path qualification with OCR 1.10.0 and explicit completion cap 4096.
   rejected alternatives are recorded.
 - [x] Data flow, trust boundaries, DLP/approval independence, telemetry privacy,
   result-file ownership, and provider-neutral reuse are explicit.
-- [x] Focused, final local, hosted, real-model, artifact, and release validation
-  responsibilities are mapped without undoing #132.
+- [x] Focused, final local, hosted, waived-model non-claim, artifact, and release
+  validation responsibilities are mapped without undoing #132.
 - [x] Risks have bounded recovery paths and the first safe unfinished action is
   exact.
 
@@ -476,9 +487,9 @@ path qualification with OCR 1.10.0 and explicit completion cap 4096.
 #### Closure Gate
 
 - [ ] All requirements and queue items are `done` or explicitly `out_of_scope`.
-- [ ] Final exact-head validation, self-review, hosted checks, real-model review,
-  stable publication, external reconciliation, issue/milestone closure, and local
-  OCR verification are recorded.
+- [ ] Final exact-head validation, self-review, hosted checks, waived-model
+  non-claim, stable publication, external reconciliation, issue/milestone closure,
+  and local OCR verification are recorded.
 - [ ] Backlog, roadmap, strategy, public docs, changelog, manifest/evidence, and
   execution history describe the same delivered state.
 - [ ] `scripts/plan_lifecycle.py check` passes before the checked close/archive
