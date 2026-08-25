@@ -1068,6 +1068,70 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
     assert error.value.code == 400
 
 
+def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
+    """Derive effective numeric behavior without retaining raw OCR diagnostics."""
+
+    module = load_script()
+
+    def preview(
+        _binary: Path,
+        _repo: Path,
+        _base: str,
+        _head: str,
+        _directory: Path,
+        *,
+        flag: str,
+        value: int | None,
+    ) -> Any:
+        stderr = ""
+        returncode = 0
+        if flag == "--max-tools" and value in {1, 49}:
+            stderr = f"[ocr] --max-tools {value} is below minimum 50, using 50\n"
+        elif flag == "--max-tools" and value == -1:
+            returncode = 1
+            stderr = (
+                "Error: --max-tools must be a non-negative integer (0 means use template default)\n"
+            )
+        elif flag == "--max-tokens-budget" and value == -1:
+            returncode = 1
+            stderr = (
+                "Error: --max-tokens-budget must be a non-negative integer (0 means unlimited)\n"
+            )
+        return module.subprocess.CompletedProcess(
+            [flag, str(value)],
+            returncode,
+            stdout='{"files": []}\n',
+            stderr=stderr,
+        )
+
+    def effective(
+        _binary: Path,
+        _repo: Path,
+        _base: str,
+        _head: str,
+        _directory: Path,
+        *,
+        value: int,
+        expected_diagnostic: object,
+    ) -> int:
+        return 100 if value == 49 else value
+
+    with (
+        patched_attr(module, "_run_numeric_preview_case", preview),
+        patched_attr(module, "_effective_max_tools_probe", effective),
+    ):
+        result = module._numeric_cli_probe(
+            Path("/synthetic/ocr"),
+            Path("/synthetic/repo"),
+            "a" * 40,
+            "b" * 40,
+            Path("/synthetic/probe"),
+        )
+
+    assert result == module.CURRENT_NUMERIC_CLI_CONTRACT
+    assert "stderr" not in json.dumps(result)
+
+
 def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
     module = load_script()
     captured: dict[str, Any] = {}

@@ -98,7 +98,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
-| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `30` | Positive maximum OCR tool requests per review loop; the example owns and passes this bounded value explicitly. |
+| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | Non-negative tool-call control passed to OCR. `0` delegates to the installed OCR template; a positive value can raise that template-owned loop limit, subject to OCR's runtime validation. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
 
 ## Dynamic adapter and MCP inputs
@@ -163,6 +163,16 @@ findings and reports the unreviewed files as budget-attributed failed coverage.
 The toolkit publishes that run as partial and never treats it as clean or eligible
 for automatic approval. The cap is approximate because already-running work may
 finish and OCR accounts the provider-reported input plus output tokens.
+
+`OCR_MAX_TOOLS` is independent of all three token controls. Leave the example
+default at `0` so the installed OCR template owns the effective per-file
+tool-call limit. For the currently qualified OCR, behavioral qualification
+observes a CLI minimum and normalization target of `50`, while omitted, `0`,
+and values through `100` all retain the template's effective `100` rounds; a
+value of `101` raises the effective limit to `101`. The OCR help text is not the
+source of truth for these values. A recognized normalization is emitted only as
+a toolkit-authored CI notice; its raw stderr is not added to findings, result
+warnings, receipts, DLP inputs, telemetry, or automatic-approval signals.
 
 ## Posting controls
 

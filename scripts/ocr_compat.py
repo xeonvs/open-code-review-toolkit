@@ -45,6 +45,7 @@ MAX_ISSUE_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_RELEASE_CHANGES_CHARS = 4_000
 MAX_RELEASE_CHANGES_LINES = 50
 MAX_QUALIFICATION_CHAIN = 10
+MAX_CLI_PROBE_BYTES = 100_000
 DOWNLOAD_ATTEMPTS = 3
 VERSION_RE = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
@@ -62,10 +63,55 @@ REQUIRED_REVIEW_FLAGS = {
     "--background-file",
     "--format",
     "--max-tokens-budget",
+    "--max-tools",
     "--from",
     "--preview",
     "--rule",
     "--to",
+}
+MAX_TOOLS_NORMALIZATION_RE = re.compile(
+    r"\[ocr\] --max-tools ([0-9]{1,12}) is below minimum ([0-9]{1,12}), "
+    r"using ([0-9]{1,12})\n?\Z"
+)
+MAX_TOOLS_NEGATIVE_RE = re.compile(
+    r"Error: --max-tools must be a non-negative integer "
+    r"\(0 means use template default\)\n?\Z"
+)
+MAX_TOKENS_BUDGET_NEGATIVE_RE = re.compile(
+    r"Error: --max-tokens-budget must be a non-negative integer "
+    r"\(0 means unlimited\)\n?\Z"
+)
+CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
+    "max_tokens_budget": {
+        "cases": {
+            "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+            "minimum": {"effective": 1, "input": 1, "outcome": "accepted"},
+            "omitted": {"effective": "unlimited", "input": None, "outcome": "accepted"},
+            "representative": {"effective": 30_000, "input": 30_000, "outcome": "accepted"},
+            "sentinel": {"effective": "unlimited", "input": 0, "outcome": "accepted"},
+        },
+        "maximum": None,
+        "owner": "ocr-cli",
+    },
+    "max_tools": {
+        "cases": {
+            "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+            "minimum": {"effective": 100, "input": 50, "outcome": "accepted"},
+            "minimum_minus_one": {
+                "effective": 100,
+                "input": 49,
+                "outcome": "normalized",
+                "reported_normalization": 50,
+            },
+            "omitted": {"effective": 100, "input": None, "outcome": "accepted"},
+            "representative": {"effective": 101, "input": 101, "outcome": "accepted"},
+            "sentinel": {"effective": 100, "input": 0, "outcome": "accepted"},
+        },
+        "maximum": None,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50,
+    },
+    "result": "passed",
 }
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
@@ -350,6 +396,8 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 "wire_field": "max_completion_tokens",
             }:
                 _fail(f"evidence does not qualify the completion cap for {version}")
+            if contracts.get("numeric_cli_probe") != CURRENT_NUMERIC_CLI_CONTRACT:
+                _fail(f"evidence does not qualify numeric CLI boundaries for {version}")
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -711,6 +759,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     tokens_per_request = 2
     grouping_tokens_per_request = 2
     grouping_mode = "singletons"
+    main_mode = "findings"
     completion_caps: list[object] = []
     request_stages: list[str] = []
 
@@ -807,41 +856,57 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             stage = "filter"
         else:
             contents = type(self)._message_contents(messages)
-            prior_comment = any(
-                isinstance(message, dict)
-                and any(
-                    isinstance(call, dict)
-                    and isinstance(call.get("function"), dict)
-                    and call["function"].get("name") == "code_comment"
-                    for call in message.get("tool_calls", [])
-                )
-                for message in messages
-            )
-            later_round = any("### Previously Confirmed Findings" in item for item in contents)
-            if not prior_comment and not later_round:
-                path = type(self)._review_path(messages)
-                if path is None:
-                    self.send_error(400)
-                    return
-                arguments = json.dumps(
-                    {
-                        "comments": [
-                            {
-                                "content": "Synthetic compatibility finding.",
-                                "existing_code": "    return 2",
-                                "path": path,
-                                "thinking": "Synthetic private compatibility reasoning.",
-                                "category": "maintainability",
-                                "severity": "low",
-                            }
-                        ]
+            if type(self).main_mode == "exhaust-tools":
+                if "file_read" in tool_names:
+                    function = {
+                        "name": "file_read",
+                        "arguments": json.dumps(
+                            {"file_path": "example.py", "start_line": 1, "end_line": 1}
+                        ),
                     }
-                )
-                function = {"name": "code_comment", "arguments": arguments}
-                call_id = "call-comment"
+                    call_id = f"call-read-{type(self).request_count}"
+                    stage = "main"
+                else:
+                    function = {"name": "task_done", "arguments": "{}"}
+                    call_id = "call-grace-done"
+                    stage = "grace"
             else:
-                function = {"name": "task_done", "arguments": "{}"}
-                call_id = "call-done"
+                prior_comment = any(
+                    isinstance(message, dict)
+                    and any(
+                        isinstance(call, dict)
+                        and isinstance(call.get("function"), dict)
+                        and call["function"].get("name") == "code_comment"
+                        for call in message.get("tool_calls", [])
+                    )
+                    for message in messages
+                )
+                later_round = any("### Previously Confirmed Findings" in item for item in contents)
+                if not prior_comment and not later_round:
+                    path = type(self)._review_path(messages)
+                    if path is None:
+                        self.send_error(400)
+                        return
+                    arguments = json.dumps(
+                        {
+                            "comments": [
+                                {
+                                    "content": "Synthetic compatibility finding.",
+                                    "existing_code": "    return 2",
+                                    "path": path,
+                                    "thinking": "Synthetic private compatibility reasoning.",
+                                    "category": "maintainability",
+                                    "severity": "low",
+                                }
+                            ]
+                        }
+                    )
+                    function = {"name": "code_comment", "arguments": arguments}
+                    call_id = "call-comment"
+                else:
+                    function = {"name": "task_done", "arguments": "{}"}
+                    call_id = "call-done"
+                stage = "main"
             message = {
                 "role": "assistant",
                 "content": None,
@@ -854,7 +919,6 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 ],
             }
             finish_reason = "tool_calls"
-            stage = "main"
         type(self).request_stages.append(stage)
         usage_tokens = (
             type(self).grouping_tokens_per_request
@@ -892,6 +956,7 @@ def _stub_gateway(
     tokens_per_request: int = 2,
     grouping_tokens_per_request: int = 2,
     grouping_mode: str = "singletons",
+    main_mode: str = "findings",
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -899,10 +964,13 @@ def _stub_gateway(
         _fail("stub gateway token usage must be at least two")
     if grouping_mode not in {"singletons", "combined"}:
         _fail("stub gateway grouping mode is invalid")
+    if main_mode not in {"findings", "exhaust-tools"}:
+        _fail("stub gateway main mode is invalid")
     _StubHandler.request_count = 0
     _StubHandler.tokens_per_request = tokens_per_request
     _StubHandler.grouping_tokens_per_request = grouping_tokens_per_request
     _StubHandler.grouping_mode = grouping_mode
+    _StubHandler.main_mode = main_mode
     _StubHandler.completion_caps = []
     _StubHandler.request_stages = []
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
@@ -1076,6 +1144,302 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
         "partial_findings_preserved": True,
         "result": "passed",
         "selected": 3,
+    }
+
+
+def _run_numeric_preview_case(
+    binary: Path,
+    repo: Path,
+    base: str,
+    head: str,
+    directory: Path,
+    *,
+    flag: str,
+    value: int | None,
+) -> subprocess.CompletedProcess[str]:
+    """Run one bounded no-model numeric CLI preview and retain diagnostics privately."""
+
+    case_name = "omitted" if value is None else str(value).replace("-", "negative-")
+    env = _isolated_probe_environment(directory / f"numeric-{flag.removeprefix('--')}-{case_name}")
+    command = [
+        str(binary),
+        "review",
+        "--from",
+        base,
+        "--to",
+        head,
+        "--preview",
+        "--format",
+        "json",
+    ]
+    if value is not None:
+        command.extend([flag, str(value)])
+    try:
+        completed = subprocess.run(  # nosec B603
+            command,
+            cwd=repo,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CompatibilityError(f"numeric CLI preview failed for {flag}") from exc
+    if (
+        len(completed.stdout.encode()) > MAX_CLI_PROBE_BYTES
+        or len(completed.stderr.encode()) > MAX_CLI_PROBE_BYTES
+    ):
+        _fail(f"numeric CLI preview exceeded its output bound for {flag}")
+    return completed
+
+
+def _accepted_numeric_preview(completed: subprocess.CompletedProcess[str], *, flag: str) -> None:
+    """Require one clean accepted numeric preview without trusting help text."""
+
+    if completed.returncode != 0 or completed.stderr:
+        _fail(f"candidate {flag} preview did not pass without diagnostics")
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError(f"candidate {flag} preview did not emit JSON") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+        _fail(f"candidate {flag} preview emitted an invalid file manifest")
+
+
+def _effective_max_tools_probe(
+    binary: Path,
+    repo: Path,
+    base: str,
+    head: str,
+    directory: Path,
+    *,
+    value: int,
+    expected_diagnostic: re.Pattern[str] | None,
+) -> int:
+    """Count real OCR main-loop rounds through a deterministic local protocol peer."""
+
+    env = _isolated_probe_environment(directory / f"effective-max-tools-{value}")
+    with _stub_gateway(main_mode="exhaust-tools") as gateway_url:
+        env.update(
+            {
+                "OCR_LLM_URL": gateway_url,
+                "OCR_LLM_TOKEN": "synthetic-token",
+                "OCR_LLM_MODEL": "synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_TELEMETRY_ENABLED": "false",
+            }
+        )
+        try:
+            completed = subprocess.run(  # nosec B603
+                [
+                    str(binary),
+                    "review",
+                    "--from",
+                    base,
+                    "--to",
+                    head,
+                    "--format",
+                    "json",
+                    "--audience",
+                    "agent",
+                    "--concurrency",
+                    "1",
+                    "--effort",
+                    "low",
+                    "--no-filter",
+                    "--max-tools",
+                    str(value),
+                ],
+                cwd=repo,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise CompatibilityError("effective max-tools probe failed") from exc
+        stages = tuple(_StubHandler.request_stages)
+    if (
+        len(completed.stdout.encode()) > MAX_CLI_PROBE_BYTES
+        or len(completed.stderr.encode()) > MAX_CLI_PROBE_BYTES
+    ):
+        _fail("effective max-tools probe exceeded its output bound")
+    first_diagnostic = completed.stderr.partition("\n")[0]
+    if expected_diagnostic is None:
+        if first_diagnostic.startswith("[ocr] --max-tools"):
+            _fail("effective max-tools probe returned an unexpected normalization")
+    elif expected_diagnostic.fullmatch(f"{first_diagnostic}\n") is None:
+        _fail("effective max-tools probe did not retain the qualified normalization")
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("effective max-tools probe did not emit JSON") from exc
+    tool_calls = payload.get("tool_calls") if isinstance(payload, dict) else None
+    by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
+    observed = stages.count("main")
+    if (
+        completed.returncode not in {0, 1}
+        or observed <= 0
+        or stages.count("grace") != 1
+        or len(stages) != observed + 1
+        or not isinstance(by_tool, dict)
+        or by_tool.get("file_read") != observed
+        or tool_calls.get("total") != observed
+    ):
+        _fail("effective max-tools probe returned an inconsistent tool-loop result")
+    return observed
+
+
+def _numeric_cli_probe(
+    binary: Path, repo: Path, base: str, head: str, directory: Path
+) -> dict[str, object]:
+    """Qualify closed numeric CLI boundaries and the resulting effective semantics."""
+
+    max_tools_omitted = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=None
+    )
+    max_tools_sentinel = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=0
+    )
+    max_tools_invalid = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=-1
+    )
+    discovery = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=1
+    )
+    for completed in (max_tools_omitted, max_tools_sentinel):
+        _accepted_numeric_preview(completed, flag="--max-tools")
+    if (
+        max_tools_invalid.returncode == 0
+        or MAX_TOOLS_NEGATIVE_RE.fullmatch(max_tools_invalid.stderr) is None
+    ):
+        _fail("candidate max-tools negative boundary did not fail closed")
+    normalization = MAX_TOOLS_NORMALIZATION_RE.fullmatch(discovery.stderr)
+    if discovery.returncode != 0 or normalization is None:
+        _fail("candidate max-tools minimum could not be qualified behaviorally")
+    requested, minimum, normalized = (int(value) for value in normalization.groups())
+    if requested != 1 or minimum <= 1 or normalized != minimum:
+        _fail("candidate max-tools minimum diagnostic is inconsistent")
+    below = minimum - 1
+    below_preview = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=below
+    )
+    below_match = MAX_TOOLS_NORMALIZATION_RE.fullmatch(below_preview.stderr)
+    if (
+        below_preview.returncode != 0
+        or below_match is None
+        or tuple(int(value) for value in below_match.groups()) != (below, minimum, minimum)
+    ):
+        _fail("candidate max-tools minimum-minus-one boundary is inconsistent")
+    minimum_preview = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=minimum
+    )
+    _accepted_numeric_preview(minimum_preview, flag="--max-tools")
+    template_default = _effective_max_tools_probe(
+        binary,
+        repo,
+        base,
+        head,
+        directory,
+        value=below,
+        expected_diagnostic=MAX_TOOLS_NORMALIZATION_RE,
+    )
+    if template_default < minimum:
+        _fail("candidate max-tools template default is below the reported minimum")
+    representative = template_default + 1
+    representative_preview = _run_numeric_preview_case(
+        binary, repo, base, head, directory, flag="--max-tools", value=representative
+    )
+    _accepted_numeric_preview(representative_preview, flag="--max-tools")
+    effective_representative = _effective_max_tools_probe(
+        binary,
+        repo,
+        base,
+        head,
+        directory,
+        value=representative,
+        expected_diagnostic=None,
+    )
+    if effective_representative != representative:
+        _fail("candidate max-tools representative value was not applied exactly")
+
+    budget_cases: dict[str, subprocess.CompletedProcess[str]] = {
+        "omitted": _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tokens-budget", value=None
+        ),
+        "sentinel": _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tokens-budget", value=0
+        ),
+        "invalid_below": _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tokens-budget", value=-1
+        ),
+        "minimum": _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tokens-budget", value=1
+        ),
+        "representative": _run_numeric_preview_case(
+            binary, repo, base, head, directory, flag="--max-tokens-budget", value=30_000
+        ),
+    }
+    for name in ("omitted", "sentinel", "minimum", "representative"):
+        _accepted_numeric_preview(budget_cases[name], flag="--max-tokens-budget")
+    if (
+        budget_cases["invalid_below"].returncode == 0
+        or MAX_TOKENS_BUDGET_NEGATIVE_RE.fullmatch(budget_cases["invalid_below"].stderr) is None
+    ):
+        _fail("candidate max-tokens-budget negative boundary did not fail closed")
+    return {
+        "max_tokens_budget": {
+            "cases": {
+                "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+                "minimum": {"effective": 1, "input": 1, "outcome": "accepted"},
+                "omitted": {"effective": "unlimited", "input": None, "outcome": "accepted"},
+                "representative": {
+                    "effective": 30_000,
+                    "input": 30_000,
+                    "outcome": "accepted",
+                },
+                "sentinel": {"effective": "unlimited", "input": 0, "outcome": "accepted"},
+            },
+            "maximum": None,
+            "owner": "ocr-cli",
+        },
+        "max_tools": {
+            "cases": {
+                "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
+                "minimum": {
+                    "effective": template_default,
+                    "input": minimum,
+                    "outcome": "accepted",
+                },
+                "minimum_minus_one": {
+                    "effective": template_default,
+                    "input": below,
+                    "outcome": "normalized",
+                    "reported_normalization": minimum,
+                },
+                "omitted": {
+                    "effective": template_default,
+                    "input": None,
+                    "outcome": "accepted",
+                },
+                "representative": {
+                    "effective": representative,
+                    "input": representative,
+                    "outcome": "accepted",
+                },
+                "sentinel": {
+                    "effective": template_default,
+                    "input": 0,
+                    "outcome": "accepted",
+                },
+            },
+            "maximum": None,
+            "owner": "ocr-template-or-higher-cli",
+            "reported_minimum": minimum,
+        },
+        "result": "passed",
     }
 
 
@@ -1458,6 +1822,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         }
 
     contracts: dict[str, Any] = {
+        "numeric_cli_probe": _numeric_cli_probe(binary, repo, base, head, directory),
         "optional_capabilities": optional_capabilities,
         "review_budget_probe": _budget_result_probe(binary, directory),
         "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),

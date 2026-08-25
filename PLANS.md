@@ -130,8 +130,8 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 | --- | --- | --- |
 | `WQ-01` | `done` | Signed planning commit `85b3097`; branch `codex/v0.8.3-ocr-boundaries`; milestone `v0.8.3` #6 with #139/#140; planning push; Draft PR #141 with exact scope/non-claims |
 | `WQ-02` | `done` | #139: outcome-authoritative workflow selection; portable atomic evidence/status/issue-body handoffs; closed late-write recovery; manifest-independent status upsert; regression tests; public contract and `139.bugfix.md` |
-| `WQ-03` | `in_progress` | Implement #140 sentinel default, closed normalization handling, numeric boundary qualification/evidence, enriched/MCP integration coverage, docs, and `140.bugfix.md` |
-| `WQ-04` | `pending` | Reconcile development/public docs and all requirements; run final quality, coverage, manifest, Towncrier, Gitleaks, and complete privacy/data-flow self-review; push completed history and resolve hosted findings |
+| `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
+| `WQ-04` | `in_progress` | Reconcile development/public docs and all requirements; run final quality, coverage, manifest, Towncrier, Gitleaks, and complete privacy/data-flow self-review; push completed history and resolve hosted findings |
 | `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
 
 #### Locked Decisions
@@ -186,6 +186,15 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
   `steps.qualify.outcome`, all file handoffs preserve the old baseline until an
   atomic replace, status recovery consumes only its closed schema, raw details
   remain private, and the restored red qualification blocks aggregation.
+- #140 focused validation: 212 runtime/compatibility/environment/integration/
+  documentation tests pass with Ruff, manifest validation, Towncrier draft, and
+  `git diff --check`. Exact installed OCR 1.10.0 Darwin arm64 no-model probes
+  pass in isolated temporary homes: CLI minimum/normalization target `50`,
+  effective template value `100`, and explicit `101` producing 101 rounds.
+  The enriched production caller performs collection, store/bootstrap, MCP
+  registration/self-query, and exact preview before its controlled model
+  boundary; the parsed normalization becomes only a CI notice and leaves result
+  warnings, DLP, receipt, posting, telemetry, and approval inputs unchanged.
 
 #### Risks And Recovery
 
@@ -206,10 +215,10 @@ OCR 1.10.0 pin, DLP, receipt v5, posting, and automatic-approval semantics.
 
 #### Resume Point
 
-`WQ-03`: add exact closed parsing for the installed OCR max-tools normalization,
-move the example default to sentinel `0`, extend numeric qualification evidence,
-and prove the enriched/MCP production caller reaches the model boundary without
-using a real model.
+`WQ-04`: run the one complete local quality/security/manifest/changelog gate,
+perform the final requirement/privacy/data-flow diff review, update this plan and
+Draft PR handoff to exact-head truth, then make the single final push and resolve
+only evidence-driven hosted failures without releasing.
 
 #### Plan Fidelity Check
 

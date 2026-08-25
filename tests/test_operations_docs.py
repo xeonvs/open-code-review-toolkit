@@ -495,6 +495,23 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "ocr.run-manifest/v1" in policy
 
 
+def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegation() -> None:
+    """Keep help text, normalization, effective values, and authority distinct."""
+
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+
+    assert "`0` delegates to the installed OCR template" in configuration
+    assert "template's effective `100` rounds" in configuration
+    assert "result\nwarnings, receipts, DLP inputs, telemetry" in configuration
+    assert "`OCR_MAX_TOOLS=0`" in operations
+    assert "CLI help, normalization text, and effective template value can differ" in operations
+    assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
+    assert "help text\n  alone is not compatibility evidence" in development
+
+
 def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "actions-maintenance.yml").read_text(
         encoding="utf-8"

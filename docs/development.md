@@ -57,6 +57,12 @@ Select checks from the changed boundary rather than from an ever-growing generic
 - package or executable-integration changes include clean wheel and sdist validation rather than mocks alone;
 - public-source changes keep private audit material untracked and run the pinned complete-range Gitleaks wrapper before push; and
 - release changes run the release authorization, receipt, workflow, artifact, and documentation suites owned by `docs/release.md`.
+- OCR pin changes run production-equivalent behavioral probes for every numeric
+  CLI option the toolkit example passes. Cover omitted/default, each sentinel,
+  invalid-below-boundary, minimum minus one, minimum, a representative value,
+  and maximum plus one when a maximum exists. Record only closed exit,
+  diagnostic, normalization, ownership, and effective-value facts; help text
+  alone is not compatibility evidence.
 
 Safe bounded read-only diagnostics are allowed. A boundary rule prohibits the unsafe acquisition, trust transition, or mutation mechanism, not HTTP, subprocesses, provider APIs, file cleanup, or debugging as whole categories.
 

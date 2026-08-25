@@ -117,6 +117,10 @@ BACKGROUND_SOFT_WARNING_RE = re.compile(
     r"\[ocr\] --background-file content is ([0-9]{1,12}) characters, exceeding the "
     r"recommended ([0-9]{1,12}) \(continuing but review quality might be impacted\)\n?\Z"
 )
+MAX_TOOLS_NORMALIZATION_RE = re.compile(
+    r"\[ocr\] --max-tools ([0-9]{1,12}) is below minimum ([0-9]{1,12}), "
+    r"using ([0-9]{1,12})\n?\Z"
+)
 BACKGROUND_HARD_CHARACTER_RE = re.compile(
     r"Error: background content is ([0-9]{1,12}) characters, exceeding the hard limit of "
     r"([0-9]{1,12}) \(aborting\)\n?\Z"
@@ -149,9 +153,10 @@ class ReviewRunnerError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class BackgroundQualification:
-    """Carry one toolkit-authored warning derived from installed OCR output."""
+    """Carry closed toolkit-authored projections of installed OCR diagnostics."""
 
     warning: str | None = None
+    operator_notices: tuple[str, ...] = ()
 
 
 class BackgroundQualificationRejected(ReviewRunnerError):
@@ -1160,7 +1165,7 @@ def _read_bounded_artifact(path: Path, *, limit: int, label: str) -> bytes:
 
 
 def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQualification:
-    """Classify only exact installed-OCR background warning and rejection forms."""
+    """Classify only exact installed-OCR preview diagnostics consumed by the toolkit."""
 
     try:
         text = stderr.decode("utf-8", errors="strict")
@@ -1170,21 +1175,41 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     soft_matches = [
         match for line in lines if (match := BACKGROUND_SOFT_WARNING_RE.fullmatch(line)) is not None
     ]
+    max_tools_matches = [
+        match for line in lines if (match := MAX_TOOLS_NORMALIZATION_RE.fullmatch(line)) is not None
+    ]
     hard_character = BACKGROUND_HARD_CHARACTER_RE.fullmatch(text)
     hard_file = BACKGROUND_HARD_FILE_RE.fullmatch(text)
     if returncode == 0:
-        if len(soft_matches) != len(lines) or len(soft_matches) > 1:
+        if (
+            len(soft_matches) + len(max_tools_matches) != len(lines)
+            or len(soft_matches) > 1
+            or len(max_tools_matches) > 1
+        ):
             raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
-        if not soft_matches:
-            return BackgroundQualification()
-        actual, limit = (int(value) for value in soft_matches[0].groups())
-        if not 0 < limit < actual:
-            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
-        return BackgroundQualification(
-            warning=(
+        warning: str | None = None
+        if soft_matches:
+            actual, limit = (int(value) for value in soft_matches[0].groups())
+            if not 0 < limit < actual:
+                raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+            warning = (
                 f"Installed OCR reported a {actual}-character review background above its "
                 f"recommended {limit}-character threshold; review continued."
             )
+        operator_notices: tuple[str, ...] = ()
+        if max_tools_matches:
+            requested, minimum, normalized = (int(value) for value in max_tools_matches[0].groups())
+            if not 0 < requested < minimum or normalized != minimum:
+                raise ReviewRunnerError("OCR background preview returned invalid tool limits")
+            operator_notices = (
+                "Installed OCR reported "
+                f"--max-tools {requested} below its CLI minimum and a normalization target "
+                f"of {normalized}; the installed OCR template remains authoritative for the "
+                "effective tool-call limit.",
+            )
+        return BackgroundQualification(
+            warning=warning,
+            operator_notices=operator_notices,
         )
     if hard_character is not None:
         actual, limit = (int(value) for value in hard_character.groups())
@@ -1304,6 +1329,8 @@ def _run_background_qualified_review(
             f"OCR background qualification warning: {qualification.warning}",
             file=sys.stderr,
         )
+    for notice in qualification.operator_notices:
+        print(f"OCR argument qualification notice: {notice}", file=sys.stderr)
     return (
         run_review(
             result_path,
