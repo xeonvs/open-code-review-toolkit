@@ -218,6 +218,7 @@ class MCPConfigTests(unittest.TestCase):
     def test_runtime_config_defaults_review_language_to_english(self) -> None:
         with (
             cleared_env("OCR_REVIEW_LANGUAGE"),
+            cleared_env("OCR_REVIEW_EFFORT"),
             patched_env(
                 OCR_LLM_URL="https://gateway.example/v1/chat/completions",
                 OCR_LLM_TOKEN="llm-secret",
@@ -227,6 +228,41 @@ class MCPConfigTests(unittest.TestCase):
             updates = ocr_configure.build_config_updates()
 
         self.assertEqual(updates["language"], "English")
+        self.assertEqual(updates["effort"], "medium")
+
+    def test_runtime_config_accepts_closed_review_effort_presets(self) -> None:
+        """Only upstream's three stable presets enter the generated root config."""
+
+        for value in ("low", "medium", "high", " HIGH "):
+            with (
+                self.subTest(value=value),
+                patched_env(
+                    OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+                    OCR_LLM_TOKEN="llm-secret",
+                    OCR_LLM_MODEL="openai/gpt-test",
+                    OCR_REVIEW_EFFORT=value,
+                ),
+            ):
+                updates = ocr_configure.build_config_updates()
+
+            self.assertEqual(updates["effort"], value.strip().lower())
+
+    def test_runtime_config_rejects_unknown_review_effort(self) -> None:
+        """Unknown effort never falls through to an OCR-owned implicit default."""
+
+        with (
+            patched_env(
+                OCR_LLM_URL="https://gateway.example/v1/chat/completions",
+                OCR_LLM_TOKEN="llm-secret",
+                OCR_LLM_MODEL="openai/gpt-test",
+                OCR_REVIEW_EFFORT="extreme",
+            ),
+            self.assertRaisesRegex(
+                ocr_configure.OCRRuntimeConfigError,
+                "OCR_REVIEW_EFFORT must be one of",
+            ),
+        ):
+            ocr_configure.build_config_updates()
 
     def test_runtime_config_rejects_non_https_llm_url_before_storing_token(self) -> None:
         with patched_env(
@@ -1440,7 +1476,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.9.10\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.10.0\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

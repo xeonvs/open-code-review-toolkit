@@ -19,12 +19,24 @@ class OCRRuntimeConfigError(Exception):
     """OCR runtime config from CI env is invalid."""
 
 
+REVIEW_EFFORTS = frozenset({"low", "medium", "high"})
+
+
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
 def _bool_env(name: str) -> bool:
     return _env(name).lower() == "true"
+
+
+def review_effort() -> str:
+    """Return the closed OCR review-effort preset, defaulting to medium."""
+
+    value = (_env("OCR_REVIEW_EFFORT") or "medium").lower()
+    if value not in REVIEW_EFFORTS:
+        raise OCRRuntimeConfigError("OCR_REVIEW_EFFORT must be one of: low, medium, high")
+    return value
 
 
 def build_config_updates() -> dict[str, Any]:
@@ -41,6 +53,7 @@ def build_config_updates() -> dict[str, Any]:
     request_controls = provider.request_controls
 
     updates: dict[str, Any] = {
+        "effort": review_effort(),
         "language": review_language,
         "llm.url": llm_url,
         "llm.auth_token": llm_token,

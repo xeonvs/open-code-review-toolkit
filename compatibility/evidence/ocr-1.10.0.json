@@ -1,0 +1,132 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "6936af725318aa67bebe4486dad6fcd4fdcf7e38dccdf8415fefcd0300651a86",
+      "size": 57592192
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "c8f51b17c2be193ca178ecce6b5bcc1e38a5614629fbe81c6e1c95af5ede12e4",
+      "size": 54644290
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b",
+      "size": 55849122
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "15f6ec310103caf103aad48bb81bd1e10b1489353d4dc9a4423724d7fbe1edf8",
+      "size": 52625570
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "c355d6c5966dc7d06922c45ca8772c95ee2c781247e120520951979863249601",
+      "size": 57309184
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "09f09d7f63211c47100f340dc51ddc2856fd386fdf3f4f7daab6751103658900",
+      "size": 53292032
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "8ecdf209dd79446488dd35bab858e6b3902ebda7e82279b7a4ba3b9e5775829e",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.9.10",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "filter_requests": 1,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-25T05:45:43Z",
+  "release_changes": "## 🚀 Features\n\n- feat(agent): group semantically related files for multi-file review (#808)\n- feat(cli): add --output flag to write review/scan results to a file (#852)\n\n## 🐛 Bug Fixes\n\n- fix(diff): surface git's own message when a diff command fails (#1039)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.9.10...v1.10.0",
+  "release_notes_sha256": "8d0f599600b34b30163d834878518758fa18e41be6f06851f131a2543e9a15cc",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.10.0",
+  "tested_baseline_version": "1.9.10",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.10.0"
+}

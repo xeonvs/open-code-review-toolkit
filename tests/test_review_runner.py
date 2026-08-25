@@ -1964,8 +1964,10 @@ def test_immutable_ref_rewrite_preserves_non_diff_ocr_options() -> None:
             "--format",
             "json",
             "--max-comments=20",
+            "--effort",
+            "high",
         ]
-    ) == ["--format", "json", "--max-comments=20"]
+    ) == ["--format", "json", "--max-comments=20", "--effort", "high"]
 
 
 @pytest.mark.parametrize(
@@ -1979,13 +1981,13 @@ def test_immutable_ref_rewrite_preserves_non_diff_ocr_options() -> None:
 )
 def test_review_rejects_caller_owned_background(arguments: list[str]) -> None:
     with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci"):
-        review_runner._reject_owned_background(arguments)
+        review_runner._reject_owned_review_options(arguments)
 
 
 @pytest.mark.parametrize("option", ["--background", "--background-file"])
 def test_review_rejects_missing_caller_background_value(option: str) -> None:
     with pytest.raises(review_runner.ReviewRunnerError, match="requires a value"):
-        review_runner._reject_owned_background([option])
+        review_runner._reject_owned_review_options([option])
 
 
 @pytest.mark.parametrize("argument", ["--preview", "-p", "--preview=true"])
@@ -1993,7 +1995,24 @@ def test_review_rejects_caller_owned_preview(argument: str) -> None:
     """Reserve preview for the toolkit's installed-OCR background gate."""
 
     with pytest.raises(review_runner.ReviewRunnerError, match="pre-model"):
-        review_runner._reject_owned_background([argument])
+        review_runner._reject_owned_review_options([argument])
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--output", "/tmp/result.json"],
+        ["--output=/tmp/result.json"],
+        ["-o", "/tmp/result.json"],
+        ["-o=/tmp/result.json"],
+        ["-o/tmp/result.json"],
+    ],
+)
+def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
+    """Reserve every OCR output spelling for the toolkit result descriptor."""
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="managed by ocr-ci"):
+        review_runner._reject_owned_review_options(arguments)
 
 
 @pytest.mark.parametrize(

@@ -29,6 +29,7 @@ RUNTIME_DEFAULTS = {
     "OCR_LLM_MAX_COMPLETION_TOKENS": "Unset (inherits OCR)",
     "OCR_ANTHROPIC_DISABLE_THINKING": "false",
     "OCR_REVIEW_LANGUAGE": "English",
+    "OCR_REVIEW_EFFORT": "medium",
     "OCR_LLM_VALIDATE_MODEL": "false",
     "OCR_LLM_MODELS_URL": "Derived from `OCR_LLM_URL`",
     "OCR_LLM_ALLOWED_MODELS": "Empty list",
@@ -68,8 +69,8 @@ GITLAB_DEFAULTS = {
 }
 
 EXAMPLE_DEFAULTS = {
-    "OCR_VERSION": "v1.9.10",
-    "OCR_SHA256": "359e5bafda1438a47ef389399f4994350e1016371eac1dc17a2c428acb228e6c",
+    "OCR_VERSION": "v1.10.0",
+    "OCR_SHA256": "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
@@ -214,6 +215,7 @@ def test_runtime_defaults_match_the_documented_contract(monkeypatch: pytest.Monk
     try:
         updates = configure.build_config_updates()
         assert updates["llm.protocol"] == "openai"
+        assert updates["effort"] == "medium"
         assert updates["llm.auth_header"] == "Authorization"
         assert updates["telemetry.enabled"] is False
         assert updates["telemetry.content_logging"] is False
@@ -261,11 +263,12 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         encoding="utf-8"
     )
     for name, value in {
-        "OCR_VERSION": "v1.9.10",
+        "OCR_VERSION": "v1.10.0",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "30",
         "OCR_MAX_TOKENS_BUDGET": "0",
+        "OCR_REVIEW_EFFORT": "medium",
     }.items():
         assert f'{name}: "{value}"' in workflow
     assert (

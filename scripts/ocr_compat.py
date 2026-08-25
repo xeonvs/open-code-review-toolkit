@@ -2229,7 +2229,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print("prepared OCR compatibility update:")
             for path in changed:
-                print(path.relative_to(ROOT))
+                print(path.resolve().relative_to(ROOT))
             return 0
         if args.command == "upsert-issue":
             evidence = load_json(args.evidence) if args.evidence is not None else None

@@ -74,18 +74,18 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `REQ-002` (`done`): make failed compatibility qualification produce a
   bounded status, canonical issue update, and artifact while the job remains red
   and aggregate remains blocked. Covered by `WQ-03`.
-- `REQ-003` (`pending`): adapt deterministic qualification to OCR 1.10.0 comment
+- `REQ-003` (`done`): adapt deterministic qualification to OCR 1.10.0 comment
   paths, grouping, filters, effort rounds, usage, budget, and version-specific
   completion caps. Covered by `WQ-03` and `WQ-04`.
-- `REQ-004` (`pending`): independently source-audit, checksum-verify, and qualify
+- `REQ-004` (`done`): independently source-audit, checksum-verify, and qualify
   OCR 1.10.0 Linux amd64, then promote every manifest, preflight, example, and
   evidence owner without changing historical OCR 1.9.10 evidence. Covered by
   `WQ-04` and `WQ-05`.
-- `REQ-005` (`pending`): add the exact documented environment contract
+- `REQ-005` (`done`): add the exact documented environment contract
   `OCR_REVIEW_EFFORT=medium`, closed validation, root-config projection, and
   explicit CLI override precedence without MR-controlled routing. Covered by
   `WQ-05`.
-- `REQ-006` (`pending`): reject caller OCR output-path controls and preserve the
+- `REQ-006` (`done`): reject caller OCR output-path controls and preserve the
   existing safe result descriptor, cleanup, and failure behavior. Covered by
   `WQ-05`.
 - `REQ-007` (`pending`): prove new group/round fields remain provider-neutral,
@@ -224,13 +224,13 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
    milestone and canonical/sub-issue coordination.
 3. `WQ-03` (`done`): implement bounded failure status plus always-run issue and
    artifact handling; add workflow/CLI tests and preserve final failure outcome.
-4. `WQ-04` (`in_progress`): adapt the gateway and real OCR contracts for path,
+4. `WQ-04` (`done`): adapt the gateway and real OCR contracts for path,
    grouping, filtering, effort rounds, budget, usage, and completion caps; push
    the signed qualification checkpoint and run hosted Linux qualification.
-5. `WQ-05` (`pending`): validate hosted evidence, promote OCR 1.10.0, add
+5. `WQ-05` (`done`): validate hosted evidence, promote OCR 1.10.0, add
    `OCR_REVIEW_EFFORT=medium`, reject OCR output-path ownership, and update exact
    environment/config/installed-artifact contracts.
-6. `WQ-06` (`pending`): add focused groups/DLP/receipt/approval/result regressions
+6. `WQ-06` (`in_progress`): add focused groups/DLP/receipt/approval/result regressions
    and repair only real contract violations exposed by them.
 7. `WQ-07` (`pending`): complete BL-017 audit and reconcile backlog, strategy,
    roadmap, telemetry privacy/cardinality, and no-new-layer conclusion.
@@ -342,6 +342,16 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   budget contract, result consumers, and telemetry-off environment. The binary,
   HOME, repositories, and receipt were temporary and removed; installed OCR and
   user configuration remain unchanged.
+- `2026-08-25`: hosted Linux run 32825123658 passed on exact head `3c49968`,
+  updated canonical issue #135, retained its seven-day artifact, and produced
+  human-review-required evidence with Linux amd64 SHA-256
+  `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b`. The reviewed source and
+  wire contract were accepted and promoted to manifest/preflight/example owners.
+  `OCR_REVIEW_EFFORT` now defaults to root-config `medium`, explicit CLI effort
+  remains authoritative, caller output paths fail before preview, and 272 focused
+  tests plus 104 subtests, installed wheel/sdist checks, Ruff, mypy, manifest
+  validation, and `git diff --check` pass. Promotion also exposed and fixed the
+  relative-manifest success-reporting bug in the compatibility CLI.
 
 #### Risks And Recovery
 
@@ -374,10 +384,9 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-04`: adapt the deterministic gateway and real OCR contracts to the
-1.10.0 path, semantic grouping, filter, effort-round, budget, usage, and
-version-specific completion-cap wire behavior; then make the next signed
-checkpoint available to hosted Linux qualification.
+Continue `WQ-06`: exercise additive OCR 1.10.0 groups/rounds through the toolkit
+result, DLP, receipt, posting, and approval boundaries; prove safe metadata is
+ignored, hostile values cannot escape, and no new field changes authority.
 
 #### Plan Fidelity Check
 

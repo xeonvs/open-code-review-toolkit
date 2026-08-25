@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.9.10",
-  "recommended_version": "1.9.10",
+  "monitoring_floor": "1.10.0",
+  "recommended_version": "1.10.0",
   "releases": [
     {
       "assets": [
@@ -1134,6 +1134,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.9.10",
       "status": "tested",
       "version": "1.9.10"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "6936af725318aa67bebe4486dad6fcd4fdcf7e38dccdf8415fefcd0300651a86",
+          "size": 57592192
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "c8f51b17c2be193ca178ecce6b5bcc1e38a5614629fbe81c6e1c95af5ede12e4",
+          "size": 54644290
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b",
+          "size": 55849122
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "15f6ec310103caf103aad48bb81bd1e10b1489353d4dc9a4423724d7fbe1edf8",
+          "size": 52625570
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "c355d6c5966dc7d06922c45ca8772c95ee2c781247e120520951979863249601",
+          "size": 57309184
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "09f09d7f63211c47100f340dc51ddc2856fd386fdf3f4f7daab6751103658900",
+          "size": 53292032
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "8ecdf209dd79446488dd35bab858e6b3902ebda7e82279b7a4ba3b9e5775829e",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.10.0.json",
+      "evidence_sha256": "50f9668b68dbcc4dc83f379a55e81aa58bc7188d1be88d44abb32a509361e761",
+      "human_conclusion": "Reviewed OCR 1.9.10...1.10.0 source and hosted Linux wire evidence: semantic grouping, path-aware comments, default medium two-round review, private additive group metadata, output-file capability, git diagnostics, and the 16384 completion cap are compatible with toolkit boundaries; toolkit retains exclusive result-path ownership and explicit 4096 cap support.",
+      "published_at": "2026-08-25T05:45:43Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.10.0",
+      "status": "tested",
+      "version": "1.10.0"
     }
   ],
   "schema_version": 1,
