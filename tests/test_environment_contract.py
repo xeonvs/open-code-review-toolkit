@@ -86,6 +86,25 @@ DYNAMIC_INPUTS = {
     "Names declared by MCP `headers_from`",
 }
 
+REQUIRED_DISPLAY_NAMES = {
+    "OCR_LLM_URL",
+    "OCR_LLM_TOKEN",
+    "OCR_LLM_MODEL",
+    "GITLAB_API_TOKEN",
+    "CI_API_V4_URL",
+    "CI_SERVER_URL",
+    "CI_PROJECT_ID",
+    "CI_MERGE_REQUEST_IID",
+    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
+    "CI_MERGE_REQUEST_DIFF_BASE_SHA",
+    "CI_PIPELINE_SOURCE",
+    "OCR_VERSION",
+    "OCR_SHA256",
+    "OCR_TOOLKIT_VERSION",
+    "OCR_TOOLKIT_CHECKSUMS_URL",
+    *DYNAMIC_INPUTS,
+}
+
 REDACTION_ONLY = {
     "OCR_LLM_AUTH_TOKEN",
     "OPENAI_API_KEY",
@@ -105,6 +124,8 @@ ENVIRONMENT_NAME_RE = re.compile(r"(?:ANTHROPIC|CI|GITLAB|OCR|OPENAI)_[A-Z0-9_]+
 
 def _display_cell(raw: str) -> str:
     value = raw.strip()
+    if value.startswith("**") and value.endswith("**"):
+        value = value[2:-2]
     if value.startswith("`") and value.endswith("`") and value.count("`") == 2:
         return value[1:-1]
     return value
@@ -184,6 +205,21 @@ def test_documented_environment_tables_are_complete_and_exact() -> None:
     assert documented_names.isdisjoint(REDACTION_ONLY)
     assert REDACTION_ONLY.issubset(SENSITIVE_ENV_NAMES)
     assert documented_names.isdisjoint(REMOVED_PUBLIC_INPUTS | {"OCR_USE_ANTHROPIC"})
+
+
+def test_required_environment_inputs_are_visually_distinct() -> None:
+    """Bold only names whose table scope requires a supplied or predefined value."""
+
+    configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    bold_names: set[str] = set()
+    for line in configuration.splitlines():
+        if not line.startswith("|"):
+            continue
+        first_cell = line.strip("|").split("|", maxsplit=1)[0].strip()
+        if first_cell.startswith("**") and first_cell.endswith("**"):
+            bold_names.add(_display_cell(first_cell))
+
+    assert bold_names == REQUIRED_DISPLAY_NAMES
 
 
 def test_source_environment_inventory_matches_the_documented_contract() -> None:

@@ -1,6 +1,6 @@
 # Environment configuration
 
-Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules.
+Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules. **Bold variable names are required in the command, mode, example, or declaration scope stated in their `Required` cell.**
 
 ## Toolkit runtime variables
 
@@ -8,9 +8,9 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `OCR_LLM_URL` | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
-| `OCR_LLM_TOKEN` | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
-| `OCR_LLM_MODEL` | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
+| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
+| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
+| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
 | `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
@@ -74,17 +74,17 @@ GitLab supplies the `CI_*` values in merge-request pipelines. The operator suppl
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `GITLAB_API_TOKEN` | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
-| `CI_API_V4_URL` | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
-| `CI_SERVER_URL` | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
-| `CI_PROJECT_ID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric project identity used for provider APIs and receipts. |
-| `CI_MERGE_REQUEST_IID` | GitLab predefined | Yes in merge-request mode | None | Bounded numeric merge-request identity and mode signal. |
-| `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | GitLab predefined | Yes for the recommended review range | Falls back to `CI_COMMIT_SHA` only where explicitly documented | Exact reviewed source head used by the review, receipt, and posting revalidation. |
-| `CI_MERGE_REQUEST_DIFF_BASE_SHA` | GitLab predefined | Yes for the recommended review range | None | Exact merge-request diff base passed to OCR and evidence collection. |
+| **`GITLAB_API_TOKEN`** | Operator secret | Yes for provider reads and posting | None | Dedicated GitLab API credential used with `PRIVATE-TOKEN`. |
+| **`CI_API_V4_URL`** | GitLab predefined | One of this or `CI_SERVER_URL` for provider reads | Derived as `${CI_SERVER_URL}/api/v4` | Absolute HTTPS GitLab API v4 root. |
+| **`CI_SERVER_URL`** | GitLab predefined | Yes for posting; alternative owner for API root | `https://gitlab.com` in posting only | Absolute HTTPS GitLab server root. GitLab CI normally always defines it. |
+| **`CI_PROJECT_ID`** | GitLab predefined | Yes in merge-request mode | None | Bounded numeric project identity used for provider APIs and receipts. |
+| **`CI_MERGE_REQUEST_IID`** | GitLab predefined | Yes in merge-request mode | None | Bounded numeric merge-request identity and mode signal. |
+| **`CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`** | GitLab predefined | Yes for the recommended review range | Falls back to `CI_COMMIT_SHA` only where explicitly documented | Exact reviewed source head used by the review, receipt, and posting revalidation. |
+| **`CI_MERGE_REQUEST_DIFF_BASE_SHA`** | GitLab predefined | Yes for the recommended review range | None | Exact merge-request diff base passed to OCR and evidence collection. |
 | `CI_COMMIT_SHA` | GitLab predefined | No | None | Fallback head identity when the MR-specific source SHA is unavailable; it does not replace the diff base. |
 | `CI_PIPELINE_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
 | `CI_JOB_ID` | GitLab predefined | No | Omitted | Optional bounded invocation identity stored as non-authoritative evidence. |
-| `CI_PIPELINE_SOURCE` | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
+| **`CI_PIPELINE_SOURCE`** | GitLab predefined / example rules | Yes for example job selection | None | The public example runs review jobs only for `merge_request_event`. |
 
 ## Example-local variables
 
@@ -92,10 +92,10 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| `OCR_VERSION` | Example pipeline | Yes | `v1.10.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.2. |
-| `OCR_SHA256` | Example pipeline | Yes | `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b` | Expected Linux AMD64 OCR binary digest. |
-| `OCR_TOOLKIT_VERSION` | Example pipeline | Yes | `0.8.1` | Exact toolkit wheel release installed by the current published example. |
-| `OCR_TOOLKIT_CHECKSUMS_URL` | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
+| **`OCR_VERSION`** | Example pipeline | Yes | `v1.10.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.2. |
+| **`OCR_SHA256`** | Example pipeline | Yes | `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b` | Expected Linux AMD64 OCR binary digest. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.1` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
 | `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `30` | Positive maximum OCR tool requests per review loop; the example owns and passes this bounded value explicitly. |
@@ -105,10 +105,10 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| Names declared by adapter `env_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Inject an adapter environment value by exact variable name; missing names fail closed. |
-| Names declared by adapter `headers_from` | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Supply a remote adapter header without persisting its secret value in configuration. |
-| Names declared by MCP `env_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Inject a local-profile stdio MCP environment value by exact variable name. |
-| Names declared by MCP `headers_from` | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Supply a remote MCP header by reference for OCR expansion at connection time. |
+| **Names declared by adapter `env_from`** | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Inject an adapter environment value by exact variable name; missing names fail closed. |
+| **Names declared by adapter `headers_from`** | Operator / `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` | Yes when declared | None | Supply a remote adapter header without persisting its secret value in configuration. |
+| **Names declared by MCP `env_from`** | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Inject a local-profile stdio MCP environment value by exact variable name. |
+| **Names declared by MCP `headers_from`** | Operator / `OCR_MCP_SERVERS_JSON` | Yes when declared | None | Supply a remote MCP header by reference for OCR expansion at connection time. |
 
 ## MCP composition and trust boundary
 
