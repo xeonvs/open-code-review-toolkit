@@ -70,10 +70,10 @@ semantics.
 | `REQ-140-B` | #140 acceptance 2-4 | Exact enriched/MCP preview accepts valid sentinel and handles known normalization without ambiguous/raw diagnostics | `WQ-03` | Parser negatives plus production-caller integration with controlled OCR peer |
 | `REQ-140-C` | #140 scope/acceptance 5 | Qualification records behavioral numeric boundaries and effective-value ownership | `WQ-03` | Exact OCR 1.10.0 no-model probe and evidence-schema tests |
 | `REQ-140-D` | #140 acceptance 6 | Current docs/tests avoid toolkit-release wording where OCR owns the contract | `WQ-03`, `WQ-04` | Documentation contract tests and full-text review |
-| `REQ-USAGE-A` | User-approved manager-facing usage summary | Existing inline technical format includes every admitted useful non-zero tool counter, deterministically ordered by count then name | `WQ-06` | Formatter and complete summary regressions with more than six tools |
-| `REQ-USAGE-B` | Result/privacy boundary | Only bounded names and integer counters cross into GitLab; arguments, results, paths, IDs, provider data, and unknown/unattributed names remain private | `WQ-06` | Hostile map/name/count, DLP, Markdown, and note-budget regressions |
-| `REQ-USAGE-C` | Honest token explanation | Tool activity appears beside aggregate token usage without percentages or per-tool token attribution | `WQ-06` | Rendering and documentation assertions |
-| `REQ-USAGE-D` | Existing trust contracts | The expanded diagnostic is not a finding, receipt proof, telemetry source, severity input, or approval signal | `WQ-06`, `WQ-07` | Posting, DLP, and approval regression review |
+| `REQ-USAGE-A` | #142 and user-approved manager-facing usage summary | Existing inline technical format includes every admitted useful non-zero tool counter, deterministically ordered by count then name | `WQ-06` | Formatter and complete summary regressions with more than six tools |
+| `REQ-USAGE-B` | #142 result/privacy boundary | Only bounded names and integer counters cross into GitLab; arguments, results, paths, IDs, provider data, and unknown/unattributed names remain private | `WQ-06` | Hostile map/name/count, DLP, Markdown, and note-budget regressions |
+| `REQ-USAGE-C` | #142 honest token explanation | Tool activity appears beside aggregate token usage without percentages or per-tool token attribution | `WQ-06` | Rendering and documentation assertions |
+| `REQ-USAGE-D` | #142 existing trust contracts | The expanded diagnostic is not a finding, receipt proof, telemetry source, severity input, or approval signal | `WQ-06`, `WQ-07` | Posting, DLP, and approval regression review |
 | `REQ-REL` | Repository release contract | Deliver 0.8.3 through reviewed feature and release PRs with external reconciliation | `WQ-01`, `WQ-04`, `WQ-05` | Protected checks, registries, attestations, tag, receipt, issue/milestone closure |
 
 #### Explicit Non-Goals
@@ -165,8 +165,8 @@ semantics.
 | `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
 | `WQ-04` | `done` | Reconciled public/development contracts and requirements; complete quality/coverage, manifest, Towncrier, and privacy/data-flow review are green; final Draft push and hosted readback are handoff actions, not release delivery |
 | `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
-| `WQ-06` | `in_progress` | Create the tool-usage issue in milestone `v0.8.3`; extend the existing inline formatter to every admitted useful non-zero counter; keep external MCP aggregated by verified server; add focused boundary tests, public operational wording, and a separate feature changelog fragment |
-| `WQ-07` | `pending` | Complete focused and final validation, self-review the reporting/privacy/approval flow, update the Draft body and issue checkboxes, make one signed feature commit plus one final push, and wait for exact-head hosted checks while keeping the PR Draft |
+| `WQ-06` | `done` | #142: the existing inline formatter now shows every admitted useful non-zero counter; external MCP stays aggregated by verified server; focused hostile-value/DLP/approval tests, public operational wording, and `142.feature.md` define the activity-not-token-attribution contract |
+| `WQ-07` | `in_progress` | Complete the one final full validation and overall self-review, record exact results, update the Draft body and issue checkboxes, make one signed handoff commit plus one final push, and wait for exact-head hosted checks while keeping the PR Draft |
 
 #### Locked Decisions
 
@@ -254,6 +254,15 @@ semantics.
 - The user then approved an additive numeric tool-activity breakdown in the
   existing format. No repository or GitHub write for that new slice preceded
   this resumed-plan materialization.
+- #142 now owns the additive feature under milestone `v0.8.3`. Focused formatter,
+  posting, result-DLP, and approval validation passes 291 tests plus 133 subtests;
+  documentation/release validation passes 38 tests and the rendered Towncrier
+  draft keeps #142 under Features with #139/#140 separately under Bug Fixes.
+- Feature self-review confirms only the nine compile-time native/context/evidence
+  labels and bounded positive integer counts can enter the inline line. Unknown
+  or dynamic names remain private, static labels cannot create DLP false
+  positives, filtered projections retain safe native counts, and the aggregate
+  token line plus receipt/approval authorities are unchanged.
 
 #### Risks And Recovery
 
@@ -282,10 +291,10 @@ semantics.
 
 #### Resume Point
 
-Continue at `WQ-06`: create the scoped GitHub issue and attach it to milestone
-`v0.8.3`, then implement the closed useful-counter projection in the existing
-formatter and its focused tests. Do not change the format, push, merge, or start
-release delivery before the new logical slice and `WQ-07` gates are complete.
+Continue at `WQ-07`: commit the reviewed #142 feature slice, run the one final
+full local gate on that exact implementation, record its evidence in this plan,
+then make the handoff commit and single final push. Do not change the format,
+merge, or start release delivery.
 
 #### Plan Fidelity Check
 
@@ -301,7 +310,7 @@ release delivery before the new logical slice and `WQ-07` gates are complete.
 #### Reconciliation Check
 
 - [x] `PLANS.md` was inactive and the worktree was clean at activation.
-- [x] #139 and #140 are the complete open issue set and do not conflict with backlog/roadmap scope.
+- [x] #139, #140, and #142 are the complete open release issue set and do not conflict with backlog/roadmap scope.
 - [x] Stable 0.8.2 closure remains historical and is not rewritten.
 - [x] Target 0.8.3 matches `.next-version` and no competing milestone exists.
 - [x] The new reporting slice extends the open Draft and milestone without
@@ -325,8 +334,8 @@ release delivery before the new logical slice and `WQ-07` gates are complete.
 - #139/#140 and milestone `v0.8.3` remain open until stable receipt publication.
 - Final handoff must repeat that no local real-LLM/provider qualification was run
   or claimed, while identifying the exact deterministic OCR boundary evidence.
-- The resumed slice needs one new feature issue and changelog fragment; #139 and
-  #140 stay checked/open and must not absorb this manager-facing reporting change.
+- #142 and its feature fragment separately own the manager-facing reporting
+  change; #139 and #140 stay checked/open and do not absorb it.
 - Final handoff must state that tool-call counts explain review activity only;
   exact per-tool token consumption remains unavailable in OCR 1.10.0.
 

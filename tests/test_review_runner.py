@@ -811,7 +811,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     assert persisted["warnings"] == ["Safe bounded warning."]
     assert persisted["tool_calls"] == {
         "total": 2,
-        "by_tool": {"ocr_toolkit_evidence": 1},
+        "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
     }
     assert persisted["_ocr_toolkit"]["publication"] == publication
     assert publication["retained"] == {"comments": 2, "warnings": 1}
@@ -1189,10 +1189,6 @@ def test_warning_objects_are_conservatively_publication_relevant() -> None:
     [
         ("message", "Authorization: Bearer synthetic-secret-token"),
         ("warnings", ["private warning detail"]),
-        (
-            "tool_calls",
-            {"total": 1, "by_tool": {"private-tool-name": 1}},
-        ),
     ],
 )
 def test_unsafe_displayed_result_units_are_partial(field: str, value: object) -> None:
@@ -1215,6 +1211,91 @@ def test_unsafe_displayed_result_units_are_partial(field: str, value: object) ->
     assert "synthetic-secret-token" not in serialized
     assert "private warning detail" not in serialized
     assert "private-tool-name" not in serialized
+
+
+def test_unknown_tool_name_is_private_sanitized_without_blocking_publication() -> None:
+    """Keep unlisted tool names private without changing review or approval inputs."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {"ocr_toolkit_evidence": 1, "private-tool-name": 1},
+        },
+    }
+    baseline = review_runner._canonical_result_projection(payload)
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private-tool-name",),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert projected["status"] == "success"
+    assert projected["tool_calls"] == {
+        "total": 2,
+        "by_tool": {"ocr_toolkit_evidence": 1},
+    }
+    assert "private-tool-name" not in json.dumps(projected)
+    assert review_runner._canonical_result_projection(projected) == baseline
+
+
+def test_closed_tool_names_do_not_create_dlp_or_approval_false_positives() -> None:
+    """Treat compile-time tool labels as labels rather than MR-controlled text."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {"file_read": 1, "ocr_toolkit_evidence": 1},
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("file_read",),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert projected is payload
+    assert publication == {"state": "passed"}
+    assert blocked is False
+
+
+def test_invalid_closed_tool_counter_is_private_sanitized() -> None:
+    """Sanitize a hostile non-numeric counter without publishing or blocking it."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {
+                "file_read": "Authorization: Bearer synthetic-tool-token",
+                "ocr_toolkit_evidence": 1,
+            },
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert "synthetic-tool-token" not in json.dumps(projected)
+    assert review_runner._canonical_result_projection(projected) == (
+        review_runner._canonical_result_projection(payload)
+    )
 
 
 def test_unsafe_manifest_failure_detail_is_partial_and_destroyed() -> None:

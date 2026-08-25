@@ -75,6 +75,7 @@ from ocr_toolkit.evidence.review_context import (
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
+    PUBLIC_REVIEW_TOOL_CALL_NAMES,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
@@ -598,22 +599,6 @@ def _publication_sinks(payload: dict[str, object]) -> list[object]:
     warnings = payload.get("warnings")
     if warnings is not None:
         sinks.append(warnings)
-    tool_calls = payload.get("tool_calls")
-    if isinstance(tool_calls, list):
-        for item in tool_calls:
-            if not isinstance(item, dict):
-                continue
-            sinks.extend(item.get(key) for key in ("name", "tool", "tool_name") if key in item)
-            function = item.get("function")
-            if isinstance(function, dict) and "name" in function:
-                sinks.append(function.get("name"))
-    elif isinstance(tool_calls, dict):
-        by_tool = tool_calls.get("by_tool")
-        if isinstance(by_tool, dict):
-            sinks.extend(by_tool)
-        calls = tool_calls.get("calls")
-        if isinstance(calls, list):
-            sinks.extend(_publication_sinks({"tool_calls": calls}))
     manifest = payload.get("manifest")
     coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
     failed = coverage.get("failed") if isinstance(coverage, dict) else None
@@ -638,28 +623,21 @@ def _is_publication_sink_path(path: tuple[object, ...]) -> bool:
         and path[2] in QUARANTINE_COMMENT_FIELDS
     ):
         return True
-    if len(path) == 3 and path[:2] == ("tool_calls", "by_tool"):
-        return True
-    if (
-        len(path) == 4
-        and path[0] == "tool_calls"
-        and isinstance(path[1], int)
-        and path[2] == "function"
-        and path[3] == "name"
-    ):
-        return True
-    if (
-        len(path) == 3
-        and path[0] == "tool_calls"
-        and isinstance(path[1], int)
-        and path[2] in {"name", "tool", "tool_name"}
-    ):
-        return True
     return bool(
         len(path) >= 5
         and path[:3] == ("manifest", "coverage", "failed")
         and isinstance(path[3], int)
         and path[4] in {"path", "reason"}
+    )
+
+
+def _is_static_public_tool_key_path(path: tuple[object, ...]) -> bool:
+    """Return whether a map key is one compile-time public tool label."""
+
+    return bool(
+        len(path) == 3
+        and path[:2] == ("tool_calls", "by_tool")
+        and path[2] in PUBLIC_REVIEW_TOOL_CALL_NAMES
     )
 
 
@@ -684,7 +662,9 @@ def _sanitize_nonpublication_fields(
             child_path = (*path, key)
             if isinstance(source, dict):
                 assert isinstance(key, str)
-                if not _is_publication_sink_path(child_path):
+                if not _is_publication_sink_path(
+                    child_path
+                ) and not _is_static_public_tool_key_path(child_path):
                     checked_key = check_text(
                         key,
                         budgets=budgets,
@@ -788,6 +768,7 @@ def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[
         tool: count
         for tool, count in by_tool.items()
         if tool in allowed_tools
+        and tool in PUBLIC_REVIEW_TOOL_CALL_NAMES
         and isinstance(count, int)
         and not isinstance(count, bool)
         and 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
@@ -814,17 +795,9 @@ def _canonical_result_projection(payload: dict[str, object]) -> bytes:
         else comment
         for comment in comments
     ]
-    tool_calls = payload.get("tool_calls")
-    projected_tool_calls: object
-    if isinstance(tool_calls, dict):
-        total = tool_calls.get("total")
-        by_tool = tool_calls.get("by_tool")
-        projected_tool_calls = {
-            "total": total,
-            "by_tool": (dict(sorted(by_tool.items())) if isinstance(by_tool, dict) else by_tool),
-        }
-    else:
-        projected_tool_calls = tool_calls
+    projected_tool_calls = _closed_tool_calls(
+        payload.get("tool_calls"), allowed_tools=PUBLIC_REVIEW_TOOL_CALL_NAMES
+    )
     projection = {
         "outcome": {
             "status": outcome.status,
@@ -958,9 +931,7 @@ def _finalize_ocr_result(
     filtered = False
     publication: dict[str, object] = {"state": "passed"}
     usage: dict[str, int] = {}
-    allowed_tools = frozenset(
-        tool for capability in composition.capabilities for tool in capability.tools
-    )
+    allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal filtered, publication, usage
