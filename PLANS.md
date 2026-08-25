@@ -97,7 +97,7 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 - `REQ-009` (`done`): publish version-separated, deployment-actionable docs
   and changelog text covering added, changed, rejected, inherited, telemetry,
   privacy, and migration behavior. Covered by `WQ-07` and `WQ-08`.
-- `REQ-010` (`pending`): atomically update local OCR to checksum-verified Darwin
+- `REQ-010` (`done`): atomically update local OCR to checksum-verified Darwin
   arm64 1.10.0 and pass isolated no-LLM checks without modifying user config.
   Covered by `WQ-09`.
 - `REQ-011` (`pending`): complete focused and one final full local validation,
@@ -236,10 +236,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
    roadmap, telemetry privacy/cardinality, and no-new-layer conclusion.
 8. `WQ-08` (`done`): update public docs, examples, compatibility text, test
    evidence matrix, and separate Towncrier feature/bugfix/maintenance fragments.
-9. `WQ-09` (`in_progress`): checksum-verify and atomically install local Darwin arm64
+9. `WQ-09` (`done`): checksum-verify and atomically install local Darwin arm64
    OCR 1.10.0; run version/help/no-LLM isolated contract checks and clean temporary
    artifacts with rollback on failure.
-10. `WQ-10` (`pending`): perform holistic requirements/privacy/architecture/data-
+10. `WQ-10` (`in_progress`): perform holistic requirements/privacy/architecture/data-
     flow/telemetry/docs self-review and one final local quality/security/manifest/
     changelog gate; update plan to exact implementation truth and final commit.
 11. `WQ-11` (`pending`): push final signed history, wait for exact-head hosted PR
@@ -380,6 +380,15 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
   intermediate OCR version. The rendered Towncrier 0.8.2 section and 53 focused
   documentation/configuration/integration tests pass with Ruff and
   `git diff --check`.
+- `2026-08-25`: the PATH-effective local OCR was atomically replaced from
+  user-owned Darwin arm64 1.8.10 with official OCR 1.10.0 commit `a66240084`.
+  Installed size `54644290` and SHA-256
+  `c8f51b17c2be193ca178ecce6b5bcc1e38a5614629fbe81c6e1c95af5ede12e4`
+  match GitHub Release metadata and the compatibility manifest. Version/help
+  confirms root effort with default `medium` and upstream output-file support;
+  the installed-binary isolated no-LLM gateway contract passes. User
+  `.opencodereview` directory metadata is byte-for-byte unchanged, rollback and
+  probe artifacts were removed, and no config, credential, or HOME was edited.
 
 #### Risks And Recovery
 
@@ -412,10 +421,10 @@ deliver the result through the protected toolkit 0.8.2 release lifecycle.
 
 #### Resume Point
 
-Continue `WQ-09`: checksum-verify the official Darwin arm64 OCR 1.10.0 asset,
-atomically replace only `/opt/homebrew/bin/ocr` with rollback on failed
-version/help/no-LLM checks, prove user OCR config metadata is unchanged, and
-remove every temporary binary, home, repository, and backup.
+Continue `WQ-10`: perform the holistic requirements, privacy, architecture,
+data-flow, telemetry, documentation, and external-state self-review; run the one
+canonical local quality/security/manifest/changelog gate; then reconcile the
+plan and Draft PR text at the exact signed implementation head before pushing.
 
 #### Plan Fidelity Check
 
