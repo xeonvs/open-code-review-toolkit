@@ -227,6 +227,30 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
 
 
+def test_summary_and_code_tab_boundaries_are_public() -> None:
+    """Keep coverage, filtering, advisory, and field-specific HTAB semantics distinct."""
+
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "Review complete with publication filtering",
+        "it is not called incomplete OCR coverage",
+        "at least two findings",
+        "Tool and token lines remain independent",
+    ):
+        assert phrase in gitlab
+    for document in (operations, configuration, security):
+        assert "existing_code" in document
+        assert "suggestion_code" in document
+        assert "horizontal tab" in document.casefold()
+    assert "filtered warnings into legacy failed-item inference" in configuration
+    assert "public projection is incomplete" in operations
+    assert "all other control/format characters remain blocking" in operations
+
+
 def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:
     operations = OPERATIONS.read_text(encoding="utf-8")
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -474,9 +498,12 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.9.9 — inherited predecessor",
         "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",
         "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
+        "OCR 1.10.1 — toolkit 0.8.4 target",
+        "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
         "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",
+        "Deploy toolkit 0.8.4 directly with OCR 1.10.1",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
     ):

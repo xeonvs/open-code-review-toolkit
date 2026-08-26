@@ -14,10 +14,11 @@ from ocr_toolkit.ocr_result import (
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
 from ocr_toolkit.posting.settings import BooleanSetting
-from ocr_toolkit.result_contract import ReviewOutcome
+from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
 
 ALLOWED_CATEGORIES = frozenset({"style", "documentation", "maintainability"})
 MAX_APPROVABLE_FINDINGS = 3
+INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
 
 
 class ApprovalStatus(str, Enum):
@@ -218,6 +219,23 @@ def publication_dlp_state(value: Any) -> str | None:
         )
     ):
         return None
+    selected = original["selected"]
+    completed = original["completed"]
+    reused = original["reused"]
+    failed = original["failed"]
+    waived = original["waived"]
+    outcome = original["outcome"]
+    derived_outcomes = {"failed"} | (
+        {"skipped"}
+        if selected == 0
+        else {"clean", "warning"}
+        if failed == 0
+        else {"failed"}
+        if failed == selected
+        else {"partial"}
+    )
+    if selected != completed + reused + failed + waived or outcome not in derived_outcomes:
+        return None
     return "publication-filtered"
 
 
@@ -237,7 +255,7 @@ def _valid_dlp_reason_counts(value: Any) -> bool:
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     """Return the closed review-time receipt blocker for automatic approval."""
 
-    invalid = "the review-time approval receipt is missing or invalid"
+    invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
     if toolkit_metadata.get("schema_version") != 5 or set(toolkit_metadata) != {
@@ -431,6 +449,51 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if external:
         return "external MCP was configured for a comment-only review"
     return ""
+
+
+def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
+    """Return whether metadata is an exact receipt v5, including valid blockers."""
+
+    return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
+
+
+def publication_outcome_for_summary(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome:
+    """Recover only validated original coverage facts from a filtered receipt."""
+
+    if publication_dlp_state(publication) != "publication-filtered":
+        return outcome
+    if outcome.kind != "partial" or outcome.manifest_present:
+        raise OcrResultContractError(
+            "publication-filtered receipt is not bound to a safe result projection"
+        )
+    original = publication["original"]
+    kind = original["outcome"]
+    if outcome.budget_exceeded and kind != "partial":
+        raise OcrResultContractError(
+            "publication-filtered receipt contradicts the result budget state"
+        )
+    counts = {
+        field: original[field] for field in ("selected", "completed", "reused", "failed", "waived")
+    }
+    manifest_present = any(counts.values())
+    status = {
+        "clean": "complete" if manifest_present else "success",
+        "warning": "completed_with_warnings",
+        "partial": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
+        "failed": "failed",
+        "skipped": "skipped",
+    }[kind]
+    return ReviewOutcome(
+        status=status,
+        kind=kind,
+        budget_exceeded=outcome.budget_exceeded and kind == "partial",
+        manifest_present=manifest_present,
+        selected_count=counts["selected"],
+        completed_count=counts["completed"],
+        reused_count=counts["reused"],
+        failed_count=counts["failed"],
+        waived_count=counts["waived"],
+    )
 
 
 def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:

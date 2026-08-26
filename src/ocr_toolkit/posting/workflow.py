@@ -17,11 +17,13 @@ from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefi
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
+    TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
     load_ocr_result,
+    parse_toolkit_advisory,
 )
 from ocr_toolkit.posting import gitlab as gitlab_api
 from ocr_toolkit.posting.approval import (
@@ -31,6 +33,8 @@ from ocr_toolkit.posting.approval import (
     evaluate_approval_policy,
     provisional_approval_result,
     publication_dlp_state,
+    publication_outcome_for_summary,
+    toolkit_receipt_is_valid,
 )
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -41,6 +45,7 @@ from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
     format_inline_comment,
     format_mcp_usage_summary,
+    format_ocr_core_advisory,
     format_omitted_comments_summary,
     format_publication_dlp_details,
     format_reviewer_guide,
@@ -625,6 +630,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             title="**Open Code Review publication policy error**",
         )
 
+    advisory = None
+    if TOOLKIT_ADVISORY_KEY in result:
+        try:
+            advisory = parse_toolkit_advisory(result[TOOLKIT_ADVISORY_KEY])
+        except OcrResultMalformed as exc:
+            return invalid_ocr_schema_exit(config, str(exc))
+        if not toolkit_receipt_is_valid(toolkit_metadata):
+            return invalid_ocr_schema_exit(
+                config,
+                "OCR toolkit advisory is not bound to a valid receipt v5",
+            )
+    ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
+
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
@@ -651,16 +669,25 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     approval_comments = list(comments)
 
     warnings = warnings_value
-    coverage_diagnostics = normalize_coverage_diagnostics(outcome, warnings)
-    if outcome.kind == "failed":
+    try:
+        summary_outcome = publication_outcome_for_summary(outcome, publication)
+    except OcrResultContractError as exc:
+        return invalid_ocr_schema_exit(config, str(exc))
+    coverage_diagnostics = normalize_coverage_diagnostics(
+        summary_outcome,
+        warnings,
+        legacy_warning_fallback=publication_state != "publication-filtered",
+    )
+    if summary_outcome.kind == "failed":
         return post_manifest_failure(
             config,
-            outcome,
+            summary_outcome,
             outcome_message,
             warnings,
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            ocr_core_advisory_summary=ocr_core_advisory_summary,
         )
 
     billing_reason = llm_billing_failure_reason(warnings)
@@ -733,11 +760,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     summary_run_id = secrets.token_hex(16)
     receipt_sha, reviewed_author_id = approval_receipt_identity(result.get(TOOLKIT_RESULT_KEY))
     reviewed_commit = receipt_sha or reviewed_sha()
+    summary_status = (
+        "publication-filtered"
+        if publication_state == "publication-filtered"
+        and summary_outcome.kind in {"clean", "warning"}
+        else "budget_exceeded"
+        if summary_outcome.budget_exceeded
+        else summary_outcome.kind
+    )
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
-        outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
-        coverage_summary=outcome.coverage_summary,
+        outcome_status=summary_status,
+        coverage_summary=summary_outcome.coverage_summary,
     )
 
     if publishable_comment_count == 0:
@@ -754,13 +789,14 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 tool_calls_summary=tool_calls_summary,
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
+                ocr_core_advisory_summary=ocr_core_advisory_summary,
                 publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
                 mr_head_sha=mr_head_sha(),
-                outcome_status=("budget_exceeded" if outcome.budget_exceeded else outcome.kind),
+                outcome_status=summary_status,
                 outcome_message=outcome_message,
-                coverage_summary=outcome.coverage_summary,
+                coverage_summary=summary_outcome.coverage_summary,
                 coverage_diagnostics=coverage_diagnostics,
                 warnings=warnings,
                 suppressed_count=suppressed_count,
@@ -940,14 +976,15 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            ocr_core_advisory_summary=ocr_core_advisory_summary,
             publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_commit,
             mr_head_sha=mr_head_sha(),
-            outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
+            outcome_status=summary_status,
             outcome_message=outcome_message,
-            coverage_summary=outcome.coverage_summary,
+            coverage_summary=summary_outcome.coverage_summary,
             coverage_diagnostics=coverage_diagnostics,
             warnings=warnings,
             suppressed_count=suppressed_count,
@@ -1060,6 +1097,7 @@ def post_manifest_failure(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    ocr_core_advisory_summary: str = "",
 ) -> int:
     """Post a manifest-declared run failure while preserving prior review notes."""
 
@@ -1072,6 +1110,7 @@ def post_manifest_failure(
         tool_calls_summary=tool_calls_summary,
         mcp_usage_summary=mcp_usage_summary,
         token_usage_summary=token_usage_summary,
+        ocr_core_advisory_summary=ocr_core_advisory_summary,
         outcome_status="failed",
         outcome_message=message,
         coverage_summary=outcome.coverage_summary,

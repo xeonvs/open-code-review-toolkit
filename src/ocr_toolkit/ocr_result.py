@@ -9,6 +9,7 @@ import secrets
 import stat
 import sys
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,11 @@ MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
 TOOLKIT_RESULT_SCHEMA_VERSION = 5
 SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({TOOLKIT_RESULT_SCHEMA_VERSION})
+TOOLKIT_ADVISORY_KEY = "_ocr_toolkit_advisory"
+TOOLKIT_ADVISORY_SCHEMA_VERSION = "ocr.toolkit-advisory/v1"
+TOOLKIT_ADVISORY_KIND = "background_recommended_limit"
+TOOLKIT_ADVISORY_UNIT = "characters"
+MAX_TOOLKIT_ADVISORY_VALUE = 999_999_999_999
 # The receipt can name the 16 configured external servers plus the mandatory built-in.
 MAX_TOOLKIT_MCP_USAGE_SERVERS = 17
 MAX_TOOLKIT_MCP_TOOLS_PER_SERVER = 128
@@ -55,6 +61,69 @@ class OcrResultMalformed(Exception):
 
 class OcrResultTooLarge(Exception):
     """The OCR result artifact exceeds the configured safety limit."""
+
+
+@dataclass(frozen=True, slots=True)
+class OcrToolkitAdvisory:
+    """Carry one validated toolkit-authored numeric OCR advisory."""
+
+    actual: int
+    recommended: int
+
+
+def parse_toolkit_advisory(value: Any) -> OcrToolkitAdvisory:
+    """Parse the exact private toolkit advisory without accepting extensions."""
+
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "kind",
+        "actual",
+        "recommended",
+        "unit",
+    }:
+        raise OcrResultMalformed("OCR toolkit advisory has an unsupported schema")
+    actual = value.get("actual")
+    recommended = value.get("recommended")
+    if (
+        value.get("schema_version") != TOOLKIT_ADVISORY_SCHEMA_VERSION
+        or value.get("kind") != TOOLKIT_ADVISORY_KIND
+        or value.get("unit") != TOOLKIT_ADVISORY_UNIT
+        or not isinstance(actual, int)
+        or isinstance(actual, bool)
+        or not isinstance(recommended, int)
+        or isinstance(recommended, bool)
+        or not 0 < recommended < actual <= MAX_TOOLKIT_ADVISORY_VALUE
+    ):
+        raise OcrResultMalformed("OCR toolkit advisory has invalid closed values")
+    return OcrToolkitAdvisory(actual=actual, recommended=recommended)
+
+
+def background_recommended_advisory(*, actual: int, recommended: int) -> OcrToolkitAdvisory:
+    """Construct one validated background recommendation advisory."""
+
+    return parse_toolkit_advisory(
+        {
+            "schema_version": TOOLKIT_ADVISORY_SCHEMA_VERSION,
+            "kind": TOOLKIT_ADVISORY_KIND,
+            "actual": actual,
+            "recommended": recommended,
+            "unit": TOOLKIT_ADVISORY_UNIT,
+        }
+    )
+
+
+def toolkit_advisory_payload(advisory: OcrToolkitAdvisory) -> dict[str, object]:
+    """Serialize a validated advisory into its exact private result shape."""
+
+    payload: dict[str, object] = {
+        "schema_version": TOOLKIT_ADVISORY_SCHEMA_VERSION,
+        "kind": TOOLKIT_ADVISORY_KIND,
+        "actual": advisory.actual,
+        "recommended": advisory.recommended,
+        "unit": TOOLKIT_ADVISORY_UNIT,
+    }
+    parse_toolkit_advisory(payload)
+    return payload
 
 
 def max_result_bytes() -> int:
@@ -234,7 +303,16 @@ def _decode_result(data: bytes) -> Any:
     except UnicodeDecodeError as exc:
         raise OcrResultMalformed(str(exc)) from exc
     try:
-        return json.loads(text)
+
+        def reject_duplicate_advisory(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, value in pairs:
+                if key == TOOLKIT_ADVISORY_KEY and key in result:
+                    raise OcrResultMalformed("OCR result repeats the reserved toolkit advisory")
+                result[key] = value
+            return result
+
+        return json.loads(text, object_pairs_hook=reject_duplicate_advisory)
     except (json.JSONDecodeError, RecursionError) as exc:
         raise OcrResultMalformed(str(exc)) from exc
 

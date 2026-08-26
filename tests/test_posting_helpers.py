@@ -18,9 +18,8 @@ from typing import Any
 
 from ocr_toolkit import ocr_result
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
-from ocr_toolkit.posting import comments as posting_comments
-from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting import (
+    approval,
     gitlab,
     markers,
     payloads,
@@ -30,6 +29,8 @@ from ocr_toolkit.posting import (
     snapshot,
     workflow,
 )
+from ocr_toolkit.posting import comments as posting_comments
+from ocr_toolkit.posting import formatting as posting_formatting
 from ocr_toolkit.posting.markers import FINGERPRINT_LEN, build_marker
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.posting.transaction import PostingTransaction
@@ -42,7 +43,7 @@ from ocr_toolkit.pre_execution import (
     write_pre_execution_status,
 )
 from ocr_toolkit.provider_failure import ProviderFailureReason
-from ocr_toolkit.result_contract import CoverageFailure, ReviewOutcome
+from ocr_toolkit.result_contract import CoverageFailure, OcrResultContractError, ReviewOutcome
 from tests.support import (
     gitlab_config,
     patched_attr,
@@ -90,6 +91,77 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
+
+    def test_advisory_without_exact_receipt_v5_never_reaches_normal_result_flow(self) -> None:
+        """Treat a correctly shaped but unbound advisory as an invalid result."""
+
+        notes: list[str] = []
+        advisory = ocr_result.toolkit_advisory_payload(
+            ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        )
+        with (
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [],
+                    "warnings": [],
+                    ocr_result.TOOLKIT_ADVISORY_KEY: advisory,
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(notes, ["**Open Code Review result schema error**"])
+
+    def test_advisory_parser_rejects_unknown_extended_and_malformed_values(self) -> None:
+        """Accept no provider text, schema extension, boolean, or impossible threshold."""
+
+        valid = ocr_result.toolkit_advisory_payload(
+            ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        )
+        cases = (
+            {},
+            {**valid, "provider": "untrusted"},
+            {**valid, "kind": "unknown"},
+            {**valid, "actual": True},
+            {**valid, "actual": 2_000},
+        )
+        for value in cases:
+            with self.subTest(value=value):
+                with self.assertRaises(ocr_result.OcrResultMalformed):
+                    ocr_result.parse_toolkit_advisory(value)
+
+    def test_advisory_renders_only_inside_technical_details(self) -> None:
+        """Keep the complete status ordinary and render only fixed labels plus numbers."""
+
+        advisory = ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        line = posting_formatting.format_ocr_core_advisory(advisory)
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="success",
+            ocr_core_advisory_summary=line,
+            emoji=True,
+        )
+        visible, technical = summary.split("<details>", 1)
+
+        self.assertIn("✅ **Review complete — no findings**", visible)
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "- OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
 
     def test_line_number_rejects_bool_and_non_decimal_values(self) -> None:
         self.assertEqual(posting_comments.line_number(True), 0)
@@ -1281,6 +1353,46 @@ class PostingIdentityTests(unittest.TestCase):
                     "waived": [],
                 },
             },
+            "_ocr_toolkit": {
+                "schema_version": 5,
+                "review": {
+                    "source_sha": "a" * 40,
+                    "policy_sha": "b" * 40,
+                    "mr_author_id": 41,
+                },
+                "context": {
+                    "mode": "off",
+                    "state": "disabled",
+                    "classes": [],
+                    "policy_digest": None,
+                    "per_source": {},
+                    "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+                    "required_degraded": False,
+                    "mutable_admitted": False,
+                    "tool_usage": {"context_get": 0, "context_list": 0},
+                },
+                "mcp": {
+                    "capabilities": [
+                        {
+                            "server": "ocr_toolkit_evidence",
+                            "transport": "builtin",
+                            "tools": ["ocr_toolkit_evidence"],
+                        }
+                    ],
+                    "usage": {},
+                },
+                "evidence": {
+                    "mandatory": False,
+                    "used": False,
+                    "calls": 0,
+                    "actions": {"state": "unavailable"},
+                },
+                "publication": {"state": "passed"},
+                "cleanup": {"result": "passed"},
+            },
+            ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+            ),
         }
         with (
             patched_attr(
@@ -1298,6 +1410,13 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(collect_calls, [])
         self.assertIn("Previous OCR review comments were preserved", notes[0])
         self.assertIn("Coverage: selected 1", notes[0])
+        visible, technical = notes[0].split("<details>", 1)
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
@@ -2710,6 +2829,96 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("Private result sanitization signal", private_details)
         self.assertIn("approval-relevant review is unchanged", private_details)
 
+    def test_filtered_receipt_recovers_only_validated_original_coverage(self) -> None:
+        """Use original counts for display while suppressing legacy warning fallback."""
+
+        publication = {
+            "state": "publication-filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 1, "warnings": 1},
+            "omitted": {"comments": 0, "warnings": 0, "fields": 1},
+            "original": {
+                "outcome": "partial",
+                "selected": 3,
+                "completed": 2,
+                "reused": 0,
+                "failed": 1,
+                "waived": 0,
+            },
+        }
+        projected = ReviewOutcome("completed_with_errors", "partial", False)
+        original = approval.publication_outcome_for_summary(projected, publication)
+        diagnostics = result.normalize_coverage_diagnostics(
+            original,
+            ["provider warning without a path"],
+            legacy_warning_fallback=False,
+        )
+
+        self.assertTrue(original.manifest_present)
+        self.assertEqual(original.kind, "partial")
+        self.assertEqual(
+            original.coverage_summary,
+            "Coverage: selected 3; completed 2; reused 0; failed 1; waived 0.",
+        )
+        self.assertEqual(diagnostics.failed_total, 0)
+        self.assertEqual(diagnostics.invalid, 0)
+
+        impossible = {
+            **publication,
+            "original": {**publication["original"], "completed": 3},
+        }
+        self.assertIsNone(approval.publication_dlp_state(impossible))
+        self.assertIs(approval.publication_outcome_for_summary(projected, impossible), projected)
+
+        with self.assertRaises(OcrResultContractError):
+            approval.publication_outcome_for_summary(
+                ReviewOutcome("success", "clean", False),
+                publication,
+            )
+
+        budget_projection = ReviewOutcome("budget_exceeded", "partial", True)
+        clean_original = {
+            **publication,
+            "original": {
+                "outcome": "clean",
+                "selected": 3,
+                "completed": 3,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        with self.assertRaises(OcrResultContractError):
+            approval.publication_outcome_for_summary(budget_projection, clean_original)
+
+    def test_one_finding_omits_focus_ranking_while_two_keep_it(self) -> None:
+        """Rank only when at least two published findings create a useful choice."""
+
+        one = posting_formatting.format_reviewer_guide(
+            [{"path": "one.py", "line": 1, "content": "Single finding."}],
+            0,
+        )
+        two = posting_formatting.format_reviewer_guide(
+            [
+                {"path": "one.py", "line": 1, "content": "First finding."},
+                {"path": "two.py", "line": 2, "content": "Second finding."},
+            ],
+            0,
+        )
+
+        self.assertNotIn("### Recommended focus areas", one)
+        self.assertNotIn("Single finding.", one)
+        self.assertIn("### Recommended focus areas", two)
+        self.assertIn(r"First finding\.", two)
+        self.assertIn(r"Second finding\.", two)
+
     def test_summary_omits_zero_counts_and_can_disable_emoji(self) -> None:
         summary = posting_formatting.summarize_result(
             total=0,
@@ -3312,7 +3521,8 @@ class PostingSummaryTests(unittest.TestCase):
                     "path": "file.py\n/close",
                     "line": 1,
                     "content": "**bold**\n/merge @all",
-                }
+                },
+                {"path": "z.py", "line": 2, "content": "Second finding."},
             ],
             0,
         )
@@ -3329,7 +3539,8 @@ class PostingSummaryTests(unittest.TestCase):
                     "path": "file.py",
                     "line": 1,
                     "content": "See <https://user:token@example.com> & <b>x</b>",
-                }
+                },
+                {"path": "z.py", "line": 2, "content": "Second finding."},
             ],
             0,
         )

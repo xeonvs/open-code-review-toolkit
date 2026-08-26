@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ocr_toolkit import review_runner
+from ocr_toolkit import ocr_result, review_runner
 from ocr_toolkit.context.broker import BrokerResult
 from ocr_toolkit.context.contracts import RecognizerPolicy
 from ocr_toolkit.context.policy import parse_policy
@@ -726,6 +726,96 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
     assert blocked is True
 
 
+def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preserve code indentation while every other DLP detector remains authoritative."""
+
+    safe_comment: dict[str, object] = {
+        "path": "src/example.py",
+        "content": "Keep the bounded branch.",
+        "existing_code": "if ready:\n\treturn current",
+        "suggestion_code": "if ready:\n\treturn updated",
+    }
+    safe_payload: dict[str, object] = {
+        "status": "success",
+        "comments": [safe_comment],
+        "warnings": [],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        safe_payload,
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+
+    assert projected is safe_payload
+    assert publication == {"state": "passed"}
+    assert blocked is False
+    decisions = review_runner._private_dlp_decisions(safe_payload, forbidden=())
+    assert decisions["decisions"] == []
+
+    tab_secret = "synthetic\ttab-bearing\tsecret"
+    monkeypatch.setenv("SYNTHETIC_SECRET", tab_secret)
+    for value, forbidden in (
+        (tab_secret, ()),
+        ("private\ttab-bearing\tcode", ("private\ttab-bearing\tcode",)),
+    ):
+        payload = {
+            **safe_payload,
+            "comments": [{**safe_comment, "existing_code": value}],
+        }
+        projected, publication, blocked = review_runner._publication_projection(
+            payload,
+            forbidden=forbidden,
+            allowed_tools=frozenset(),
+        )
+        assert projected["comments"][0].get("existing_code") is None
+        assert publication["state"] == "publication-filtered"
+        assert blocked is True
+
+    hostile_values = (
+        "line\vhidden",
+        "line\fhidden",
+        "line\x00hidden",
+        "line\u202ehidden",
+        "owner = 'synthetic@example.invalid'",
+        "Authorization: Bearer synthetic-tab-field-token",
+        "<span>hidden</span>",
+        "private code sentence",
+    )
+    for value in hostile_values:
+        payload = {
+            **safe_payload,
+            "comments": [
+                {
+                    **safe_comment,
+                    "existing_code": value,
+                }
+            ],
+        }
+        projected, publication, blocked = review_runner._publication_projection(
+            payload,
+            forbidden=("private code sentence",),
+            allowed_tools=frozenset(),
+        )
+        assert publication["state"] == "publication-filtered"
+        assert blocked is True
+        assert value not in json.dumps(projected)
+
+    content_with_tab = {
+        **safe_payload,
+        "comments": [{"content": "Finding\twith hidden layout"}],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        content_with_tab,
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+    assert publication["reason_counts"]["invalid_text"] == 1
+    assert blocked is True
+
+
 def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     tmp_path: Path,
 ) -> None:
@@ -818,10 +908,10 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
 
 
-def test_background_preview_warning_is_atomically_finalized_and_blocks_approval(
+def test_background_preview_advisory_is_atomically_finalized_without_blocking_approval(
     tmp_path: Path,
 ) -> None:
-    """Make an installed-OCR soft warning visible to summary and approval owners."""
+    """Keep the accepted numeric advisory outside warnings, DLP, and approval inputs."""
 
     result = tmp_path / "result.json"
     result.write_text(
@@ -853,10 +943,7 @@ def test_background_preview_warning_is_atomically_finalized_and_blocks_approval(
         external_servers=(),
         secret_values=(),
     )
-    warning = (
-        "Installed OCR reported a 2100-character review background above its recommended "
-        "2000-character threshold; review continued."
-    )
+    advisory = ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
 
     _usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
@@ -864,11 +951,18 @@ def test_background_preview_warning_is_atomically_finalized_and_blocks_approval(
         replace(DEFAULT_IDENTITY, mr_author_id=41),
         None,
         forbidden=(),
-        toolkit_warnings=(warning, warning),
+        toolkit_advisory=advisory,
     )
 
     persisted = json.loads(result.read_text(encoding="utf-8"))
-    assert persisted["warnings"] == [warning]
+    assert persisted["warnings"] == []
+    assert persisted[ocr_result.TOOLKIT_ADVISORY_KEY] == {
+        "schema_version": "ocr.toolkit-advisory/v1",
+        "kind": "background_recommended_limit",
+        "actual": 2_100,
+        "recommended": 2_000,
+        "unit": "characters",
+    }
     assert publication == {"state": "passed"}
     assert blocked is False
     outcome = parse_result_outcome(persisted)
@@ -880,11 +974,72 @@ def test_background_preview_warning_is_atomically_finalized_and_blocks_approval(
         0,
         persisted["_ocr_toolkit"],
     )
-    assert eligibility.eligible is False
-    assert eligibility.result.reason == "the OCR review reported warnings"
+    assert eligibility.eligible is True
     serialized = result.read_text(encoding="utf-8")
+    assert "Installed OCR reported" not in serialized
     assert "private discussion sentence" not in serialized
     assert "synthetic@example.invalid" not in serialized
+
+
+def test_raw_ocr_result_cannot_supply_the_reserved_toolkit_advisory(tmp_path: Path) -> None:
+    """Reject even a well-shaped advisory before receipt and publication policy run."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                    ocr_result.background_recommended_advisory(
+                        actual=2_100,
+                        recommended=2_000,
+                    )
+                )
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="not valid bounded JSON"):
+        review_runner._finalize_ocr_result(
+            result,
+            composition,
+            replace(DEFAULT_IDENTITY, mr_author_id=41),
+            None,
+            forbidden=(),
+        )
+
+    assert ocr_result.TOOLKIT_ADVISORY_KEY in result.read_text(encoding="utf-8")
+
+
+def test_raw_ocr_result_rejects_duplicate_reserved_advisory_keys(tmp_path: Path) -> None:
+    """Fail closed before JSON duplicate-key collapse can select an advisory value."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        '{"_ocr_toolkit_advisory":{},"_ocr_toolkit_advisory":{}}',
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="not valid bounded JSON"):
+        review_runner._finalize_ocr_result(
+            result,
+            composition,
+            replace(DEFAULT_IDENTITY, mr_author_id=41),
+            None,
+            forbidden=(),
+        )
 
 
 def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_sinks() -> None:
@@ -1334,6 +1489,56 @@ def test_unsafe_manifest_failure_detail_is_partial_and_destroyed() -> None:
     assert blocked is True
     assert "manifest" not in projected
     assert "private failure detail" not in json.dumps(projected)
+
+
+def test_filtered_budget_projection_preserves_the_original_stop_state() -> None:
+    """Keep a real token-budget stop stronger than independent publication filtering."""
+
+    payload: dict[str, object] = {
+        "status": "partial",
+        "summary": {"budget_exceeded": True},
+        "comments": [{"content": "Safe finding."}],
+        "warnings": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "partial",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}, {"item_id": "safe-b"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [
+                    {
+                        "item_id": "safe-b",
+                        "path": "src/private.py",
+                        "classification": "budget",
+                        "reason": "private failure detail",
+                    }
+                ],
+                "waived": [],
+            },
+        },
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private failure detail",),
+        allowed_tools=frozenset(),
+    )
+    projected_outcome = parse_result_outcome(projected)
+    summary_outcome = approval.publication_outcome_for_summary(
+        projected_outcome,
+        publication,
+    )
+
+    assert blocked is True
+    assert projected["status"] == "budget_exceeded"
+    assert projected["summary"] == {"budget_exceeded": True}
+    assert projected_outcome.budget_exceeded is True
+    assert summary_outcome.kind == "partial"
+    assert summary_outcome.budget_exceeded is True
+    assert summary_outcome.coverage_summary == (
+        "Coverage: selected 2; completed 1; reused 0; failed 1; waived 0."
+    )
 
 
 def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_manifest(
@@ -2181,14 +2386,14 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("returncode", "stderr", "warning", "notices", "rejection"),
+    ("returncode", "stderr", "advisory", "notices", "rejection"),
     [
         (0, b"", None, (), None),
         (
             0,
             b"[ocr] --background-file content is 2001 characters, exceeding the recommended "
             b"2000 (continuing but review quality might be impacted)\n",
-            "2001-character review background above its recommended 2000-character threshold",
+            (2_001, 2_000),
             (),
             None,
         ),
@@ -2204,7 +2409,7 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
             b"[ocr] --max-tools 30 is below minimum 50, using 50\n"
             b"[ocr] --background-file content is 2001 characters, exceeding the recommended "
             b"2000 (continuing but review quality might be impacted)\n",
-            "2001-character review background above its recommended 2000-character threshold",
+            (2_001, 2_000),
             ("--max-tools 30", "normalization target of 50", "template remains authoritative"),
             None,
         ),
@@ -2229,7 +2434,7 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
 def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
     returncode: int,
     stderr: bytes,
-    warning: str | None,
+    advisory: tuple[int, int] | None,
     notices: tuple[str, ...],
     rejection: tuple[str, int, int, str] | None,
 ) -> None:
@@ -2237,9 +2442,11 @@ def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
 
     if rejection is None:
         result = review_runner._parse_background_preview(returncode=returncode, stderr=stderr)
-        assert warning is None or warning in result.warning  # type: ignore[operator]
-        if warning is None:
-            assert result.warning is None
+        if advisory is None:
+            assert result.advisory is None
+        else:
+            assert result.advisory is not None
+            assert (result.advisory.actual, result.advisory.recommended) == advisory
         for expected in notices:
             assert expected in result.operator_notices[0]
         if not notices:
@@ -2322,7 +2529,10 @@ def test_background_preview_uses_exact_production_argv_and_cleans_artifacts(
     )
 
     assert argv_seen == ["/private/ocr", "review", *production_args, "--preview"]
-    assert result.warning is not None
+    assert result.advisory == ocr_result.OcrToolkitAdvisory(
+        actual=2_100,
+        recommended=2_000,
+    )
     assert list(session_home.iterdir()) == []
 
 
@@ -2370,7 +2580,7 @@ def test_background_preview_preserves_rejection_when_cleanup_also_fails(
     )
 
     assert exit_code == 2
-    assert qualification.warning is None
+    assert qualification.advisory is None
     assert model_calls == []
     persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
     assert (persisted["actual"], persisted["limit"], persisted["unit"]) == (
@@ -2446,7 +2656,7 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
     )
 
     assert exit_code == 2
-    assert qualification.warning is None
+    assert qualification.advisory is None
     assert model_calls == []
     persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
     assert persisted == {
@@ -2676,7 +2886,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     else:
         if ocr_exit_code == 0:
             assert events[9] == "ocr-usage"
-            assert finalized[0]["toolkit_warnings"] == ()
+            assert finalized[0]["toolkit_advisory"] is None
         else:
             assert "ocr-usage" not in events
         assert not artifacts.store.exists()

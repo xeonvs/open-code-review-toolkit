@@ -7,6 +7,7 @@ import unittest
 from contextlib import redirect_stderr
 from typing import Any
 
+from ocr_toolkit import ocr_result
 from ocr_toolkit.posting import (
     approval,
     formatting,
@@ -259,6 +260,54 @@ class ApprovalPolicyTests(unittest.TestCase):
             decision.result.reason,
             "publication DLP filtered the complete review result",
         )
+
+    def test_filtered_receipt_rejects_outcomes_that_contradict_coverage(self) -> None:
+        """Accept run-level failure but reject impossible coverage/outcome combinations."""
+
+        publication = {
+            "state": "publication-filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 0, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "failed",
+                "selected": 2,
+                "completed": 2,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        self.assertEqual(approval.publication_dlp_state(publication), "publication-filtered")
+
+        invalid_originals = (
+            {"outcome": "partial", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "clean", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "warning", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "skipped", "selected": 1, "completed": 1, "failed": 0},
+            {"outcome": "partial", "selected": 2, "completed": 2, "failed": 0},
+            {"outcome": "partial", "selected": 2, "completed": 0, "failed": 2},
+            {"outcome": "clean", "selected": 2, "completed": 0, "failed": 2},
+            {"outcome": "warning", "selected": 2, "completed": 0, "failed": 2},
+        )
+        for original in invalid_originals:
+            candidate = {
+                **publication,
+                "original": {
+                    "reused": 0,
+                    "waived": 0,
+                    **original,
+                },
+            }
+            with self.subTest(original=original):
+                self.assertIsNone(approval.publication_dlp_state(candidate))
 
     def test_private_only_sanitization_keeps_existing_approval_gates(self) -> None:
         receipt = receipt_v5()
@@ -862,6 +911,210 @@ class ApprovalWorkflowTests(unittest.TestCase):
             mutate(candidate)
             with self.subTest(candidate=candidate):
                 self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))
+
+    def test_valid_receipt_binds_advisory_without_changing_summary_or_approval_inputs(self) -> None:
+        """Publish one closed advisory in Technical details with ordinary clean status."""
+
+        receipt = receipt_v5(author_id=41)
+        self.assertTrue(approval.toolkit_receipt_is_valid(receipt))
+        notes: list[str] = []
+
+        def capture_note(_config: Any, _title: str, body: str, *_args: Any) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [],
+                    "warnings": [],
+                    "manifest": {
+                        "schema_version": "ocr.run-manifest/v1",
+                        "operation": "review",
+                        "terminal_state": "complete",
+                        "coverage": {
+                            "selected": [{"item_id": "synthetic-item"}],
+                            "completed": [{"item_id": "synthetic-item"}],
+                            "reused": [],
+                            "failed": [],
+                            "waived": [],
+                        },
+                    },
+                    "_ocr_toolkit": receipt,
+                    ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                        ocr_result.background_recommended_advisory(
+                            actual=2_100,
+                            recommended=2_000,
+                        )
+                    ),
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(notes), 1)
+        visible, technical = notes[0].split("<details>", 1)
+        self.assertIn("Review complete — no findings", visible)
+        self.assertNotIn("warnings", visible.casefold())
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
+
+    def test_complete_filtered_review_keeps_coverage_and_activity_dimensions_separate(
+        self,
+    ) -> None:
+        """Render scenario B without inventing partial coverage or a failed item."""
+
+        receipt = receipt_v5(author_id=41)
+        receipt["publication"] = {
+            "state": "publication-filtered",
+            "reason_counts": {
+                "forbidden": 0,
+                "invalid_text": 2,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 1, "warnings": 0},
+            "omitted": {"comments": 0, "warnings": 0, "fields": 2},
+            "original": {
+                "outcome": "clean",
+                "selected": 5,
+                "completed": 5,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        notes: list[tuple[str, str]] = []
+
+        def capture_note(
+            _config: Any,
+            title: str,
+            body: str,
+            *_args: Any,
+        ) -> dict[str, int]:
+            notes.append((title, body))
+            return {"id": len(notes)}
+
+        with (
+            patched_attr(
+                workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
+            ),
+            patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "completed_with_errors",
+                    "message": "Publication policy produced a safe partial OCR result.",
+                    "comments": [
+                        {
+                            "path": "src/example.py",
+                            "line": 7,
+                            "content": "Keep the validated branch.",
+                            "severity": "low",
+                            "category": "maintainability",
+                        }
+                    ],
+                    "warnings": [],
+                    "tool_calls": {"total": 2, "by_tool": {"file_read": 2}},
+                    "usage": {"input_tokens": 40, "output_tokens": 8},
+                    "_ocr_toolkit": receipt,
+                    ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                        ocr_result.background_recommended_advisory(
+                            actual=2_248,
+                            recommended=2_000,
+                        )
+                    ),
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        summary = next(body for title, body in notes if not title and "## Open Code Review" in body)
+        self.assertIn("Review complete with publication filtering — 1 finding published", summary)
+        self.assertNotIn("Review incomplete", summary)
+        self.assertNotIn("OCR reported partial coverage", summary)
+        self.assertNotIn("failed item(s) had no safe", summary)
+        self.assertIn("Coverage: selected 5; completed 5; reused 0; failed 0; waived 0.", summary)
+        self.assertIn("The public projection changed", summary)
+        self.assertNotIn("### Recommended focus areas", summary)
+        self.assertIn("- all OCR tool calls: 2 total (`file_read`: 2)", summary)
+        self.assertIn("- token usage: 48 total (input: 40, output: 8)", summary)
+        self.assertIn("OCR core advisory: background 2248 characters", summary)
+        self.assertIn("Automatic approval: `not eligible`", summary)
+
+    def test_private_sanitized_review_keeps_tool_and_token_activity_visible(self) -> None:
+        """Keep independent numeric activity lines after private-only sanitization."""
+
+        receipt = receipt_v5(author_id=41)
+        receipt["publication"] = {
+            "state": "private-sanitized",
+            "reason_counts": {
+                "forbidden": 0,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 1,
+                "secret": 0,
+            },
+            "sanitized_fields": 1,
+        }
+        notes: list[str] = []
+
+        def capture_note(_config: Any, _title: str, body: str, *_args: Any) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(
+                workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
+            ),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [],
+                    "warnings": [],
+                    "manifest": {
+                        "schema_version": "ocr.run-manifest/v1",
+                        "operation": "review",
+                        "terminal_state": "complete",
+                        "coverage": {
+                            "selected": [{"item_id": "safe-item"}],
+                            "completed": [{"item_id": "safe-item"}],
+                            "reused": [],
+                            "failed": [],
+                            "waived": [],
+                        },
+                    },
+                    "tool_calls": {"total": 3, "by_tool": {"file_read": 3}},
+                    "usage": {"input_tokens": 20, "output_tokens": 4},
+                    "_ocr_toolkit": receipt,
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("- all OCR tool calls: 3 total (`file_read`: 3)", notes[0])
+        self.assertIn("- token usage: 24 total (input: 20, output: 4)", notes[0])
+        self.assertIn("Private result sanitization signal", notes[0])
 
     def test_current_summary_readback_requires_one_owned_run_marker(self) -> None:
         body = build_marked_note_body(markers.build_summary_run_marker(self.RUN_ID) + "\nsummary")

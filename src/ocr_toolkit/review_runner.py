@@ -76,13 +76,17 @@ from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
+    OcrToolkitAdvisory,
+    background_recommended_advisory,
     inspect_ocr_result,
     load_ocr_result,
+    toolkit_advisory_payload,
     transform_ocr_result,
 )
 from ocr_toolkit.posting.result import ocr_warning_text
@@ -156,7 +160,7 @@ class ReviewRunnerError(Exception):
 class BackgroundQualification:
     """Carry closed toolkit-authored projections of installed OCR diagnostics."""
 
-    warning: str | None = None
+    advisory: OcrToolkitAdvisory | None = None
     operator_notices: tuple[str, ...] = ()
 
 
@@ -441,7 +445,13 @@ def _review_receipt(
     }
 
 
-def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher) -> Counter[str]:
+def _dlp_reasons(
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    allow_horizontal_tabs: bool = False,
+) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
@@ -459,10 +469,22 @@ def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatch
                 budgets=budgets,
                 publication=True,
                 forbidden_matcher=matcher,
+                allow_horizontal_tabs=allow_horizontal_tabs,
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
     return reasons
+
+
+def _code_field_allows_horizontal_tabs(path: tuple[object, ...]) -> bool:
+    """Allow HTAB only in the two closed code-bearing finding fields."""
+
+    return bool(
+        len(path) == 3
+        and path[0] == "comments"
+        and isinstance(path[1], int)
+        and path[2] in {"existing_code", "suggestion_code"}
+    )
 
 
 def _private_dlp_decisions(
@@ -527,6 +549,7 @@ def _private_dlp_decisions(
             budgets=budgets,
             publication=True,
             forbidden_matcher=matcher,
+            allow_horizontal_tabs=_code_field_allows_horizontal_tabs(path),
         )
         if checked.admitted:
             continue
@@ -582,32 +605,36 @@ def _write_private_dlp_decisions(
         raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
-def _publication_sinks(payload: dict[str, object]) -> list[object]:
+def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
     """Select only OCR-controlled values that the posting owner can render."""
 
-    sinks: list[object] = []
+    sinks: list[tuple[object, bool]] = []
     message = payload.get("message")
     if message is not None:
-        sinks.append(message)
+        sinks.append((message, False))
     comments = payload.get("comments")
     if isinstance(comments, list):
-        sinks.extend(
-            {key: value for key, value in item.items() if key in QUARANTINE_COMMENT_FIELDS}
-            for item in comments
-            if isinstance(item, dict)
-        )
+        for item in comments:
+            if not isinstance(item, dict):
+                continue
+            sinks.extend(
+                (
+                    value,
+                    isinstance(value, str) and key in {"existing_code", "suggestion_code"},
+                )
+                for key, value in item.items()
+                if key in QUARANTINE_COMMENT_FIELDS
+            )
     warnings = payload.get("warnings")
     if warnings is not None:
-        sinks.append(warnings)
+        sinks.append((warnings, False))
     manifest = payload.get("manifest")
     coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
     failed = coverage.get("failed") if isinstance(coverage, dict) else None
     if isinstance(failed, list):
-        sinks.extend(
-            {key: item.get(key) for key in ("path", "reason") if key in item}
-            for item in failed
-            if isinstance(item, dict)
-        )
+        for item in failed:
+            if isinstance(item, dict):
+                sinks.extend((item[key], False) for key in ("path", "reason") if key in item)
     return sinks
 
 
@@ -729,7 +756,14 @@ def _safe_publication_comments(
         for key, field_value in item.items():
             if not isinstance(key, str) or key not in QUARANTINE_COMMENT_FIELDS:
                 continue
-            if _dlp_reasons(field_value, budgets=budgets, matcher=matcher):
+            if _dlp_reasons(
+                field_value,
+                budgets=budgets,
+                matcher=matcher,
+                allow_horizontal_tabs=(
+                    isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
+                ),
+            ):
                 omitted_fields += 1
                 content_unsafe = content_unsafe or key == "content"
                 continue
@@ -844,8 +878,15 @@ def _publication_projection(
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     sink_reasons: Counter[str] = Counter()
-    for sink in _publication_sinks(payload):
-        sink_reasons.update(_dlp_reasons(sink, budgets=budgets, matcher=matcher))
+    for sink, allow_horizontal_tabs in _publication_sinks(payload):
+        sink_reasons.update(
+            _dlp_reasons(
+                sink,
+                budgets=budgets,
+                matcher=matcher,
+                allow_horizontal_tabs=allow_horizontal_tabs,
+            )
+        )
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
         payload, budgets=budgets, matcher=matcher
     )
@@ -871,7 +912,7 @@ def _publication_projection(
             payload.get("warnings"), budgets=budgets, matcher=matcher
         )
         projected: dict[str, object] = {
-            "status": "completed_with_errors",
+            "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
             "message": (
                 "Publication policy produced a safe partial OCR result. Independently safe "
                 "findings may be published, but the result must not be treated as a complete "
@@ -883,6 +924,8 @@ def _publication_projection(
                 payload.get("tool_calls"), allowed_tools=allowed_tools
             ),
         }
+        if outcome.budget_exceeded:
+            projected["summary"] = {"budget_exceeded": True}
     else:
         reasons = sink_reasons + private_reasons
         return (
@@ -924,7 +967,7 @@ def _finalize_ocr_result(
     evidence_action_counts: dict[str, int] | None = None,
     *,
     forbidden: tuple[str, ...],
-    toolkit_warnings: tuple[str, ...] = (),
+    toolkit_advisory: OcrToolkitAdvisory | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -935,25 +978,12 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal filtered, publication, usage
-        if TOOLKIT_RESULT_KEY in payload:
-            raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
+        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
+            if reserved in payload:
+                raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
-        warning_texts = {ocr_warning_text(warning) for warning in warnings}
-        appended_warnings: list[str] = []
-        for warning in toolkit_warnings:
-            if warning in warning_texts:
-                continue
-            warning_texts.add(warning)
-            appended_warnings.append(warning)
-        payload = {
-            **payload,
-            "warnings": [
-                *warnings,
-                *appended_warnings,
-            ],
-        }
         metadata = _review_receipt(
             payload,
             composition,
@@ -969,7 +999,10 @@ def _finalize_ocr_result(
         mcp = metadata.get("mcp")
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
-        return {**projected, TOOLKIT_RESULT_KEY: metadata}
+        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata}
+        if toolkit_advisory is not None:
+            finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
+        return finalized
 
     try:
         transform_ocr_result(result_path, finalize)
@@ -1158,14 +1191,14 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
             or len(max_tools_matches) > 1
         ):
             raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
-        warning: str | None = None
+        advisory: OcrToolkitAdvisory | None = None
         if soft_matches:
             actual, limit = (int(value) for value in soft_matches[0].groups())
             if not 0 < limit < actual:
                 raise ReviewRunnerError("OCR background preview returned invalid thresholds")
-            warning = (
-                f"Installed OCR reported a {actual}-character review background above its "
-                f"recommended {limit}-character threshold; review continued."
+            advisory = background_recommended_advisory(
+                actual=actual,
+                recommended=limit,
             )
         operator_notices: tuple[str, ...] = ()
         if max_tools_matches:
@@ -1179,7 +1212,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
                 "effective tool-call limit.",
             )
         return BackgroundQualification(
-            warning=warning,
+            advisory=advisory,
             operator_notices=operator_notices,
         )
     if hard_character is not None:
@@ -1295,9 +1328,11 @@ def _run_background_qualified_review(
             file=sys.stderr,
         )
         return 2, BackgroundQualification()
-    if qualification.warning is not None:
+    if qualification.advisory is not None:
         print(
-            f"OCR background qualification warning: {qualification.warning}",
+            "OCR core advisory: "
+            f"background {qualification.advisory.actual} characters; recommended "
+            f"{qualification.advisory.recommended} characters; accepted by OCR core",
             file=sys.stderr,
         )
     for notice in qualification.operator_notices:
@@ -1933,11 +1968,7 @@ def run_evidence_review(
                         enrichment,
                         evidence_action_counts,
                         forbidden=forbidden,
-                        toolkit_warnings=(
-                            (background_qualification.warning,)
-                            if background_qualification.warning is not None
-                            else ()
-                        ),
+                        toolkit_advisory=background_qualification.advisory,
                     )
                 except ReviewRunnerError:
                     try:
