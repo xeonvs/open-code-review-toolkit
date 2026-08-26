@@ -8,10 +8,12 @@ Use this file for active or blocked repository work. Update it before implementa
 
 #### Goal
 
-Deliver a fully implemented, locally validated, hosted-green Draft feature PR for
-toolkit `0.8.4` that fixes GitLab review-summary ownership boundaries and
-qualifies OCR `1.10.1`. The stable release remains deferred: this work does not
-merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
+Deliver toolkit `0.8.4` through the complete protected stable-release lifecycle:
+finish and independently review the existing Draft feature PR, run one final
+local OCR `1.10.1` review, correct confirmed findings, merge the exact hosted-
+green feature head, prepare and merge `release/v0.8.4`, and independently
+reconcile the published artifacts, provenance, immutable receipt, issues, and
+milestone.
 
 #### Plan Origin
 
@@ -33,7 +35,9 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 - Preserve the current tool-call and token technical-summary format and emit
   those independent non-empty metrics under passed, private-sanitized, and
   publication-filtered states.
-- Finish with an open Draft PR, open #145/#146, and open milestone `v0.8.4`.
+- Finish with verified stable `0.8.4` artifacts and provenance, Actions-owned
+  receipts on #145/#146, both issues closed, milestone `v0.8.4` closed, and a
+  clean local `main` synchronized with `origin/main`.
 
 #### Requirement Traceability
 
@@ -48,7 +52,8 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Explicit Non-Goals
 
-- No real LLM or provider calls.
+- No additional OCR qualification campaign or enriched-context qualification;
+  run only the user-authorized final local OCR review on this repository.
 - No receipt v5, publication-DLP signal v2, result, manifest, telemetry, or
   approval-contract version changes.
 - No weakening of global context DLP or publication controls outside the two
@@ -57,13 +62,13 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
   provider preset, or upstream repository-local `providers.go` rule.
 - No mechanical test-directory reorganization or refactor unrelated to the
   two activated issues.
-- No Ready transition, merge, release branch, tag, registry publication,
-  issue closure, or milestone closure.
+- No consumer-repository, B2B, `core/common`, or shared-template integration.
+- No issue or milestone closure before independent stable-release readback.
 
 #### Constraints
 
 - Release classification: `release-required`; target stable version: `0.8.4`;
-  delivery state: `release-deferred`.
+  delivery state: `active stable delivery`.
 - Branch: `codex/v0.8.4-summary-ocr-1.10.1`, based on clean released `v0.8.3`
   `main`; `.next-version` already owns `0.8.4`.
 - The first tracked repository write is this complete active plan.
@@ -73,9 +78,16 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
   self-review, trust/data-flow review, and `git diff --check`.
 - New tests stay with existing thematic owners and include docstrings.
 - Do not change OCR configuration, credentials, or the user's `HOME`.
-- Local OCR checks use an isolated temporary `HOME` and never invoke an LLM.
-- Run the full local gate once at the end; hosted workflows own package,
-  cross-platform, dependency, Security, and CodeQL validation.
+- The final local OCR review uses the already configured local OCR `1.10.1`,
+  concurrency `2`, no provider-specific `4096` completion cap, and private
+  ignored artifacts. Its exit status is insufficient without complete result
+  and manifest readback.
+- Keep long-running test and OCR output in ignored owner-only logs and expose
+  only bounded summaries in the interactive session.
+- Run the full local gate after the final fixes; hosted workflows own the
+  cross-platform, dependency, Security, and CodeQL validation, while local
+  release closure additionally owns deterministic package and clean-install
+  evidence.
 
 #### Inputs And Sources
 
@@ -90,8 +102,10 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### User Decisions And Answers
 
-- Keep the PR Draft after the final push; do not release `0.8.4` yet.
-- Update the direct local OCR binary to `1.10.1` but skip local LLM execution.
+- Complete and publish stable toolkit `0.8.4` in this task.
+- Run one final local OCR `1.10.1` review, correct confirmed findings, perform a
+  holistic self-review, then push and move the exact Draft head through the
+  protected release process.
 - Preserve the existing technical-summary format and publish tool-call/token
   numeric metrics only when their list/value is non-empty and non-zero.
 - Default `OCR_REVIEW_EFFORT` remains `medium`.
@@ -131,12 +145,30 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
    - Use `publication.original` for filtered coverage; suppress the legacy
      warning fallback in filtered state; correct DLP wording; permit HTAB only
      in the two code fields; omit focus areas for one finding.
-5. **Final validation and Draft handoff**
-   - Changelog/docs and the full local quality/coverage, lock, manifest,
-     Towncrier, and diff gates are complete. Commit the exact local handoff,
-     run Gitleaks against that final history, push once, reconcile hosted CI,
-     update Draft/issue checklists, and leave all release state open and
-     deferred.
+5. **Independent feature review and final OCR - active**
+   - Review the complete Draft diff and trust/data flows, run focused and full
+     validation with bounded output, then execute the single final local OCR
+     `1.10.1` review with concurrency `2`.
+   - Inspect the OCR result and manifest for complete selected-item coverage;
+     trace and fix only confirmed findings, rerun their owner tests, and record
+     the private-safe conclusions without publishing raw provider artifacts.
+6. **Holistic self-review and feature delivery**
+   - Review the complete post-OCR diff, correct findings, run the final
+     quality/coverage, lock, manifest, Towncrier, Gitleaks, deterministic-build,
+     clean-install, and diff gates, then push the exact reviewed head.
+   - Verify hosted checks and unresolved threads on that head, move #147 to
+     Ready, and squash-merge it through the protected branch policy.
+7. **Release PR and stable publication**
+   - Verify the protected-main development publication, prepare
+     `release/v0.8.4` with the canonical release metadata, changelog, issue set,
+     and plan archive, then validate and squash-merge the exact release head.
+   - Monitor the Release workflow and independently verify TestPyPI/PyPI/GitHub
+     bytes, PEP 740 provenance, GitHub attestations, annotated tag target,
+     immutable Release, receipt identities, and clean Python 3.12-3.14 installs.
+8. **External closure**
+   - Verify Actions-owned receipts, close #145/#146 and milestone `v0.8.4` only
+     after external reconciliation, re-read planning sources, synchronize clean
+     local `main`, and remove temporary logs, archives, and unused environments.
 
 #### Locked Decisions
 
@@ -234,10 +266,9 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Resume Point
 
-Current action: self-review and sign the final changelog/handoff commit, run
-Gitleaks against that exact history, then make the one final push and reconcile
-hosted CI. Draft PR #147, milestone `v0.8.4`, and #145/#146 remain open and the
-PR must remain Draft. Do not create release state.
+Current action: independently review and validate exact Draft PR #147 head
+`b4c6cf4602ca3e66a6c52f4ba680ae06546356ce`, then run the single final local
+OCR `1.10.1` review before any new push or Ready transition.
 
 #### Plan Fidelity Check
 
@@ -256,22 +287,24 @@ PR must remain Draft. Do not create release state.
 
 #### Closure Gate
 
-This active plan may leave implementation state only when the Draft feature PR
-is hosted-green and accurately documents Added, Fixed, Changed, Unchanged,
-checksums, validation, and the exact head/tree. It must remain active or blocked
-if any required check, issue criterion, or remote readback is incomplete.
+This objective is complete only when the exact protected release is externally
+reconciled: registry and Release bytes agree, provenance and attestations
+validate, the annotated tag and immutable receipt bind the reviewed release,
+Python 3.12-3.14 clean installs pass, Actions-owned issue receipts exist,
+#145/#146 and milestone `v0.8.4` are closed, and local `main` is clean and
+synchronized. Earlier feature, merge, development-publication, or workflow-green
+states are intermediate only.
 
 #### Post-Close Delivery
 
-Stable delivery remains deferred. A later explicitly authorized task may move
-the exact reviewed Draft head to Ready, merge it, create `release/v0.8.4`, and
-perform the protected publication lifecycle. That future work must revalidate
-the immutable reviewed head and live provider/registry state.
+No post-close repository delivery remains in this objective. Conditional backlog
+work stays inactive unless its own trigger and authorization are met.
 
 #### Handoff Notes
 
-- Draft PR, #145, #146, and milestone `v0.8.4` must remain open.
-- The next agent must not repeat completed local development or run a real LLM;
-  it should start from the exact documented Draft head and current hosted CI.
+- Draft PR #147 may move to Ready only after the final OCR fixes, holistic
+  self-review, exact-head local gates, push, and hosted reconciliation.
+- #145, #146, and milestone `v0.8.4` remain open until the stable receipt and
+  independent external readback prove closure.
 - OCR `1.10.1` is the qualified toolkit target; the previous `1.10.0` evidence
   remains historical and must not be rewritten.
