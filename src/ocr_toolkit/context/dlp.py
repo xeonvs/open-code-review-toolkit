@@ -109,7 +109,7 @@ class ForbiddenMatcher:
         exact: list[str] = []
         seen: set[str] = set()
         for value in values:
-            candidate = normalize_text(value)
+            candidate = normalize_text(value, allow_horizontal_tabs=True)
             if not candidate:
                 continue
             for representation in (_display_normalize(candidate), _source_normalize(candidate)):
@@ -157,14 +157,16 @@ class ForbiddenMatcher:
         return self.match_reason(value) is not None
 
 
-def normalize_text(value: object) -> str | None:
+def normalize_text(value: object, *, allow_horizontal_tabs: bool = False) -> str | None:
     """Normalize NFC/newlines and reject unsupported controls."""
 
     if not isinstance(value, str):
         return None
     normalized = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
+    allowed_controls = "\n\t" if allow_horizontal_tabs else "\n"
     if any(
-        unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"} and character != "\n"
+        unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"}
+        and character not in allowed_controls
         for character in normalized
     ):
         return None
@@ -178,10 +180,11 @@ def check_text(
     publication: bool = False,
     forbidden: tuple[str, ...] = (),
     forbidden_matcher: ForbiddenMatcher | None = None,
+    allow_horizontal_tabs: bool = False,
 ) -> DLPResult:
     """Apply independent units, redaction, PII, and optional publication checks."""
 
-    normalized = normalize_text(value)
+    normalized = normalize_text(value, allow_horizontal_tabs=allow_horizontal_tabs)
     if normalized is None:
         return DLPResult(False, None, "invalid_text", "type_or_control")
     normalized_bytes = normalized.encode("utf-8")

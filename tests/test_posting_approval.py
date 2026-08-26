@@ -261,6 +261,54 @@ class ApprovalPolicyTests(unittest.TestCase):
             "publication DLP filtered the complete review result",
         )
 
+    def test_filtered_receipt_rejects_outcomes_that_contradict_coverage(self) -> None:
+        """Accept run-level failure but reject impossible coverage/outcome combinations."""
+
+        publication = {
+            "state": "publication-filtered",
+            "reason_counts": {
+                "forbidden": 1,
+                "invalid_text": 0,
+                "laundering": 0,
+                "limit": 0,
+                "pii": 0,
+                "secret": 0,
+            },
+            "retained": {"comments": 0, "warnings": 0},
+            "omitted": {"comments": 1, "warnings": 0, "fields": 0},
+            "original": {
+                "outcome": "failed",
+                "selected": 2,
+                "completed": 2,
+                "reused": 0,
+                "failed": 0,
+                "waived": 0,
+            },
+        }
+        self.assertEqual(approval.publication_dlp_state(publication), "publication-filtered")
+
+        invalid_originals = (
+            {"outcome": "partial", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "clean", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "warning", "selected": 0, "completed": 0, "failed": 0},
+            {"outcome": "skipped", "selected": 1, "completed": 1, "failed": 0},
+            {"outcome": "partial", "selected": 2, "completed": 2, "failed": 0},
+            {"outcome": "partial", "selected": 2, "completed": 0, "failed": 2},
+            {"outcome": "clean", "selected": 2, "completed": 0, "failed": 2},
+            {"outcome": "warning", "selected": 2, "completed": 0, "failed": 2},
+        )
+        for original in invalid_originals:
+            candidate = {
+                **publication,
+                "original": {
+                    "reused": 0,
+                    "waived": 0,
+                    **original,
+                },
+            }
+            with self.subTest(original=original):
+                self.assertIsNone(approval.publication_dlp_state(candidate))
+
     def test_private_only_sanitization_keeps_existing_approval_gates(self) -> None:
         receipt = receipt_v5()
         receipt["publication"] = {

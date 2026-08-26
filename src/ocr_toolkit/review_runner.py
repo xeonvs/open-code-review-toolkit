@@ -464,12 +464,12 @@ def _dlp_reasons(
         elif isinstance(nested, list):
             stack.extend(nested)
         elif isinstance(nested, str):
-            checked_value = nested.replace("\t", " ") if allow_horizontal_tabs else nested
             checked = check_text(
-                checked_value,
+                nested,
                 budgets=budgets,
                 publication=True,
                 forbidden_matcher=matcher,
+                allow_horizontal_tabs=allow_horizontal_tabs,
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
@@ -544,14 +544,12 @@ def _private_dlp_decisions(
             continue
         if not isinstance(value, str):
             continue
-        checked_value = (
-            value.replace("\t", " ") if _code_field_allows_horizontal_tabs(path) else value
-        )
         checked = check_text(
-            checked_value,
+            value,
             budgets=budgets,
             publication=True,
             forbidden_matcher=matcher,
+            allow_horizontal_tabs=_code_field_allows_horizontal_tabs(path),
         )
         if checked.admitted:
             continue

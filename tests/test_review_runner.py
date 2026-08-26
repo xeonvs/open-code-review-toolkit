@@ -726,7 +726,9 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
     assert blocked is True
 
 
-def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_controls() -> None:
+def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Preserve code indentation while every other DLP detector remains authoritative."""
 
     safe_comment: dict[str, object] = {
@@ -751,6 +753,25 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert blocked is False
     decisions = review_runner._private_dlp_decisions(safe_payload, forbidden=())
     assert decisions["decisions"] == []
+
+    tab_secret = "synthetic\ttab-bearing\tsecret"
+    monkeypatch.setenv("SYNTHETIC_SECRET", tab_secret)
+    for value, forbidden in (
+        (tab_secret, ()),
+        ("private\ttab-bearing\tcode", ("private\ttab-bearing\tcode",)),
+    ):
+        payload = {
+            **safe_payload,
+            "comments": [{**safe_comment, "existing_code": value}],
+        }
+        projected, publication, blocked = review_runner._publication_projection(
+            payload,
+            forbidden=forbidden,
+            allowed_tools=frozenset(),
+        )
+        assert projected["comments"][0].get("existing_code") is None
+        assert publication["state"] == "publication-filtered"
+        assert blocked is True
 
     hostile_values = (
         "line\vhidden",

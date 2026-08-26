@@ -152,6 +152,13 @@ milestone.
    - Inspect the OCR result and manifest for complete selected-item coverage;
      trace and fix only confirmed findings, rerun their owner tests, and record
      the private-safe conclusions without publishing raw provider artifacts.
+   - The final exact-range run completed all 10 selected items at
+     `02c2f9d8f76d736ba83deed7700bed9374c4e38d` with no failed, reused, or
+     waived coverage and produced three confirmed boundary corrections: make
+     receipt-v5 original outcome/count validation exhaustive; preserve the
+     original HTAB-bearing code value for secret and forbidden matching while
+     relaxing only its control-character admission; and carry a valid
+     receipt-bound OCR core advisory into failed-result Technical details.
 6. **Holistic self-review and feature delivery**
    - Review the complete post-OCR diff, correct findings, run the final
      quality/coverage, lock, manifest, Towncrier, Gitleaks, deterministic-build,
@@ -243,9 +250,31 @@ milestone.
   and `git diff --check` passed. The rendered draft has separate Bug Fixes
   (#145), Maintenance (#146), and Rules (#146) sections with explicit
   deployment and unchanged-contract guidance.
-- Product implementation is complete locally. The release remains deferred;
-  exact-head Gitleaks, the final push, hosted CI reconciliation, and Draft/
-  issue readback remain.
+- The original product implementation and all three final-OCR corrections are
+  complete locally. Focused posting/review regressions pass 343 tests plus 217
+  subtests; shared DLP callers pass 66 tests plus 8 subtests; Ruff and strict
+  MyPy pass. The release remains active pending the final holistic gates, push,
+  hosted CI reconciliation, Draft transition, and protected release lifecycle.
+- The single authorized final local OCR `1.10.1` review completed the exact
+  `origin/main..02c2f9d8f76d736ba83deed7700bed9374c4e38d` range in 6m23s with
+  concurrency `2`, complete 10/10 coverage, no failed/reused/waived items,
+  no stderr, and 102 tool calls. Its three candidates were all confirmed as
+  bounded correctness or trust-boundary defects and are the active corrective
+  scope above; the retained private result and DLP sidecar remain local-only
+  remediation evidence and will be deleted after verification.
+- Final holistic gates passed after the corrective slice: Gitleaks 8.24.3
+  scanned the complete `origin/main..HEAD` feature range; `pip-audit
+  --skip-editable` found no known dependency vulnerabilities; the focused
+  public-contract suite passed 25 tests; and `git diff --check` passed.
+- Two independent local `0.8.4` builds with one fixed source epoch were
+  byte-identical. Twine accepted both wheel/sdist pairs, archive inspection
+  found no private/log/Git/environment/key paths, and clean wheel plus sdist
+  installations passed `ocr-ci --help` on Python 3.12, 3.13, and 3.14.
+- Holistic documentation review replaced the remaining obsolete
+  tab-normalized-copy wording with the implemented unchanged-value DLP
+  contract. Required variables remain bold in the canonical tables, and the
+  example toolkit pin correctly stays at the currently published `0.8.3`
+  until the release PR advances it.
 
 #### Risks And Recovery
 
@@ -266,9 +295,9 @@ milestone.
 
 #### Resume Point
 
-Current action: independently review and validate exact Draft PR #147 head
-`b4c6cf4602ca3e66a6c52f4ba680ae06546356ce`, then run the single final local
-OCR `1.10.1` review before any new push or Ready transition.
+Current action: sign and push the complete post-OCR corrective head, verify the
+hosted checks and review threads on that exact head, then move Draft PR #147 to
+Ready and squash-merge it through the protected branch policy.
 
 #### Plan Fidelity Check
 

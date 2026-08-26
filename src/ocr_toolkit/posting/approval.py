@@ -225,12 +225,16 @@ def publication_dlp_state(value: Any) -> str | None:
     failed = original["failed"]
     waived = original["waived"]
     outcome = original["outcome"]
-    if (
-        selected != completed + reused + failed + waived
-        or (outcome in {"clean", "warning"} and failed != 0)
-        or (outcome == "partial" and selected > 0 and not 0 < failed < selected)
-        or (outcome == "skipped" and any((selected, completed, reused, failed, waived)))
-    ):
+    derived_outcomes = {"failed"} | (
+        {"skipped"}
+        if selected == 0
+        else {"clean", "warning"}
+        if failed == 0
+        else {"failed"}
+        if failed == selected
+        else {"partial"}
+    )
+    if selected != completed + reused + failed + waived or outcome not in derived_outcomes:
         return None
     return "publication-filtered"
 

@@ -687,6 +687,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            ocr_core_advisory_summary=ocr_core_advisory_summary,
         )
 
     billing_reason = llm_billing_failure_reason(warnings)
@@ -1096,6 +1097,7 @@ def post_manifest_failure(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    ocr_core_advisory_summary: str = "",
 ) -> int:
     """Post a manifest-declared run failure while preserving prior review notes."""
 
@@ -1108,6 +1110,7 @@ def post_manifest_failure(
         tool_calls_summary=tool_calls_summary,
         mcp_usage_summary=mcp_usage_summary,
         token_usage_summary=token_usage_summary,
+        ocr_core_advisory_summary=ocr_core_advisory_summary,
         outcome_status="failed",
         outcome_message=message,
         coverage_summary=outcome.coverage_summary,

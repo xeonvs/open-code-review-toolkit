@@ -1353,6 +1353,46 @@ class PostingIdentityTests(unittest.TestCase):
                     "waived": [],
                 },
             },
+            "_ocr_toolkit": {
+                "schema_version": 5,
+                "review": {
+                    "source_sha": "a" * 40,
+                    "policy_sha": "b" * 40,
+                    "mr_author_id": 41,
+                },
+                "context": {
+                    "mode": "off",
+                    "state": "disabled",
+                    "classes": [],
+                    "policy_digest": None,
+                    "per_source": {},
+                    "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+                    "required_degraded": False,
+                    "mutable_admitted": False,
+                    "tool_usage": {"context_get": 0, "context_list": 0},
+                },
+                "mcp": {
+                    "capabilities": [
+                        {
+                            "server": "ocr_toolkit_evidence",
+                            "transport": "builtin",
+                            "tools": ["ocr_toolkit_evidence"],
+                        }
+                    ],
+                    "usage": {},
+                },
+                "evidence": {
+                    "mandatory": False,
+                    "used": False,
+                    "calls": 0,
+                    "actions": {"state": "unavailable"},
+                },
+                "publication": {"state": "passed"},
+                "cleanup": {"result": "passed"},
+            },
+            ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+            ),
         }
         with (
             patched_attr(
@@ -1370,6 +1410,13 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(collect_calls, [])
         self.assertIn("Previous OCR review comments were preserved", notes[0])
         self.assertIn("Coverage: selected 1", notes[0])
+        visible, technical = notes[0].split("<details>", 1)
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
