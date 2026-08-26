@@ -459,6 +459,10 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert workflow.count("upsert-issue") == 1
     assert "continue-on-error: true" in workflow
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
+    assert "QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}" in workflow
+    assert 'case "${QUALIFICATION_OUTCOME}" in' in workflow
+    assert "success) input=(--evidence /tmp/ocr-compat/evidence.json)" in workflow
+    assert "failure) input=(--status /tmp/ocr-compat/status.json)" in workflow
     assert "if: ${{ !cancelled() }}" in workflow
     assert "if: ${{ always() && !cancelled() }}" in workflow
     assert "if: steps.qualify.outcome == 'failure'" in workflow
@@ -489,6 +493,23 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "absolute Python executable in isolated mode" in policy
     assert "eventually consistent search index" in policy
     assert "ocr.run-manifest/v1" in policy
+
+
+def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegation() -> None:
+    """Keep help text, normalization, effective values, and authority distinct."""
+
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+
+    assert "`0` delegates to the installed OCR template" in configuration
+    assert "template's effective `100` rounds" in configuration
+    assert "result\nwarnings, receipts, DLP inputs, telemetry" in configuration
+    assert "`OCR_MAX_TOOLS=0`" in operations
+    assert "CLI help, normalization text, and effective template value can differ" in operations
+    assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
+    assert "help text\n  alone is not compatibility evidence" in development
 
 
 def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:

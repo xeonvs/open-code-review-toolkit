@@ -276,11 +276,16 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
 
 
 def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
-    """Run all five functional combinations while collecting coverage once."""
+    """Keep Linux blocking and macOS visible but advisory at both endpoints."""
 
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "  push:" not in workflow
+    assert "continue-on-error: ${{ matrix.advisory }}" in workflow
+    assert workflow.count("advisory: false") == 3
+    assert workflow.count("advisory: true") == 2
+    assert workflow.count("os: ubuntu-latest") == 3
+    assert workflow.count("os: macos-latest") == 2
     assert workflow.count('python: "3.12"') == 2
     assert workflow.count('python: "3.13"') == 1
     assert workflow.count('python: "3.14"') == 2

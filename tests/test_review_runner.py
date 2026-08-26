@@ -811,7 +811,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     assert persisted["warnings"] == ["Safe bounded warning."]
     assert persisted["tool_calls"] == {
         "total": 2,
-        "by_tool": {"ocr_toolkit_evidence": 1},
+        "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
     }
     assert persisted["_ocr_toolkit"]["publication"] == publication
     assert publication["retained"] == {"comments": 2, "warnings": 1}
@@ -1189,10 +1189,6 @@ def test_warning_objects_are_conservatively_publication_relevant() -> None:
     [
         ("message", "Authorization: Bearer synthetic-secret-token"),
         ("warnings", ["private warning detail"]),
-        (
-            "tool_calls",
-            {"total": 1, "by_tool": {"private-tool-name": 1}},
-        ),
     ],
 )
 def test_unsafe_displayed_result_units_are_partial(field: str, value: object) -> None:
@@ -1215,6 +1211,91 @@ def test_unsafe_displayed_result_units_are_partial(field: str, value: object) ->
     assert "synthetic-secret-token" not in serialized
     assert "private warning detail" not in serialized
     assert "private-tool-name" not in serialized
+
+
+def test_unknown_tool_name_is_private_sanitized_without_blocking_publication() -> None:
+    """Keep unlisted tool names private without changing review or approval inputs."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {"ocr_toolkit_evidence": 1, "private-tool-name": 1},
+        },
+    }
+    baseline = review_runner._canonical_result_projection(payload)
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private-tool-name",),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert projected["status"] == "success"
+    assert projected["tool_calls"] == {
+        "total": 2,
+        "by_tool": {"ocr_toolkit_evidence": 1},
+    }
+    assert "private-tool-name" not in json.dumps(projected)
+    assert review_runner._canonical_result_projection(projected) == baseline
+
+
+def test_closed_tool_names_do_not_create_dlp_or_approval_false_positives() -> None:
+    """Treat compile-time tool labels as labels rather than MR-controlled text."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {"file_read": 1, "ocr_toolkit_evidence": 1},
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("file_read",),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert projected is payload
+    assert publication == {"state": "passed"}
+    assert blocked is False
+
+
+def test_invalid_closed_tool_counter_is_private_sanitized() -> None:
+    """Sanitize a hostile non-numeric counter without publishing or blocking it."""
+
+    payload: dict[str, object] = {
+        "status": "success",
+        "comments": [],
+        "warnings": [],
+        "tool_calls": {
+            "total": 2,
+            "by_tool": {
+                "file_read": "Authorization: Bearer synthetic-tool-token",
+                "ocr_toolkit_evidence": 1,
+            },
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is False
+    assert publication["state"] == "private-sanitized"
+    assert "synthetic-tool-token" not in json.dumps(projected)
+    assert review_runner._canonical_result_projection(projected) == (
+        review_runner._canonical_result_projection(payload)
+    )
 
 
 def test_unsafe_manifest_failure_detail_is_partial_and_destroyed() -> None:
@@ -2100,14 +2181,31 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("returncode", "stderr", "warning", "rejection"),
+    ("returncode", "stderr", "warning", "notices", "rejection"),
     [
-        (0, b"", None, None),
+        (0, b"", None, (), None),
         (
             0,
             b"[ocr] --background-file content is 2001 characters, exceeding the recommended "
             b"2000 (continuing but review quality might be impacted)\n",
             "2001-character review background above its recommended 2000-character threshold",
+            (),
+            None,
+        ),
+        (
+            0,
+            b"[ocr] --max-tools 30 is below minimum 50, using 50\n",
+            None,
+            ("--max-tools 30", "normalization target of 50", "template remains authoritative"),
+            None,
+        ),
+        (
+            0,
+            b"[ocr] --max-tools 30 is below minimum 50, using 50\n"
+            b"[ocr] --background-file content is 2001 characters, exceeding the recommended "
+            b"2000 (continuing but review quality might be impacted)\n",
+            "2001-character review background above its recommended 2000-character threshold",
+            ("--max-tools 30", "normalization target of 50", "template remains authoritative"),
             None,
         ),
         (
@@ -2115,6 +2213,7 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
             b"Error: background content is 8001 characters, exceeding the hard limit of 8000 "
             b"(aborting)\n",
             None,
+            (),
             ("ocr_background_character_limit", 8_001, 8_000, "characters"),
         ),
         (
@@ -2122,6 +2221,7 @@ def test_review_rejects_caller_owned_output(arguments: list[str]) -> None:
             b'Error: background file "/private/synthetic/background.md" is 1048577 bytes, '
             b"exceeding the maximum of 1048576 bytes; please provide a smaller file\n",
             None,
+            (),
             ("ocr_background_file_size_limit", 1_048_577, 1_048_576, "bytes"),
         ),
     ],
@@ -2130,6 +2230,7 @@ def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
     returncode: int,
     stderr: bytes,
     warning: str | None,
+    notices: tuple[str, ...],
     rejection: tuple[str, int, int, str] | None,
 ) -> None:
     """Keep paths and raw OCR diagnostics outside the public qualification result."""
@@ -2139,6 +2240,10 @@ def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
         assert warning is None or warning in result.warning  # type: ignore[operator]
         if warning is None:
             assert result.warning is None
+        for expected in notices:
+            assert expected in result.operator_notices[0]
+        if not notices:
+            assert result.operator_notices == ()
         return
     with pytest.raises(review_runner.BackgroundQualificationRejected) as raised:
         review_runner._parse_background_preview(returncode=returncode, stderr=stderr)
@@ -2153,6 +2258,11 @@ def test_background_preview_parser_accepts_only_closed_installed_ocr_forms(
     [
         (1, b"provider token rejected\n"),
         (0, b"prefix [ocr] --background-file content is 2001 characters\n"),
+        (0, b"[ocr] --max-tools 30 is below minimum 50, using 50\nunknown\n"),
+        (0, b"[ocr] --max-tools 30 is below minimum 50, using 50\n" * 2),
+        (0, b"[ocr] --max-tools 50 is below minimum 50, using 50\n"),
+        (0, b"[ocr] --max-tools 30 is below minimum 50, using 51\n"),
+        (0, "[ocr] --max-tools \uff13\uff10 is below minimum 50, using 50\n".encode()),
         (
             1,
             b'Error: background file "/private/value\npath" is 9 bytes, exceeding the maximum '
@@ -2383,6 +2493,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
 
     events: list[object] = []
     session_homes: list[Path] = []
+    real_subprocess_run = subprocess.run
     original_home = os.environ.get("HOME")
     artifacts = review_runner.repository_artifacts(tmp_path)
     review_runner.prepare_artifact_directory(artifacts)
@@ -2425,9 +2536,24 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         result.write_text(json.dumps({"status": status}), encoding="utf-8")
         return ocr_exit_code
 
-    def qualify(args: list[str], **_kwargs: object) -> review_runner.BackgroundQualification:
-        events.append(("preview", args))
-        return review_runner.BackgroundQualification()
+    def preview(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if "stdout" not in kwargs:
+            return real_subprocess_run(argv, **kwargs)  # type: ignore[return-value]
+        events.append(("preview", argv))
+        kwargs["stdout"].write(b'{"files":[]}\n')  # type: ignore[union-attr]
+        kwargs["stderr"].write(  # type: ignore[union-attr]
+            b"[ocr] --max-tools 30 is below minimum 50, using 50\n"
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    finalized: list[dict[str, object]] = []
+
+    def finalize(
+        *_args: object, **kwargs: object
+    ) -> tuple[dict[str, int], bool, dict[str, object]]:
+        finalized.append(kwargs)
+        events.append("ocr-usage")
+        return {"ocr_toolkit_evidence": 1}, False, {"state": "passed"}
 
     def write_bootstrap(path: Path, content: str) -> None:
         events.append(("bootstrap", path, content))
@@ -2476,20 +2602,25 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         patched_attr(
             review_runner,
             "_finalize_ocr_result",
-            lambda *_args, **_kwargs: (
-                events.append("ocr-usage") or {"ocr_toolkit_evidence": 1},
-                False,
-                {"state": "passed"},
-            ),
+            finalize,
         ),
         patched_attr(review_runner, "_resolve_ocr_binary", lambda: "/synthetic/ocr"),
-        patched_attr(review_runner, "_qualify_review_background", qualify),
+        patched_attr(review_runner.subprocess, "run", preview),
         patched_attr(review_runner, "run_review", run),
     ):
         result = review_runner.run_evidence_review(
             tmp_path / "result.json",
             tmp_path / "stderr.log",
-            ["--from", "base", "--to", "head", "--format", "json"],
+            [
+                "--from",
+                "base",
+                "--to",
+                "head",
+                "--format",
+                "json",
+                "--max-tools",
+                "30",
+            ],
             preserve_private_artifacts=preserve_private_artifacts,
         )
 
@@ -2514,17 +2645,22 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     assert events[6] == "self-query"
     assert events[7][0] == "preview"  # type: ignore[index]
     assert events[7][1] == [  # type: ignore[index]
+        "/synthetic/ocr",
+        "review",
         "--from",
         "a" * 40,
         "--to",
         "b" * 40,
         "--format",
         "json",
+        "--max-tools",
+        "30",
         "--background-file",
         str(artifacts.bootstrap),
+        "--preview",
     ]
     assert events[8][0] == "ocr"  # type: ignore[index]
-    assert events[8][3] == events[7][1]  # type: ignore[index]
+    assert events[8][3] == events[7][1][2:-1]  # type: ignore[index]
     if preserve_private_artifacts:
         assert "ocr-usage" not in events
         assert artifacts.store.exists()
@@ -2540,6 +2676,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     else:
         if ocr_exit_code == 0:
             assert events[9] == "ocr-usage"
+            assert finalized[0]["toolkit_warnings"] == ()
         else:
             assert "ocr-usage" not in events
         assert not artifacts.store.exists()

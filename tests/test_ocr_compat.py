@@ -759,6 +759,201 @@ def test_qualify_cli_retains_status_when_manifest_validation_fails(tmp_path: Pat
     assert status["reason"] == "metadata-invalid"
 
 
+def test_qualify_cli_replaces_retained_evidence_with_failed_status_after_late_write(
+    tmp_path: Path,
+) -> None:
+    """A late public-output failure remains authoritative after evidence exists."""
+
+    module = load_script()
+    evidence_output = tmp_path / "evidence.json"
+    status_output = tmp_path / "status.json"
+    blocked_parent = tmp_path / "blocked-parent"
+    blocked_parent.write_text("not a directory\n", encoding="utf-8")
+    evidence = json.loads(
+        (PROJECT_ROOT / "compatibility" / "evidence" / "ocr-1.10.0.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def retain_evidence(
+        _release: dict[str, Any],
+        _manifest: dict[str, Any],
+        output: Path,
+        **_kwargs: object,
+    ) -> dict[str, Any]:
+        output.write_bytes(module.canonical_json(evidence))
+        return evidence
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module, "qualify_release", retain_evidence),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.10.0",
+                "--comparison-version",
+                "1.9.10",
+                "--tested-baseline-version",
+                "1.9.10",
+                "--output",
+                str(evidence_output),
+                "--issue-body",
+                str(blocked_parent / "issue.md"),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert evidence_output.exists()
+    assert status["phase"] == "evidence"
+    assert status["reason"] == "issue-body-write-failed"
+    assert status["result"] == "failed"
+    assert str(blocked_parent) not in status_output.read_text(encoding="utf-8")
+
+
+def test_atomic_output_preserves_baseline_and_cleans_temporary_on_replace_failure(
+    tmp_path: Path,
+) -> None:
+    """A failed commit cannot replace the baseline or retain private temporary data."""
+
+    module = load_script()
+    output = tmp_path / "status.json"
+    output.write_bytes(b"baseline\n")
+
+    def fail_replace(_source: object, _target: object) -> None:
+        raise OSError("injected replace failure")
+
+    with patched_attr(module.os, "replace", fail_replace):
+        with pytest.raises(module.CompatibilityError, match="cannot write compatibility status"):
+            module.write_atomic_bytes(output, b"replacement\n", label="compatibility status")
+
+    assert output.read_bytes() == b"baseline\n"
+    assert list(tmp_path.glob(".status.json.*")) == []
+
+
+def test_qualify_cli_recovers_when_success_status_commit_fails_once(tmp_path: Path) -> None:
+    """A failed success-status commit is replaced by its closed failure status."""
+
+    module = load_script()
+    evidence_output = tmp_path / "evidence.json"
+    status_output = tmp_path / "status.json"
+    evidence = json.loads(
+        (PROJECT_ROOT / "compatibility" / "evidence" / "ocr-1.10.0.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    real_write = module.write_atomic_bytes
+    status_writes = 0
+
+    def retain_evidence(
+        _release: dict[str, Any],
+        _manifest: dict[str, Any],
+        output: Path,
+        **_kwargs: object,
+    ) -> dict[str, Any]:
+        output.write_bytes(module.canonical_json(evidence))
+        return evidence
+
+    def fail_first_status_write(path: Path, payload: bytes, *, label: str) -> None:
+        nonlocal status_writes
+        if path == status_output:
+            status_writes += 1
+            if status_writes == 1:
+                raise module.CompatibilityError("cannot write compatibility status")
+        real_write(path, payload, label=label)
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module, "qualify_release", retain_evidence),
+        patched_attr(module, "write_atomic_bytes", fail_first_status_write),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.10.0",
+                "--comparison-version",
+                "1.9.10",
+                "--tested-baseline-version",
+                "1.9.10",
+                "--output",
+                str(evidence_output),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status_writes == 2
+    assert status["phase"] == "evidence"
+    assert status["reason"] == "status-write-failed"
+    assert status["result"] == "failed"
+
+
+def test_status_upsert_does_not_require_a_valid_support_manifest(tmp_path: Path) -> None:
+    """Publish a closed recovery status without reopening invalid support metadata."""
+
+    module = load_script()
+    invalid_manifest = tmp_path / "invalid-manifest.json"
+    invalid_manifest.write_text("{}\n", encoding="utf-8")
+    status_path = tmp_path / "status.json"
+    status_path.write_bytes(
+        module.canonical_json(
+            module.qualification_status(
+                tag="v1.10.0",
+                comparison_version="1.9.10",
+                tested_baseline_version="1.9.10",
+                result="failed",
+                phase="metadata",
+                reason="metadata-invalid",
+            )
+        )
+    )
+    issue_number = tmp_path / "issue-number.txt"
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    def request(
+        url: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        calls.append((url, method, payload))
+        return {"number": 140}
+
+    with (
+        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 140),
+        patched_attr(module, "_issue_api_request", request),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(invalid_manifest),
+                "upsert-issue",
+                "--status",
+                str(status_path),
+                "--repository",
+                "synthetic/repository",
+                "--run-url",
+                "https://github.com/synthetic/repository/actions/runs/123",
+                "--output-number",
+                str(issue_number),
+            ]
+        )
+
+    assert result == 0
+    assert issue_number.read_text(encoding="utf-8") == "140\n"
+    assert calls[0][1] == "PATCH"
+    assert calls[0][2] is not None
+    assert "metadata-invalid" in calls[0][2]["body"]
+
+
 def test_qualification_requires_exact_supported_asset_matrix() -> None:
     module = load_script()
     candidate = release("1.7.18")
@@ -871,6 +1066,70 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
             module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
 
     assert error.value.code == 400
+
+
+def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
+    """Derive effective numeric behavior without retaining raw OCR diagnostics."""
+
+    module = load_script()
+
+    def preview(
+        _binary: Path,
+        _repo: Path,
+        _base: str,
+        _head: str,
+        _directory: Path,
+        *,
+        flag: str,
+        value: int | None,
+    ) -> Any:
+        stderr = ""
+        returncode = 0
+        if flag == "--max-tools" and value in {1, 49}:
+            stderr = f"[ocr] --max-tools {value} is below minimum 50, using 50\n"
+        elif flag == "--max-tools" and value == -1:
+            returncode = 1
+            stderr = (
+                "Error: --max-tools must be a non-negative integer (0 means use template default)\n"
+            )
+        elif flag == "--max-tokens-budget" and value == -1:
+            returncode = 1
+            stderr = (
+                "Error: --max-tokens-budget must be a non-negative integer (0 means unlimited)\n"
+            )
+        return module.subprocess.CompletedProcess(
+            [flag, str(value)],
+            returncode,
+            stdout='{"files": []}\n',
+            stderr=stderr,
+        )
+
+    def effective(
+        _binary: Path,
+        _repo: Path,
+        _base: str,
+        _head: str,
+        _directory: Path,
+        *,
+        value: int,
+        expected_diagnostic: object,
+    ) -> int:
+        return 100 if value == 49 else value
+
+    with (
+        patched_attr(module, "_run_numeric_preview_case", preview),
+        patched_attr(module, "_effective_max_tools_probe", effective),
+    ):
+        result = module._numeric_cli_probe(
+            Path("/synthetic/ocr"),
+            Path("/synthetic/repo"),
+            "a" * 40,
+            "b" * 40,
+            Path("/synthetic/probe"),
+        )
+
+    assert result == module.CURRENT_NUMERIC_CLI_CONTRACT
+    assert "stderr" not in json.dumps(result)
 
 
 def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:

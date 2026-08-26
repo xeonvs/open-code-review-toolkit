@@ -20,6 +20,7 @@ from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    PUBLIC_REVIEW_TOOL_CALL_NAMES,
     SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
@@ -45,8 +46,6 @@ from ocr_toolkit.posting.settings import (
     MAX_REVIEWER_GUIDE_LABEL_CHARS,
     MAX_REVIEWER_GUIDE_LOCATION_CHARS,
     MAX_REVIEWER_GUIDE_TEXT_CHARS,
-    MAX_TOOL_CALL_NAME_CHARS,
-    MAX_TOOL_CALL_SUMMARY_TOOLS,
     SUGGESTION_HEADER,
     post_badges,
     post_emoji,
@@ -374,32 +373,25 @@ def nonnegative_int(value: Any) -> int | None:
     return None
 
 
-def truncate_tool_call_name(name: str) -> str:
-    """Return a compact tool name for one-line MR summaries."""
-
-    if len(name) <= MAX_TOOL_CALL_NAME_CHARS:
-        return name
-
-    return name[: MAX_TOOL_CALL_NAME_CHARS - 3].rstrip() + "..."
-
-
 def tool_call_name(value: Any) -> str:
-    """Extract a displayable tool name from common OCR tool-call shapes."""
+    """Extract one closed public tool name from common OCR call shapes."""
 
     if isinstance(value, str):
-        return clean_text(value)
+        name = clean_text(value)
+        return name if name in PUBLIC_REVIEW_TOOL_CALL_NAMES else ""
 
     if not isinstance(value, dict):
         return ""
 
     for key in ("name", "tool", "tool_name"):
         name = clean_text(value.get(key))
-        if name:
+        if name in PUBLIC_REVIEW_TOOL_CALL_NAMES:
             return name
 
     function_value = value.get("function")
     if isinstance(function_value, dict):
-        return clean_text(function_value.get("name"))
+        name = clean_text(function_value.get("name"))
+        return name if name in PUBLIC_REVIEW_TOOL_CALL_NAMES else ""
 
     return ""
 
@@ -407,14 +399,17 @@ def tool_call_name(value: Any) -> str:
 def tool_call_counts_from_items(
     items: list[Any],
 ) -> tuple[int | None, list[tuple[str, int]]]:
-    """Summarize a list-style OCR tool_calls payload."""
+    """Summarize admitted calls from a legacy list-style OCR payload."""
 
     counts: dict[str, int] = {}
     for item in items:
         name = tool_call_name(item)
         if not name:
             continue
-        counts[name] = counts.get(name, 0) + 1
+        count = counts.get(name, 0) + 1
+        if count > MAX_TOOLKIT_MCP_USAGE_COUNT:
+            return None, []
+        counts[name] = count
 
     total = sum(counts.values())
     if total == 0 and items:
@@ -424,51 +419,52 @@ def tool_call_counts_from_items(
 
 
 def format_tool_calls_summary(tool_calls: Any) -> str:
-    """Return one bounded MR summary line for OCR tool-call statistics."""
+    """Return one bounded MR line for admitted non-zero OCR tool counts."""
 
     entries: list[tuple[str, int]]
     total: int | None
-    scalar_total = nonnegative_int(tool_calls)
-    if scalar_total is not None:
-        total = scalar_total
-        entries = []
-    elif isinstance(tool_calls, list):
+    if isinstance(tool_calls, list):
         total, entries = tool_call_counts_from_items(tool_calls)
     elif isinstance(tool_calls, dict):
         by_tool_value = tool_calls.get("by_tool")
         entries = []
-        by_tool_total = 0
-        valid_by_tool_count = False
+        admitted_total = 0
 
         if isinstance(by_tool_value, dict):
             for raw_name, raw_count in by_tool_value.items():
-                count = nonnegative_int(raw_count)
-                if count is None:
+                if not isinstance(raw_name, str) or raw_name not in PUBLIC_REVIEW_TOOL_CALL_NAMES:
                     continue
-                name = clean_text(raw_name)
-                if not name:
+                if (
+                    not isinstance(raw_count, int)
+                    or isinstance(raw_count, bool)
+                    or not 0 < raw_count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                ):
                     continue
-                valid_by_tool_count = True
-                by_tool_total += count
-                if count > 0:
-                    entries.append((name, count))
+                admitted_total += raw_count
+                if admitted_total > MAX_TOOLKIT_MCP_USAGE_COUNT:
+                    return ""
+                entries.append((raw_name, raw_count))
 
         calls_value = tool_calls.get("calls")
-        if valid_by_tool_count:
-            list_total = None
-        elif isinstance(calls_value, list):
+        if not by_tool_value and isinstance(calls_value, list):
             list_total, entries = tool_call_counts_from_items(calls_value)
         else:
             list_total = None
 
-        total = nonnegative_int(tool_calls.get("total"))
-        if total is None:
-            if valid_by_tool_count:
-                total = by_tool_total
-            elif list_total is not None:
+        if "total" in tool_calls:
+            raw_total = tool_calls["total"]
+            if (
+                not isinstance(raw_total, int)
+                or isinstance(raw_total, bool)
+                or not 0 < raw_total <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            ):
+                return ""
+            total = raw_total
+        else:
+            if list_total is not None:
                 total = list_total
-            elif by_tool_value == {}:
-                total = 0
+            elif entries:
+                total = admitted_total
             else:
                 return ""
     else:
@@ -476,21 +472,14 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
 
     if total is None:
         return ""
-    if total == 0:
+    if total == 0 or not entries:
+        return ""
+    if sum(count for _name, count in entries) > total:
         return ""
 
     line = f"- all OCR tool calls: {total} total"
-    if not entries:
-        return line
-
     entries.sort(key=lambda item: (-item[1], item[0]))
-    shown_entries = entries[:MAX_TOOL_CALL_SUMMARY_TOOLS]
-    detail_parts = [
-        f"{inline_code(truncate_tool_call_name(name))}: {count}" for name, count in shown_entries
-    ]
-    omitted_entries = len(entries) - len(shown_entries)
-    if omitted_entries > 0:
-        detail_parts.append(f"+{omitted_entries} more")
+    detail_parts = [f"{inline_code(name)}: {count}" for name, count in entries]
 
     return f"{line} ({', '.join(detail_parts)})"
 

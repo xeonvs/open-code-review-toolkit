@@ -2469,6 +2469,8 @@ class PostingSummaryTests(unittest.TestCase):
             self.assertFalse(settings.post_emoji())
 
     def test_tool_calls_prefers_calls_when_by_tool_is_empty(self) -> None:
+        """Keep the bounded legacy list fallback for admitted tool names."""
+
         summary = posting_formatting.format_tool_calls_summary(
             {"by_tool": {}, "calls": [{"name": "file_read"}, {"tool": "code_search"}]}
         )
@@ -2476,6 +2478,106 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("2 total", summary)
         self.assertIn("`file_read`: 1", summary)
         self.assertIn("`code_search`: 1", summary)
+
+    def test_tool_calls_reports_every_useful_nonzero_counter_inline(self) -> None:
+        """Expose the complete useful activity breakdown without changing its format."""
+
+        summary = posting_formatting.format_tool_calls_summary(
+            {
+                "total": 36,
+                "by_tool": {
+                    "task_done": 1,
+                    "file_find": 1,
+                    "context_list": 1,
+                    "file_read_diff": 2,
+                    "context_get": 3,
+                    "code_comment": 4,
+                    "ocr_toolkit_evidence": 5,
+                    "code_search": 7,
+                    "file_read": 12,
+                },
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "- all OCR tool calls: 36 total "
+            "(`file_read`: 12, `code_search`: 7, `ocr_toolkit_evidence`: 5, "
+            "`code_comment`: 4, `context_get`: 3, `file_read_diff`: 2, "
+            "`context_list`: 1, `file_find`: 1, `task_done`: 1)",
+        )
+        self.assertNotIn("more", summary)
+
+    def test_tool_calls_omits_empty_zero_or_unknown_breakdowns(self) -> None:
+        """Do not emit a technical line without a positive admitted counter list."""
+
+        cases = (
+            None,
+            7,
+            [],
+            {"total": 0, "by_tool": {}},
+            {"total": 5, "by_tool": {}},
+            {"total": 5, "by_tool": {"file_read": 0}},
+            {"total": 5, "by_tool": {"dynamic_external_tool": 5}},
+            [{"name": "dynamic_external_tool"}],
+        )
+
+        for value in cases:
+            with self.subTest(value=value):
+                self.assertEqual(posting_formatting.format_tool_calls_summary(value), "")
+
+    def test_tool_calls_ignores_invalid_counts_and_rejects_invalid_totals(self) -> None:
+        """Admit only bounded integer counters under a consistent positive total."""
+
+        summary = posting_formatting.format_tool_calls_summary(
+            {
+                "total": 2,
+                "by_tool": {
+                    "file_read": 2,
+                    "code_search": True,
+                    "file_find": -1,
+                    "task_done": "1",
+                    "context_get": 1.0,
+                    "context_list": ocr_result.MAX_TOOLKIT_MCP_USAGE_COUNT + 1,
+                },
+            }
+        )
+
+        self.assertEqual(summary, "- all OCR tool calls: 2 total (`file_read`: 2)")
+        invalid_totals = (False, 0, -1, "2", 2.0, ocr_result.MAX_TOOLKIT_MCP_USAGE_COUNT + 1)
+        for total in invalid_totals:
+            with self.subTest(total=total):
+                self.assertEqual(
+                    posting_formatting.format_tool_calls_summary(
+                        {"total": total, "by_tool": {"file_read": 1}}
+                    ),
+                    "",
+                )
+        self.assertEqual(
+            posting_formatting.format_tool_calls_summary({"total": 1, "by_tool": {"file_read": 2}}),
+            "",
+        )
+
+    def test_tool_and_token_activity_remain_separate_technical_lines(self) -> None:
+        """Do not imply that aggregate token usage is attributable to tool counters."""
+
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="success",
+            outcome_message="No comments generated. Looks good to me.",
+            tool_calls_summary=posting_formatting.format_tool_calls_summary(
+                {"total": 2, "by_tool": {"file_read": 2}}
+            ),
+            token_usage_summary="- token usage: 48 total (input: 40, output: 8)",
+            emoji=True,
+        )
+
+        self.assertIn("- all OCR tool calls: 2 total (`file_read`: 2)", summary)
+        self.assertIn("- token usage: 48 total (input: 40, output: 8)", summary)
+        self.assertNotIn("per-tool", summary)
 
     def test_root_total_is_not_treated_as_token_usage(self) -> None:
         self.assertEqual(posting_formatting.format_token_usage_summary({"total": 17}), "")

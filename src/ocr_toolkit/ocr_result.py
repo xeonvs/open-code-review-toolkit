@@ -27,6 +27,23 @@ MAX_TOOLKIT_MCP_TOOL_NAME_CHARS = 4_096
 MAX_TOOLKIT_MCP_USAGE_COUNT = 1_000_000_000
 TOOLKIT_MCP_SERVER_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
+# Closed names whose numeric call counts may appear in the public review summary.
+# Dynamic external MCP tools remain represented by the receipt's verified
+# per-server aggregate so provider-controlled names do not cross into GitLab.
+PUBLIC_REVIEW_TOOL_CALL_NAMES = frozenset(
+    {
+        "code_comment",
+        "code_search",
+        "context_get",
+        "context_list",
+        "file_find",
+        "file_read",
+        "file_read_diff",
+        "ocr_toolkit_evidence",
+        "task_done",
+    }
+)
+
 
 class OcrResultMissing(Exception):
     """The OCR result artifact is missing or unreadable on disk."""

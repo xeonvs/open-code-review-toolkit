@@ -13,7 +13,7 @@ uv run python -m build
 uv run twine check dist/*
 ```
 
-For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests still run the complete suite on all five supported OS/Python combinations, while Ubuntu with the newest supported Python is the sole coverage owner. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
+For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests still run the complete suite on all five supported OS/Python combinations. The three Linux jobs are release-blocking, with Ubuntu on the newest supported Python as the sole coverage owner. The two macOS endpoint jobs are best-effort compatibility diagnostics: they continue to run and remain visible for follow-up, but a platform-only failure does not block a Linux-priority release. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
 
 Runtime code must remain compatible with Python 3.12-3.14 and standard-library-only. Tests must use synthetic data; public examples must use safe placeholder hosts and credentials while describing the real operating behavior rather than labelling the feature itself as synthetic. User-visible changes require a fragment in `changelog.d/`.
 Repository-only qualification tools and evidence live under `scripts/` and `compatibility/`; they are excluded from both published distributions. Validate the manifest with `PYTHONPATH=src python scripts/ocr_compat.py validate`.
@@ -57,6 +57,12 @@ Select checks from the changed boundary rather than from an ever-growing generic
 - package or executable-integration changes include clean wheel and sdist validation rather than mocks alone;
 - public-source changes keep private audit material untracked and run the pinned complete-range Gitleaks wrapper before push; and
 - release changes run the release authorization, receipt, workflow, artifact, and documentation suites owned by `docs/release.md`.
+- OCR pin changes run production-equivalent behavioral probes for every numeric
+  CLI option the toolkit example passes. Cover omitted/default, each sentinel,
+  invalid-below-boundary, minimum minus one, minimum, a representative value,
+  and maximum plus one when a maximum exists. Record only closed exit,
+  diagnostic, normalization, ownership, and effective-value facts; help text
+  alone is not compatibility evidence.
 
 Safe bounded read-only diagnostics are allowed. A boundary rule prohibits the unsafe acquisition, trust transition, or mutation mechanism, not HTTP, subprocesses, provider APIs, file cleanup, or debugging as whole categories.
 

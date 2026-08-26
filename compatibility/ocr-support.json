@@ -1181,8 +1181,8 @@
         "semantic_grouping"
       ],
       "evidence": "compatibility/evidence/ocr-1.10.0.json",
-      "evidence_sha256": "50f9668b68dbcc4dc83f379a55e81aa58bc7188d1be88d44abb32a509361e761",
-      "human_conclusion": "Reviewed OCR 1.9.10...1.10.0 source and hosted Linux wire evidence: semantic grouping, path-aware comments, default medium two-round review, private additive group metadata, output-file capability, git diagnostics, and the 16384 completion cap are compatible with toolkit boundaries; toolkit retains exclusive result-path ownership and explicit 4096 cap support.",
+      "evidence_sha256": "55fe857b240df00d69a7e70c8ac2d0a0bb2c12640b72e6aa9f270fa87063f8eb",
+      "human_conclusion": "Reviewed OCR 1.9.10...1.10.0 source, hosted Linux wire evidence, and exact Darwin numeric-boundary evidence: semantic grouping, path-aware comments, default medium two-round review, private additive group metadata, output-file capability, git diagnostics, the 16384 completion cap, and template-owned max-tools behavior are compatible with toolkit boundaries; toolkit retains exclusive result-path ownership, explicit 4096 cap support, and closed normalization projection.",
       "published_at": "2026-08-25T05:45:43Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.10.0",
       "status": "tested",

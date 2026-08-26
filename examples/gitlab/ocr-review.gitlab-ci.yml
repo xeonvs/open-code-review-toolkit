@@ -22,8 +22,8 @@ variables:
   OCR_LLM_ALLOWED_MODELS: ""
   # Two review rounds by default; low and high remain explicit operator choices.
   OCR_REVIEW_EFFORT: "medium"
-  # Bounded example cap; raise deliberately for repositories that need more tool interaction.
-  OCR_MAX_TOOLS: "30"
+  # Inherit the installed OCR template; use a positive value only to raise its tool-call limit.
+  OCR_MAX_TOOLS: "0"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"
   # Reviews default to English. To request another language, for example Russian, set:
@@ -78,7 +78,7 @@ open_code_review:
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
-    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tools "${OCR_MAX_TOOLS:-30}" --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
+    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tools "${OCR_MAX_TOOLS:-0}" --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
     - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
 
 open_code_review_self_test:
