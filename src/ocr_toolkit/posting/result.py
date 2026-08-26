@@ -122,7 +122,10 @@ def _safe_detail(value: object, reason: str) -> str:
 
 
 def normalize_coverage_diagnostics(
-    outcome: ReviewOutcome, warnings: Sequence[Any]
+    outcome: ReviewOutcome,
+    warnings: Sequence[Any],
+    *,
+    legacy_warning_fallback: bool = True,
 ) -> CoverageDiagnostics:
     """Normalize manifest failures or legacy warnings once at the posting boundary."""
 
@@ -136,7 +139,7 @@ def normalize_coverage_diagnostics(
             )
             for item in outcome.failed_items
         )
-    elif outcome.kind == "partial":
+    elif outcome.kind == "partial" and legacy_warning_fallback:
         for warning in warnings:
             path = warning.get("file") or warning.get("path") if isinstance(warning, dict) else None
             candidates.append((path, _legacy_reason(warning), ocr_warning_text(warning)))

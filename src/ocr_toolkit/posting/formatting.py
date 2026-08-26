@@ -600,10 +600,10 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
     omitted = signal["omitted"]
     carried = signal["carried_forward_comments"]
     completeness = (
-        "One or more publication units were omitted, so this review is partial and cannot "
-        "authorize automatic approval."
+        "One or more public projection units were omitted. OCR coverage is reported "
+        "separately, and automatic approval remains unavailable."
         if omitted["comments"] or omitted["warnings"]
-        else "The canonical publication or approval projection changed, so automatic approval remains unavailable."
+        else "The public projection changed, so automatic approval remains unavailable."
     )
     return "\n".join(
         [
@@ -831,7 +831,11 @@ def format_reviewer_guide(
         enumerate(comments),
         key=lambda item: _guide_comment_rank(item[1], item[0]),
     )
-    guide_comments = [comment for _, comment in ranked_comments[:MAX_REVIEWER_GUIDE_COMMENTS]]
+    guide_comments = (
+        [comment for _, comment in ranked_comments[:MAX_REVIEWER_GUIDE_COMMENTS]]
+        if len(comments) >= 2
+        else []
+    )
     if guide_comments:
         lines.append("")
         lines.append("### Recommended focus areas")
@@ -880,6 +884,8 @@ def _review_outcome_line(
             marker, status_text = "⚠️", "Review stopped at token budget"
         elif partial_result:
             marker, status_text = "⚠️", "Review incomplete"
+        elif outcome_status == "publication-filtered":
+            marker, status_text = "⚠️", "Review complete with publication filtering"
         elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
             marker, status_text = "⚠️", "Review complete with warnings"
         elif has_finding_state:

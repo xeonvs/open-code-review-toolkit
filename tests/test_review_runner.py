@@ -726,6 +726,75 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
     assert blocked is True
 
 
+def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_controls() -> None:
+    """Preserve code indentation while every other DLP detector remains authoritative."""
+
+    safe_comment: dict[str, object] = {
+        "path": "src/example.py",
+        "content": "Keep the bounded branch.",
+        "existing_code": "if ready:\n\treturn current",
+        "suggestion_code": "if ready:\n\treturn updated",
+    }
+    safe_payload: dict[str, object] = {
+        "status": "success",
+        "comments": [safe_comment],
+        "warnings": [],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        safe_payload,
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+
+    assert projected is safe_payload
+    assert publication == {"state": "passed"}
+    assert blocked is False
+    decisions = review_runner._private_dlp_decisions(safe_payload, forbidden=())
+    assert decisions["decisions"] == []
+
+    hostile_values = (
+        "line\vhidden",
+        "line\fhidden",
+        "line\x00hidden",
+        "line\u202ehidden",
+        "owner = 'synthetic@example.invalid'",
+        "Authorization: Bearer synthetic-tab-field-token",
+        "<span>hidden</span>",
+        "private code sentence",
+    )
+    for value in hostile_values:
+        payload = {
+            **safe_payload,
+            "comments": [
+                {
+                    **safe_comment,
+                    "existing_code": value,
+                }
+            ],
+        }
+        projected, publication, blocked = review_runner._publication_projection(
+            payload,
+            forbidden=("private code sentence",),
+            allowed_tools=frozenset(),
+        )
+        assert publication["state"] == "publication-filtered"
+        assert blocked is True
+        assert value not in json.dumps(projected)
+
+    content_with_tab = {
+        **safe_payload,
+        "comments": [{"content": "Finding\twith hidden layout"}],
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        content_with_tab,
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+    assert publication["reason_counts"]["invalid_text"] == 1
+    assert blocked is True
+
+
 def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     tmp_path: Path,
 ) -> None:
@@ -1399,6 +1468,56 @@ def test_unsafe_manifest_failure_detail_is_partial_and_destroyed() -> None:
     assert blocked is True
     assert "manifest" not in projected
     assert "private failure detail" not in json.dumps(projected)
+
+
+def test_filtered_budget_projection_preserves_the_original_stop_state() -> None:
+    """Keep a real token-budget stop stronger than independent publication filtering."""
+
+    payload: dict[str, object] = {
+        "status": "partial",
+        "summary": {"budget_exceeded": True},
+        "comments": [{"content": "Safe finding."}],
+        "warnings": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "partial",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}, {"item_id": "safe-b"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [
+                    {
+                        "item_id": "safe-b",
+                        "path": "src/private.py",
+                        "classification": "budget",
+                        "reason": "private failure detail",
+                    }
+                ],
+                "waived": [],
+            },
+        },
+    }
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("private failure detail",),
+        allowed_tools=frozenset(),
+    )
+    projected_outcome = parse_result_outcome(projected)
+    summary_outcome = approval.publication_outcome_for_summary(
+        projected_outcome,
+        publication,
+    )
+
+    assert blocked is True
+    assert projected["status"] == "budget_exceeded"
+    assert projected["summary"] == {"budget_exceeded": True}
+    assert projected_outcome.budget_exceeded is True
+    assert summary_outcome.kind == "partial"
+    assert summary_outcome.budget_exceeded is True
+    assert summary_outcome.coverage_summary == (
+        "Coverage: selected 2; completed 1; reused 0; failed 1; waived 0."
+    )
 
 
 def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_manifest(

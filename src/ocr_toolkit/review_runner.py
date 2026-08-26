@@ -445,7 +445,13 @@ def _review_receipt(
     }
 
 
-def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher) -> Counter[str]:
+def _dlp_reasons(
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    allow_horizontal_tabs: bool = False,
+) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
@@ -458,8 +464,9 @@ def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatch
         elif isinstance(nested, list):
             stack.extend(nested)
         elif isinstance(nested, str):
+            checked_value = nested.replace("\t", " ") if allow_horizontal_tabs else nested
             checked = check_text(
-                nested,
+                checked_value,
                 budgets=budgets,
                 publication=True,
                 forbidden_matcher=matcher,
@@ -467,6 +474,17 @@ def _dlp_reasons(value: object, *, budgets: TextBudgets, matcher: ForbiddenMatch
             if not checked.admitted:
                 reasons[checked.reason] += 1
     return reasons
+
+
+def _code_field_allows_horizontal_tabs(path: tuple[object, ...]) -> bool:
+    """Allow HTAB only in the two closed code-bearing finding fields."""
+
+    return bool(
+        len(path) == 3
+        and path[0] == "comments"
+        and isinstance(path[1], int)
+        and path[2] in {"existing_code", "suggestion_code"}
+    )
 
 
 def _private_dlp_decisions(
@@ -526,8 +544,11 @@ def _private_dlp_decisions(
             continue
         if not isinstance(value, str):
             continue
+        checked_value = (
+            value.replace("\t", " ") if _code_field_allows_horizontal_tabs(path) else value
+        )
         checked = check_text(
-            value,
+            checked_value,
             budgets=budgets,
             publication=True,
             forbidden_matcher=matcher,
@@ -586,32 +607,39 @@ def _write_private_dlp_decisions(
         raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
-def _publication_sinks(payload: dict[str, object]) -> list[object]:
+def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
     """Select only OCR-controlled values that the posting owner can render."""
 
-    sinks: list[object] = []
+    sinks: list[tuple[object, bool]] = []
     message = payload.get("message")
     if message is not None:
-        sinks.append(message)
+        sinks.append((message, False))
     comments = payload.get("comments")
     if isinstance(comments, list):
-        sinks.extend(
-            {key: value for key, value in item.items() if key in QUARANTINE_COMMENT_FIELDS}
-            for item in comments
-            if isinstance(item, dict)
-        )
+        for item in comments:
+            if not isinstance(item, dict):
+                continue
+            sinks.extend(
+                (
+                    value,
+                    isinstance(value, str)
+                    and key in {"existing_code", "suggestion_code"},
+                )
+                for key, value in item.items()
+                if key in QUARANTINE_COMMENT_FIELDS
+            )
     warnings = payload.get("warnings")
     if warnings is not None:
-        sinks.append(warnings)
+        sinks.append((warnings, False))
     manifest = payload.get("manifest")
     coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
     failed = coverage.get("failed") if isinstance(coverage, dict) else None
     if isinstance(failed, list):
-        sinks.extend(
-            {key: item.get(key) for key in ("path", "reason") if key in item}
-            for item in failed
-            if isinstance(item, dict)
-        )
+        for item in failed:
+            if isinstance(item, dict):
+                sinks.extend(
+                    (item[key], False) for key in ("path", "reason") if key in item
+                )
     return sinks
 
 
@@ -733,7 +761,15 @@ def _safe_publication_comments(
         for key, field_value in item.items():
             if not isinstance(key, str) or key not in QUARANTINE_COMMENT_FIELDS:
                 continue
-            if _dlp_reasons(field_value, budgets=budgets, matcher=matcher):
+            if _dlp_reasons(
+                field_value,
+                budgets=budgets,
+                matcher=matcher,
+                allow_horizontal_tabs=(
+                    isinstance(field_value, str)
+                    and key in {"existing_code", "suggestion_code"}
+                ),
+            ):
                 omitted_fields += 1
                 content_unsafe = content_unsafe or key == "content"
                 continue
@@ -848,8 +884,15 @@ def _publication_projection(
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     sink_reasons: Counter[str] = Counter()
-    for sink in _publication_sinks(payload):
-        sink_reasons.update(_dlp_reasons(sink, budgets=budgets, matcher=matcher))
+    for sink, allow_horizontal_tabs in _publication_sinks(payload):
+        sink_reasons.update(
+            _dlp_reasons(
+                sink,
+                budgets=budgets,
+                matcher=matcher,
+                allow_horizontal_tabs=allow_horizontal_tabs,
+            )
+        )
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
         payload, budgets=budgets, matcher=matcher
     )
@@ -875,7 +918,7 @@ def _publication_projection(
             payload.get("warnings"), budgets=budgets, matcher=matcher
         )
         projected: dict[str, object] = {
-            "status": "completed_with_errors",
+            "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
             "message": (
                 "Publication policy produced a safe partial OCR result. Independently safe "
                 "findings may be published, but the result must not be treated as a complete "
@@ -887,6 +930,8 @@ def _publication_projection(
                 payload.get("tool_calls"), allowed_tools=allowed_tools
             ),
         }
+        if outcome.budget_exceeded:
+            projected["summary"] = {"budget_exceeded": True}
     else:
         reasons = sink_reasons + private_reasons
         return (

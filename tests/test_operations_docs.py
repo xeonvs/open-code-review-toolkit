@@ -227,6 +227,30 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
 
 
+def test_summary_and_code_tab_boundaries_are_public() -> None:
+    """Keep coverage, filtering, advisory, and field-specific HTAB semantics distinct."""
+
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "Review complete with publication filtering",
+        "it is not called incomplete OCR coverage",
+        "at least two findings",
+        "Tool and token lines remain independent",
+    ):
+        assert phrase in gitlab
+    for document in (operations, configuration, security):
+        assert "existing_code" in document
+        assert "suggestion_code" in document
+        assert "horizontal tab" in document.casefold()
+    assert "filtered warnings into legacy failed-item inference" in configuration
+    assert "public projection is incomplete" in operations
+    assert "all other control/format characters remain blocking" in operations
+
+
 def test_finding_badge_contract_is_opt_in_and_privacy_explicit() -> None:
     operations = OPERATIONS.read_text(encoding="utf-8")
     configuration = CONFIGURATION.read_text(encoding="utf-8")

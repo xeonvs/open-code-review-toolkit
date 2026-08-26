@@ -33,6 +33,7 @@ from ocr_toolkit.posting.approval import (
     evaluate_approval_policy,
     provisional_approval_result,
     publication_dlp_state,
+    publication_outcome_for_summary,
     toolkit_receipt_is_valid,
 )
 from ocr_toolkit.posting.comments import (
@@ -668,11 +669,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     approval_comments = list(comments)
 
     warnings = warnings_value
-    coverage_diagnostics = normalize_coverage_diagnostics(outcome, warnings)
-    if outcome.kind == "failed":
+    try:
+        summary_outcome = publication_outcome_for_summary(outcome, publication)
+    except OcrResultContractError as exc:
+        return invalid_ocr_schema_exit(config, str(exc))
+    coverage_diagnostics = normalize_coverage_diagnostics(
+        summary_outcome,
+        warnings,
+        legacy_warning_fallback=publication_state != "publication-filtered",
+    )
+    if summary_outcome.kind == "failed":
         return post_manifest_failure(
             config,
-            outcome,
+            summary_outcome,
             outcome_message,
             warnings,
             tool_calls_summary=tool_calls_summary,
@@ -750,11 +759,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     summary_run_id = secrets.token_hex(16)
     receipt_sha, reviewed_author_id = approval_receipt_identity(result.get(TOOLKIT_RESULT_KEY))
     reviewed_commit = receipt_sha or reviewed_sha()
+    summary_status = (
+        "publication-filtered"
+        if publication_state == "publication-filtered"
+        and summary_outcome.kind in {"clean", "warning"}
+        else "budget_exceeded"
+        if summary_outcome.budget_exceeded
+        else summary_outcome.kind
+    )
     reviewer_guide = format_reviewer_guide(
         comments,
         omitted_count,
-        outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
-        coverage_summary=outcome.coverage_summary,
+        outcome_status=summary_status,
+        coverage_summary=summary_outcome.coverage_summary,
     )
 
     if publishable_comment_count == 0:
@@ -776,9 +793,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
                 mr_head_sha=mr_head_sha(),
-                outcome_status=("budget_exceeded" if outcome.budget_exceeded else outcome.kind),
+                outcome_status=summary_status,
                 outcome_message=outcome_message,
-                coverage_summary=outcome.coverage_summary,
+                coverage_summary=summary_outcome.coverage_summary,
                 coverage_diagnostics=coverage_diagnostics,
                 warnings=warnings,
                 suppressed_count=suppressed_count,
@@ -964,9 +981,9 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_commit,
             mr_head_sha=mr_head_sha(),
-            outcome_status="budget_exceeded" if outcome.budget_exceeded else outcome.kind,
+            outcome_status=summary_status,
             outcome_message=outcome_message,
-            coverage_summary=outcome.coverage_summary,
+            coverage_summary=summary_outcome.coverage_summary,
             coverage_diagnostics=coverage_diagnostics,
             warnings=warnings,
             suppressed_count=suppressed_count,

@@ -14,7 +14,7 @@ from ocr_toolkit.ocr_result import (
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
 from ocr_toolkit.posting.settings import BooleanSetting
-from ocr_toolkit.result_contract import ReviewOutcome
+from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
 
 ALLOWED_CATEGORIES = frozenset({"style", "documentation", "maintainability"})
 MAX_APPROVABLE_FINDINGS = 3
@@ -217,6 +217,19 @@ def publication_dlp_state(value: Any) -> str | None:
             or not 0 <= original[field] <= MAX_TOOLKIT_MCP_USAGE_COUNT
             for field in ("selected", "completed", "reused", "failed", "waived")
         )
+    ):
+        return None
+    selected = original["selected"]
+    completed = original["completed"]
+    reused = original["reused"]
+    failed = original["failed"]
+    waived = original["waived"]
+    outcome = original["outcome"]
+    if (
+        selected != completed + reused + failed + waived
+        or (outcome in {"clean", "warning"} and failed != 0)
+        or (outcome == "partial" and selected > 0 and not 0 < failed < selected)
+        or (outcome == "skipped" and any((selected, completed, reused, failed, waived)))
     ):
         return None
     return "publication-filtered"
@@ -438,6 +451,48 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
     """Return whether metadata is an exact receipt v5, including valid blockers."""
 
     return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
+
+
+def publication_outcome_for_summary(
+    outcome: ReviewOutcome, publication: Any
+) -> ReviewOutcome:
+    """Recover only validated original coverage facts from a filtered receipt."""
+
+    if publication_dlp_state(publication) != "publication-filtered":
+        return outcome
+    if outcome.kind != "partial" or outcome.manifest_present:
+        raise OcrResultContractError(
+            "publication-filtered receipt is not bound to a safe result projection"
+        )
+    original = publication["original"]
+    kind = original["outcome"]
+    if outcome.budget_exceeded and kind != "partial":
+        raise OcrResultContractError(
+            "publication-filtered receipt contradicts the result budget state"
+        )
+    counts = {
+        field: original[field]
+        for field in ("selected", "completed", "reused", "failed", "waived")
+    }
+    manifest_present = any(counts.values())
+    status = {
+        "clean": "complete" if manifest_present else "success",
+        "warning": "completed_with_warnings",
+        "partial": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
+        "failed": "failed",
+        "skipped": "skipped",
+    }[kind]
+    return ReviewOutcome(
+        status=status,
+        kind=kind,
+        budget_exceeded=outcome.budget_exceeded and kind == "partial",
+        manifest_present=manifest_present,
+        selected_count=counts["selected"],
+        completed_count=counts["completed"],
+        reused_count=counts["reused"],
+        failed_count=counts["failed"],
+        waived_count=counts["waived"],
+    )
 
 
 def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
