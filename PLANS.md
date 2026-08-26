@@ -9,10 +9,9 @@ Use this file for active or blocked repository work. Update it before implementa
 Status: `active`
 Owner: Codex
 Plan Origin: `resumed`
-Release classification: `release-deferred` (the product changes require stable
-`0.8.3`, but feature merge and publication are explicitly deferred)
+Release classification: `release-required`
 Target stable version: `0.8.3`
-Last Updated: 2026-08-25
+Last Updated: 2026-08-26
 
 #### Goal
 
@@ -57,6 +56,9 @@ semantics.
 - Treat tool-call counts as operational activity only. Keep aggregate token
   input/output/cache telemetry alongside them, but do not claim or derive
   per-tool token consumption because OCR 1.10.0 does not provide that contract.
+- Keep the Linux Python 3.12-3.14 matrix, quality, security, dependency, build,
+  and CodeQL checks release-blocking while making the two macOS endpoint jobs
+  best-effort diagnostics that cannot delay the priority Linux hotfix release.
 
 #### Requirement Traceability
 
@@ -74,6 +76,7 @@ semantics.
 | `REQ-USAGE-B` | #142 result/privacy boundary | Only bounded names and integer counters cross into GitLab; arguments, results, paths, IDs, provider data, and unknown/unattributed names remain private | `WQ-06` | Hostile map/name/count, DLP, Markdown, and note-budget regressions |
 | `REQ-USAGE-C` | #142 honest token explanation | Tool activity appears beside aggregate token usage without percentages or per-tool token attribution | `WQ-06` | Rendering and documentation assertions |
 | `REQ-USAGE-D` | #142 existing trust contracts | The expanded diagnostic is not a finding, receipt proof, telemetry source, severity input, or approval signal | `WQ-06`, `WQ-07` | Posting, DLP, and approval regression review |
+| `REQ-MACOS-A` | Owner-authorized hotfix release policy | macOS 3.12 and 3.14 jobs continue to run but are explicitly non-blocking; Linux endpoints and all non-platform release gates remain required | `WQ-08` | Workflow contract test plus live ruleset readback |
 | `REQ-REL` | Repository release contract | Deliver 0.8.3 through reviewed feature and release PRs with external reconciliation | `WQ-01`, `WQ-04`, `WQ-05` | Protected checks, registries, attestations, tag, receipt, issue/milestone closure |
 
 #### Explicit Non-Goals
@@ -96,6 +99,9 @@ semantics.
   of merely available tools, add per-tool token estimates/percentages, or expose
   raw tool-call arguments, results, errors, paths, request IDs, or dynamic
   external MCP tool names.
+- Do not remove macOS support metadata or stop its endpoint jobs from running;
+  only their merge-blocking status changes. Do not weaken Linux, coverage,
+  quality, security, dependency, package, or release-publication gates.
 
 #### Constraints
 
@@ -136,8 +142,12 @@ semantics.
   environment has no access; do not claim that evidence.
 - Continue the established efficient workflow: logical commits, self-review,
   one final complete local gate, and protected hosted CI.
-- After the final push, keep PR #141 in Draft. Do not merge the feature branch,
-  publish development/stable artifacts, create a release PR, or release 0.8.3.
+- Resume and complete the full stable 0.8.3 lifecycle now: update the existing
+  Draft, make it ready, merge through protected `main`, publish and independently
+  verify the stable artifacts, then close the tracked issues and milestone.
+- macOS endpoint jobs remain useful best-effort compatibility diagnostics but
+  must not block the priority Linux hotfix release; all Linux and non-platform
+  release gates stay mandatory.
 - The accepted manager-facing question is “where did the review activity go?”:
   preserve the current inline format, show the selected numeric counters, and
   explicitly avoid claiming exact per-tool token attribution.
@@ -164,9 +174,10 @@ semantics.
 | `WQ-02` | `done` | #139: outcome-authoritative workflow selection; portable atomic evidence/status/issue-body handoffs; closed late-write recovery; manifest-independent status upsert; regression tests; public contract and `139.bugfix.md` |
 | `WQ-03` | `done` | #140: example sentinel `0`; exact normalization parser and operator-only notice; behavioral numeric/effective-loop qualification; updated exact OCR evidence/hash; full enriched/MCP preview regression; public/development contracts and `140.bugfix.md` |
 | `WQ-04` | `done` | Reconciled public/development contracts and requirements; complete quality/coverage, manifest, Towncrier, and privacy/data-flow review are green; final Draft push and hosted readback are handoff actions, not release delivery |
-| `WQ-05` | `out_of_scope` | Owner-deferred delivery: keep PR #141 Draft after final push; do not merge, publish TestPyPI/PyPI, prepare a release PR, tag, close issues, or close the milestone in this run |
+| `WQ-05` | `in_progress` | Owner-authorized stable delivery: exact-head review and feature merge; development publication readback; protected `release/v0.8.3` PR; stable workflow; independent registry/tag/provenance/attestation/install/receipt verification; issue and milestone closure |
 | `WQ-06` | `done` | #142 feature commit `a416f37`: the existing inline formatter now shows every admitted useful non-zero counter; external MCP stays aggregated by verified server; focused hostile-value/DLP/approval tests, public operational wording, and `142.feature.md` define the activity-not-token-attribution contract |
 | `WQ-07` | `done` | One final full local gate and overall reporting/privacy/approval self-review are green; this signed handoff commit is followed by one final push, Draft/issue coordination, and exact-head hosted readback as delivery evidence rather than another repository-content change |
+| `WQ-08` | `in_progress` | Make macOS 3.12/3.14 CI entries explicitly best-effort, preserve their execution and all mandatory Linux/non-platform gates, update the workflow contract/docs/changelog, and reconcile the live protected-main ruleset before readiness |
 
 #### Locked Decisions
 
@@ -189,6 +200,9 @@ semantics.
 - Built-in OCR and toolkit-owned context/evidence names may be shown as activity.
   External dynamic MCP tools remain represented only through the existing
   verified per-server aggregate; unknown raw names never gain public meaning.
+- Linux is the release-priority platform. macOS remains supported and exercised
+  at both Python endpoints, but its two hosted jobs are advisory rather than
+  protected-main requirements; failures stay visible for follow-up.
 
 #### Verification
 
@@ -211,6 +225,9 @@ semantics.
   more than six useful counters remain visible, deterministic and bounded; raw
   call content and unknown names remain absent; aggregate token rendering and
   approval decisions are unchanged.
+- macOS CI policy: workflow-source tests prove both endpoint jobs still exist and
+  are marked non-blocking while every Linux endpoint remains blocking; live
+  ruleset readback must omit only the two macOS contexts.
 
 #### Latest Validation Results
 
@@ -298,11 +315,10 @@ semantics.
 
 #### Resume Point
 
-After this handoff commit, push the accumulated signed history once, update Draft
-PR #141 and #142 with the exact remote head/tree, and wait for protected hosted
-checks. If green, the next authorized agent starts from review of that immutable
-Draft head rather than repeating local development. Do not merge or start release
-delivery.
+Finish `WQ-08`, push the signed feature head, and require the updated hosted
+checks plus exact live-ruleset readback. Then make PR #141 ready and complete
+`WQ-05` through feature merge, protected release PR, stable publication,
+independent external verification, issue receipts, and milestone closure.
 
 #### Plan Fidelity Check
 
@@ -329,16 +345,16 @@ delivery.
 - [x] All implementation requirements and in-scope work items are terminal with current local validation evidence.
 - [x] Complete diff self-review confirms issue, workflow, subprocess, privacy, DLP, approval, and documentation boundaries.
 - [ ] Exact feature head is green locally and in protected hosted checks with resolved review threads.
-- [ ] PR #141 remains Draft at the exact pushed head; #139/#140/#142 and milestone `v0.8.3` remain open.
-- [x] The active plan retains an exact external-review/release resume point and is not archived before deferred delivery; this repository has no separate plan-lifecycle checker.
+- [ ] PR #141 is merged from the exact reviewed head and development publication is verified.
+- [ ] Release PR is merged from its exact reviewed head; stable artifacts, tag,
+  provenance, attestations, immutable Release, installs, and receipt are verified.
+- [ ] #139/#140/#142 plus the macOS CI policy issue and milestone `v0.8.3` are closed only after stable receipt publication.
 
 #### Post-Close Delivery
 
-- This run ends at a pushed green Draft PR. Feature implementation does not close
-  through merge, and no TestPyPI/PyPI or stable publication is authorized.
-- A later owner-authorized continuation must review the exact Draft head, preserve
-  or amend the plan from current state, then use the protected feature/release
-  lifecycle. Readiness is not delivery.
+- This run is authorized to complete the protected feature and stable-release
+  lifecycle. Readiness, feature merge, development publication, release merge,
+  stable publication, and external reconciliation remain separate gates.
 - #139/#140/#142 and milestone `v0.8.3` remain open until stable receipt publication.
 - Final handoff must repeat that no local real-LLM/provider qualification was run
   or claimed, while identifying the exact deterministic OCR boundary evidence.
@@ -349,7 +365,7 @@ delivery.
 
 #### Handoff Notes
 
-- Start at `WQ-01`; do not implement from an uncommitted or compressed substitute.
+- Resume at `WQ-08` on exact Draft head `62f5bd7`; do not repeat completed feature work.
 - The source-level max-tools mismatch is material: reported normalization `50`
   and embedded template default `100` are distinct facts. Preserve that distinction
   in code, evidence, docs, changelog, issue updates, and future OCR upgrades.

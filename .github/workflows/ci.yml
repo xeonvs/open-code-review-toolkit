@@ -14,15 +14,16 @@ concurrency:
 jobs:
   test:
     name: test-${{ matrix.os }}-py${{ matrix.python }}
+    continue-on-error: ${{ matrix.advisory }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, python: "3.12", coverage: false }
-          - { os: ubuntu-latest, python: "3.13", coverage: false }
-          - { os: ubuntu-latest, python: "3.14", coverage: true }
-          - { os: macos-latest, python: "3.12", coverage: false }
-          - { os: macos-latest, python: "3.14", coverage: false }
+          - { os: ubuntu-latest, python: "3.12", coverage: false, advisory: false }
+          - { os: ubuntu-latest, python: "3.13", coverage: false, advisory: false }
+          - { os: ubuntu-latest, python: "3.14", coverage: true, advisory: false }
+          - { os: macos-latest, python: "3.12", coverage: false, advisory: true }
+          - { os: macos-latest, python: "3.14", coverage: false, advisory: true }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
