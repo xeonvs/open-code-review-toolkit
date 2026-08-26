@@ -1,3 +1,34 @@
+## 0.8.4 - 2026-08-26
+
+### 🐛 Bug Fixes
+
+- Correct GitLab review summaries by keeping OCR coverage, publication integrity, findings, and OCR core advisories as independent signals.
+
+  - **Added:** accepted OCR background recommendations are projected as a receipt-bound numeric `ocr.toolkit-advisory/v1` line under Technical details, including failed-result summaries; they no longer become OCR warnings or approval blockers.
+  - **Fixed:** complete OCR coverage followed by publication filtering now renders `Review complete with publication filtering`, preserves only exhaustively validated original outcome/count combinations, and does not invent partial-coverage or pathless failed-item diagnostics.
+  - **Changed:** horizontal tabs are retained only in `existing_code` and `suggestion_code` after the unchanged value passes all secret, PII, forbidden-value, laundering, and budget checks, and Recommended focus areas are shown only for two or more published findings.
+  - **Unchanged:** publication filtering remains warning-bearing and automatic-approval-ineligible; receipt v5, publication-DLP signal v2, manifest/result schemas, secret/PII/laundering/budget checks, ordinary OCR warnings, real partial/budget outcomes, and the existing non-zero tool-call/token summary format remain authoritative.
+
+  ([#145](https://github.com/xeonvs/open-code-review-toolkit/issues/145))
+
+### 🛠 Maintenance
+
+- Qualify and promote checksum-pinned Open Code Review 1.10.1 for toolkit 0.8.4.
+
+  - **Added:** canonical qualification evidence records the hosted OCR 1.10.1 result, completion-cap, medium-effort, and max-tools probes.
+  - **Changed:** preflight, the compatibility manifest, and the GitLab example now require OCR 1.10.1. SHA-256 pins are Linux AMD64 `8b806c221d409727a21611b4a7952d8e15edadbbc25f5affccaeb8f677e4055c`, Darwin ARM64 `8fc24bd825c9d918b894be05c0cf27fac8d30bc549257c812d87337167c7563c`, and upstream `sha256sum.txt` `ec72bda51f1227f412ee00602d952868efc57d847cce0ae1586fb97069d4139d`.
+  - **Consumed:** bounded private session-cache keys reduce upstream cache-key risk without adding a toolkit receipt or telemetry field.
+  - **Unchanged:** result and manifest schemas, inherited OpenAI completion cap `16384`, explicit `4096` override, default `medium` effort, and behaviorally qualified max-tools semantics remain unchanged.
+  - **Not consumed:** the upstream GitHub Action, delegate skill, npm launcher, provider preset, and repository-local `providers.go` rule do not alter the toolkit's native-binary, explicit-protocol integration.
+  - **Deployment:** update directly from OCR 1.10.0 to 1.10.1; no intermediate OCR version is required.
+
+  ([#146](https://github.com/xeonvs/open-code-review-toolkit/issues/146))
+
+### 🧩 Rules
+
+- OCR 1.10.1 adds `.m` files to its review allowlist and selects MATLAB or Objective-C built-in rules from file content. The upstream repository-local `providers.go` rule is not a toolkit-wide rule. ([#146](https://github.com/xeonvs/open-code-review-toolkit/issues/146))
+
+
 ## 0.8.3 - 2026-08-26
 
 ### 🚀 Features

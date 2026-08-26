@@ -2,6 +2,94 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-4"></a>
+
+## Toolkit 0.8.4 — GitLab summary correctness and OCR 1.10.1
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.8.4`
+Repository completion date: 2026-08-26
+
+### Goal and delivered scope
+
+Separate OCR coverage, publication integrity, ordinary findings or warnings,
+and the low-level OCR core background recommendation in GitLab summaries. A
+strict receipt-bound `ocr.toolkit-advisory/v1` projection now renders only in
+Technical details and does not become an OCR warning, DLP input, coverage
+signal, receipt field, telemetry field, or approval signal. Complete OCR
+coverage followed by publication filtering retains its validated original
+counts and renders the publication-filtered state; real partial, budget, and
+failed outcomes remain authoritative.
+
+Publication DLP admits HTAB only in `existing_code` and `suggestion_code` while
+checking the unchanged value for secrets, PII, forbidden values, laundering,
+and budget. A single published finding no longer repeats itself in Recommended
+focus areas; deterministic ranking remains for two or more findings. Toolkit
+0.8.4 promotes checksum-pinned OCR 1.10.1, including its `.m` MATLAB versus
+Objective-C rule selection, while preserving receipt v5, publication-DLP signal
+v2, result and manifest schemas, ordinary OCR warnings, and the existing
+non-zero tool-call and token summary format.
+
+### Decisions and non-claims
+
+- Issues #145 and #146 are the complete tracked release set.
+- The OCR core advisory is accepted only from the exact preview diagnostic,
+  projected to bounded positive character counts, bound to a valid receipt,
+  and rendered under Technical details. Raw or malformed advisory input fails
+  closed and cannot affect approval.
+- HTAB admission is field-specific rather than a whitespace-normalized checking
+  copy: every private and public DLP check sees the original code value.
+- OCR 1.10.1 compatibility is Maintenance; its effective `.m` review behavior
+  is a separate Rules entry. Historical OCR 1.10.0 evidence is unchanged.
+- The final OCR run used context mode `off`; no enriched-context qualification
+  is claimed and no second local OCR run is part of release preparation.
+- B2B, `core/common`, shared templates, and other consumer repositories remain
+  outside this release.
+
+### Repository, OCR, and hosted evidence
+
+- Final local OCR 1.10.1 reviewed exact range
+  `origin/main..02c2f9d8f76d736ba83deed7700bed9374c4e38d` with concurrency
+  `2`, context mode `off`, and no explicit completion cap. It completed all
+  10 selected items with failed/reused/waived `0/0/0`, 102 tool calls, and
+  empty stderr.
+- Three confirmed OCR findings were corrected: exhaustive receipt-v5 original
+  outcome/count validation; unchanged HTAB-bearing values across all remaining
+  DLP checks; and valid advisory rendering for failed-result Technical details.
+- The final local gate passed 1,290 tests plus 337 subtests at 86.46% combined
+  branch coverage against the 85% floor. Risk groups passed at 85%, 82%, 86%,
+  and 87%; Ruff, strict MyPy, Bandit, Gitleaks 8.24.3, lock and OCR manifest
+  validation, Towncrier draft, deterministic builds, Twine, archive privacy,
+  and clean Python 3.12-3.14 wheel and sdist installs passed.
+- Feature PR #147 passed all 13 hosted checks at reviewed head
+  `54521ceb370a91cd5b5d5cf95eb7565cd8da78b0` and tree
+  `619869ca79d687fab3feb5c374096b5b35d39230`, with zero unresolved review
+  threads. It was squash-merged as verified commit
+  `5393e7526c9358873ad668fdd1d8f35443d14940` with the same tree.
+- Development workflow run 32964488326 published and independently verified
+  `0.8.4.dev74`. TestPyPI wheel SHA-256 is
+  `dbb97bee0fe74d75721ab978d6db49c7e6c265f6d059186276a60430fb32e095`;
+  sdist SHA-256 is
+  `904b829ffde000e2825bf979147fed9e1191317aca7957d8570eedff360d26f0`.
+  Trusted Publishing provenance, exact readback, and clean installs passed.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. It sets
+`.release-version=0.8.4`, `.next-version=0.8.5`, deterministic source epoch
+`1787744412` one second after the feature squash merge, exact sorted issues
+`[145, 146]`, generated Towncrier notes, stable example pins, and this archived
+plan while returning `PLANS.md` to its inactive template.
+
+External closure remains pending until the exact reviewed release head is
+squash-merged and stable workflow output is independently reconciled across
+TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
+requires byte equality, PEP 740 provenance and GitHub attestations, annotated
+`v0.8.4` tag and peeled target, immutable `release-receipt.json`, clean PyPI
+wheel and sdist installs on Python 3.12-3.14, Actions-owned receipts, closed
+#145/#146 and milestone `v0.8.4`, synchronized clean `main`, and scratch cleanup.
+
 <a id="plan-toolkit-0-8-3"></a>
 
 ## Toolkit 0.8.3 — OCR boundaries and review tool-usage visibility
