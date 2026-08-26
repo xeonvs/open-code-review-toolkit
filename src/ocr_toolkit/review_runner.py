@@ -76,13 +76,17 @@ from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
+    OcrToolkitAdvisory,
+    background_recommended_advisory,
     inspect_ocr_result,
     load_ocr_result,
+    toolkit_advisory_payload,
     transform_ocr_result,
 )
 from ocr_toolkit.posting.result import ocr_warning_text
@@ -156,7 +160,7 @@ class ReviewRunnerError(Exception):
 class BackgroundQualification:
     """Carry closed toolkit-authored projections of installed OCR diagnostics."""
 
-    warning: str | None = None
+    advisory: OcrToolkitAdvisory | None = None
     operator_notices: tuple[str, ...] = ()
 
 
@@ -924,7 +928,7 @@ def _finalize_ocr_result(
     evidence_action_counts: dict[str, int] | None = None,
     *,
     forbidden: tuple[str, ...],
-    toolkit_warnings: tuple[str, ...] = (),
+    toolkit_advisory: OcrToolkitAdvisory | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -935,25 +939,12 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal filtered, publication, usage
-        if TOOLKIT_RESULT_KEY in payload:
-            raise OcrResultMalformed(f"OCR result contains reserved field {TOOLKIT_RESULT_KEY!r}")
+        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
+            if reserved in payload:
+                raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
-        warning_texts = {ocr_warning_text(warning) for warning in warnings}
-        appended_warnings: list[str] = []
-        for warning in toolkit_warnings:
-            if warning in warning_texts:
-                continue
-            warning_texts.add(warning)
-            appended_warnings.append(warning)
-        payload = {
-            **payload,
-            "warnings": [
-                *warnings,
-                *appended_warnings,
-            ],
-        }
         metadata = _review_receipt(
             payload,
             composition,
@@ -969,7 +960,10 @@ def _finalize_ocr_result(
         mcp = metadata.get("mcp")
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
-        return {**projected, TOOLKIT_RESULT_KEY: metadata}
+        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata}
+        if toolkit_advisory is not None:
+            finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
+        return finalized
 
     try:
         transform_ocr_result(result_path, finalize)
@@ -1158,14 +1152,14 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
             or len(max_tools_matches) > 1
         ):
             raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
-        warning: str | None = None
+        advisory: OcrToolkitAdvisory | None = None
         if soft_matches:
             actual, limit = (int(value) for value in soft_matches[0].groups())
             if not 0 < limit < actual:
                 raise ReviewRunnerError("OCR background preview returned invalid thresholds")
-            warning = (
-                f"Installed OCR reported a {actual}-character review background above its "
-                f"recommended {limit}-character threshold; review continued."
+            advisory = background_recommended_advisory(
+                actual=actual,
+                recommended=limit,
             )
         operator_notices: tuple[str, ...] = ()
         if max_tools_matches:
@@ -1179,7 +1173,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
                 "effective tool-call limit.",
             )
         return BackgroundQualification(
-            warning=warning,
+            advisory=advisory,
             operator_notices=operator_notices,
         )
     if hard_character is not None:
@@ -1295,9 +1289,11 @@ def _run_background_qualified_review(
             file=sys.stderr,
         )
         return 2, BackgroundQualification()
-    if qualification.warning is not None:
+    if qualification.advisory is not None:
         print(
-            f"OCR background qualification warning: {qualification.warning}",
+            "OCR core advisory: "
+            f"background {qualification.advisory.actual} characters; recommended "
+            f"{qualification.advisory.recommended} characters; accepted by OCR core",
             file=sys.stderr,
         )
     for notice in qualification.operator_notices:
@@ -1933,11 +1929,7 @@ def run_evidence_review(
                         enrichment,
                         evidence_action_counts,
                         forbidden=forbidden,
-                        toolkit_warnings=(
-                            (background_qualification.warning,)
-                            if background_qualification.warning is not None
-                            else ()
-                        ),
+                        toolkit_advisory=background_qualification.advisory,
                     )
                 except ReviewRunnerError:
                     try:

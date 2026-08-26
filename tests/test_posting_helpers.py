@@ -91,6 +91,77 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
+    def test_advisory_without_exact_receipt_v5_never_reaches_normal_result_flow(self) -> None:
+        """Treat a correctly shaped but unbound advisory as an invalid result."""
+
+        notes: list[str] = []
+        advisory = ocr_result.toolkit_advisory_payload(
+            ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        )
+        with (
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [],
+                    "warnings": [],
+                    ocr_result.TOOLKIT_ADVISORY_KEY: advisory,
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(notes, ["**Open Code Review result schema error**"])
+
+    def test_advisory_parser_rejects_unknown_extended_and_malformed_values(self) -> None:
+        """Accept no provider text, schema extension, boolean, or impossible threshold."""
+
+        valid = ocr_result.toolkit_advisory_payload(
+            ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        )
+        cases = (
+            {},
+            {**valid, "provider": "untrusted"},
+            {**valid, "kind": "unknown"},
+            {**valid, "actual": True},
+            {**valid, "actual": 2_000},
+        )
+        for value in cases:
+            with self.subTest(value=value):
+                with self.assertRaises(ocr_result.OcrResultMalformed):
+                    ocr_result.parse_toolkit_advisory(value)
+
+    def test_advisory_renders_only_inside_technical_details(self) -> None:
+        """Keep the complete status ordinary and render only fixed labels plus numbers."""
+
+        advisory = ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
+        line = posting_formatting.format_ocr_core_advisory(advisory)
+        summary = posting_formatting.summarize_result(
+            total=0,
+            inline_count=0,
+            fallback_count=0,
+            warning_count=0,
+            outcome_status="success",
+            ocr_core_advisory_summary=line,
+            emoji=True,
+        )
+        visible, technical = summary.split("<details>", 1)
+
+        self.assertIn("✅ **Review complete — no findings**", visible)
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "- OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
+
     def test_line_number_rejects_bool_and_non_decimal_values(self) -> None:
         self.assertEqual(posting_comments.line_number(True), 0)
         self.assertEqual(posting_comments.line_number("1.5"), 0)

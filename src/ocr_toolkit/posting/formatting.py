@@ -23,6 +23,7 @@ from ocr_toolkit.ocr_result import (
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
     SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
+    OcrToolkitAdvisory,
 )
 from ocr_toolkit.posting.approval import (
     ApprovalResult,
@@ -922,6 +923,17 @@ def _review_outcome_line(
     return f"{prefix}**{status_text} — {result_text}**"
 
 
+def format_ocr_core_advisory(advisory: OcrToolkitAdvisory | None) -> str:
+    """Render one validated numeric OCR advisory for Technical details only."""
+
+    if advisory is None:
+        return ""
+    return (
+        f"- OCR core advisory: background {advisory.actual} characters; recommended "
+        f"{advisory.recommended} characters; accepted by OCR core"
+    )
+
+
 def summarize_result(
     total: int,
     inline_count: int,
@@ -933,6 +945,7 @@ def summarize_result(
     tool_calls_summary: str = "",
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
+    ocr_core_advisory_summary: str = "",
     publication_dlp_details: str = "",
     reviewer_guide: str = "",
     fallback_reasons: Mapping[str, int] | None = None,
@@ -1044,7 +1057,12 @@ def summarize_result(
         )
         if reasons:
             technical.append(f"- Fallback reasons: {reasons}")
-    for summary in (mcp_usage_summary, tool_calls_summary, token_usage_summary):
+    for summary in (
+        mcp_usage_summary,
+        tool_calls_summary,
+        token_usage_summary,
+        ocr_core_advisory_summary,
+    ):
         if summary:
             technical.append(summary)
     technical.append(f"- Review mode: `{post_mode()}`")

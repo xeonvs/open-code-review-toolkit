@@ -123,11 +123,11 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
      pins, current-version docs, and separate Maintenance/Rules fragments.
    - Atomically update the direct local binary with checksum verification and
      rollback on validation failure; run isolated no-LLM checks.
-3. **Closed advisory contract - in progress**
+3. **Closed advisory contract - completed locally**
    - Remove the accepted background advisory from OCR warnings; validate and
      attach a private toolkit-owned numeric advisory after publication DLP;
      render it only with a valid receipt in Technical details.
-4. **Coverage, publication DLP, and reviewer guide**
+4. **Coverage, publication DLP, and reviewer guide - in progress**
    - Use `publication.original` for filtered coverage; suppress the legacy
      warning fallback in filtered state; correct DLP wording; permit HTAB only
      in the two code fields; omit focus areas for one finding.
@@ -191,6 +191,10 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 - Isolated no-LLM version/help, hosted/local contract, soft/hard background,
   and MATLAB/Objective-C rule-resolution checks passed without changing user
   configuration or `HOME`.
+- Closed advisory slice: 360 focused tests and Ruff passed. Raw/duplicate/
+  malformed/unbound advisory input fails closed; the valid numeric projection
+  remains outside OCR warnings, publication DLP, coverage, receipt v5,
+  telemetry, and approval inputs and renders only in Technical details.
 - Remaining implementation and final validation: pending.
 
 #### Risks And Recovery
@@ -212,10 +216,10 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Resume Point
 
-Current action: self-review and commit the completed OCR `1.10.1` slice, then
-implement the closed advisory contract. Draft PR #147, milestone `v0.8.4`, and
-#145/#146 are open. The initial Draft push is complete; do not push again until
-all local slices and the final local gate are complete.
+Current action: self-review and commit the closed advisory slice, then correct
+coverage/publication-DLP/reviewer-guide behavior. Draft PR #147, milestone
+`v0.8.4`, and #145/#146 are open. The initial Draft push is complete; do not
+push again until all local slices and the final local gate are complete.
 
 #### Plan Fidelity Check
 

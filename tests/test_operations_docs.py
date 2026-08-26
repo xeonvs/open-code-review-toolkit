@@ -475,6 +475,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",
         "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
         "OCR 1.10.1 — toolkit 0.8.4 target",
+        "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
         "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",

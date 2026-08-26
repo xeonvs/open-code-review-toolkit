@@ -7,6 +7,7 @@ import unittest
 from contextlib import redirect_stderr
 from typing import Any
 
+from ocr_toolkit import ocr_result
 from ocr_toolkit.posting import (
     approval,
     formatting,
@@ -862,6 +863,62 @@ class ApprovalWorkflowTests(unittest.TestCase):
             mutate(candidate)
             with self.subTest(candidate=candidate):
                 self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))
+
+    def test_valid_receipt_binds_advisory_without_changing_summary_or_approval_inputs(self) -> None:
+        """Publish one closed advisory in Technical details with ordinary clean status."""
+
+        receipt = receipt_v5(author_id=41)
+        self.assertTrue(approval.toolkit_receipt_is_valid(receipt))
+        notes: list[str] = []
+
+        def capture_note(_config: Any, _title: str, body: str, *_args: Any) -> dict[str, int]:
+            notes.append(body)
+            return {"id": 1}
+
+        with (
+            patched_attr(workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [],
+                    "warnings": [],
+                    "manifest": {
+                        "schema_version": "ocr.run-manifest/v1",
+                        "operation": "review",
+                        "terminal_state": "complete",
+                        "coverage": {
+                            "selected": [{"item_id": "synthetic-item"}],
+                            "completed": [{"item_id": "synthetic-item"}],
+                            "reused": [],
+                            "failed": [],
+                            "waived": [],
+                        },
+                    },
+                    "_ocr_toolkit": receipt,
+                    ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
+                        ocr_result.background_recommended_advisory(
+                            actual=2_100,
+                            recommended=2_000,
+                        )
+                    ),
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(notes), 1)
+        visible, technical = notes[0].split("<details>", 1)
+        self.assertIn("Review complete — no findings", visible)
+        self.assertNotIn("warnings", visible.casefold())
+        self.assertNotIn("OCR core advisory", visible)
+        self.assertIn(
+            "OCR core advisory: background 2100 characters; recommended 2000 characters; "
+            "accepted by OCR core",
+            technical,
+        )
 
     def test_current_summary_readback_requires_one_owned_run_marker(self) -> None:
         body = build_marked_note_body(markers.build_summary_run_marker(self.RUN_ID) + "\nsummary")

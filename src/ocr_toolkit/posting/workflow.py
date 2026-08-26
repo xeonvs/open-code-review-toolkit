@@ -17,11 +17,13 @@ from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefi
 from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
+    TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
     load_ocr_result,
+    parse_toolkit_advisory,
 )
 from ocr_toolkit.posting import gitlab as gitlab_api
 from ocr_toolkit.posting.approval import (
@@ -31,6 +33,7 @@ from ocr_toolkit.posting.approval import (
     evaluate_approval_policy,
     provisional_approval_result,
     publication_dlp_state,
+    toolkit_receipt_is_valid,
 )
 from ocr_toolkit.posting.comments import (
     clean_text,
@@ -41,6 +44,7 @@ from ocr_toolkit.posting.formatting import (
     format_fallback_comment_chunks,
     format_inline_comment,
     format_mcp_usage_summary,
+    format_ocr_core_advisory,
     format_omitted_comments_summary,
     format_publication_dlp_details,
     format_reviewer_guide,
@@ -625,6 +629,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             title="**Open Code Review publication policy error**",
         )
 
+    advisory = None
+    if TOOLKIT_ADVISORY_KEY in result:
+        try:
+            advisory = parse_toolkit_advisory(result[TOOLKIT_ADVISORY_KEY])
+        except OcrResultMalformed as exc:
+            return invalid_ocr_schema_exit(config, str(exc))
+        if not toolkit_receipt_is_valid(toolkit_metadata):
+            return invalid_ocr_schema_exit(
+                config,
+                "OCR toolkit advisory is not bound to a valid receipt v5",
+            )
+    ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
+
     comments_value = result.get("comments", [])
     warnings_value = result.get("warnings", [])
     tool_calls_summary = format_tool_calls_summary(result.get("tool_calls"))
@@ -754,6 +771,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 tool_calls_summary=tool_calls_summary,
                 mcp_usage_summary=mcp_usage_summary,
                 token_usage_summary=token_usage_summary,
+                ocr_core_advisory_summary=ocr_core_advisory_summary,
                 publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
@@ -940,6 +958,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             tool_calls_summary=tool_calls_summary,
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
+            ocr_core_advisory_summary=ocr_core_advisory_summary,
             publication_dlp_details=dlp_details,
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,

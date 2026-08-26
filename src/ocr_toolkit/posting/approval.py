@@ -18,6 +18,7 @@ from ocr_toolkit.result_contract import ReviewOutcome
 
 ALLOWED_CATEGORIES = frozenset({"style", "documentation", "maintainability"})
 MAX_APPROVABLE_FINDINGS = 3
+INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
 
 
 class ApprovalStatus(str, Enum):
@@ -237,7 +238,7 @@ def _valid_dlp_reason_counts(value: Any) -> bool:
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     """Return the closed review-time receipt blocker for automatic approval."""
 
-    invalid = "the review-time approval receipt is missing or invalid"
+    invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
     if toolkit_metadata.get("schema_version") != 5 or set(toolkit_metadata) != {
@@ -431,6 +432,12 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if external:
         return "external MCP was configured for a comment-only review"
     return ""
+
+
+def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
+    """Return whether metadata is an exact receipt v5, including valid blockers."""
+
+    return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
 
 
 def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
