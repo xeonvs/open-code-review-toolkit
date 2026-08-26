@@ -473,10 +473,10 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     for contract in (
         "OCR 1.9.9 — inherited predecessor",
         "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",
-        "OCR 1.10.0 — toolkit 0.8.2 target",
+        "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
-        "Deploy toolkit 0.8.2 directly with OCR 1.10.0",
+        "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
     ):

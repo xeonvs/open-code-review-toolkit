@@ -164,6 +164,24 @@ def test_082_release_notes_are_actionable_for_people_and_deployment_agents() -> 
         assert phrase in notes
 
 
+def test_083_release_notes_cover_hotfix_activity_and_release_gates() -> None:
+    """Keep the hotfix delta actionable without overstating telemetry or macOS gates."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.3")
+
+    for phrase in (
+        "actual qualification outcome",
+        "sentinel `0`",
+        "template-owned tool-loop value",
+        "all OCR tool calls",
+        "does not report per-tool token consumption",
+        "macOS endpoint CI jobs",
+        "Linux, coverage, quality, security, dependency, package, and CodeQL",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

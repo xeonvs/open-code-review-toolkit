@@ -58,7 +58,7 @@ Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fail
 
 If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer is deduplicated. A different value, or a boolean, string, float, or null at that field, fails configuration with a migration error; remove the duplicate field or keep the same integer in both places. Other `OCR_LLM_EXTRA_BODY` members are preserved. For example, set `OCR_LLM_MAX_COMPLETION_TOKENS=4096` when a gateway accepts short probes but rejects a full review before generation because it reserves spending against the requested output cap.
 
-Toolkit 0.8.2 does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
+The toolkit does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
 
 The inherited value is version-owned and therefore changes with a qualified OCR upgrade. The toolkit observed `max_completion_tokens=58888` from OCR 1.9.10 and `16384` from OCR 1.10.0 when the variable was unset. Deployments that require an invariant gateway-specific cap must set `OCR_LLM_MAX_COMPLETION_TOKENS` explicitly rather than depending on either OCR default.
 
@@ -92,9 +92,9 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_VERSION`** | Example pipeline | Yes | `v1.10.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.2. |
+| **`OCR_VERSION`** | Example pipeline | Yes | `v1.10.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.3. |
 | **`OCR_SHA256`** | Example pipeline | Yes | `f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b` | Expected Linux AMD64 OCR binary digest. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.2` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.3` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
