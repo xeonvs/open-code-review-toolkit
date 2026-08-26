@@ -182,6 +182,28 @@ def test_083_release_notes_cover_hotfix_activity_and_release_gates() -> None:
         assert phrase in notes
 
 
+def test_084_release_notes_separate_advisory_publication_and_dlp_contracts() -> None:
+    """Keep the summary hotfix and OCR deployment boundary explicit."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.4")
+
+    for phrase in (
+        "ocr.toolkit-advisory/v1",
+        "Technical details",
+        "Review complete with publication filtering",
+        "original outcome/count combinations",
+        "horizontal tabs",
+        "unchanged value",
+        "secret, PII, forbidden-value, laundering, and budget checks",
+        "two or more published findings",
+        "Open Code Review 1.10.1",
+        "MATLAB or Objective-C",
+        "update directly from OCR 1.10.0 to 1.10.1",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 
