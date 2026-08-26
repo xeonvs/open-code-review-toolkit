@@ -115,15 +115,15 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Current Work Queue
 
-1. **Plan and Draft coordination**
+1. **Plan and Draft coordination - completed**
    - Create milestone `v0.8.4`, assign #145/#146 to `xeonvs`, add both issues to
      the milestone, commit this plan, push once, and open the Draft PR.
-2. **OCR 1.10.1 qualification**
+2. **OCR 1.10.1 qualification - completed locally**
    - Import canonical evidence, human conclusion, manifest/preflight/example
      pins, current-version docs, and separate Maintenance/Rules fragments.
    - Atomically update the direct local binary with checksum verification and
      rollback on validation failure; run isolated no-LLM checks.
-3. **Closed advisory contract**
+3. **Closed advisory contract - in progress**
    - Remove the accepted background advisory from OCR warnings; validate and
      attach a private toolkit-owned numeric advisory after publication DLP;
      render it only with a valid receipt in Technical details.
@@ -182,7 +182,16 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 - Baseline branch/worktree check: clean `main` at
   `4c697fee6eeceb02a50fbed1c150a6eb953a08d6`.
 - Hosted OCR compatibility run `32955196785`: successful.
-- Implementation validation: pending.
+- OCR `1.10.1` compatibility slice: 146 focused tests passed; support manifest
+  and Towncrier draft validated.
+- The direct local Darwin arm64 binary now reports OCR `1.10.1` and matches
+  SHA-256 `8fc24bd825c9d918b894be05c0cf27fac8d30bc549257c812d87337167c7563c`;
+  upstream `sha256sum.txt` matches
+  `ec72bda51f1227f412ee00602d952868efc57d847cce0ae1586fb97069d4139d`.
+- Isolated no-LLM version/help, hosted/local contract, soft/hard background,
+  and MATLAB/Objective-C rule-resolution checks passed without changing user
+  configuration or `HOME`.
+- Remaining implementation and final validation: pending.
 
 #### Risks And Recovery
 
@@ -203,10 +212,10 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Resume Point
 
-Current action: validate and commit this planning checkpoint, create GitHub
-coordination state and the initial Draft PR, then begin the OCR `1.10.1` slice.
-After the initial Draft push, do not push again until all local slices and the
-final local gate are complete.
+Current action: self-review and commit the completed OCR `1.10.1` slice, then
+implement the closed advisory contract. Draft PR #147, milestone `v0.8.4`, and
+#145/#146 are open. The initial Draft push is complete; do not push again until
+all local slices and the final local gate are complete.
 
 #### Plan Fidelity Check
 

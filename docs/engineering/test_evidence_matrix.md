@@ -106,6 +106,14 @@ The M5 negative suite is an attacker matrix, not merely a replay of observed rev
 | Result-file ownership remains toolkit-only | review argument validation -> pre-opened result descriptor -> atomic finalization/cleanup | caller `--output`, `--output=...`, `-o`, and attached short forms fail before preview | `test_review_runner.py` and installed-artifact tests | subprocess doubles prove rejection timing; the exact OCR binary independently proves the new flag exists | proven |
 | Failed qualification retains bounded coordination evidence without becoming green | qualification status owner -> always-run issue/artifact handling -> terminal failure step | closed phase/reason/version/run reaches the canonical issue/artifact; raw exception remains job-log-only; aggregate cannot run from failure | compatibility CLI/workflow tests and the repaired workflow contract | static Action tests prove control flow; the next real failed candidate run remains operational readback evidence | proven for workflow contract |
 
+## v0.8.4 OCR 1.10.1 evidence
+
+| Requirement or boundary | Production owner and entry point | Required observable result | Evidence | Double boundary and claim limit | State |
+| --- | --- | --- | --- | --- | --- |
+| Exact OCR 1.10.1 review contract | compatibility gateway -> hosted Linux binary -> manifest/evidence promotion | result/manifest, inherited `16384` and explicit `4096` completion caps, default-medium two rounds, semantic grouping, and behaviorally observed max-tools values remain compatible | hosted run 32955196785; checksum-pinned `compatibility/evidence/ocr-1.10.1.json`; independent checksum-verified Darwin arm64 local gateway probe | deterministic gateways prove the consumed wire/result/loop contract, not provider quality or production spending policy | proven for exact qualified OCR wire contract |
+| New upstream rule selection | exact OCR preview -> allowlist and built-in rule resolver | `.m` input is reviewable and content selects MATLAB or Objective-C behavior without changing the toolkit rule file | isolated Darwin arm64 no-LLM `ocr rules check` readback for MATLAB and Objective-C plus upstream semantic audit | selection evidence proves language/rule routing, not finding quality | proven |
+| Bounded upstream session keys stay private | OCR runtime private cache/session owner -> toolkit result boundary | new bounded keys do not enter result, receipt v5, toolkit telemetry, GitLab text, or approval | upstream semantic audit plus unchanged result/manifest probes | source and result evidence prove the consumed boundary, not every upstream internal cache implementation | proven |
+
 ## Complete suite module audit
 
 Every top-level test module is classified below. A module can contain more than one evidence class; the strongest class applies only to the named boundary, never to all tests in that file.

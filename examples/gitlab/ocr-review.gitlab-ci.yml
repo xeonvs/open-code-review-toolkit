@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.10.0"
+  OCR_VERSION: "v1.10.1"
   OCR_TOOLKIT_VERSION: "0.8.3"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "f8f99ea071bed77dbcaa15fdd2083287bb8ae408d5928b3943ebe0788d191b6b"
+  OCR_SHA256: "8b806c221d409727a21611b4a7952d8e15edadbbc25f5affccaeb8f677e4055c"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on receipt-bound approval; external MCP always remains comment-only.

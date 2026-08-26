@@ -1,0 +1,204 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "259dd57e09ed326ac001ecdb0798296ac06a1ca1ebfd5a55588c4647d2eb75f0",
+      "size": 57633504
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "8fc24bd825c9d918b894be05c0cf27fac8d30bc549257c812d87337167c7563c",
+      "size": 54677666
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "8b806c221d409727a21611b4a7952d8e15edadbbc25f5affccaeb8f677e4055c",
+      "size": 55890082
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "681d9fb93352f56439b1ac9c64e2a62b1b3c20e753d6ad69dd02f4bd1baa7f3b",
+      "size": 52625570
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "66f495d48ee6fb155c9812ba8e8d650e1a8ad34be9cca174831cea1b7151f6e3",
+      "size": 57351680
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "b3b0628d61ca980705b2c6eb3166c264af3ce1eac839e1786fe5a968491abf91",
+      "size": 53334016
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "ec72bda51f1227f412ee00602d952868efc57d847cce0ae1586fb97069d4139d",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.10.0",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "filter_requests": 1,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-26T08:51:59Z",
+  "release_changes": "## 🚀 Features\n\n- feat(rules): add Objective-C-specific review rules (#1061)\n- feat(allowlist): add matlab support (#574)\n- feat(rules): add project review rule for providers.go (#1057)\n\n## 🐛 Bug Fixes\n\n- fix(llm): bound session task key length (#1009)\n- fix(skill): handle delegate CLI version skew and background limits (#1047)\n- fix(action): forward review timeout and complete LLM config (#1051)\n- fix(llm): serve GPT-5.6 models via the OpenAI Responses API (#559) (#938)\n- fix(cli): exit 128+signo when the native binary is killed by a signal (#1054)\n\n## 📖 Documentation\n\n- docs(ko): add Korean translation for getting-started pages (#993)\n\n## Other Changes\n\n- ci(workflows): run the contract suite in a dedicated workflow (#1058)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.10.0...v1.10.1",
+  "release_notes_sha256": "890f24192f1ccf427d65baa7970721dcef50b933cbcd3777f3843e95dfc64d43",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.10.1",
+  "tested_baseline_version": "1.10.0",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.10.1"
+}
