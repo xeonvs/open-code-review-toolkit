@@ -453,9 +453,7 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
     return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
 
 
-def publication_outcome_for_summary(
-    outcome: ReviewOutcome, publication: Any
-) -> ReviewOutcome:
+def publication_outcome_for_summary(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome:
     """Recover only validated original coverage facts from a filtered receipt."""
 
     if publication_dlp_state(publication) != "publication-filtered":
@@ -471,8 +469,7 @@ def publication_outcome_for_summary(
             "publication-filtered receipt contradicts the result budget state"
         )
     counts = {
-        field: original[field]
-        for field in ("selected", "completed", "reused", "failed", "waived")
+        field: original[field] for field in ("selected", "completed", "reused", "failed", "waived")
     }
     manifest_present = any(counts.values())
     status = {

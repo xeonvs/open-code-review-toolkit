@@ -622,8 +622,7 @@ def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
             sinks.extend(
                 (
                     value,
-                    isinstance(value, str)
-                    and key in {"existing_code", "suggestion_code"},
+                    isinstance(value, str) and key in {"existing_code", "suggestion_code"},
                 )
                 for key, value in item.items()
                 if key in QUARANTINE_COMMENT_FIELDS
@@ -637,9 +636,7 @@ def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
     if isinstance(failed, list):
         for item in failed:
             if isinstance(item, dict):
-                sinks.extend(
-                    (item[key], False) for key in ("path", "reason") if key in item
-                )
+                sinks.extend((item[key], False) for key in ("path", "reason") if key in item)
     return sinks
 
 
@@ -766,8 +763,7 @@ def _safe_publication_comments(
                 budgets=budgets,
                 matcher=matcher,
                 allow_horizontal_tabs=(
-                    isinstance(field_value, str)
-                    and key in {"existing_code", "suggestion_code"}
+                    isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
             ):
                 omitted_fields += 1

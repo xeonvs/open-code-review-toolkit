@@ -132,9 +132,11 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
      warning fallback in filtered state; correct DLP wording; permit HTAB only
      in the two code fields; omit focus areas for one finding.
 5. **Final validation and Draft handoff**
-   - Complete changelog/docs, run the single full local gate, push all local
-     history, reconcile hosted CI, update Draft/issue checklists, and leave all
-     release state open and deferred.
+   - Changelog/docs and the full local quality/coverage, lock, manifest,
+     Towncrier, and diff gates are complete. Commit the exact local handoff,
+     run Gitleaks against that final history, push once, reconcile hosted CI,
+     update Draft/issue checklists, and leave all release state open and
+     deferred.
 
 #### Locked Decisions
 
@@ -201,7 +203,17 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
   passed/private-sanitized/publication-filtered tool and token lines remain
   independent; field-specific HTAB, hostile controls and remaining DLP checks,
   one/two-finding guide behavior, and impossible receipt counts are covered.
-- Remaining implementation and final validation: pending.
+- Final quality gate passed: Ruff format/lint, mypy, Bandit, and the complete
+  pytest run produced 86% combined coverage. Risk groups passed at 85%
+  (result/preflight), 82% (posting/GitLab transaction), 86%
+  (review/context/DLP/approval), and 87% (MCP/provider/policy/result).
+- `uv lock --check`, OCR support-manifest validation, Towncrier 0.8.4 draft,
+  and `git diff --check` passed. The rendered draft has separate Bug Fixes
+  (#145), Maintenance (#146), and Rules (#146) sections with explicit
+  deployment and unchanged-contract guidance.
+- Product implementation is complete locally. The release remains deferred;
+  exact-head Gitleaks, the final push, hosted CI reconciliation, and Draft/
+  issue readback remain.
 
 #### Risks And Recovery
 
@@ -222,11 +234,10 @@ merge the feature PR, create `release/v0.8.4`, tag, or publish artifacts.
 
 #### Resume Point
 
-Current action: complete the coverage/publication-DLP slice self-review and
-signed commit, then reconcile changelog/current docs and run the single final
-local gate. Draft PR #147, milestone `v0.8.4`, and #145/#146 are open. The
-initial Draft push is complete; do not push again until all local slices and
-the final local gate are complete.
+Current action: self-review and sign the final changelog/handoff commit, run
+Gitleaks against that exact history, then make the one final push and reconcile
+hosted CI. Draft PR #147, milestone `v0.8.4`, and #145/#146 remain open and the
+PR must remain Draft. Do not create release state.
 
 #### Plan Fidelity Check
 

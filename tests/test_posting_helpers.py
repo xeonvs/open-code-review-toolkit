@@ -2816,7 +2816,10 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertTrue(original.manifest_present)
         self.assertEqual(original.kind, "partial")
-        self.assertEqual(original.coverage_summary, "Coverage: selected 3; completed 2; reused 0; failed 1; waived 0.")
+        self.assertEqual(
+            original.coverage_summary,
+            "Coverage: selected 3; completed 2; reused 0; failed 1; waived 0.",
+        )
         self.assertEqual(diagnostics.failed_total, 0)
         self.assertEqual(diagnostics.invalid, 0)
 

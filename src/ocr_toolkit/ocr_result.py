@@ -303,6 +303,7 @@ def _decode_result(data: bytes) -> Any:
     except UnicodeDecodeError as exc:
         raise OcrResultMalformed(str(exc)) from exc
     try:
+
         def reject_duplicate_advisory(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             result: dict[str, Any] = {}
             for key, value in pairs:
