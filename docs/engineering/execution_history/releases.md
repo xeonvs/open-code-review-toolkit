@@ -2,6 +2,82 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-3"></a>
+
+## Toolkit 0.8.3 — OCR boundaries and review tool-usage visibility
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.8.3`
+Repository completion date: 2026-08-26
+
+### Goal and delivered scope
+
+Deliver the priority 0.8.3 hotfix without changing OCR 1.10.0, DLP, receipt v5,
+posting transactions, severity, findings, telemetry ownership, or automatic
+approval. Compatibility publication now follows the actual qualification
+outcome, recovers through a closed status independently of invalid support
+metadata, and publishes its bounded issue/artifact before restoring a red job.
+The GitLab example delegates max-tools ownership to installed OCR with sentinel
+`0`; exact behavior-based qualification distinguishes OCR's reported
+normalization target `50` from its template-owned effective loop value `100`.
+
+The existing GitLab `all OCR tool calls` line now shows every non-zero admitted
+counter from the fixed nine-tool review set, sorted by count and name. Those
+counts describe activity only: OCR 1.10.0 does not report per-tool token use,
+and raw arguments, results, paths, IDs, unknown names, and dynamic external MCP
+tool names remain private. Both macOS endpoint jobs continue to run as advisory
+diagnostics; all Linux, coverage, quality, security, dependency, package, and
+CodeQL gates remain release-blocking.
+
+### Decisions and non-claims
+
+- Issues #139, #140, #142, and #143 are the complete tracked release set.
+- OCR remains checksum-pinned to 1.10.0; current numeric behavior belongs to the
+  installed OCR and is qualified behaviorally rather than copied into toolkit
+  configuration constants.
+- A recognized max-tools normalization becomes a toolkit-authored operator
+  notice only. Raw stderr and the notice do not enter results, DLP, receipts,
+  telemetry, lifecycle commands, findings, severity, or approval decisions.
+- No local real-LLM/provider review or separate qualification receipt was run or
+  claimed. Deterministic exact-OCR no-model probes and a controlled local peer
+  cover the process boundary; protected hosted and release gates cover delivery.
+- macOS support metadata is unchanged. Advisory endpoint failures remain visible
+  for follow-up but cannot delay a Linux-priority hotfix release.
+
+### Repository and hosted evidence
+
+- Final feature head `6520a53db6b4f9d907735456be43e0b17ec296af`
+  passed all 13 hosted checks with no review threads. PR #141 was squash-merged
+  as verified commit `74b3f46f72f1d6231c44cc39ca12f732a46da706`;
+  reviewed and merged tree are both
+  `6ab22194ecb44329a7b89be918c4c5afb8f8daf7`.
+- The final local gate passed 1,275 tests plus 324 subtests at 86.35% combined
+  branch coverage. Risk groups passed at 84%, 82%, 86%, and 87% against floors
+  80%, 80%, 85%, and 85%; Ruff, strict MyPy, Bandit, Gitleaks, lock validation,
+  OCR manifest validation, Towncrier draft, and diff review also passed.
+- Development workflow run 32946899220 published `0.8.3.dev72`. Independent
+  TestPyPI readback matched wheel SHA-256
+  `892c8662a1e797940b1fd7587fcde7ba8e2c0e8bee437f71c3592bdafdce745a`
+  and sdist SHA-256
+  `920264937ba787341e468121d52e83cd945f669c4995eb72f1612d0adb49df00`;
+  provenance and clean wheel/sdist installs passed.
+- The live protected-main ruleset retains ten required Linux/non-platform
+  contexts and omits only the two macOS endpoint contexts. Workflow source keeps
+  three Linux jobs blocking and both macOS endpoint jobs running with explicit
+  advisory status.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. External closure remains
+pending until its exact reviewed head is squash-merged and the stable workflow
+is independently reconciled across TestPyPI, PyPI, workflow artifacts, and the
+immutable GitHub Release. Closure requires byte/hash equality, PEP 740
+provenance and GitHub attestations, annotated `v0.8.3` tag readback, Python
+3.12-3.14 wheel/sdist install and CLI smoke, Actions-owned receipt comments,
+closed #139/#140/#142/#143, closed milestone `v0.8.3`, and clean synchronized
+local `main`.
+
 <a id="plan-toolkit-0-8-2"></a>
 
 ## Repository-Complete Plan: v0.8.2 OCR 1.10.0 and review effort

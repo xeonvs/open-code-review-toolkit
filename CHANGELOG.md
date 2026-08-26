@@ -1,3 +1,24 @@
+## 0.8.3 - 2026-08-26
+
+### 🚀 Features
+
+- GitLab technical details now make OCR review activity easier to explain without implying unsupported token attribution.
+
+  - **Added:** the existing inline `all OCR tool calls` line shows every non-zero counter from the closed OCR inspection, review-output, and toolkit context/evidence set instead of collapsing entries after the six most frequent tools.
+  - **Unchanged:** aggregate input/output/cache token usage remains separate because OCR does not report per-tool token consumption; raw call arguments, results, dynamic external MCP tool names, receipt v5, DLP, findings, severity, and automatic approval are unchanged.
+
+  ([#142](https://github.com/xeonvs/open-code-review-toolkit/issues/142))
+
+### 🐛 Bug Fixes
+
+- Made OCR compatibility failure publication authoritative and recoverable. The workflow now selects closed status or evidence from the actual qualification outcome, atomically replaces output handoffs, and can publish a failure status without loading unrelated support metadata. It still publishes the bounded issue and diagnostic artifact before returning a red job, while aggregate promotion remains blocked and raw diagnostics remain private. ([#139](https://github.com/xeonvs/open-code-review-toolkit/issues/139))
+- Fixed the GitLab example's stale positive `OCR_MAX_TOOLS` default by delegating with sentinel `0`. Added exact parsing for OCR's supported max-tools normalization notice and behavior-based compatibility evidence for numeric CLI boundaries, including the effective template-owned tool-loop value. The notice remains operator-only: raw OCR stderr, findings, result warnings, receipts, DLP, telemetry, lifecycle commands, and automatic-approval semantics are unchanged. ([#140](https://github.com/xeonvs/open-code-review-toolkit/issues/140))
+
+### 🛠 Maintenance
+
+- Keep both macOS endpoint CI jobs as visible best-effort compatibility diagnostics while retaining Linux, coverage, quality, security, dependency, package, and CodeQL checks as release-blocking gates. ([#143](https://github.com/xeonvs/open-code-review-toolkit/issues/143))
+
+
 ## 0.8.2 - 2026-08-25
 
 ### 🚀 Features
