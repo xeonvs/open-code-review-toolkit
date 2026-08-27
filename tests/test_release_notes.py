@@ -204,6 +204,27 @@ def test_084_release_notes_separate_advisory_publication_and_dlp_contracts() -> 
         assert phrase in notes
 
 
+def test_085_release_notes_keep_provider_diagnostics_bounded_and_actionable() -> None:
+    """Keep the provider and OCR upgrade boundaries explicit for deployment."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.5")
+
+    for phrase in (
+        "ocr.llm-retry-report/v1",
+        "http-payment-required",
+        "http-rate-limited",
+        "OCR_REVIEW_CONCURRENCY",
+        "OCR_LLM_MAX_COMPLETION_TOKENS",
+        "GitLab summary/reason",
+        "Open Code Review 1.10.2",
+        "07:15 UTC",
+        "Solidity",
+        "Vyper",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 
