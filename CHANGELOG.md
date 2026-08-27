@@ -1,3 +1,34 @@
+## 0.8.5 - 2026-08-27
+
+### 🚀 Features
+
+- Classified LLM-provider failures now emit at most one toolkit-authored CI diagnostic line with closed HTTP detail and non-zero aggregate retry counts from a fully validated `ocr.llm-retry-report/v1`.
+
+  - **Added:** HTTP `402` is shown as `http-payment-required`, HTTP `429` as `http-rate-limited`, a uniform status is shown only when all terminal failures share it, and mixed details are deterministically count-aggregated.
+  - **Changed:** The `rate-or-spending-limit` GitLab remediation now recommends lowering `OCR_REVIEW_CONCURRENCY` and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, starting a new merge request pipeline, and checking provider request/account limits without claiming either setting caused the failure.
+  - **Unchanged:** The GitLab summary/reason, previous-review preservation, DLP, receipt v5, toolkit telemetry, and automatic-approval contracts are unchanged; raw provider-controlled fields and stderr remain private.
+
+  ([#149](https://github.com/xeonvs/open-code-review-toolkit/issues/149))
+
+### 🐛 Bug Fixes
+
+- OCR compatibility classification now sends feature-bearing patch releases to human review instead of allowing adjacent maintenance keywords to misclassify them as `automatic-safe`. ([#151](https://github.com/xeonvs/open-code-review-toolkit/issues/151))
+
+### 🛠 Maintenance
+
+- Open Code Review 1.10.2 is the checksum-pinned runtime dependency for toolkit 0.8.5.
+
+  - **Changed:** The current GitLab example, runtime preflight, compatibility manifest, and qualification evidence move from OCR 1.10.1 to 1.10.2. The inherited OpenAI completion cap remains `16384`, but OCR grouping requests now use that template-owned cap instead of a separate `4096`; an explicit `OCR_LLM_MAX_COMPLETION_TOKENS` continues to override every request.
+  - **Changed:** Daily OCR compatibility discovery moves from `05:41 UTC` to `07:15 UTC`; exact-tag manual dispatch remains the recovery path when GitHub delays or omits a scheduled run.
+  - **Unchanged:** OCR result and manifest schemas, default `medium` effort, effective max-tools behavior, DLP, receipt v5, toolkit telemetry ownership, and approval contracts are unchanged.
+
+  ([#151](https://github.com/xeonvs/open-code-review-toolkit/issues/151))
+
+### 🧩 Rules
+
+- The recommended OCR 1.10.2 built-in Rules and reviewable-file allowlist now cover Solidity (`.sol`) and Vyper (`.vy`). ([#151](https://github.com/xeonvs/open-code-review-toolkit/issues/151))
+
+
 ## 0.8.4 - 2026-08-26
 
 ### 🐛 Bug Fixes

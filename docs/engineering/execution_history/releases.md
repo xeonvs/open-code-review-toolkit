@@ -2,6 +2,102 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-5"></a>
+
+## Toolkit 0.8.5 — provider diagnostics and OCR 1.10.2
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.8.5`
+Repository completion date: 2026-08-27
+
+### Goal and delivered scope
+
+Toolkit 0.8.5 adds one bounded provider-neutral CI diagnostic line derived
+only from a fully validated private `ocr.llm-retry-report/v1`. HTTP 402 and
+429 retain the same public `rate-or-spending-limit` reason while the local log
+can distinguish `http-payment-required` from `http-rate-limited`, include one
+uniform HTTP status, and aggregate only non-zero closed retry counters. Mixed
+terminal details are deterministically counted. Provider-controlled text,
+identities, paths, URLs, headers, request IDs, and stderr cannot enter that
+projection.
+
+The GitLab summary shape, previous-review preservation, publication DLP, receipt
+v5, toolkit telemetry, findings, severity, suppression, and automatic approval
+remain unchanged. Rate/spending remediation suggests lowering concurrency and/or
+an operator-selected completion cap, starting a new pipeline, and checking the
+provider's request/account limits without claiming a proven cause or recommending
+a provider-specific numeric cap.
+
+The release qualifies and pins OCR 1.10.2, records its grouping-cap and
+grace-round behavior, adds Solidity and Vyper to the effective Rules contract,
+and makes feature-bearing OCR patch releases require human compatibility review.
+Daily discovery moves to 07:15 UTC while exact-tag manual dispatch remains the
+recovery path.
+
+### Decisions and non-claims
+
+- Issues #149 and #151 are the complete tracked release set.
+- Provider diagnostics remain one toolkit-authored local line from a strict
+  closed numeric projection; they are not telemetry, receipt, DLP, finding,
+  severity, outcome, publication, or approval inputs.
+- OCR 1.10.2 qualification is Maintenance, the classifier correction is a Bug
+  Fix, the diagnostic is a Feature, and Solidity/Vyper support is Rules.
+- Session comparison and upstream GitHub Action checkpoint ranges are not
+  consumed. The latter does not activate or complete a second forge adapter.
+- B2B, `core/common`, shared templates, and consumer repositories remain outside
+  this release.
+- Local semantic OCR review is explicitly waived for this release, not passed:
+  both owner-authorized invocations failed before generation only at the external
+  provider boundary.
+
+### Repository, OCR, and hosted evidence
+
+- Official Darwin arm64 OCR 1.10.2 was installed as the PATH-effective binary
+  and verified at SHA-256
+  `74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd`.
+  Hosted qualification run 33055459209 and local isolated probes verified the
+  consumed OCR contracts without changing user configuration.
+- The exact-range local OCR attempts used concurrency 2 and then the
+  owner-requested concurrency 1. Each selected all nine supported files, but all
+  13 logical requests received HTTP 429 through 65 retries, with zero input/output
+  tokens and zero findings. The owner authorized release continuation if the
+  concurrency-1 retry repeated that class. No OCR finding or semantic-pass claim
+  was derived from these failures.
+- The final deterministic gate passed 1,296 tests plus 337 subtests at 86.51%
+  branch-aware coverage. Risk groups passed at 85%, 82%, 86%, and 87% against
+  floors of 80%, 80%, 85%, and 85%. The current release-contract tests, Ruff,
+  strict MyPy, Bandit, manifest and lock validation, Towncrier draft, pinned
+  Gitleaks, public-diff privacy scan, and `git diff --check` passed.
+- Feature PR #150 passed all 13 hosted checks at reviewed head
+  `701bedd2e39b67a7433a63c0b2019354fc751089` and tree
+  `0ecda6c3836201378220e7935eaadc72a8ff9a58`, with zero unresolved review
+  threads. It was squash-merged as verified commit
+  `6a9d6d37833dabe75d09937694c958e75fe77faa` with the same tree.
+- Development workflow run 33060708492 published and independently verified
+  `0.8.5.dev76`. TestPyPI wheel SHA-256 is
+  `d340472778120454fc7b0a74f37d743d592e536c3dcc41c83f0c9afc02da7af6`;
+  sdist SHA-256 is
+  `efa9c865f8e959d774710976453422625f566fd1835d868c066a6b6a87644aa3`.
+  Workflow/TestPyPI bytes, PEP 740 provenance, and clean wheel/sdist installs
+  agree.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. It sets
+`.release-version=0.8.5`, `.next-version=0.8.6`, deterministic source epoch
+`1787824489` one second after the feature squash merge, exact sorted issues
+`[149, 151]`, generated Towncrier notes, stable example pins, and this archived
+plan while returning `PLANS.md` to its inactive template.
+
+External closure remains pending until the exact reviewed release head is
+squash-merged and stable workflow output is independently reconciled across
+TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
+requires byte equality, PEP 740 provenance and GitHub attestations, annotated
+`v0.8.5` tag and peeled target, immutable `release-receipt.json`, clean PyPI
+wheel and sdist installs on Python 3.12-3.14, Actions-owned receipts, closed
+#149/#151 and milestone `v0.8.5`, synchronized clean `main`, and scratch cleanup.
+
 <a id="plan-toolkit-0-8-4"></a>
 
 ## Toolkit 0.8.4 — GitLab summary correctness and OCR 1.10.1
