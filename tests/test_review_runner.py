@@ -2160,9 +2160,14 @@ def test_run_review_keeps_classified_provider_stderr_private() -> None:
         assert stderr_path.read_text(encoding="utf-8") == "private provider body and token\n"
 
     assert exit_code == 1
-    assert "rate-or-spending-limit" in output.getvalue()
-    assert "private provider body" not in output.getvalue()
-    assert "private-provider" not in output.getvalue()
+    controlled_output = output.getvalue()
+    assert controlled_output.count("OCR provider diagnostics:") == 1
+    assert (
+        "OCR provider diagnostics: summary=rate-or-spending-limit "
+        "detail=http-rate-limited status=429 failed_requests=1"
+    ) in controlled_output
+    assert "private provider body" not in controlled_output
+    assert "private-provider" not in controlled_output
 
 
 @pytest.mark.skipif(os.name == "nt", reason="synthetic executable contract is POSIX-only")

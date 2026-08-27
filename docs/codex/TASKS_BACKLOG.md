@@ -44,7 +44,7 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 ## M6 Profiles and quality measurement
 
-Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. Toolkit v0.7.1 exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v5, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. M6 audits whether those result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
+Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v5, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
 
 ### BL-016: Evaluate explicit run-level model profiles
 
@@ -127,6 +127,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Roadmap theme:** M7 Later and conditional work
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
+- **Upstream overlap:** OCR 1.10.2 reusable GitHub Action checkpoint ranges cover only upstream Action range selection. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
 - **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.

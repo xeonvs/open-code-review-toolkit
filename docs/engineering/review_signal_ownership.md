@@ -1,15 +1,15 @@
 # Review signal ownership
 
-This matrix records the completed BL-017 audit for toolkit 0.8.2 and the
-qualified OCR 1.10.0 runtime. It separates provider/review telemetry from the
-toolkit's deterministic control-plane receipts. It is an ownership map, not a
-new telemetry API.
+This matrix records the completed BL-017 audit and its narrow toolkit 0.8.5
+operator-diagnostic reconciliation. It separates provider/review telemetry from
+the toolkit's deterministic control-plane receipts. It is an ownership map, not
+a new telemetry API.
 
 ## Source-to-signal matrix
 
 | Signal | Authoritative source | Toolkit projection | Privacy and authority boundary |
 | --- | --- | --- | --- |
-| Provider/model identity, request/session correlation, retries, latency, HTTP outcome, and cost | OCR and its configured provider telemetry | None, except the closed provider-failure class used for static failure text | Raw identities, request IDs, response text, and provider codes do not enter GitLab notes, receipt v5, DLP signals, or approval. |
+| Provider/model identity, request/session correlation, retries, latency, HTTP outcome, and cost | OCR and its configured provider telemetry | One closed provider-failure class for static GitLab text; on failure, at most one local toolkit-authored line may add closed protocol detail, one shared HTTP status, and non-zero bounded retry counters | Raw identities, request IDs, response text, provider codes, URLs, paths, warnings, and stderr do not enter the projection, GitLab notes, receipt v5, DLP signals, toolkit telemetry, or approval. HTTP detail does not prove a provider business cause. |
 | Prompt, completion, cached, reasoning, and total tokens | OCR result and OCR telemetry | Closed non-negative provider-neutral token buckets in the result summary and canonical publication comparison | Unknown fields are ignored; malformed or contradictory counters are unavailable. Token counts never authorize approval or automatic routing. |
 | Review effort and executed rounds | Operator-owned root `effort` config and OCR runtime | `OCR_REVIEW_EFFORT` writes one closed `low`, `medium`, or `high` setting; the toolkit does not publish inferred round telemetry | Merge-request content cannot select effort. Budget or incomplete coverage remains approval-ineligible through the existing result contract. |
 | Semantic grouping, group file membership, per-group spans, and filter activity | OCR runtime and OCR telemetry | Additive private result fields may be DLP-sanitized; no group or round field enters receipt v5, GitLab text, fingerprints, severity, lifecycle commands, toolkit telemetry, or approval | Group labels are model-produced. Group keys are sorted changed paths, so both are untrusted and potentially high-cardinality. |
@@ -41,8 +41,9 @@ The established owners already cover provider operations, completeness,
 evidence use, context degradation, publication safety, posting, and approval.
 The remaining data is either provider-specific telemetry already owned by OCR
 or untrusted high-cardinality group data that should not be duplicated.
-Therefore BL-017 concludes `no-new-layer`: toolkit 0.8.2 adds no exporter,
-metric schema, context telemetry implementation, or automatic routing.
+Therefore BL-017 concludes `no-new-layer`: the toolkit adds no exporter,
+metric schema, context telemetry implementation, or automatic routing. The
+bounded failure-only operator line does not reopen that conclusion.
 
 No safe stable objective currently supports automatic profile routing or a
 generic review-quality score. BL-016 remains parked, BL-018 remains conditional

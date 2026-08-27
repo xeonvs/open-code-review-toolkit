@@ -200,9 +200,11 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
 
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
-        assert "4096" in document
         assert "OCR_MAX_TOKENS_BUDGET" in document
         assert "/models" in document
+        assert "provider-specific" in document
+    for document in (configuration, operations, gitlab):
+        assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
     for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
         assert field in configuration
     for phrase in (
@@ -217,13 +219,17 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     for phrase in (
         "endpoint-or-model-not-found",
         "cost reservation from the requested output cap",
-        "not a claim that the cap was the cause",
+        "OCR provider diagnostics:",
+        "http-payment-required",
+        "http-rate-limited",
+        "not toolkit telemetry",
+        "Neither setting is presented as the proven cause",
         "`OCR_POST_ERROR_DETAILS=1` cannot add them",
         "the previous successful review is preserved",
         "automatic approval is not attempted",
     ):
         assert phrase in operations
-    assert "closed provider-neutral reason may cross the separate strict parser" in security
+    assert "one separate local line may contain closed protocol detail" in security
     assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
 
 
@@ -460,6 +466,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     policy = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     assert "schedule:" in workflow
+    assert '- cron: "15 7 * * *"' in workflow
+    assert '- cron: "41 5 * * *"' not in workflow
     assert "workflow_dispatch:" in workflow
     assert "contents: read" in workflow
     assert "issues: write" in workflow
@@ -499,15 +507,19 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",
         "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
         "OCR 1.10.1 — toolkit 0.8.4 target",
+        "OCR 1.10.2 — toolkit 0.8.5 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
         "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",
         "Deploy toolkit 0.8.4 directly with OCR 1.10.1",
+        "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
     ):
         assert contract in policy
+    assert "daily trigger is scheduled for `07:15 UTC`" in policy
+    assert "feature-bearing patch notes" in policy
     assert "--search" not in workflow
     assert "git push origin main" not in workflow
     assert "gh pr merge" not in workflow

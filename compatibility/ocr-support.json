@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.10.1",
-  "recommended_version": "1.10.1",
+  "monitoring_floor": "1.10.2",
+  "recommended_version": "1.10.2",
   "releases": [
     {
       "assets": [
@@ -1240,6 +1240,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.10.1",
       "status": "tested",
       "version": "1.10.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "91d30daa43ea698775df16cb4999e69624f009c93bb7a832310d13070981303d",
+          "size": 57674784
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd",
+          "size": 54711010
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "e9205614f80e009ee7b1f444c9da08486fb9ff6db022954fe9203d923ab720b2",
+          "size": 55931042
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "8ca3f4931200fbf48ff4b2045a6fb69da18246d11f74e630558a6ba5bab53ef4",
+          "size": 52691106
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "3ec56cc810500fac54d2c4c0ebe580b7841b1cd1966f2e2e86ce51d0292aa56e",
+          "size": 57393152
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "27ee3472871a32cd5d843579361db198ed10a83855fd43d26a763a0e9cd3cddd",
+          "size": 53370880
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "b5176aaa04a7f00bd84dd61556ca29e6cbdfcfe64cc50af6653163d9be4e7654",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.10.2.json",
+      "evidence_sha256": "5f37a74a412734c3ebb6846a1082c4a553c087d7d0b5221597a381ec28c16ce3",
+      "human_conclusion": "Compatible after human review in issue #151 and hosted workflow run 33055459209. OCR 1.10.2 adds tracked grouping and grace-round requests, aligns grouping with the inherited 16384 completion cap, and adds Solidity/Vyper review rules without changing toolkit result, manifest, medium-effort, max-tools, DLP, receipt, telemetry, or approval contracts. Session comparison and reusable GitHub Action checkpoint ranges are not consumed; the latter only partially overlaps BL-021. The original machine automatic-safe classification was overridden because feature-bearing release notes require human review.",
+      "published_at": "2026-08-27T05:49:24Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.10.2",
+      "status": "tested",
+      "version": "1.10.2"
     }
   ],
   "schema_version": 1,

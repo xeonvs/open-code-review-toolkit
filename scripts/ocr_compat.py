@@ -55,8 +55,9 @@ SAFE_NOTES_RE = re.compile(
     r"\b(fix|bug|documentation|docs|test|chore|refactor|performance)\b", re.I
 )
 MATERIAL_NOTES_RE = re.compile(
-    r"\b(breaking|remove[ds]?|deprecat|security|vulnerab|protocol|schema|format|cli|flag|config|provider|gitlab)\b",
-    re.I,
+    r"\b(breaking|remove[ds]?|deprecat|security|vulnerab|protocol|schema|format|cli|flag|config|provider|gitlab|features?)\b"
+    r"|^[ \t]*-[ \t]*feat(?:\([^\r\n)]{1,80}\))?:",
+    re.I | re.M,
 )
 REQUIRED_REVIEW_FLAGS = {
     "--audience",
@@ -380,14 +381,17 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 "semantic_grouping",
             }.issubset(capabilities):
                 _fail(f"evidence does not qualify effort and grouping for {version}")
-            if contracts.get("semantic_grouping_probe") != {
+            expected_grouping_probe = {
                 "default_effort": "medium",
                 "filter_requests": 1,
                 "grouping_requests": 1,
                 "main_requests": 3,
                 "result": "passed",
                 "review_rounds": 2,
-            }:
+            }
+            if _version(version) >= (1, 10, 2):
+                expected_grouping_probe["grouping_completion_cap"] = 16_384
+            if contracts.get("semantic_grouping_probe") != expected_grouping_probe:
                 _fail(f"evidence does not qualify semantic grouping behavior for {version}")
             if contracts.get("completion_cap_probe") != {
                 "explicit": 4_096,
@@ -1443,7 +1447,7 @@ def _numeric_cli_probe(
     }
 
 
-def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Drive one real two-file group through grouping and medium review rounds."""
 
     root = directory / "semantic-grouping-probe"
@@ -1495,6 +1499,7 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
             env=env,
         )
         stages = list(_StubHandler.request_stages)
+        completion_caps = list(_StubHandler.completion_caps)
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
@@ -1511,7 +1516,13 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
         _fail("semantic grouping review did not preserve the accepted group")
     if stages != ["grouping", "main", "main", "filter", "main"]:
         _fail(f"default medium review emitted an unexpected stage sequence: {stages!r}")
-    return {
+    expected_grouping_cap = 16_384 if _version(version) >= (1, 10, 2) else 4_096
+    if len(completion_caps) != len(stages) or completion_caps[0] != expected_grouping_cap:
+        _fail(
+            "semantic grouping review emitted an unexpected grouping completion cap: "
+            f"{completion_caps!r}"
+        )
+    result: dict[str, object] = {
         "default_effort": "medium",
         "filter_requests": 1,
         "grouping_requests": 1,
@@ -1519,6 +1530,9 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
         "result": "passed",
         "review_rounds": 2,
     }
+    if _version(version) >= (1, 10, 2):
+        result["grouping_completion_cap"] = expected_grouping_cap
+    return result
 
 
 def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
@@ -1843,7 +1857,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         },
     }
     if _version(version) >= (1, 10, 0):
-        contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
+        contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, version, directory)
     if _version(version) >= (1, 9, 10):
         contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
     if thinking_probe is not None:

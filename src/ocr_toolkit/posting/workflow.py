@@ -1151,7 +1151,7 @@ def post_llm_provider_failure(
         ),
         ProviderFailureReason.RATE_OR_SPENDING_LIMIT: (
             "The LLM provider rejected the request under a rate or spending limit.",
-            "The cause may be ordinary throttling, an account or API-key spending limit, or cost reservation from the requested output cap. Retry later and check account limits. If short probes pass but a full review fails before generation, try an explicit `OCR_LLM_MAX_COMPLETION_TOKENS`, for example `4096`.",
+            "Try lowering `OCR_REVIEW_CONCURRENCY` and/or `OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline. If it still fails, check the provider's request and account limits.",
         ),
         ProviderFailureReason.OVERLOADED: (
             "The LLM provider reported that it was overloaded.",

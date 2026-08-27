@@ -99,7 +99,11 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatusError,
     write_pre_execution_status,
 )
-from ocr_toolkit.provider_failure import ProviderFailureReason, provider_failure_reason
+from ocr_toolkit.provider_failure import (
+    ProviderFailureProjection,
+    provider_failure_projection,
+    render_provider_diagnostics,
+)
 from ocr_toolkit.providers.gitlab import (
     GitLabProviderError,
     acquire_review_snapshot,
@@ -2081,14 +2085,16 @@ def read_stderr_excerpt(stderr_path: Path, max_chars: int = DEFAULT_DIAGNOSTIC_C
     return redact_sensitive(text)[:max_chars]
 
 
-def _closed_provider_failure_reason(result_path: Path) -> ProviderFailureReason | None:
-    """Return only a validated retry-report reason from one private result artifact."""
+def _closed_provider_failure_projection(
+    result_path: Path,
+) -> ProviderFailureProjection | None:
+    """Return only validated retry-report diagnostics from one private result."""
 
     try:
         result = load_ocr_result(result_path)
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge):
         return None
-    return provider_failure_reason(result)
+    return provider_failure_projection(result)
 
 
 def _resolve_ocr_binary() -> str:
@@ -2155,13 +2161,9 @@ def run_review(
 
     if completed.returncode != 0:
         print(f"Open Code Review exited with code {completed.returncode}.", file=sys.stderr)
-        provider_reason = _closed_provider_failure_reason(result_path)
-        if provider_reason is not None:
-            print(
-                f"OCR provider failure classified as {provider_reason.value}; "
-                "private diagnostics remain in the owner-only artifacts.",
-                file=sys.stderr,
-            )
+        provider_projection = _closed_provider_failure_projection(result_path)
+        if provider_projection is not None:
+            print(render_provider_diagnostics(provider_projection), file=sys.stderr)
         else:
             excerpt = read_stderr_excerpt(stderr_path)
             if excerpt:

@@ -154,9 +154,11 @@ Qualified OCR releases expose explicit per-run provider/model overrides, additiv
 The completed [BL-017 signal-ownership audit](review_signal_ownership.md) reaches
 `no-new-layer`. OCR owns provider, request, latency, cost, grouping, round, and
 tool telemetry. The toolkit owns only deterministic closed result, receipt,
-context, publication-DLP, posting, and approval projections. OCR 1.10.1 group
+context, publication-DLP, posting, and approval projections. OCR 1.10.2 group
 keys contain changed paths and its labels are model-produced, so neither becomes
-a toolkit metric, routing input, or approval authority.
+a toolkit metric, routing input, or approval authority. A single bounded
+toolkit-authored failure diagnostic derived from closed retry-report enums and
+counts is operator feedback, not a second telemetry or exporter layer.
 
 Automatic routing is conditional on stable evidence, latency, token, and review-quality metrics. If activated, it is deterministic, conservative, observable, never changes explicit coverage controls, and never routes a merge request to a full-repository scan.
 
@@ -164,7 +166,7 @@ Automatic routing is conditional on stable evidence, latency, token, and review-
 
 Fast-moving upstream compatibility is a product capability, not an ad hoc version string update. One machine-readable manifest should define recommended and tested OCR releases and known capabilities. Version and capability inspection is centralized, additive output fields are parsed tolerantly, and required contract removal fails closed.
 
-Contract tests cover the supported release set. Scheduled automation enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence. Ordered candidates retain the current tested baseline while each classification uses its adjacent predecessor. A conservative same-minor maintenance classifier may prepare one cumulative compatibility patch only when the sequence is contiguous, every consumed contract remains stable, and no release notes contain a material signal. Minor/major, ambiguous, changed, failed, or mixed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
+Contract tests cover the supported release set. Daily automation runs at `07:15 UTC`, enumerates every unseen stable upstream release, verifies official checksums before bounded machine probes, and records reproducible evidence; exact-tag manual dispatch remains the recovery path when GitHub delays or omits a scheduled run. Ordered candidates retain the current tested baseline while each classification uses its adjacent predecessor. A conservative same-minor maintenance classifier may prepare one cumulative compatibility patch only when the sequence is contiguous, every consumed contract remains stable, and no release notes contain a feature or other material signal. Minor/major, feature-bearing, ambiguous, changed, failed, or mixed candidates always require human qualification. No lane writes directly to `main`: updating the manifest or recommended version remains a separate reviewed, checksum-pinned change with the normal protected PR and release gates.
 
 ## Historical and migration-only evidence
 
