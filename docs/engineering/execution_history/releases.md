@@ -1055,7 +1055,7 @@ After that run, the focused trust-boundary suite passed with 369 tests and 158 s
 
 #### Qualification and feature validation receipt
 
-- The active `/Users/xeon/.local/bin/ocr` reports 1.9.5 and has SHA-256 `459d3986e59fed5ed8ad6a97bc02d2eb995a89106b3fe6a6fcf74bb69cab1b73`, matching the official Darwin arm64 release metadata and `sha256sum.txt`. Hosted run `32000131436` verified every official asset and the Linux amd64 contracts.
+- The PATH-effective OCR executable reports 1.9.5 and has SHA-256 `459d3986e59fed5ed8ad6a97bc02d2eb995a89106b3fe6a6fcf74bb69cab1b73`, matching the official Darwin arm64 release metadata and `sha256sum.txt`. Hosted run `32000131436` verified every official asset and the Linux amd64 contracts.
 - The real budget probe selected three files, completed two, retained their findings, and represented the third as `summary.budget_exceeded`, `token_budget_reached`, and manifest `failed(budget)` coverage normalized to `partial`. The evidence matrix records the real OCR/launcher/parser boundaries and the local model-peer non-claim.
 - PR #94's reviewed head `a0d55caad296f14de9839eb283947d754b1633be` passed all 13 hosted checks and is tree-equivalent to squash merge `13093602a0b40521641447c9d31ed61754e90aea`.
 - Feature validation passed clean Python 3.12.14, 3.13.15, and 3.14.7 suites with 813 tests plus 105 subtests and at least 81.20% coverage, including real nested-venv wheel/sdist and stdio-MCP paths. Ruff, mypy, Bandit, pip-audit, pinned Gitleaks, manifest, YAML/shell, Towncrier, deterministic packaging, Twine, and clean installed-artifact smokes passed.

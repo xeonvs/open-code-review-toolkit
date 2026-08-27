@@ -152,7 +152,7 @@ state for this task: full stable delivery authorized on 2026-08-27.
 | `WQ-03` | `completed` | OCR 1.10.2 pins/evidence, schedule, classifier correction, current docs/Rules, source audit, backlog reconciliation, and local no-LLM update are complete. |
 | `WQ-04` | `completed` | One closed provider-neutral projection renders the single numeric review log line; GitLab keeps only the prior reason with safer remediation. |
 | `WQ-05` | `completed` | Changelog/docs are reconciled; the complete local quality, coverage, manifest, lock, Towncrier, Gitleaks, and diff gates pass. |
-| `WQ-06` | `in_progress` | Correct the PATH-effective OCR installation, run the single final real OCR review, remediate confirmed findings, and complete self-review/final feature gates. |
+| `WQ-06` | `in_progress` | Correct the PATH-effective OCR installation, complete the required real OCR review, remediate confirmed findings, and complete self-review/final feature gates. |
 | `WQ-07` | `pending` | Reconcile exact feature head/checks/threads, mark PR ready, merge it, synchronize `main`, and verify its TestPyPI development publication. |
 | `WQ-08` | `pending` | Prepare the signed `release/v0.8.5` repository state and merge its exact protected release PR after all gates. |
 | `WQ-09` | `pending` | Monitor stable publication and independently read back bytes, provenance, attestations, installs, tag, immutable Release/receipt, issue receipts, milestone, main, and cleanup. |
@@ -241,6 +241,13 @@ state for this task: full stable delivery authorized on 2026-08-27.
   official Darwin arm64
   `74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd`; the temporary
   download and rollback copy were removed after verification.
+- 2026-08-27: the first real exact-range OCR 1.10.2 invocation selected nine supported
+  files at concurrency `2` but failed before generation: all 13 logical requests received
+  HTTP 429 through 65 retries, token usage and findings stayed zero, and the complete
+  structured result was retained owner-only for audit. This proves the current binary and
+  review path executed but does not qualify semantic review or toolkit correctness. No
+  second configured backend exists; do not describe this outcome as a passing OCR review
+  or waive the required completed review.
 
 #### Risks And Recovery
 

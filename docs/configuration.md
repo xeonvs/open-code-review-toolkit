@@ -56,7 +56,7 @@ Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fail
 | `openai-responses` | `max_output_tokens` |
 | `anthropic` | `max_tokens` |
 
-If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer is deduplicated. A different value, or a boolean, string, float, or null at that field, fails configuration with a migration error; remove the duplicate field or keep the same integer in both places. Other `OCR_LLM_EXTRA_BODY` members are preserved. For example, set `OCR_LLM_MAX_COMPLETION_TOKENS=4096` when a gateway accepts short probes but rejects a full review before generation because it reserves spending against the requested output cap.
+If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer is deduplicated. A different value, or a boolean, string, float, or null at that field, fails configuration with a migration error; remove the duplicate field or keep the same integer in both places. Other `OCR_LLM_EXTRA_BODY` members are preserved. Select an explicit completion cap only from the deployment's provider/model contract when a gateway reserves spending against the requested output cap; the toolkit does not recommend a provider-specific value.
 
 The toolkit does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
 

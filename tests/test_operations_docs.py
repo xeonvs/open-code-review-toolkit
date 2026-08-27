@@ -200,9 +200,11 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
 
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
-        assert "4096" in document
         assert "OCR_MAX_TOKENS_BUDGET" in document
         assert "/models" in document
+        assert "provider-specific" in document
+    for document in (configuration, operations, gitlab):
+        assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
     for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
         assert field in configuration
     for phrase in (
