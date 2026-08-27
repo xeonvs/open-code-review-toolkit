@@ -1,0 +1,205 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "91d30daa43ea698775df16cb4999e69624f009c93bb7a832310d13070981303d",
+      "size": 57674784
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd",
+      "size": 54711010
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "e9205614f80e009ee7b1f444c9da08486fb9ff6db022954fe9203d923ab720b2",
+      "size": 55931042
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "8ca3f4931200fbf48ff4b2045a6fb69da18246d11f74e630558a6ba5bab53ef4",
+      "size": 52691106
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "3ec56cc810500fac54d2c4c0ebe580b7841b1cd1966f2e2e86ce51d0292aa56e",
+      "size": 57393152
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "27ee3472871a32cd5d843579361db198ed10a83855fd43d26a763a0e9cd3cddd",
+      "size": 53370880
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "b5176aaa04a7f00bd84dd61556ca29e6cbdfcfe64cc50af6653163d9be4e7654",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.10.1",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-27T05:49:24Z",
+  "release_changes": "## 🚀 Features\n\n- feat(session): register GroupingTask as a tracked TaskType (#1067)\n- feat(rules): add Solidity and Vyper review rules (#961)\n- feat(action): opt-in completeness-gated checkpoint ranges (#476) (#945)\n- feat(session): compare findings across two review sessions (#922) (#946)\n\n## 🐛 Bug Fixes\n\n- fix: record grace round requests (#1066)\n\n## 📖 Documentation\n\n- docs(ko): add Korean translation for integration guides (#1072)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.10.1...v1.10.2",
+  "release_notes_sha256": "cad919d43d01e6f8c5ed1a2cb83120d76d082996e5c246c356a97155443d2e83",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.10.2",
+  "tested_baseline_version": "1.10.1",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.10.2"
+}

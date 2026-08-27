@@ -138,9 +138,9 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 | Queue | Status | Deliverable |
 | --- | --- | --- |
-| `WQ-01` | `in_progress` | Review this plan, pass fidelity/diff checks, commit it signed, push once, and open the Draft PR. |
-| `WQ-02` | `pending` | Create/assign milestone coordination and manually run exact OCR 1.10.2 qualification to create the canonical issue. |
-| `WQ-03` | `pending` | Implement schedule, OCR evidence/pins/current docs/Rules changes, semantic audit, backlog reconciliation, and local no-LLM OCR update. |
+| `WQ-01` | `completed` | Planning commit `123c331` was signed and pushed once; Draft PR #150 is open. |
+| `WQ-02` | `completed` | Milestone `v0.8.5` owns assigned open issues #149/#151; hosted run 33055459209 qualified exact OCR 1.10.2. |
+| `WQ-03` | `completed` | OCR 1.10.2 pins/evidence, schedule, classifier correction, current docs/Rules, source audit, backlog reconciliation, and local no-LLM update are complete. |
 | `WQ-04` | `pending` | Implement the single closed provider diagnostic projection/renderer and GitLab remediation with boundary regressions. |
 | `WQ-05` | `pending` | Finalize changelog/docs/plan truth and run the complete local gate once. |
 | `WQ-06` | `pending` | Push the complete history once, reconcile hosted CI, update Draft/issue coordination with exact evidence, and verify final state. |
@@ -190,7 +190,19 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   required documentation indexes, and all canonical workflow owners present.
 - 2026-08-27: live GitHub readback found open #149, no open PR, no open milestone, active
   compatibility workflow, and no scheduled compatibility run for the day by 08:29 UTC.
-- No implementation tests have run yet; WQ-01 is the current gate.
+- 2026-08-27: signed planning commit `123c331` was pushed and Draft PR #150 opened;
+  milestone `v0.8.5` was created and assigned open issues #149/#151.
+- 2026-08-27: hosted run 33055459209 passed OCR 1.10.2 checksum and compatibility
+  probes. Human semantic review overrode its erroneous `automatic-safe` result because
+  the release contains Features; the classifier now routes feature-bearing patches to
+  human review.
+- 2026-08-27: exact local Darwin arm64 OCR 1.10.2 at SHA-256
+  `74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd` passed
+  version/help, isolated Solidity/Vyper selection/rule checks, and a loopback-only
+  semantic grouping probe with cap `16384` and default-medium stage sequence. No external
+  LLM/provider call or user OCR configuration change occurred.
+- 2026-08-27: 104 focused compatibility/workflow/environment tests pass; manifest
+  validation, focused Ruff, Towncrier draft, and `git diff --check` pass.
 
 #### Risks And Recovery
 
@@ -214,10 +226,9 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 #### Resume Point
 
-Finish `WQ-01`: inspect the complete plan diff against the approved Plan Mode outcome,
-run the plan fidelity and `git diff --check` gates, make the signed planning commit, push
-the branch once, and open the Draft PR. Then begin `WQ-02` without another repository
-push.
+Begin `WQ-04` from the reviewed OCR 1.10.2 slice. Implement the single closed numeric
+provider diagnostic owner and GitLab remediation regressions without changing public
+summary, DLP, receipt, telemetry, or approval schemas. Do not push until WQ-05 completes.
 
 #### Plan Fidelity Check
 
