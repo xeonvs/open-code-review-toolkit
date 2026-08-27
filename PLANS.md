@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Toolkit 0.8.5 - provider diagnostics, OCR 1.10.2, and compatibility scheduling
 
-Status: active
+Status: implementation complete; stable release deferred
 
 #### Goal
 
@@ -142,8 +142,8 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 | `WQ-02` | `completed` | Milestone `v0.8.5` owns assigned open issues #149/#151; hosted run 33055459209 qualified exact OCR 1.10.2. |
 | `WQ-03` | `completed` | OCR 1.10.2 pins/evidence, schedule, classifier correction, current docs/Rules, source audit, backlog reconciliation, and local no-LLM update are complete. |
 | `WQ-04` | `completed` | One closed provider-neutral projection renders the single numeric review log line; GitLab keeps only the prior reason with safer remediation. |
-| `WQ-05` | `in_progress` | Finalize changelog/docs/plan truth and run the complete local gate once. |
-| `WQ-06` | `pending` | Push the complete history once, reconcile hosted CI, update Draft/issue coordination with exact evidence, and verify final state. |
+| `WQ-05` | `completed` | Changelog/docs are reconciled; the complete local quality, coverage, manifest, lock, Towncrier, Gitleaks, and diff gates pass. |
+| `WQ-06` | `in_progress` | Push the complete history once, reconcile hosted CI, update Draft/issue coordination with exact evidence, and verify final state. |
 
 #### Locked Decisions
 
@@ -207,6 +207,17 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   tests plus 217 subtests pass. The reviewed flow is `private OCR result -> strict retry
   parser -> closed immutable reason/detail/status/counts -> one local line`; GitLab uses
   only the reason, and DLP/receipt/telemetry/approval projections are unchanged.
+- 2026-08-27: `scripts/quality.sh check` passes 1,296 tests and 337 subtests with
+  branch-aware total coverage 86.51%. Risk groups pass at 85%, 82%, 86%, and 87%
+  against required 80%, 80%, 85%, and 85% floors.
+- 2026-08-27: locked dependency resolution, OCR manifest validation, rendered Towncrier
+  0.8.5 draft, and `git diff --check` pass. Checksum-verified temporary Gitleaks 8.24.3
+  passes the complete first-parent feature history; the installed unrelated 8.30.1 was
+  not substituted for the repository pin.
+- 2026-08-27: requirements, provider-data-flow, privacy, DLP/approval independence,
+  compatibility, telemetry ownership, backlog, documentation, and complete feature diff
+  self-reviews are complete. Exact temporary OCR/Gitleaks artifacts and the recoverable
+  OCR 1.10.1 backup were removed after successful validation; local OCR remains 1.10.2.
 
 #### Risks And Recovery
 
@@ -230,9 +241,13 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 #### Resume Point
 
-Finish `WQ-05`: self-review and commit the provider-diagnostic slice, then update final
-Draft-only plan truth and run the one complete local quality/coverage/manifest/lock/
-Towncrier/Gitleaks/diff gate. Do not push until that gate and final handoff commit pass.
+Finish `WQ-06`: commit this Draft-only handoff truth, push the locally reviewed history
+with lease protection because the two implementation commits were autosquashed and
+re-signed after gate corrections, wait for hosted PR workflows, and fix only evidenced
+failures through the same self-review/commit gate. When green, update Draft PR #150 and
+open issues #149/#151 with exact head/tree, hashes, validation, Added/Fixed/Changed/
+Unchanged summaries, and the stable-release resume action. Leave the PR Draft and both
+issues plus milestone `v0.8.5` open; do not merge, tag, publish, or start a release PR.
 
 #### Plan Fidelity Check
 
