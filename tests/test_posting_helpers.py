@@ -1697,6 +1697,13 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertIn("rate-or-spending-limit", published)
         self.assertIn("Previous OCR review comments were preserved", published)
         self.assertIn("Automatic approval was not attempted", published)
+        self.assertIn(
+            "Try lowering `OCR_REVIEW_CONCURRENCY` and/or "
+            "`OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline.",
+            published,
+        )
+        self.assertNotIn("OCR provider diagnostics:", published)
+        self.assertNotIn("OCR provider diagnostics:", controlled_log)
         for private in private_values:
             self.assertNotIn(private, published)
             self.assertNotIn(private, controlled_log)
@@ -2349,9 +2356,9 @@ class PostingWorkflowTests(unittest.TestCase):
 
             self.assertEqual(exit_code, expected)
             self.assertIn("rate-or-spending-limit", notes[0])
-            self.assertIn("cost reservation", notes[0])
+            self.assertIn("OCR_REVIEW_CONCURRENCY", notes[0])
+            self.assertIn("start a new merge request pipeline", notes[0])
             self.assertIn("OCR_LLM_MAX_COMPLETION_TOKENS", notes[0])
-            self.assertIn("4096", notes[0])
 
     def test_previous_review_cleanup_depends_only_on_coverage_completeness(self) -> None:
         """Clean prior review state only after complete replacement coverage."""

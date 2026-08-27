@@ -217,13 +217,17 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     for phrase in (
         "endpoint-or-model-not-found",
         "cost reservation from the requested output cap",
-        "not a claim that the cap was the cause",
+        "OCR provider diagnostics:",
+        "http-payment-required",
+        "http-rate-limited",
+        "not toolkit telemetry",
+        "Neither setting is presented as the proven cause",
         "`OCR_POST_ERROR_DETAILS=1` cannot add them",
         "the previous successful review is preserved",
         "automatic approval is not attempted",
     ):
         assert phrase in operations
-    assert "closed provider-neutral reason may cross the separate strict parser" in security
+    assert "one separate local line may contain closed protocol detail" in security
     assert "receipt, DLP, telemetry, severity, finding, or approval signal" in security
 
 

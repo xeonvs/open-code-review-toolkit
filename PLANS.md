@@ -141,8 +141,8 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 | `WQ-01` | `completed` | Planning commit `123c331` was signed and pushed once; Draft PR #150 is open. |
 | `WQ-02` | `completed` | Milestone `v0.8.5` owns assigned open issues #149/#151; hosted run 33055459209 qualified exact OCR 1.10.2. |
 | `WQ-03` | `completed` | OCR 1.10.2 pins/evidence, schedule, classifier correction, current docs/Rules, source audit, backlog reconciliation, and local no-LLM update are complete. |
-| `WQ-04` | `pending` | Implement the single closed provider diagnostic projection/renderer and GitLab remediation with boundary regressions. |
-| `WQ-05` | `pending` | Finalize changelog/docs/plan truth and run the complete local gate once. |
+| `WQ-04` | `completed` | One closed provider-neutral projection renders the single numeric review log line; GitLab keeps only the prior reason with safer remediation. |
+| `WQ-05` | `in_progress` | Finalize changelog/docs/plan truth and run the complete local gate once. |
 | `WQ-06` | `pending` | Push the complete history once, reconcile hosted CI, update Draft/issue coordination with exact evidence, and verify final state. |
 
 #### Locked Decisions
@@ -203,6 +203,10 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   LLM/provider call or user OCR configuration change occurred.
 - 2026-08-27: 104 focused compatibility/workflow/environment tests pass; manifest
   validation, focused Ruff, Towncrier draft, and `git diff --check` pass.
+- 2026-08-27: 403 provider parser, review runner, posting, approval, and documentation
+  tests plus 217 subtests pass. The reviewed flow is `private OCR result -> strict retry
+  parser -> closed immutable reason/detail/status/counts -> one local line`; GitLab uses
+  only the reason, and DLP/receipt/telemetry/approval projections are unchanged.
 
 #### Risks And Recovery
 
@@ -226,9 +230,9 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 #### Resume Point
 
-Begin `WQ-04` from the reviewed OCR 1.10.2 slice. Implement the single closed numeric
-provider diagnostic owner and GitLab remediation regressions without changing public
-summary, DLP, receipt, telemetry, or approval schemas. Do not push until WQ-05 completes.
+Finish `WQ-05`: self-review and commit the provider-diagnostic slice, then update final
+Draft-only plan truth and run the one complete local quality/coverage/manifest/lock/
+Towncrier/Gitleaks/diff gate. Do not push until that gate and final handoff commit pass.
 
 #### Plan Fidelity Check
 

@@ -8,10 +8,14 @@ import pytest
 
 from ocr_toolkit.provider_failure import (
     MAX_ATTEMPTS_PER_REQUEST,
+    ProviderFailureDetail,
     ProviderFailureReason,
     RetryReportError,
     parse_retry_report_failure,
+    parse_retry_report_projection,
+    provider_failure_projection,
     provider_failure_reason,
+    render_provider_diagnostics,
 )
 
 
@@ -70,26 +74,31 @@ def _result(requests: list[dict[str, Any]], *, total_requests: int | None = None
 
 
 @pytest.mark.parametrize(
-    ("status", "error_class", "expected"),
+    ("status", "error_class", "expected", "detail"),
     [
-        (400, "provider", ProviderFailureReason.REQUEST_REJECTED),
-        (401, "authentication", ProviderFailureReason.AUTHENTICATION),
-        (402, "provider", ProviderFailureReason.RATE_OR_SPENDING_LIMIT),
-        (403, "authentication", ProviderFailureReason.AUTHORIZATION),
-        (404, "provider", ProviderFailureReason.ENDPOINT_OR_MODEL_NOT_FOUND),
-        (408, "timeout", ProviderFailureReason.TIMEOUT),
-        (409, "provider", ProviderFailureReason.REQUEST_REJECTED),
-        (413, "provider", ProviderFailureReason.REQUEST_REJECTED),
-        (422, "provider", ProviderFailureReason.REQUEST_REJECTED),
-        (429, "rate_limited", ProviderFailureReason.RATE_OR_SPENDING_LIMIT),
-        (500, "provider", ProviderFailureReason.PROVIDER_UNAVAILABLE),
-        (503, "provider", ProviderFailureReason.PROVIDER_UNAVAILABLE),
-        (504, "timeout", ProviderFailureReason.TIMEOUT),
-        (529, "overloaded", ProviderFailureReason.OVERLOADED),
+        (400, "provider", ProviderFailureReason.REQUEST_REJECTED, "http-bad-request"),
+        (401, "authentication", ProviderFailureReason.AUTHENTICATION, "http-unauthorized"),
+        (402, "provider", ProviderFailureReason.RATE_OR_SPENDING_LIMIT, "http-payment-required"),
+        (403, "authentication", ProviderFailureReason.AUTHORIZATION, "http-forbidden"),
+        (404, "provider", ProviderFailureReason.ENDPOINT_OR_MODEL_NOT_FOUND, "http-not-found"),
+        (408, "timeout", ProviderFailureReason.TIMEOUT, "http-request-timeout"),
+        (409, "provider", ProviderFailureReason.REQUEST_REJECTED, "http-conflict"),
+        (413, "provider", ProviderFailureReason.REQUEST_REJECTED, "http-content-too-large"),
+        (
+            422,
+            "provider",
+            ProviderFailureReason.REQUEST_REJECTED,
+            "http-unprocessable-content",
+        ),
+        (429, "rate_limited", ProviderFailureReason.RATE_OR_SPENDING_LIMIT, "http-rate-limited"),
+        (500, "provider", ProviderFailureReason.PROVIDER_UNAVAILABLE, "http-server-error"),
+        (503, "provider", ProviderFailureReason.PROVIDER_UNAVAILABLE, "http-server-error"),
+        (504, "timeout", ProviderFailureReason.TIMEOUT, "http-gateway-timeout"),
+        (529, "overloaded", ProviderFailureReason.OVERLOADED, "http-overloaded"),
     ],
 )
 def test_http_status_matrix_maps_only_validated_attempt_fields(
-    status: int, error_class: str, expected: ProviderFailureReason
+    status: int, error_class: str, expected: ProviderFailureReason, detail: str
 ) -> None:
     """Map the complete required HTTP matrix without reading provider text."""
 
@@ -97,7 +106,11 @@ def test_http_status_matrix_maps_only_validated_attempt_fields(
         [_request("failed", [_error_attempt(status=status, error_class=error_class, phase="http")])]
     )
 
-    assert parse_retry_report_failure(result) is expected
+    projection = parse_retry_report_projection(result)
+
+    assert projection is not None
+    assert projection.reason is expected
+    assert projection.details[0][0].value == detail
 
 
 @pytest.mark.parametrize(
@@ -228,3 +241,121 @@ def test_raw_provider_identity_and_payload_fields_do_not_affect_reason() -> None
 
     assert reason is ProviderFailureReason.ENDPOINT_OR_MODEL_NOT_FOUND
     assert "private" not in reason.value
+
+
+@pytest.mark.parametrize(
+    ("status", "error_class", "detail"),
+    [
+        (402, "provider", ProviderFailureDetail.HTTP_PAYMENT_REQUIRED),
+        (429, "rate_limited", ProviderFailureDetail.HTTP_RATE_LIMITED),
+    ],
+)
+def test_payment_and_rate_statuses_keep_one_public_reason_with_distinct_detail(
+    status: int,
+    error_class: str,
+    detail: ProviderFailureDetail,
+) -> None:
+    """Distinguish protocol status without claiming a provider business cause."""
+
+    result = _result(
+        [_request("failed", [_error_attempt(status=status, error_class=error_class, phase="http")])]
+    )
+
+    projection = parse_retry_report_projection(result)
+
+    assert projection is not None
+    assert projection.reason is ProviderFailureReason.RATE_OR_SPENDING_LIMIT
+    assert projection.details == ((detail, 1),)
+    assert projection.status_code == status
+    assert render_provider_diagnostics(projection) == (
+        "OCR provider diagnostics: summary=rate-or-spending-limit "
+        f"detail={detail.value} status={status} failed_requests=1"
+    )
+
+
+def test_retries_and_recovered_requests_are_aggregated_without_zero_fields() -> None:
+    """Expose only useful validated counts and one terminal status."""
+
+    failed = _request(
+        "failed",
+        [
+            _error_attempt(status=429, error_class="rate_limited", phase="http", number=number)
+            for number in (1, 2, 3)
+        ],
+    )
+    recovered = _request(
+        "recovered",
+        [
+            _error_attempt(status=429, error_class="rate_limited", phase="http"),
+            _success_attempt(2),
+        ],
+    )
+
+    projection = parse_retry_report_projection(_result([failed, recovered]))
+
+    assert projection is not None
+    assert render_provider_diagnostics(projection) == (
+        "OCR provider diagnostics: summary=rate-or-spending-limit "
+        "detail=http-rate-limited status=429 failed_requests=1 retried_requests=2 "
+        "total_retries=3 recovered_requests=1"
+    )
+    assert "cancelled_requests=" not in render_provider_diagnostics(projection)
+
+
+def test_mixed_details_are_counted_and_sorted_without_nonuniform_status() -> None:
+    """Collapse heterogeneous terminal failures into one deterministic line."""
+
+    requests = [
+        _request(
+            "failed",
+            [_error_attempt(status=429, error_class="rate_limited", phase="http")],
+        ),
+        _request(
+            "failed",
+            [_error_attempt(status=402, error_class="provider", phase="http")],
+        ),
+        _request(
+            "failed",
+            [_error_attempt(status=0, error_class="network", phase="transport")],
+        ),
+    ]
+
+    projection = parse_retry_report_projection(_result(requests))
+
+    assert projection is not None
+    line = render_provider_diagnostics(projection)
+    assert line == (
+        "OCR provider diagnostics: summary=mixed "
+        "details=http-payment-required:1,http-rate-limited:1,network:1 "
+        "failed_requests=3"
+    )
+    assert "status=" not in line
+
+
+def test_malformed_projection_and_private_extensions_never_reach_renderer() -> None:
+    """Keep malformed reports and provider-controlled additive values unavailable."""
+
+    result = _result(
+        [
+            _request(
+                "failed",
+                [_error_attempt(status=429, error_class="rate_limited", phase="http")],
+            )
+        ]
+    )
+    projection = provider_failure_projection(result)
+
+    assert projection is not None
+    line = render_provider_diagnostics(projection)
+    for private in (
+        "private-provider",
+        "private-model",
+        "private-request-id",
+        "private-token",
+        "/private/repository/file.py",
+        "private-response-body",
+    ):
+        assert private not in line
+
+    result["retry_report"]["failed_requests"] = 2
+    assert provider_failure_projection(result) is None
