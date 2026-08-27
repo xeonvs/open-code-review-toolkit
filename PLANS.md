@@ -6,14 +6,15 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Toolkit 0.8.5 - provider diagnostics, OCR 1.10.2, and compatibility scheduling
 
-Status: implementation complete; stable release deferred
+Status: release execution in progress
 
 #### Goal
 
-Deliver a production-ready Draft feature pull request for toolkit 0.8.5 that implements
+Deliver and publish stable toolkit 0.8.5 with verified artifacts. The release implements
 issue #149's bounded provider diagnostics, qualifies and adopts OCR 1.10.2, moves the
 daily compatibility discovery after the observed upstream release window, reconciles
-upstream capabilities with the durable backlog, and leaves stable publication deferred.
+upstream capabilities with the durable backlog, and completes independent external
+readback and issue/milestone closure.
 
 #### Plan Origin
 
@@ -34,11 +35,15 @@ upstream capabilities with the durable backlog, and leaves stable publication de
   `ocr.llm-retry-report/v1`, without changing the merge-request summary structure.
 - Reconcile every relevant OCR 1.10.2 capability and #149 outcome against backlog goals,
   activation triggers, dependencies, and acceptance criteria.
-- Finish at a green Draft feature PR. Do not merge, prepare a release PR, tag, or publish
-  toolkit 0.8.5.
+- Update the PATH-effective local OCR to exact 1.10.2, run one real final review of the
+  complete feature range with the configured provider at concurrency `2`, retain its
+  private artifacts only through finding analysis, and remediate confirmed findings.
+- Complete holistic self-review and deterministic gates, merge the protected feature PR,
+  verify the protected-main development publication, prepare and merge `release/v0.8.5`,
+  publish stable artifacts, and independently reconcile every release surface.
 
 Release classification: `release-required`; target stable version: `0.8.5`; delivery
-state for this task: `release-deferred` at the green Draft PR boundary.
+state for this task: full stable delivery authorized on 2026-08-27.
 
 #### Requirement Traceability
 
@@ -53,7 +58,10 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 | `REQ-007` | Produce at most one closed numeric provider diagnostic line from a strictly validated retry report. | `WQ-04` | Parser, renderer, bounds, aggregation, and hostile-input tests |
 | `REQ-008` | Preserve GitLab summary shape, prior review, DLP, receipt, telemetry, and approval boundaries while improving remediation text. | `WQ-04` | Posting/review/approval/privacy regressions |
 | `REQ-009` | Document current behavior and classify dependency, Rules, feature, and scheduling changes accurately for humans and release agents. | `WQ-03`, `WQ-05` | Towncrier draft and documentation contract tests |
-| `REQ-010` | Complete one local final gate, one final push, hosted CI reconciliation, and exact Draft handoff state. | `WQ-05`, `WQ-06` | Quality/coverage/Gitleaks/checks, PR/head/tree/status readback |
+| `REQ-010` | Run one complete real OCR 1.10.2 review over the final feature range, remediate confirmed findings, and finish deterministic validation and self-review. | `WQ-05`, `WQ-06` | Private complete OCR result, finding trace, quality/coverage/Gitleaks/checks |
+| `REQ-011` | Merge the exact protected feature PR after required checks and thread reconciliation, then verify the deterministic TestPyPI development build. | `WQ-07` | PR/merge/tree/rules/checks and registry/provenance readback |
+| `REQ-012` | Prepare and merge the final protected `Release v0.8.5` PR with release metadata, changelog, notes, plan archival, and next-version state. | `WQ-08` | Exact release head/tree/checks/threads/authorization metadata |
+| `REQ-013` | Publish and independently verify stable TestPyPI/PyPI bytes, provenance/attestations, supported-Python installs, annotated tag, immutable GitHub Release/receipt, issue receipts, and milestone closure. | `WQ-09` | Live registry, GitHub, workflow, install, issue, milestone, and clean-main readback |
 
 #### Explicit Non-Goals
 
@@ -67,8 +75,8 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   response text, headers, URLs, request IDs, paths, warnings, or stderr.
 - No toolkit consumption of OCR's GitHub Action checkpoint ranges or `ocr session
   compare`; resemblance alone does not activate or close backlog work.
-- No mechanical test-directory reorganization, production refactor solely for coverage,
-  stable release, issue closure, milestone closure, merge, tag, or registry publication.
+- No mechanical test-directory reorganization or production refactor solely for coverage.
+- No B2B, `core/common`, shared-template, or consumer-repository integration.
 
 #### Constraints
 
@@ -93,8 +101,8 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 - Before each signed logical commit: focused tests, complete slice diff review,
   trust/data-flow/privacy review, requirement/backlog reconciliation, and
   `git diff --check`.
-- After the initial Draft push, do not push again until local implementation and the final
-  gate are complete.
+- Do not run a second repository-diff OCR review after the authorized final run. Confirmed
+  findings are repaired and covered by deterministic tests plus holistic self-review.
 
 #### Inputs And Sources
 
@@ -115,11 +123,12 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 #### User Decisions And Answers
 
-- Delivery ends at a green Draft PR; stable toolkit 0.8.5 publication is deferred.
+- The 2026-08-27 owner instruction supersedes the Draft-only boundary and authorizes
+  feature merge, release preparation/merge, stable publication, and external closure.
 - Use one daily `07:15 UTC` compatibility check, not two checks.
 - Update any backlog item that toolkit or OCR actually closes; update partial overlap
   truthfully and keep unmet work open.
-- Update the local OCR binary, but skip local LLM execution.
+- Update the PATH-effective local OCR binary and run the required real local OCR review.
 - Work efficiently in complete logical commits with self-review before each commit.
 
 #### Completed Baseline State
@@ -143,7 +152,10 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 | `WQ-03` | `completed` | OCR 1.10.2 pins/evidence, schedule, classifier correction, current docs/Rules, source audit, backlog reconciliation, and local no-LLM update are complete. |
 | `WQ-04` | `completed` | One closed provider-neutral projection renders the single numeric review log line; GitLab keeps only the prior reason with safer remediation. |
 | `WQ-05` | `completed` | Changelog/docs are reconciled; the complete local quality, coverage, manifest, lock, Towncrier, Gitleaks, and diff gates pass. |
-| `WQ-06` | `in_progress` | Push the complete history once, reconcile hosted CI, update Draft/issue coordination with exact evidence, and verify final state. |
+| `WQ-06` | `in_progress` | Correct the PATH-effective OCR installation, run the single final real OCR review, remediate confirmed findings, and complete self-review/final feature gates. |
+| `WQ-07` | `pending` | Reconcile exact feature head/checks/threads, mark PR ready, merge it, synchronize `main`, and verify its TestPyPI development publication. |
+| `WQ-08` | `pending` | Prepare the signed `release/v0.8.5` repository state and merge its exact protected release PR after all gates. |
+| `WQ-09` | `pending` | Monitor stable publication and independently read back bytes, provenance, attestations, installs, tag, immutable Release/receipt, issue receipts, milestone, main, and cleanup. |
 
 #### Locked Decisions
 
@@ -179,7 +191,10 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   notes, receipts, DLP signals, or approval inputs.
 - Lifecycle regressions prove previous review preservation, no failed-result findings,
   no approval, unchanged public classification, and strict/non-strict posting behavior.
-- Final local gate once: `scripts/quality.sh check`, all coverage floors,
+- One complete local OCR 1.10.2 review of `origin/main..HEAD` at concurrency `2`; inspect
+  its private result/manifest completeness and trace every candidate before accepting or
+  rejecting it. Do not post the result.
+- Final local gate after remediation: `scripts/quality.sh check`, all coverage floors,
   `scripts/ocr_compat.py validate`, lock check, Towncrier draft, `scripts/gitleaks.sh`,
   and `git diff --check`. Hosted PR workflows own package/OS/Python/Security/CodeQL gates.
 
@@ -218,6 +233,14 @@ state for this task: `release-deferred` at the green Draft PR boundary.
   compatibility, telemetry ownership, backlog, documentation, and complete feature diff
   self-reviews are complete. Exact temporary OCR/Gitleaks artifacts and the recoverable
   OCR 1.10.1 backup were removed after successful validation; local OCR remains 1.10.2.
+- 2026-08-27 release-resume audit found that the PATH-effective executable still reports
+  1.10.1, contradicting the earlier PATH-effective 1.10.2 claim. Release work therefore
+  reopens local OCR installation and the required real review gate before feature merge.
+- 2026-08-27: the shadow executable was atomically replaced. `command -v ocr`, ordinary
+  `ocr --version`, and review help now resolve and report 1.10.2, and SHA-256 is the
+  official Darwin arm64
+  `74fc7bcc0e6d0790c5ca033fd82a5474b6f05d443ed51a26a6f61c0cac6589fd`; the temporary
+  download and rollback copy were removed after verification.
 
 #### Risks And Recovery
 
@@ -241,19 +264,16 @@ state for this task: `release-deferred` at the green Draft PR boundary.
 
 #### Resume Point
 
-Finish `WQ-06`: commit this Draft-only handoff truth, push the locally reviewed history
-with lease protection because the two implementation commits were autosquashed and
-re-signed after gate corrections, wait for hosted PR workflows, and fix only evidenced
-failures through the same self-review/commit gate. When green, update Draft PR #150 and
-open issues #149/#151 with exact head/tree, hashes, validation, Added/Fixed/Changed/
-Unchanged summaries, and the stable-release resume action. Leave the PR Draft and both
-issues plus milestone `v0.8.5` open; do not merge, tag, publish, or start a release PR.
+Finish `WQ-06` from the exact Draft head: install and verify PATH-effective OCR 1.10.2,
+run the single complete local review, remediate confirmed findings, perform holistic
+self-review, and push the resulting signed feature state. Continue through `WQ-07` to
+`WQ-09` without redefining stable delivery as complete before independent readback.
 
 #### Plan Fidelity Check
 
 - [x] Every approved outcome has a stable requirement and queue owner.
-- [x] Release classification, target, Draft-only boundary, and deferred stable delivery
-  are explicit.
+- [x] Release classification, target, superseded Draft-only boundary, and stable delivery
+  authorization are explicit.
 - [x] Inputs, exact hashes, schedule evidence, public/private data flow, backlog rules,
   non-goals, validation, recovery, and resume state are retained.
 - [x] DLP, receipt, telemetry, approval, GitLab summary, local OCR, and no-LLM boundaries
@@ -278,23 +298,23 @@ issues plus milestone `v0.8.5` open; do not merge, tag, publish, or start a rele
 - [ ] Final quality, coverage, OCR validation, lock, Towncrier, Gitleaks, and diff gates
   are green on the exact final tree.
 - [ ] Hosted required checks are green and the Draft PR has no unresolved conversations.
-- [ ] #149 and the OCR issue remain open in milestone `v0.8.5`; milestone remains open.
-- [ ] Draft remains unmerged; no release PR, tag, registry publication, or stable closure
-  occurred.
+- [ ] Exact feature and release PR heads passed required checks with no unresolved threads
+  and their merge trees match reviewed trees.
+- [ ] Stable external bytes, provenance, attestations, installs, tag, immutable Release,
+  receipt, issue receipts/closure, milestone closure, synchronized main, and cleanup are
+  independently verified.
 
 #### Post-Close Delivery
 
-- This task ends with a green Draft feature PR and an explicit `release-deferred` state.
-- Merge, protected-main TestPyPI publication, `release/v0.8.5`, stable registries, tag,
-  immutable GitHub Release, issue receipts/closure, milestone closure, and independent
-  external reconciliation require a later owner instruction.
-- Hosted package, OS/Python, Dependency Review, Security, and CodeQL jobs are required PR
-  evidence but are not duplicated locally.
+- This task ends only after stable v0.8.5 publication and independent external
+  reconciliation. Hosted package, OS/Python, Dependency Review, Security, and CodeQL jobs
+  remain required PR evidence; macOS jobs are advisory under the documented policy.
 
 #### Handoff Notes
 
 - Final Draft body must identify toolkit target 0.8.5, OCR target 1.10.2, exact head/tree,
   exact OCR hashes and qualification run/issue, schedule rationale, Added/Fixed/Changed/
   Unchanged behavior, backlog disposition, local no-LLM checks, and hosted validation.
-- The next agent starts from the exact Draft head; it does not rerun completed local
-  development or publish stable 0.8.5 without explicit authorization.
+- Release closure must retain the exact feature/release heads, merge/tree identities,
+  workflow run/attempt, artifact hashes, registry provenance, receipt hash, issue receipts,
+  and final cleanup evidence.
