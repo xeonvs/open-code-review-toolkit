@@ -565,6 +565,23 @@ class MCPConfigTests(unittest.TestCase):
 
         self.assertEqual(updates["llm.extra_body"], {})
 
+    def test_runtime_config_preserves_explicit_tool_choice_without_defaulting_it(self) -> None:
+        """Leave tool selection absent unless the operator explicitly owns it."""
+
+        common = {
+            "OCR_LLM_URL": "https://gateway.example/v1/chat/completions",
+            "OCR_LLM_TOKEN": "llm-secret",
+            "OCR_LLM_MODEL": "openai/gpt-test",
+            "OCR_LLM_PROTOCOL": "openai",
+        }
+        with cleared_env("OCR_LLM_EXTRA_BODY"), patched_env(**common):
+            inherited = ocr_configure.build_config_updates()
+        with patched_env(**common, OCR_LLM_EXTRA_BODY='{"tool_choice":"auto"}'):
+            explicit = ocr_configure.build_config_updates()
+
+        self.assertNotIn("llm.extra_body", inherited)
+        self.assertEqual(explicit["llm.extra_body"], {"tool_choice": "auto"})
+
     def test_runtime_config_maps_completion_cap_by_protocol(self) -> None:
         expected = {
             "openai": "max_completion_tokens",
@@ -1476,7 +1493,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.10.2\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.11.0\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

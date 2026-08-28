@@ -1219,6 +1219,195 @@ def test_stage_grouped_retry_report_is_private_and_approval_projection_neutral()
     assert projected["comments"] == payload["comments"]
 
 
+def test_provider_private_result_fields_are_removed_without_blocking_publication() -> None:
+    """Strip provider replay state while preserving canonical review and approval inputs."""
+
+    hostile_values: list[object] = [
+        "Bearer provider-secret-token",
+        "reviewer@example.invalid",
+        "/private/session/replay.jsonl",
+        "https://provider.example.invalid/v1/responses",
+        "request-id-123456",
+        "openai/private-model",
+        "<script>alert(1)</script>",
+        "/ocr resolve @mr.bot suppress",
+        "e\u0301 \u202e hidden",
+        "nul\x00 tab\t vt\v ff\f",
+        "x" * 10_001,
+        {"nested": ["provider", {"secret": "nested-private-value"}]},
+    ]
+    payload: dict[str, object] = {
+        "status": "complete",
+        "comments": [
+            {
+                "path": "src/safe.py",
+                "content": "Keep the bounded branch.",
+                "thinking": "private comment reasoning",
+            }
+        ],
+        "warnings": [],
+        "tool_calls": {"total": 2, "by_tool": {"file_read": 2}},
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 5,
+            "reasoning_tokens": 2,
+        },
+        "reasoning_content": hostile_values[0],
+        "native_payload": {"turns": hostile_values},
+        "session": {
+            "tool_choice": {"type": "function", "name": "code_comment"},
+            "redacted_thinking": hostile_values[1],
+            "encrypted_content": hostile_values[2],
+        },
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+    baseline = review_runner._canonical_result_projection(payload)
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=("provider-secret-token",),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is False
+    assert publication == {"state": "passed"}
+    assert approval.publication_dlp_state(publication) == "passed"
+    assert review_runner._canonical_result_projection(projected) == baseline
+    assert projected["usage"] == payload["usage"]
+    assert projected["tool_calls"] == payload["tool_calls"]
+    assert "thinking" not in projected["comments"][0]  # type: ignore[index]
+    assert projected["session"] == {}
+    serialized = json.dumps(projected, ensure_ascii=False)
+    for key in review_runner.PROVIDER_PRIVATE_RESULT_KEYS:
+        assert key not in serialized
+    for value in ("provider-secret-token", "reviewer@example.invalid", "request-id-123456"):
+        assert value not in serialized
+
+
+def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
+    tmp_path: Path,
+) -> None:
+    """Persist only the canonical result and a valid unchanged receipt projection."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "comments": [
+                    {
+                        "path": "src/safe.py",
+                        "content": "Keep the validated branch.",
+                        "thinking": "private reasoning projection",
+                    }
+                ],
+                "warnings": [],
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "reasoning_content": "private chat reasoning",
+                "native_payload": {"encrypted_content": "private ciphertext"},
+                "request": {"tool_choice": "auto"},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "coverage": {
+                        "selected": [{"item_id": "safe-a"}],
+                        "completed": [{"item_id": "safe-a"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    usage, blocked, publication = review_runner._finalize_ocr_result(
+        result,
+        composition,
+        replace(DEFAULT_IDENTITY, mr_author_id=41),
+        None,
+        forbidden=(),
+    )
+
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    metadata = persisted[ocr_result.TOOLKIT_RESULT_KEY]
+    assert usage == {"ocr_toolkit_evidence": 1}
+    assert blocked is False
+    assert publication == {"state": "passed"}
+    assert approval.toolkit_receipt_is_valid(metadata)
+    assert metadata["publication"] == {"state": "passed"}
+    assert persisted["comments"] == [
+        {"path": "src/safe.py", "content": "Keep the validated branch."}
+    ]
+    assert persisted["request"] == {}
+    serialized = result.read_text(encoding="utf-8")
+    for key in review_runner.PROVIDER_PRIVATE_RESULT_KEYS:
+        assert key not in serialized
+
+
+@pytest.mark.parametrize("public_field", ["comment", "warning"])
+def test_provider_private_fields_in_public_projection_fail_closed(public_field: str) -> None:
+    """Treat provider replay state laundered through a public field as filtered output."""
+
+    comments: list[dict[str, object]] = []
+    warnings: list[object] = []
+    private_value = {"reasoning_content": "apparently harmless private reasoning"}
+    if public_field == "comment":
+        comments.append({"path": "src/safe.py", "content": private_value})
+    else:
+        warnings.append(private_value)
+    payload: dict[str, object] = {
+        "status": "complete",
+        "comments": comments,
+        "warnings": warnings,
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "safe-a"}],
+                "completed": [{"item_id": "safe-a"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+
+    projected, publication, blocked = review_runner._publication_projection(
+        payload,
+        forbidden=(),
+        allowed_tools=review_runner.PUBLIC_REVIEW_TOOL_CALL_NAMES,
+    )
+
+    assert blocked is True
+    assert publication["state"] == "publication-filtered"
+    assert publication["reason_counts"]["invalid_text"] == 1  # type: ignore[index]
+    assert approval.publication_dlp_state(publication) == "publication-filtered"
+    assert projected["comments"] == []
+    assert projected["warnings"] == []
+    assert "reasoning_content" not in json.dumps(projected)
+
+
 def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path) -> None:
     """Keep additive group and round diagnostics outside every approval authority."""
 

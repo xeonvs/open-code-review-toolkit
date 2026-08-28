@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.10.2"
-    assert manifest["monitoring_floor"] == "1.10.2"
+    assert manifest["recommended_version"] == "1.11.0"
+    assert manifest["monitoring_floor"] == "1.11.0"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -72,6 +72,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.10.0", "tested"),
         ("1.10.1", "tested"),
         ("1.10.2", "tested"),
+        ("1.11.0", "tested"),
     ]
 
 
@@ -156,9 +157,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.10.3")]
+    first_page = [release("1.11.1")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.10.2")]
+    second_page = [release("1.11.0")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -168,14 +169,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.10.3"]
+    assert [item["tag_name"] for item in unseen] == ["v1.11.1"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.10.3")]
+    page = [release("1.11.1")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -220,14 +221,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.10.3")])
+    matrix = module.qualification_matrix(manifest, [release("1.11.1")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.10.2",
-                "tag": "v1.10.3",
-                "tested_baseline_version": "1.10.2",
+                "comparison_version": "1.11.0",
+                "tag": "v1.11.1",
+                "tested_baseline_version": "1.11.0",
             }
         ]
     }
@@ -1078,6 +1079,166 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
     assert error.value.code == 400
 
 
+def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None:
+    """Qualification pins the 1.10 line and 1.11.0 to different exact wire shapes."""
+
+    module = load_script()
+
+    def messages(inventory: str) -> list[dict[str, str]]:
+        """Wrap one inventory in OCR's public grouping user prompt."""
+
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Group the following changed files:\n\n"
+                    f"{inventory}\n\n"
+                    "Respond with a JSON array:\n"
+                    '[{"label": "theme", "files": ["path"]}]'
+                ),
+            }
+        ]
+
+    old_inventory = messages(
+        "src/space (unicode) λ.py (ADDED, +10/-0)\n"
+        "win\\deleted.hbs (DELETED, +0/-5)\n"
+        "renamed.mustache (RENAMED, +0/-0)"
+    )
+    old_results = [
+        module.parse_grouping_inventory(old_inventory, version)
+        for version in ("1.10.0", "1.10.1", "1.10.2")
+    ]
+    new = module.parse_grouping_inventory(
+        messages(
+            "ADDED   src/space (unicode) λ.py (+10/-0)\n"
+            "DELETED   win\\deleted.hbs (+0/-5)\n"
+            "RENAMED   renamed.mustache (+0/-0)"
+        ),
+        "1.11.0",
+    )
+
+    assert (
+        old_results[0]
+        == old_results[1]
+        == old_results[2]
+        == new
+        == [
+            module.GroupingInventoryEntry("ADDED", "src/space (unicode) λ.py", 10, 0),
+            module.GroupingInventoryEntry("DELETED", "win\\deleted.hbs", 0, 5),
+            module.GroupingInventoryEntry("RENAMED", "renamed.mustache", 0, 0),
+        ]
+    )
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
+        module.parse_grouping_inventory(messages("ADDED   path.py (+1/-0)"), "1.10.2")
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
+        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.11.0")
+    with pytest.raises(module.CompatibilityError, match="not qualified"):
+        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.9.10")
+
+
+@pytest.mark.parametrize(
+    "inventory",
+    [
+        "MODIFIED   one.py (+1/-1)\none.py (MODIFIED, +1/-1)",
+        "MODIFIED  one.py (+1/-1)",
+        "BINARY   image.bin (+0/-0)",
+        "UNKNOWN   one.py (+1/-1)",
+        "MODIFIED   one.py (+01/-1)",
+        "MODIFIED   one.py (+1000000001/-0)",
+        "MODIFIED   one.py (+1/-1)\nMODIFIED   one.py (+1/-1)",
+        "MODIFIED   one.py (+1/-1) trailing",
+    ],
+)
+def test_grouping_inventory_rejects_mixed_duplicate_and_malformed_values(
+    inventory: str,
+) -> None:
+    """Untrusted grouping prompts fail closed on ambiguity, binary markers, and bounds."""
+
+    module = load_script()
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                "Group the following changed files:\n\n"
+                f"{inventory}\n\nRespond with a JSON array:\n[]"
+            ),
+        }
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory"):
+        module.parse_grouping_inventory(messages, "1.11.0")
+
+
+def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> None:
+    """Prompt boundaries and entry counts remain singular and bounded."""
+
+    module = load_script()
+    valid = {
+        "role": "user",
+        "content": (
+            "Group the following changed files:\n\n"
+            "MODIFIED   one.py (+1/-1)\n\nRespond with a JSON array:\n[]"
+        ),
+    }
+
+    with pytest.raises(module.CompatibilityError, match="exactly one"):
+        module.parse_grouping_inventory([], "1.11.0")
+    with pytest.raises(module.CompatibilityError, match="exactly one"):
+        module.parse_grouping_inventory([valid, valid], "1.11.0")
+    oversized = "\n".join(
+        f"MODIFIED   file-{index}.py (+1/-1)"
+        for index in range(module.MAX_GROUPING_INVENTORY_ENTRIES + 1)
+    )
+    with pytest.raises(module.CompatibilityError, match="invalid entry count"):
+        module.parse_grouping_inventory(
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        "Group the following changed files:\n\n"
+                        f"{oversized}\n\nRespond with a JSON array:\n[]"
+                    ),
+                }
+            ],
+            "1.11.0",
+        )
+
+
+@pytest.mark.parametrize(
+    "observed",
+    [
+        [
+            ("MODIFIED", "second.py", 1, 1),
+            ("MODIFIED", "first.py", 1, 1),
+        ],
+        [
+            ("ADDED", "first.py", 1, 1),
+            ("MODIFIED", "second.py", 1, 1),
+        ],
+        [
+            ("MODIFIED", "first.py", 0, 0),
+            ("MODIFIED", "second.py", 1, 1),
+        ],
+    ],
+)
+def test_grouping_inventory_rejects_reorder_status_and_churn_drift(
+    observed: list[tuple[str, str, int, int]],
+) -> None:
+    """Semantic qualification binds order, status, and churn to the controlled fixture."""
+
+    module = load_script()
+    expected = [
+        module.GroupingInventoryEntry("MODIFIED", "first.py", 1, 1),
+        module.GroupingInventoryEntry("MODIFIED", "second.py", 1, 1),
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="unexpected status/churn"):
+        module._require_exact_grouping_inventory(
+            [module.GroupingInventoryEntry(*entry) for entry in observed],
+            expected,
+        )
+
+
 def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
     """Derive effective numeric behavior without retaining raw OCR diagnostics."""
 
@@ -1437,11 +1598,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.10.3",
+        "version": "1.11.1",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.10.2",
-        "tested_baseline_version": "1.10.2",
+        "comparison_version": "1.11.0",
+        "tested_baseline_version": "1.11.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -1457,11 +1618,11 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.11.0",
+        "version": "1.12.0",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.10.2",
-        "tested_baseline_version": "1.10.2",
+        "comparison_version": "1.11.0",
+        "tested_baseline_version": "1.11.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="explicit human review"):
@@ -1473,7 +1634,7 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         )
 
 
-@pytest.mark.parametrize("version", ["1.11.0", "2.0.0"])
+@pytest.mark.parametrize("version", ["1.12.0", "2.0.0"])
 def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: str) -> None:
     """Legacy evidence cannot prove a chain across a semantic-version boundary."""
 
@@ -1499,11 +1660,11 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.12.0",
+        "version": "1.13.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.10.2",
-        "tested_baseline_version": "1.10.2",
+        "comparison_version": "1.11.0",
+        "tested_baseline_version": "1.11.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
@@ -1511,7 +1672,7 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=73,
-            human_conclusions={"1.12.0": "Synthetic reviewed conclusion."},
+            human_conclusions={"1.13.0": "Synthetic reviewed conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -1520,11 +1681,11 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.10.3",
+        "version": "1.11.1",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.10.2",
-        "tested_baseline_version": "1.10.2",
+        "comparison_version": "1.11.0",
+        "tested_baseline_version": "1.11.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="only evidence versions"):
@@ -1532,7 +1693,7 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.10.4": "Synthetic unrelated conclusion."},
+            human_conclusions={"1.11.2": "Synthetic unrelated conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -1544,11 +1705,11 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.10.3",
+        "version": "1.11.1",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.10.2",
-        "tested_baseline_version": "1.10.2",
+        "comparison_version": "1.11.0",
+        "tested_baseline_version": "1.11.0",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded plain text"):
@@ -1556,7 +1717,7 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.10.3": conclusion},
+            human_conclusions={"1.11.1": conclusion},
             root=PROJECT_ROOT,
         )
 

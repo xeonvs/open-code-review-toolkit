@@ -3396,6 +3396,95 @@ class PostingSummaryTests(unittest.TestCase):
         self.assertIn("## Security review focus", guide)
         self.assertIn("**Security signal:**", guide)
 
+    def test_reviewer_guide_does_not_promote_neutral_injection_phrase(self) -> None:
+        """Count only the real security finding from the issue reproducer."""
+
+        comments = [
+            {
+                "severity": "high",
+                "category": "security",
+                "path": "src/command_builder.py",
+                "line": 12,
+                "content": "Untrusted input can cause shell command injection.",
+            },
+            {
+                "severity": "medium",
+                "category": "bug",
+                "path": "src/documentation_plan.py",
+                "line": 34,
+                "content": "Validate the knowledge injection payload before rendering.",
+            },
+            {
+                "severity": "medium",
+                "category": "bug",
+                "path": "src/schema.py",
+                "line": 56,
+                "content": "Constrain the accepted enum values.",
+            },
+        ]
+        original = [dict(comment) for comment in comments]
+
+        guide = posting_formatting.format_reviewer_guide(comments, omitted_count=0)
+
+        self.assertEqual(comments, original)
+        self.assertIn("**Security signal:** 1 published OCR finding", guide)
+        self.assertIn("Estimated effort to review: 2/5", guide)
+
+    def test_security_signal_accepts_only_closed_injection_classes(self) -> None:
+        """Recognize explicit vulnerability classes across safe separators and casing."""
+
+        positive = (
+            "command injection",
+            "OS command injection",
+            "shell command injection",
+            "SQL-injection",
+            "NoSQL_INJECTION",
+            "code injection",
+            "server-side template injection",
+            "prompt injection",
+            "LDAP injection",
+            "XPath injection",
+            "CRLF injection",
+            "HTTP header injection",
+            "log injection",
+            "HTML injection",
+            "script injection",
+            "expression\u2014injection",
+        )
+
+        for content in positive:
+            with self.subTest(content=content):
+                self.assertTrue(
+                    posting_formatting.comment_has_security_signal({"content": content})
+                )
+
+    def test_security_signal_rejects_neutral_and_partial_injection_terms(self) -> None:
+        """Do not promote neutral domains or substrings outside closed word boundaries."""
+
+        neutral = (
+            "knowledge injection",
+            "dependency injection",
+            "data injection",
+            "injection molding",
+            "codeinjection",
+            "prompt injectionist",
+            "expression/injection",
+        )
+
+        for content in neutral:
+            with self.subTest(content=content):
+                self.assertFalse(
+                    posting_formatting.comment_has_security_signal(
+                        {"severity": "medium", "category": "bug", "content": content}
+                    )
+                )
+
+        self.assertTrue(
+            posting_formatting.comment_has_security_signal(
+                {"severity": "low", "category": "security", "content": "dependency injection"}
+            )
+        )
+
     def test_reviewer_guide_ranks_only_its_published_copy(self) -> None:
         comments = [
             {

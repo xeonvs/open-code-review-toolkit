@@ -261,6 +261,16 @@ class ApprovalPolicyTests(unittest.TestCase):
             "publication DLP filtered the complete review result",
         )
 
+    def test_provider_private_fields_cannot_enter_approval_receipt(self) -> None:
+        """Reject replay or request-control fields at the closed receipt boundary."""
+
+        for field in ("reasoning_content", "native_payload", "tool_choice"):
+            receipt = receipt_v5()
+            receipt[field] = "private"
+
+            with self.subTest(field=field):
+                self.assertFalse(approval.toolkit_receipt_is_valid(receipt))
+
     def test_filtered_receipt_rejects_outcomes_that_contradict_coverage(self) -> None:
         """Accept run-level failure but reject impossible coverage/outcome combinations."""
 

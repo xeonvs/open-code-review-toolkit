@@ -1,5 +1,6 @@
 """Contracts for the public GitLab operations documentation."""
 
+import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -37,6 +38,32 @@ def test_readme_and_gitlab_guide_link_to_operations() -> None:
     assert "docs/operations.md" in readme
     assert "operations.md" in gitlab
     assert "## How reviews evolve" in readme
+
+
+def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
+    """Keep the root installation path exact without using preflight as a smoke test."""
+
+    readme = README.read_text(encoding="utf-8")
+    install = readme.split("## Install", 1)[1].split("## How reviews evolve", 1)[0]
+    manifest = json.loads(
+        (PROJECT_ROOT / "compatibility" / "ocr-support.json").read_text(encoding="utf-8")
+    )
+    recommended = manifest["recommended_version"]
+    release = next(item for item in manifest["releases"] if item["version"] == recommended)
+    digests = {asset["name"]: asset["sha256"] for asset in release["assets"]}
+
+    assert "Python 3.12 through 3.14" in install
+    assert "uv tool install open-code-review-toolkit" in install
+    assert install.index(". .venv/bin/activate") < install.index(
+        "python -m pip install open-code-review-toolkit"
+    )
+    assert f"Open Code Review {recommended}" in install
+    assert f"open-code-review v{recommended}" in install
+    assert digests["opencodereview-linux-amd64"] in install
+    assert digests["opencodereview-darwin-arm64"] in install
+    assert "ocr --version" in install
+    assert "ocr-ci --help" in install
+    assert "not the installation\nsmoke test" in install
 
 
 def test_documentation_indexes_route_to_canonical_owners() -> None:
@@ -197,6 +224,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
@@ -205,6 +233,10 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         assert "provider-specific" in document
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
+    current_compatibility = compatibility.split("### OCR 1.11.0 — toolkit 0.8.6 target", 1)[1]
+    assert "override `4096`" not in current_compatibility
+    assert "operator-selected positive completion-cap override" in current_compatibility
+    assert "historical OCR 1.10.0 through 1.10.2" in current_compatibility
     for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
         assert field in configuration
     for phrase in (
@@ -508,12 +540,15 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
         "OCR 1.10.1 — toolkit 0.8.4 target",
         "OCR 1.10.2 — toolkit 0.8.5 target",
+        "OCR 1.11.0 — toolkit 0.8.6 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
         "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",
         "Deploy toolkit 0.8.4 directly with OCR 1.10.1",
         "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
+        "Deploy toolkit 0.8.6 directly with OCR 1.11.0",
+        "max-tools runtime behavior is unchanged",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
     ):
@@ -542,11 +577,12 @@ def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegati
     compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
     development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
 
-    assert "`0` delegates to the installed OCR template" in configuration
-    assert "template's effective `100` rounds" in configuration
-    assert "result\nwarnings, receipts, DLP inputs, telemetry" in configuration
+    assert "default at `0` so OCR uses its embedded template limit of `100`" in configuration
+    assert "explicit `50` remain below the template default" in configuration
+    assert "raw stderr is not added to\nfindings, result warnings" in configuration
+    assert "receipts, DLP inputs, telemetry" in configuration
     assert "`OCR_MAX_TOOLS=0`" in operations
-    assert "CLI help, normalization text, and effective template value can differ" in operations
+    assert "corrects stale help text for the already-qualified behavior" in operations
     assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
     assert "help text\n  alone is not compatibility evidence" in development
 

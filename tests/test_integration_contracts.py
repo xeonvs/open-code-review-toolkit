@@ -130,6 +130,7 @@ def test_gitlab_example_preserves_review_gating_and_manual_self_test() -> None:
     assert 'OCR_MAX_TOKENS_BUDGET: "0"' in workflow
     assert 'OCR_REVIEW_EFFORT: "medium"' in workflow
     assert 'OCR_MAX_TOOLS: "0"' in workflow
+    assert "timeout: 45m" in review_job
     assert '--max-tools "${OCR_MAX_TOOLS:-0}"' in review_job
     assert '--max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}"' in review_job
     assert "lint:\n  stage: lint" in workflow

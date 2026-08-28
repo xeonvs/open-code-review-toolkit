@@ -72,6 +72,18 @@ def test_quality_script_runs_the_bounded_bandit_gate() -> None:
     assert "tests" not in command
 
 
+def test_python_commit_gate_applies_and_then_checks_ruff_formatting() -> None:
+    """Keep immediate formatting and the repository-wide commit gate explicit."""
+
+    script = SCRIPT.read_text(encoding="utf-8")
+    development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
+
+    assert "set -- uv run --no-sync ruff format ." in script
+    assert 'for command in "ruff format --check ."' in script
+    assert "`scripts/quality.sh format` before self-review" in development
+    assert "`uv run --frozen ruff format --check .`" in development
+
+
 def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Path) -> None:
     """Do not mix stale coverage output into a later multi-command result."""
 
