@@ -98,7 +98,9 @@ state for this task: `release-deferred` after a green Draft handoff.
 - Every new production and test function receives a purpose-focused docstring.
 - Before every signed logical commit: focused tests, complete slice diff self-review,
   requirement/trust/data-flow/privacy review, backlog reconciliation where applicable,
-  and `git diff --check`.
+  format changed Python with Ruff, run repository-wide `ruff format --check .`, and
+  `git diff --check`. The existing `scripts/quality.sh check` remains the single complete
+  final gate; do not add a duplicate formatting owner.
 - After the initial plan/harness push, do not push partial implementation; perform one
   final push only after all local slices and final gates are complete.
 
@@ -116,7 +118,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 - Current compatibility manifest/evidence/harness/workflow, runtime preflight/configuration,
   review runner/result publication/DLP/receipt/approval, posting formatter, tests, README,
   public docs, strategy, roadmap, and backlog.
-- Workflow audit using engineering-workflow 0.8.1: mature repository, canonical owners
+- Workflow audit using engineering-workflow 0.8.2: mature repository, canonical owners
   and required navigation indexes present; no instruction migration required.
 
 #### User Decisions And Answers
@@ -149,9 +151,9 @@ state for this task: `release-deferred` after a green Draft handoff.
 | Queue | Status | Deliverable |
 | --- | --- | --- |
 | `WQ-01` | `done` | Full plan materialized first and passed the workflow fidelity/lifecycle check. |
-| `WQ-02` | `in_progress` | Strict version-gated grouping qualification is implemented and validated; commit it, then push the two initial commits and open Draft. |
-| `WQ-03` | `pending` | Create/assign/milestone issues and obtain hosted exact OCR 1.11.0 qualification evidence. |
-| `WQ-04` | `pending` | Integrate 1.11.0 evidence, pins, preflight/example/docs/rules/timeouts/backlog and local no-LLM binary update. |
+| `WQ-02` | `done` | Strict grouping harness committed; the two signed initial commits were pushed and Draft PR #154 opened. |
+| `WQ-03` | `done` | Milestone v0.8.6 and issue #155 are coordinated; hosted run 33158664020 produced accepted exact 1.11.0 evidence. |
+| `WQ-04` | `done` | Exact 1.11.0 evidence/pins/preflight/example/docs/rules/timeouts/backlog and max-tools help/runtime distinction are integrated; local OCR is atomically updated and no-LLM qualified. |
 | `WQ-05` | `pending` | Add reasoning/tool-choice/private-session qualification and DLP/cleanup/receipt/approval regressions. |
 | `WQ-06` | `pending` | Implement and verify #153's closed contextual security-signal matcher. |
 | `WQ-07` | `pending` | Update README/public docs and categorized changelog with the external qualification table. |
@@ -166,7 +168,10 @@ state for this task: `release-deferred` after a green Draft handoff.
 - GitLab example job timeout becomes 45 minutes. OCR base timeout remains inherited 15
   minutes, yielding low/medium/high effective limits of 15/30/45 minutes.
 - Completion behavior remains inherited cap 16384 with the existing explicit toolkit
-  override example 4096. Default effort remains medium; max-tools semantics are unchanged.
+  override example 4096. Default effort remains medium. OCR 1.11.0 only corrects stale
+  max-tools help text: runtime behavior is unchanged from the qualified 1.10.2 baseline,
+  where `0` selects template default `100`, `1-49` reports normalization to `50` but the
+  template remains effective, and only a value above `100` raises the effective cap.
 - Provider flow:
   `private session/result -> canonical projection -> DLP -> publication -> receipt/approval`.
 - Reviewer-guide flow:
@@ -206,7 +211,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 
 - 2026-08-28: `main`/`origin/main` clean at v0.8.5 `72c5111`; no open PR or v0.8.6
   milestone; issue #153 is the only open issue.
-- 2026-08-28: engineering-workflow 0.8.1 audit found the mature canonical repository
+- 2026-08-28: engineering-workflow 0.8.2 audit found the mature canonical repository
   owners and documentation indexes present. The audit traversed ignored quality artifacts
   but identified no tracked workflow migration requirement.
 - 2026-08-28: exact OCR 1.11.0 release hashes, public help defaults, source changes, local
@@ -216,6 +221,26 @@ state for this task: `release-deferred` after a green Draft handoff.
 - 2026-08-28: 86 compatibility tests pass, including 14 focused old/new grouping and
   gateway tests; Ruff, MyPy, and `git diff --check` pass. Exact local OCR 1.10.2 also
   passes the strict old-format semantic grouping probe through the loopback-only gateway.
+- 2026-08-28: signed planning and grouping-harness commits were pushed once; Draft PR
+  #154, milestone v0.8.6, assigned issues #153/#155, and exact-tag compatibility run
+  33158664020 are open. The hosted artifact verified all release hashes and candidate
+  contracts and requires the planned human semantic conclusion, which has been recorded.
+- 2026-08-28: initial Draft CI quality failed only because two newly committed Python files
+  were not Ruff-formatted. The canonical local `scripts/quality.sh check` already owns
+  `ruff format --check .`; the process correction is to format and run that lightweight
+  check before each Python commit. The macOS 3.14 diagnostic independently failed while
+  fetching `hatch-vcs` from PyPI after three network retries, not on repository behavior.
+- 2026-08-28: upstream release/source and both 1.10.2/1.11.0 hosted artifacts confirm the
+  max-tools runtime contract is identical (`0 -> 100`, `49 -> reported 50/effective 100`,
+  `50 -> effective 100`, `101 -> effective 101`). OCR 1.11.0 changes help/docs only.
+- 2026-08-28: the checksum-verified Darwin arm64 candidate and atomically installed
+  `/opt/homebrew/bin/ocr` both report 1.11.0 and pass isolated version/help,
+  Handlebars/Mustache system-rule readback, accepted 2,001-character soft background,
+  rejected 8,001-character hard background, and no-session preview checks. The previous
+  exact 1.10.2 digest was verified before replacement; no LLM, user HOME, configuration,
+  or credentials were used.
+- 2026-08-28: the integrated OCR slice passes 229 focused tests plus 104 subtests,
+  manifest validation, Ruff lint and repository-wide format check, and `git diff --check`.
 
 #### Risks And Recovery
 
@@ -237,8 +262,9 @@ state for this task: `release-deferred` after a green Draft handoff.
 
 #### Resume Point
 
-Continue `WQ-02`: commit the reviewed harness slice, push the two signed initial commits,
-open the Draft, and then create/dispatch the `WQ-03` GitHub coordination state.
+Commit the reviewed `WQ-04` OCR integration slice without pushing, then continue `WQ-05`
+with the existing canonical projection/DLP/cleanup owners and focused provider-private
+reasoning/tool-choice regressions.
 
 #### Plan Fidelity Check
 
@@ -255,7 +281,7 @@ open the Draft, and then create/dispatch the `WQ-03` GitHub coordination state.
 
 - [x] Current main/tag/next version, worktree, plan, issues, PRs, milestones, workflow,
   local OCR, manifest, harness, README, backlog, and canonical docs were read.
-- [ ] Hosted OCR 1.11.0 issue/evidence and semantic source audit agree.
+- [x] Hosted OCR 1.11.0 issue/evidence and semantic source audit agree.
 - [ ] Backlog, roadmap, strategy, public docs, changelog, issues, milestone, and Draft agree.
 - [ ] Final local/hosted validation, head/tree, threads, remote ref, and worktree agree.
 

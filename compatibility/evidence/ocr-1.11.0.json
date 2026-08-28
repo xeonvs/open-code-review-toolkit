@@ -1,0 +1,206 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "c129af341b52ead65f860831593573b11d1099b434f98cb37d2f885673592109",
+      "size": 57703712
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "ac8bf5a0fcd176bb9dcc15b169e90f4b52bf32787adef17a850489dbed97fb78",
+      "size": 54760802
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "13f68cc2eca1a36d42140e9d37797b68fea5cbbf4b6345ec01ec1b06910fab60",
+      "size": 55959714
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "e2177621b967ed332240dd30841b538b38467b778245b68af37583e4c76f583e",
+      "size": 52691106
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "2809ff67e36f40c75dba756f77cb48c5fe12bc6893b0a896a51b6f1522e285a9",
+      "size": 57422336
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "c308ee95825191291b56d817681e3248bfc3380f532df679cad2236e95eb0a9c",
+      "size": 53395968
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "9dff050ec859882bef26037415b8bd9e5db70c5a7d960e5eb3989385372311ee",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.10.2",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-28T06:06:56Z",
+  "release_changes": "## 🚀 Features\n\n- feat(allowlist): add Handlebars and Mustache support (#1086)\n- feat(config): validate provider existence before auxiliary fields (#1093)\n- feat(agent): include churn stats (+N/-M) in the other-changed-files list (#1078) (#1082)\n\n## 🐛 Bug Fixes\n\n- fix(llm): preserve provider reasoning/thinking across assistant turns (#1070)\n- fix(agent): scale subtask timeout linearly with effort review rounds (#1085)\n- fix(filter): omit forced tool choice (#1065)\n- fix(tool): support subpath and cross-platform queries in file_find (#1075)\n\n## 📖 Documentation\n\n- docs(ko): polish the six new Korean pages (#1087)\n- docs(ko): complete the Korean docs locale (#1084)\n- docs(ko): add Korean translation for the core user guide (#1080)\n- docs(cli): align --max-tools help text with min 50 clamp (#1077)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.10.2...v1.11.0",
+  "release_notes_sha256": "a68802ee02c22c1b02955f5307f79427b379c14a76b5c2ce6545b5e9fc82b5b0",
+  "result": "compatible",
+  "schema_version": 2,
+  "tag": "v1.11.0",
+  "tested_baseline_version": "1.10.2",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.11.0"
+}

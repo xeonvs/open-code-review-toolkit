@@ -89,7 +89,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
 - **Exclusions:** Checkbox coverage, network resolution, runtime execution, or unrelated bundles.
 - **Validation:** Pack fixtures plus common evidence/bootstrap/MCP contracts.
-- **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; a new reviewable language alone does not activate an evidence pack.
+- **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; OCR 1.11.0 Handlebars/Mustache selection improves review coverage but does not supply a framework evidence contract or activate an evidence pack.
 - **Release classification expectation:** `release-required`.
 
 ### BL-019: Run a native fuzzing campaign
@@ -127,7 +127,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Roadmap theme:** M7 Later and conditional work
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
-- **Upstream overlap:** OCR 1.10.2 reusable GitHub Action checkpoint ranges cover only upstream Action range selection. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
+- **Upstream overlap:** OCR 1.10.2 reusable GitHub Action checkpoint ranges and OCR 1.11.0 Action/plugin changes cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
 - **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.

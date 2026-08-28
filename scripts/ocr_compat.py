@@ -1001,9 +1001,7 @@ def _stub_gateway(
         thread.join(timeout=5)
 
 
-def parse_grouping_inventory(
-    messages: list[Any], version: str
-) -> list[GroupingInventoryEntry]:
+def parse_grouping_inventory(messages: list[Any], version: str) -> list[GroupingInventoryEntry]:
     """Parse the exact grouping prompt shape qualified for one OCR release line."""
 
     parsed_version = _version(version)
@@ -1611,9 +1609,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         _fail("semantic grouping review did not preserve the accepted group")
     if stages != ["grouping", "main", "main", "filter", "main"]:
         _fail(f"default medium review emitted an unexpected stage sequence: {stages!r}")
-    expected_inventory = [
-        GroupingInventoryEntry("MODIFIED", path, 1, 1) for path in paths
-    ]
+    expected_inventory = [GroupingInventoryEntry("MODIFIED", path, 1, 1) for path in paths]
     if len(grouping_inventories) != 1:
         _fail("semantic grouping review emitted an unexpected grouping inventory count")
     _require_exact_grouping_inventory(grouping_inventories[0], expected_inventory)

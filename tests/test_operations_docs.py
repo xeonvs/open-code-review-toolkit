@@ -508,12 +508,15 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.10.0 — toolkit 0.8.2 and 0.8.3 target",
         "OCR 1.10.1 — toolkit 0.8.4 target",
         "OCR 1.10.2 — toolkit 0.8.5 target",
+        "OCR 1.11.0 — toolkit 0.8.6 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
         "Deploy toolkit 0.8.2 or 0.8.3 directly with OCR 1.10.0",
         "Deploy toolkit 0.8.4 directly with OCR 1.10.1",
         "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
+        "Deploy toolkit 0.8.6 directly with OCR 1.11.0",
+        "max-tools runtime behavior is unchanged",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
     ):
@@ -542,11 +545,12 @@ def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegati
     compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
     development = (PROJECT_ROOT / "docs" / "development.md").read_text(encoding="utf-8")
 
-    assert "`0` delegates to the installed OCR template" in configuration
-    assert "template's effective `100` rounds" in configuration
-    assert "result\nwarnings, receipts, DLP inputs, telemetry" in configuration
+    assert "default at `0` so OCR uses its embedded template limit of `100`" in configuration
+    assert "explicit `50` remain below the template default" in configuration
+    assert "raw stderr is not added to\nfindings, result warnings" in configuration
+    assert "receipts, DLP inputs, telemetry" in configuration
     assert "`OCR_MAX_TOOLS=0`" in operations
-    assert "CLI help, normalization text, and effective template value can differ" in operations
+    assert "corrects stale help text for the already-qualified behavior" in operations
     assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
     assert "help text\n  alone is not compatibility evidence" in development
 

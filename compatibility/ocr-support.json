@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.10.2",
-  "recommended_version": "1.10.2",
+  "monitoring_floor": "1.11.0",
+  "recommended_version": "1.11.0",
   "releases": [
     {
       "assets": [
@@ -1293,6 +1293,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.10.2",
       "status": "tested",
       "version": "1.10.2"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "c129af341b52ead65f860831593573b11d1099b434f98cb37d2f885673592109",
+          "size": 57703712
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ac8bf5a0fcd176bb9dcc15b169e90f4b52bf32787adef17a850489dbed97fb78",
+          "size": 54760802
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "13f68cc2eca1a36d42140e9d37797b68fea5cbbf4b6345ec01ec1b06910fab60",
+          "size": 55959714
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "e2177621b967ed332240dd30841b538b38467b778245b68af37583e4c76f583e",
+          "size": 52691106
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "2809ff67e36f40c75dba756f77cb48c5fe12bc6893b0a896a51b6f1522e285a9",
+          "size": 57422336
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "c308ee95825191291b56d817681e3248bfc3380f532df679cad2236e95eb0a9c",
+          "size": 53395968
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "9dff050ec859882bef26037415b8bd9e5db70c5a7d960e5eb3989385372311ee",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.0.json",
+      "evidence_sha256": "97c56e301aab5298d5b8d2182afdda33d6cb704abf7bf476f04c668b95b61f22",
+      "human_conclusion": "Compatible after hosted checksum-verified Linux qualification in run 33158664020 and direct adjacent source review in issue #155. OCR 1.11.0 changes grouping and other-file inventory to status-first entries with churn, preserves provider-native reasoning across assistant turns, removes the filter's forced tool choice, scales subtask timeout by review rounds, improves file_find subpaths, and adds Handlebars/Mustache rules. The toolkit qualification harness consumes the inventory shape and runtime-facing boundaries while provider reasoning and native payloads remain private and unconsumed. Result/manifest schemas, inherited 16384 and explicit 4096 completion caps, medium effort, max-tools, receipt v5, DLP, telemetry, and approval contracts remain unchanged. Upstream action, plugin, launcher, locale, provider preset, and config-command validation changes are not consumed.",
+      "published_at": "2026-08-28T06:06:56Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.0",
+      "status": "tested",
+      "version": "1.11.0"
     }
   ],
   "schema_version": 1,
