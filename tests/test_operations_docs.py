@@ -224,6 +224,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    compatibility = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS" in document
@@ -232,6 +233,10 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         assert "provider-specific" in document
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
+    current_compatibility = compatibility.split("### OCR 1.11.0 — toolkit 0.8.6 target", 1)[1]
+    assert "override `4096`" not in current_compatibility
+    assert "operator-selected positive completion-cap override" in current_compatibility
+    assert "historical OCR 1.10.0 through 1.10.2" in current_compatibility
     for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
         assert field in configuration
     for phrase in (

@@ -1005,7 +1005,7 @@ def parse_grouping_inventory(messages: list[Any], version: str) -> list[Grouping
     """Parse the exact grouping prompt shape qualified for one OCR release line."""
 
     parsed_version = _version(version)
-    if parsed_version == (1, 10, 2):
+    if (1, 10, 0) <= parsed_version < (1, 11, 0):
         pattern = re.compile(
             r"(?P<path>[^\r\n]{1,1000}) "
             r"\((?P<status>ADDED|MODIFIED|DELETED|RENAMED), "

@@ -1080,7 +1080,7 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
 
 
 def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None:
-    """Comparison evidence pins 1.10.2 and 1.11.0 to different exact wire shapes."""
+    """Qualification pins the 1.10 line and 1.11.0 to different exact wire shapes."""
 
     module = load_script()
 
@@ -1099,14 +1099,15 @@ def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None
             }
         ]
 
-    old = module.parse_grouping_inventory(
-        messages(
-            "src/space (unicode) λ.py (ADDED, +10/-0)\n"
-            "win\\deleted.hbs (DELETED, +0/-5)\n"
-            "renamed.mustache (RENAMED, +0/-0)"
-        ),
-        "1.10.2",
+    old_inventory = messages(
+        "src/space (unicode) λ.py (ADDED, +10/-0)\n"
+        "win\\deleted.hbs (DELETED, +0/-5)\n"
+        "renamed.mustache (RENAMED, +0/-0)"
     )
+    old_results = [
+        module.parse_grouping_inventory(old_inventory, version)
+        for version in ("1.10.0", "1.10.1", "1.10.2")
+    ]
     new = module.parse_grouping_inventory(
         messages(
             "ADDED   src/space (unicode) λ.py (+10/-0)\n"
@@ -1117,7 +1118,9 @@ def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None
     )
 
     assert (
-        old
+        old_results[0]
+        == old_results[1]
+        == old_results[2]
         == new
         == [
             module.GroupingInventoryEntry("ADDED", "src/space (unicode) λ.py", 10, 0),
@@ -1130,7 +1133,7 @@ def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None
     with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
         module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.11.0")
     with pytest.raises(module.CompatibilityError, match="not qualified"):
-        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.10.1")
+        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.9.10")
 
 
 @pytest.mark.parametrize(

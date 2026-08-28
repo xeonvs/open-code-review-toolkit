@@ -71,10 +71,10 @@ release issues and milestone, and synchronized clean `main`.
 | Queue | Status | Deliverable |
 | --- | --- | --- |
 | `WQ-01` | `done` | Live `main`, Draft PR, issues, milestone, upstream release, roadmap/backlog, and release owners inspected. |
-| `WQ-02` | `in progress` | Audit Draft #154 implementation and documentation; correct plan drift and any demonstrated defects. |
-| `WQ-03` | `pending` | Install and qualify local OCR 1.11.0; run the single semantic review at concurrency 1 and classify the result honestly. |
-| `WQ-04` | `pending` | Remediate findings, run targeted/full gates, perform complete self-review, and bind the final feature head. |
-| `WQ-05` | `pending` | Mark feature PR ready, verify protected checks/threads/policy, merge, and verify development publication. |
+| `WQ-02` | `done` | Draft #154 implementation and documentation audited; release plan and completion-cap wording corrected. |
+| `WQ-03` | `done` | Exact local OCR 1.11.0 installed and qualified; the single concurrency-1 semantic review completed 7/7 selected files. |
+| `WQ-04` | `done` | The one confirmed OCR finding is fixed; full gates and holistic self-review pass, and the signed final feature-head commit is ready to bind. |
+| `WQ-05` | `in progress` | Push the final feature head, update and mark PR ready, verify protected checks/threads/policy, merge, and verify development publication. |
 | `WQ-06` | `pending` | Prepare signed `release/v0.8.6` state, generated changelog, archived plan, receipt inputs, and release PR. |
 | `WQ-07` | `pending` | Verify release PR, merge exact reviewed tree, and complete the protected stable workflow. |
 | `WQ-08` | `pending` | Independently verify registries, bytes, provenance, attestations, tag, immutable Release, receipt, and supported-Python installs. |
@@ -110,6 +110,40 @@ release issues and milestone, and synchronized clean `main`.
   do not misclassify cache lag as an artifact defect.
 - Stable release publication is irreversible. Re-read exact release head, authorization,
   checks, and receipt inputs immediately before merge; stop on any mismatch.
+
+#### Current Evidence
+
+- Draft PR #154 starts from released v0.8.5 and had 13/13 hosted checks green at head
+  `79d5587`; issues #153/#155 and milestone v0.8.6 are open.
+- Hosted OCR compatibility run 33158664020 verified the official 1.11.0 assets and generated
+  the accepted human-review-required evidence. Adjacent source review maps each consumed
+  contract or records it as no-impact.
+- PATH-effective OCR is official Darwin arm64 1.11.0 with SHA-256
+  `ac8bf5a0fcd176bb9dcc15b169e90f4b52bf32787adef17a850489dbed97fb78`.
+  The installed `probe-local` contract passed version/help, preview, grouping, Rules, result,
+  budget, numeric CLI, and completion-cap checks.
+- The only configured-provider OCR review ran at concurrency 1 on exact head `d2249ab` and
+  finished in 396 seconds with manifest `complete`: 7 selected, 7 completed, 0 failed,
+  0 reused, and 0 waived. It returned one medium bug finding; this is a passing semantic
+  gate, so no provider waiver applies.
+- The finding correctly identified that the qualification-only grouping parser accepted the
+  historical wire shape only for 1.10.2 even though repeatable semantic probes cover the full
+  qualified 1.10.0–1.10.2 line. The parser now binds that exact old shape to all 1.10.x
+  releases while production preflight remains exact 1.11.0. All 86 compatibility tests pass.
+- Targeted privacy/posting/configuration/release suites pass 480 tests plus 243 subtests;
+  manifest validation, Towncrier draft, Ruff format check, and diff checks pass.
+- The final canonical gate passes 1,321 tests plus 363 subtests at 86.52% branch
+  coverage. The four locked risk groups pass at 85%, 82%, 86%, and 87%; Ruff format/lint,
+  strict MyPy, and Bandit pass in the same run.
+- Independent lock and OCR-manifest validation, rendered 0.8.6 Towncrier draft,
+  dependency audit, pinned Gitleaks, and `git diff --check` pass. Two deterministic
+  wheel/sdist builds are byte-identical; Twine and archive content/privacy checks pass,
+  and clean wheel plus sdist installs and CLI smoke pass on Python 3.12, 3.13, and 3.14.
+- Holistic feature-diff self-review found and fixed one documentation drift: the current
+  compatibility guide now describes only an operator-selected positive completion-cap
+  override and the full qualification-only historical 1.10.x inventory parser range.
+  Machine qualification evidence retains its exact checksum-bound tested probe. No other
+  correctness, privacy, release, documentation, or example inconsistency remains.
 
 #### Closure Gate
 
