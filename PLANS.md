@@ -156,7 +156,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 | `WQ-04` | `done` | Exact 1.11.0 evidence/pins/preflight/example/docs/rules/timeouts/backlog and max-tools help/runtime distinction are integrated; local OCR is atomically updated and no-LLM qualified. |
 | `WQ-05` | `done` | Provider-private reasoning/request fields are stripped before persistence and receipt binding; laundering through public sinks is filtered, explicit tool choice is preserved, and receipt/approval regressions pass. |
 | `WQ-06` | `done` | #153 now uses explicit metadata/strong terms plus a closed injection-class matcher over published findings; neutral domains do not inflate guide count or effort. |
-| `WQ-07` | `pending` | Update README/public docs and categorized changelog with the external qualification table. |
+| `WQ-07` | `done` | README/public operations/install/formatting guidance and agent-readable categorized changelog are current; the Draft retains the external old/new grouping and provider-wire qualification table for final-head binding. |
 | `WQ-08` | `pending` | Run holistic self-review and the one complete local final gate; update plan to truthful Draft handoff state. |
 | `WQ-09` | `pending` | Final push, hosted CI reconciliation, Draft/issue/milestone/remote/worktree readback. |
 
@@ -255,6 +255,14 @@ state for this task: `release-deferred` after a green Draft handoff.
   and other non-closed phrases remain ordinary. All 200 posting-helper tests plus 161
   subtests pass with deterministic ordering and no input mutation; Ruff, MyPy,
   repository-wide format check, and `git diff --check` pass.
+- 2026-08-28: root installation now requires Python 3.12–3.14, recommends isolated
+  `uv tool install`, bounds `pip` to an activated virtualenv, and names exact
+  checksum-verified OCR 1.11.0 plus no-LLM version/help smoke checks. Public docs clarify
+  max-tools, private reasoning/tool choice, and contextual security signals; required
+  environment-variable names remain bold. The canonical development workflow now applies
+  Ruff formatting before self-review and checks the entire repository before every Python
+  commit. All 61 documentation/integration/quality/release-note tests, Ruff, the
+  repository-wide format check, Towncrier draft, and `git diff --check` pass.
 
 #### Risks And Recovery
 

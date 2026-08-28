@@ -1,5 +1,6 @@
 """Contracts for the public GitLab operations documentation."""
 
+import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -37,6 +38,32 @@ def test_readme_and_gitlab_guide_link_to_operations() -> None:
     assert "docs/operations.md" in readme
     assert "operations.md" in gitlab
     assert "## How reviews evolve" in readme
+
+
+def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
+    """Keep the root installation path exact without using preflight as a smoke test."""
+
+    readme = README.read_text(encoding="utf-8")
+    install = readme.split("## Install", 1)[1].split("## How reviews evolve", 1)[0]
+    manifest = json.loads(
+        (PROJECT_ROOT / "compatibility" / "ocr-support.json").read_text(encoding="utf-8")
+    )
+    recommended = manifest["recommended_version"]
+    release = next(item for item in manifest["releases"] if item["version"] == recommended)
+    digests = {asset["name"]: asset["sha256"] for asset in release["assets"]}
+
+    assert "Python 3.12 through 3.14" in install
+    assert "uv tool install open-code-review-toolkit" in install
+    assert install.index(". .venv/bin/activate") < install.index(
+        "python -m pip install open-code-review-toolkit"
+    )
+    assert f"Open Code Review {recommended}" in install
+    assert f"open-code-review v{recommended}" in install
+    assert digests["opencodereview-linux-amd64"] in install
+    assert digests["opencodereview-darwin-arm64"] in install
+    assert "ocr --version" in install
+    assert "ocr-ci --help" in install
+    assert "not the installation\nsmoke test" in install
 
 
 def test_documentation_indexes_route_to_canonical_owners() -> None:
