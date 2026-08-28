@@ -225,6 +225,30 @@ def test_085_release_notes_keep_provider_diagnostics_bounded_and_actionable() ->
         assert phrase in notes
 
 
+def test_086_release_notes_preserve_privacy_and_exact_ocr_migration() -> None:
+    """Keep the security-signal fix and OCR 1.11.0 boundary actionable."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.6")
+
+    for phrase in (
+        "standalone word `injection`",
+        "knowledge or dependency injection",
+        "encrypted/native replay payloads",
+        "tool_choice",
+        "publication-filtered",
+        "Open Code Review 1.11.0",
+        "sole accepted runtime",
+        "status-first with churn",
+        "45 minutes",
+        "operator-selected positive completion-cap override",
+        "does not recommend a provider-specific value",
+        "Handlebars",
+        "Mustache",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

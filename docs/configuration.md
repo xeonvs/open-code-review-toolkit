@@ -92,9 +92,9 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_VERSION`** | Example pipeline | Yes | `v1.11.0` | Checksum-pinned recommended OCR binary release for the toolkit 0.8.6 development line. |
+| **`OCR_VERSION`** | Example pipeline | Yes | `v1.11.0` | Checksum-pinned recommended OCR binary release for toolkit 0.8.6. |
 | **`OCR_SHA256`** | Example pipeline | Yes | `13f68cc2eca1a36d42140e9d37797b68fea5cbbf4b6345ec01ec1b06910fab60` | Expected Linux AMD64 OCR binary digest. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.5` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.6` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |

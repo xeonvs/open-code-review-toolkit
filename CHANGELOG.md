@@ -1,3 +1,47 @@
+## 0.8.6 - 2026-08-28
+
+### 🐛 Bug Fixes
+
+- Correct reviewer-guide security classification:
+
+  - **Fixed:** command/shell, SQL/NoSQL, code, template, prompt, LDAP, XPath, CRLF/header, log, HTML/script, and expression injection require explicit vulnerability context; the standalone word `injection` is no longer promoted.
+  - **Changed:** neutral phrases such as knowledge or dependency injection no longer inflate the published security count or estimated review effort.
+  - **Unchanged:** finding severity, lifecycle, suppression, and approval behavior.
+
+  ([#153](https://github.com/xeonvs/open-code-review-toolkit/issues/153))
+- Contain provider-private OCR state at the publication boundary:
+
+  - **Fixed:** reasoning, encrypted/native replay payloads, and request `tool_choice` fields are removed before the canonical OCR result is persisted or receipt v5 is bound.
+  - **Changed:** private-only removal preserves a byte-equivalent review projection and approval eligibility; the same fields laundered through findings or warnings become `publication-filtered`.
+  - **Unchanged:** receipt v5, public tool-call and reasoning-token counters, DLP reason counts for private-only state, and approval rules.
+
+  ([#155](https://github.com/xeonvs/open-code-review-toolkit/issues/155))
+
+### 🛠 Maintenance
+
+- Qualify the toolkit 0.8.6 OCR dependency:
+
+  - **Changed:** Open Code Review 1.11.0 is the sole accepted runtime; grouping inventory is status-first with churn and the GitLab job timeout is 45 minutes for the default-medium/highest supported round envelope.
+  - **Added:** checksum-verified Linux and Darwin evidence plus strict historical-1.10.x-old/1.11.0-new qualification fixtures.
+  - **Migration:** deploy toolkit 0.8.6 directly with OCR 1.11.0. OCR 1.10.2 is comparison evidence only, not a supported fallback.
+  - **Unchanged:** result/manifest, inherited completion cap `16384`, support for an operator-selected positive completion-cap override, default effort `medium`, receipt v5, DLP, telemetry, summary, and approval contracts. The toolkit leaves that override unset by default and does not recommend a provider-specific value. OCR 1.11.0 corrects max-tools help text only: effective omitted/`0`/`49`/`50` remains `100`, while `101` raises the cap to `101`.
+
+  ([#155](https://github.com/xeonvs/open-code-review-toolkit/issues/155))
+
+### 📖 Documentation
+
+- Refresh installation and operating guidance:
+
+  - **Changed:** Python 3.12–3.14 uses `uv tool install` by default or `pip` only in an activated virtual environment; OCR is installed separately as checksum-verified 1.11.0 and verified with `ocr --version` plus `ocr-ci --help`.
+  - **Clarified:** max-tools runtime is unchanged despite corrected help text; reasoning and `tool_choice` stay private; reviewer-guide injection matching is contextual; Ruff formatting is applied and checked before each Python commit.
+
+  ([#155](https://github.com/xeonvs/open-code-review-toolkit/issues/155))
+
+### 🧩 Rules
+
+- **Added:** review Handlebars (`.hbs`) and Mustache (`.mustache`) files through OCR 1.11.0's built-in allowlist and language-specific Rules. Toolkit evidence and publication authority are unchanged. ([#155](https://github.com/xeonvs/open-code-review-toolkit/issues/155))
+
+
 ## 0.8.5 - 2026-08-27
 
 ### 🚀 Features

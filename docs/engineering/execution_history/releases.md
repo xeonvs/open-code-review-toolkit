@@ -2,6 +2,100 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-6"></a>
+
+## Toolkit 0.8.6 — OCR 1.11.0 and precise security signals
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.8.6`
+Repository completion date: 2026-08-28
+
+### Goal and delivered scope
+
+Toolkit 0.8.6 qualifies OCR 1.11.0 as its sole accepted runtime, corrects
+reviewer-guide security classification for neutral uses of the word
+`injection`, and keeps provider-private reasoning and request state outside
+every persisted public, receipt, summary, telemetry, and approval projection.
+
+Security promotion now requires explicit command/shell, SQL/NoSQL, code,
+template, prompt, LDAP, XPath, CRLF/header, log, HTML/script, or expression
+injection context. Neutral phrases such as knowledge or dependency injection
+do not increase the published security count or estimated review effort;
+finding severity, lifecycle, suppression, and approval behavior are unchanged.
+
+OCR reasoning, signed or encrypted replay payloads, and request `tool_choice`
+state are removed before canonical result persistence and receipt-v5 binding.
+Private-only removal preserves a byte-equivalent review projection and approval
+eligibility. The same values laundered through public findings or warnings are
+publication-filtered through the existing DLP and remain approval-ineligible.
+
+### OCR qualification and compatibility decisions
+
+- OCR 1.11.0 is the only production runtime accepted by toolkit 0.8.6.
+  OCR 1.10.2 is adjacent historical comparison evidence, not a fallback.
+- Grouping inventory changes to status-first entries with added/deleted churn.
+  Qualification accepts the old wire form only for OCR 1.10.0 through 1.10.2
+  and the new form from 1.11.0 onward; production code consumes neither form.
+- `file_find` supports repository-relative subpaths and both slash styles.
+  Handlebars and Mustache join the built-in allowlist and Rules contract.
+- OCR's 15-minute base subtask timeout scales to 15/30/45 minutes for
+  low/medium/high effort, so the GitLab example allows the 45-minute envelope.
+- Max-tools runtime behavior is unchanged: omitted, `0`, `49`, and `50` remain
+  effectively `100`; `101` raises the cap to `101`. Corrected help text does
+  not alter findings, completeness, DLP, receipt, telemetry, or approval.
+- The inherited completion cap remains OCR-owned. The toolkit supports an
+  operator-selected positive override, leaves it unset by default, and does
+  not recommend a provider-specific value.
+- Receipt v5, result and manifest schemas, public token/tool counters, DLP,
+  toolkit telemetry, summary, and approval contracts remain unchanged.
+
+### Repository, OCR, and hosted evidence
+
+- Hosted qualification run 33158664020 verified the checksum-pinned OCR 1.11.0
+  artifacts and required human review for the minor release. The PATH-effective
+  Darwin arm64 binary matched SHA-256
+  `ac8bf5a0fcd176bb9dcc15b169e90f4b52bf32787adef17a850489dbed97fb78`.
+- Exactly one configured-provider semantic review ran with concurrency 1 at
+  exact feature head `d2249abaa1760a1ac15e7b0ab75414e7af5a37ea`. Its manifest
+  completed all 7 selected files with failed/reused/waived `0/0/0` and found
+  one valid grouping-qualification defect.
+- Signed corrective commit `2a96f02b58eb54fc3e71ff1e9cec7343f4a20076`
+  extends the qualification-only old-format parser across OCR 1.10.0-1.10.2
+  while production preflight remains exact 1.11.0. No second OCR run was made.
+- The final feature gate passed 1,321 tests plus 363 subtests at 86.52% branch
+  coverage. Risk groups passed at 85%, 82%, 86%, and 87%; Ruff, strict MyPy,
+  Bandit, lock/manifest validation, Towncrier draft, dependency audit, pinned
+  Gitleaks, deterministic builds, Twine, archive privacy, and clean Python
+  3.12-3.14 wheel and sdist installs passed.
+- Feature PR #154 passed all 13 hosted checks at reviewed head
+  `2a96f02b58eb54fc3e71ff1e9cec7343f4a20076` and tree
+  `0d37e445782671e9cbe95e2d6a0ba2ce1599eb17`, with zero unresolved review
+  threads. It was squash-merged as verified commit
+  `58170e9765480e25ca0a963cd790af5938df83bc` with the same tree.
+- Development workflow run 33164086626 published and independently verified
+  `0.8.6.dev78`. TestPyPI wheel SHA-256 is
+  `2608b60b8efd891be1796c729ba6ac2151045febe4d0d724f355ec6a884327c6`;
+  sdist SHA-256 is
+  `e99a6e50b4a82d913660a66a46ba8c256104c5d1ab7971274716671208d1968a`.
+  Workflow and registry bytes, PEP 740 provenance, and clean installs agree.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. It sets
+`.release-version=0.8.6`, `.next-version=0.8.7`, deterministic source epoch
+`1787913471` one second after the feature squash merge, exact sorted issues
+`[153, 155]`, generated Towncrier notes, the stable example pin, and this
+archived plan while returning `PLANS.md` to its inactive template.
+
+External closure remains pending until the exact reviewed release head is
+squash-merged and the protected workflow is independently reconciled across
+TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
+requires byte equality, PEP 740 provenance and GitHub attestations, annotated
+`v0.8.6` tag and peeled target, immutable `release-receipt.json`, clean PyPI
+wheel and sdist installs on Python 3.12-3.14, Actions-owned receipts, closed
+#153/#155 and milestone `v0.8.6`, synchronized clean `main`, and scratch cleanup.
+
 <a id="plan-toolkit-0-8-5"></a>
 
 ## Toolkit 0.8.5 — provider diagnostics and OCR 1.10.2
