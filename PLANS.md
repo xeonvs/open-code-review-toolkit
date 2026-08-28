@@ -6,7 +6,7 @@ Use this file for active or blocked repository work. Update it before implementa
 
 ### Toolkit 0.8.6 - OCR 1.11.0 and precise security-signal classification
 
-Status: active
+Status: active — local implementation complete; final Draft push and hosted CI pending
 
 #### Goal
 
@@ -157,7 +157,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 | `WQ-05` | `done` | Provider-private reasoning/request fields are stripped before persistence and receipt binding; laundering through public sinks is filtered, explicit tool choice is preserved, and receipt/approval regressions pass. |
 | `WQ-06` | `done` | #153 now uses explicit metadata/strong terms plus a closed injection-class matcher over published findings; neutral domains do not inflate guide count or effort. |
 | `WQ-07` | `done` | README/public operations/install/formatting guidance and agent-readable categorized changelog are current; the Draft retains the external old/new grouping and provider-wire qualification table for final-head binding. |
-| `WQ-08` | `pending` | Run holistic self-review and the one complete local final gate; update plan to truthful Draft handoff state. |
+| `WQ-08` | `done` | Holistic requirement/privacy/architecture/data-flow review and the single complete local quality/coverage/security gate are green; stable delivery remains deferred. |
 | `WQ-09` | `pending` | Final push, hosted CI reconciliation, Draft/issue/milestone/remote/worktree readback. |
 
 #### Locked Decisions
@@ -263,6 +263,13 @@ state for this task: `release-deferred` after a green Draft handoff.
   Ruff formatting before self-review and checks the entire repository before every Python
   commit. All 61 documentation/integration/quality/release-note tests, Ruff, the
   repository-wide format check, Towncrier draft, and `git diff --check` pass.
+- 2026-08-28: holistic review confirms one provider-neutral private-result flow, no new
+  public/receipt/telemetry schema, no max-tools summary or configuration drift, and no
+  production compatibility fallback. The single final `scripts/quality.sh check` passes
+  1,321 tests plus 363 subtests at 86.52% combined branch coverage; locked risk groups pass
+  at 85%, 82%, 86%, and 87%. Manifest validation, `uv lock --check`, rendered Towncrier,
+  repository-wide Ruff format, lint, MyPy, Bandit, checksum-verified temporary Gitleaks
+  8.24.3, and `git diff --check` all pass. No LLM/provider call was performed.
 
 #### Risks And Recovery
 
@@ -284,9 +291,10 @@ state for this task: `release-deferred` after a green Draft handoff.
 
 #### Resume Point
 
-Commit the reviewed `WQ-04` OCR integration slice without pushing, then continue `WQ-05`
-with the existing canonical projection/DLP/cleanup owners and focused provider-private
-reasoning/tool-choice regressions.
+Commit this local-complete handoff state, push the accumulated signed history once, wait for
+all hosted Draft checks, and correct only evidence-backed failures through the same focused
+self-review gate. Then bind the Draft body to the exact final head/tree, mark issue acceptance
+criteria complete without closing #153/#155 or milestone v0.8.6, and stop with PR #154 Draft.
 
 #### Plan Fidelity Check
 
@@ -304,15 +312,15 @@ reasoning/tool-choice regressions.
 - [x] Current main/tag/next version, worktree, plan, issues, PRs, milestones, workflow,
   local OCR, manifest, harness, README, backlog, and canonical docs were read.
 - [x] Hosted OCR 1.11.0 issue/evidence and semantic source audit agree.
-- [ ] Backlog, roadmap, strategy, public docs, changelog, issues, milestone, and Draft agree.
+- [x] Backlog, roadmap, strategy, public docs, changelog, issues, milestone, and Draft agree.
 - [ ] Final local/hosted validation, head/tree, threads, remote ref, and worktree agree.
 
 #### Closure Gate
 
 - [ ] All in-scope requirements and queue items are done or justified out of scope.
-- [ ] Every logical commit passed focused tests, self-review, boundary review, and
+- [x] Every completed logical commit passed focused tests, self-review, boundary review, and
   `git diff --check`.
-- [ ] Final quality, coverage, manifest, lock, Towncrier, Gitleaks, and diff gates are green.
+- [x] Final quality, coverage, manifest, lock, Towncrier, Gitleaks, and diff gates are green.
 - [ ] Hosted required Draft checks are green with no unresolved conversations.
 - [ ] Draft body, issues, milestone, remote ref, exact head/tree, and clean worktree agree.
 
