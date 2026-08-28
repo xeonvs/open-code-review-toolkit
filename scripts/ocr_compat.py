@@ -46,6 +46,9 @@ MAX_RELEASE_CHANGES_CHARS = 4_000
 MAX_RELEASE_CHANGES_LINES = 50
 MAX_QUALIFICATION_CHAIN = 10
 MAX_CLI_PROBE_BYTES = 100_000
+MAX_GROUPING_INVENTORY_ENTRIES = 100
+MAX_GROUPING_PATH_CHARS = 1_000
+MAX_GROUPING_CHURN = 1_000_000_000
 DOWNLOAD_ATTEMPTS = 3
 VERSION_RE = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
@@ -164,6 +167,16 @@ class QualificationStageError(CompatibilityError):
         super().__init__(message)
         self.phase = phase
         self.reason = reason
+
+
+@dataclass(frozen=True)
+class GroupingInventoryEntry:
+    """One strictly parsed, qualification-only grouping inventory entry."""
+
+    status: str
+    path: str
+    insertions: int
+    deletions: int
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -763,6 +776,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     tokens_per_request = 2
     grouping_tokens_per_request = 2
     grouping_mode = "singletons"
+    grouping_inventory_version: str | None = None
+    grouping_inventories: list[list[GroupingInventoryEntry]] = []
     main_mode = "findings"
     completion_caps: list[object] = []
     request_stages: list[str] = []
@@ -779,18 +794,13 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
     @classmethod
     def _grouping_files(cls, messages: list[Any]) -> list[str]:
-        """Extract the public grouping prompt's changed-file inventory."""
+        """Extract one version-bound grouping inventory and retain structural evidence."""
 
-        paths: list[str] = []
-        for content in cls._message_contents(messages):
-            for match in re.finditer(
-                r"(?m)^([^\r\n]+) \((?:ADDED|MODIFIED|DELETED|RENAMED), \+[0-9]+/-[0-9]+\)$",
-                content,
-            ):
-                candidate = match.group(1)
-                if candidate not in paths:
-                    paths.append(candidate)
-        return paths
+        if cls.grouping_inventory_version is None:
+            _fail("grouping inventory version is not configured")
+        entries = parse_grouping_inventory(messages, cls.grouping_inventory_version)
+        cls.grouping_inventories.append(entries)
+        return [entry.path for entry in entries]
 
     @classmethod
     def _review_path(cls, messages: list[Any]) -> str | None:
@@ -960,6 +970,7 @@ def _stub_gateway(
     tokens_per_request: int = 2,
     grouping_tokens_per_request: int = 2,
     grouping_mode: str = "singletons",
+    grouping_inventory_version: str | None = None,
     main_mode: str = "findings",
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
@@ -974,6 +985,8 @@ def _stub_gateway(
     _StubHandler.tokens_per_request = tokens_per_request
     _StubHandler.grouping_tokens_per_request = grouping_tokens_per_request
     _StubHandler.grouping_mode = grouping_mode
+    _StubHandler.grouping_inventory_version = grouping_inventory_version
+    _StubHandler.grouping_inventories = []
     _StubHandler.main_mode = main_mode
     _StubHandler.completion_caps = []
     _StubHandler.request_stages = []
@@ -986,6 +999,81 @@ def _stub_gateway(
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def parse_grouping_inventory(
+    messages: list[Any], version: str
+) -> list[GroupingInventoryEntry]:
+    """Parse the exact grouping prompt shape qualified for one OCR release line."""
+
+    parsed_version = _version(version)
+    if parsed_version == (1, 10, 2):
+        pattern = re.compile(
+            r"(?P<path>[^\r\n]{1,1000}) "
+            r"\((?P<status>ADDED|MODIFIED|DELETED|RENAMED), "
+            r"\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
+        )
+    elif parsed_version >= (1, 11, 0):
+        pattern = re.compile(
+            r"(?P<status>ADDED|MODIFIED|DELETED|RENAMED)   "
+            r"(?P<path>[^\r\n]{1,1000}) "
+            r"\(\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
+        )
+    else:
+        _fail(f"grouping inventory format is not qualified for OCR {version}")
+
+    prefix = "Group the following changed files:\n\n"
+    suffix = "\n\nRespond with a JSON array:"
+    blocks: list[str] = []
+    for content in _StubHandler._message_contents(messages):
+        if not content.startswith(prefix) or suffix not in content:
+            continue
+        inventory, remainder = content[len(prefix) :].split(suffix, 1)
+        if suffix in remainder:
+            _fail("grouping prompt contains duplicate response boundaries")
+        blocks.append(inventory)
+    if len(blocks) != 1:
+        _fail("grouping prompt must contain exactly one changed-file inventory")
+
+    lines = blocks[0].splitlines()
+    if not lines or len(lines) > MAX_GROUPING_INVENTORY_ENTRIES:
+        _fail("grouping inventory has an invalid entry count")
+    entries: list[GroupingInventoryEntry] = []
+    observed_paths: set[str] = set()
+    for line in lines:
+        match = pattern.fullmatch(line)
+        if match is None:
+            _fail(f"OCR {version} emitted an invalid grouping inventory entry")
+        path = match.group("path")
+        insertions = int(match.group("insertions"))
+        deletions = int(match.group("deletions"))
+        if (
+            len(path) > MAX_GROUPING_PATH_CHARS
+            or path in observed_paths
+            or insertions > MAX_GROUPING_CHURN
+            or deletions > MAX_GROUPING_CHURN
+        ):
+            _fail(f"OCR {version} emitted an invalid grouping inventory value")
+        observed_paths.add(path)
+        entries.append(
+            GroupingInventoryEntry(
+                status=match.group("status"),
+                path=path,
+                insertions=insertions,
+                deletions=deletions,
+            )
+        )
+    return entries
+
+
+def _require_exact_grouping_inventory(
+    observed: list[GroupingInventoryEntry],
+    expected: list[GroupingInventoryEntry],
+) -> None:
+    """Reject status, churn, path, or ordering drift in one grouping inventory."""
+
+    if observed != expected:
+        _fail("semantic grouping review emitted an unexpected status/churn inventory")
 
 
 def detect_optional_capabilities(help_output: str, sample: dict[str, Any]) -> list[str]:
@@ -1053,7 +1141,7 @@ def _validate_file_groups(value: Any, expected_paths: set[str] | None = None) ->
         _fail("candidate semantic grouping did not cover the expected paths")
 
 
-def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Drive the real OCR review budget gate and validate its partial manifest."""
 
     git_env = _isolated_probe_environment(directory / "budget-git-home")
@@ -1074,7 +1162,10 @@ def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
 
     home = directory / "budget-review-home"
     env = _isolated_probe_environment(home)
-    with _stub_gateway(tokens_per_request=20_000) as gateway_url:
+    with _stub_gateway(
+        tokens_per_request=20_000,
+        grouping_inventory_version=version,
+    ) as gateway_url:
         env.update(
             {
                 "OCR_LLM_URL": gateway_url,
@@ -1470,7 +1561,10 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
 
     env = _isolated_probe_environment(root / "review-home")
-    with _stub_gateway(grouping_mode="combined") as gateway_url:
+    with _stub_gateway(
+        grouping_mode="combined",
+        grouping_inventory_version=version,
+    ) as gateway_url:
         env.update(
             {
                 "OCR_LLM_URL": gateway_url,
@@ -1500,6 +1594,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         )
         stages = list(_StubHandler.request_stages)
         completion_caps = list(_StubHandler.completion_caps)
+        grouping_inventories = list(_StubHandler.grouping_inventories)
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
@@ -1516,6 +1611,12 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         _fail("semantic grouping review did not preserve the accepted group")
     if stages != ["grouping", "main", "main", "filter", "main"]:
         _fail(f"default medium review emitted an unexpected stage sequence: {stages!r}")
+    expected_inventory = [
+        GroupingInventoryEntry("MODIFIED", path, 1, 1) for path in paths
+    ]
+    if len(grouping_inventories) != 1:
+        _fail("semantic grouping review emitted an unexpected grouping inventory count")
+    _require_exact_grouping_inventory(grouping_inventories[0], expected_inventory)
     expected_grouping_cap = 16_384 if _version(version) >= (1, 10, 2) else 4_096
     if len(completion_caps) != len(stages) or completion_caps[0] != expected_grouping_cap:
         _fail(
@@ -1838,7 +1939,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts: dict[str, Any] = {
         "numeric_cli_probe": _numeric_cli_probe(binary, repo, base, head, directory),
         "optional_capabilities": optional_capabilities,
-        "review_budget_probe": _budget_result_probe(binary, directory),
+        "review_budget_probe": _budget_result_probe(binary, version, directory),
         "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),
         "version_probe": "passed",
         "required_review_flags": sorted(required_review_flags),

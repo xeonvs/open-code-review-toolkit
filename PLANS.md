@@ -149,7 +149,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 | Queue | Status | Deliverable |
 | --- | --- | --- |
 | `WQ-01` | `done` | Full plan materialized first and passed the workflow fidelity/lifecycle check. |
-| `WQ-02` | `in_progress` | Implement strict version-gated grouping qualification, commit the harness, then push the two initial commits and open Draft. |
+| `WQ-02` | `in_progress` | Strict version-gated grouping qualification is implemented and validated; commit it, then push the two initial commits and open Draft. |
 | `WQ-03` | `pending` | Create/assign/milestone issues and obtain hosted exact OCR 1.11.0 qualification evidence. |
 | `WQ-04` | `pending` | Integrate 1.11.0 evidence, pins, preflight/example/docs/rules/timeouts/backlog and local no-LLM binary update. |
 | `WQ-05` | `pending` | Add reasoning/tool-choice/private-session qualification and DLP/cleanup/receipt/approval regressions. |
@@ -213,6 +213,9 @@ state for this task: `release-deferred` after a green Draft handoff.
   1.10.2 state, and the old-format-only grouping harness were read before this first write.
 - 2026-08-28: this active plan passes the engineering-workflow lifecycle/fidelity check
   and `git diff --check`; the planning slice has no product/runtime change.
+- 2026-08-28: 86 compatibility tests pass, including 14 focused old/new grouping and
+  gateway tests; Ruff, MyPy, and `git diff --check` pass. Exact local OCR 1.10.2 also
+  passes the strict old-format semantic grouping probe through the loopback-only gateway.
 
 #### Risks And Recovery
 
@@ -234,8 +237,8 @@ state for this task: `release-deferred` after a green Draft handoff.
 
 #### Resume Point
 
-Continue `WQ-02`: make the signed planning commit, then implement and validate only the
-strict version-gated grouping qualification slice before the initial push.
+Continue `WQ-02`: commit the reviewed harness slice, push the two signed initial commits,
+open the Draft, and then create/dispatch the `WQ-03` GitHub coordination state.
 
 #### Plan Fidelity Check
 

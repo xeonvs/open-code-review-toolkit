@@ -1078,6 +1078,159 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
     assert error.value.code == 400
 
 
+def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None:
+    """Comparison evidence pins 1.10.2 and 1.11.0 to different exact wire shapes."""
+
+    module = load_script()
+
+    def messages(inventory: str) -> list[dict[str, str]]:
+        """Wrap one inventory in OCR's public grouping user prompt."""
+
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Group the following changed files:\n\n"
+                    f"{inventory}\n\n"
+                    "Respond with a JSON array:\n"
+                    '[{"label": "theme", "files": ["path"]}]'
+                ),
+            }
+        ]
+
+    old = module.parse_grouping_inventory(
+        messages(
+            "src/space (unicode) λ.py (ADDED, +10/-0)\n"
+            "win\\deleted.hbs (DELETED, +0/-5)\n"
+            "renamed.mustache (RENAMED, +0/-0)"
+        ),
+        "1.10.2",
+    )
+    new = module.parse_grouping_inventory(
+        messages(
+            "ADDED   src/space (unicode) λ.py (+10/-0)\n"
+            "DELETED   win\\deleted.hbs (+0/-5)\n"
+            "RENAMED   renamed.mustache (+0/-0)"
+        ),
+        "1.11.0",
+    )
+
+    assert old == new == [
+        module.GroupingInventoryEntry("ADDED", "src/space (unicode) λ.py", 10, 0),
+        module.GroupingInventoryEntry("DELETED", "win\\deleted.hbs", 0, 5),
+        module.GroupingInventoryEntry("RENAMED", "renamed.mustache", 0, 0),
+    ]
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
+        module.parse_grouping_inventory(messages("ADDED   path.py (+1/-0)"), "1.10.2")
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
+        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.11.0")
+    with pytest.raises(module.CompatibilityError, match="not qualified"):
+        module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.10.1")
+
+
+@pytest.mark.parametrize(
+    "inventory",
+    [
+        "MODIFIED   one.py (+1/-1)\none.py (MODIFIED, +1/-1)",
+        "MODIFIED  one.py (+1/-1)",
+        "BINARY   image.bin (+0/-0)",
+        "UNKNOWN   one.py (+1/-1)",
+        "MODIFIED   one.py (+01/-1)",
+        "MODIFIED   one.py (+1000000001/-0)",
+        "MODIFIED   one.py (+1/-1)\nMODIFIED   one.py (+1/-1)",
+        "MODIFIED   one.py (+1/-1) trailing",
+    ],
+)
+def test_grouping_inventory_rejects_mixed_duplicate_and_malformed_values(
+    inventory: str,
+) -> None:
+    """Untrusted grouping prompts fail closed on ambiguity, binary markers, and bounds."""
+
+    module = load_script()
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                "Group the following changed files:\n\n"
+                f"{inventory}\n\nRespond with a JSON array:\n[]"
+            ),
+        }
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory"):
+        module.parse_grouping_inventory(messages, "1.11.0")
+
+
+def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> None:
+    """Prompt boundaries and entry counts remain singular and bounded."""
+
+    module = load_script()
+    valid = {
+        "role": "user",
+        "content": (
+            "Group the following changed files:\n\n"
+            "MODIFIED   one.py (+1/-1)\n\nRespond with a JSON array:\n[]"
+        ),
+    }
+
+    with pytest.raises(module.CompatibilityError, match="exactly one"):
+        module.parse_grouping_inventory([], "1.11.0")
+    with pytest.raises(module.CompatibilityError, match="exactly one"):
+        module.parse_grouping_inventory([valid, valid], "1.11.0")
+    oversized = "\n".join(
+        f"MODIFIED   file-{index}.py (+1/-1)"
+        for index in range(module.MAX_GROUPING_INVENTORY_ENTRIES + 1)
+    )
+    with pytest.raises(module.CompatibilityError, match="invalid entry count"):
+        module.parse_grouping_inventory(
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        "Group the following changed files:\n\n"
+                        f"{oversized}\n\nRespond with a JSON array:\n[]"
+                    ),
+                }
+            ],
+            "1.11.0",
+        )
+
+
+@pytest.mark.parametrize(
+    "observed",
+    [
+        [
+            ("MODIFIED", "second.py", 1, 1),
+            ("MODIFIED", "first.py", 1, 1),
+        ],
+        [
+            ("ADDED", "first.py", 1, 1),
+            ("MODIFIED", "second.py", 1, 1),
+        ],
+        [
+            ("MODIFIED", "first.py", 0, 0),
+            ("MODIFIED", "second.py", 1, 1),
+        ],
+    ],
+)
+def test_grouping_inventory_rejects_reorder_status_and_churn_drift(
+    observed: list[tuple[str, str, int, int]],
+) -> None:
+    """Semantic qualification binds order, status, and churn to the controlled fixture."""
+
+    module = load_script()
+    expected = [
+        module.GroupingInventoryEntry("MODIFIED", "first.py", 1, 1),
+        module.GroupingInventoryEntry("MODIFIED", "second.py", 1, 1),
+    ]
+
+    with pytest.raises(module.CompatibilityError, match="unexpected status/churn"):
+        module._require_exact_grouping_inventory(
+            [module.GroupingInventoryEntry(*entry) for entry in observed],
+            expected,
+        )
+
+
 def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
     """Derive effective numeric behavior without retaining raw OCR diagnostics."""
 
