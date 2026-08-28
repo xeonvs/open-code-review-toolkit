@@ -154,6 +154,16 @@ QUARANTINE_COMMENT_FIELDS = frozenset(
         "suggestion_code",
     }
 )
+PROVIDER_PRIVATE_RESULT_KEYS = frozenset(
+    {
+        "encrypted_content",
+        "native_payload",
+        "reasoning_content",
+        "redacted_thinking",
+        "thinking",
+        "tool_choice",
+    }
+)
 
 
 class ReviewRunnerError(Exception):
@@ -463,8 +473,10 @@ def _dlp_reasons(
     while stack:
         nested = stack.pop()
         if isinstance(nested, dict):
-            stack.extend(nested.keys())
-            stack.extend(nested.values())
+            for key, value in nested.items():
+                if isinstance(key, str) and key in PROVIDER_PRIVATE_RESULT_KEYS:
+                    reasons["invalid_text"] += 1
+                stack.extend((key, value))
         elif isinstance(nested, list):
             stack.extend(nested)
         elif isinstance(nested, str):
@@ -693,6 +705,11 @@ def _sanitize_nonpublication_fields(
             child_path = (*path, key)
             if isinstance(source, dict):
                 assert isinstance(key, str)
+                if key in PROVIDER_PRIVATE_RESULT_KEYS and not _is_publication_sink_path(
+                    child_path
+                ):
+                    redacted_fields += 1
+                    continue
                 if not _is_publication_sink_path(
                     child_path
                 ) and not _is_static_public_tool_key_path(child_path):
@@ -894,7 +911,7 @@ def _publication_projection(
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
         payload, budgets=budgets, matcher=matcher
     )
-    if not sink_reasons and not private_reasons:
+    if not sink_reasons and not private_reasons and redacted_fields == 0:
         return payload, {"state": "passed"}, False
 
     try:
@@ -932,6 +949,8 @@ def _publication_projection(
             projected["summary"] = {"budget_exceeded": True}
     else:
         reasons = sink_reasons + private_reasons
+        if not reasons:
+            return sanitized, {"state": "passed"}, False
         return (
             sanitized,
             {

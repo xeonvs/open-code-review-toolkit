@@ -154,7 +154,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 | `WQ-02` | `done` | Strict grouping harness committed; the two signed initial commits were pushed and Draft PR #154 opened. |
 | `WQ-03` | `done` | Milestone v0.8.6 and issue #155 are coordinated; hosted run 33158664020 produced accepted exact 1.11.0 evidence. |
 | `WQ-04` | `done` | Exact 1.11.0 evidence/pins/preflight/example/docs/rules/timeouts/backlog and max-tools help/runtime distinction are integrated; local OCR is atomically updated and no-LLM qualified. |
-| `WQ-05` | `pending` | Add reasoning/tool-choice/private-session qualification and DLP/cleanup/receipt/approval regressions. |
+| `WQ-05` | `done` | Provider-private reasoning/request fields are stripped before persistence and receipt binding; laundering through public sinks is filtered, explicit tool choice is preserved, and receipt/approval regressions pass. |
 | `WQ-06` | `pending` | Implement and verify #153's closed contextual security-signal matcher. |
 | `WQ-07` | `pending` | Update README/public docs and categorized changelog with the external qualification table. |
 | `WQ-08` | `pending` | Run holistic self-review and the one complete local final gate; update plan to truthful Draft handoff state. |
@@ -241,6 +241,13 @@ state for this task: `release-deferred` after a green Draft handoff.
   or credentials were used.
 - 2026-08-28: the integrated OCR slice passes 229 focused tests plus 104 subtests,
   manifest validation, Ruff lint and repository-wide format check, and `git diff --check`.
+- 2026-08-28: provider-private reasoning, encrypted/native replay payloads, and request
+  `tool_choice` fields are removed from the persisted result without changing a
+  byte-equivalent canonical review projection or blocking approval. The same keys in a
+  public finding or warning fail closed as `publication-filtered`; receipt v5 rejects
+  private replay/request fields, while actual tool-call and reasoning-token counters remain
+  available. The focused boundary suite passes 253 tests plus 186 subtests, Ruff, MyPy,
+  repository-wide format check, and `git diff --check`.
 
 #### Risks And Recovery
 
