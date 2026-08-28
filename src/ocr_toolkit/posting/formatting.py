@@ -650,9 +650,16 @@ SECURITY_SIGNAL_RE = re.compile(
     r"(?i)\b("
     r"security|credential|secret|token|password|private[_ -]?token|"
     r"client[_ -]?secret|api[_ -]?key|authorization|auth|"
-    r"injection|xss|csrf|ssrf|rce|path traversal|host header|"
+    r"xss|csrf|ssrf|rce|path traversal|host header|"
     r"privilege|permission|access control|vault|leak"
     r")\b"
+)
+SECURITY_INJECTION_RE = re.compile(
+    r"(?i)(?<!\w)(?:"
+    r"(?:os[\s_-]+)?command|shell(?:[\s_-]+command)?|sql|nosql|code|"
+    r"(?:server[\s_-]+side[\s_-]+)?template|prompt|ldap|xpath|crlf|"
+    r"(?:http[\s_-]+)?header|log|html|script|expression"
+    r")[\s_\-\u2010-\u2015]+injection(?!\w)"
 )
 
 
@@ -674,7 +681,8 @@ def comment_signal_text(comment: dict[str, Any]) -> str:
 def comment_has_security_signal(comment: dict[str, Any]) -> bool:
     """Return true only when OCR text explicitly carries security wording."""
 
-    return bool(SECURITY_SIGNAL_RE.search(comment_signal_text(comment)))
+    text = comment_signal_text(comment)
+    return bool(SECURITY_SIGNAL_RE.search(text) or SECURITY_INJECTION_RE.search(text))
 
 
 def comment_is_high_signal(comment: dict[str, Any]) -> bool:

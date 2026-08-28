@@ -155,7 +155,7 @@ state for this task: `release-deferred` after a green Draft handoff.
 | `WQ-03` | `done` | Milestone v0.8.6 and issue #155 are coordinated; hosted run 33158664020 produced accepted exact 1.11.0 evidence. |
 | `WQ-04` | `done` | Exact 1.11.0 evidence/pins/preflight/example/docs/rules/timeouts/backlog and max-tools help/runtime distinction are integrated; local OCR is atomically updated and no-LLM qualified. |
 | `WQ-05` | `done` | Provider-private reasoning/request fields are stripped before persistence and receipt binding; laundering through public sinks is filtered, explicit tool choice is preserved, and receipt/approval regressions pass. |
-| `WQ-06` | `pending` | Implement and verify #153's closed contextual security-signal matcher. |
+| `WQ-06` | `done` | #153 now uses explicit metadata/strong terms plus a closed injection-class matcher over published findings; neutral domains do not inflate guide count or effort. |
 | `WQ-07` | `pending` | Update README/public docs and categorized changelog with the external qualification table. |
 | `WQ-08` | `pending` | Run holistic self-review and the one complete local final gate; update plan to truthful Draft handoff state. |
 | `WQ-09` | `pending` | Final push, hosted CI reconciliation, Draft/issue/milestone/remote/worktree readback. |
@@ -248,6 +248,13 @@ state for this task: `release-deferred` after a green Draft handoff.
   private replay/request fields, while actual tool-call and reasoning-token counters remain
   available. The focused boundary suite passes 253 tests plus 186 subtests, Ruff, MyPy,
   repository-wide format check, and `git diff --check`.
+- 2026-08-28: #153's exact three-finding reproducer now yields one security-sensitive
+  finding and effort `2/5`. Explicit security metadata and command/shell, SQL/NoSQL,
+  code, template, prompt, LDAP, XPath, CRLF/header, log, HTML/script, and expression
+  injection remain promoted across bounded separator/case variants; knowledge, dependency,
+  and other non-closed phrases remain ordinary. All 200 posting-helper tests plus 161
+  subtests pass with deterministic ordering and no input mutation; Ruff, MyPy,
+  repository-wide format check, and `git diff --check` pass.
 
 #### Risks And Recovery
 
