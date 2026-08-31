@@ -214,6 +214,11 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   forge/fuzzing backlog now include the policy-v3 CI-outcome boundary without rewriting release
   history or marking those future backlog items complete. Documentation tests passed 56 tests;
   Towncrier draft renders every v0.8.7 category once without duplicate issue links.
+- 2026-08-31: the first exact-head quality run reached 86.18% combined coverage and exposed one
+  stale cross-provider assertion that still expected the pre-#159 one-sided-delta diagnostic in
+  the compact bootstrap. Production behavior and budgets were unchanged; the test continues to
+  prove actual framework/template deltas, summary counts, MCP list/get projection, and bootstrap
+  routing without requiring a removed diagnostic. Its focused owner suite passed 41 tests.
 
 #### Risks And Recovery
 
