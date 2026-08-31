@@ -129,7 +129,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | done | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
-| WQ-09 | pending | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
+| WQ-09 | in_progress | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
 
 #### Locked Decisions
 
@@ -219,6 +219,19 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   the compact bootstrap. Production behavior and budgets were unchanged; the test continues to
   prove actual framework/template deltas, summary counts, MCP list/get projection, and bootstrap
   routing without requiring a removed diagnostic. Its focused owner suite passed 41 tests.
+- 2026-08-31: the corrected exact-head local gate passed 1,367 tests plus 366 subtests at 86.18%
+  combined branch coverage; the four risk groups passed at 85%, 82%, 86%, and 87%. Ruff format
+  and lint, strict MyPy, Bandit, lock, OCR manifest/evidence, rendered Towncrier, and
+  `git diff --check` passed. Repository-pinned Gitleaks 8.24.3 passed the complete first-parent
+  branch history from `origin/main`; its official Darwin arm64 archive verified SHA-256
+  `b90f13bb8c90ab72083d9b0c842e39dafb82c0e5c3f872f407366b7a58909013`, the temporary files
+  were removed, and the global 8.30.1 installation was not changed.
+- 2026-08-31: engineering-workflow 0.9.0 plan lifecycle check passed. Its value-free public-tree
+  privacy scanner reported 339 established baseline matches and 346 on the final tree; the seven
+  added match counts are limited to controlled OCR qualification probes, the new GitLab token
+  parser owner, and explicit DLP/evidence test owners. No new hard-category appeared. This
+  repository-owned synthetic/false-positive provenance agrees with the clean redacted Gitleaks
+  history scan; no candidate value was opened or copied into the review.
 
 #### Risks And Recovery
 
@@ -238,8 +251,10 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Begin WQ-09 with one exact-head local quality/privacy/release gate, then make the single final
-push, reconcile hosted PR and OCR-compatibility results, and leave the green PR in Draft.
+Push this reviewed local history once to Draft PR #164, reconcile hosted PR and exact-head
+OCR-compatibility results, update only external PR/issue checklists, and leave the branch in Draft.
+The next product action after green hosted checks is external OCR 1.11.1 qualification of this
+exact head with a configured LLM endpoint; do not merge or publish first.
 
 #### Plan Fidelity Check
 
@@ -257,7 +272,8 @@ push, reconcile hosted PR and OCR-compatibility results, and leave the green PR 
 - [x] No pre-existing user changes are present in the worktree.
 - [x] Milestone and issue relationships agree with this plan.
 - [ ] Draft PR and compatibility artifact agree with this plan.
-- [ ] Final implementation, docs, changelog, backlog, tests, and remote state agree.
+- [x] Final implementation, docs, changelog, backlog, and local tests agree.
+- [ ] Remote Draft head, hosted checks, and compatibility artifact agree.
 
 #### Closure Gate
 
@@ -265,7 +281,8 @@ push, reconcile hosted PR and OCR-compatibility results, and leave the green PR 
 - [ ] Final local and hosted checks are current for the exact Draft head.
 - [ ] Draft remains open, mergeable, and without unresolved review threads.
 - [ ] External qualification remains a truthful post-close/deferred delivery item.
-- [ ] `scripts/plan_lifecycle.py check` accepts the final state before closure or archival.
+- [x] Engineering-workflow 0.9.0 `plan_lifecycle.py check` accepts the active deferred state;
+  closure/archive remains out of scope until the ordinary stable release lifecycle.
 
 #### Post-Close Delivery
 
