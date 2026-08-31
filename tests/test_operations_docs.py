@@ -14,9 +14,20 @@ CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 SIGNAL_OWNERSHIP = PROJECT_ROOT / "docs" / "engineering" / "review_signal_ownership.md"
 
 
-def test_readme_security_badges_link_to_repository_specific_results() -> None:
+def test_readme_product_and_security_badges_link_to_authoritative_results() -> None:
     readme = README.read_text(encoding="utf-8")
 
+    product_badges = (
+        "[![Version](https://img.shields.io/pypi/v/open-code-review-toolkit?"
+        "label=version&color=0A66C2)](https://pypi.org/project/open-code-review-toolkit/)",
+        "[![Python](https://img.shields.io/pypi/pyversions/open-code-review-toolkit?"
+        "logo=python&logoColor=white&label=python)]"
+        "(https://pypi.org/project/open-code-review-toolkit/)",
+        "[![License](https://img.shields.io/pypi/l/open-code-review-toolkit?color=0A66C2)]"
+        "(https://github.com/xeonvs/open-code-review-toolkit/blob/main/LICENSE)",
+    )
+    for badge in product_badges:
+        assert badge in readme
     assert (
         "[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/"
         "github.com/xeonvs/open-code-review-toolkit/badge)]"
@@ -29,6 +40,11 @@ def test_readme_security_badges_link_to_repository_specific_results() -> None:
         "(https://github.com/xeonvs/open-code-review-toolkit/actions/"
         "workflows/codeql.yml)"
     ) in readme
+    positions = [readme.index(badge) for badge in product_badges]
+    assert positions == sorted(positions)
+    assert positions[-1] < readme.index("[![OpenSSF Best Practices]")
+    assert "img.shields.io/pypi/v/open-code-review-toolkit" in readme
+    assert "test.pypi.org" not in readme.split("## Install", 1)[0]
 
 
 def test_readme_and_gitlab_guide_link_to_operations() -> None:

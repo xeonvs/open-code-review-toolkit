@@ -1,5 +1,8 @@
 # Open Code Review Toolkit
 
+[![Version](https://img.shields.io/pypi/v/open-code-review-toolkit?label=version&color=0A66C2)](https://pypi.org/project/open-code-review-toolkit/)
+[![Python](https://img.shields.io/pypi/pyversions/open-code-review-toolkit?logo=python&logoColor=white&label=python)](https://pypi.org/project/open-code-review-toolkit/)
+[![License](https://img.shields.io/pypi/l/open-code-review-toolkit?color=0A66C2)](https://github.com/xeonvs/open-code-review-toolkit/blob/main/LICENSE)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13906/badge)](https://www.bestpractices.dev/projects/13906)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/xeonvs/open-code-review-toolkit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/xeonvs/open-code-review-toolkit)
 [![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml)

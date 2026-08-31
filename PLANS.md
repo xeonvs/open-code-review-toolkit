@@ -128,7 +128,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-05 | done | #162 guidance, exact OCR 1.11.1 pins/rules/evidence, and local binary are complete |
 | WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
-| WQ-08 | pending | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
+| WQ-08 | done | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
 | WQ-09 | pending | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
 
 #### Locked Decisions
@@ -207,6 +207,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   bootstrap, while raw provider identities/payloads and CI status stay outside receipts, public
   summaries, and approval authority. Ruff format/check, `git diff --check`, and the focused
   policy/provider/store/MCP/review/publication suite passed with 350 tests and 83 subtests.
+- 2026-08-31: #157 adds dynamic stable PyPI version, supported-Python, and Apache-2.0
+  product badges ahead of the unchanged supply-chain/CI badges. Live Shields readback reported
+  stable `v0.8.6`, Python `3.12 | 3.13 | 3.14`, and Apache-2.0; no TestPyPI or duplicate GitHub
+  version badge was added. Current strategy, roadmap, M5 evidence matrix, and conditional
+  forge/fuzzing backlog now include the policy-v3 CI-outcome boundary without rewriting release
+  history or marking those future backlog items complete. Documentation tests passed 56 tests;
+  Towncrier draft renders every v0.8.7 category once without duplicate issue links.
 
 #### Risks And Recovery
 
@@ -226,9 +233,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Begin WQ-08 with #157's stable-distribution badges, then reconcile current public docs,
-strategy/roadmap/backlog, changelog, and final Draft-only plan truth without rewriting historical
-release records.
+Begin WQ-09 with one exact-head local quality/privacy/release gate, then make the single final
+push, reconcile hosted PR and OCR-compatibility results, and leave the green PR in Draft.
 
 #### Plan Fidelity Check
 
