@@ -144,10 +144,12 @@ def collect_repository_evidence(
         ),
     )
     exhausted_kinds: set[str] = set()
-    for record in ordered_typed_facts:
+    incomplete_delta_kinds: set[str] = set()
+    for index, record in enumerate(ordered_typed_facts):
         if record.kind in exhausted_kinds:
             continue
         if not store.add(record):
+            incomplete_delta_kinds.add(record.kind)
             if record.component == "ansible" and record.kind.startswith("ansible."):
                 raise EvidenceStoreError(
                     "Ansible topology facts exceed the atomic evidence store limits"
@@ -155,18 +157,23 @@ def collect_repository_evidence(
             limit_state = store.record_limit_state(record.kind)
             if limit_state == "global":
                 store.add_diagnostic("typed evidence was truncated by the global store limit")
+                incomplete_delta_kinds.update(
+                    candidate.kind for candidate in ordered_typed_facts[index:]
+                )
                 break
             if limit_state == "kind":
                 # A per-kind omission must not suppress later independent domains.
                 store.add_diagnostic(f"typed {record.kind} evidence was truncated by store limits")
                 exhausted_kinds.add(record.kind)
+    for kind in sorted(incomplete_delta_kinds):
+        store.add_diagnostic(f"typed {kind} comparison incomplete; unsafe semantic deltas omitted")
     # Deltas are projections of canonical accepted store records, never raw facts
     # or references to values that redaction, deduplication, or a budget omitted.
     store.deltas = tuple(
         sorted(
             (
                 *snapshot_deltas,
-                *fact_deltas(store.records),
+                *fact_deltas(store.records, incomplete_kinds=incomplete_delta_kinds),
                 *coverage_deltas(all_coverage),
             ),
             key=lambda item: (item.kind, item.component, item.identity),

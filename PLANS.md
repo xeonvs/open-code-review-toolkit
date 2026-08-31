@@ -122,9 +122,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | Queue | Status | Work |
 | --- | --- | --- |
 | WQ-01 | done | Materialize plan, create milestone/issue relationships, planning commit, and fidelity check |
-| WQ-02 | in_progress | #163 harness is locally complete; commit, initial push, and Draft PR remain |
-| WQ-03 | pending | Rerun hosted OCR 1.11.1 qualification and accept only exact structural evidence |
-| WQ-04 | pending | Implement #159 pair-aware comparison and impossible-state rejection |
+| WQ-02 | done | #163 harness committed; initial push and Draft PR #164 created |
+| WQ-03 | done | Hosted run 33400677367 accepted exact OCR 1.11.1 structural evidence |
+| WQ-04 | in_progress | #159 incomplete-kind delta suppression is locally complete; commit remains |
 | WQ-05 | pending | Implement #162 multi-round contract and adopt OCR 1.11.1 pins/security/rules/local binary |
 | WQ-06 | pending | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | pending | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
@@ -181,6 +181,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   probe. Evidence separates local single-file, bundle-all, and high-churn per-file grouping
   from the four-file semantic grouping request; it also records two medium review rounds,
   filter-survivor wording, partial budget coverage 2/3, completion cap, and max-tools behavior.
+- 2026-08-31: Draft PR #164 opened from the two reviewed initial commits. Hosted compatibility
+  run `33400677367` passed on exact commit `ffe1233242eb1c102b1cf34306d0c106bad60806`;
+  candidate #158 now records schema-v3 compatible evidence and a human-review-required semantic
+  audit classification.
+- 2026-08-31: #159 focused evidence/store/MCP suite passed with 197 tests. Generated Go and
+  Composer lock fixtures prove byte-identical over-limit inputs publish no semantic delta;
+  bounded one-sided and ordinary version changes remain available.
 
 #### Risks And Recovery
 
@@ -200,8 +207,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Commit the reviewed WQ-02 qualification harness, push the two initial commits, open the Draft
-PR, and dispatch the exact-branch OCR 1.11.1 compatibility workflow for WQ-03.
+Commit the reviewed WQ-04 evidence-integrity slice, then begin WQ-05 with the OCR 1.11.1
+semantic source audit, multi-round mitigation, exact pins, rules, and isolated local update.
 
 #### Plan Fidelity Check
 

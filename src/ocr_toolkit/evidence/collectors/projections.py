@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 
 from ocr_toolkit.evidence.coverage import CoverageObservation, compose_coverage
 from ocr_toolkit.evidence.frameworks import PluginCoverage, PluginFact
@@ -62,8 +62,10 @@ def plugin_coverage(
     ]
 
 
-def fact_deltas(records: Iterable[EvidenceRecord]) -> tuple[EvidenceDelta, ...]:
-    """Build reproducible typed deltas keyed by kind/component/identity."""
+def fact_deltas(
+    records: Iterable[EvidenceRecord], *, incomplete_kinds: Collection[str] = ()
+) -> tuple[EvidenceDelta, ...]:
+    """Build deltas only where base/head admission leaves the identity comparable."""
 
     base: dict[tuple[str, str, str], list[EvidenceRecord]] = {}
     head: dict[tuple[str, str, str], list[EvidenceRecord]] = {}
@@ -108,6 +110,18 @@ def fact_deltas(records: Iterable[EvidenceRecord]) -> tuple[EvidenceDelta, ...]:
     for key in sorted(set(base) | set(head)):
         before = base.get(key)
         after = head.get(key)
+        if key[0] in incomplete_kinds and (
+            before is None
+            or after is None
+            or len(before) != 1
+            or len(after) != 1
+            or before[0].source_path != after[0].source_path
+        ):
+            # Once admission is incomplete, a one-sided or ambiguous identity may
+            # be an omitted peer rather than a real add/remove/move. A singular
+            # identity admitted from the same source on both refs remains directly
+            # comparable and can still expose a real value change.
+            continue
         before_value = projected_values(before, after)
         after_value = projected_values(after, before)
         change = "removed" if after is None else "added" if before is None else "changed"

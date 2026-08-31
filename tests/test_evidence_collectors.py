@@ -872,6 +872,110 @@ def test_collects_both_refs_and_derives_dependency_and_image_deltas(tmp_path: Pa
     }
 
 
+@pytest.mark.parametrize("lock_name", ["go.sum", "composer.lock"])
+def test_oversized_identical_locks_cannot_create_semantic_deltas(
+    tmp_path: Path, lock_name: str
+) -> None:
+    """Suppress deltas when a shared kind budget makes base/head facts incomparable."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "agent@example.invalid")
+    _git(tmp_path, "config", "user.name", "Synthetic Agent")
+    if lock_name == "go.sum":
+        lock_text = "".join(
+            f"example.invalid/package-{index:04d} v1.0.0 h1:sum-{index}\n"
+            for index in range(MAX_MANIFEST_ITEMS + 1)
+        )
+    else:
+        lock_text = json.dumps(
+            {
+                "packages": [
+                    {
+                        "name": f"synthetic/package-{index:04d}",
+                        "version": "1.0.0",
+                    }
+                    for index in range(MAX_MANIFEST_ITEMS + 1)
+                ]
+            }
+        )
+    (tmp_path / lock_name).write_text(lock_text, encoding="utf-8")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", lock_name, "app.py")
+    _git(tmp_path, "commit", "-qm", "bounded lock baseline")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "unrelated source change")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    assert _git(tmp_path, "rev-parse", f"{base}:{lock_name}") == _git(
+        tmp_path, "rev-parse", f"{head}:{lock_name}"
+    )
+    store = collect_repository_evidence(tmp_path, base_ref=base, head_ref=head)
+    response = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "ocr_toolkit_evidence",
+                "arguments": {
+                    "action": "list",
+                    "kind": "repository.evidence_delta",
+                    "delta_kind": "dependency.locked",
+                },
+            },
+        },
+    )
+    payload = json.loads(response["result"]["content"][0]["text"])
+
+    assert not any(delta.kind == "dependency.locked" for delta in store.deltas)
+    assert (
+        "typed dependency.locked comparison incomplete; unsafe semantic deltas omitted"
+        in store.diagnostics
+    )
+    assert payload["records"] == []
+    assert payload["returned"] == 0
+
+
+def test_fact_deltas_preserve_one_sided_ref_semantics() -> None:
+    """Keep bounded additions and removals while incomplete kinds alone are suppressed."""
+
+    def fact(ref: RefRole, version: str = "1.0.0") -> EvidenceRecord:
+        """Build one generated locked dependency at an immutable ref."""
+
+        return EvidenceRecord(
+            kind="dependency.locked",
+            value={"identity": "lock:synthetic", "fact": {"version": version}},
+            source_path="synthetic.lock",
+            ref=ref,
+            commit_sha="a" * 40 if ref is RefRole.BASE else "b" * 40,
+            component="synthetic",
+        )
+
+    added = fact_deltas((fact(RefRole.HEAD),))
+    removed = fact_deltas((fact(RefRole.BASE),))
+    suppressed_add = fact_deltas(
+        (fact(RefRole.HEAD),),
+        incomplete_kinds={"dependency.locked"},
+    )
+    comparable_change = fact_deltas(
+        (fact(RefRole.BASE), fact(RefRole.HEAD, "2.0.0")),
+        incomplete_kinds={"dependency.locked"},
+    )
+
+    assert [(delta.change, delta.before, delta.after) for delta in added] == [
+        ("added", None, {"version": "1.0.0"})
+    ]
+    assert [(delta.change, delta.before, delta.after) for delta in removed] == [
+        ("removed", {"version": "1.0.0"}, None)
+    ]
+    assert suppressed_add == ()
+    assert [(delta.change, delta.before, delta.after) for delta in comparable_change] == [
+        ("changed", {"version": "1.0.0"}, {"version": "2.0.0"})
+    ]
+
+
 def test_image_facts_accept_yaml_sequence_items(tmp_path: Path) -> None:
     """Collect common CircleCI and Kubernetes list-item image declarations."""
 

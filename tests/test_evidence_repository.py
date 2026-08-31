@@ -298,7 +298,9 @@ def test_collection_never_keeps_deltas_for_rejected_typed_records(
 
     assert not any(record.kind == "dependency.declared" for record in store.records)
     assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
-    assert store.diagnostics == []
+    assert store.diagnostics == [
+        "typed dependency.declared comparison incomplete; unsafe semantic deltas omitted"
+    ]
 
 
 def test_collection_continues_after_a_real_per_kind_store_limit(
