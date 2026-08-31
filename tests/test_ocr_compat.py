@@ -43,8 +43,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.11.0"
-    assert manifest["monitoring_floor"] == "1.11.0"
+    assert manifest["recommended_version"] == "1.11.1"
+    assert manifest["monitoring_floor"] == "1.11.1"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -73,6 +73,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.10.1", "tested"),
         ("1.10.2", "tested"),
         ("1.11.0", "tested"),
+        ("1.11.1", "tested"),
     ]
 
 
@@ -157,9 +158,9 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
 def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    first_page = [release("1.11.1")]
+    first_page = [release("1.11.2")]
     first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
-    second_page = [release("1.11.0")]
+    second_page = [release("1.11.1")]
     requested: list[str] = []
 
     def fake_request(url: str) -> list[dict[str, Any]]:
@@ -169,14 +170,14 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     with patched_attr(module, "_request_json", fake_request):
         unseen = module.discover_unseen(manifest)
 
-    assert [item["tag_name"] for item in unseen] == ["v1.11.1"]
+    assert [item["tag_name"] for item in unseen] == ["v1.11.2"]
     assert len(requested) == 2
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    page = [release("1.11.1")]
+    page = [release("1.11.2")]
     page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
 
     with patched_attr(module, "_request_json", lambda _url: page):
@@ -221,14 +222,14 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
-    matrix = module.qualification_matrix(manifest, [release("1.11.1")])
+    matrix = module.qualification_matrix(manifest, [release("1.11.2")])
 
     assert matrix == {
         "include": [
             {
-                "comparison_version": "1.11.0",
-                "tag": "v1.11.1",
-                "tested_baseline_version": "1.11.0",
+                "comparison_version": "1.11.1",
+                "tag": "v1.11.2",
+                "tested_baseline_version": "1.11.1",
             }
         ]
     }
@@ -1176,9 +1177,9 @@ def test_schema_three_candidate_remains_chain_aware() -> None:
     manifest = module.load_json(MANIFEST)
     evidence = {
         "schema_version": 3,
-        "version": "1.11.1",
-        "tested_baseline_version": "1.11.0",
-        "comparison_version": "1.11.0",
+        "version": "1.11.2",
+        "tested_baseline_version": "1.11.1",
+        "comparison_version": "1.11.1",
         "result": "compatible",
         "classification": "automatic-safe",
     }
@@ -1188,9 +1189,9 @@ def test_schema_three_candidate_remains_chain_aware() -> None:
     assert result == {
         "automatic_blockers": [],
         "classification": "automatic-safe",
-        "target_version": "1.11.1",
-        "tested_baseline_version": "1.11.0",
-        "versions": ["1.11.1"],
+        "target_version": "1.11.2",
+        "tested_baseline_version": "1.11.1",
+        "versions": ["1.11.2"],
     }
 
 
@@ -1656,11 +1657,11 @@ def test_prepare_update_rejects_human_review_candidate(tmp_path: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.11.1",
+        "version": "1.11.2",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.11.0",
-        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.1",
+        "tested_baseline_version": "1.11.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
@@ -1679,8 +1680,8 @@ def test_prepare_update_requires_human_review_for_minor_transition() -> None:
         "version": "1.12.0",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.11.0",
-        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.1",
+        "tested_baseline_version": "1.11.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="explicit human review"):
@@ -1721,8 +1722,8 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
         "version": "1.13.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.11.0",
-        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.1",
+        "tested_baseline_version": "1.11.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
@@ -1739,11 +1740,11 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.11.1",
+        "version": "1.11.2",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.11.0",
-        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.1",
+        "tested_baseline_version": "1.11.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="only evidence versions"):
@@ -1751,7 +1752,7 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.11.2": "Synthetic unrelated conclusion."},
+            human_conclusions={"1.11.3": "Synthetic unrelated conclusion."},
             root=PROJECT_ROOT,
         )
 
@@ -1763,11 +1764,11 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.11.1",
+        "version": "1.11.2",
         "result": "compatible",
         "classification": "automatic-safe",
-        "comparison_version": "1.11.0",
-        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.1",
+        "tested_baseline_version": "1.11.1",
     }
 
     with pytest.raises(module.CompatibilityError, match="bounded plain text"):
@@ -1775,7 +1776,7 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=72,
-            human_conclusions={"1.11.1": conclusion},
+            human_conclusions={"1.11.2": conclusion},
             root=PROJECT_ROOT,
         )
 

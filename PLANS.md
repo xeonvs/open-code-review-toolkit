@@ -111,7 +111,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - `main` is released v0.8.6 and `.next-version` selects 0.8.7.
 - Existing evidence store v4 exposes one built-in MCP with summary/list/get; context uses fixed
   context_list/context_get; receipt v5 reconciles count-only evidence usage.
-- OCR 1.11.0 is the exact current runtime and local `/opt/homebrew/bin/ocr` version.
+- OCR 1.11.1 is the exact current runtime and local `/opt/homebrew/bin/ocr` version.
 - Workflow audit with engineering-workflow 0.9.0 found canonical files and navigation indexes;
   no target workflow migration is required.
 - OCR v1.11.1 assets verify, while current qualification fails because its probes assume
@@ -124,8 +124,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-01 | done | Materialize plan, create milestone/issue relationships, planning commit, and fidelity check |
 | WQ-02 | done | #163 harness committed; initial push and Draft PR #164 created |
 | WQ-03 | done | Hosted run 33400677367 accepted exact OCR 1.11.1 structural evidence |
-| WQ-04 | in_progress | #159 incomplete-kind delta suppression is locally complete; commit remains |
-| WQ-05 | pending | Implement #162 multi-round contract and adopt OCR 1.11.1 pins/security/rules/local binary |
+| WQ-04 | done | #159 suppresses unsafe deltas when either side was not admitted while preserving comparable pairs |
+| WQ-05 | done | #162 guidance, exact OCR 1.11.1 pins/rules/evidence, and local binary are complete |
 | WQ-06 | pending | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | pending | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | pending | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
@@ -188,6 +188,11 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - 2026-08-31: #159 focused evidence/store/MCP suite passed with 197 tests. Generated Go and
   Composer lock fixtures prove byte-identical over-limit inputs publish no semantic delta;
   bounded one-sided and ordinary version changes remain available.
+- 2026-08-31: exact local OCR 1.11.1 passed the extended no-LLM contract. Small-change and
+  semantic grouping remain distinct; the mandatory re-check marker reached all three main
+  requests; Pug, `.v`, `.vh`, `.sv`, `.vhd`, and `.vhdl` were selected with system rules while
+  unqualified `.svh` remained excluded. The focused compatibility/runtime/docs suite passed
+  with 291 tests and 104 subtests.
 
 #### Risks And Recovery
 
@@ -207,8 +212,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Commit the reviewed WQ-04 evidence-integrity slice, then begin WQ-05 with the OCR 1.11.1
-semantic source audit, multi-round mitigation, exact pins, rules, and isolated local update.
+Begin WQ-06 with the provider-neutral search/coverage query contracts, then connect the two
+fixed tools to the existing built-in MCP, routing guidance, action receipt v2, and receipt v6.
 
 #### Plan Fidelity Check
 

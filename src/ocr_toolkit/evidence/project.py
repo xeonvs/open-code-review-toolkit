@@ -25,10 +25,11 @@ DEFAULT_BOOTSTRAP_MAX_BYTES = 32_768
 MAX_BOOTSTRAP_POLICY_SUMMARIES = 20
 MAX_BOOTSTRAP_MAX_BYTES = 65_536
 MANDATORY_EVIDENCE_INSTRUCTION = (
-    "# Required evidence call\n\n"
-    "Call `ocr_toolkit_evidence(action=summary)` before analysis, even for "
-    "small/self-contained diffs. Model use is mandatory; preflight self-query does not "
-    "count; zero calls are rejected.\n\n"
+    "# Required evidence\n\n"
+    "Call `ocr_toolkit_evidence(action=summary)` before analysis; preflight excluded; "
+    "zero model calls fail.\n"
+    "Prior/filter-surviving findings remain unverified; re-check against current "
+    "code/tests/trusted evidence.\n\n"
 )
 
 

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.0",
-  "recommended_version": "1.11.0",
+  "monitoring_floor": "1.11.1",
+  "recommended_version": "1.11.1",
   "releases": [
     {
       "assets": [
@@ -1346,6 +1346,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.0",
       "status": "tested",
       "version": "1.11.0"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "53d50290903851948113910503f82f05e129087eb2c664c3b5d419b880de287b",
+          "size": 57736624
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "5fdf72e51aae021ac7bf43d7b9dcb160f04880f623c66e8ada5e6ae5a92e172c",
+          "size": 54777442
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f",
+          "size": 55992482
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "a9ac65ebc4aabbc296f1ddae729ca6e553cca5040a565c002edf7d6fed597b00",
+          "size": 52691106
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "967ba90f835964051c8b89718ba0725a11725416f799401d74f0726c426e1c30",
+          "size": 57453056
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "abfec0c6c2c043f925a912a07551db51434047c0d0f074695d4903314d4dc35b",
+          "size": 53424128
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "8760d31184c12f947c182fcb00114730707892524ddf1beac78fc415cb61b37b",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.1.json",
+      "evidence_sha256": "516d78050006e216118adcc4c1fb73d1be5318e3b7b152968061bf0a34b4aecf",
+      "human_conclusion": "Compatible after source and behavioral review. Toolkit consumes bounded small-change grouping, project-rule confinement, selected-file session correction, and Pug/Verilog/SystemVerilog/VHDL review coverage; .svh remains excluded. Result and manifest schemas, completion cap 16384, explicit 4096 override, medium effort, effective max-tools, private reasoning/session boundaries, receipts, DLP, and approval authority remain unchanged. Filter survivors are still labeled confirmed upstream, so toolkit treats them as unverified and requires current code, test, and trusted evidence re-checking.",
+      "published_at": "2026-08-31T10:06:30Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.1",
+      "status": "tested",
+      "version": "1.11.1"
     }
   ],
   "schema_version": 1,

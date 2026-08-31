@@ -73,6 +73,7 @@ REQUIRED_REVIEW_FLAGS = {
     "--rule",
     "--to",
 }
+PRIOR_FINDING_RECHECK_MARKER = "Prior/filter-surviving findings remain unverified"
 MAX_TOOLS_NORMALIZATION_RE = re.compile(
     r"\[ocr\] --max-tools ([0-9]{1,12}) is below minimum ([0-9]{1,12}), "
     r"using ([0-9]{1,12})\n?\Z"
@@ -803,6 +804,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     completion_caps: list[object] = []
     request_stages: list[str] = []
     prior_finding_semantics: set[str] = set()
+    recheck_instruction_requests = 0
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -909,6 +911,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             stage = "filter"
         else:
             contents = type(self)._message_contents(messages)
+            if any(PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
+                type(self).recheck_instruction_requests += 1
             if type(self).main_mode == "exhaust-tools":
                 if "file_read" in tool_names:
                     function = {
@@ -1032,6 +1036,7 @@ def _stub_gateway(
     _StubHandler.completion_caps = []
     _StubHandler.request_stages = []
     _StubHandler.prior_finding_semantics = set()
+    _StubHandler.recheck_instruction_requests = 0
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -1626,6 +1631,13 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     _run(["git", "commit", "-am", "group related changes"], cwd=repo, env=git_env)
     head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
 
+    from ocr_toolkit.evidence.project import MANDATORY_EVIDENCE_INSTRUCTION
+
+    if PRIOR_FINDING_RECHECK_MARKER not in MANDATORY_EVIDENCE_INSTRUCTION:
+        _fail("toolkit bootstrap lost the multi-round re-check instruction")
+    background = root / "bootstrap.md"
+    background.write_text(MANDATORY_EVIDENCE_INSTRUCTION, encoding="utf-8")
+
     env = _isolated_probe_environment(root / "review-home")
     with _stub_gateway(
         grouping_mode="combined",
@@ -1652,6 +1664,8 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
                 "json",
                 "--audience",
                 "agent",
+                "--background-file",
+                str(background),
                 "--concurrency",
                 "1",
             ],
@@ -1662,6 +1676,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         completion_caps = list(_StubHandler.completion_caps)
         grouping_inventories = list(_StubHandler.grouping_inventories)
         prior_finding_semantics = set(_StubHandler.prior_finding_semantics)
+        recheck_instruction_requests = _StubHandler.recheck_instruction_requests
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
@@ -1701,7 +1716,10 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     if _version(version) >= (1, 11, 1):
         if prior_finding_semantics != {"filter_survivors_as_confirmed"}:
             _fail("multi-round review did not expose the qualified prior-finding semantics")
+        if recheck_instruction_requests != 3:
+            _fail("multi-round review did not retain toolkit re-check guidance in every round")
         result["prior_finding_semantics"] = "filter_survivors_as_confirmed"
+        result["recheck_instruction_requests"] = recheck_instruction_requests
         result["files"] = len(paths)
     return result
 
@@ -1977,6 +1995,93 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
     }
 
 
+def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Prove consumed built-in language selection and rule ownership without an LLM."""
+
+    root = directory / "language-rule-probe"
+    root.mkdir()
+    git_env = _isolated_probe_environment(root / "git-home")
+    repo = root / "review"
+    repo.mkdir()
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+    supported_paths = (
+        "views/page.pug",
+        "rtl/module.v",
+        "rtl/include.vh",
+        "rtl/module.sv",
+        "rtl/entity.vhd",
+        "rtl/entity.vhdl",
+    )
+    unsupported_path = "rtl/include.svh"
+    paths = (*supported_paths, unsupported_path)
+    for path in paths:
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("// baseline\n", encoding="utf-8")
+    _run(["git", "add", *paths], cwd=repo, env=git_env)
+    _run(["git", "commit", "-m", "language baseline"], cwd=repo, env=git_env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    for path in paths:
+        (repo / path).write_text("// changed\n", encoding="utf-8")
+    _run(["git", "commit", "-am", "language changes"], cwd=repo, env=git_env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    env = _isolated_probe_environment(root / "review-home")
+    preview = _run(
+        [
+            str(binary),
+            "review",
+            "--from",
+            base,
+            "--to",
+            head,
+            "--preview",
+            "--format",
+            "json",
+        ],
+        cwd=repo,
+        env=env,
+    )
+    try:
+        payload = json.loads(preview)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("language preview did not emit JSON") from exc
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        _fail("language preview emitted an invalid file manifest")
+    selected = {
+        item.get("path")
+        for item in files
+        if isinstance(item, dict) and item.get("will_review") is True
+    }
+    if selected != set(supported_paths):
+        missing = sorted(set(supported_paths) - selected)
+        unexpected = sorted(selected - set(supported_paths))
+        _fail(
+            "candidate did not select the qualified built-in language set: "
+            f"missing={missing!r}, unexpected={unexpected!r}"
+        )
+    unsupported_selected, unsupported_reason = _preview_file_selection(payload, unsupported_path)
+    if unsupported_selected or unsupported_reason != "unsupported_ext":
+        _fail("candidate unexpectedly selected the unqualified .svh extension")
+    for path in supported_paths:
+        output = _run([str(binary), "rules", "check", path], cwd=repo, env=env)
+        if (
+            f"File: {path}\n" not in output
+            or "Source: System built-in\n" not in output
+            or "Pattern: " not in output
+        ):
+            _fail("candidate did not resolve a qualified built-in language rule")
+    return {
+        "extensions": [".pug", ".sv", ".v", ".vhd", ".vhdl", ".vh"],
+        "excluded_extensions": [".svh"],
+        "result": "passed",
+        "rule_source": "system_builtin",
+        "selected": len(supported_paths),
+    }
+
+
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
     """Run deterministic CLI and JSON-consumer probes against one OCR binary."""
 
@@ -2127,6 +2232,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         contracts["small_change_grouping_probe"] = _small_change_grouping_probe(
             binary, version, directory
         )
+        contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
     if _version(version) >= (1, 9, 10):
         contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
     if thinking_probe is not None:

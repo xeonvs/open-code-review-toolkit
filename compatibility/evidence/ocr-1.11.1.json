@@ -1,0 +1,217 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "53d50290903851948113910503f82f05e129087eb2c664c3b5d419b880de287b",
+      "size": 57736624
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "5fdf72e51aae021ac7bf43d7b9dcb160f04880f623c66e8ada5e6ae5a92e172c",
+      "size": 54777442
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f",
+      "size": 55992482
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "a9ac65ebc4aabbc296f1ddae729ca6e553cca5040a565c002edf7d6fed597b00",
+      "size": 52691106
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "967ba90f835964051c8b89718ba0725a11725416f799401d74f0726c426e1c30",
+      "size": 57453056
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "abfec0c6c2c043f925a912a07551db51434047c0d0f074695d4903314d4dc35b",
+      "size": 53424128
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "8760d31184c12f947c182fcb00114730707892524ddf1beac78fc415cb61b37b",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.11.0",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-08-31T10:06:30Z",
+  "release_changes": "## 🚀 Features\n\n- feat(allowlist): add Pug template support (#1114)\n- feat(grouping): skip the grouping LLM call for small change sets (#1103)\n- feat(allowlist): add Verilog, SystemVerilog, and VHDL support (#1050)\n\n## 🐛 Bug Fixes\n\n- fix(security): prevent rule.json from reading arbitrary files on the review host (#1100)\n- fix(viewer): report selected files from run manifest (#1096)\n\n## 📖 Documentation\n\n- docs(site): replace concurrency feature card with effort (#1116)\n- docs(skill): correct timeout description to reflect effort-scaled group timeout (#1110)\n\n## Other Changes\n\n- chore(skill): remove Prerequisites section from delegate SKILL.md (#1098)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.11.0...v1.11.1",
+  "release_notes_sha256": "ff00b801f0ce4cca6b2a0a0df941a65fed3cfe89738a84aff8532e3a9f39bd20",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.11.1",
+  "tested_baseline_version": "1.11.0",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.11.1"
+}
