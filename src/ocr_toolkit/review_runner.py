@@ -38,7 +38,13 @@ from ocr_toolkit.context.broker import (
     prepare_discussion_records,
     prepare_remediation_records,
 )
-from ocr_toolkit.context.contracts import ContextContractError, ContextPolicy, TextBudgets
+from ocr_toolkit.context.ci_outcomes import prepare_ci_outcome_records
+from ocr_toolkit.context.contracts import (
+    CI_OUTCOME_MODEL_FIELD,
+    ContextContractError,
+    ContextPolicy,
+    TextBudgets,
+)
 from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
 from ocr_toolkit.context.policy import load_protected_policy
 from ocr_toolkit.context.recognizers import recognize
@@ -116,6 +122,7 @@ from ocr_toolkit.providers.gitlab import (
     invocation_identifiers,
     is_merge_request_environment,
 )
+from ocr_toolkit.providers.gitlab_ci import acquire_gitlab_ci_outcomes
 from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
@@ -287,6 +294,7 @@ class EnrichmentReceipt:
     required_degraded: bool
     mutable_admitted: bool
     forbidden_publication: tuple[str, ...]
+    bootstrap_hints: dict[str, int]
 
 
 def _write_isolated_runtime_config() -> None:
@@ -1589,6 +1597,17 @@ def _bounded_combined_records(
                     reply_text = reply.get("text") if isinstance(reply, dict) else None
                     if isinstance(reply_text, str):
                         texts.append(reply_text)
+        ci_outcome = model.get(CI_OUTCOME_MODEL_FIELD)
+        if isinstance(ci_outcome, dict):
+            stack: list[object] = [ci_outcome]
+            while stack:
+                nested = stack.pop()
+                if isinstance(nested, dict):
+                    stack.extend(nested.values())
+                elif isinstance(nested, list):
+                    stack.extend(nested)
+                elif isinstance(nested, str):
+                    texts.append(nested)
         record_chars = sum(len(value) for value in texts)
         record_bytes = sum(len(value.encode()) for value in texts)
         record_lines = sum(value.count("\n") + 1 for value in texts)
@@ -1668,6 +1687,7 @@ def _prepare_enrichment(
     adapter_secrets = configured_secret_values(adapters, os.environ)
     discussion_policy = policy.forge_discussions
     remediation_policy = policy.remediation_threads
+    ci_policy = policy.ci_outcomes
     discussion_origin = ContextOrigin(
         source="forge:gitlab_discussions", adapter="gitlab", tenant="project"
     )
@@ -1757,6 +1777,38 @@ def _prepare_enrichment(
                     )
                     required_degraded = True
                 pending.extend(remediation_records)
+    ci_origin = "forge:ci_outcomes"
+    if ci_policy is not None:
+        try:
+            ci_snapshot = acquire_gitlab_ci_outcomes(
+                os.environ,
+                project_id=identity.context.project_id,
+                source_sha=identity.source_sha,
+                policy=ci_policy,
+                now=now,
+                deadline=acquisition_deadline,
+            )
+        except GitLabProviderError:
+            completeness[ci_origin] = "unavailable"
+            degradation["unavailable"] += 1
+            required_degraded = required_degraded or ci_policy.required
+        else:
+            completeness[ci_origin] = ci_snapshot.state
+            if ci_snapshot.state != "complete":
+                degradation["invalid"] += max(1, ci_snapshot.invalid)
+                degradation["limit"] += int(ci_snapshot.omitted > 0)
+                required_degraded = required_degraded or ci_policy.required
+            ci_records = prepare_ci_outcome_records(
+                ci_snapshot,
+                policy=ci_policy,
+                now=now,
+                forbidden=adapter_secrets,
+            )
+            if len(ci_records) != len(ci_snapshot.records):
+                completeness[ci_origin] = "partial"
+                degradation["invalid"] += len(ci_snapshot.records) - len(ci_records)
+                required_degraded = True
+            pending.extend(ci_records)
     selections = _select_reference_candidates(policy, candidate_texts)
     external: BrokerResult = acquire_external_records(
         policy=policy,
@@ -1785,6 +1837,8 @@ def _prepare_enrichment(
             required_sources.add("forge:gitlab_discussions")
         if policy.remediation_threads is not None and policy.remediation_threads.required:
             required_sources.add("forge:gitlab_remediation_threads")
+        if policy.ci_outcomes is not None and policy.ci_outcomes.required:
+            required_sources.add("forge:ci_outcomes")
         required_degraded = required_degraded or bool(limited_sources & required_sources)
         for source in limited_sources:
             completeness[source] = "partial"
@@ -1814,6 +1868,16 @@ def _prepare_enrichment(
                 elif isinstance(nested, str) and nested:
                     forbidden_values.append(nested)
     forbidden = (*adapter_secrets, *forbidden_values)
+    ci_hints: dict[str, int] = {}
+    for record in context_store.records:
+        model = record.projections["model"].get(CI_OUTCOME_MODEL_FIELD)
+        if not isinstance(model, dict):
+            continue
+        status = model.get("status")
+        requirement = model.get("requirement")
+        if isinstance(status, str) and isinstance(requirement, str):
+            key = f"{requirement}_{status}"
+            ci_hints[key] = ci_hints.get(key, 0) + 1
     receipt = EnrichmentReceipt(
         policy_digest=policy.digest,
         completeness=dict(sorted(completeness.items())),
@@ -1821,6 +1885,7 @@ def _prepare_enrichment(
         required_degraded=required_degraded,
         mutable_admitted=_remediation_mutable_admitted(context_store.records),
         forbidden_publication=forbidden,
+        bootstrap_hints=dict(sorted(ci_hints.items())),
     )
     return (
         mcp_config.MCPContextConfig(
@@ -1925,7 +1990,11 @@ def run_evidence_review(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
             )
-            bootstrap = render_bootstrap(store, capabilities=composition.capabilities)
+            bootstrap = render_bootstrap(
+                store,
+                capabilities=composition.capabilities,
+                context_hints=enrichment.bootstrap_hints if enrichment is not None else None,
+            )
             write_private_text(artifacts.bootstrap, bootstrap)
             mcp_config.apply_mcp_composition(composition)
             mcp_config.verify_mcp_composition(composition)

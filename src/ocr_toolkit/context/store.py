@@ -17,6 +17,7 @@ from typing import Any
 
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
+    CI_OUTCOME_MODEL_FIELD,
     REMEDIATION_MODEL_FIELD,
     RETENTION_FIELDS,
     STORE_PROJECTION_FIELDS,
@@ -42,6 +43,9 @@ STORE_TEXT_BUDGETS = TextBudgets(
 REMEDIATION_ANCHOR_STATES = frozenset({"current", "outdated", "unpositioned"})
 REMEDIATION_COMPLETENESS = frozenset({"complete", "partial"})
 MAX_REMEDIATION_REPLIES = 100
+CI_OUTCOME_STATUSES = frozenset({"passed", "failed", "skipped", "canceled", "unknown"})
+CI_OUTCOME_REQUIREMENTS = frozenset({"required", "advisory"})
+CI_OUTCOME_ORIGINS = frozenset({"current_pipeline", "same_revision_pipeline"})
 
 
 class ContextStoreError(ValueError):
@@ -252,11 +256,79 @@ def _remediation_projection(value: object) -> Mapping[str, object]:
     }
 
 
+def _ci_outcome_projection(value: object) -> Mapping[str, object]:
+    """Hostile-read the fixed model-only same-revision CI projection."""
+
+    item = _mapping(value, "CI outcome projection")
+    if set(item) != {
+        "check",
+        "revision",
+        "status",
+        "requirement",
+        "scope",
+        "origin",
+        "completed_at",
+    }:
+        raise ContextStoreError("CI outcome projection fields are invalid")
+    check = normalize_text(item.get("check"))
+    if (
+        check != item.get("check")
+        or not isinstance(check, str)
+        or not 1 <= len(check) <= 128
+        or not check_text(check, budgets=TextBudgets(128, 512, 1)).admitted
+    ):
+        raise ContextStoreError("CI outcome check is invalid")
+    if item.get("revision") != "reviewed_head":
+        raise ContextStoreError("CI outcome revision is invalid")
+    status = item.get("status")
+    requirement = item.get("requirement")
+    origin = item.get("origin")
+    if (
+        status not in CI_OUTCOME_STATUSES
+        or requirement not in CI_OUTCOME_REQUIREMENTS
+        or origin not in CI_OUTCOME_ORIGINS
+    ):
+        raise ContextStoreError("CI outcome state is invalid")
+    completed_at = item.get("completed_at")
+    if not isinstance(completed_at, int) or isinstance(completed_at, bool) or completed_at < 0:
+        raise ContextStoreError("CI outcome completion time is invalid")
+    scope = _mapping(item.get("scope"), "CI outcome scope")
+    if set(scope) != {"mode", "path_prefixes"} or scope.get("mode") != "declared":
+        raise ContextStoreError("CI outcome scope is invalid")
+    prefixes = scope.get("path_prefixes")
+    if not isinstance(prefixes, list) or not prefixes or len(prefixes) > 32:
+        raise ContextStoreError("CI outcome path prefixes are invalid")
+    normalized: list[str] = []
+    for prefix in prefixes:
+        value = normalize_text(prefix)
+        if (
+            value != prefix
+            or not isinstance(value, str)
+            or not 1 <= len(value) <= 256
+            or not check_text(value, budgets=TextBudgets(256, 1_024, 1)).admitted
+        ):
+            raise ContextStoreError("CI outcome path prefix is invalid")
+        normalized.append(value)
+    if normalized != sorted(set(normalized)):
+        raise ContextStoreError("CI outcome path prefixes are not canonical")
+    return {
+        "check": check,
+        "revision": "reviewed_head",
+        "status": status,
+        "requirement": requirement,
+        "scope": {"mode": "declared", "path_prefixes": normalized},
+        "origin": origin,
+        "completed_at": completed_at,
+    }
+
+
 def _projection_value(field: str, value: object) -> object:
     """Hostile-read one generic projection value without policy reinterpretation."""
 
     if field == REMEDIATION_MODEL_FIELD:
         return _remediation_projection(value)
+    if field == CI_OUTCOME_MODEL_FIELD:
+        return _ci_outcome_projection(value)
     if field == "text":
         checked = check_text(value, budgets=STORE_TEXT_BUDGETS)
         if not checked.admitted or checked.text != value:
@@ -417,6 +489,7 @@ def _record(value: object) -> ContextRecord:
             field: _projection_value(field, value) for field, value in mapped.items()
         }
     remediation_model = REMEDIATION_MODEL_FIELD in normalized_projections["model"]
+    ci_outcome_model = CI_OUTCOME_MODEL_FIELD in normalized_projections["model"]
     if (
         REMEDIATION_MODEL_FIELD in normalized_projections["publish"]
         or REMEDIATION_MODEL_FIELD in normalized_projections["retain"]
@@ -429,8 +502,23 @@ def _record(value: object) -> ContextRecord:
             )
         )
         or (strings["resource_class"] != "remediation_thread" and remediation_model)
+        or CI_OUTCOME_MODEL_FIELD in normalized_projections["publish"]
+        or CI_OUTCOME_MODEL_FIELD in normalized_projections["retain"]
+        or (
+            strings["resource_class"] == "ci_outcome"
+            and (
+                strings["descriptor"] != "ci_outcome"
+                or not ci_outcome_model
+                or set(normalized_projections["model"]) != {"descriptor", CI_OUTCOME_MODEL_FIELD}
+                or mutable is not False
+                or normalized_projections["model"][CI_OUTCOME_MODEL_FIELD]["completed_at"] > expiry
+                or strings["version"]
+                != str(normalized_projections["model"][CI_OUTCOME_MODEL_FIELD]["completed_at"])
+            )
+        )
+        or (strings["resource_class"] != "ci_outcome" and ci_outcome_model)
     ):
-        raise ContextStoreError("remediation projection placement is invalid")
+        raise ContextStoreError("special context projection placement is invalid")
     for projection in normalized_projections.values():
         if (
             ("descriptor" in projection and projection["descriptor"] != strings["descriptor"])

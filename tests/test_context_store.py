@@ -91,6 +91,45 @@ def remediation_pending(*, expiry: int = 200) -> PendingContextRecord:
     )
 
 
+def ci_pending(*, expiry: int = 200) -> PendingContextRecord:
+    """Return one exact provider-neutral CI outcome projection."""
+
+    outcome = {
+        "check": "functional-tests",
+        "revision": "reviewed_head",
+        "status": "passed",
+        "requirement": "required",
+        "scope": {"mode": "declared", "path_prefixes": ["src/", "tests/"]},
+        "origin": "same_revision_pipeline",
+        "completed_at": 120,
+    }
+    digest = hashlib.sha256(
+        json.dumps(outcome, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return PendingContextRecord(
+        source="forge:ci_outcomes",
+        adapter="gitlab",
+        tenant="project",
+        canonical_object="ci-outcome-safe",
+        resource_class="ci_outcome",
+        descriptor="ci_outcome",
+        projections={
+            "model": {"descriptor": "ci_outcome", "ci_outcome": outcome},
+            "publish": {"descriptor": "ci_outcome"},
+            "retain": {
+                "digest": digest,
+                "expiry": expiry,
+                "state": "passed",
+                "version": "120",
+            },
+        },
+        version="120",
+        digest=digest,
+        mutable=False,
+        expiry=expiry,
+    )
+
+
 def commit(path: Path, **kwargs: object) -> ContextStore:
     parameters = {
         "run_id": RUN_ID,
@@ -200,6 +239,56 @@ def test_context_store_keeps_remediation_projection_model_only(tmp_path: Path) -
     ]
     with pytest.raises(ContextStoreError, match="placement"):
         commit(path, records=[generic])
+
+
+def test_context_store_admits_only_closed_immutable_ci_outcome(tmp_path: Path) -> None:
+    """Persist scoped status without provider IDs, URLs, users, logs, or artifacts."""
+
+    path = tmp_path / "context-store.json"
+    store = commit(
+        path,
+        completeness={"forge:ci_outcomes": "complete"},
+        records=[ci_pending()],
+    )
+    record = store.records[0]
+    serialized = path.read_text(encoding="utf-8")
+
+    assert record.resource_class == "ci_outcome"
+    assert record.mutable is False
+    assert record.projections["model"]["ci_outcome"]["revision"] == "reviewed_head"  # type: ignore[index]
+    for forbidden in ("web_url", "runner", "user", "trace", "pipeline_id", "job_id"):
+        assert forbidden not in serialized
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda outcome: outcome.update({"provider_url": "https://private.invalid"}),
+        lambda outcome: outcome.update({"check": "x" * 129}),
+        lambda outcome: outcome.update({"revision": "a" * 40}),
+        lambda outcome: outcome.update({"status": "green"}),
+        lambda outcome: outcome.update({"requirement": "optional"}),
+        lambda outcome: outcome.update({"origin": "pipeline-7"}),
+        lambda outcome: outcome["scope"].update({"path_prefixes": ["tests/", "src/"]}),
+        lambda outcome: outcome.update({"completed_at": 201}),
+    ],
+)
+def test_context_store_rejects_hostile_ci_outcome_projection(
+    tmp_path: Path, mutation: object
+) -> None:
+    """Fail closed when persisted CI context widens or loses its revision binding."""
+
+    candidate = ci_pending()
+    outcome = candidate.projections["model"]["ci_outcome"]
+    assert callable(mutation) and isinstance(outcome, dict)
+    mutation(outcome)
+
+    with pytest.raises(ContextStoreError):
+        commit(
+            tmp_path / "context-store.json",
+            completeness={"forge:ci_outcomes": "complete"},
+            records=[candidate],
+        )
 
 
 def test_context_store_rejects_wrong_run_policy_expiry_and_replay(tmp_path: Path) -> None:

@@ -114,10 +114,17 @@ def test_context_bootstrap_limits_remediation_to_current_evidence_hypotheses() -
         capabilities=(
             SimpleNamespace(
                 server="ocr_toolkit_evidence",
-                tools=("ocr_toolkit_evidence", "context_list", "context_get"),
+                tools=(
+                    "ocr_toolkit_evidence",
+                    "ocr_toolkit_evidence_search",
+                    "ocr_toolkit_evidence_coverage",
+                    "context_list",
+                    "context_get",
+                ),
                 builtin=True,
             ),
         ),
+        context_hints={"required_passed": 1, "advisory_failed": 0},
         max_chars=3_000,
     )
 
@@ -125,6 +132,9 @@ def test_context_bootstrap_limits_remediation_to_current_evidence_hypotheses() -
     assert "re-checked against current code and test evidence" in bootstrap
     assert "cannot change severity" in bootstrap
     assert "authorize approval" in bootstrap
+    assert "required_passed=1" in bootstrap
+    assert "advisory_failed" not in bootstrap
+    assert "context_list(resource_class=ci_outcome)" in bootstrap
 
 
 def test_normalizer_applies_complete_field_multibyte_line_control_and_label_bounds(

@@ -19,6 +19,7 @@ import pytest
 
 from ocr_toolkit import ocr_result, review_runner
 from ocr_toolkit.context.broker import BrokerResult
+from ocr_toolkit.context.ci_outcomes import CIOutcomeSnapshot
 from ocr_toolkit.context.contracts import RecognizerPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.store import ContextStore
@@ -29,7 +30,8 @@ from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import approval, settings
 from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import patched_attr, patched_env
-from tests.test_context_policy import encoded_policy, remediation_policy_value
+from tests.test_context_broker import ci_outcome
+from tests.test_context_policy import ci_policy_value, encoded_policy, remediation_policy_value
 
 DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
@@ -80,17 +82,64 @@ def configure_enrichment_test(
     *,
     provider_acquire: object,
     external_acquire: object,
+    policy_value: dict[str, object] | None = None,
+    ci_acquire: object | None = None,
 ) -> EvidenceArtifacts:
     """Install only the composition-edge fakes shared by enrichment tests."""
 
-    policy = parse_policy(encoded_policy(remediation_policy_value()))
+    policy = parse_policy(encoded_policy(policy_value or remediation_policy_value()))
     artifacts = repository_artifacts(tmp_path)
     artifacts.directory.mkdir(mode=0o700)
     monkeypatch.setattr(review_runner, "load_protected_policy", lambda *_args, **_kwargs: policy)
     monkeypatch.setattr(review_runner, "acquire_gitlab_context", provider_acquire)
     monkeypatch.setattr(review_runner, "acquire_external_records", external_acquire)
+    if ci_acquire is not None:
+        monkeypatch.setattr(review_runner, "acquire_gitlab_ci_outcomes", ci_acquire)
     monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
     return artifacts
+
+
+def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bind a protected same-revision pass without making it suppress or approve findings."""
+
+    policy = ci_policy_value()
+    policy.pop("forge_discussions")
+    policy.pop("remediation_threads")
+    policy["references"] = []
+    snapshot = CIOutcomeSnapshot("complete", (ci_outcome(),), 0, 0)
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: None,
+        external_acquire=lambda **_kwargs: BrokerResult(
+            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
+        ),
+        policy_value=policy,
+        ci_acquire=lambda *_args, **_kwargs: snapshot,
+    )
+
+    context_config, receipt = review_runner._prepare_enrichment(
+        enriched_identity(),
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert context_config is not None and receipt is not None
+    assert receipt.completeness == {"forge:ci_outcomes": "complete"}
+    assert receipt.required_degraded is False
+    assert receipt.mutable_admitted is False
+    assert receipt.bootstrap_hints == {"required_passed": 1}
+    restored = ContextStore.read(
+        artifacts.context_store,
+        expected_run_id=context_config.run_id,
+        expected_policy_digest=context_config.policy_digest,
+        now=0,
+    )
+    assert [record.resource_class for record in restored.records] == ["ci_outcome"]
+    assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
 
 
 def test_default_termination_signal_is_translated_for_cleanup() -> None:
@@ -362,6 +411,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
     safe_enrichment = review_runner.EnrichmentReceipt(
         policy_digest="c" * 64,
         completeness={
+            "forge:ci_outcomes": "complete",
             "forge:gitlab_discussions": "complete",
             "reference:tracker:engineering:issue": "complete",
         },
@@ -372,6 +422,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             "Validate current behavior",
             "Review the implementation and its tests.",
         ),
+        bootstrap_hints={"required_passed": 1},
     )
 
     metadata = review_runner._review_receipt(
@@ -1983,6 +2034,7 @@ def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: P
         required_degraded=False,
         mutable_admitted=False,
         forbidden_publication=(),
+        bootstrap_hints={},
     )
 
     with pytest.raises(review_runner.ReviewRunnerError, match="mandatory"):

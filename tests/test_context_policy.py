@@ -80,6 +80,20 @@ def remediation_policy_value() -> dict[str, object]:
     return value
 
 
+def ci_policy_value() -> dict[str, object]:
+    """Build one protected policy v3 with exact CI check scopes."""
+
+    value = remediation_policy_value()
+    value["schema_version"] = "ocr.review-context-policy/v3"
+    value["ci_outcomes"] = {
+        "checks": [
+            {"name": "functional-tests", "path_prefixes": ["src/", "tests/"]},
+            {"name": "package", "path_prefixes": ["pyproject.toml"]},
+        ]
+    }
+    return value
+
+
 def git(root: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -116,6 +130,66 @@ def test_policy_v2_adds_fixed_remediation_threads_without_changing_v1() -> None:
     assert current.remediation_threads is not None
     assert current.remediation_threads.account_classes == ("automation", "user")
     assert current.remediation_threads.max_replies_per_thread == 8
+
+
+def test_policy_v3_adds_exact_ci_scopes_with_conservative_defaults() -> None:
+    """Keep CI authority protected, exact, bounded, and opt-in."""
+
+    parsed = parse_policy(encoded_policy(ci_policy_value()))
+
+    assert parsed.schema_version == "ocr.review-context-policy/v3"
+    assert parsed.ci_outcomes is not None
+    assert parsed.ci_outcomes.required is False
+    assert parsed.ci_outcomes.max_age_seconds == 86_400
+    assert parsed.ci_outcomes.checks[0].name == "functional-tests"
+    assert parsed.ci_outcomes.checks[0].path_prefixes == ("src/", "tests/")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update({"schema_version": "ocr.review-context-policy/v2"}),
+        lambda value: value["ci_outcomes"].update({"unknown": True}),
+        lambda value: value["ci_outcomes"].update({"required": "yes"}),
+        lambda value: value["ci_outcomes"].update({"max_age_seconds": 59}),
+        lambda value: value["ci_outcomes"].update(
+            {"checks": [{"name": "functional-tests", "path_prefixes": ["../tests/"]}]}
+        ),
+        lambda value: value["ci_outcomes"].update(
+            {"checks": [{"name": "functional-tests", "path_prefixes": []}]}
+        ),
+        lambda value: value["ci_outcomes"].update(
+            {
+                "checks": [
+                    {
+                        "name": "functional-tests",
+                        "path_prefixes": ["https://private.invalid/tests/"],
+                    }
+                ]
+            }
+        ),
+        lambda value: value["ci_outcomes"].update(
+            {
+                "checks": [
+                    {"name": "duplicate", "path_prefixes": ["src/"]},
+                    {"name": "duplicate", "path_prefixes": ["tests/"]},
+                ]
+            }
+        ),
+        lambda value: value["ci_outcomes"].update(
+            {"checks": [{"name": "unsafe\u202e", "path_prefixes": ["src/"]}]}
+        ),
+    ],
+)
+def test_policy_v3_rejects_ci_authority_expansion(mutation: object) -> None:
+    """Reject legacy, ambiguous, unsafe, or unbounded CI policy forms."""
+
+    value = ci_policy_value()
+    assert callable(mutation)
+    mutation(value)
+
+    with pytest.raises(ContextContractError):
+        parse_policy(encoded_policy(value))
 
 
 @pytest.mark.parametrize(

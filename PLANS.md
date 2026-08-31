@@ -127,7 +127,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-04 | done | #159 suppresses unsafe deltas when either side was not admitted while preserving comparable pairs |
 | WQ-05 | done | #162 guidance, exact OCR 1.11.1 pins/rules/evidence, and local binary are complete |
 | WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
-| WQ-07 | pending | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
+| WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | pending | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
 | WQ-09 | pending | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
 
@@ -200,6 +200,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   installed-artifact, documentation, receipt, publication, and approval suite passed with 621
   tests and 350 subtests. Self-review also corrected two current-contract references from receipt
   v5 to v6 without rewriting historical compatibility records.
+- 2026-08-31: #161 adds protected policy v3, a bounded twice-read GitLab pipeline/job adapter,
+  and one immutable provider-neutral `ci_outcome` projection through the existing store and MCP.
+  Exact-head and protected path scope are mandatory; pagination, stale checks, duplicate retries,
+  mutation, DLP mismatch, hostile persistence, and replay fail closed. Only count hints enter the
+  bootstrap, while raw provider identities/payloads and CI status stay outside receipts, public
+  summaries, and approval authority. Ruff format/check, `git diff --check`, and the focused
+  policy/provider/store/MCP/review/publication suite passed with 350 tests and 83 subtests.
 
 #### Risks And Recovery
 
@@ -219,8 +226,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Begin WQ-07 with the provider-neutral CI outcome model and protected context-policy v3, then
-connect one bounded twice-read GitLab snapshot to store/MCP degradation and approval tests.
+Begin WQ-08 with #157's stable-distribution badges, then reconcile current public docs,
+strategy/roadmap/backlog, changelog, and final Draft-only plan truth without rewriting historical
+release records.
 
 #### Plan Fidelity Check
 

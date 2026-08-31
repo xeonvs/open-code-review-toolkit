@@ -79,6 +79,7 @@ def render_bootstrap(
     store: EvidenceStore,
     *,
     capabilities: Sequence[CapabilityView] = (),
+    context_hints: Mapping[str, int] | None = None,
     max_chars: int = DEFAULT_BOOTSTRAP_MAX_CHARS,
     max_bytes: int = DEFAULT_BOOTSTRAP_MAX_BYTES,
 ) -> str:
@@ -180,6 +181,15 @@ def render_bootstrap(
                 ),
             )
         )
+        if context_hints:
+            hints = ", ".join(
+                f"{name}={count}" for name, count in sorted(context_hints.items()) if count > 0
+            )
+            if hints:
+                lines.append(
+                    "Protected same-revision CI outcomes: "
+                    f"{hints}; use `context_list(resource_class=ci_outcome)` for records."
+                )
     lines.append("Only applicable `complete` coverage proves absence; otherwise it is unknown.")
     lines.extend(
         (

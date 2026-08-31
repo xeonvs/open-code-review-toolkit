@@ -1,0 +1,25 @@
+{
+  "schema_version": "ocr.review-context-policy/v3",
+  "budgets": {
+    "max_records": 16,
+    "max_chars": 12000,
+    "max_bytes": 24000,
+    "max_lines": 300,
+    "timeout_ms": 15000
+  },
+  "ci_outcomes": {
+    "required": false,
+    "max_age_seconds": 86400,
+    "checks": [
+      {
+        "name": "functional-tests",
+        "path_prefixes": ["src/", "tests/"]
+      },
+      {
+        "name": "package",
+        "path_prefixes": ["pyproject.toml", "src/"]
+      }
+    ]
+  },
+  "references": []
+}
