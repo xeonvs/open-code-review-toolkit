@@ -1300,7 +1300,11 @@ class MCPConfigTests(unittest.TestCase):
         self.assertEqual(config["mcp_servers"]["remote"]["env"], ["AUTH=bridge-secret-value"])
         self.assertEqual(
             config["mcp_servers"][mcp_config.BUILTIN_EVIDENCE_SERVER]["tools"],
-            ["ocr_toolkit_evidence"],
+            [
+                "ocr_toolkit_evidence",
+                "ocr_toolkit_evidence_search",
+                "ocr_toolkit_evidence_coverage",
+            ],
         )
 
     def test_configure_mcp_servers_replaces_stale_servers(self) -> None:

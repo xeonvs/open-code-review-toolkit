@@ -38,6 +38,18 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     context_mode="off",
     context=None,
 )
+BUILTIN_EVIDENCE_TOOLS = (
+    "ocr_toolkit_evidence",
+    "ocr_toolkit_evidence_search",
+    "ocr_toolkit_evidence_coverage",
+)
+SUMMARY_ACTION_COUNTS = {
+    "summary": 1,
+    "list": 0,
+    "get": 0,
+    "search": 0,
+    "coverage": 0,
+}
 
 
 def enriched_identity() -> review_runner.ReviewIdentity:
@@ -334,7 +346,13 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         capabilities=(
             MCPCapability(
                 "ocr_toolkit_evidence",
-                ("ocr_toolkit_evidence", "context_list", "context_get"),
+                (
+                    "ocr_toolkit_evidence",
+                    "ocr_toolkit_evidence_search",
+                    "ocr_toolkit_evidence_coverage",
+                    "context_list",
+                    "context_get",
+                ),
                 True,
             ),
         ),
@@ -361,8 +379,9 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         composition,
         identity,
         safe_enrichment,
+        {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
     )
-    metadata["schema_version"] = 5
+    metadata["schema_version"] = 6
     eligible = approval.evaluate_approval_policy(
         settings.BooleanSetting(True),
         parse_result_outcome(payload),
@@ -388,8 +407,14 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             "the selected review context was degraded",
         ),
     ):
-        blocked = review_runner._review_receipt(payload, composition, identity, changed)
-        blocked["schema_version"] = 5
+        blocked = review_runner._review_receipt(
+            payload,
+            composition,
+            identity,
+            changed,
+            {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+        )
+        blocked["schema_version"] = 6
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
             parse_result_outcome(payload),
@@ -481,7 +506,7 @@ def test_evidence_mcp_self_query_does_not_satisfy_model_usage(tmp_path: Path) ->
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -505,7 +530,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -513,7 +538,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 5,
+        "schema_version": 6,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
         "context": {
             "mode": "off",
@@ -531,7 +556,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
                 {
                     "server": "ocr_toolkit_evidence",
                     "transport": "builtin",
-                    "tools": ["ocr_toolkit_evidence"],
+                    "tools": list(BUILTIN_EVIDENCE_TOOLS),
                 }
             ],
             "usage": {"ocr_toolkit_evidence": 2},
@@ -559,13 +584,19 @@ def test_evidence_action_attribution_is_verified_only_on_exact_reconciliation(
 ) -> None:
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
     cases = (
-        ({"summary": 1, "list": 1, "get": 0}, "verified"),
-        ({"summary": 1, "list": 0, "get": 0}, "unavailable"),
+        (
+            {"summary": 1, "list": 1, "get": 0, "search": 0, "coverage": 0},
+            "verified",
+        ),
+        (
+            {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+            "unavailable",
+        ),
         (None, "unavailable"),
     )
     for index, (counts, expected) in enumerate(cases):
@@ -591,6 +622,53 @@ def test_evidence_action_attribution_is_verified_only_on_exact_reconciliation(
         assert actions["state"] == expected
 
 
+def test_evidence_action_receipt_reconciles_each_fixed_tool_independently(
+    tmp_path: Path,
+) -> None:
+    """Bind search and coverage counts to their exact OCR by-tool identities."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 5,
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 3,
+                        "ocr_toolkit_evidence_search": 1,
+                        "ocr_toolkit_evidence_coverage": 1,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    counts = {"summary": 1, "list": 1, "get": 1, "search": 1, "coverage": 1}
+
+    usage = review_runner._record_ocr_result_mcp_usage(
+        result,
+        composition,
+        DEFAULT_IDENTITY,
+        evidence_action_counts=counts,
+    )
+    receipt = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]
+
+    assert usage == {"ocr_toolkit_evidence": 5}
+    assert receipt["evidence"] == {
+        "mandatory": True,
+        "used": True,
+        "calls": 5,
+        "actions": {"state": "verified", **counts},
+    }
+
+
 def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     tmp_path: Path,
 ) -> None:
@@ -606,7 +684,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -618,7 +696,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 5,
+        "schema_version": 6,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
@@ -636,7 +714,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
                 {
                     "server": "ocr_toolkit_evidence",
                     "transport": "builtin",
-                    "tools": ["ocr_toolkit_evidence"],
+                    "tools": list(BUILTIN_EVIDENCE_TOOLS),
                 }
             ],
             "usage": {"ocr_toolkit_evidence": 1},
@@ -858,7 +936,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -868,6 +946,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
         composition,
         DEFAULT_IDENTITY,
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=("private discussion sentence",),
     )
 
@@ -939,7 +1018,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -950,6 +1029,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
         composition,
         replace(DEFAULT_IDENTITY, mr_author_id=41),
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
         toolkit_advisory=advisory,
     )
@@ -1000,7 +1080,7 @@ def test_raw_ocr_result_cannot_supply_the_reserved_toolkit_advisory(tmp_path: Pa
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1027,7 +1107,7 @@ def test_raw_ocr_result_rejects_duplicate_reserved_advisory_keys(tmp_path: Path)
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1335,7 +1415,7 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1345,6 +1425,7 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
         composition,
         replace(DEFAULT_IDENTITY, mr_author_id=41),
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
     )
 
@@ -1413,7 +1494,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
 
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1467,6 +1548,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             composition,
             identity,
             None,
+            SUMMARY_ACTION_COUNTS,
             forbidden=(),
         )
 
@@ -1766,7 +1848,7 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1776,6 +1858,7 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
         composition,
         DEFAULT_IDENTITY,
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
     )
 
@@ -1939,7 +2022,7 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1950,7 +2033,14 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
         "mandatory": False,
         "used": False,
         "calls": 0,
-        "actions": {"state": "unavailable"},
+        "actions": {
+            "state": "verified",
+            "summary": 0,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+        },
     }
     assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
 
@@ -1973,7 +2063,7 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
 
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2009,7 +2099,7 @@ def test_ocr_result_allows_manifest_skipped_message_without_tool_calls(tmp_path:
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2044,7 +2134,7 @@ def test_ocr_result_manifest_complete_requires_builtin_mcp_usage(tmp_path: Path)
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2078,7 +2168,7 @@ def test_ocr_result_rejects_unpinned_skipped_contract(
     result.write_text(json.dumps(payload), encoding="utf-8")
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2106,7 +2196,7 @@ def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> No
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2140,7 +2230,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
     composition = MCPComposition(
         payload={},
         capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
+            MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),
             MCPCapability("documentation", ("search_docs", "get_docs")),
         ),
         external_servers=(),
@@ -2178,7 +2268,7 @@ def test_ocr_result_rejects_unbounded_known_mcp_usage(
     composition = MCPComposition(
         payload={},
         capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),
+            MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),
             MCPCapability("external", ("external_a", "external_b")),
         ),
         external_servers=(),
@@ -2209,7 +2299,7 @@ def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> N
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2240,9 +2330,7 @@ def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) 
     os.link(target, result)
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2922,9 +3010,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
 
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),),
         external_servers=(),
         secret_values=(),
     )

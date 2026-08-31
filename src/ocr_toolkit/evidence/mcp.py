@@ -7,7 +7,8 @@ import hashlib
 import json
 import sys
 import time
-from collections.abc import Iterator
+import unicodedata
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO, cast
@@ -27,6 +28,8 @@ from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
 TOOL_NAME = "ocr_toolkit_evidence"
+SEARCH_TOOL_NAME = "ocr_toolkit_evidence_search"
+COVERAGE_TOOL_NAME = "ocr_toolkit_evidence_coverage"
 SERVER_NAME = "open-code-review-toolkit-evidence"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {
@@ -39,6 +42,24 @@ MAX_REQUEST_BYTES = 64_000
 MAX_RESPONSE_BYTES = 64_000
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
+DEFAULT_SEARCH_RESULTS = 20
+MAX_SEARCH_RESULTS = 50
+MAX_SEARCH_QUERY_CHARS = 128
+MAX_SEARCH_QUERY_TOKENS = 8
+_SEARCH_OPERATOR_CHARACTERS = frozenset("*?[]{}()|\\^$~:=!<>`\"'")
+_SEARCH_VALUE_KEYS: dict[str, frozenset[str]] = {
+    "dependency": frozenset({"identity", "name", "package", "requirement", "version"}),
+    "runtime": frozenset({"identity", "name", "runtime", "version"}),
+    "container": frozenset({"digest", "identity", "image", "name", "tag", "version"}),
+    "ci": frozenset({"digest", "identity", "image", "name", "tag", "version"}),
+    "application": frozenset({"identity", "name", "version"}),
+    "framework": frozenset({"framework", "identity", "name", "plugin", "version"}),
+    "template": frozenset({"engine", "identity", "name", "path"}),
+    "repository": frozenset(
+        {"decision_id", "identity", "matched_paths", "name", "path", "scope", "scopes"}
+    ),
+    "ansible": frozenset({"collection", "group", "identity", "name", "role", "version"}),
+}
 _MISSING_REQUEST_ID = object()
 
 
@@ -162,6 +183,11 @@ def _optional_filter(arguments: dict[str, object], name: str) -> str | None:
         return None
     if not isinstance(value, str) or len(value) > 256:
         raise EvidenceMCPError(f"{name} must be a non-empty string of at most 256 characters")
+    if any(
+        character == "\x7f" or unicodedata.category(character) in {"Cc", "Cf"}
+        for character in value
+    ):
+        raise EvidenceMCPError(f"{name} must not contain control or format characters")
     return value
 
 
@@ -270,6 +296,163 @@ def _get_record(store: EvidenceStore, arguments: dict[str, object]) -> dict[str,
     }
 
 
+def _search_query(value: object) -> tuple[str, ...]:
+    """Normalize one bounded literal query without accepting search operators."""
+
+    if not isinstance(value, str) or not 1 <= len(value) <= MAX_SEARCH_QUERY_CHARS:
+        raise EvidenceMCPError(
+            f"query must contain between 1 and {MAX_SEARCH_QUERY_CHARS} characters"
+        )
+    if any(
+        character in _SEARCH_OPERATOR_CHARACTERS or unicodedata.category(character) in {"Cc", "Cf"}
+        for character in value
+    ):
+        raise EvidenceMCPError("query must be literal text without operators or controls")
+    normalized = unicodedata.normalize("NFKC", value).casefold().strip()
+    if len(normalized) > MAX_SEARCH_QUERY_CHARS:
+        raise EvidenceMCPError("normalized query exceeds the character limit")
+    tokens = tuple(normalized.split())
+    if not tokens or len(tokens) > MAX_SEARCH_QUERY_TOKENS:
+        raise EvidenceMCPError(
+            f"query must contain between 1 and {MAX_SEARCH_QUERY_TOKENS} literal tokens"
+        )
+    if any(token in {"and", "or", "not"} for token in tokens):
+        raise EvidenceMCPError("query must be literal text without boolean operators")
+    return tokens
+
+
+def _search_scalars(value: object, allowed_keys: frozenset[str], *, key: str = "") -> list[str]:
+    """Extract only per-kind allowlisted scalar leaves from one admitted value."""
+
+    if isinstance(value, Mapping):
+        result: list[str] = []
+        for child_key, child in value.items():
+            if isinstance(child_key, str):
+                result.extend(_search_scalars(child, allowed_keys, key=child_key))
+        return result
+    if isinstance(value, (list, tuple)):
+        if key not in allowed_keys:
+            return []
+        return [
+            str(item)
+            for item in value
+            if isinstance(item, (str, int)) and not isinstance(item, bool)
+        ]
+    if key in allowed_keys and isinstance(value, (str, int)) and not isinstance(value, bool):
+        return [str(value)]
+    return []
+
+
+def _normalized_search_fields(record: EvidenceRecord | EvidenceDelta) -> tuple[str, ...]:
+    """Return normalized searchable fields without widening the response projection."""
+
+    if isinstance(record, EvidenceDelta):
+        values = [record.kind, record.component, record.identity]
+        allowed = _SEARCH_VALUE_KEYS.get(record.kind.split(".", 1)[0], frozenset({"identity"}))
+        values.extend(_search_scalars(record.before, allowed))
+        values.extend(_search_scalars(record.after, allowed))
+    else:
+        values = [record.kind, record.component, record.source_path]
+        allowed = _SEARCH_VALUE_KEYS.get(record.kind.split(".", 1)[0], frozenset({"identity"}))
+        values.extend(_search_scalars(record.value, allowed))
+    return tuple(unicodedata.normalize("NFKC", value).casefold() for value in values)
+
+
+def _search_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[str, object]:
+    """Search admitted metadata and allowlisted scalars without returning matched values."""
+
+    tokens = _search_query(arguments.get("query"))
+    kind = _optional_filter(arguments, "kind")
+    component = _optional_filter(arguments, "component")
+    ref = _optional_filter(arguments, "ref")
+    if ref not in {None, "base", "head", "policy", "shared"}:
+        raise EvidenceMCPError("ref must be base, head, policy, or shared")
+    max_results = arguments.get("max_results", DEFAULT_SEARCH_RESULTS)
+    if isinstance(max_results, bool) or not isinstance(max_results, int):
+        raise EvidenceMCPError("max_results must be an integer")
+    if not 1 <= max_results <= MAX_SEARCH_RESULTS:
+        raise EvidenceMCPError(f"max_results must be between 1 and {MAX_SEARCH_RESULTS}")
+    candidates: tuple[EvidenceRecord | EvidenceDelta, ...] = (*store.records, *store.safe_deltas)
+    matches: list[dict[str, object]] = []
+    total_matches = 0
+    for record in candidates:
+        record_kind = record.kind
+        record_ref = None if isinstance(record, EvidenceDelta) else record.ref.value
+        if (
+            (kind is not None and record_kind != kind)
+            or (component is not None and record.component != component)
+            or (ref is not None and record_ref != ref)
+        ):
+            continue
+        fields = _normalized_search_fields(record)
+        if not all(any(token in field for field in fields) for token in tokens):
+            continue
+        total_matches += 1
+        if len(matches) >= max_results:
+            continue
+        item: dict[str, object] = {
+            "id": record.id,
+            "kind": (
+                "repository.evidence_delta" if isinstance(record, EvidenceDelta) else record.kind
+            ),
+            "component": record.component,
+        }
+        if isinstance(record, EvidenceDelta):
+            item["delta_kind"] = record.kind
+        else:
+            item.update({"ref": record.ref.value, "source_path": record.source_path})
+        matches.append(item)
+    return {
+        "schema_version": "ocr.evidence-search/v1",
+        "matches": matches,
+        "returned": len(matches),
+        "total_matches": total_matches,
+        "truncated": total_matches > len(matches),
+    }
+
+
+def _coverage_query(store: EvidenceStore, arguments: dict[str, object]) -> dict[str, object]:
+    """Return whether one exact evidence scope can support a negative conclusion."""
+
+    kind = _optional_filter(arguments, "kind")
+    ref = _optional_filter(arguments, "ref")
+    component = _optional_filter(arguments, "component")
+    source_path = _optional_filter(arguments, "path")
+    if kind is None:
+        raise EvidenceMCPError("kind is required")
+    if ref not in {"base", "head"}:
+        raise EvidenceMCPError("ref must be base or head")
+    matching_records = [
+        record
+        for record in store.records
+        if record.kind == kind
+        and record.ref.value == ref
+        and (component is None or record.component == component)
+        and (source_path is None or record.source_path == source_path)
+    ]
+    applicable = [
+        record
+        for record in store.coverage
+        if record.domain == kind
+        and record.ref.value == ref
+        and (component is None or record.component == component)
+        and (source_path is None or record.scope == source_path)
+    ]
+    state_counts: dict[str, int] = {}
+    for record in applicable:
+        state_counts[record.state.value] = state_counts.get(record.state.value, 0) + 1
+    complete = bool(applicable) and all(record.state.value == "complete" for record in applicable)
+    return {
+        "schema_version": "ocr.evidence-coverage-query/v1",
+        "state": "complete" if complete else "unknown",
+        "matches": len(matching_records),
+        "coverage_records": len(applicable),
+        "coverage_states": dict(sorted(state_counts.items())),
+        "truncated": False,
+        "absence_authoritative": complete and not matching_records,
+    }
+
+
 def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
     """Execute one closed, read-only evidence action."""
 
@@ -304,6 +487,27 @@ def call_tool(store: EvidenceStore, arguments: object) -> dict[str, object]:
     else:
         raise EvidenceMCPError("action must be summary, list, or get")
     return _text_result(payload)
+
+
+def call_named_tool(store: EvidenceStore, name: str, arguments: object) -> dict[str, object]:
+    """Dispatch one fixed built-in evidence tool through its closed contract."""
+
+    if name == TOOL_NAME:
+        return call_tool(store, arguments)
+    if not isinstance(arguments, dict):
+        raise EvidenceMCPError("tool arguments must be an object")
+    typed = cast(dict[str, object], arguments)
+    if name == SEARCH_TOOL_NAME:
+        unknown = set(typed) - {"query", "kind", "component", "ref", "max_results"}
+        if unknown:
+            raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
+        return _text_result(_search_records(store, typed))
+    if name == COVERAGE_TOOL_NAME:
+        unknown = set(typed) - {"kind", "ref", "component", "path"}
+        if unknown:
+            raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
+        return _text_result(_coverage_query(store, typed))
+    raise EvidenceMCPError("unknown built-in evidence tool")
 
 
 def _tool_definition() -> dict[str, object]:
@@ -378,6 +582,82 @@ def _tool_definition() -> dict[str, object]:
     }
 
 
+def _search_tool_definition() -> dict[str, object]:
+    """Declare the literal, bounded evidence search tool."""
+
+    return {
+        "name": SEARCH_TOOL_NAME,
+        "description": (
+            "Locate unknown evidence records by bounded literal text after using the summary. "
+            "Search covers admitted paths, identities, and per-kind allowlisted scalar fields; "
+            "results contain stable IDs but never matched values. Use the primary evidence tool "
+            "with action=get for a selected ID."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["query"],
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": MAX_SEARCH_QUERY_CHARS,
+                    "description": "One to eight literal NFKC/case-insensitive tokens; no operators.",
+                },
+                "kind": {"type": "string", "maxLength": 256},
+                "component": {"type": "string", "maxLength": 256},
+                "ref": {"type": "string", "enum": ["base", "head", "policy", "shared"]},
+                "max_results": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": MAX_SEARCH_RESULTS,
+                },
+            },
+        },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    }
+
+
+def _coverage_tool_definition() -> dict[str, object]:
+    """Declare the exact scoped absence-proof tool."""
+
+    return {
+        "name": COVERAGE_TOOL_NAME,
+        "description": (
+            "Check exact scoped evidence completeness before making a negative claim. "
+            "absence_authoritative is true only for applicable complete coverage with zero "
+            "matching records and no truncation; every missing, partial, runtime-dependent, "
+            "or unavailable scope returns unknown."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["kind", "ref"],
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Exact evidence kind and coverage domain.",
+                },
+                "ref": {"type": "string", "enum": ["base", "head"]},
+                "component": {"type": "string", "maxLength": 256},
+                "path": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional exact record source path and coverage scope.",
+                },
+            },
+        },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    }
+
+
+def evidence_tool_definitions() -> list[dict[str, object]]:
+    """Return the fixed built-in evidence tools in stable routing order."""
+
+    return [_tool_definition(), _search_tool_definition(), _coverage_tool_definition()]
+
+
 def _success(request_id: object, result: object) -> dict[str, object]:
     """Create a JSON-RPC success response."""
 
@@ -435,7 +715,7 @@ def handle_request(
     if method == "ping":
         return _success(request_id, {})
     if method == "tools/list":
-        tools = [_tool_definition()]
+        tools = evidence_tool_definitions()
         if context_store is not None:
             tools.extend(tool_definitions())
         return _success(request_id, {"tools": tools})
@@ -443,9 +723,9 @@ def handle_request(
         if not isinstance(params, dict):
             return _error(request_id, -32602, "Invalid tool call")
         name = params.get("name")
-        if name == TOOL_NAME:
+        if isinstance(name, str) and name in {TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME}:
             try:
-                result = call_tool(store, params.get("arguments", {}))
+                result = call_named_tool(store, str(name), params.get("arguments", {}))
             except EvidenceMCPError as exc:
                 return _success(
                     request_id,
@@ -453,7 +733,10 @@ def handle_request(
                 )
             if action_receipt_path is not None:
                 arguments = params.get("arguments", {})
-                action = arguments.get("action") if isinstance(arguments, dict) else None
+                if name == TOOL_NAME:
+                    action = arguments.get("action") if isinstance(arguments, dict) else None
+                else:
+                    action = "search" if name == SEARCH_TOOL_NAME else "coverage"
                 try:
                     record_action(action_receipt_path, action)
                 except (OSError, ValueError):

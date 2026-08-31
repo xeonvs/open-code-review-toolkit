@@ -126,7 +126,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-03 | done | Hosted run 33400677367 accepted exact OCR 1.11.1 structural evidence |
 | WQ-04 | done | #159 suppresses unsafe deltas when either side was not admitted while preserving comparable pairs |
 | WQ-05 | done | #162 guidance, exact OCR 1.11.1 pins/rules/evidence, and local binary are complete |
-| WQ-06 | pending | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
+| WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | pending | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | pending | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
 | WQ-09 | pending | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
@@ -193,6 +193,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   requests; Pug, `.v`, `.vh`, `.sv`, `.vhd`, and `.vhdl` were selected with system rules while
   unqualified `.svh` remained excluded. The focused compatibility/runtime/docs suite passed
   with 291 tests and 104 subtests.
+- 2026-08-31: #160 adds separate fixed literal-search and exact-coverage tools over the existing
+  DLP-admitted store. Action receipt v2 and toolkit receipt v6 reconcile every tool separately;
+  incomplete coverage cannot prove absence or support approval, and only non-zero reconciled
+  counts reach Technical details. Ruff format/check, `git diff --check`, and the focused boundary,
+  installed-artifact, documentation, receipt, publication, and approval suite passed with 621
+  tests and 350 subtests. Self-review also corrected two current-contract references from receipt
+  v5 to v6 without rewriting historical compatibility records.
 
 #### Risks And Recovery
 
@@ -212,8 +219,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Begin WQ-06 with the provider-neutral search/coverage query contracts, then connect the two
-fixed tools to the existing built-in MCP, routing guidance, action receipt v2, and receipt v6.
+Begin WQ-07 with the provider-neutral CI outcome model and protected context-policy v3, then
+connect one bounded twice-read GitLab snapshot to store/MCP degradation and approval tests.
 
 #### Plan Fidelity Check
 

@@ -206,7 +206,11 @@ This source-only decision must not replace target policy.
     assert "title=admitted" in bootstrap
 
     builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
-    assert builtin["tools"] == ["ocr_toolkit_evidence"]
+    assert builtin["tools"] == [
+        "ocr_toolkit_evidence",
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ]
     assert os.path.isabs(str(builtin["command"]))
     assert list(builtin["args"]) == ["-I", "-m", "ocr_toolkit.evidence"]
     process = subprocess.Popen(
@@ -242,12 +246,13 @@ This source-only decision must not replace target policy.
         process,
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
     )["result"]["tools"]
-    assert len(tools) == 1 and tools[0]["name"] == "ocr_toolkit_evidence"
-    assert tools[0]["annotations"] == {
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "openWorldHint": False,
-    }
+    assert [tool["name"] for tool in tools] == builtin["tools"]
+    for tool in tools:
+        assert tool["annotations"] == {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": False,
+        }
     request_id = 3
 
     def call(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -278,6 +283,23 @@ This source-only decision must not replace target policy.
         return _tool_payload(response)
 
     summary = call({"action": "summary"})
+
+    def call_named(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Call one additional fixed installed evidence tool."""
+
+        nonlocal request_id
+        response = _rpc(
+            process,
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+        )
+        request_id += 1
+        return _tool_payload(response)
+
     unknown_response = _rpc(
         process,
         {
@@ -327,6 +349,25 @@ This source-only decision must not replace target policy.
     assert "current decision" in decision["value"]["fact"]["rationale"]
     assert "source-only decision" not in decision["value"]["fact"]["rationale"]
     assert call({"action": "get", "id": decision["id"]})["record"] == decision
+    searched = call_named(
+        "ocr_toolkit_evidence_search",
+        {"query": "current-policy-choice", "kind": "repository.accepted_decision"},
+    )
+    assert searched["matches"] == [
+        {
+            "id": decision["id"],
+            "kind": "repository.accepted_decision",
+            "component": "repository",
+            "ref": "policy",
+            "source_path": ".opencodereview/accepted-decisions.md",
+        }
+    ]
+    unknown_coverage = call_named(
+        "ocr_toolkit_evidence_coverage",
+        {"kind": "repository.accepted_decision", "ref": "head"},
+    )
+    assert unknown_coverage["state"] == "unknown"
+    assert unknown_coverage["absence_authoritative"] is False
     assert (
         call({"action": "list", "kind": "repository.accepted_decision", "ref": "head"})["records"]
         == []

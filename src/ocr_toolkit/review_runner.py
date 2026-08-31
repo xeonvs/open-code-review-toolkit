@@ -59,7 +59,13 @@ from ocr_toolkit.evidence.artifacts import (
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
-from ocr_toolkit.evidence.mcp import TOOL_NAME, call_tool, evidence_summary
+from ocr_toolkit.evidence.mcp import (
+    COVERAGE_TOOL_NAME,
+    SEARCH_TOOL_NAME,
+    TOOL_NAME,
+    call_tool,
+    evidence_summary,
+)
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
@@ -380,20 +386,34 @@ def _review_receipt(
         or total_calls < known_usage_total
     ):
         raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
-    evidence_calls = by_tool.get(TOOL_NAME, 0) if isinstance(by_tool, dict) else 0
+    evidence_by_tool = {
+        name: by_tool.get(name, 0) if isinstance(by_tool, dict) else 0
+        for name in (TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME)
+    }
+    evidence_calls = sum(evidence_by_tool.values())
     evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
-    if outcome.requires_evidence_mcp and not evidence_used:
+    if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
-    action_attribution: dict[str, object] = {"state": "unavailable"}
-    if (
+    action_attribution: dict[str, object]
+    if evidence_calls == 0 and evidence_action_counts is None:
+        action_attribution = {
+            "state": "verified",
+            **dict.fromkeys(EVIDENCE_ACTIONS, 0),
+        }
+    elif (
         evidence_action_counts is not None
         and set(evidence_action_counts) == set(EVIDENCE_ACTIONS)
-        and sum(evidence_action_counts.values()) == evidence_calls
+        and sum(evidence_action_counts[action] for action in ("summary", "list", "get"))
+        == evidence_by_tool[TOOL_NAME]
+        and evidence_action_counts["search"] == evidence_by_tool[SEARCH_TOOL_NAME]
+        and evidence_action_counts["coverage"] == evidence_by_tool[COVERAGE_TOOL_NAME]
     ):
         action_attribution = {
             "state": "verified",
             **{action: evidence_action_counts[action] for action in EVIDENCE_ACTIONS},
         }
+    else:
+        action_attribution = {"state": "unavailable"}
     capabilities = [
         {
             "server": capability.server,
@@ -894,7 +914,7 @@ def _publication_projection(
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return a DLP-safe result plus one exact v5 publication state."""
+    """Return a DLP-safe result plus one exact v6 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
@@ -1589,7 +1609,7 @@ def _bounded_combined_records(
 
 
 def _remediation_mutable_admitted(records: Sequence[ContextRecord]) -> bool:
-    """Report only admitted remediation as the receipt-v5 comment-only condition."""
+    """Report only admitted remediation as the receipt-v6 comment-only condition."""
 
     return any(
         record.mutable and record.resource_class == "remediation_thread" for record in records

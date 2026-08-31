@@ -790,7 +790,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 5,
+        "schema_version": 6,
         "review": {"source_sha": head, "policy_sha": policy, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
@@ -808,7 +808,11 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
                 {
                     "server": "ocr_toolkit_evidence",
                     "transport": "builtin",
-                    "tools": ["ocr_toolkit_evidence"],
+                    "tools": [
+                        "ocr_toolkit_evidence",
+                        "ocr_toolkit_evidence_search",
+                        "ocr_toolkit_evidence_coverage",
+                    ],
                 }
             ],
             "usage": {"ocr_toolkit_evidence": 3},
@@ -822,6 +826,8 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
                 "summary": 1,
                 "list": 2,
                 "get": 0,
+                "search": 0,
+                "coverage": 0,
             },
         },
         "publication": {"state": "passed"},

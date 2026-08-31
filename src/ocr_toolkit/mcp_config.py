@@ -14,7 +14,7 @@ from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, read_ocr_config, update_ocr_config
 from ocr_toolkit.context.mcp import GET_TOOL as CONTEXT_GET_TOOL
 from ocr_toolkit.context.mcp import LIST_TOOL as CONTEXT_LIST_TOOL
-from ocr_toolkit.evidence.mcp import TOOL_NAME
+from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
 
 MAX_MCP_CONFIG_BYTES = 64_000
 MAX_MCP_SERVERS = 16
@@ -379,8 +379,10 @@ def parse_mcp_servers(raw: str | None = None, *, profile: str = "local") -> list
         tools = _tool_names(server.get("tools", []), f"servers.{name}.tools")
         if not tools:
             raise MCPConfigError(f"servers.{name}.tools must explicitly allow at least one tool")
-        if TOOL_NAME in tools:
-            raise MCPConfigError(f"MCP tool name {TOOL_NAME!r} is reserved by the toolkit")
+        reserved_tools = {TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME}
+        conflict = next((tool for tool in tools if tool in reserved_tools), None)
+        if conflict is not None:
+            raise MCPConfigError(f"MCP tool name {conflict!r} is reserved by the toolkit")
         setup = server.get("setup", "")
         if not isinstance(setup, str):
             raise MCPConfigError(f"servers.{name}.setup must be a string")
@@ -583,7 +585,7 @@ def compose_mcp_servers(
             "the running Python executable must be absolute for built-in MCP launch"
         )
     builtin_args = ["-I", "-m", "ocr_toolkit.evidence"]
-    builtin_tools = [TOOL_NAME]
+    builtin_tools = [TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME]
     if context is not None:
         if not os.path.isabs(context.store_path):
             raise MCPConfigError("built-in context store path must be absolute")
@@ -700,7 +702,7 @@ def configure_mcp_servers() -> int:
             f"OCR MCP server configured: {server.name} type={server.transport} "
             f"{detail} tools={len(server.tools)}"
         )
-    print(f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} type=stdio args=3 env=0 tools=1")
+    print(f"OCR MCP server configured: {BUILTIN_EVIDENCE_SERVER} type=stdio args=3 env=0 tools=3")
 
     return 0
 

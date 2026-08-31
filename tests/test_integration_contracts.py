@@ -293,14 +293,14 @@ def test_public_docs_describe_the_established_m5_boundary() -> None:
         "ocr.context-adapter-response/v1",
         "context_list",
         "context_get",
-        "receipt v5",
+        "receipt v6",
         "schema_version",
         "no store or receipt migration path",
         "semantic paraphrase",
     ):
         assert contract in bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v5" in document
+        assert "receipt v6" in document
         assert "review-context.md" in document
     assert "M5's foundation is established in v0.7.0" in strategy
     assert "M5 Bounded review-context enrichment<br/>established" in roadmap

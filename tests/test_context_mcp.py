@@ -169,9 +169,15 @@ def test_enriched_tools_are_declared_only_with_bound_context(tmp_path: Path) -> 
 
     assert ordinary is not None and enriched is not None
     assert malformed_name is not None and malformed_name["error"]["code"] == -32602  # type: ignore[index]
-    assert [tool["name"] for tool in ordinary["result"]["tools"]] == [TOOL_NAME]  # type: ignore[index]
+    assert [tool["name"] for tool in ordinary["result"]["tools"]] == [  # type: ignore[index]
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ]
     assert [tool["name"] for tool in enriched["result"]["tools"]] == [  # type: ignore[index]
         TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
         "context_list",
         "context_get",
     ]
@@ -186,8 +192,20 @@ def test_enriched_tools_are_declared_only_with_bound_context(tmp_path: Path) -> 
         ),
     )
     builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
-    assert builtin["tools"] == [TOOL_NAME, "context_list", "context_get"]
-    assert composition.capabilities[0].tools == (TOOL_NAME, "context_list", "context_get")
+    assert builtin["tools"] == [
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+        "context_list",
+        "context_get",
+    ]
+    assert composition.capabilities[0].tools == (
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+        "context_list",
+        "context_get",
+    )
 
 
 def test_real_stdio_mcp_serves_evidence_and_committed_context_in_one_process(
@@ -245,6 +263,8 @@ def test_real_stdio_mcp_serves_evidence_and_committed_context_in_one_process(
     assert completed.returncode == 0, completed.stderr
     assert [tool["name"] for tool in responses[0]["result"]["tools"]] == [
         TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
         "context_list",
         "context_get",
     ]

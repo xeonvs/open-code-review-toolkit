@@ -342,15 +342,44 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v5" in configuration
-    assert "Receipt v1-v4" in configuration
-    assert "Receipt v1-v4" in operations
+    assert "receipt v6" in configuration
+    assert "Receipt v1-v5" in configuration
+    assert "Receipt v1-v5" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
     assert "admitted remediation context" in operations
     assert "absolute HTTPS `url`" in configuration
     assert "sole stdio exception" in configuration
+
+
+def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
+    """Document efficient routing without exposing search or coverage arguments."""
+
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+
+    for name in (
+        "ocr_toolkit_evidence",
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ):
+        assert name in configuration
+        assert name in gitlab
+    for phrase in (
+        "1\u2013128 characters",
+        "at most eight literal tokens",
+        "absence_authoritative=true",
+        "Stop once the required evidence is sufficient",
+        "action receipt v2",
+        "Receipt v6",
+    ):
+        assert phrase in configuration
+    assert "DLP-admitted store" in security
+    assert "Zero action counters, queries, scopes, IDs" in operations
+    assert "arguments, queries, scopes, IDs, and results stay private" in gitlab
 
 
 def test_production_bot_modes_and_current_contract_are_public() -> None:

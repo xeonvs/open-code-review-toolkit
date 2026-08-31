@@ -145,16 +145,22 @@ def render_bootstrap(
     if capabilities:
         for capability in capabilities:
             marker = " (built-in)" if capability.builtin else ""
+            if capability.builtin and capability.server == "ocr_toolkit_evidence":
+                lines.append(f"- {inline_code(capability.server)}{marker}: fixed read-only tools")
+                continue
             tool_names = ", ".join(inline_code(tool) for tool in capability.tools)
             lines.append(
                 f"- {inline_code(capability.server)}{marker}: "
                 f"{tool_names or 'all allowlisted server tools'}"
             )
     else:
-        lines.append("- `ocr_toolkit_evidence` (built-in): `ocr_toolkit_evidence`")
+        lines.append(
+            "- `ocr_toolkit_evidence` (built-in): `ocr_toolkit_evidence`, "
+            "`ocr_toolkit_evidence_search`, `ocr_toolkit_evidence_coverage`"
+        )
     lines.append(
-        "Use `action=summary`, `action=list`, then `action=get`; list "
-        "`kind=repository.evidence_delta` with optional `delta_kind` for changes."
+        "Use `action=summary` once; `action=list` for known facts; literal search for unknown "
+        "locations; `action=get` for selected IDs; coverage before absence; stop when sufficient."
     )
     if any("context_list" in capability.tools for capability in capabilities):
         lines.extend(

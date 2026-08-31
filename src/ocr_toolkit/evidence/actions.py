@@ -13,8 +13,8 @@ from typing import Any
 
 from ocr_toolkit.evidence.store.atomic import atomic_write
 
-ACTION_RECEIPT_SCHEMA = "ocr.evidence-action-receipt/v1"
-EVIDENCE_ACTIONS = ("summary", "list", "get")
+ACTION_RECEIPT_SCHEMA = "ocr.evidence-action-receipt/v2"
+EVIDENCE_ACTIONS = ("summary", "list", "get", "search", "coverage")
 MAX_ACTION_CALLS = 1_000_000_000
 MAX_ACTION_RECEIPT_BYTES = 4_096
 

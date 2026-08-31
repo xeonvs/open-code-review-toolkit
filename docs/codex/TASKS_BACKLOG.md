@@ -44,7 +44,7 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 ## M6 Profiles and quality measurement
 
-Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v5, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
+Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v6, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
 
 ### BL-016: Evaluate explicit run-level model profiles
 

@@ -22,8 +22,10 @@ from ocr_toolkit.evidence import (
 )
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.mcp import (
+    COVERAGE_TOOL_NAME,
     MAX_REQUEST_BYTES,
     PROTOCOL_VERSION,
+    SEARCH_TOOL_NAME,
     SUPPORTED_PROTOCOL_VERSIONS,
     TOOL_NAME,
     call_tool,
@@ -266,6 +268,192 @@ def test_coverage_is_summarized_filtered_and_addressable() -> None:
     assert fetched["record"] == coverage.to_dict()
 
 
+def test_literal_search_returns_only_stable_metadata_and_normalizes_unicode() -> None:
+    """Locate admitted facts without echoing the query or matched scalar values."""
+
+    store = _store(0)
+    assert store.add(
+        EvidenceRecord(
+            kind="dependency.declared",
+            value={"identity": "requirements.txt:CaféPackage", "name": "CaféPackage"},
+            source_path="services/café/requirements.txt",
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+            component="python-api",
+            provenance="synthetic parser",
+            trust=TrustClass.SOURCE_REPOSITORY,
+        )
+    )
+
+    result = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": SEARCH_TOOL_NAME,
+                "arguments": {"query": "CAFE\u0301PACKAGE", "ref": "head"},
+            },
+        },
+    )
+    assert result is not None
+    payload = _payload(result["result"])
+
+    assert payload == {
+        "schema_version": "ocr.evidence-search/v1",
+        "matches": [
+            {
+                "id": store.records[0].id,
+                "kind": "dependency.declared",
+                "component": "python-api",
+                "ref": "head",
+                "source_path": "services/café/requirements.txt",
+            }
+        ],
+        "returned": 1,
+        "total_matches": 1,
+        "truncated": False,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "CaféPackage" not in serialized and "CAFE" not in serialized
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "name:*",
+        "a OR b",
+        "one two three four five six seven eight nine",
+        "safe\u202eunsafe",
+        "\N{VULGAR FRACTION ONE QUARTER}" * 128,
+    ],
+)
+def test_literal_search_rejects_empty_operator_broad_and_format_queries(query: str) -> None:
+    """Keep search literal, bounded, and independent from regex or query languages."""
+
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": SEARCH_TOOL_NAME, "arguments": {"query": query}},
+        },
+    )
+    assert result is not None and result["result"]["isError"] is True
+
+
+def test_search_truncation_is_explicit_and_deterministic() -> None:
+    """Bound result projection without turning omitted matches into absence."""
+
+    result = handle_request(
+        _store(3),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": SEARCH_TOOL_NAME,
+                "arguments": {"query": "package", "max_results": 1},
+            },
+        },
+    )
+    assert result is not None
+    payload = _payload(result["result"])
+    assert payload["returned"] == 1
+    assert payload["total_matches"] == 3
+    assert payload["truncated"] is True
+
+
+def test_coverage_tool_proves_only_complete_exact_zero_match_scope() -> None:
+    """Distinguish authoritative absence from missing, partial, and positive evidence."""
+
+    store = _store(0)
+    assert store.add_coverage(
+        CoverageRecord(
+            component="python",
+            domain="dependency.declared",
+            scope="requirements.txt",
+            state=CoverageState.COMPLETE,
+            reasons=("bounded-source-complete",),
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+        )
+    )
+    arguments = {
+        "kind": "dependency.declared",
+        "ref": "head",
+        "component": "python",
+        "path": "requirements.txt",
+    }
+    absent = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": COVERAGE_TOOL_NAME, "arguments": arguments},
+        },
+    )
+    assert absent is not None
+    absent_payload = _payload(absent["result"])
+    assert absent_payload == {
+        "schema_version": "ocr.evidence-coverage-query/v1",
+        "state": "complete",
+        "matches": 0,
+        "coverage_records": 1,
+        "coverage_states": {"complete": 1},
+        "truncated": False,
+        "absence_authoritative": True,
+    }
+
+    assert store.add(
+        EvidenceRecord(
+            kind="dependency.declared",
+            value={"identity": "requirements.txt:package", "name": "package"},
+            source_path="requirements.txt",
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+            component="python",
+            provenance="synthetic parser",
+            trust=TrustClass.SOURCE_REPOSITORY,
+        )
+    )
+    present = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": COVERAGE_TOOL_NAME, "arguments": arguments},
+        },
+    )
+    assert present is not None
+    present_payload = _payload(present["result"])
+    assert present_payload["matches"] == 1
+    assert present_payload["absence_authoritative"] is False
+
+    unknown = handle_request(
+        store,
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": COVERAGE_TOOL_NAME,
+                "arguments": {**arguments, "path": "other.txt"},
+            },
+        },
+    )
+    assert unknown is not None
+    unknown_payload = _payload(unknown["result"])
+    assert unknown_payload["state"] == "unknown"
+    assert unknown_payload["coverage_records"] == 0
+    assert unknown_payload["absence_authoritative"] is False
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -395,7 +583,11 @@ def test_initialized_notification_and_post_handshake_operations() -> None:
     assert pinged["result"] == {}
     listed = handle_request(store, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     assert listed is not None
-    assert [tool["name"] for tool in listed["result"]["tools"]] == [TOOL_NAME]
+    assert [tool["name"] for tool in listed["result"]["tools"]] == [
+        TOOL_NAME,
+        SEARCH_TOOL_NAME,
+        COVERAGE_TOOL_NAME,
+    ]
     called = handle_request(
         store,
         {
@@ -435,7 +627,13 @@ def test_server_records_only_completed_model_time_evidence_actions(tmp_path: Pat
 
     assert successful and successful["result"].get("isError", False) is False
     assert failed and failed["result"].get("isError", False) is True
-    assert read_action_receipt(receipt) == {"summary": 1, "list": 0, "get": 0}
+    assert read_action_receipt(receipt) == {
+        "summary": 1,
+        "list": 0,
+        "get": 0,
+        "search": 0,
+        "coverage": 0,
+    }
 
 
 def test_notifications_never_receive_json_rpc_responses() -> None:
