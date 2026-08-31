@@ -122,7 +122,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | Queue | Status | Work |
 | --- | --- | --- |
 | WQ-01 | done | Materialize plan, create milestone/issue relationships, planning commit, and fidelity check |
-| WQ-02 | in_progress | Implement #163 version-gated qualification harness, commit, initial push, and Draft PR |
+| WQ-02 | in_progress | #163 harness is locally complete; commit, initial push, and Draft PR remain |
 | WQ-03 | pending | Rerun hosted OCR 1.11.1 qualification and accept only exact structural evidence |
 | WQ-04 | pending | Implement #159 pair-aware comparison and impossible-state rejection |
 | WQ-05 | pending | Implement #162 multi-round contract and adopt OCR 1.11.1 pins/security/rules/local binary |
@@ -175,7 +175,12 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   navigation indexes; ignored `.quality-logs` were audit noise only.
 - 2026-08-31: milestone `v0.8.7` created; #157–#163 assigned to `xeonvs`; dependency and
   production-slice boundaries recorded on #158, #160, and #161.
-- No implementation validation has run yet.
+- 2026-08-31: `tests/test_ocr_compat.py` passed with 88 tests after repository formatting;
+  `git diff --check` passed.
+- 2026-08-31: checksum-verified temporary OCR 1.11.1 passed the full local no-LLM contract
+  probe. Evidence separates local single-file, bundle-all, and high-churn per-file grouping
+  from the four-file semantic grouping request; it also records two medium review rounds,
+  filter-survivor wording, partial budget coverage 2/3, completion cap, and max-tools behavior.
 
 #### Risks And Recovery
 
@@ -195,8 +200,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Begin WQ-02 after committing this planning checkpoint: inspect the current compatibility
-harness owners, add strict v1.11.0 baseline and v1.11.1 grouping probes, and run focused tests.
+Commit the reviewed WQ-02 qualification harness, push the two initial commits, open the Draft
+PR, and dispatch the exact-branch OCR 1.11.1 compatibility workflow for WQ-03.
 
 #### Plan Fidelity Check
 

@@ -1079,8 +1079,37 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
     assert error.value.code == 400
 
 
+def test_compatibility_gateway_distinguishes_tool_free_plan_requests() -> None:
+    """PLAN traffic must not be parsed as the versioned grouping inventory."""
+
+    module = load_script()
+    payload = {
+        "messages": [
+            {"role": "system", "content": "Produce a structured review plan."},
+            {"role": "user", "content": "Please analyze the code changes."},
+        ]
+    }
+
+    with module._stub_gateway(grouping_inventory_version="1.11.1") as gateway:
+        request = module.urllib.request.Request(
+            f"{gateway}/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with module.urllib.request.urlopen(
+            request, timeout=module.HTTP_TIMEOUT_SECONDS
+        ) as response:
+            result = json.loads(response.read())
+
+        assert module._StubHandler.request_stages == ["plan"]
+        assert module._StubHandler.grouping_inventories == []
+
+    content = result["choices"][0]["message"]["content"]
+    assert content == "Summary: Review the changed code.\n\nIssues\n(none)"
+
+
 def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None:
-    """Qualification pins the 1.10 line and 1.11.0 to different exact wire shapes."""
+    """Qualification pins the 1.10 line and 1.11 releases to exact wire shapes."""
 
     module = load_script()
 
@@ -1108,20 +1137,24 @@ def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None
         module.parse_grouping_inventory(old_inventory, version)
         for version in ("1.10.0", "1.10.1", "1.10.2")
     ]
-    new = module.parse_grouping_inventory(
-        messages(
-            "ADDED   src/space (unicode) λ.py (+10/-0)\n"
-            "DELETED   win\\deleted.hbs (+0/-5)\n"
-            "RENAMED   renamed.mustache (+0/-0)"
-        ),
-        "1.11.0",
-    )
+    new_results = [
+        module.parse_grouping_inventory(
+            messages(
+                "ADDED   src/space (unicode) λ.py (+10/-0)\n"
+                "DELETED   win\\deleted.hbs (+0/-5)\n"
+                "RENAMED   renamed.mustache (+0/-0)"
+            ),
+            version,
+        )
+        for version in ("1.11.0", "1.11.1")
+    ]
 
     assert (
         old_results[0]
         == old_results[1]
         == old_results[2]
-        == new
+        == new_results[0]
+        == new_results[1]
         == [
             module.GroupingInventoryEntry("ADDED", "src/space (unicode) λ.py", 10, 0),
             module.GroupingInventoryEntry("DELETED", "win\\deleted.hbs", 0, 5),
@@ -1134,6 +1167,31 @@ def test_grouping_inventory_strictly_parses_old_and_new_release_shapes() -> None
         module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.11.0")
     with pytest.raises(module.CompatibilityError, match="not qualified"):
         module.parse_grouping_inventory(messages("path.py (ADDED, +1/-0)"), "1.9.10")
+
+
+def test_schema_three_candidate_remains_chain_aware() -> None:
+    """Current behavioral evidence participates in the adjacent release chain."""
+
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    evidence = {
+        "schema_version": 3,
+        "version": "1.11.1",
+        "tested_baseline_version": "1.11.0",
+        "comparison_version": "1.11.0",
+        "result": "compatible",
+        "classification": "automatic-safe",
+    }
+
+    result = module.assess_automatic_chain(manifest, [evidence])
+
+    assert result == {
+        "automatic_blockers": [],
+        "classification": "automatic-safe",
+        "target_version": "1.11.1",
+        "tested_baseline_version": "1.11.0",
+        "versions": ["1.11.1"],
+    }
 
 
 @pytest.mark.parametrize(

@@ -370,14 +370,19 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
             )
             if not isinstance(required_flags, list) or "--max-tokens-budget" not in required_flags:
                 _fail(f"evidence does not qualify the review budget flag for {version}")
-            if budget_probe != {
+            expected_budget_probe: dict[str, object] = {
                 "budget": 30_000,
                 "completed": 2,
                 "failed_budget": 1,
                 "partial_findings_preserved": True,
                 "result": "passed",
                 "selected": 3,
-            }:
+            }
+            if _version(version) >= (1, 11, 1):
+                expected_budget_probe.update(
+                    {"grouping_requests": 0, "grouping_strategy": "per_file"}
+                )
+            if budget_probe != expected_budget_probe:
                 _fail(f"evidence does not qualify partial review budget behavior for {version}")
         if _version(version) >= (1, 10, 0):
             contracts = evidence.get("contracts")
@@ -404,8 +409,24 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
             }
             if _version(version) >= (1, 10, 2):
                 expected_grouping_probe["grouping_completion_cap"] = 16_384
+            if _version(version) >= (1, 11, 1):
+                expected_grouping_probe.update(
+                    {
+                        "files": 4,
+                        "prior_finding_semantics": "filter_survivors_as_confirmed",
+                    }
+                )
             if contracts.get("semantic_grouping_probe") != expected_grouping_probe:
                 _fail(f"evidence does not qualify semantic grouping behavior for {version}")
+            if _version(version) >= (1, 11, 1) and contracts.get("small_change_grouping_probe") != {
+                "grouping_requests": 0,
+                "high_churn": "per_file",
+                "low_churn": "bundle_all",
+                "result": "passed",
+                "single_file": "per_file",
+                "threshold_files": 4,
+            }:
+                _fail(f"evidence does not qualify small-change grouping behavior for {version}")
             if contracts.get("completion_cap_probe") != {
                 "explicit": 4_096,
                 "inherited": 16_384,
@@ -781,6 +802,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     main_mode = "findings"
     completion_caps: list[object] = []
     request_stages: list[str] = []
+    prior_finding_semantics: set[str] = set()
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -801,6 +823,16 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         entries = parse_grouping_inventory(messages, cls.grouping_inventory_version)
         cls.grouping_inventories.append(entries)
         return [entry.path for entry in entries]
+
+    @classmethod
+    def _is_grouping_request(cls, messages: list[Any]) -> bool:
+        """Distinguish the tool-free grouping task from OCR's tool-free plan task."""
+
+        return any(
+            content.startswith("Group the following changed files:\n\n")
+            and "\n\nRespond with a JSON array:\n" in content
+            for content in cls._message_contents(messages)
+        )
 
     @classmethod
     def _review_path(cls, messages: list[Any]) -> str | None:
@@ -841,7 +873,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 if isinstance(function, dict) and isinstance(function.get("name"), str):
                     tool_names.add(function["name"])
         message: dict[str, Any]
-        if not tool_names:
+        if not tool_names and type(self)._is_grouping_request(messages):
             paths = type(self)._grouping_files(messages)
             if not paths:
                 self.send_error(400)
@@ -854,6 +886,13 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             message = {"role": "assistant", "content": json.dumps(groups)}
             finish_reason = "stop"
             stage = "grouping"
+        elif not tool_names:
+            message = {
+                "role": "assistant",
+                "content": "Summary: Review the changed code.\n\nIssues\n(none)",
+            }
+            finish_reason = "stop"
+            stage = "plan"
         elif "approve_all_comments" in tool_names:
             message = {
                 "role": "assistant",
@@ -896,6 +935,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                     for message in messages
                 )
                 later_round = any("### Previously Confirmed Findings" in item for item in contents)
+                if later_round:
+                    type(self).prior_finding_semantics.add("filter_survivors_as_confirmed")
                 if not prior_comment and not later_round:
                     path = type(self)._review_path(messages)
                     if path is None:
@@ -990,6 +1031,7 @@ def _stub_gateway(
     _StubHandler.main_mode = main_mode
     _StubHandler.completion_caps = []
     _StubHandler.request_stages = []
+    _StubHandler.prior_finding_semantics = set()
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -1148,13 +1190,20 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    for name in ("first.py", "second.py", "third.py"):
-        (repo / name).write_text("def value():\n    return 1\n", encoding="utf-8")
+    paths = ("first.py", "second.py", "third.py")
+    for name in paths:
+        (repo / name).write_text(
+            "def value():\n    return 1\n" + "# baseline\n" * 34,
+            encoding="utf-8",
+        )
     _run(["git", "add", "first.py", "second.py", "third.py"], cwd=repo, env=git_env)
     _run(["git", "commit", "-m", "budget baseline"], cwd=repo, env=git_env)
     base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
-    for name in ("first.py", "second.py", "third.py"):
-        (repo / name).write_text("def value():\n    return 2\n", encoding="utf-8")
+    for name in paths:
+        (repo / name).write_text(
+            "def value():\n    return 2\n" + "# changed\n" * 34,
+            encoding="utf-8",
+        )
     _run(["git", "commit", "-am", "budget changes"], cwd=repo, env=git_env)
     head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
 
@@ -1193,6 +1242,8 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
             cwd=repo,
             env=env,
         )
+        grouping_inventories = list(_StubHandler.grouping_inventories)
+        request_stages = list(_StubHandler.request_stages)
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
@@ -1230,7 +1281,17 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
     comments = sample.get("comments")
     if not isinstance(comments, list) or len(comments) != 2:
         _fail("budget-limited review did not preserve its completed finding")
-    return {
+    _validate_file_groups(sample.get("groups"), set(paths))
+    groups = sample["groups"]
+    if any(len(group.get("files", [])) != 1 for group in groups):
+        _fail("budget-limited review did not preserve per-file group boundaries")
+    grouping_requests = request_stages.count("grouping")
+    expected_grouping_requests = 0 if _version(version) >= (1, 11, 1) else 1
+    if grouping_requests != expected_grouping_requests:
+        _fail("budget-limited review emitted an unexpected grouping request count")
+    if expected_grouping_requests == 0 and grouping_inventories:
+        _fail("budget-limited small-change review unexpectedly emitted a grouping inventory")
+    result: dict[str, object] = {
         "budget": 30_000,
         "completed": 2,
         "failed_budget": 1,
@@ -1238,6 +1299,9 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
         "result": "passed",
         "selected": 3,
     }
+    if _version(version) >= (1, 11, 1):
+        result.update({"grouping_requests": 0, "grouping_strategy": "per_file"})
+    return result
 
 
 def _run_numeric_preview_case(
@@ -1537,7 +1601,7 @@ def _numeric_cli_probe(
 
 
 def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
-    """Drive one real two-file group through grouping and medium review rounds."""
+    """Drive a threshold-crossing group through grouping and medium review rounds."""
 
     root = directory / "semantic-grouping-probe"
     root.mkdir()
@@ -1547,7 +1611,11 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    paths = ("first.py", "second.py")
+    paths = (
+        ("01-first.py", "02-second.py", "03-third.py", "04-fourth.py")
+        if _version(version) >= (1, 11, 1)
+        else ("first.py", "second.py")
+    )
     for path in paths:
         (repo / path).write_text("def value():\n    return 1\n", encoding="utf-8")
     _run(["git", "add", *paths], cwd=repo, env=git_env)
@@ -1593,6 +1661,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         stages = list(_StubHandler.request_stages)
         completion_caps = list(_StubHandler.completion_caps)
         grouping_inventories = list(_StubHandler.grouping_inventories)
+        prior_finding_semantics = set(_StubHandler.prior_finding_semantics)
     try:
         sample = json.loads(output)
     except json.JSONDecodeError as exc:
@@ -1629,7 +1698,106 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     }
     if _version(version) >= (1, 10, 2):
         result["grouping_completion_cap"] = expected_grouping_cap
+    if _version(version) >= (1, 11, 1):
+        if prior_finding_semantics != {"filter_survivors_as_confirmed"}:
+            _fail("multi-round review did not expose the qualified prior-finding semantics")
+        result["prior_finding_semantics"] = "filter_survivors_as_confirmed"
+        result["files"] = len(paths)
     return result
+
+
+def _small_change_grouping_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+    """Prove OCR keeps below-threshold grouping local and deterministic."""
+
+    if _version(version) < (1, 11, 1):
+        _fail("small-change grouping probe requires OCR 1.11.1 behavior")
+    scenarios = (
+        ("single_file", ("single.py",), 1, "per_file"),
+        ("low_churn", ("first.py", "second.py"), 1, "bundle_all"),
+        ("high_churn", ("first.py", "second.py"), 50, "per_file"),
+    )
+    observed: dict[str, str] = {}
+    for name, paths, lines, expected_strategy in scenarios:
+        root = directory / f"small-change-{name}"
+        root.mkdir()
+        git_env = _isolated_probe_environment(root / "git-home")
+        repo = root / "review"
+        repo.mkdir()
+        _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+        _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+        _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+        for path in paths:
+            (repo / path).write_text(
+                "def value():\n    return 1\n" + "# baseline\n" * lines,
+                encoding="utf-8",
+            )
+        _run(["git", "add", *paths], cwd=repo, env=git_env)
+        _run(["git", "commit", "-m", "small-change baseline"], cwd=repo, env=git_env)
+        base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+        for path in paths:
+            (repo / path).write_text(
+                "def value():\n    return 2\n" + "# changed\n" * lines,
+                encoding="utf-8",
+            )
+        _run(["git", "commit", "-am", "small-change update"], cwd=repo, env=git_env)
+        head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+        env = _isolated_probe_environment(root / "review-home")
+        with _stub_gateway(grouping_inventory_version=version) as gateway_url:
+            env.update(
+                {
+                    "OCR_LLM_URL": gateway_url,
+                    "OCR_LLM_TOKEN": "synthetic-token",
+                    "OCR_LLM_MODEL": "synthetic-model",
+                    "OCR_LLM_PROTOCOL": "openai",
+                    "OCR_TELEMETRY_ENABLED": "false",
+                }
+            )
+            output = _run(
+                [
+                    str(binary),
+                    "review",
+                    "--from",
+                    base,
+                    "--to",
+                    head,
+                    "--format",
+                    "json",
+                    "--audience",
+                    "agent",
+                    "--effort",
+                    "low",
+                    "--concurrency",
+                    "1",
+                ],
+                cwd=repo,
+                env=env,
+            )
+            request_stages = list(_StubHandler.request_stages)
+            grouping_inventories = list(_StubHandler.grouping_inventories)
+        try:
+            sample = json.loads(output)
+        except json.JSONDecodeError as exc:
+            raise CompatibilityError("small-change grouping review did not emit JSON") from exc
+        if not isinstance(sample, dict):
+            _fail("small-change grouping review emitted an unsupported result object")
+        _validate_file_groups(sample.get("groups"), set(paths))
+        groups = sample["groups"]
+        actual_strategy = "bundle_all" if len(groups) == 1 and len(paths) > 1 else "per_file"
+        if (
+            actual_strategy != expected_strategy
+            or "grouping" in request_stages
+            or grouping_inventories
+        ):
+            _fail(f"small-change grouping scenario {name} violated its local strategy")
+        observed[name] = actual_strategy
+    return {
+        "grouping_requests": 0,
+        "high_churn": observed["high_churn"],
+        "low_churn": observed["low_churn"],
+        "result": "passed",
+        "single_file": observed["single_file"],
+        "threshold_files": 4,
+    }
 
 
 def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
@@ -1955,6 +2123,10 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     }
     if _version(version) >= (1, 10, 0):
         contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, version, directory)
+    if _version(version) >= (1, 11, 1):
+        contracts["small_change_grouping_probe"] = _small_change_grouping_probe(
+            binary, version, directory
+        )
     if _version(version) >= (1, 9, 10):
         contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
     if thinking_probe is not None:
@@ -2164,7 +2336,7 @@ def qualify_release(
         contracts_passed=True,
     )
     evidence = {
-        "schema_version": 2,
+        "schema_version": 3 if _version(version) >= (1, 11, 1) else 2,
         "upstream_repository": UPSTREAM_REPOSITORY,
         "version": version,
         "tag": tag,
@@ -2218,7 +2390,7 @@ def assess_automatic_chain(
         if candidate[:2] != previous[:2] or candidate[2] != previous[2] + 1:
             contiguous = False
         if (
-            item.get("schema_version") != 2
+            item.get("schema_version") not in {2, 3}
             or item.get("tested_baseline_version") != tested_baseline
             or item.get("comparison_version") != comparison
             or item.get("result") != "compatible"
@@ -2273,18 +2445,18 @@ def prepare_update(
         transition = _release_transition(comparison, candidate)
         if transition is None:
             _fail("candidate evidence chain is not a contiguous release sequence")
-        if transition != "patch" and item.get("schema_version") != 2:
-            _fail("minor and major promotions require chain-aware evidence schema 2")
+        if transition != "patch" and item.get("schema_version") not in {2, 3}:
+            _fail("minor and major promotions require chain-aware evidence schema 2 or 3")
         if item.get("result") != "compatible":
             _fail(f"candidate evidence does not qualify {version} as compatible")
         schema_version = item.get("schema_version")
-        if schema_version == 2:
+        if schema_version in {2, 3}:
             if item.get("tested_baseline_version") != old_version:
                 _fail(f"candidate evidence {version} has a stale tested baseline")
             if item.get("comparison_version") != expected_comparison:
                 _fail(f"candidate evidence {version} has a non-adjacent comparison version")
         elif schema_version != 1 or len(evidences) != 1:
-            _fail("multi-release promotion requires chain-aware evidence schema 2")
+            _fail("multi-release promotion requires chain-aware evidence schema 2 or 3")
         classification = item.get("classification")
         conclusion = conclusions.get(version)
         if conclusion is not None and (
