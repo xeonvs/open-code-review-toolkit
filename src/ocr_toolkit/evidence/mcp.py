@@ -311,6 +311,11 @@ def _search_query(value: object) -> tuple[str, ...]:
     normalized = unicodedata.normalize("NFKC", value).casefold().strip()
     if len(normalized) > MAX_SEARCH_QUERY_CHARS:
         raise EvidenceMCPError("normalized query exceeds the character limit")
+    if any(
+        character in _SEARCH_OPERATOR_CHARACTERS or unicodedata.category(character) in {"Cc", "Cf"}
+        for character in normalized
+    ):
+        raise EvidenceMCPError("query must be literal text without operators or controls")
     tokens = tuple(normalized.split())
     if not tokens or len(tokens) > MAX_SEARCH_QUERY_TOKENS:
         raise EvidenceMCPError(
@@ -363,8 +368,13 @@ def _search_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[
 
     tokens = _search_query(arguments.get("query"))
     kind = _optional_filter(arguments, "kind")
+    delta_kind = _optional_filter(arguments, "delta_kind")
     component = _optional_filter(arguments, "component")
     ref = _optional_filter(arguments, "ref")
+    if delta_kind is not None and kind != "repository.evidence_delta":
+        raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
+    if kind == "repository.evidence_delta" and ref is not None:
+        raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
     if ref not in {None, "base", "head", "policy", "shared"}:
         raise EvidenceMCPError("ref must be base, head, policy, or shared")
     max_results = arguments.get("max_results", DEFAULT_SEARCH_RESULTS)
@@ -376,13 +386,18 @@ def _search_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[
     matches: list[dict[str, object]] = []
     total_matches = 0
     for record in candidates:
-        record_kind = record.kind
-        record_ref = None if isinstance(record, EvidenceDelta) else record.ref.value
-        if (
-            (kind is not None and record_kind != kind)
-            or (component is not None and record.component != component)
-            or (ref is not None and record_ref != ref)
-        ):
+        if isinstance(record, EvidenceDelta):
+            if kind not in {None, "repository.evidence_delta"}:
+                continue
+            if delta_kind is not None and record.kind != delta_kind:
+                continue
+            if ref is not None:
+                continue
+        elif kind is not None and record.kind != kind:
+            continue
+        if component is not None and record.component != component:
+            continue
+        if not isinstance(record, EvidenceDelta) and ref is not None and record.ref.value != ref:
             continue
         fields = _normalized_search_fields(record)
         if not all(any(token in field for field in fields) for token in tokens):
@@ -430,25 +445,47 @@ def _coverage_query(store: EvidenceStore, arguments: dict[str, object]) -> dict[
         and (component is None or record.component == component)
         and (source_path is None or record.source_path == source_path)
     ]
-    applicable = [
-        record
-        for record in store.coverage
-        if record.domain == kind
-        and record.ref.value == ref
-        and (component is None or record.component == component)
-        and (source_path is None or record.scope == source_path)
-    ]
+    exact_scope = component is not None and source_path is not None
+    applicable = (
+        [
+            record
+            for record in store.coverage
+            if record.domain == kind
+            and record.ref.value == ref
+            and record.component == component
+            and record.scope == source_path
+        ]
+        if exact_scope
+        else []
+    )
     state_counts: dict[str, int] = {}
     for record in applicable:
         state_counts[record.state.value] = state_counts.get(record.state.value, 0) + 1
-    complete = bool(applicable) and all(record.state.value == "complete" for record in applicable)
+    diagnostics = set(store.diagnostics)
+    incomplete = any(
+        diagnostic
+        in {
+            "global evidence record limit reached",
+            f"per-kind evidence record limit reached for {kind}",
+            f"omitted ambiguous {kind} evidence value",
+            f"omitted oversized {kind} evidence value",
+            f"typed {kind} comparison incomplete; unsafe semantic deltas omitted",
+        }
+        for diagnostic in diagnostics
+    )
+    complete = (
+        exact_scope
+        and bool(applicable)
+        and not incomplete
+        and all(record.state.value == "complete" for record in applicable)
+    )
     return {
         "schema_version": "ocr.evidence-coverage-query/v1",
         "state": "complete" if complete else "unknown",
         "matches": len(matching_records),
         "coverage_records": len(applicable),
         "coverage_states": dict(sorted(state_counts.items())),
-        "truncated": False,
+        "truncated": incomplete,
         "absence_authoritative": complete and not matching_records,
     }
 
@@ -498,7 +535,14 @@ def call_named_tool(store: EvidenceStore, name: str, arguments: object) -> dict[
         raise EvidenceMCPError("tool arguments must be an object")
     typed = cast(dict[str, object], arguments)
     if name == SEARCH_TOOL_NAME:
-        unknown = set(typed) - {"query", "kind", "component", "ref", "max_results"}
+        unknown = set(typed) - {
+            "query",
+            "kind",
+            "delta_kind",
+            "component",
+            "ref",
+            "max_results",
+        }
         if unknown:
             raise EvidenceMCPError(f"unsupported tool argument: {sorted(unknown)[0]}")
         return _text_result(_search_records(store, typed))
@@ -590,8 +634,9 @@ def _search_tool_definition() -> dict[str, object]:
         "description": (
             "Locate unknown evidence records by bounded literal text after using the summary. "
             "Search covers admitted paths, identities, and per-kind allowlisted scalar fields; "
-            "results contain stable IDs but never matched values. Use the primary evidence tool "
-            "with action=get for a selected ID."
+            "results contain stable IDs but never matched values. Use "
+            "kind=repository.evidence_delta with optional delta_kind for base/head changes. "
+            "Use the primary evidence tool with action=get for a selected ID."
         ),
         "inputSchema": {
             "type": "object",
@@ -605,6 +650,14 @@ def _search_tool_definition() -> dict[str, object]:
                     "description": "One to eight literal NFKC/case-insensitive tokens; no operators.",
                 },
                 "kind": {"type": "string", "maxLength": 256},
+                "delta_kind": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": (
+                        "Optional original fact-kind filter with "
+                        "kind=repository.evidence_delta only."
+                    ),
+                },
                 "component": {"type": "string", "maxLength": 256},
                 "ref": {"type": "string", "enum": ["base", "head", "policy", "shared"]},
                 "max_results": {
@@ -625,7 +678,8 @@ def _coverage_tool_definition() -> dict[str, object]:
         "name": COVERAGE_TOOL_NAME,
         "description": (
             "Check exact scoped evidence completeness before making a negative claim. "
-            "absence_authoritative is true only for applicable complete coverage with zero "
+            "absence_authoritative is true only for an exact component/path scope with "
+            "applicable complete coverage and zero "
             "matching records and no truncation; every missing, partial, runtime-dependent, "
             "or unavailable scope returns unknown."
         ),
@@ -640,11 +694,18 @@ def _coverage_tool_definition() -> dict[str, object]:
                     "description": "Exact evidence kind and coverage domain.",
                 },
                 "ref": {"type": "string", "enum": ["base", "head"]},
-                "component": {"type": "string", "maxLength": 256},
+                "component": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Exact evidence component required for authoritative absence.",
+                },
                 "path": {
                     "type": "string",
                     "maxLength": 256,
-                    "description": "Optional exact record source path and coverage scope.",
+                    "description": (
+                        "Exact record source path and coverage scope required for "
+                        "authoritative absence."
+                    ),
                 },
             },
         },

@@ -110,17 +110,10 @@ def fact_deltas(
     for key in sorted(set(base) | set(head)):
         before = base.get(key)
         after = head.get(key)
-        if key[0] in incomplete_kinds and (
-            before is None
-            or after is None
-            or len(before) != 1
-            or len(after) != 1
-            or before[0].source_path != after[0].source_path
-        ):
-            # Once admission is incomplete, a one-sided or ambiguous identity may
-            # be an omitted peer rather than a real add/remove/move. A singular
-            # identity admitted from the same source on both refs remains directly
-            # comparable and can still expose a real value change.
+        if key[0] in incomplete_kinds:
+            # Kind-level admission failure cannot identify which semantic key was
+            # omitted. Even a remaining same-source pair may have lost a third
+            # value for this identity, so no delta for that kind is authoritative.
             continue
         before_value = projected_values(before, after)
         after_value = projected_values(after, before)

@@ -132,6 +132,45 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     assert receipt.required_degraded is False
     assert receipt.mutable_admitted is False
     assert receipt.bootstrap_hints == {"required_passed": 1}
+    assert "functional-tests" in receipt.forbidden_publication
+    assert "src/" in receipt.forbidden_publication
+    assert "tests/" in receipt.forbidden_publication
+    assert not {
+        "passed",
+        "required",
+        "reviewed_head",
+        "declared",
+        "same_revision_pipeline",
+    } & set(receipt.forbidden_publication)
+    payload = {
+        "status": "complete",
+        "comments": [{"content": "The required functional check passed."}],
+        "warnings": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "item-1"}],
+                "completed": [{"item_id": "item-1"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+        "tool_calls": {
+            "total": 1,
+            "by_tool": {"ocr_toolkit_evidence": 1},
+        },
+    }
+    projected, publication, filtered = review_runner._publication_projection(
+        payload,
+        forbidden=receipt.forbidden_publication,
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+    assert projected is payload
+    assert publication == {"state": "passed"}
+    assert filtered is False
     restored = ContextStore.read(
         artifacts.context_store,
         expected_run_id=context_config.run_id,
@@ -140,6 +179,41 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     )
     assert [record.resource_class for record in restored.records] == ["ci_outcome"]
     assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
+
+
+def test_optional_ci_record_rejection_does_not_degrade_required_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep malformed optional CI evidence visible without treating it as required."""
+
+    policy = ci_policy_value()
+    policy.pop("forge_discussions")
+    policy.pop("remediation_threads")
+    policy["references"] = []
+    snapshot = CIOutcomeSnapshot("complete", (ci_outcome(),), 0, 0)
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
+    monkeypatch.setattr(review_runner, "prepare_ci_outcome_records", lambda *_args, **_kwargs: ())
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: None,
+        external_acquire=lambda **_kwargs: BrokerResult(
+            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
+        ),
+        policy_value=policy,
+        ci_acquire=lambda *_args, **_kwargs: snapshot,
+    )
+
+    _context_config, receipt = review_runner._prepare_enrichment(
+        enriched_identity(),
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert receipt is not None
+    assert receipt.completeness == {"forge:ci_outcomes": "partial"}
+    assert receipt.degradation_counts["invalid"] == 1
+    assert receipt.required_degraded is False
 
 
 def test_default_termination_signal_is_translated_for_cleanup() -> None:
@@ -718,6 +792,46 @@ def test_evidence_action_receipt_reconciles_each_fixed_tool_independently(
         "calls": 5,
         "actions": {"state": "verified", **counts},
     }
+
+
+def test_mandatory_evidence_rejects_available_receipt_without_summary(
+    tmp_path: Path,
+) -> None:
+    """Do not let list/get calls impersonate the mandatory summary action."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 2,
+                    "by_tool": {"ocr_toolkit_evidence": 2},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="mandatory evidence summary"):
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            DEFAULT_IDENTITY,
+            evidence_action_counts={
+                "summary": 0,
+                "list": 1,
+                "get": 1,
+                "search": 0,
+                "coverage": 0,
+            },
+        )
 
 
 def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(

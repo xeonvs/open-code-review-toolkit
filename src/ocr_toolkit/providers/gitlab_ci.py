@@ -124,7 +124,7 @@ def _raw_snapshot(
     if not isinstance(pipelines, list) or len(pipelines) > MAX_PIPELINES:
         raise GitLabProviderError("GitLab CI pipeline list is invalid")
     requested = {check.name: check.path_prefixes for check in policy.checks}
-    candidates: dict[str, list[tuple[int, int, str, bool]]] = {name: [] for name in requested}
+    candidates: dict[str, list[tuple[int, int, int, str, bool]]] = {name: [] for name in requested}
     invalid_names: set[str] = set()
     structural: list[object] = []
     current_pipeline = int(_numeric_identifier(environment, "CI_PIPELINE_ID"))
@@ -148,13 +148,13 @@ def _raw_snapshot(
         if not isinstance(jobs, list) or len(jobs) > MAX_JOBS_PER_PIPELINE:
             raise GitLabProviderError("GitLab CI job list is invalid")
         omitted += int(jobs_more)
-        per_pipeline: set[str] = set()
         for job in jobs:
             if not isinstance(job, Mapping):
                 raise GitLabProviderError("GitLab CI job is invalid")
-            name = _bounded_name(job.get("name"))
-            if name not in requested:
+            raw_name = job.get("name")
+            if not isinstance(raw_name, str) or raw_name not in requested:
                 continue
+            name = _bounded_name(raw_name)
             nested = job.get("pipeline")
             if (
                 not isinstance(nested, Mapping)
@@ -163,10 +163,7 @@ def _raw_snapshot(
             ):
                 invalid_names.add(name)
                 continue
-            if name in per_pipeline:
-                invalid_names.add(name)
-                continue
-            per_pipeline.add(name)
+            job_id = _positive_id(job.get("id"))
             status = job.get("status")
             allow_failure = job.get("allow_failure")
             completed_at = timestamp(job.get("finished_at"))
@@ -182,8 +179,8 @@ def _raw_snapshot(
             ):
                 invalid_names.add(name)
                 continue
-            candidates[name].append((completed_at, pipeline_id, status, allow_failure))
-            structural.append([pipeline_id, name, status, allow_failure, completed_at])
+            candidates[name].append((completed_at, job_id, pipeline_id, status, allow_failure))
+            structural.append([pipeline_id, job_id, name, status, allow_failure, completed_at])
     records: list[CIOutcome] = []
     for name, path_prefixes in requested.items():
         selected = sorted(candidates[name], reverse=True)
@@ -191,10 +188,10 @@ def _raw_snapshot(
             invalid += 1
             continue
         newest = selected[0]
-        if len(selected) > 1 and selected[1][0] == newest[0]:
+        if len(selected) > 1 and selected[1][:2] == newest[:2]:
             invalid += 1
             continue
-        completed_at, pipeline_id, raw_status, allow_failure = newest
+        completed_at, _job_id, pipeline_id, raw_status, allow_failure = newest
         if now - completed_at > policy.max_age_seconds:
             invalid += 1
             continue
@@ -219,9 +216,18 @@ def _raw_snapshot(
         ).hexdigest()
         records.append(
             CIOutcome(
+                check=name,
+                status=status,
+                requirement="advisory" if allow_failure else "required",
+                path_prefixes=tuple(path_prefixes),
+                origin=(
+                    "current_pipeline"
+                    if pipeline_id == current_pipeline
+                    else "same_revision_pipeline"
+                ),
+                completed_at=completed_at,
                 version=str(completed_at),
                 digest=digest,
-                **normalized,  # type: ignore[arg-type]
             )
         )
     omitted += len(requested) - len(records) - invalid
@@ -229,8 +235,8 @@ def _raw_snapshot(
     snapshot_digest = hashlib.sha256(
         json.dumps(
             {
-                "pipelines": structural,
-                "records": [record.digest for record in records],
+                "pipelines": sorted(structural),
+                "records": sorted(record.digest for record in records),
                 "state": state,
             },
             sort_keys=True,

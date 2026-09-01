@@ -26,6 +26,7 @@ from ocr_toolkit.context.contracts import (
     TextBudgets,
 )
 from ocr_toolkit.context.dlp import check_text, normalize_text
+from ocr_toolkit.context.policy import normalize_ci_path_prefix
 
 MAX_STORE_BYTES = 4_000_000
 MAX_STORE_RECORDS = 128
@@ -301,14 +302,16 @@ def _ci_outcome_projection(value: object) -> Mapping[str, object]:
     normalized: list[str] = []
     for prefix in prefixes:
         value = normalize_text(prefix)
+        try:
+            canonical = normalize_ci_path_prefix(value)
+        except (ContextStoreError, ValueError):
+            raise ContextStoreError("CI outcome path prefix is invalid") from None
         if (
-            value != prefix
-            or not isinstance(value, str)
-            or not 1 <= len(value) <= 256
-            or not check_text(value, budgets=TextBudgets(256, 1_024, 1)).admitted
+            canonical != prefix
+            or not check_text(canonical, budgets=TextBudgets(256, 1_024, 1)).admitted
         ):
             raise ContextStoreError("CI outcome path prefix is invalid")
-        normalized.append(value)
+        normalized.append(canonical)
     if normalized != sorted(set(normalized)):
         raise ContextStoreError("CI outcome path prefixes are not canonical")
     return {

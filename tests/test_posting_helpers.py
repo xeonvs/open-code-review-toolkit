@@ -3183,14 +3183,23 @@ class PostingSummaryTests(unittest.TestCase):
                 "search": 0,
                 "coverage": 0,
             },
+            {
+                "state": "verified",
+                "summary": 0,
+                "list": 2,
+                "get": 1,
+                "search": 0,
+                "coverage": 0,
+            },
         ):
             with self.subTest(actions=actions):
+                calls = sum(value for key, value in actions.items() if key != "state")
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
                         {
                             "schema_version": 6,
                             "mcp": {"usage": {"ocr_toolkit_evidence": 3}},
-                            "evidence": {"calls": 0, "actions": actions},
+                            "evidence": {"calls": calls, "actions": actions},
                         }
                     ),
                     "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",

@@ -41,6 +41,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   the reviewed tree uses the updated CI, CodeQL, TestPyPI, release, and provenance actions.
 - Run one configured semantic qualification of the new MCP/context contracts and one final
   repository review with project rules; remediate validated findings before the final push.
+- Use the owner-authorized second complete review to re-check the corrected built-in evidence
+  MCP as one coherent product slice: runtime schemas and routing, user documentation, changelog,
+  and regression examples. Record selected/completed coverage and reconciled MCP use privately.
 - Merge the protected feature and release pull requests, publish stable 0.8.7, independently
   read back every external artifact, close tracking, and clean task-owned scratch state.
 
@@ -116,7 +119,7 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - Current GitLab technical-summary format stays stable and emits only non-zero tool names.
 - Full delivery includes publication, independent external readback, Actions-owned issue
   receipts, milestone closure, synchronized `main`, and cleanup; merge or green CI is not final.
-- Final repository OCR review uses project rules, `medium` effort, concurrency one, OCR-owned
+- Final repository OCR review uses project rules, `medium` effort, concurrency two, OCR-owned
   completion limits, and max-tools sentinel zero. Confirmed findings are fixed before push and
   followed by deterministic validation plus a complete self-review.
 - If a newer stable OCR appears before the final repository review, qualify and adopt it as the
@@ -149,8 +152,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | done | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
 | WQ-09 | done | Merge protected `main` #165 into the Draft branch, update maintenance notes, and revalidate the combined tree |
-| WQ-10 | in_progress | Run configured semantic qualification and final project-rule OCR review; remediate findings and self-review before push |
-| WQ-11 | pending | Push the final feature head, reconcile hosted checks, merge #164, and verify its development publication |
+| WQ-10 | done | Reconcile all three project-rule OCR reviews, close repeated findings, and prove the complete legacy/new built-in MCP route through one bounded controlled OCR qualification before push |
+| WQ-11 | in_progress | Push the final feature head, reconcile hosted checks, merge #164, and verify its development publication |
 | WQ-12 | pending | Prepare and merge `Release v0.8.7`, publish stable artifacts, independently read back every release surface, close tracking, and clean scratch state |
 
 #### Locked Decisions
@@ -158,9 +161,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - Search tool: NFKC/casefold query of 1–128 characters and at most eight tokens; no regex,
   wildcard, operators, controls, bidi/format characters, or broad empty search. Search only
   DLP-admitted source paths, identities, and per-kind allowlisted scalar values.
-- Coverage tool: exact kind/ref plus optional exact component/path. Missing mappings and any
-  incomplete scope yield unknown; `absence_authoritative` requires complete scope, zero
-  matches, and no truncation.
+- Coverage tool: exact kind/ref supports broad discovery, while authoritative absence also
+  requires exact component/path. Missing mappings, broad or incomplete scope, and admission
+  truncation yield unknown; `absence_authoritative` requires complete scope and zero matches.
 - Routing: summary once, list for known kinds/deltas, search for unknown location/identity, get
   selected records, coverage only before a negative claim, context_list before context_get,
   and stop when evidence is sufficient. No forced `tool_choice`.
@@ -271,6 +274,53 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   PATH-effective, and its configured LLM connectivity test passes. Current compatibility wording
   preserves only explicit positive completion-cap transport: the toolkit default remains unset
   and no provider-specific cap is recommended.
+- 2026-09-01: the one owner-authorized final repository review used OCR 1.11.1 through the
+  production wrapper with project rules, `medium` effort, concurrency `2`, OCR-owned completion
+  limits, and context mode `off`. It completed all 29 selected files with no failed, reused, or
+  waived work; cleanup, publication DLP, receipt v6, and all 139 attributed tool calls reconciled.
+  Nine candidates were statically re-checked. Confirmed compatibility-evidence, optional-CI,
+  retry-selection, hostile-scope, evidence-search, and authoritative-coverage defects were fixed
+  with focused regressions. The corrected tree passes 1,377 tests plus 366 subtests at 86.24%
+  branch coverage; risk groups pass at 85%, 82%, 86%, and 87%, with Ruff, strict MyPy, Bandit,
+  OCR manifest validation, Towncrier, Gitleaks, and diff/privacy hygiene also green. The owner
+  subsequently authorized one second complete project-rule review on the committed corrected
+  head, with explicit attention to the updated built-in evidence MCP code and user material;
+  no separate enriched-context qualification is claimed.
+- 2026-09-01: the second owner-authorized repository review completed the same immutable 29-file
+  range with no failed, reused, or waived work. Its bootstrap advertised the primary evidence,
+  search, and coverage tools; OCR recorded eight primary-tool calls and one search-tool call.
+  It did not call coverage, and the private completed-action receipt did not reconcile to the
+  OCR by-tool attempt counts, so action attribution correctly remained unavailable. The run
+  therefore proves real primary/search MCP reachability but does not prove summary/list/get or
+  coverage routing and cannot close REQ-007/REQ-008 by itself. Its nine candidates repeat the
+  first run's review surfaces. Current-code revalidation confirmed seven boundary defects in CI
+  outcome typing, hostile Unicode handling, incomplete-kind deltas and coverage, mandatory-summary
+  enforcement, action-summary rendering, and CI outcome DLP inputs. The fixes and expanded negative
+  regressions pass 1,382 tests plus 367 subtests at 86.25% branch coverage; risk groups pass at
+  85%, 82%, 86%, and 87%, with Ruff, strict MyPy, manifest validation, Towncrier, Gitleaks, and
+  diff hygiene green. Self-review additionally removed schema-owned CI enums from forbidden-value
+  matching and reconciled the affected changelog contracts.
+- 2026-09-01: the third owner-authorized OCR 1.11.1 review completed all 29 selected files on
+  signed head `66bc208` with no failed, reused, waived, publication, cleanup, or warning state.
+  Its four candidates were revalidated against the current implementation: provider-order-sensitive
+  GitLab CI mutation hashing and compatibility-normalized search operators were confirmed and fixed;
+  the context-contract exception and unused evidence-receipt claims were rejected because the former
+  is already caught through `ValueError` and the latter is returned as `evidence.used`. Reversed
+  pipeline/job order and fullwidth operator regressions pass in a 305-test, 8-subtest focused suite.
+  Production-composed stdio MCP profiling found repeated live environment scans inside one evidence
+  redaction pass. Removing only that duplicate call, without caching secrets or changing their live
+  lifecycle, reduced three unprofiled synthetic runs to 1.51-1.63 seconds from the prior 1.95-second
+  baseline while preserving the 2,244-character bootstrap and private, read-only, clean-repository
+  assertions. A regression now locks one complete redaction pass per string leaf. The review used
+  the mandatory summary action but did not exercise all five routes, so the controlled exact-OCR
+  qualification and final full gate remain required before push.
+- 2026-09-01: the bounded controlled OCR 1.11.1 qualification completed its one selected file
+  without findings, warnings, failed, reused, or waived work. The actual model selected every
+  documented built-in evidence route exactly once: summary, list, get, literal search, and scoped
+  coverage. The primary action subtotal of three reconciles exactly to three
+  `ocr_toolkit_evidence` calls, while search and coverage each reconcile exactly to their one
+  dedicated OCR by-tool call. Receipt v6, publication DLP, and cleanup passed; context mode stayed
+  off, so this proves the complete legacy/new evidence MCP route without claiming enriched context.
 
 #### Risks And Recovery
 
@@ -290,9 +340,10 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Run the configured semantic qualification and final project-rule OCR review on the combined
-exact head. Push only after validated findings are remediated and the final self-review is
-complete.
+Finalize the signed plan truth, repeat the bounded five-action qualification on that immutable
+plan-only head, then push the exact feature head to Draft PR #164. Reconcile hosted checks and
+threads before Ready and merge; verify its development publication before preparing the separate
+stable release PR.
 
 #### Plan Fidelity Check
 
@@ -309,24 +360,27 @@ complete.
   were inspected before implementation.
 - [x] No pre-existing user changes are present in the worktree.
 - [x] Milestone and issue relationships agree with this plan.
-- [ ] Draft PR, protected-main #165, and compatibility artifact agree with this plan.
+- [x] Draft PR, protected-main #165, and compatibility artifact agree with this plan.
 - [x] Final implementation, docs, changelog, backlog, and local tests agree.
-- [ ] Remote Draft head, hosted checks, and compatibility artifact agree.
+- [x] Local exact-OCR qualification, compatibility artifact, implementation, and plan agree.
+- [ ] Remote Draft head and hosted checks agree.
 
 #### Closure Gate
 
 - [ ] All REQ and WQ items are done or explicitly out of scope.
 - [ ] Final local and hosted checks are current for the exact Draft head.
 - [ ] Feature and release PR exact heads pass their owned checks and have no unresolved threads.
-- [ ] Configured qualification and project-rule review have complete exact-head receipts.
+- [x] All three owner-authorized project-rule reviews completed; their confirmed findings were
+  remediated and revalidated, and the current implementation passed the separate five-action
+  controlled receipt. No enriched-context qualification is claimed.
 - [ ] Stable publication and independent readback satisfy every external closure invariant.
 - [ ] #157-#163 and any added release tracker are closed by Actions receipts; milestone is closed.
 - [ ] Task-owned scratch state is removed and local/remote `main` equals the peeled stable tag.
 
 #### Stable Delivery
 
-The feature PR becomes Ready only after the combined exact head passes configured qualification,
-project-rule review, remediation, self-review, and hosted checks. Its verified squash merge is
+The feature PR becomes Ready only after the combined exact head passes project-rule review,
+remediation, self-review, and hosted checks. Its verified squash merge is
 followed by development publication readback and a separate protected `Release v0.8.7` PR. The
 release merge authorizes stable publication; independent registry/Release/provenance/install and
 tracking readback completes delivery without another repository PR.

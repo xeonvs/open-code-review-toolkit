@@ -29,11 +29,12 @@ def _job(
     status: str = "success",
     allow_failure: bool = False,
     finished_at: str = "2027-01-15T08:00:00Z",
+    job_id: int | None = None,
 ) -> dict[str, object]:
     """Build one minimal GitLab-style job response."""
 
     return {
-        "id": pipeline_id * 100,
+        "id": pipeline_id * 100 if job_id is None else job_id,
         "name": name,
         "status": status,
         "allow_failure": allow_failure,
@@ -88,6 +89,7 @@ def test_gitlab_ci_admits_only_exact_scoped_current_and_same_revision_outcomes(
         ("functional-tests", "same_revision_pipeline", "passed"),
         ("package", "current_pipeline", "passed"),
     ]
+    assert all(isinstance(record.path_prefixes, tuple) for record in snapshot.records)
     assert all("private" not in record.digest for record in snapshot.records)
 
 
@@ -130,6 +132,101 @@ def test_gitlab_ci_rejects_wrong_revision_and_ambiguous_retries(
     assert snapshot.state == "partial"
     assert all(record.check != "functional-tests" for record in snapshot.records)
     assert snapshot.invalid >= 1
+
+
+def test_gitlab_ci_selects_newest_unambiguous_retry_and_ignores_unrequested_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Use the newest requested retry without letting unrelated names degrade evidence."""
+
+    policy = parse_policy(encoded_policy(ci_policy_value())).ci_outcomes
+    assert policy is not None
+    jobs = {
+        10: [
+            _job("x" * 1024, pipeline_id=10),
+            _job(
+                "functional-tests",
+                pipeline_id=10,
+                status="failed",
+                finished_at="2027-01-15T07:59:00Z",
+                job_id=1001,
+            ),
+            _job("functional-tests", pipeline_id=10, job_id=1002),
+            _job("package", pipeline_id=10),
+        ]
+    }
+    monkeypatch.setattr(
+        gitlab_ci,
+        "_read_page",
+        _reader([{"id": 10, "sha": HEAD}], jobs),
+    )
+
+    snapshot, _digest = gitlab_ci._raw_snapshot(
+        ENVIRONMENT,
+        project_id="7",
+        source_sha=HEAD,
+        policy=policy,
+        now=NOW,
+        deadline=NOW,
+    )
+
+    assert snapshot.state == "complete"
+    assert {record.check: record.status for record in snapshot.records} == {
+        "functional-tests": "passed",
+        "package": "passed",
+    }
+
+
+def test_gitlab_ci_snapshot_digest_is_independent_of_provider_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not report mutation when GitLab reorders identical pipelines or jobs."""
+
+    policy = parse_policy(encoded_policy(ci_policy_value())).ci_outcomes
+    assert policy is not None
+    pipelines = [{"id": 10, "sha": HEAD}, {"id": 11, "sha": HEAD}]
+    jobs = {
+        10: [_job("package", pipeline_id=10), _job("functional-tests", pipeline_id=10)],
+        11: [
+            _job(
+                "functional-tests",
+                pipeline_id=11,
+                finished_at="2027-01-15T07:59:00Z",
+            ),
+            _job(
+                "package",
+                pipeline_id=11,
+                finished_at="2027-01-15T07:59:00Z",
+            ),
+        ],
+    }
+    monkeypatch.setattr(gitlab_ci, "_read_page", _reader(pipelines, jobs))
+    first, first_digest = gitlab_ci._raw_snapshot(
+        ENVIRONMENT,
+        project_id="7",
+        source_sha=HEAD,
+        policy=policy,
+        now=NOW,
+        deadline=NOW,
+    )
+    monkeypatch.setattr(
+        gitlab_ci,
+        "_read_page",
+        _reader(
+            list(reversed(pipelines)), {key: list(reversed(value)) for key, value in jobs.items()}
+        ),
+    )
+    second, second_digest = gitlab_ci._raw_snapshot(
+        ENVIRONMENT,
+        project_id="7",
+        source_sha=HEAD,
+        policy=policy,
+        now=NOW,
+        deadline=NOW,
+    )
+
+    assert second == first
+    assert second_digest == first_digest
 
 
 def test_gitlab_ci_preserves_advisory_and_unknown_without_claiming_success(

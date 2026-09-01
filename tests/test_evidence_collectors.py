@@ -959,7 +959,7 @@ def test_fact_deltas_preserve_one_sided_ref_semantics() -> None:
         (fact(RefRole.HEAD),),
         incomplete_kinds={"dependency.locked"},
     )
-    comparable_change = fact_deltas(
+    suppressed_change = fact_deltas(
         (fact(RefRole.BASE), fact(RefRole.HEAD, "2.0.0")),
         incomplete_kinds={"dependency.locked"},
     )
@@ -971,9 +971,7 @@ def test_fact_deltas_preserve_one_sided_ref_semantics() -> None:
         ("removed", {"version": "1.0.0"}, None)
     ]
     assert suppressed_add == ()
-    assert [(delta.change, delta.before, delta.after) for delta in comparable_change] == [
-        ("changed", {"version": "1.0.0"}, {"version": "2.0.0"})
-    ]
+    assert suppressed_change == ()
 
 
 def test_image_facts_accept_yaml_sequence_items(tmp_path: Path) -> None:

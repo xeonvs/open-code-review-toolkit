@@ -402,6 +402,12 @@ def _review_receipt(
     evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+    if (
+        outcome.requires_evidence_mcp
+        and evidence_action_counts is not None
+        and evidence_action_counts.get("summary", 0) < 1
+    ):
+        raise ReviewRunnerError("OCR review did not call the mandatory evidence summary action")
     action_attribution: dict[str, object]
     if evidence_calls == 0 and evidence_action_counts is None:
         action_attribution = {
@@ -1807,7 +1813,7 @@ def _prepare_enrichment(
             if len(ci_records) != len(ci_snapshot.records):
                 completeness[ci_origin] = "partial"
                 degradation["invalid"] += len(ci_snapshot.records) - len(ci_records)
-                required_degraded = True
+                required_degraded = required_degraded or ci_policy.required
             pending.extend(ci_records)
     selections = _select_reference_candidates(policy, candidate_texts)
     external: BrokerResult = acquire_external_records(
@@ -1858,6 +1864,14 @@ def _prepare_enrichment(
         for field, value in record.projections["model"].items():
             if field in published:
                 continue
+            if field == CI_OUTCOME_MODEL_FIELD and isinstance(value, dict):
+                scope = value.get("scope")
+                value = {
+                    "check": value.get("check"),
+                    "path_prefixes": (
+                        scope.get("path_prefixes") if isinstance(scope, dict) else None
+                    ),
+                }
             stack = [value]
             while stack:
                 nested = stack.pop()

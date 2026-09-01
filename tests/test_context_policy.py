@@ -179,6 +179,12 @@ def test_policy_v3_adds_exact_ci_scopes_with_conservative_defaults() -> None:
         lambda value: value["ci_outcomes"].update(
             {"checks": [{"name": "unsafe\u202e", "path_prefixes": ["src/"]}]}
         ),
+        lambda value: value["ci_outcomes"].update(
+            {"checks": [{"name": "unsafe\ud800", "path_prefixes": ["src/"]}]}
+        ),
+        lambda value: value["ci_outcomes"].update(
+            {"checks": [{"name": "functional-tests", "path_prefixes": ["src/\ud800"]}]}
+        ),
     ],
 )
 def test_policy_v3_rejects_ci_authority_expansion(mutation: object) -> None:

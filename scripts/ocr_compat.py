@@ -415,6 +415,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                     {
                         "files": 4,
                         "prior_finding_semantics": "filter_survivors_as_confirmed",
+                        "recheck_instruction_requests": 3,
                     }
                 )
             if contracts.get("semantic_grouping_probe") != expected_grouping_probe:
@@ -428,6 +429,14 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 "threshold_files": 4,
             }:
                 _fail(f"evidence does not qualify small-change grouping behavior for {version}")
+            if _version(version) >= (1, 11, 1) and contracts.get("language_rule_probe") != {
+                "excluded_extensions": [".svh"],
+                "extensions": [".pug", ".sv", ".v", ".vhd", ".vhdl", ".vh"],
+                "result": "passed",
+                "rule_source": "system_builtin",
+                "selected": 6,
+            }:
+                _fail(f"evidence does not qualify built-in language rules for {version}")
             if contracts.get("completion_cap_probe") != {
                 "explicit": 4_096,
                 "inherited": 16_384,

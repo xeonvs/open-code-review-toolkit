@@ -8,7 +8,6 @@ from collections.abc import Mapping
 
 from ocr_toolkit.common.redaction import (
     SENSITIVE_NAMED_KEY_PATTERN,
-    redact_env_secret_values,
     redact_sensitive,
 )
 from ocr_toolkit.evidence.model import EvidenceValue
@@ -23,13 +22,13 @@ def redact_value(value: EvidenceValue) -> EvidenceValue:
     """Recursively redact string leaves before evidence reaches persistent storage."""
 
     if isinstance(value, str):
-        return redact_env_secret_values(redact_sensitive(value))
+        return redact_sensitive(value)
     if isinstance(value, (list, tuple)):
         return [redact_value(item) for item in value]
     if isinstance(value, Mapping):
         redacted_mapping: dict[str, EvidenceValue] = {}
         for key, item in value.items():
-            redacted_key = redact_env_secret_values(redact_sensitive(key))
+            redacted_key = redact_sensitive(key)
             if not redacted_key:
                 raise EvidenceValueRedactionError("evidence object key is empty after redaction")
             if redacted_key in redacted_mapping:
@@ -61,13 +60,13 @@ def safe_diagnostic(message: object) -> str:
 
     if not isinstance(message, str) or not message or len(message) > 1024:
         raise EvidenceStoreError("evidence diagnostic must contain between 1 and 1024 characters")
-    return redact_env_secret_values(redact_sensitive(message))
+    return redact_sensitive(message)
 
 
 def safe_delta_metadata(value: str, *, name: str, max_chars: int) -> str:
     """Redact and bound one repository-derived delta metadata field."""
 
-    redacted = redact_env_secret_values(redact_sensitive(value))
+    redacted = redact_sensitive(value)
     if not redacted or len(redacted) > max_chars:
         raise EvidenceStoreError(f"evidence delta {name} exceeds its metadata budget")
     return redacted

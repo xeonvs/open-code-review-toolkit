@@ -270,6 +270,10 @@ def test_context_store_admits_only_closed_immutable_ci_outcome(tmp_path: Path) -
         lambda outcome: outcome.update({"requirement": "optional"}),
         lambda outcome: outcome.update({"origin": "pipeline-7"}),
         lambda outcome: outcome["scope"].update({"path_prefixes": ["tests/", "src/"]}),
+        lambda outcome: outcome["scope"].update({"path_prefixes": ["/src/"]}),
+        lambda outcome: outcome["scope"].update({"path_prefixes": ["src/../tests/"]}),
+        lambda outcome: outcome["scope"].update({"path_prefixes": ["src//tests/"]}),
+        lambda outcome: outcome["scope"].update({"path_prefixes": ["src\\tests/"]}),
         lambda outcome: outcome.update({"completed_at": 201}),
     ],
 )

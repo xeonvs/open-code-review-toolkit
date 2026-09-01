@@ -531,6 +531,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
             and not isinstance(evidence_calls, bool)
             and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
             and sum(action_counts) == evidence_calls
+            and (evidence_calls == 0 or actions["summary"] >= 1)
         ):
             return "\n".join(lines)
         positive = [action for action in EVIDENCE_ACTIONS if actions[action] > 0]

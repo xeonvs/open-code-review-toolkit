@@ -214,16 +214,16 @@ def _remediation_threads(value: object) -> RemediationThreadPolicy:
     )
 
 
-def _ci_path_prefix(value: object) -> str:
+def normalize_ci_path_prefix(value: object) -> str:
     """Validate one protected repository-relative POSIX path prefix."""
 
     if (
         not isinstance(value, str)
         or not 1 <= len(value) <= 256
-        or len(value.encode("utf-8")) > 1_024
         or "\\" in value
         or "://" in value
-        or any(unicodedata.category(character) in {"Cc", "Cf"} for character in value)
+        or any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in value)
+        or len(value.encode("utf-8")) > 1_024
     ):
         raise ContextContractError("ci_outcomes path prefix is invalid")
     trailing = value.endswith("/")
@@ -258,15 +258,15 @@ def _ci_outcomes(value: object) -> CIOutcomePolicy:
         if (
             not isinstance(name, str)
             or not 1 <= len(name) <= 128
-            or len(name.encode("utf-8")) > 512
             or "://" in name
-            or any(unicodedata.category(character) in {"Cc", "Cf"} for character in name)
+            or any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in name)
+            or len(name.encode("utf-8")) > 512
             or not isinstance(prefixes, list)
             or not prefixes
             or len(prefixes) > 32
         ):
             raise ContextContractError("ci_outcomes check is invalid")
-        normalized = tuple(_ci_path_prefix(prefix) for prefix in prefixes)
+        normalized = tuple(normalize_ci_path_prefix(prefix) for prefix in prefixes)
         if list(normalized) != sorted(set(normalized)):
             raise ContextContractError("ci_outcomes path prefixes must be sorted and unique")
         parsed.append(CIOutcomeCheckPolicy(name=name, path_prefixes=normalized))

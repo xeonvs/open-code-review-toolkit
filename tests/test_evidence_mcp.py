@@ -17,6 +17,7 @@ from ocr_toolkit.evidence import (
     EvidenceDelta,
     EvidenceRecord,
     EvidenceStore,
+    EvidenceStoreLimits,
     RefRole,
     TrustClass,
 )
@@ -28,6 +29,7 @@ from ocr_toolkit.evidence.mcp import (
     SEARCH_TOOL_NAME,
     SUPPORTED_PROTOCOL_VERSIONS,
     TOOL_NAME,
+    call_named_tool,
     call_tool,
     handle_request,
     serve,
@@ -324,6 +326,8 @@ def test_literal_search_returns_only_stable_metadata_and_normalizes_unicode() ->
     [
         "",
         "name:*",
+        "name\uff1apackage",
+        "package\uff0a",
         "a OR b",
         "one two three four five six seven eight nine",
         "safe\u202eunsafe",
@@ -365,6 +369,71 @@ def test_search_truncation_is_explicit_and_deterministic() -> None:
     assert payload["returned"] == 1
     assert payload["total_matches"] == 3
     assert payload["truncated"] is True
+
+
+def test_search_filters_deltas_by_public_kind_and_original_delta_kind() -> None:
+    """Keep delta search filters aligned with the primary list contract."""
+
+    store = _store(0)
+    store.deltas = (
+        EvidenceDelta(
+            kind="dependency.declared",
+            component="python",
+            identity="requirements.txt:package",
+            change="changed",
+            before={"name": "package", "version": "1.0"},
+            after={"name": "package", "version": "2.0"},
+        ),
+    )
+
+    payload = _payload(
+        handle_request(
+            store,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": SEARCH_TOOL_NAME,
+                    "arguments": {
+                        "query": "package",
+                        "kind": "repository.evidence_delta",
+                        "delta_kind": "dependency.declared",
+                    },
+                },
+            },
+        )["result"]  # type: ignore[index]
+    )
+
+    assert payload["total_matches"] == 1
+    assert payload["matches"][0]["kind"] == "repository.evidence_delta"  # type: ignore[index]
+    assert payload["matches"][0]["delta_kind"] == "dependency.declared"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"query": "package", "delta_kind": "dependency.declared"},
+        {
+            "query": "package",
+            "kind": "repository.evidence_delta",
+            "ref": "head",
+        },
+    ],
+)
+def test_search_rejects_incoherent_delta_filters(arguments: dict[str, object]) -> None:
+    """Reject delta-only filters that cannot identify a coherent search domain."""
+
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": SEARCH_TOOL_NAME, "arguments": arguments},
+        },
+    )
+    assert result is not None and result["result"]["isError"] is True  # type: ignore[index]
 
 
 def test_coverage_tool_proves_only_complete_exact_zero_match_scope() -> None:
@@ -452,6 +521,124 @@ def test_coverage_tool_proves_only_complete_exact_zero_match_scope() -> None:
     assert unknown_payload["state"] == "unknown"
     assert unknown_payload["coverage_records"] == 0
     assert unknown_payload["absence_authoritative"] is False
+
+
+def test_coverage_broad_or_admission_truncated_queries_cannot_prove_absence() -> None:
+    """Require an exact untruncated scope before publishing authoritative absence."""
+
+    coverage = CoverageRecord(
+        component="python",
+        domain="dependency.declared",
+        scope="requirements.txt",
+        state=CoverageState.COMPLETE,
+        reasons=("bounded-source-complete",),
+        ref=RefRole.HEAD,
+        commit_sha=SHA,
+    )
+    broad_store = _store(0)
+    assert broad_store.add_coverage(coverage)
+    broad = _payload(
+        handle_request(
+            broad_store,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": COVERAGE_TOOL_NAME,
+                    "arguments": {"kind": "dependency.declared", "ref": "head"},
+                },
+            },
+        )["result"]  # type: ignore[index]
+    )
+    assert broad["state"] == "unknown"
+    assert broad["coverage_records"] == 0
+    assert broad["absence_authoritative"] is False
+
+    limited = EvidenceStore(limits=EvidenceStoreLimits(max_records=2, max_records_per_kind=1))
+    assert limited.add_coverage(coverage)
+    assert limited.add(
+        EvidenceRecord(
+            kind="dependency.declared",
+            value={"name": "other"},
+            source_path="other.txt",
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+            component="python",
+            provenance="synthetic parser",
+            trust=TrustClass.SOURCE_REPOSITORY,
+        )
+    )
+    assert not limited.add(
+        EvidenceRecord(
+            kind="dependency.declared",
+            value={"name": "dropped"},
+            source_path="requirements.txt",
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+            component="python",
+            provenance="synthetic parser",
+            trust=TrustClass.SOURCE_REPOSITORY,
+        )
+    )
+    truncated = _payload(
+        handle_request(
+            limited,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": COVERAGE_TOOL_NAME,
+                    "arguments": {
+                        "kind": "dependency.declared",
+                        "ref": "head",
+                        "component": "python",
+                        "path": "requirements.txt",
+                    },
+                },
+            },
+        )["result"]  # type: ignore[index]
+    )
+    assert truncated["state"] == "unknown"
+    assert truncated["truncated"] is True
+    assert truncated["absence_authoritative"] is False
+
+
+@pytest.mark.parametrize("reason", ["ambiguous", "oversized"])
+def test_coverage_rejects_authoritative_absence_after_value_omission(reason: str) -> None:
+    """Treat every same-kind admission failure as incomplete scoped coverage."""
+
+    store = _store(0)
+    assert store.add_coverage(
+        CoverageRecord(
+            component="python",
+            domain="dependency.declared",
+            scope="requirements.txt",
+            state=CoverageState.COMPLETE,
+            reasons=("bounded-source-complete",),
+            ref=RefRole.HEAD,
+            commit_sha=SHA,
+        )
+    )
+    store.add_diagnostic(f"omitted {reason} dependency.declared evidence value")
+
+    payload = _payload(
+        call_named_tool(
+            store,
+            COVERAGE_TOOL_NAME,
+            {
+                "kind": "dependency.declared",
+                "ref": "head",
+                "component": "python",
+                "path": "requirements.txt",
+            },
+        )
+    )
+
+    assert payload["state"] == "unknown"
+    assert payload["truncated"] is True
+    assert payload["absence_authoritative"] is False
 
 
 @pytest.mark.parametrize(

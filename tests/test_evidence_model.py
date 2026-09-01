@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.evidence import (
     CoverageRecord,
     CoverageState,
@@ -316,6 +317,25 @@ def test_store_redacts_before_persistence_and_round_trips(
     restored = EvidenceStore.read(path)
     assert restored.to_json() == serialized
     assert restored.records[0].sensitivity.value == "redacted"
+
+
+def test_store_scans_live_secret_values_once_per_string_leaf(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Avoid repeating the same live environment scan inside one redaction pass."""
+
+    calls = 0
+
+    def counted_redaction(value: str) -> str:
+        nonlocal calls
+        calls += 1
+        return redact_sensitive(value)
+
+    monkeypatch.setattr("ocr_toolkit.evidence.store.values.redact_sensitive", counted_redaction)
+    store = EvidenceStore()
+
+    assert store.add(record("safe public value"))
+    assert calls == 1
 
 
 def test_store_redacts_sensitive_mapping_keys() -> None:
