@@ -148,8 +148,8 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | done | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
-| WQ-09 | in_progress | Merge protected `main` #165 into the Draft branch, update maintenance notes, and revalidate the combined tree |
-| WQ-10 | pending | Run configured semantic qualification and final project-rule OCR review; remediate findings and self-review before push |
+| WQ-09 | done | Merge protected `main` #165 into the Draft branch, update maintenance notes, and revalidate the combined tree |
+| WQ-10 | in_progress | Run configured semantic qualification and final project-rule OCR review; remediate findings and self-review before push |
 | WQ-11 | pending | Push the final feature head, reconcile hosted checks, merge #164, and verify its development publication |
 | WQ-12 | pending | Prepare and merge `Release v0.8.7`, publish stable artifacts, independently read back every release surface, close tracking, and clean scratch state |
 
@@ -264,6 +264,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - 2026-09-01: protected-main PR #165 was squash-merged as verified commit `4fd4eda`; its seven
   workflow-only pin changes have no path overlap or merge conflict with #164. Development run
   33482577560 and Scorecard run 33482577475 completed successfully on that exact commit.
+- 2026-09-01: signed local merge `0ca7b93` incorporates exact protected-main #165 into the Draft
+  branch. The combined tree passes the complete local gate with 1,367 tests plus 366 subtests at
+  86.18% branch coverage and risk groups at 85%, 82%, 86%, and 87%; manifest validation,
+  Towncrier rendering, Gitleaks, and diff hygiene also pass. Checksum-verified OCR 1.11.1 is now
+  PATH-effective, and its configured LLM connectivity test passes. Current compatibility wording
+  preserves only explicit positive completion-cap transport: the toolkit default remains unset
+  and no provider-specific cap is recommended.
 
 #### Risks And Recovery
 
@@ -283,9 +290,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Merge protected `origin/main` at `4fd4eda` into the local #164 branch without pushing, validate
-the combined trusted workflow/runtime tree, atomically update OCR, and run the two configured OCR
-gates. Push only after validated findings are remediated and the final self-review is complete.
+Run the configured semantic qualification and final project-rule OCR review on the combined
+exact head. Push only after validated findings are remediated and the final self-review is
+complete.
 
 #### Plan Fidelity Check
 
