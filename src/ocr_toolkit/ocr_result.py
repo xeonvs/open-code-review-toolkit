@@ -19,7 +19,7 @@ from ocr_toolkit.common.redaction import sanitize_ocr_value
 DEFAULT_MAX_RESULT_BYTES = 2_000_000
 MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
-TOOLKIT_RESULT_SCHEMA_VERSION = 5
+TOOLKIT_RESULT_SCHEMA_VERSION = 6
 SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({TOOLKIT_RESULT_SCHEMA_VERSION})
 TOOLKIT_ADVISORY_KEY = "_ocr_toolkit_advisory"
 TOOLKIT_ADVISORY_SCHEMA_VERSION = "ocr.toolkit-advisory/v1"
@@ -46,6 +46,8 @@ PUBLIC_REVIEW_TOOL_CALL_NAMES = frozenset(
         "file_read",
         "file_read_diff",
         "ocr_toolkit_evidence",
+        "ocr_toolkit_evidence_coverage",
+        "ocr_toolkit_evidence_search",
         "task_done",
     }
 )

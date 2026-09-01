@@ -19,6 +19,7 @@ from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
+    TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -159,7 +160,10 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 5:
+    if (
+        not isinstance(toolkit_metadata, dict)
+        or toolkit_metadata.get("schema_version") != TOOLKIT_RESULT_SCHEMA_VERSION
+    ):
         return "", None
     review = toolkit_metadata.get("review")
     if not isinstance(review, dict):
@@ -618,14 +622,17 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     )
     if toolkit_metadata is None:
         publication_state = "direct"
-    elif isinstance(toolkit_metadata, dict) and toolkit_metadata.get("schema_version") == 5:
+    elif (
+        isinstance(toolkit_metadata, dict)
+        and toolkit_metadata.get("schema_version") == TOOLKIT_RESULT_SCHEMA_VERSION
+    ):
         publication_state = publication_dlp_state(publication)
     else:
         publication_state = None
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,
-            "receipt v5 publication state is invalid",
+            "receipt v6 publication state is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -639,7 +646,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not toolkit_receipt_is_valid(toolkit_metadata):
             return invalid_ocr_schema_exit(
                 config,
-                "OCR toolkit advisory is not bound to a valid receipt v5",
+                "OCR toolkit advisory is not bound to a valid receipt v6",
             )
     ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
 

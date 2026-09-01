@@ -231,12 +231,12 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.change_category" for record in store.records)
-    assert bootstrap.startswith("# Required evidence call\n")
+    assert bootstrap.startswith("# Required evidence\n")
     instruction = bootstrap.index("ocr_toolkit_evidence(action=summary)")
     assert instruction < bootstrap.index(base_sha)
-    assert "small/self-contained diffs" in bootstrap
-    assert "preflight self-query does not count" in bootstrap
-    assert "zero calls are rejected" in bootstrap
+    assert "Prior/filter-surviving findings remain unverified" in bootstrap
+    assert "preflight excluded" in bootstrap
+    assert "zero model calls fail" in bootstrap
     assert "# Repository evidence bootstrap" in bootstrap
     assert "Untrusted repository data" in bootstrap
     assert f"- base: `{base_sha}`" in bootstrap
@@ -298,7 +298,9 @@ def test_collection_never_keeps_deltas_for_rejected_typed_records(
 
     assert not any(record.kind == "dependency.declared" for record in store.records)
     assert not any(delta.kind == "dependency.declared" for delta in store.deltas)
-    assert store.diagnostics == []
+    assert store.diagnostics == [
+        "typed dependency.declared comparison incomplete; unsafe semantic deltas omitted"
+    ]
 
 
 def test_collection_continues_after_a_real_per_kind_store_limit(
@@ -426,9 +428,11 @@ def test_bootstrap_truncation_is_explicit() -> None:
     assert len(bootstrap) <= 400
     assert len(bootstrap.encode("utf-8")) <= 1024
     assert "bootstrap truncated" in bootstrap
-    assert bootstrap.startswith("# Required evidence call\n")
+    assert bootstrap.startswith("# Required evidence\n")
     assert "ocr_toolkit_evidence(action=summary)" in bootstrap
-    assert "zero calls are rejected" in bootstrap
+    assert "zero model calls fail" in bootstrap
+    assert "Prior/filter-surviving findings remain unverified" in bootstrap
+    assert "re-check against current code/tests/trusted evidence" in bootstrap
 
 
 def test_bootstrap_neutralizes_untrusted_diagnostic_markdown() -> None:

@@ -25,10 +25,11 @@ DEFAULT_BOOTSTRAP_MAX_BYTES = 32_768
 MAX_BOOTSTRAP_POLICY_SUMMARIES = 20
 MAX_BOOTSTRAP_MAX_BYTES = 65_536
 MANDATORY_EVIDENCE_INSTRUCTION = (
-    "# Required evidence call\n\n"
-    "Call `ocr_toolkit_evidence(action=summary)` before analysis, even for "
-    "small/self-contained diffs. Model use is mandatory; preflight self-query does not "
-    "count; zero calls are rejected.\n\n"
+    "# Required evidence\n\n"
+    "Call `ocr_toolkit_evidence(action=summary)` before analysis; preflight excluded; "
+    "zero model calls fail.\n"
+    "Prior/filter-surviving findings remain unverified; re-check against current "
+    "code/tests/trusted evidence.\n\n"
 )
 
 
@@ -78,6 +79,7 @@ def render_bootstrap(
     store: EvidenceStore,
     *,
     capabilities: Sequence[CapabilityView] = (),
+    context_hints: Mapping[str, int] | None = None,
     max_chars: int = DEFAULT_BOOTSTRAP_MAX_CHARS,
     max_bytes: int = DEFAULT_BOOTSTRAP_MAX_BYTES,
 ) -> str:
@@ -144,16 +146,22 @@ def render_bootstrap(
     if capabilities:
         for capability in capabilities:
             marker = " (built-in)" if capability.builtin else ""
+            if capability.builtin and capability.server == "ocr_toolkit_evidence":
+                lines.append(f"- {inline_code(capability.server)}{marker}: fixed read-only tools")
+                continue
             tool_names = ", ".join(inline_code(tool) for tool in capability.tools)
             lines.append(
                 f"- {inline_code(capability.server)}{marker}: "
                 f"{tool_names or 'all allowlisted server tools'}"
             )
     else:
-        lines.append("- `ocr_toolkit_evidence` (built-in): `ocr_toolkit_evidence`")
+        lines.append(
+            "- `ocr_toolkit_evidence` (built-in): `ocr_toolkit_evidence`, "
+            "`ocr_toolkit_evidence_search`, `ocr_toolkit_evidence_coverage`"
+        )
     lines.append(
-        "Use `action=summary`, `action=list`, then `action=get`; list "
-        "`kind=repository.evidence_delta` with optional `delta_kind` for changes."
+        "Use `action=summary` once; `action=list` for known facts; literal search for unknown "
+        "locations; `action=get` for selected IDs; coverage before absence; stop when sufficient."
     )
     if any("context_list" in capability.tools for capability in capabilities):
         lines.extend(
@@ -173,6 +181,15 @@ def render_bootstrap(
                 ),
             )
         )
+        if context_hints:
+            hints = ", ".join(
+                f"{name}={count}" for name, count in sorted(context_hints.items()) if count > 0
+            )
+            if hints:
+                lines.append(
+                    "Protected same-revision CI outcomes: "
+                    f"{hints}; use `context_list(resource_class=ci_outcome)` for records."
+                )
     lines.append("Only applicable `complete` coverage proves absence; otherwise it is unknown.")
     lines.extend(
         (

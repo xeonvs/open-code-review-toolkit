@@ -17,6 +17,7 @@ from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
@@ -515,10 +516,8 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     lines = [f"- verified MCP calls: {len(used)} server(s) ({details})"]
     evidence = toolkit_metadata.get("evidence")
     actions = evidence.get("actions") if isinstance(evidence, dict) else None
-    if actions == {"state": "unavailable"}:
-        lines.append("- built-in evidence actions: unavailable")
-    elif isinstance(actions, dict) and set(actions) == {"state", "summary", "list", "get"}:
-        action_counts = [actions[action] for action in ("summary", "list", "get")]
+    if isinstance(actions, dict) and set(actions) == {"state", *EVIDENCE_ACTIONS}:
+        action_counts = [actions[action] for action in EVIDENCE_ACTIONS]
         evidence_calls = evidence.get("calls") if isinstance(evidence, dict) else None
         if not (
             actions.get("state") == "verified"
@@ -532,19 +531,22 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
             and not isinstance(evidence_calls, bool)
             and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
             and sum(action_counts) == evidence_calls
+            and (evidence_calls == 0 or actions["summary"] >= 1)
         ):
             return "\n".join(lines)
-        lines.append(
-            "- built-in evidence actions: "
-            + ", ".join(f"{action}: {actions[action]}" for action in ("summary", "list", "get"))
-        )
+        positive = [action for action in EVIDENCE_ACTIONS if actions[action] > 0]
+        if positive:
+            lines.append(
+                "- built-in evidence actions: "
+                + ", ".join(f"{action}: {actions[action]}" for action in positive)
+            )
     return "\n".join(lines)
 
 
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact v5 DLP receipt."""
+    """Return one low-cardinality signal from an exact v6 DLP receipt."""
 
     state = publication_dlp_state(publication)
     if (

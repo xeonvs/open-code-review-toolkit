@@ -19,6 +19,7 @@ import pytest
 
 from ocr_toolkit import ocr_result, review_runner
 from ocr_toolkit.context.broker import BrokerResult
+from ocr_toolkit.context.ci_outcomes import CIOutcomeSnapshot
 from ocr_toolkit.context.contracts import RecognizerPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.store import ContextStore
@@ -29,7 +30,8 @@ from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import approval, settings
 from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import patched_attr, patched_env
-from tests.test_context_policy import encoded_policy, remediation_policy_value
+from tests.test_context_broker import ci_outcome
+from tests.test_context_policy import ci_policy_value, encoded_policy, remediation_policy_value
 
 DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
@@ -38,6 +40,18 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     context_mode="off",
     context=None,
 )
+BUILTIN_EVIDENCE_TOOLS = (
+    "ocr_toolkit_evidence",
+    "ocr_toolkit_evidence_search",
+    "ocr_toolkit_evidence_coverage",
+)
+SUMMARY_ACTION_COUNTS = {
+    "summary": 1,
+    "list": 0,
+    "get": 0,
+    "search": 0,
+    "coverage": 0,
+}
 
 
 def enriched_identity() -> review_runner.ReviewIdentity:
@@ -68,17 +82,138 @@ def configure_enrichment_test(
     *,
     provider_acquire: object,
     external_acquire: object,
+    policy_value: dict[str, object] | None = None,
+    ci_acquire: object | None = None,
 ) -> EvidenceArtifacts:
     """Install only the composition-edge fakes shared by enrichment tests."""
 
-    policy = parse_policy(encoded_policy(remediation_policy_value()))
+    policy = parse_policy(encoded_policy(policy_value or remediation_policy_value()))
     artifacts = repository_artifacts(tmp_path)
     artifacts.directory.mkdir(mode=0o700)
     monkeypatch.setattr(review_runner, "load_protected_policy", lambda *_args, **_kwargs: policy)
     monkeypatch.setattr(review_runner, "acquire_gitlab_context", provider_acquire)
     monkeypatch.setattr(review_runner, "acquire_external_records", external_acquire)
+    if ci_acquire is not None:
+        monkeypatch.setattr(review_runner, "acquire_gitlab_ci_outcomes", ci_acquire)
     monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
     return artifacts
+
+
+def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bind a protected same-revision pass without making it suppress or approve findings."""
+
+    policy = ci_policy_value()
+    policy.pop("forge_discussions")
+    policy.pop("remediation_threads")
+    policy["references"] = []
+    snapshot = CIOutcomeSnapshot("complete", (ci_outcome(),), 0, 0)
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: None,
+        external_acquire=lambda **_kwargs: BrokerResult(
+            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
+        ),
+        policy_value=policy,
+        ci_acquire=lambda *_args, **_kwargs: snapshot,
+    )
+
+    context_config, receipt = review_runner._prepare_enrichment(
+        enriched_identity(),
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert context_config is not None and receipt is not None
+    assert receipt.completeness == {"forge:ci_outcomes": "complete"}
+    assert receipt.required_degraded is False
+    assert receipt.mutable_admitted is False
+    assert receipt.bootstrap_hints == {"required_passed": 1}
+    assert "functional-tests" in receipt.forbidden_publication
+    assert "src/" in receipt.forbidden_publication
+    assert "tests/" in receipt.forbidden_publication
+    assert not {
+        "passed",
+        "required",
+        "reviewed_head",
+        "declared",
+        "same_revision_pipeline",
+    } & set(receipt.forbidden_publication)
+    payload = {
+        "status": "complete",
+        "comments": [{"content": "The required functional check passed."}],
+        "warnings": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "complete",
+            "coverage": {
+                "selected": [{"item_id": "item-1"}],
+                "completed": [{"item_id": "item-1"}],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+        "tool_calls": {
+            "total": 1,
+            "by_tool": {"ocr_toolkit_evidence": 1},
+        },
+    }
+    projected, publication, filtered = review_runner._publication_projection(
+        payload,
+        forbidden=receipt.forbidden_publication,
+        allowed_tools=frozenset({"ocr_toolkit_evidence"}),
+    )
+    assert projected is payload
+    assert publication == {"state": "passed"}
+    assert filtered is False
+    restored = ContextStore.read(
+        artifacts.context_store,
+        expected_run_id=context_config.run_id,
+        expected_policy_digest=context_config.policy_digest,
+        now=0,
+    )
+    assert [record.resource_class for record in restored.records] == ["ci_outcome"]
+    assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
+
+
+def test_optional_ci_record_rejection_does_not_degrade_required_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep malformed optional CI evidence visible without treating it as required."""
+
+    policy = ci_policy_value()
+    policy.pop("forge_discussions")
+    policy.pop("remediation_threads")
+    policy["references"] = []
+    snapshot = CIOutcomeSnapshot("complete", (ci_outcome(),), 0, 0)
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
+    monkeypatch.setattr(review_runner, "prepare_ci_outcome_records", lambda *_args, **_kwargs: ())
+    artifacts = configure_enrichment_test(
+        tmp_path,
+        monkeypatch,
+        provider_acquire=lambda *_args, **_kwargs: None,
+        external_acquire=lambda **_kwargs: BrokerResult(
+            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
+        ),
+        policy_value=policy,
+        ci_acquire=lambda *_args, **_kwargs: snapshot,
+    )
+
+    _context_config, receipt = review_runner._prepare_enrichment(
+        enriched_identity(),
+        artifacts,
+        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
+    )
+
+    assert receipt is not None
+    assert receipt.completeness == {"forge:ci_outcomes": "partial"}
+    assert receipt.degradation_counts["invalid"] == 1
+    assert receipt.required_degraded is False
 
 
 def test_default_termination_signal_is_translated_for_cleanup() -> None:
@@ -334,7 +469,13 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         capabilities=(
             MCPCapability(
                 "ocr_toolkit_evidence",
-                ("ocr_toolkit_evidence", "context_list", "context_get"),
+                (
+                    "ocr_toolkit_evidence",
+                    "ocr_toolkit_evidence_search",
+                    "ocr_toolkit_evidence_coverage",
+                    "context_list",
+                    "context_get",
+                ),
                 True,
             ),
         ),
@@ -344,6 +485,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
     safe_enrichment = review_runner.EnrichmentReceipt(
         policy_digest="c" * 64,
         completeness={
+            "forge:ci_outcomes": "complete",
             "forge:gitlab_discussions": "complete",
             "reference:tracker:engineering:issue": "complete",
         },
@@ -354,6 +496,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             "Validate current behavior",
             "Review the implementation and its tests.",
         ),
+        bootstrap_hints={"required_passed": 1},
     )
 
     metadata = review_runner._review_receipt(
@@ -361,8 +504,9 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         composition,
         identity,
         safe_enrichment,
+        {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
     )
-    metadata["schema_version"] = 5
+    metadata["schema_version"] = 6
     eligible = approval.evaluate_approval_policy(
         settings.BooleanSetting(True),
         parse_result_outcome(payload),
@@ -388,8 +532,14 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             "the selected review context was degraded",
         ),
     ):
-        blocked = review_runner._review_receipt(payload, composition, identity, changed)
-        blocked["schema_version"] = 5
+        blocked = review_runner._review_receipt(
+            payload,
+            composition,
+            identity,
+            changed,
+            {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+        )
+        blocked["schema_version"] = 6
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
             parse_result_outcome(payload),
@@ -481,7 +631,7 @@ def test_evidence_mcp_self_query_does_not_satisfy_model_usage(tmp_path: Path) ->
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -505,7 +655,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -513,7 +663,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         "ocr_toolkit_evidence": 2
     }
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 5,
+        "schema_version": 6,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
         "context": {
             "mode": "off",
@@ -531,7 +681,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
                 {
                     "server": "ocr_toolkit_evidence",
                     "transport": "builtin",
-                    "tools": ["ocr_toolkit_evidence"],
+                    "tools": list(BUILTIN_EVIDENCE_TOOLS),
                 }
             ],
             "usage": {"ocr_toolkit_evidence": 2},
@@ -559,13 +709,19 @@ def test_evidence_action_attribution_is_verified_only_on_exact_reconciliation(
 ) -> None:
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
     cases = (
-        ({"summary": 1, "list": 1, "get": 0}, "verified"),
-        ({"summary": 1, "list": 0, "get": 0}, "unavailable"),
+        (
+            {"summary": 1, "list": 1, "get": 0, "search": 0, "coverage": 0},
+            "verified",
+        ),
+        (
+            {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+            "unavailable",
+        ),
         (None, "unavailable"),
     )
     for index, (counts, expected) in enumerate(cases):
@@ -591,6 +747,93 @@ def test_evidence_action_attribution_is_verified_only_on_exact_reconciliation(
         assert actions["state"] == expected
 
 
+def test_evidence_action_receipt_reconciles_each_fixed_tool_independently(
+    tmp_path: Path,
+) -> None:
+    """Bind search and coverage counts to their exact OCR by-tool identities."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 5,
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 3,
+                        "ocr_toolkit_evidence_search": 1,
+                        "ocr_toolkit_evidence_coverage": 1,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    counts = {"summary": 1, "list": 1, "get": 1, "search": 1, "coverage": 1}
+
+    usage = review_runner._record_ocr_result_mcp_usage(
+        result,
+        composition,
+        DEFAULT_IDENTITY,
+        evidence_action_counts=counts,
+    )
+    receipt = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]
+
+    assert usage == {"ocr_toolkit_evidence": 5}
+    assert receipt["evidence"] == {
+        "mandatory": True,
+        "used": True,
+        "calls": 5,
+        "actions": {"state": "verified", **counts},
+    }
+
+
+def test_mandatory_evidence_rejects_available_receipt_without_summary(
+    tmp_path: Path,
+) -> None:
+    """Do not let list/get calls impersonate the mandatory summary action."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 2,
+                    "by_tool": {"ocr_toolkit_evidence": 2},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="mandatory evidence summary"):
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            DEFAULT_IDENTITY,
+            evidence_action_counts={
+                "summary": 0,
+                "list": 1,
+                "get": 1,
+                "search": 0,
+                "coverage": 0,
+            },
+        )
+
+
 def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     tmp_path: Path,
 ) -> None:
@@ -606,7 +849,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -618,7 +861,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 5,
+        "schema_version": 6,
         "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
         "context": {
             "mode": "metadata",
@@ -636,7 +879,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
                 {
                     "server": "ocr_toolkit_evidence",
                     "transport": "builtin",
-                    "tools": ["ocr_toolkit_evidence"],
+                    "tools": list(BUILTIN_EVIDENCE_TOOLS),
                 }
             ],
             "usage": {"ocr_toolkit_evidence": 1},
@@ -858,7 +1101,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -868,6 +1111,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
         composition,
         DEFAULT_IDENTITY,
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=("private discussion sentence",),
     )
 
@@ -939,7 +1183,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -950,6 +1194,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
         composition,
         replace(DEFAULT_IDENTITY, mr_author_id=41),
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
         toolkit_advisory=advisory,
     )
@@ -1000,7 +1245,7 @@ def test_raw_ocr_result_cannot_supply_the_reserved_toolkit_advisory(tmp_path: Pa
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1027,7 +1272,7 @@ def test_raw_ocr_result_rejects_duplicate_reserved_advisory_keys(tmp_path: Path)
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1335,7 +1580,7 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1345,6 +1590,7 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
         composition,
         replace(DEFAULT_IDENTITY, mr_author_id=41),
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
     )
 
@@ -1413,7 +1659,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
 
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1467,6 +1713,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             composition,
             identity,
             None,
+            SUMMARY_ACTION_COUNTS,
             forbidden=(),
         )
 
@@ -1766,7 +2013,7 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1776,6 +2023,7 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
         composition,
         DEFAULT_IDENTITY,
         None,
+        SUMMARY_ACTION_COUNTS,
         forbidden=(),
     )
 
@@ -1900,6 +2148,7 @@ def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: P
         required_degraded=False,
         mutable_admitted=False,
         forbidden_publication=(),
+        bootstrap_hints={},
     )
 
     with pytest.raises(review_runner.ReviewRunnerError, match="mandatory"):
@@ -1939,7 +2188,7 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -1950,7 +2199,14 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
         "mandatory": False,
         "used": False,
         "calls": 0,
-        "actions": {"state": "unavailable"},
+        "actions": {
+            "state": "verified",
+            "summary": 0,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+        },
     }
     assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
 
@@ -1973,7 +2229,7 @@ def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> 
 
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2009,7 +2265,7 @@ def test_ocr_result_allows_manifest_skipped_message_without_tool_calls(tmp_path:
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2044,7 +2300,7 @@ def test_ocr_result_manifest_complete_requires_builtin_mcp_usage(tmp_path: Path)
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2078,7 +2334,7 @@ def test_ocr_result_rejects_unpinned_skipped_contract(
     result.write_text(json.dumps(payload), encoding="utf-8")
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2106,7 +2362,7 @@ def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> No
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2140,7 +2396,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
     composition = MCPComposition(
         payload={},
         capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
+            MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),
             MCPCapability("documentation", ("search_docs", "get_docs")),
         ),
         external_servers=(),
@@ -2178,7 +2434,7 @@ def test_ocr_result_rejects_unbounded_known_mcp_usage(
     composition = MCPComposition(
         payload={},
         capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),
+            MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),
             MCPCapability("external", ("external_a", "external_b")),
         ),
         external_servers=(),
@@ -2209,7 +2465,7 @@ def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> N
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), True),),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2240,9 +2496,7 @@ def test_ocr_result_receipt_rejects_hard_link_without_rewriting(tmp_path: Path) 
     os.link(target, result)
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),),
         external_servers=(),
         secret_values=(),
     )
@@ -2922,9 +3176,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
 
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", ("ocr_toolkit_evidence",), builtin=True),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),),
         external_servers=(),
         secret_values=(),
     )

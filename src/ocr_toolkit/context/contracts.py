@@ -6,14 +6,17 @@ from dataclasses import dataclass
 
 POLICY_SCHEMA_V1 = "ocr.review-context-policy/v1"
 POLICY_SCHEMA_V2 = "ocr.review-context-policy/v2"
-POLICY_SCHEMAS = frozenset({POLICY_SCHEMA_V1, POLICY_SCHEMA_V2})
-POLICY_SCHEMA = POLICY_SCHEMA_V2
+POLICY_SCHEMA_V3 = "ocr.review-context-policy/v3"
+POLICY_SCHEMAS = frozenset({POLICY_SCHEMA_V1, POLICY_SCHEMA_V2, POLICY_SCHEMA_V3})
+POLICY_SCHEMA = POLICY_SCHEMA_V3
 STORE_SCHEMA = "ocr.context-store/v2"
 REQUEST_SCHEMA = "ocr.context-adapter-request/v1"
 RESPONSE_SCHEMA = "ocr.context-adapter-response/v1"
 ACCOUNT_CLASSES = frozenset({"user", "automation", "system", "toolkit_bot"})
 REFERENCE_RESOURCE_CLASSES = frozenset({"issue", "document"})
-STORE_RESOURCE_CLASSES = frozenset({*REFERENCE_RESOURCE_CLASSES, "remediation_thread"})
+STORE_RESOURCE_CLASSES = frozenset(
+    {*REFERENCE_RESOURCE_CLASSES, "remediation_thread", "ci_outcome"}
+)
 PROJECTION_FIELDS = frozenset(
     {
         "descriptor",
@@ -33,7 +36,10 @@ PROJECTION_FIELDS = frozenset(
     }
 )
 REMEDIATION_MODEL_FIELD = "remediation_thread"
-STORE_PROJECTION_FIELDS = frozenset({*PROJECTION_FIELDS, REMEDIATION_MODEL_FIELD})
+CI_OUTCOME_MODEL_FIELD = "ci_outcome"
+STORE_PROJECTION_FIELDS = frozenset(
+    {*PROJECTION_FIELDS, REMEDIATION_MODEL_FIELD, CI_OUTCOME_MODEL_FIELD}
+)
 RETENTION_FIELDS = frozenset({"state", "count", "digest", "version", "expiry"})
 
 
@@ -100,6 +106,23 @@ class RemediationThreadPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class CIOutcomeCheckPolicy:
+    """Authorize one exact forge check and its protected path scope."""
+
+    name: str
+    path_prefixes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CIOutcomePolicy:
+    """Select bounded same-revision forge outcomes under protected policy."""
+
+    required: bool
+    max_age_seconds: int
+    checks: tuple[CIOutcomeCheckPolicy, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RecognizerPolicy:
     """Hold one fixed toolkit-authored candidate grammar."""
 
@@ -132,5 +155,6 @@ class ContextPolicy:
     budgets: AggregateBudgets
     forge_discussions: DiscussionPolicy | None
     remediation_threads: RemediationThreadPolicy | None
+    ci_outcomes: CIOutcomePolicy | None
     references: tuple[ReferencePolicy, ...]
     digest: str

@@ -12,7 +12,14 @@ import pytest
 from ocr_toolkit import mcp_config
 from ocr_toolkit.context.mcp import ContextMCPError, call_context_tool, tool_definitions
 from ocr_toolkit.evidence.mcp import TOOL_NAME, handle_request
-from tests.test_context_store import POLICY_DIGEST, RUN_ID, commit, pending, remediation_pending
+from tests.test_context_store import (
+    POLICY_DIGEST,
+    RUN_ID,
+    ci_pending,
+    commit,
+    pending,
+    remediation_pending,
+)
 from tests.test_evidence_mcp import _store
 
 
@@ -90,7 +97,42 @@ def test_context_tools_expose_fixed_remediation_resource_without_provider_identi
     assert "thread-" not in serialized
     assert "provider_id" not in serialized
     resource_schema = tool_definitions()[0]["inputSchema"]["properties"]["resource_class"]  # type: ignore[index]
-    assert resource_schema["enum"] == ["document", "issue", "remediation_thread"]
+    assert resource_schema["enum"] == ["ci_outcome", "document", "issue", "remediation_thread"]
+
+
+def test_context_tools_expose_scoped_ci_outcome_without_provider_identity(tmp_path: Path) -> None:
+    """Return only the protected scope and closed same-revision outcome projection."""
+
+    store = commit(
+        tmp_path / "context.json",
+        completeness={"forge:ci_outcomes": "complete"},
+        records=[ci_pending()],
+    )
+    listed = payload(
+        call_context_tool(
+            store,
+            "context_list",
+            {"resource_class": "ci_outcome"},
+            now=150,
+        )
+    )
+    fetched = payload(
+        call_context_tool(
+            store,
+            "context_get",
+            {"handle": listed["records"][0]["handle"]},
+            now=150,
+        )
+    )
+    serialized = json.dumps((listed, fetched), sort_keys=True)
+
+    assert fetched["record"]["ci_outcome"]["status"] == "passed"
+    assert fetched["record"]["ci_outcome"]["scope"] == {
+        "mode": "declared",
+        "path_prefixes": ["src/", "tests/"],
+    }
+    for forbidden in ("pipeline_id", "job_id", "web_url", "runner", "user", "trace"):
+        assert forbidden not in serialized
 
 
 def test_context_tools_enforce_live_expiry_and_colon_source_cursor(tmp_path: Path) -> None:
@@ -169,9 +211,15 @@ def test_enriched_tools_are_declared_only_with_bound_context(tmp_path: Path) -> 
 
     assert ordinary is not None and enriched is not None
     assert malformed_name is not None and malformed_name["error"]["code"] == -32602  # type: ignore[index]
-    assert [tool["name"] for tool in ordinary["result"]["tools"]] == [TOOL_NAME]  # type: ignore[index]
+    assert [tool["name"] for tool in ordinary["result"]["tools"]] == [  # type: ignore[index]
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ]
     assert [tool["name"] for tool in enriched["result"]["tools"]] == [  # type: ignore[index]
         TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
         "context_list",
         "context_get",
     ]
@@ -186,8 +234,20 @@ def test_enriched_tools_are_declared_only_with_bound_context(tmp_path: Path) -> 
         ),
     )
     builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
-    assert builtin["tools"] == [TOOL_NAME, "context_list", "context_get"]
-    assert composition.capabilities[0].tools == (TOOL_NAME, "context_list", "context_get")
+    assert builtin["tools"] == [
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+        "context_list",
+        "context_get",
+    ]
+    assert composition.capabilities[0].tools == (
+        TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+        "context_list",
+        "context_get",
+    )
 
 
 def test_real_stdio_mcp_serves_evidence_and_committed_context_in_one_process(
@@ -245,6 +305,8 @@ def test_real_stdio_mcp_serves_evidence_and_committed_context_in_one_process(
     assert completed.returncode == 0, completed.stderr
     assert [tool["name"] for tool in responses[0]["result"]["tools"]] == [
         TOOL_NAME,
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
         "context_list",
         "context_get",
     ]

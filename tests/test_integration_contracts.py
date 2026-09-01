@@ -222,6 +222,7 @@ def test_public_bounded_context_recipes_match_runtime_schemas(
     example_root = PROJECT_ROOT / "examples" / "gitlab" / "context"
     adapter_policy = parse_policy((example_root / "policy-adapters.json").read_bytes())
     discussion_policy = parse_policy((example_root / "policy-discussions.json").read_bytes())
+    ci_policy = parse_policy((example_root / "policy-ci-outcomes.json").read_bytes())
     stdio = parse_adapter_config((example_root / "adapters-stdio.json").read_text(encoding="utf-8"))
     remote = parse_adapter_config(
         (example_root / "adapters-remote.json").read_text(encoding="utf-8")
@@ -234,6 +235,14 @@ def test_public_bounded_context_recipes_match_runtime_schemas(
     assert discussion_policy.schema_version == "ocr.review-context-policy/v2"
     assert discussion_policy.remediation_threads is not None
     assert discussion_policy.references == ()
+    assert ci_policy.schema_version == "ocr.review-context-policy/v3"
+    assert ci_policy.ci_outcomes is not None
+    assert ci_policy.ci_outcomes.required is False
+    assert ci_policy.ci_outcomes.max_age_seconds == 86_400
+    assert [check.name for check in ci_policy.ci_outcomes.checks] == [
+        "functional-tests",
+        "package",
+    ]
     assert stdio[0].name == "tracker" and stdio[0].type == "stdio"
     assert remote[0].name == "tracker" and remote[0].type == "remote"
     assert remote[0].url == ("https://context-proxy.example.invalid/v1/authorize-and-resolve")
@@ -288,19 +297,20 @@ def test_public_docs_describe_the_established_m5_boundary() -> None:
     for contract in (
         "ocr.review-context-policy/v1",
         "ocr.review-context-policy/v2",
+        "ocr.review-context-policy/v3",
         "ocr.context-store/v2",
         "ocr.context-adapter-request/v1",
         "ocr.context-adapter-response/v1",
         "context_list",
         "context_get",
-        "receipt v5",
+        "receipt v6",
         "schema_version",
         "no store or receipt migration path",
         "semantic paraphrase",
     ):
         assert contract in bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v5" in document
+        assert "receipt v6" in document
         assert "review-context.md" in document
     assert "M5's foundation is established in v0.7.0" in strategy
     assert "M5 Bounded review-context enrichment<br/>established" in roadmap

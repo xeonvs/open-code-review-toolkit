@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS
+from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOL_NAME_CHARS,
     MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
@@ -160,7 +162,7 @@ def _sha256(value: Any) -> bool:
 
 
 def publication_dlp_state(value: Any) -> str | None:
-    """Validate the exact v5 publication-policy receipt."""
+    """Validate the exact v6 publication-policy receipt."""
 
     if value == {"state": "passed"}:
         return "passed"
@@ -258,7 +260,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    if toolkit_metadata.get("schema_version") != 5 or set(toolkit_metadata) != {
+    if toolkit_metadata.get("schema_version") != 6 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
@@ -363,7 +365,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     servers: set[str] = set()
     tool_owners: set[str] = set()
     external = False
-    builtin_server = "ocr_toolkit_evidence"
+    builtin_server = TOOL_NAME
+    builtin_tools = [TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME]
     for capability in capabilities:
         if not isinstance(capability, dict) or set(capability) != {"server", "transport", "tools"}:
             return invalid
@@ -388,9 +391,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
                 server == builtin_server
                 and tools
                 != (
-                    [builtin_server, "context_list", "context_get"]
+                    [*builtin_tools, "context_list", "context_get"]
                     if mode == "enriched"
-                    else [builtin_server]
+                    else builtin_tools
                 )
             )
         ):
@@ -452,7 +455,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
 
 
 def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
-    """Return whether metadata is an exact receipt v5, including valid blockers."""
+    """Return whether metadata is an exact receipt v6, including valid blockers."""
 
     return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
 
@@ -500,10 +503,11 @@ def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
     """Validate verified counts or an explicit unavailable attribution state."""
 
     if value == {"state": "unavailable"}:
-        return True
-    if not isinstance(value, dict) or set(value) != {"state", "summary", "list", "get"}:
+        return evidence_calls == 0
+    expected = {"state", *EVIDENCE_ACTIONS}
+    if not isinstance(value, dict) or set(value) != expected:
         return False
-    counts = [value.get(action) for action in ("summary", "list", "get")]
+    counts = [value.get(action) for action in EVIDENCE_ACTIONS]
     return bool(
         value.get("state") == "verified"
         and all(
@@ -513,4 +517,5 @@ def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
             for count in counts
         )
         and sum(counts) == evidence_calls
+        and (evidence_calls == 0 or value.get("summary", 0) >= 1)
     )

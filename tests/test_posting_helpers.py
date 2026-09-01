@@ -67,13 +67,13 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
-    def test_invalid_v5_publication_state_never_reaches_normal_result_flow(self) -> None:
+    def test_invalid_v6_publication_state_never_reaches_normal_result_flow(self) -> None:
         notes: list[str] = []
         result_data = {
             "status": "failed",
             "comments": [{"content": "locally retained safe finding"}],
             "_ocr_toolkit": {
-                "schema_version": 5,
+                "schema_version": 6,
                 "publication": {"dlp": "blocked"},
             },
         }
@@ -92,7 +92,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
-    def test_advisory_without_exact_receipt_v5_never_reaches_normal_result_flow(self) -> None:
+    def test_advisory_without_exact_receipt_v6_never_reaches_normal_result_flow(self) -> None:
         """Treat a correctly shaped but unbound advisory as an invalid result."""
 
         notes: list[str] = []
@@ -1311,7 +1311,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "status": "completed_with_errors",
                     "comments": [old, new],
                     "warnings": [],
-                    "_ocr_toolkit": {"schema_version": 5, "publication": publication},
+                    "_ocr_toolkit": {"schema_version": 6, "publication": publication},
                 },
             )
 
@@ -1354,7 +1354,7 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             },
             "_ocr_toolkit": {
-                "schema_version": 5,
+                "schema_version": 6,
                 "review": {
                     "source_sha": "a" * 40,
                     "policy_sha": "b" * 40,
@@ -1376,7 +1376,11 @@ class PostingIdentityTests(unittest.TestCase):
                         {
                             "server": "ocr_toolkit_evidence",
                             "transport": "builtin",
-                            "tools": ["ocr_toolkit_evidence"],
+                            "tools": [
+                                "ocr_toolkit_evidence",
+                                "ocr_toolkit_evidence_search",
+                                "ocr_toolkit_evidence_coverage",
+                            ],
                         }
                     ],
                     "usage": {},
@@ -2053,9 +2057,9 @@ class PostingWorkflowTests(unittest.TestCase):
         for metadata in (
             None,
             {"schema_version": 4},
-            {"schema_version": 5, "review": []},
+            {"schema_version": 6, "review": []},
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "review": {"source_sha": "invalid", "mr_author_id": True},
             },
         ):
@@ -2064,7 +2068,7 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(
             workflow.approval_receipt_identity(
                 {
-                    "schema_version": 5,
+                    "schema_version": 6,
                     "review": {"source_sha": "a" * 40, "mr_author_id": 41},
                 }
             ),
@@ -3107,7 +3111,7 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "mcp": {
                     "usage": {
                         "ocr_toolkit_evidence": 2,
@@ -3120,15 +3124,14 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)\n"
-            "- built-in evidence actions: unavailable",
+            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
         )
         self.assertNotIn("file_read", summary)
 
-    def test_mcp_usage_summary_reads_receipt_v5_inventory(self) -> None:
+    def test_mcp_usage_summary_reads_receipt_v6_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "mcp": {
                     "capabilities": [],
                     "usage": {"ocr_toolkit_evidence": 3},
@@ -3139,14 +3142,13 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)\n"
-            "- built-in evidence actions: unavailable",
+            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
         )
 
     def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
                 "evidence": {
                     "calls": 4,
@@ -3155,6 +3157,8 @@ class PostingSummaryTests(unittest.TestCase):
                         "summary": 1,
                         "list": 2,
                         "get": 1,
+                        "search": 0,
+                        "coverage": 0,
                     },
                 },
             }
@@ -3166,6 +3170,41 @@ class PostingSummaryTests(unittest.TestCase):
             "- built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
+    def test_mcp_usage_summary_omits_zero_or_unavailable_action_breakdown(self) -> None:
+        """Publish only reconciled non-zero action counts."""
+
+        for actions in (
+            {"state": "unavailable"},
+            {
+                "state": "verified",
+                "summary": 0,
+                "list": 0,
+                "get": 0,
+                "search": 0,
+                "coverage": 0,
+            },
+            {
+                "state": "verified",
+                "summary": 0,
+                "list": 2,
+                "get": 1,
+                "search": 0,
+                "coverage": 0,
+            },
+        ):
+            with self.subTest(actions=actions):
+                calls = sum(value for key, value in actions.items() if key != "state")
+                self.assertEqual(
+                    posting_formatting.format_mcp_usage_summary(
+                        {
+                            "schema_version": 6,
+                            "mcp": {"usage": {"ocr_toolkit_evidence": 3}},
+                            "evidence": {"calls": calls, "actions": actions},
+                        }
+                    ),
+                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+                )
+
     def test_mcp_usage_summary_omits_hostile_or_unreconciled_action_breakdown(self) -> None:
         for actions in (
             {"state": "verified", "summary": "1\n/approve", "list": 2, "get": 1},
@@ -3176,7 +3215,7 @@ class PostingSummaryTests(unittest.TestCase):
             with self.subTest(actions=actions):
                 summary = posting_formatting.format_mcp_usage_summary(
                     {
-                        "schema_version": 5,
+                        "schema_version": 6,
                         "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
                         "evidence": {"calls": 4, "actions": actions},
                     }
@@ -3191,7 +3230,7 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
                 "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
                 "evidence": {
@@ -3201,6 +3240,8 @@ class PostingSummaryTests(unittest.TestCase):
                         "summary": 1,
                         "list": 2,
                         "get": 1,
+                        "search": 0,
+                        "coverage": 0,
                     },
                 },
             }
@@ -3223,7 +3264,7 @@ class PostingSummaryTests(unittest.TestCase):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
                         {
-                            "schema_version": 5,
+                            "schema_version": 6,
                             "mcp": {"usage": usage},
                             "evidence": {"actions": {"state": "unavailable"}},
                         }
@@ -3231,7 +3272,7 @@ class PostingSummaryTests(unittest.TestCase):
                     "",
                 )
 
-    def test_mcp_usage_summary_rejects_pre_v5_receipt(self) -> None:
+    def test_mcp_usage_summary_rejects_pre_v6_receipt(self) -> None:
         self.assertEqual(
             posting_formatting.format_mcp_usage_summary(
                 {"schema_version": 1, "mcp_usage": {}},
@@ -5350,7 +5391,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 5)
+            self.assertEqual(metadata["schema_version"], 6)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

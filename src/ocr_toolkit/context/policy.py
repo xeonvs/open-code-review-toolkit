@@ -5,18 +5,23 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Callable, Mapping
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
 from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
     POLICY_SCHEMA_V1,
+    POLICY_SCHEMA_V2,
     POLICY_SCHEMAS,
     PROJECTION_FIELDS,
     REFERENCE_RESOURCE_CLASSES,
     RETENTION_FIELDS,
     AggregateBudgets,
+    CIOutcomeCheckPolicy,
+    CIOutcomePolicy,
     ContextContractError,
     ContextPolicy,
     ContextProjections,
@@ -32,6 +37,7 @@ MAX_POLICY_BYTES = 64 * 1024
 MAX_REFERENCES = 16
 NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 ISSUE_PREFIX_RE = re.compile(r"[A-Z][A-Z0-9]{0,15}\Z")
+MAX_CI_CHECKS = 32
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -208,6 +214,79 @@ def _remediation_threads(value: object) -> RemediationThreadPolicy:
     )
 
 
+def normalize_ci_path_prefix(value: object) -> str:
+    """Validate one protected repository-relative POSIX path prefix."""
+
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 256
+        or "\\" in value
+        or "://" in value
+        or any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in value)
+        or len(value.encode("utf-8")) > 1_024
+    ):
+        raise ContextContractError("ci_outcomes path prefix is invalid")
+    trailing = value.endswith("/")
+    path = PurePosixPath(value)
+    parts = value.rstrip("/").split("/")
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in parts):
+        raise ContextContractError("ci_outcomes path prefix is invalid")
+    normalized = path.as_posix()
+    return f"{normalized}/" if trailing else normalized
+
+
+def _ci_outcomes(value: object) -> CIOutcomePolicy:
+    """Parse exact check names and path scopes from protected policy v3."""
+
+    item = _object(
+        value,
+        keys=frozenset({"required", "max_age_seconds", "checks"}),
+        label="ci_outcomes",
+    )
+    checks = item.get("checks")
+    if not isinstance(checks, list) or not checks or len(checks) > MAX_CI_CHECKS:
+        raise ContextContractError("ci_outcomes.checks is invalid")
+    parsed: list[CIOutcomeCheckPolicy] = []
+    for raw in checks:
+        check = _object(
+            raw,
+            keys=frozenset({"name", "path_prefixes"}),
+            label="ci_outcomes check",
+        )
+        name = check.get("name")
+        prefixes = check.get("path_prefixes")
+        if (
+            not isinstance(name, str)
+            or not 1 <= len(name) <= 128
+            or "://" in name
+            or any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in name)
+            or len(name.encode("utf-8")) > 512
+            or not isinstance(prefixes, list)
+            or not prefixes
+            or len(prefixes) > 32
+        ):
+            raise ContextContractError("ci_outcomes check is invalid")
+        normalized = tuple(normalize_ci_path_prefix(prefix) for prefix in prefixes)
+        if list(normalized) != sorted(set(normalized)):
+            raise ContextContractError("ci_outcomes path prefixes must be sorted and unique")
+        parsed.append(CIOutcomeCheckPolicy(name=name, path_prefixes=normalized))
+    names = [check.name for check in parsed]
+    if names != sorted(set(names)):
+        raise ContextContractError("ci_outcomes check names must be sorted and unique")
+    required = item.get("required", False)
+    max_age_seconds = item.get("max_age_seconds", 86_400)
+    return CIOutcomePolicy(
+        required=_boolean(required, label="ci_outcomes.required"),
+        max_age_seconds=_integer(
+            max_age_seconds,
+            minimum=60,
+            maximum=604_800,
+            label="ci_outcomes.max_age_seconds",
+        ),
+        checks=tuple(parsed),
+    )
+
+
 def _recognizer(value: object, *, resource_class: str) -> RecognizerPolicy:
     item = _object(
         value,
@@ -328,6 +407,7 @@ def parse_policy(raw: bytes) -> ContextPolicy:
                 "budgets",
                 "forge_discussions",
                 "remediation_threads",
+                "ci_outcomes",
                 "references",
             }
         ),
@@ -338,6 +418,8 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         raise ContextContractError("context policy schema version is unsupported")
     if schema_version == POLICY_SCHEMA_V1 and "remediation_threads" in root:
         raise ContextContractError("context policy v1 cannot select remediation threads")
+    if schema_version in {POLICY_SCHEMA_V1, POLICY_SCHEMA_V2} and "ci_outcomes" in root:
+        raise ContextContractError("context policy v1/v2 cannot select CI outcomes")
     budgets_value = _object(
         root.get("budgets"),
         keys=frozenset({"max_records", "max_chars", "max_bytes", "max_lines", "timeout_ms"}),
@@ -364,6 +446,7 @@ def parse_policy(raw: bytes) -> ContextPolicy:
     remediation = (
         _remediation_threads(root["remediation_threads"]) if "remediation_threads" in root else None
     )
+    ci_outcomes = _ci_outcomes(root["ci_outcomes"]) if "ci_outcomes" in root else None
     references_value = root.get("references", [])
     if (
         not isinstance(references_value, list)
@@ -375,7 +458,7 @@ def parse_policy(raw: bytes) -> ContextPolicy:
     identities = [(item.adapter, item.tenant, item.resource_class) for item in references]
     if len(identities) != len(set(identities)):
         raise ContextContractError("context policy references collide")
-    if discussion is None and remediation is None and not references:
+    if discussion is None and remediation is None and ci_outcomes is None and not references:
         raise ContextContractError("context policy must select at least one source")
     canonical = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -385,6 +468,7 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         budgets=budgets,
         forge_discussions=discussion,
         remediation_threads=remediation,
+        ci_outcomes=ci_outcomes,
         references=references,
         digest=hashlib.sha256(canonical).hexdigest(),
     )

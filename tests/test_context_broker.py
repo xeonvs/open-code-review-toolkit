@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -14,8 +16,18 @@ from ocr_toolkit.context.broker import (
     prepare_discussion_records,
     prepare_remediation_records,
 )
+from ocr_toolkit.context.ci_outcomes import (
+    CIOutcome,
+    CIOutcomeSnapshot,
+    prepare_ci_outcome_records,
+)
 from ocr_toolkit.context.policy import parse_policy
-from tests.test_context_policy import encoded_policy, policy_value, remediation_policy_value
+from tests.test_context_policy import (
+    ci_policy_value,
+    encoded_policy,
+    policy_value,
+    remediation_policy_value,
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +69,25 @@ class RemediationThread:
     outdated_count: int = 0
     version: str = "130"
     digest: str = "b" * 64
+
+
+def ci_outcome(**changes: object) -> CIOutcome:
+    """Build one digest-bound provider-neutral CI outcome."""
+
+    value: dict[str, object] = {
+        "check": "functional-tests",
+        "status": "passed",
+        "requirement": "required",
+        "path_prefixes": ("src/", "tests/"),
+        "origin": "same_revision_pipeline",
+        "completed_at": 120,
+    }
+    value.update(changes)
+    digest_value = {**value, "path_prefixes": list(value["path_prefixes"])}
+    digest = hashlib.sha256(
+        json.dumps(digest_value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return CIOutcome(version=str(value["completed_at"]), digest=digest, **value)  # type: ignore[arg-type]
 
 
 def test_context_core_does_not_import_a_forge_provider() -> None:
@@ -157,6 +188,41 @@ def test_common_remediation_projection_is_fixed_model_only_and_rechecks_every_te
     assert set(record.projections["model"]) == {"descriptor", "remediation_thread"}
     assert record.projections["publish"] == {"descriptor": "remediation_thread"}
     assert "reviewer@example.invalid" not in repr(records)
+
+
+def test_common_ci_projection_is_provider_neutral_scoped_and_dlp_checked() -> None:
+    """Admit a fake-provider outcome without forge IDs or unsafe protected text."""
+
+    policy_value = ci_policy_value()
+    policy_value["ci_outcomes"]["checks"].append(  # type: ignore[index,union-attr]
+        {"name": "private-check", "path_prefixes": ["private/"]}
+    )
+    policy = parse_policy(encoded_policy(policy_value)).ci_outcomes
+    assert policy is not None
+    safe = ci_outcome()
+    secret = ci_outcome(check="private-check", path_prefixes=("private/",), completed_at=121)
+
+    records = prepare_ci_outcome_records(
+        CIOutcomeSnapshot("complete", (safe, secret), 0, 0),
+        policy=policy,
+        now=150,
+        forbidden=("private-check",),
+    )
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.resource_class == "ci_outcome"
+    assert record.mutable is False
+    assert record.projections["model"]["ci_outcome"] == {
+        "check": "functional-tests",
+        "revision": "reviewed_head",
+        "status": "passed",
+        "requirement": "required",
+        "scope": {"mode": "declared", "path_prefixes": ["src/", "tests/"]},
+        "origin": "same_revision_pipeline",
+        "completed_at": 120,
+    }
+    assert "gitlab" not in repr(record.projections)
 
 
 @pytest.mark.parametrize(

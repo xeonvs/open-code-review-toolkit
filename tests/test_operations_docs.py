@@ -14,9 +14,20 @@ CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 SIGNAL_OWNERSHIP = PROJECT_ROOT / "docs" / "engineering" / "review_signal_ownership.md"
 
 
-def test_readme_security_badges_link_to_repository_specific_results() -> None:
+def test_readme_product_and_security_badges_link_to_authoritative_results() -> None:
     readme = README.read_text(encoding="utf-8")
 
+    product_badges = (
+        "[![Version](https://img.shields.io/pypi/v/open-code-review-toolkit?"
+        "label=version&color=0A66C2)](https://pypi.org/project/open-code-review-toolkit/)",
+        "[![Python](https://img.shields.io/pypi/pyversions/open-code-review-toolkit?"
+        "logo=python&logoColor=white&label=python)]"
+        "(https://pypi.org/project/open-code-review-toolkit/)",
+        "[![License](https://img.shields.io/pypi/l/open-code-review-toolkit?color=0A66C2)]"
+        "(https://github.com/xeonvs/open-code-review-toolkit/blob/main/LICENSE)",
+    )
+    for badge in product_badges:
+        assert badge in readme
     assert (
         "[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/"
         "github.com/xeonvs/open-code-review-toolkit/badge)]"
@@ -29,6 +40,11 @@ def test_readme_security_badges_link_to_repository_specific_results() -> None:
         "(https://github.com/xeonvs/open-code-review-toolkit/actions/"
         "workflows/codeql.yml)"
     ) in readme
+    positions = [readme.index(badge) for badge in product_badges]
+    assert positions == sorted(positions)
+    assert positions[-1] < readme.index("[![OpenSSF Best Practices]")
+    assert "img.shields.io/pypi/v/open-code-review-toolkit" in readme
+    assert "test.pypi.org" not in readme.split("## Install", 1)[0]
 
 
 def test_readme_and_gitlab_guide_link_to_operations() -> None:
@@ -233,10 +249,11 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         assert "provider-specific" in document
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
-    current_compatibility = compatibility.split("### OCR 1.11.0 — toolkit 0.8.6 target", 1)[1]
-    assert "override `4096`" not in current_compatibility
-    assert "operator-selected positive completion-cap override" in current_compatibility
-    assert "historical OCR 1.10.0 through 1.10.2" in current_compatibility
+    current_compatibility = compatibility.split("### OCR 1.11.1 — toolkit 0.8.7 target", 1)[1]
+    assert "explicit positive completion-cap transport" in current_compatibility
+    assert "default remains unset" in current_compatibility
+    assert "provider-specific cap" in current_compatibility
+    assert "historical OCR 1.10.0 through 1.10.2" in compatibility
     for field in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
         assert field in configuration
     for phrase in (
@@ -343,15 +360,44 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v5" in configuration
-    assert "Receipt v1-v4" in configuration
-    assert "Receipt v1-v4" in operations
+    assert "receipt v6" in configuration
+    assert "Receipt v1-v5" in configuration
+    assert "Receipt v1-v5" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
     assert "admitted remediation context" in operations
     assert "absolute HTTPS `url`" in configuration
     assert "sole stdio exception" in configuration
+
+
+def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
+    """Document efficient routing without exposing search or coverage arguments."""
+
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+
+    for name in (
+        "ocr_toolkit_evidence",
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ):
+        assert name in configuration
+        assert name in gitlab
+    for phrase in (
+        "1\u2013128 characters",
+        "at most eight literal tokens",
+        "absence_authoritative=true",
+        "Stop once the required evidence is sufficient",
+        "action receipt v2",
+        "Receipt v6",
+    ):
+        assert phrase in configuration
+    assert "DLP-admitted store" in security
+    assert "Zero action counters, queries, scopes, IDs" in operations
+    assert "arguments, queries, scopes, IDs, and results stay private" in gitlab
 
 
 def test_production_bot_modes_and_current_contract_are_public() -> None:
@@ -541,6 +587,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.10.1 — toolkit 0.8.4 target",
         "OCR 1.10.2 — toolkit 0.8.5 target",
         "OCR 1.11.0 — toolkit 0.8.6 target",
+        "OCR 1.11.1 — toolkit 0.8.7 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
@@ -548,6 +595,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "Deploy toolkit 0.8.4 directly with OCR 1.10.1",
         "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
         "Deploy toolkit 0.8.6 directly with OCR 1.11.0",
+        "Deploy toolkit 0.8.7 directly with OCR 1.11.1",
         "max-tools runtime behavior is unchanged",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",

@@ -1,5 +1,8 @@
 # Open Code Review Toolkit
 
+[![Version](https://img.shields.io/pypi/v/open-code-review-toolkit?label=version&color=0A66C2)](https://pypi.org/project/open-code-review-toolkit/)
+[![Python](https://img.shields.io/pypi/pyversions/open-code-review-toolkit?logo=python&logoColor=white&label=python)](https://pypi.org/project/open-code-review-toolkit/)
+[![License](https://img.shields.io/pypi/l/open-code-review-toolkit?color=0A66C2)](https://github.com/xeonvs/open-code-review-toolkit/blob/main/LICENSE)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13906/badge)](https://www.bestpractices.dev/projects/13906)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/xeonvs/open-code-review-toolkit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/xeonvs/open-code-review-toolkit)
 [![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml)
@@ -28,11 +31,11 @@ python -m pip install open-code-review-toolkit
 ```
 
 The toolkit does not bundle OCR. Download the platform asset for exact
-[Open Code Review 1.11.0](https://github.com/alibaba/open-code-review/releases/tag/v1.11.0),
+[Open Code Review 1.11.1](https://github.com/alibaba/open-code-review/releases/tag/v1.11.1),
 verify it before installation against the [compatibility manifest](compatibility/ocr-support.json),
 and place the verified binary on `PATH`. The current Linux amd64 digest is
-`13f68cc2eca1a36d42140e9d37797b68fea5cbbf4b6345ec01ec1b06910fab60`; Darwin arm64 is
-`ac8bf5a0fcd176bb9dcc15b169e90f4b52bf32787adef17a850489dbed97fb78`. The manifest owns
+`1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f`; Darwin arm64 is
+`5fdf72e51aae021ac7bf43d7b9dcb160f04880f623c66e8ada5e6ae5a92e172c`. The manifest owns
 the other platform hashes.
 
 Verify the installation without contacting an LLM provider:
@@ -42,14 +45,14 @@ ocr --version
 ocr-ci --help
 ```
 
-`ocr --version` must report `open-code-review v1.11.0`; `ocr-ci --help` must exit
+`ocr --version` must report `open-code-review v1.11.1`; `ocr-ci --help` must exit
 successfully. `ocr-ci preflight` is an operational configuration check, not the installation
 smoke test.
 
 The exact recommended OCR release and its verified asset checksums live in the [versioned compatibility manifest](compatibility/ocr-support.json). CI should pin that release and checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
-The current OCR 1.11.0 integration defaults `OCR_REVIEW_EFFORT` to `medium` for two review rounds. `low` and `high` are explicit one- and three-round alternatives; see the [configuration reference](docs/configuration.md#review-effort) for cost, budget, and precedence boundaries.
+The current OCR 1.11.1 integration defaults `OCR_REVIEW_EFFORT` to `medium` for two review rounds. `low` and `high` are explicit one- and three-round alternatives; see the [configuration reference](docs/configuration.md#review-effort) for cost, budget, and precedence boundaries.
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
 
@@ -59,16 +62,16 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
-After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v5's exact reviewed source SHA and merge-request author. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. DLP-clean metadata, generic discussions, and adapter records do not independently block approval, while degraded metadata, DLP rejection, required context degradation, admitted remediation history, legacy receipts, publication filtering, any direct external MCP, author movement, or bot self-authorship prevents an approval write. GitLab approval rules and protected-branch policy remain authoritative. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
+After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v6's exact reviewed source SHA and merge-request author. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. DLP-clean metadata, generic discussions, protected same-revision CI outcomes, and adapter records do not independently block approval, while degraded metadata, DLP rejection, required context degradation, admitted remediation history, legacy receipts, publication filtering, any direct external MCP, author movement, or bot self-authorship prevents an approval write. A CI status is review context, never approval authority. GitLab approval rules and protected-branch policy remain authoritative. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
 
 Accepted tradeoffs can be recorded in `.opencodereview/accepted-decisions.md`; the evidence collector supplies only applicable target-ref decisions and never lets a source change self-authorize its review. Root and nested target `AGENTS.md`/`CLAUDE.md` guidance is similarly exposed through the existing evidence MCP with deterministic scope and precedence, while any guidance touched by the merge request is excluded. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) and [Target project guidance](docs/configuration.md#target-project-guidance) for formats and trust boundaries.
 
 ## Project architecture
 
-The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, scoped completeness, and base/head changes through the mandatory built-in read-only MCP server. Protected-policy enriched reviews can acquire stable GitLab discussions, verified remediation history, and authorized external issue/document records before OCR. Forge-specific acquisition and posting stay at provider edges; the broker, DLP, store, MCP, receipts, and tests use common contracts so a future GitHub adapter can reuse them without inheriting GitLab API semantics. The same built-in MCP exposes only opaque committed `context_list`/`context_get` handles; it has no provider network or arbitrary identifier path. Direct external MCP remains a separate privileged, comment-only operator boundary.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, literal search, scoped absence checks, and base/head changes through three fixed tools in the mandatory built-in read-only MCP server. Protected-policy enriched reviews can acquire stable GitLab discussions, verified remediation history, protected same-revision CI outcomes, and authorized external issue/document records before OCR. Forge-specific acquisition and posting stay at provider edges; the broker, DLP, store, MCP, receipts, and tests use common contracts so a future GitHub adapter can reuse them without inheriting GitLab API semantics. The same built-in MCP exposes only opaque committed `context_list`/`context_get` handles; it has no provider network or arbitrary identifier path. Direct external MCP remains a separate privileged, comment-only operator boundary.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
-- [Bounded review context](docs/review-context.md) - protected policy, adapter protocol, GitLab discussions, opaque handles, DLP, receipt, and cleanup contracts.
+- [Bounded review context](docs/review-context.md) - protected policy, GitLab discussions and same-revision CI outcomes, adapter protocol, opaque handles, DLP, receipt, and cleanup contracts.
 - [Roadmap](ROADMAP.md) - milestone status, dependencies, outcomes, and completion signals.
 - [Backlog](docs/codex/TASKS_BACKLOG.md) - inactive implementation-ready work; active execution remains in `PLANS.md`.
 

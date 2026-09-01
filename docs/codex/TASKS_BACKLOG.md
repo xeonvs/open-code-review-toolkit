@@ -20,7 +20,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 | OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
 | Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established M5 parsers, handles, schemas, and hostile adapter responses in its candidate inventory. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
-| Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion and snapshot capabilities without blocking GitLab-first M5. |
+| Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion, snapshot, and protected same-revision CI-outcome capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
 | Review measurement gaps (BL-017) | Completed and removed | The toolkit 0.8.2 source-to-signal audit concludes `no-new-layer`: OCR retains provider/review telemetry ownership, while toolkit receipts and count-only DLP events retain deterministic lifecycle ownership. Group labels and path-derived keys are explicitly classified as untrusted, high-cardinality upstream telemetry. |
 
@@ -44,7 +44,7 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 ## M6 Profiles and quality measurement
 
-Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v5, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
+Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v6, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
 
 ### BL-016: Evaluate explicit run-level model profiles
 
@@ -100,7 +100,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
 - **Activation trigger:** Not met: named targets, bounded CI resources, corpus ownership, and backend criteria across Python 3.12-3.14 are not agreed.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
-- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus M5 policy parsers, recognizers, handle codec, broker schema, and hostile adapter responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
+- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus M5 policy parsers, recognizers, handle codec, broker schema, CI-outcome adapter/store readback, and hostile adapter responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
 - **Exclusions:** Unbounded CI, production data, blanket fuzzing, or a runtime dependency.
 - **Validation:** Reproducible smoke campaign and minimized-corpus replay.
@@ -129,7 +129,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
 - **Upstream overlap:** OCR 1.10.2 reusable GitHub Action checkpoint ranges and OCR 1.11.0 Action/plugin changes cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
-- **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
+- **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, protected same-revision CI outcomes, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.
 - **Exclusions:** Repository ecosystem/framework detection, partial adapters, legacy namespace shims, or multi-host abstractions without a real second provider.
 - **Validation:** Shared adapter contract suite, provider-specific synthetic integration tests, redaction/write-bound tests, and documentation validation.

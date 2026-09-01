@@ -183,7 +183,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         )
         receipt = json.loads(output)
         assert receipt["installed_version"] == ARTIFACT_VERSION
-        assert receipt["bootstrap_chars"] == 2_185
+        assert receipt["bootstrap_chars"] == 2_244
         assert receipt["bootstrap_truncated"] is False
         assert receipt["base"] != receipt["policy_sha"] != receipt["head"]
         assert receipt["merge_request_context"] == {
