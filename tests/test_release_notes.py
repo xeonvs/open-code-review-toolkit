@@ -249,6 +249,31 @@ def test_086_release_notes_preserve_privacy_and_exact_ocr_migration() -> None:
         assert phrase in notes
 
 
+def test_087_release_notes_cover_evidence_integrity_and_mcp_routing() -> None:
+    """Keep the 0.8.7 evidence, context, and OCR migration actionable."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.8.7")
+
+    for phrase in (
+        "literal evidence search",
+        "exact scoped coverage checks",
+        "summary/list/search/get/coverage routing",
+        "action receipt v2",
+        "toolkit receipt v6",
+        "same-revision CI outcomes",
+        "cannot suppress findings",
+        "manufacturing dependency deltas",
+        "unverified across multiple review rounds",
+        "Open Code Review 1.11.1",
+        "sole supported runtime",
+        "Pug",
+        "SystemVerilog",
+        "VHDL",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

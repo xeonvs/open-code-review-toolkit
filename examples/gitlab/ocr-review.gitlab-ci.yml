@@ -7,7 +7,7 @@ default:
 
 variables:
   OCR_VERSION: "v1.11.1"
-  OCR_TOOLKIT_VERSION: "0.8.6"
+  OCR_TOOLKIT_VERSION: "0.8.7"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
   OCR_SHA256: "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f"
   OCR_POST_MODE: "draft"

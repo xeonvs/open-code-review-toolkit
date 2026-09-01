@@ -6,6 +6,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.8.7` | [OCR 1.11.1, evidence integrity, and efficient built-in MCP](releases.md#plan-toolkit-0-8-7) | Evidence comparison integrity, bounded search and exact coverage tools, protected same-revision CI outcomes, OCR 1.11.1 qualification, three complete local reviews, controlled five-action MCP qualification, feature merge, development artifact verification, and stable-delivery handoff. |
 | `v0.8.6` | [OCR 1.11.0 and precise security signals](releases.md#plan-toolkit-0-8-6) | Contextual injection classification, provider-private OCR-state containment, OCR 1.11.0 qualification and Rules, one complete local semantic review with remediation, feature merge, development artifact verification, and stable-delivery handoff. |
 | `v0.8.5` | [Provider diagnostics and OCR 1.10.2](releases.md#plan-toolkit-0-8-5) | Closed numeric provider diagnostics, unchanged GitLab/DLP/receipt/approval projections, OCR 1.10.2 qualification and Rules, compatibility scheduling, explicit local OCR provider-failure waiver, feature merge, development artifact verification, and stable-delivery handoff. |
 | `v0.8.4` | [GitLab summary correctness and OCR 1.10.1](releases.md#plan-toolkit-0-8-4) | Receipt-bound OCR core advisory, publication-filtered coverage, field-bounded HTAB with unchanged-value DLP checks, non-duplicating one-finding guide, OCR 1.10.1 qualification, final local OCR remediation, feature merge, development artifact verification, and stable-delivery handoff. |
