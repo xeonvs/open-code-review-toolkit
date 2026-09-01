@@ -2,6 +2,85 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-8-7"></a>
+
+## Toolkit 0.8.7 — OCR 1.11.1, evidence integrity, and efficient built-in MCP
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.8.7`
+Repository completion date: 2026-09-01
+
+### Goal and delivered scope
+
+Toolkit 0.8.7 prevents incomplete evidence admission from creating dependency
+deltas, keeps repeated OCR claims unverified until current evidence supports
+them, and adds bounded literal search plus exact scoped coverage to the existing
+read-only evidence MCP. Action receipt v2 and toolkit receipt v6 reconcile all
+five evidence actions while preserving established public-output privacy
+boundaries.
+
+Protected review-context policy v3 admits bounded same-revision CI outcomes as
+provider-neutral review context. Exact-head and protected-path scope remain
+mandatory. CI outcomes cannot suppress findings, prove unrelated absence,
+change severity or lifecycle, or authorize approval. Policies v1 and v2 remain
+valid without CI outcomes.
+
+The release qualifies OCR 1.11.1 as its sole supported runtime, adds its Pug,
+Verilog/SystemVerilog, and VHDL review coverage, refreshes protected workflow
+actions, and exposes stable package, Python-support, and license metadata in the
+README without hardcoding the package version.
+
+### Qualification, review, and performance evidence
+
+- OCR 1.11.1 was checksum-qualified through hosted and local no-model probes.
+  OCR 1.11.0 is adjacent historical evidence, not a runtime fallback.
+- Three complete repository reviews were performed with project rules. Confirmed
+  findings and profiler findings were corrected and covered by regressions.
+- A final controlled model-driven qualification on feature head
+  `410194895f85be37e1801b3b92e959177aabf04f` completed one selected item with
+  zero failures, warnings, or findings. It reconciled exactly one summary, list,
+  get, search, and coverage action, proving both legacy and new evidence tools
+  were actually selected.
+- Context mode was off for that controlled qualification. It therefore does not
+  claim model-time enriched `context_list` or `context_get` qualification.
+- The final gate passed 1,386 tests plus 367 subtests at 86.26% branch coverage.
+  Risk groups passed at 85%, 82%, 86%, and 87%.
+- MCP profiling improved the measured path from 1.95 seconds to 1.51–1.63
+  seconds with a 2,244-character bootstrap by removing one redundant live-secret
+  scan per scalar while preserving live-secret semantics.
+
+### Repository and development-publication evidence
+
+- Feature PR #164 passed all 13 exact-head checks with zero active review
+  threads. Reviewed feature head `410194895f85be37e1801b3b92e959177aabf04f`
+  and squash merge `73a17ffddc4fcefef0ebca914966876222b84528`
+  have the same tree `3c63cf60a9de30ac375e3bec88712fd3e5b32a42`.
+- Development workflow run 33492962175 published and independently verified
+  `0.8.7.dev81`. The TestPyPI wheel SHA-256 is
+  `339d92b914fac77e535a85efcded2bbd408b209758599e45edf76d3738d3416e`;
+  the sdist SHA-256 is
+  `d9d16ebfb1930258d0b59da6d339a8cf1102f2aa9774ec08f7945b23a151ea5d`.
+  Workflow and registry bytes, publisher provenance, and clean installs agree.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. It sets
+`.release-version=0.8.7`, `.next-version=0.8.8`, deterministic source epoch
+`1788255290`, exact sorted issues `#157`–`#163`, generated Towncrier notes, the
+stable example pin, and this archive while returning `PLANS.md` to its inactive
+template. Release-preparation validation passed 1,387 tests plus 367 subtests at
+86.26% branch coverage, the four risk-group floors, release contracts,
+manifest and secret checks, and byte-identical local wheel/sdist builds.
+
+External closure remains pending until the exact reviewed release head is
+squash-merged and the protected workflow is independently reconciled across
+TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
+requires byte equality, PEP 740 provenance and GitHub attestations, annotated
+`v0.8.7` tag and peeled target, immutable `release-receipt.json`, clean PyPI
+wheel and sdist installs on Python 3.12–3.14, Actions-owned receipts, closed
+#157–#163 and milestone `v0.8.7`, synchronized clean `main`, and scratch cleanup.
+
 <a id="plan-toolkit-0-8-6"></a>
 
 ## Toolkit 0.8.6 — OCR 1.11.0 and precise security signals

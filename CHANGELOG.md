@@ -1,3 +1,35 @@
+## 0.8.7 - 2026-09-01
+
+### 🚀 Features
+
+- Add two fixed read-only built-in MCP tools for bounded literal evidence search and exact scoped coverage checks. OCR now receives concise summary/list/search/get/coverage routing, while action receipt v2 and toolkit receipt v6 reconcile all five actions to OCR's per-tool counts. Search applies the same public delta-kind semantics as list, rejects compatibility-normalized operators, and authoritative absence requires an exact component/path scope with no evidence-store admission limit, ambiguous or oversized omission, or incomplete semantic comparison. Evidence admission performs one live secret-value scan per scalar instead of repeating the same scan within a redaction pass. Only non-zero numeric counts may reach GitLab; queries, scopes, matched values, IDs, and results remain private, and incomplete coverage can never prove absence or authorize automatic approval. ([#160](https://github.com/xeonvs/open-code-review-toolkit/issues/160))
+- Add protected review-context policy v3 for bounded same-revision CI outcomes. Operators may map exact GitLab job names to protected path prefixes; the toolkit twice reads exact-head pipeline/job metadata, ignores unrelated jobs, treats provider response ordering as non-semantic, selects the unambiguously newest requested retry, and exposes only closed status, required/advisory classification, current-or-same-revision provenance, scope, and completion time through the existing private context MCP. Hostile persisted scopes are revalidated against the protected repository-relative path grammar, and optional record rejection does not become required-source degradation. Logs, artifacts, URLs, provider IDs, identities, variables, and raw payloads remain private and unpersisted. CI outcomes provide review context only: they cannot suppress findings, prove unrelated absence, change severity/lifecycle, or authorize approval. Policies v1/v2 remain valid without `ci_outcomes`. ([#161](https://github.com/xeonvs/open-code-review-toolkit/issues/161))
+
+### 🐛 Bug Fixes
+
+- Prevent incomplete base/head evidence admission from manufacturing dependency deltas. Once admission for a fact kind is incomplete, all semantic deltas for that kind are omitted with an explicit diagnostic because the missing value cannot be attributed safely to one identity. ([#159](https://github.com/xeonvs/open-code-review-toolkit/issues/159))
+- Keep OCR review-filter survivors unverified across multiple review rounds. The mandatory evidence guidance now requires every prior claim to be checked again against current code, tests, and trusted evidence without changing finding, DLP, receipt, or approval schemas. ([#162](https://github.com/xeonvs/open-code-review-toolkit/issues/162))
+
+### 🛠 Maintenance
+
+- Target checksum-verified Open Code Review 1.11.1 as the sole supported runtime for toolkit 0.8.7.
+
+  Changed: small change sets use OCR-owned local grouping below four files, while threshold-crossing changes retain semantic grouping; project `rule.json` file references are confined to the canonical repository root; selected session files follow manifest coverage.
+
+  Unchanged: result and manifest schemas, inherited completion cap `16384`, explicit positive completion-cap transport, default `medium` effort, effective max-tools, private reasoning/session data, DLP, receipts, telemetry ownership, and approval authority.
+
+  Deployment: install OCR 1.11.1 directly and verify the platform checksum from the compatibility manifest; OCR 1.11.0 is historical comparison evidence, not a runtime fallback. ([#158](https://github.com/xeonvs/open-code-review-toolkit/issues/158))
+- Update the pinned CI, CodeQL, TestPyPI, release, and build-provenance actions used by protected workflows. ([#165](https://github.com/xeonvs/open-code-review-toolkit/issues/165))
+
+### 📖 Documentation
+
+- Add dynamic stable PyPI version, supported-Python, and Apache-2.0 license badges to the root README. The badges derive product metadata from the supported distribution instead of a hardcoded release or the development-only TestPyPI index. ([#157](https://github.com/xeonvs/open-code-review-toolkit/issues/157))
+
+### 🧩 Rules
+
+- Review Pug (`.pug`), Verilog/SystemVerilog (`.v`, `.vh`, `.sv`), and VHDL (`.vhd`, `.vhdl`) through the built-in OCR 1.11.1 allowlist and language-specific Rules. The upstream allowlist does not include `.svh`. ([#158](https://github.com/xeonvs/open-code-review-toolkit/issues/158))
+
+
 ## 0.8.6 - 2026-08-28
 
 ### 🐛 Bug Fixes
