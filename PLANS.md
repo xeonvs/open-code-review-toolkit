@@ -10,12 +10,11 @@ before handoff or commit. Completed stable plans are indexed in
 
 - **Status:** active
 - **Plan Origin:** plan_mode_approved
-- **Release classification:** release-required; stable delivery is release-deferred
+- **Release classification:** release-required
 - **Target stable version:** 0.8.7
 - **Branch:** `codex/v0.8.7-ocr-1.11.1-evidence-trust`
-- **Delivery boundary:** a fully implemented, green Draft pull request. Merge, release PR,
-  tags, TestPyPI/PyPI publication, stable release, issue closure, and milestone closure are
-  outside this cycle until an external configured environment qualifies the exact Draft head.
+- **Delivery boundary:** published stable toolkit 0.8.7 with independently verified registry,
+  provenance, attestation, immutable Release, issue, milestone, and synchronized-main receipts.
 
 #### Goal
 
@@ -38,6 +37,12 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - Complete #157 with stable PyPI, supported-Python, and license badges.
 - Reconcile backlog, public contracts, test-evidence ownership, changelog, Draft PR, issue
   checklists, and milestone state.
+- Incorporate merged maintenance PR #165 from protected `main` before final qualification so
+  the reviewed tree uses the updated CI, CodeQL, TestPyPI, release, and provenance actions.
+- Run one configured semantic qualification of the new MCP/context contracts and one final
+  repository review with project rules; remediate validated findings before the final push.
+- Merge the protected feature and release pull requests, publish stable 0.8.7, independently
+  read back every external artifact, close tracking, and clean task-owned scratch state.
 
 #### Requirement Traceability
 
@@ -53,12 +58,12 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | REQ-008 | New tools have exact count-only receipt and GitLab-summary attribution without content leakage | WQ-06 | receipt v6, action receipt v2, reconciliation/DLP/approval tests |
 | REQ-009 | Protected same-revision GitLab CI outcomes become bounded provider-neutral evidence only | WQ-07 | policy v3, stable API snapshot, store/MCP and negative provider tests |
 | REQ-010 | Public docs, badges, backlog, roadmap, strategy, and changelog describe added, changed, removed, and unchanged contracts | WQ-08 | documentation contracts and Towncrier draft |
-| REQ-011 | Final Draft is clean and green but remains deferred for exact-head external LLM qualification | WQ-09 | final local gate, hosted CI, Draft/remote/worktree readback |
+| REQ-011 | Final feature head includes protected-main PR #165 and passes configured semantic qualification plus project-rule OCR review | WQ-09, WQ-10 | exact base/head receipts, complete manifests, remediation and self-review |
+| REQ-012 | Stable 0.8.7 is published and independently reconciled across every release surface | WQ-11, WQ-12 | feature/release PR receipts, registry bytes, provenance, attestations, tag, Release, installs, issue and milestone closure |
 
 #### Explicit Non-Goals
 
 - No support or runtime fallback for OCR 1.11.0 or older releases.
-- No real LLM/provider calls in this local environment.
 - No automatic cap, tool choice, model, or protocol inference from provider metadata.
 - No arbitrary repository grep, model-loop network, second evidence/context store, second OCR
   pass, or new DDL/testcontainer parser for evidence search.
@@ -66,7 +71,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   prompt, tool arguments, or tool results in public output or receipts.
 - No approval, suppression, lifecycle, or severity authority from remediation text, search
   results, coverage hints, CI outcomes, OCR survivor wording, or tool-call counts.
-- No merge, Ready transition, issue/milestone closure, release branch, tag, or publication.
+- No downstream consumer or shared-template integration.
+- No public retention of sensitive external-system data, model-session data, private fixtures,
+  credentials, or local environment details.
 
 #### Constraints
 
@@ -84,8 +91,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Inputs And Sources
 
-- Approved conversation plan and user decisions: green Draft only; protected policy v3;
-  include #157; add dedicated search and coverage MCP tools; preserve efficient OCR routing.
+- Approved conversation plan and subsequent delivery reset: protected policy v3; include #157;
+  add dedicated search and coverage MCP tools; preserve efficient OCR routing; complete stable
+  delivery after configured exact-head validation.
 - GitHub issues #157–#163 and OCR dependency tracker #158.
 - OCR v1.11.1 release/source diff and compatibility workflow run `33391721404`.
 - OCR v1.11.1 pins: Linux amd64
@@ -98,20 +106,31 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### User Decisions And Answers
 
-- Delivery ends at a green Draft and external exact-head qualification blocker.
+- Delivery continues from a green Draft through configured exact-head qualification and the
+  complete protected stable-release lifecycle.
 - CI outcome authority is owned only by protected-target policy v3.
 - Documentation issue #157 is part of v0.8.7.
 - Built-in MCP gains two separate tools rather than another union action.
 - OCR must receive explicit routing guidance and qualification proving correct and efficient
   use; optional tools are not forced on every review.
 - Current GitLab technical-summary format stays stable and emits only non-zero tool names.
+- Full delivery includes publication, independent external readback, Actions-owned issue
+  receipts, milestone closure, synchronized `main`, and cleanup; merge or green CI is not final.
+- Final repository OCR review uses project rules, `medium` effort, concurrency one, OCR-owned
+  completion limits, and max-tools sentinel zero. Confirmed findings are fixed before push and
+  followed by deterministic validation plus a complete self-review.
+- If a newer stable OCR appears before the final repository review, qualify and adopt it as the
+  sole runtime when compatible. Freeze the qualified OCR version once that review begins.
 
 #### Completed Baseline State
 
-- `main` is released v0.8.6 and `.next-version` selects 0.8.7.
+- Protected `main` contains released v0.8.6 plus verified maintenance squash #165 at
+  `4fd4eda3fb10ff3ae7c40b099ab791ba4797c134`; its development publication and Scorecard pass.
+  `.next-version` selects 0.8.7.
 - Existing evidence store v4 exposes one built-in MCP with summary/list/get; context uses fixed
   context_list/context_get; receipt v5 reconciles count-only evidence usage.
-- OCR 1.11.1 is the exact current runtime and local `/opt/homebrew/bin/ocr` version.
+- OCR 1.11.1 is the exact target runtime; the PATH-effective local binary still requires an
+  atomic checksum-verified update before configured qualification.
 - Workflow audit with engineering-workflow 0.9.0 found canonical files and navigation indexes;
   no target workflow migration is required.
 - OCR v1.11.1 assets verify, while current qualification fails because its probes assume
@@ -129,7 +148,10 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 | WQ-06 | done | Implement #160 search/coverage tools, OCR routing, action receipt v2, and toolkit receipt v6 |
 | WQ-07 | done | Implement #161 protected policy v3 and same-revision GitLab CI evidence |
 | WQ-08 | done | Implement #157, public docs, backlog/strategy/roadmap, changelog, and final plan truth |
-| WQ-09 | in_progress | Run final local gate, final push, hosted CI reconciliation, and Draft-only handoff |
+| WQ-09 | in_progress | Merge protected `main` #165 into the Draft branch, update maintenance notes, and revalidate the combined tree |
+| WQ-10 | pending | Run configured semantic qualification and final project-rule OCR review; remediate findings and self-review before push |
+| WQ-11 | pending | Push the final feature head, reconcile hosted checks, merge #164, and verify its development publication |
+| WQ-12 | pending | Prepare and merge `Release v0.8.7`, publish stable artifacts, independently read back every release surface, close tracking, and clean scratch state |
 
 #### Locked Decisions
 
@@ -166,6 +188,13 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 - Hosted PR workflows own OS/Python matrix, packages, dependencies, Security, and CodeQL.
 - External configured qualification owns real OCR 1.11.1 LLM behavior, multi-round correction,
   search/get and no-match/coverage routing, same-revision CI evidence, and leakage audit.
+- Final repository OCR review owns the complete `v0.8.6..feature-head` diff with
+  `examples/gitlab/rules.json`; it runs only after the protected-main merge and latest-stable OCR
+  check. Full output remains ignored and owner-only.
+- Stable closure requires byte equality across workflow artifact, TestPyPI, PyPI, and immutable
+  GitHub Release; PEP 740 provenance; GitHub attestations; annotated tag target; receipt
+  validation; Python 3.12-3.14 wheel/sdist installs; Actions-owned issue receipts; closed
+  milestone; and clean `main == origin/main == v0.8.7^{}`.
 
 #### Latest Validation Results
 
@@ -232,6 +261,9 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
   parser owner, and explicit DLP/evidence test owners. No new hard-category appeared. This
   repository-owned synthetic/false-positive provenance agrees with the clean redacted Gitleaks
   history scan; no candidate value was opened or copied into the review.
+- 2026-09-01: protected-main PR #165 was squash-merged as verified commit `4fd4eda`; its seven
+  workflow-only pin changes have no path overlap or merge conflict with #164. Development run
+  33482577560 and Scorecard run 33482577475 completed successfully on that exact commit.
 
 #### Risks And Recovery
 
@@ -251,15 +283,14 @@ weakening DLP, privacy, approval, or immutable-ref boundaries.
 
 #### Resume Point
 
-Push this reviewed local history once to Draft PR #164, reconcile hosted PR and exact-head
-OCR-compatibility results, update only external PR/issue checklists, and leave the branch in Draft.
-The next product action after green hosted checks is external OCR 1.11.1 qualification of this
-exact head with a configured LLM endpoint; do not merge or publish first.
+Merge protected `origin/main` at `4fd4eda` into the local #164 branch without pushing, validate
+the combined trusted workflow/runtime tree, atomically update OCR, and run the two configured OCR
+gates. Push only after validated findings are remediated and the final self-review is complete.
 
 #### Plan Fidelity Check
 
 - [x] Every approved outcome has a stable requirement ID and queue owner.
-- [x] Release/Draft boundary, exact OCR target, checksums, and external qualification are explicit.
+- [x] Stable-release boundary, exact OCR target, checksums, and external qualification are explicit.
 - [x] Data-flow, DLP, provider-neutral ownership, approval, and failure semantics are explicit.
 - [x] Rejected alternatives and non-goals prevent compatibility fallbacks and extra infrastructure.
 - [x] Validation maps production owners, installed boundaries, hosted ownership, and local limits.
@@ -271,7 +302,7 @@ exact head with a configured LLM endpoint; do not merge or publish first.
   were inspected before implementation.
 - [x] No pre-existing user changes are present in the worktree.
 - [x] Milestone and issue relationships agree with this plan.
-- [ ] Draft PR and compatibility artifact agree with this plan.
+- [ ] Draft PR, protected-main #165, and compatibility artifact agree with this plan.
 - [x] Final implementation, docs, changelog, backlog, and local tests agree.
 - [ ] Remote Draft head, hosted checks, and compatibility artifact agree.
 
@@ -279,19 +310,19 @@ exact head with a configured LLM endpoint; do not merge or publish first.
 
 - [ ] All REQ and WQ items are done or explicitly out of scope.
 - [ ] Final local and hosted checks are current for the exact Draft head.
-- [ ] Draft remains open, mergeable, and without unresolved review threads.
-- [ ] External qualification remains a truthful post-close/deferred delivery item.
-- [x] Engineering-workflow 0.9.0 `plan_lifecycle.py check` accepts the active deferred state;
-  closure/archive remains out of scope until the ordinary stable release lifecycle.
+- [ ] Feature and release PR exact heads pass their owned checks and have no unresolved threads.
+- [ ] Configured qualification and project-rule review have complete exact-head receipts.
+- [ ] Stable publication and independent readback satisfy every external closure invariant.
+- [ ] #157-#163 and any added release tracker are closed by Actions receipts; milestone is closed.
+- [ ] Task-owned scratch state is removed and local/remote `main` equals the peeled stable tag.
 
-#### Post-Close Delivery
+#### Stable Delivery
 
-An external agent must start from the exact green Draft head, checksum-verified OCR 1.11.1,
-an isolated HOME, and a configured LLM endpoint. It runs real `ocr review`, verifies small and
-threshold-crossing grouping, multi-round contradiction handling, search/get and no-match/coverage
-routing, same-revision CI evidence, cleanup, and absence of raw prompts/reasoning/provider/MCP
-content in public artifacts. Only after that evidence may the owner move the Draft toward the
-ordinary protected merge and stable v0.8.7 release process.
+The feature PR becomes Ready only after the combined exact head passes configured qualification,
+project-rule review, remediation, self-review, and hosted checks. Its verified squash merge is
+followed by development publication readback and a separate protected `Release v0.8.7` PR. The
+release merge authorizes stable publication; independent registry/Release/provenance/install and
+tracking readback completes delivery without another repository PR.
 
 #### Handoff Notes
 
@@ -299,4 +330,5 @@ ordinary protected merge and stable v0.8.7 release process.
 - OCR v1.11.0 may appear only as historical comparison evidence.
 - Do not publish external qualification prompts, reasoning, tool arguments/results, provider
   bodies, session files, credentials, or private fixture content.
-- Keep #157–#163 and milestone `v0.8.7` open in the Draft-only state.
+- Keep #157-#163 and milestone `v0.8.7` open until the protected stable workflow records its
+  Actions-owned receipts. PR #165 is included maintenance history, not a release-closure issue.
