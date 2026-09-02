@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from ocr_toolkit.evidence.invocation import MAX_CI_IDENTIFIER_CHARS, InvocationIdentifier
 from ocr_toolkit.evidence.review_context import (
@@ -28,6 +28,9 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_PROVIDER_BODY_BYTES = 2_000_000
 PROVIDER_READ_CHUNK_BYTES = 64 * 1024
 PROVIDER_TIMEOUT_SECONDS = 30
+TARGET_PROTECTION_MODE_VARIABLE = "OCR_GITLAB_TARGET_PROTECTION_MODE"
+TargetProtectionMode = Literal["required", "unprotected"]
+TargetProtectionState = Literal["protected", "unprotected"]
 
 
 class GitLabProviderError(ValueError):
@@ -36,13 +39,14 @@ class GitLabProviderError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class GitLabReviewSnapshot:
-    """Bind one reviewed source head to the current protected target commit."""
+    """Bind one reviewed source head to the current target commit and protection state."""
 
     project_id: str
     merge_request_iid: str
     source_sha: str
     target_branch: str
     target_sha: str
+    target_protection: TargetProtectionState
     author_id: int
     context: MergeRequestContext | None
 
@@ -208,6 +212,20 @@ def _positive_identifier(value: object, label: str) -> int:
     return value
 
 
+def parse_target_protection_mode(raw: str | None) -> TargetProtectionMode:
+    """Parse the exact fail-closed target-protection policy setting."""
+
+    if raw is None:
+        return "required"
+    if raw == "required":
+        return "required"
+    if raw == "unprotected":
+        return "unprotected"
+    raise GitLabProviderError(
+        f"{TARGET_PROTECTION_MODE_VARIABLE} must be exactly 'required' or 'unprotected'"
+    )
+
+
 def _branch(value: object) -> str:
     """Return one bounded safe target branch name for endpoint construction."""
 
@@ -227,6 +245,7 @@ def acquire_review_snapshot(
     """Acquire and cross-check one MR plus protected-target branch snapshot."""
 
     expected_head = _sha(expected_head, "reviewed source head")
+    protection_mode = parse_target_protection_mode(environment.get(TARGET_PROTECTION_MODE_VARIABLE))
     project_id = _numeric_identifier(environment, "CI_PROJECT_ID")
     merge_request_iid = _numeric_identifier(environment, "CI_MERGE_REQUEST_IID")
     token = environment.get("GITLAB_API_TOKEN", "").strip()
@@ -273,18 +292,22 @@ def acquire_review_snapshot(
     )
     if not isinstance(branch, dict):
         raise GitLabProviderError("GitLab target-branch metadata must be an object")
-    if branch.get("name") != target_branch or branch.get("protected") is not True:
+    protected = branch.get("protected")
+    if branch.get("name") != target_branch or not isinstance(protected, bool):
+        raise GitLabProviderError("GitLab target branch protection metadata is invalid")
+    if not protected and protection_mode != "unprotected":
         raise GitLabProviderError("GitLab target branch is not the captured protected branch")
     commit = branch.get("commit")
     if not isinstance(commit, dict):
         raise GitLabProviderError("GitLab target branch has no commit identity")
-    target_sha = _sha(commit.get("id"), "protected target head")
+    target_sha = _sha(commit.get("id"), "target head")
     return GitLabReviewSnapshot(
         project_id=project_id,
         merge_request_iid=merge_request_iid,
         source_sha=source_sha,
         target_branch=target_branch,
         target_sha=target_sha,
+        target_protection="protected" if protected else "unprotected",
         author_id=author_id,
         context=context,
     )

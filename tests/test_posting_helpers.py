@@ -95,7 +95,7 @@ class PostingIdentityTests(unittest.TestCase):
             "status": "failed",
             "comments": [{"content": "locally retained safe finding"}],
             "_ocr_toolkit": {
-                "schema_version": 6,
+                "schema_version": 7,
                 "publication": {"dlp": "blocked"},
             },
         }
@@ -114,7 +114,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
-    def test_advisory_without_exact_receipt_v6_never_reaches_normal_result_flow(self) -> None:
+    def test_advisory_without_exact_receipt_v7_never_reaches_normal_result_flow(self) -> None:
         """Treat a correctly shaped but unbound advisory as an invalid result."""
 
         notes: list[str] = []
@@ -1333,7 +1333,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "status": "completed_with_errors",
                     "comments": [old, new],
                     "warnings": [],
-                    "_ocr_toolkit": {"schema_version": 6, "publication": publication},
+                    "_ocr_toolkit": {"schema_version": 7, "publication": publication},
                 },
             )
 
@@ -1376,10 +1376,12 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             },
             "_ocr_toolkit": {
-                "schema_version": 6,
+                "schema_version": 7,
                 "review": {
                     "source_sha": "a" * 40,
                     "policy_sha": "b" * 40,
+                    "target_sha": "b" * 40,
+                    "target_protection": "protected",
                     "mr_author_id": 41,
                 },
                 "context": {
@@ -2079,9 +2081,9 @@ class PostingWorkflowTests(unittest.TestCase):
         for metadata in (
             None,
             {"schema_version": 4},
-            {"schema_version": 6, "review": []},
+            {"schema_version": 7, "review": []},
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "review": {"source_sha": "invalid", "mr_author_id": True},
             },
         ):
@@ -2090,8 +2092,14 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(
             workflow.approval_receipt_identity(
                 {
-                    "schema_version": 6,
-                    "review": {"source_sha": "a" * 40, "mr_author_id": 41},
+                    "schema_version": 7,
+                    "review": {
+                        "source_sha": "a" * 40,
+                        "policy_sha": "b" * 40,
+                        "target_sha": "b" * 40,
+                        "target_protection": "protected",
+                        "mr_author_id": 41,
+                    },
                 }
             ),
             ("a" * 40, 41),
@@ -3274,7 +3282,7 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "mcp": {
                     "usage": {
                         "ocr_toolkit_evidence": 2,
@@ -3291,10 +3299,10 @@ class PostingSummaryTests(unittest.TestCase):
         )
         self.assertNotIn("file_read", summary)
 
-    def test_mcp_usage_summary_reads_receipt_v6_inventory(self) -> None:
+    def test_mcp_usage_summary_reads_receipt_v7_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "mcp": {
                     "capabilities": [],
                     "usage": {"ocr_toolkit_evidence": 3},
@@ -3311,7 +3319,7 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
                 "evidence": {
                     "calls": 4,
@@ -3360,7 +3368,7 @@ class PostingSummaryTests(unittest.TestCase):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
                         {
-                            "schema_version": 6,
+                            "schema_version": 7,
                             "mcp": {"usage": {"ocr_toolkit_evidence": 3}},
                             "evidence": {"calls": calls, "actions": actions},
                         }
@@ -3378,7 +3386,7 @@ class PostingSummaryTests(unittest.TestCase):
             with self.subTest(actions=actions):
                 summary = posting_formatting.format_mcp_usage_summary(
                     {
-                        "schema_version": 6,
+                        "schema_version": 7,
                         "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
                         "evidence": {"calls": 4, "actions": actions},
                     }
@@ -3393,7 +3401,7 @@ class PostingSummaryTests(unittest.TestCase):
     def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
                 "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
                 "evidence": {
@@ -3427,7 +3435,7 @@ class PostingSummaryTests(unittest.TestCase):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
                         {
-                            "schema_version": 6,
+                            "schema_version": 7,
                             "mcp": {"usage": usage},
                             "evidence": {"actions": {"state": "unavailable"}},
                         }
@@ -5554,7 +5562,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 6)
+            self.assertEqual(metadata["schema_version"], 7)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

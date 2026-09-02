@@ -68,8 +68,12 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    results receive verified zero counts, and the shared neutral receipt owner validates every
    generated MR receipt before any advisory can be attached. Security regressions cover missing,
    malformed, unwritable, incomplete, type-confused, and per-tool-mismatched attribution.
-5. [ ] Implement #168 provider/config/snapshot, receipt v7, and approval boundary as one complete
-   runtime commit.
+5. [x] Implement #168 provider/config/snapshot, receipt v7, and approval boundary as one complete
+   runtime commit. The exact closed setting preserves protected behavior, while an actually
+   unprotected target rejects privileged context and external MCP, omits structured target policy,
+   binds source/target/protection in receipt v7, renders the validated limitation, and cannot reach
+   the approval executor. Hostile, orchestration, DLP-summary, and immutable-target regressions
+   cover these boundaries.
 6. [ ] Implement #168 summary projection, complete public documentation, and synthetic examples
    as one complete documentation contract commit.
 7. [ ] Implement #170 qualification, OCR 1.11.2 pins, Rules probes, and `maintenance` plus `rules`

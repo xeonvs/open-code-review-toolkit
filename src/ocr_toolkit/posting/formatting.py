@@ -109,6 +109,10 @@ SHIELDS_SEVERITY_COLORS = {
     "low": "green",
 }
 SHIELDS_CATEGORY_COLOR = "blue"
+UNPROTECTED_TARGET_LIMITATION = (
+    "*The target branch was not protected in GitLab. This review ran in limited, "
+    "comment-only mode.*"
+)
 
 
 def inline_code(value: str) -> str:
@@ -546,7 +550,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact v6 DLP receipt."""
+    """Return one low-cardinality signal from an exact v7 DLP receipt."""
 
     state = publication_dlp_state(publication)
     if (
@@ -974,6 +978,7 @@ def summarize_result(
     warnings: Sequence[Any] = (),
     suppressed_count: int = 0,
     approval_result: ApprovalResult | None = None,
+    unprotected_target: bool = False,
     emoji: bool | None = None,
 ) -> str:
     """Build one decision-first summary for every validated OCR outcome."""
@@ -991,6 +996,8 @@ def summarize_result(
         emoji=use_emoji,
     )
     lines = ["## Open Code Review", "", outcome_line]
+    if unprotected_target:
+        lines.append(UNPROTECTED_TARGET_LIMITATION)
     if outcome_status == "failed":
         lines.extend(
             [

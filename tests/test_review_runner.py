@@ -39,6 +39,8 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     mr_author_id=None,
     context_mode="off",
     context=None,
+    target_sha="b" * 40,
+    target_protection="local",
 )
 BUILTIN_EVIDENCE_TOOLS = (
     "ocr_toolkit_evidence",
@@ -73,6 +75,8 @@ def enriched_identity() -> review_runner.ReviewIdentity:
         mr_author_id=41,
         context_mode="enriched",
         context=context,
+        target_sha="b" * 40,
+        target_protection="protected",
     )
 
 
@@ -179,6 +183,46 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
     )
     assert [record.resource_class for record in restored.records] == ["ci_outcome"]
     assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
+
+
+def test_unprotected_enrichment_guard_never_loads_policy_or_acquires_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep protected-policy and provider acquisition unreachable in constrained mode."""
+
+    artifacts = repository_artifacts(tmp_path)
+    artifacts.directory.mkdir(mode=0o700)
+    artifacts.context_store.write_text("stale", encoding="utf-8")
+    identity = replace(
+        enriched_identity(),
+        context_mode="metadata",
+        target_protection="unprotected",
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        review_runner,
+        "load_protected_policy",
+        lambda *_args, **_kwargs: calls.append("policy") or None,
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_gitlab_context",
+        lambda *_args, **_kwargs: calls.append("gitlab") or None,
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_external_records",
+        lambda *_args, **_kwargs: calls.append("external") or None,
+    )
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+
+    assert review_runner._prepare_enrichment(
+        identity,
+        artifacts,
+        SimpleNamespace(),  # type: ignore[arg-type]
+    ) == (None, None)
+    assert calls == []
+    assert not artifacts.context_store.exists()
 
 
 def test_optional_ci_record_rejection_does_not_degrade_required_context(
@@ -506,7 +550,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         safe_enrichment,
         {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
     )
-    metadata["schema_version"] = 6
+    metadata["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
     eligible = approval.evaluate_approval_policy(
         settings.BooleanSetting(True),
         parse_result_outcome(payload),
@@ -539,7 +583,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             changed,
             {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
         )
-        blocked["schema_version"] = 6
+        blocked["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
             parse_result_outcome(payload),
@@ -664,8 +708,14 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 6,
-        "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": None},
+        "schema_version": 7,
+        "review": {
+            "source_sha": "a" * 40,
+            "policy_sha": "b" * 40,
+            "target_sha": "b" * 40,
+            "target_protection": "local",
+            "mr_author_id": None,
+        },
         "context": {
             "mode": "off",
             "state": "disabled",
@@ -925,7 +975,9 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     review_runner._record_ocr_result_mcp_usage(
         result,
         composition,
-        review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "metadata", None),
+        review_runner.ReviewIdentity(
+            "a" * 40, "b" * 40, 41, "metadata", None, "b" * 40, "protected"
+        ),
         evidence_action_counts={
             "summary": 1,
             "list": 0,
@@ -936,8 +988,14 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 6,
-        "review": {"source_sha": "a" * 40, "policy_sha": "b" * 40, "mr_author_id": 41},
+        "schema_version": 7,
+        "review": {
+            "source_sha": "a" * 40,
+            "policy_sha": "b" * 40,
+            "target_sha": "b" * 40,
+            "target_protection": "protected",
+            "mr_author_id": 41,
+        },
         "context": {
             "mode": "metadata",
             "state": "degraded",
@@ -1274,7 +1332,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
     _usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
         composition,
-        replace(DEFAULT_IDENTITY, mr_author_id=41),
+        replace(DEFAULT_IDENTITY, mr_author_id=41, target_protection="protected"),
         None,
         SUMMARY_ACTION_COUNTS,
         forbidden=(),
@@ -1670,7 +1728,7 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
     usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
         composition,
-        replace(DEFAULT_IDENTITY, mr_author_id=41),
+        replace(DEFAULT_IDENTITY, mr_author_id=41, target_protection="protected"),
         None,
         SUMMARY_ACTION_COUNTS,
         forbidden=(),
@@ -1745,7 +1803,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
         external_servers=(),
         secret_values=(),
     )
-    identity = replace(DEFAULT_IDENTITY, mr_author_id=41)
+    identity = replace(DEFAULT_IDENTITY, mr_author_id=41, target_protection="protected")
     base_payload: dict[str, object] = {
         "status": "complete",
         "comments": [],
@@ -2237,7 +2295,9 @@ def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: P
         review_runner._record_ocr_result_mcp_usage(
             result,
             composition,
-            review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "enriched", None),
+            review_runner.ReviewIdentity(
+                "a" * 40, "b" * 40, 41, "enriched", None, "b" * 40, "protected"
+            ),
             enrichment,
         )
 
@@ -3231,15 +3291,25 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
 
 
 @pytest.mark.parametrize(
-    ("preserve_private_artifacts", "ocr_exit_code"),
-    [(False, 0), (False, 1), (True, 0)],
+    ("preserve_private_artifacts", "ocr_exit_code", "target_protection"),
+    [
+        (False, 0, "local"),
+        (False, 1, "local"),
+        (True, 0, "local"),
+        (False, 0, "unprotected"),
+    ],
 )
 def test_evidence_review_prepares_internal_context_before_ocr(
-    tmp_path: Path, preserve_private_artifacts: bool, ocr_exit_code: int
+    tmp_path: Path,
+    preserve_private_artifacts: bool,
+    ocr_exit_code: int,
+    target_protection: str,
 ) -> None:
     """Clean ordinary success/failure while retaining requested local diagnostics."""
 
     events: list[object] = []
+    composition_inputs: list[dict[str, object]] = []
+    bootstrap_inputs: list[dict[str, object]] = []
     session_homes: list[Path] = []
     real_subprocess_run = subprocess.run
     original_home = os.environ.get("HOME")
@@ -3305,6 +3375,23 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         events.append(("bootstrap", path, content))
         path.write_text(content, encoding="utf-8")
 
+    def compose(**kwargs: object) -> MCPComposition:
+        composition_inputs.append(kwargs)
+        return composition
+
+    def bootstrap(*_args: object, **kwargs: object) -> str:
+        bootstrap_inputs.append(kwargs)
+        return "bootstrap"
+
+    identity = replace(
+        DEFAULT_IDENTITY,
+        source_sha="b" * 40,
+        policy_sha="a" * 40,
+        target_sha="a" * 40,
+        target_protection=target_protection,
+        mr_author_id=41 if target_protection == "unprotected" else None,
+    )
+
     with (
         patched_attr(
             review_runner,
@@ -3312,6 +3399,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
         ),
         patched_attr(review_runner, "_write_isolated_runtime_config", lambda: None),
+        patched_attr(
+            review_runner,
+            "_prepare_policy_context",
+            lambda _refs, args, _artifacts: (identity, args),
+        ),
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
         patched_attr(review_runner, "collect_repository_evidence", collect),
         patched_attr(
@@ -3323,7 +3415,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         patched_attr(
             review_runner.mcp_config,
             "build_mcp_composition",
-            lambda **_kwargs: composition,
+            compose,
         ),
         patched_attr(
             review_runner.mcp_config,
@@ -3335,7 +3427,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "verify_mcp_composition",
             lambda _composition: events.append("verify"),
         ),
-        patched_attr(review_runner, "render_bootstrap", lambda *_args, **_kwargs: "bootstrap"),
+        patched_attr(review_runner, "render_bootstrap", bootstrap),
         patched_attr(review_runner, "write_private_text", write_bootstrap),
         patched_attr(
             review_runner,
@@ -3381,8 +3473,23 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "base_ref": "a" * 40,
             "head_ref": "b" * 40,
             "policy_ref": "a" * 40,
+            "include_policy_records": target_protection != "unprotected",
         },
     )
+    assert composition_inputs == [
+        {
+            "profile": "gitlab_mr" if target_protection == "unprotected" else "local",
+            "context": None,
+            "allow_external": target_protection != "unprotected",
+        }
+    ]
+    assert bootstrap_inputs == [
+        {
+            "capabilities": composition.capabilities,
+            "context_hints": None,
+            "unprotected_target": target_protection == "unprotected",
+        }
+    ]
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
     assert events[2] == ("write", artifacts.store)
     assert events[3] == ("bootstrap", artifacts.bootstrap, "bootstrap")
@@ -3461,7 +3568,9 @@ def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> No
 
     with pytest.raises(review_runner.ReviewRunnerError, match="local reviews only"):
         review_runner._authorize_private_artifact_preservation(
-            review_runner.ReviewIdentity("a" * 40, "b" * 40, 41, "off", None),
+            review_runner.ReviewIdentity(
+                "a" * 40, "b" * 40, 41, "off", None, "b" * 40, "protected"
+            ),
             requested=True,
         )
 
@@ -3502,7 +3611,9 @@ def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Pat
             review_runner,
             "_prepare_policy_context",
             lambda *_args: (
-                review_runner.ReviewIdentity("b" * 40, "a" * 40, 41, "off", None),
+                review_runner.ReviewIdentity(
+                    "b" * 40, "a" * 40, 41, "off", None, "a" * 40, "protected"
+                ),
                 ["--from", "base", "--to", "head"],
             ),
         ),

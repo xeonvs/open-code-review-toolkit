@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS
@@ -16,6 +17,19 @@ from ocr_toolkit.ocr_result import (
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
+UNPROTECTED_APPROVAL_REASON = (
+    "the GitLab target branch was unprotected; limited reviews are comment-only"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ReceiptReviewIdentity:
+    """Carry immutable provider facts from one fully validated receipt."""
+
+    source_sha: str
+    target_sha: str
+    target_protection: str
+    mr_author_id: int
 
 
 def verified_evidence_actions(
@@ -74,7 +88,7 @@ def _sha256(value: Any) -> bool:
 
 
 def publication_dlp_state(value: Any) -> str | None:
-    """Validate the exact v6 publication-policy receipt."""
+    """Validate the exact v7 publication-policy receipt."""
 
     if value == {"state": "passed"}:
         return "passed"
@@ -172,7 +186,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    if toolkit_metadata.get("schema_version") != 6 or set(toolkit_metadata) != {
+    if toolkit_metadata.get("schema_version") != 7 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
@@ -184,9 +198,22 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
 
     review = toolkit_metadata.get("review")
-    if not isinstance(review, dict) or set(review) != {"source_sha", "policy_sha", "mr_author_id"}:
+    if not isinstance(review, dict) or set(review) != {
+        "source_sha",
+        "policy_sha",
+        "target_sha",
+        "target_protection",
+        "mr_author_id",
+    }:
         return invalid
-    if not _full_sha(review.get("source_sha")) or not _full_sha(review.get("policy_sha")):
+    if (
+        not _full_sha(review.get("source_sha"))
+        or not _full_sha(review.get("policy_sha"))
+        or not _full_sha(review.get("target_sha"))
+        or review.get("policy_sha") != review.get("target_sha")
+        or not isinstance(review.get("target_protection"), str)
+        or review.get("target_protection") not in {"protected", "unprotected"}
+    ):
         return invalid
     if not _positive_id(review.get("mr_author_id")):
         return invalid
@@ -355,6 +382,10 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     publication_state = publication_dlp_state(publication)
     if publication_state is None or cleanup != {"result": "passed"}:
         return invalid
+    if review.get("target_protection") == "unprotected":
+        if mode not in {"off", "metadata"} or external:
+            return invalid
+        return UNPROTECTED_APPROVAL_REASON
     if publication_state == "publication-filtered":
         return "publication DLP filtered the complete review result"
     if context.get("state") == "degraded" or required_degraded:
@@ -367,9 +398,50 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
 
 
 def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
-    """Return whether metadata is an exact receipt v6, including valid blockers."""
+    """Return whether metadata is an exact receipt v7, including valid blockers."""
 
     return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
+
+
+def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
+    """Parse the exact immutable identity section without granting approval authority."""
+
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 7:
+        return None
+    review = toolkit_metadata.get("review")
+    if (
+        not isinstance(review, dict)
+        or set(review)
+        != {
+            "source_sha",
+            "policy_sha",
+            "target_sha",
+            "target_protection",
+            "mr_author_id",
+        }
+        or not _full_sha(review.get("source_sha"))
+        or not _full_sha(review.get("policy_sha"))
+        or not _full_sha(review.get("target_sha"))
+        or review.get("policy_sha") != review.get("target_sha")
+        or not isinstance(review.get("target_protection"), str)
+        or review.get("target_protection") not in {"protected", "unprotected"}
+        or not _positive_id(review.get("mr_author_id"))
+    ):
+        return None
+    return ReceiptReviewIdentity(
+        source_sha=review["source_sha"],
+        target_sha=review["target_sha"],
+        target_protection=review["target_protection"],
+        mr_author_id=review["mr_author_id"],
+    )
+
+
+def validated_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
+    """Return immutable review facts only after complete hostile receipt validation."""
+
+    if not toolkit_receipt_is_valid(toolkit_metadata):
+        return None
+    return receipt_review_identity(toolkit_metadata)
 
 
 def publication_outcome_for_summary(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome:
