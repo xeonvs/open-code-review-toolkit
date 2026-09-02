@@ -93,13 +93,16 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    The complete suite passed with 1,438 tests and 397 subtests at 86.37% coverage; every scoped
    risk floor passed. Compatibility, Towncrier draft, pinned Gitleaks, dependency audit, signatures,
    diff checks, clean build/Twine, archive privacy, and separate wheel/sdist CLI smokes also passed.
-9. [ ] Run exactly one Codex Security diff scan for `origin/main..HEAD`, validate attack paths, fix
+9. [x] Run exactly one Codex Security diff scan for `origin/main..HEAD`, validate attack paths, fix
    supported findings, and repeat holistic review plus deterministic validation. Scan
    `cecd81ce-bc01-42eb-bedf-a4a2a44a096c` completed with full changed-range coverage and no
    reportable findings. Its two rejected candidates still identified useful fail-closed contract
    hardening: surrounding whitespace must not normalize an inherited SHA, and summary/approval
    identities must come only from a fully valid receipt. Both controls and hostile regressions are
-   included in the current remediation commit before the repeated deterministic gates.
+   included in the remediation commit. The post-remediation holistic review found no remaining
+   defect, and the repeated deterministic gates passed with 1,438 tests, 406 subtests, 86.35%
+   coverage, all scoped risk floors, compatibility, Towncrier, Gitleaks, dependency audit,
+   signatures, diff checks, clean build/Twine, archive privacy, and wheel/sdist CLI smokes green.
 10. [ ] Checksum-verify and atomically install PATH-effective OCR 1.11.2 with a rollback copy, then
     run exactly one configured-provider local OCR review of the complete exact range with context
     `off`, public Rules, concurrency 2, and owner-only artifacts. Inspect complete manifest coverage
