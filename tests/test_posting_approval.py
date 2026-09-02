@@ -1001,6 +1001,8 @@ class ApprovalWorkflowTests(unittest.TestCase):
             lambda value: value["review"].update({"source_sha": "invalid"}),
             lambda value: value["review"].update({"mr_author_id": None}),
             lambda value: value["review"].update({"mr_author_id": True}),
+            lambda value: value.update({"cleanup": {"result": "unknown"}}),
+            lambda value: value.update({"extra": True}),
         ):
             candidate = receipt_v7(author_id=41)
             mutate(candidate)

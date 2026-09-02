@@ -64,8 +64,15 @@ class PostingIdentityTests(unittest.TestCase):
             ("d" * 40, valid, "d" * 40),
             ("B" * 40, valid, ""),
             ("bad", valid, ""),
+            (f" {valid}", commit, ""),
+            (f"{valid} ", commit, ""),
+            (f"{valid}\n", commit, ""),
+            (f"{'0' * 40} ", commit, ""),
             ("", "C" * 40, ""),
             ("", "bad", ""),
+            ("", f" {valid}", ""),
+            ("", f"{valid} ", ""),
+            ("", f"{valid}\n", ""),
         ):
             with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
                 environment = {
@@ -2102,7 +2109,7 @@ class PostingWorkflowTests(unittest.TestCase):
                     },
                 }
             ),
-            ("a" * 40, 41),
+            ("", None),
         )
 
         with patched_env(

@@ -110,7 +110,7 @@ from ocr_toolkit.provider_failure import (
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.review_identity import effective_reviewed_sha
-from ocr_toolkit.review_receipt import receipt_review_identity, validated_review_identity
+from ocr_toolkit.review_receipt import validated_review_identity
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -159,7 +159,7 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    identity = receipt_review_identity(toolkit_metadata)
+    identity = validated_review_identity(toolkit_metadata)
     if identity is None:
         return "", None
     return identity.source_sha, identity.mr_author_id
