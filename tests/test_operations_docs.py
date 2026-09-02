@@ -133,6 +133,8 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
 
     for phrase in (
         "Source-to-signal matrix",
+        "receipt v7",
+        "action-receipt-v2 attribution",
         "Group labels are model-produced",
         "sorted changed paths",
         "no exporter of its own",
@@ -145,6 +147,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
         assert phrase in audit
     assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
     assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
+    assert "Current receipt v7 adds immutable target/protection identity" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:

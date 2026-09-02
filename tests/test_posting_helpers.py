@@ -89,7 +89,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
-    def test_invalid_v6_publication_state_never_reaches_normal_result_flow(self) -> None:
+    def test_invalid_v7_publication_state_never_reaches_normal_result_flow(self) -> None:
         notes: list[str] = []
         result_data = {
             "status": "failed",
