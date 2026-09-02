@@ -31,11 +31,11 @@ python -m pip install open-code-review-toolkit
 ```
 
 The toolkit does not bundle OCR. Download the platform asset for exact
-[Open Code Review 1.11.1](https://github.com/alibaba/open-code-review/releases/tag/v1.11.1),
+[Open Code Review 1.11.2](https://github.com/alibaba/open-code-review/releases/tag/v1.11.2),
 verify it before installation against the [compatibility manifest](compatibility/ocr-support.json),
 and place the verified binary on `PATH`. The current Linux amd64 digest is
-`1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f`; Darwin arm64 is
-`5fdf72e51aae021ac7bf43d7b9dcb160f04880f623c66e8ada5e6ae5a92e172c`. The manifest owns
+`fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731`; Darwin arm64 is
+`8c1a58cacca6d82d4616f121e07bd7c586a2e6c88d5b6688e3bfedf135d17ff4`. The manifest owns
 the other platform hashes.
 
 Verify the installation without contacting an LLM provider:
@@ -45,14 +45,14 @@ ocr --version
 ocr-ci --help
 ```
 
-`ocr --version` must report `open-code-review v1.11.1`; `ocr-ci --help` must exit
+`ocr --version` must report `open-code-review v1.11.2`; `ocr-ci --help` must exit
 successfully. `ocr-ci preflight` is an operational configuration check, not the installation
 smoke test.
 
 The exact recommended OCR release and its verified asset checksums live in the [versioned compatibility manifest](compatibility/ocr-support.json). CI should pin that release and checksum before execution.
 The [versioned compatibility policy](docs/compatibility.md) records tested assets and evidence and describes the conservative Dependabot-like qualification workflow for later upstream releases.
 Review output defaults to English. `OCR_REVIEW_LANGUAGE` accepts another explicit language name when a project needs localized review output; for example, `OCR_REVIEW_LANGUAGE=Russian`.
-The current OCR 1.11.1 integration defaults `OCR_REVIEW_EFFORT` to `medium` for two review rounds. `low` and `high` are explicit one- and three-round alternatives; see the [configuration reference](docs/configuration.md#review-effort) for cost, budget, and precedence boundaries.
+The current OCR 1.11.2 integration defaults `OCR_REVIEW_EFFORT` to `medium` for two review rounds. `low` and `high` are explicit one- and three-round alternatives; see the [configuration reference](docs/configuration.md#review-effort) for cost, budget, and precedence boundaries.
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
 

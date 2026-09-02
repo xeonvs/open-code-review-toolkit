@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.1",
-  "recommended_version": "1.11.1",
+  "monitoring_floor": "1.11.2",
+  "recommended_version": "1.11.2",
   "releases": [
     {
       "assets": [
@@ -1399,6 +1399,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.1",
       "status": "tested",
       "version": "1.11.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "20bbf9ebcce58a1951068cb19fd27e012e42b24b18c4c7dff61d3d6870e3f5ea",
+          "size": 57749072
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "8c1a58cacca6d82d4616f121e07bd7c586a2e6c88d5b6688e3bfedf135d17ff4",
+          "size": 54794130
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731",
+          "size": 56008866
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "3d74d764d9a94e0113791a6f8a04da7aebb225838867d8445f6331fb23e26b99",
+          "size": 52691106
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "6adfb158fbf82c2f2fed05f920b9b4eedd369a14e7f36d4f60bd08041f8248dc",
+          "size": 57467392
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "5e82df7bad7cf2f35276bc50ec0d8c4a23dedf877543a73ef4fc51ef3e237933",
+          "size": 53436928
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "1d997d5ced335750e50df8af0d8a0ec8b9978937d1f26047b0a2114b7a8fa9e1",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.2.json",
+      "evidence_sha256": "b4aabea8626cf35102c563e2eaa678e950e53f464b3a1c1032ecb55083434559",
+      "human_conclusion": "Compatible after hosted checksum-verified Linux qualification in workflow 33508349494 and direct adjacent source review. OCR 1.11.2 corrects built-in language routing so .mjs/.cjs use JavaScript Rules and .cxx/.hxx use C++ Rules; .svh remains excluded. Result and manifest schemas, completion cap 16384, explicit positive completion-cap transport, default medium effort, effective max-tools, private session/reasoning boundaries, receipt v7, DLP, telemetry ownership, and approval authority remain unchanged. Viewer URL opening is not invoked by the toolkit; remote-MCP and localization changes are documentation-only; the nested pages Go module only excludes site node_modules from upstream Go package enumeration.",
+      "published_at": "2026-09-01T13:45:04Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.2",
+      "status": "tested",
+      "version": "1.11.2"
     }
   ],
   "schema_version": 1,

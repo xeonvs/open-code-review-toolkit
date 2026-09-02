@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.11.1"
+  OCR_VERSION: "v1.11.2"
   OCR_TOOLKIT_VERSION: "0.8.7"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f"
+  OCR_SHA256: "fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Secure default: reject an unprotected GitLab target before OCR.
@@ -46,7 +46,7 @@ open_code_review:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: on_success
     - when: never
-  # OCR 1.11.1 scales the 15-minute subtask base by low/medium/high rounds (15/30/45).
+  # OCR 1.11.2 scales the 15-minute subtask base by low/medium/high rounds (15/30/45).
   timeout: 45m
   script:
     - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git

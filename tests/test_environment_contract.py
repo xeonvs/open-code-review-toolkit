@@ -70,8 +70,8 @@ GITLAB_DEFAULTS = {
 }
 
 EXAMPLE_DEFAULTS = {
-    "OCR_VERSION": "v1.11.1",
-    "OCR_SHA256": "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f",
+    "OCR_VERSION": "v1.11.2",
+    "OCR_SHA256": "fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
@@ -300,7 +300,7 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         encoding="utf-8"
     )
     for name, value in {
-        "OCR_VERSION": "v1.11.1",
+        "OCR_VERSION": "v1.11.2",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "0",

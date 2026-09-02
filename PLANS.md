@@ -78,8 +78,14 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    as one complete documentation contract commit. The secure default, constrained capability matrix,
    two-MR and one-MR setup paths, static limitation, fail-closed diagnostics, and separate GitLab
    merge-policy boundary are now explicit and contract-tested.
-7. [ ] Implement #170 qualification, OCR 1.11.2 pins, Rules probes, and `maintenance` plus `rules`
-   Towncrier entries.
+7. [x] Implement #170 qualification, OCR 1.11.2 pins, Rules probes, and `maintenance` plus `rules`
+   Towncrier entries. Hosted Linux workflow `33508349494` establishes the baseline qualification;
+   the independently checksum-verified Darwin arm64 rerun matches every baseline contract and its
+   expanded probe selects ten qualified extensions, binds `.mjs`/`.cjs` to exact JavaScript Rules
+   and `.cxx`/`.hxx` to exact C++ Rules, and keeps `.svh` excluded. Security coverage across
+   #167-#169 exercises the effective
+   SHA matrix, strict evidence-action receipt reconciliation, atomic receipt identity, unprotected
+   context/MCP rejection, static limitation provenance, and the unreachable approval executor.
 8. [ ] Review every commit and the complete `origin/main..HEAD` range, run all deterministic local
    gates, and fix supported findings in separately reviewed signed commits.
 9. [ ] Run exactly one Codex Security diff scan for `origin/main..HEAD`, validate attack paths, fix

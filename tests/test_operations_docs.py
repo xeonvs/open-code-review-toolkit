@@ -249,7 +249,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         assert "provider-specific" in document
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
-    current_compatibility = compatibility.split("### OCR 1.11.1 — toolkit 0.8.7 target", 1)[1]
+    current_compatibility = compatibility.split("### OCR 1.11.2 — toolkit 0.9.0 target", 1)[1]
     assert "explicit positive completion-cap transport" in current_compatibility
     assert "default remains unset" in current_compatibility
     assert "provider-specific cap" in current_compatibility
@@ -643,6 +643,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.10.2 — toolkit 0.8.5 target",
         "OCR 1.11.0 — toolkit 0.8.6 target",
         "OCR 1.11.1 — toolkit 0.8.7 target",
+        "OCR 1.11.2 — toolkit 0.9.0 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
@@ -651,6 +652,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
         "Deploy toolkit 0.8.6 directly with OCR 1.11.0",
         "Deploy toolkit 0.8.7 directly with OCR 1.11.1",
+        "Deploy toolkit 0.9.0 directly with OCR 1.11.2",
         "max-tools runtime behavior is unchanged",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",
