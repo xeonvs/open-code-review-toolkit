@@ -21,6 +21,7 @@ from ocr_toolkit.evidence import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence import mcp as evidence_mcp
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
@@ -821,6 +822,30 @@ def test_server_records_only_completed_model_time_evidence_actions(tmp_path: Pat
         "search": 0,
         "coverage": 0,
     }
+
+
+@pytest.mark.parametrize("failure", [OSError("unwritable"), ValueError("malformed")])
+def test_server_action_receipt_failure_cannot_change_tool_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    """Keep model behavior stable while finalization later fails closed on attribution."""
+
+    monkeypatch.setattr(
+        evidence_mcp, "record_action", lambda *_args: (_ for _ in ()).throw(failure)
+    )
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+        },
+        action_receipt_path=tmp_path / "actions.json",
+    )
+
+    assert result and result["result"].get("isError", False) is False
+    assert not (tmp_path / "actions.json").exists()
 
 
 def test_notifications_never_receive_json_rpc_responses() -> None:

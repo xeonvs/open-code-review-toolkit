@@ -63,7 +63,11 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    do not use closing keywords because the stable Release workflow owns issue closure.
 3. [x] Implement #167 as a focused signed identity/status commit with its synthetic regression
    matrix.
-4. [ ] Implement #169 as a focused signed receipt/action-integrity commit.
+4. [x] Implement #169 as a focused signed receipt/action-integrity commit. Positive evidence
+   usage now requires exact private action attribution before atomic publication, zero-call
+   results receive verified zero counts, and the shared neutral receipt owner validates every
+   generated MR receipt before any advisory can be attached. Security regressions cover missing,
+   malformed, unwritable, incomplete, type-confused, and per-tool-mismatched attribution.
 5. [ ] Implement #168 provider/config/snapshot, receipt v7, and approval boundary as one complete
    runtime commit.
 6. [ ] Implement #168 summary projection, complete public documentation, and synthetic examples

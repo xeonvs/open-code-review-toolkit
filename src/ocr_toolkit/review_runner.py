@@ -54,7 +54,7 @@ from ocr_toolkit.context.store import (
     ContextStoreError,
     PendingContextRecord,
 )
-from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS, read_action_receipt
+from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
     prepare_artifact_directory,
@@ -126,6 +126,7 @@ from ocr_toolkit.providers.gitlab_ci import acquire_gitlab_ci_outcomes
 from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
+from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
 BACKGROUND_PREVIEW_STDERR_BYTES = 64 * 1024
@@ -402,32 +403,14 @@ def _review_receipt(
     evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
-    if (
-        outcome.requires_evidence_mcp
-        and evidence_action_counts is not None
-        and evidence_action_counts.get("summary", 0) < 1
-    ):
-        raise ReviewRunnerError("OCR review did not call the mandatory evidence summary action")
-    action_attribution: dict[str, object]
-    if evidence_calls == 0 and evidence_action_counts is None:
-        action_attribution = {
-            "state": "verified",
-            **dict.fromkeys(EVIDENCE_ACTIONS, 0),
-        }
-    elif (
-        evidence_action_counts is not None
-        and set(evidence_action_counts) == set(EVIDENCE_ACTIONS)
-        and sum(evidence_action_counts[action] for action in ("summary", "list", "get"))
-        == evidence_by_tool[TOOL_NAME]
-        and evidence_action_counts["search"] == evidence_by_tool[SEARCH_TOOL_NAME]
-        and evidence_action_counts["coverage"] == evidence_by_tool[COVERAGE_TOOL_NAME]
-    ):
-        action_attribution = {
-            "state": "verified",
-            **{action: evidence_action_counts[action] for action in EVIDENCE_ACTIONS},
-        }
-    else:
-        action_attribution = {"state": "unavailable"}
+    try:
+        action_attribution = verified_evidence_actions(
+            evidence_by_tool,
+            evidence_action_counts,
+            mandatory=outcome.requires_evidence_mcp,
+        )
+    except ValueError as exc:
+        raise ReviewRunnerError(str(exc)) from exc
     capabilities = [
         {
             "server": capability.server,
@@ -1053,6 +1036,8 @@ def _finalize_ocr_result(
         )
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
+        if identity.mr_author_id is not None and not toolkit_receipt_is_valid(metadata):
+            raise ReviewRunnerError("toolkit generated an invalid review receipt")
         mcp = metadata.get("mcp")
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
@@ -1065,6 +1050,12 @@ def _finalize_ocr_result(
         transform_ocr_result(result_path, finalize)
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
+    except ReviewRunnerError:
+        try:
+            result_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     return usage, filtered, publication
 
 
