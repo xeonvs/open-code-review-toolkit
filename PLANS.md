@@ -86,11 +86,13 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    #167-#169 exercises the effective
    SHA matrix, strict evidence-action receipt reconciliation, atomic receipt identity, unprotected
    context/MCP rejection, static limitation provenance, and the unreachable approval executor.
-8. [ ] Review every commit and the complete `origin/main..HEAD` range, run all deterministic local
+8. [x] Review every commit and the complete `origin/main..HEAD` range, run all deterministic local
    gates, and fix supported findings in separately reviewed signed commits. The holistic source,
    test, and documentation review found no runtime defect; it reconciled the current receipt-v7,
    source/target identity, action-integrity, and constrained-target evidence/status contracts.
-   Complete deterministic gates remain before this step closes.
+   The complete suite passed with 1,438 tests and 397 subtests at 86.37% coverage; every scoped
+   risk floor passed. Compatibility, Towncrier draft, pinned Gitleaks, dependency audit, signatures,
+   diff checks, clean build/Twine, archive privacy, and separate wheel/sdist CLI smokes also passed.
 9. [ ] Run exactly one Codex Security diff scan for `origin/main..HEAD`, validate attack paths, fix
    supported findings, and repeat holistic review plus deterministic validation.
 10. [ ] Checksum-verify and atomically install PATH-effective OCR 1.11.2 with a rollback copy, then
