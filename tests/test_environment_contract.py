@@ -66,6 +66,7 @@ GITLAB_DEFAULTS = {
     "CI_PIPELINE_ID": "Omitted",
     "CI_JOB_ID": "Omitted",
     "CI_PIPELINE_SOURCE": "None",
+    "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
 }
 
 EXAMPLE_DEFAULTS = {
@@ -305,6 +306,7 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         "OCR_MAX_TOOLS": "0",
         "OCR_MAX_TOKENS_BUDGET": "0",
         "OCR_REVIEW_EFFORT": "medium",
+        "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
     }.items():
         assert f'{name}: "{value}"' in workflow
     assert (

@@ -360,9 +360,9 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v6" in configuration
-    assert "Receipt v1-v5" in configuration
-    assert "Receipt v1-v5" in operations
+    assert "receipt v7" in configuration
+    assert "Receipt v1-v6" in configuration
+    assert "Receipt v1-v6" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
@@ -371,7 +371,7 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
     assert "sole stdio exception" in configuration
 
 
-def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
+def test_builtin_search_coverage_and_receipt_v7_boundaries_are_public() -> None:
     """Document efficient routing without exposing search or coverage arguments."""
 
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -392,7 +392,7 @@ def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
         "action receipt v2",
-        "Receipt v6",
+        "Receipt v7",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
@@ -439,6 +439,7 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         "enriched-discussions.gitlab-ci.yml",
         "identity-only.gitlab-ci.yml",
         "metadata.gitlab-ci.yml",
+        "unprotected-target.gitlab-ci.yml",
     }
     assert {path.name for path in mode_root.glob("*.yml")} == expected_modes
     for mode in expected_modes:
@@ -446,6 +447,60 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         assert recipe.startswith("variables:\n")
         assert "OCR_REVIEW_CONTEXT_MODE" in recipe
         assert "OCR_AUTO_APPROVE" in recipe
+
+
+def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
+    example = GITLAB_EXAMPLE.read_text(encoding="utf-8")
+    recipe = (GITLAB_EXAMPLES / "modes" / "unprotected-target.gitlab-ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "required"' in example
+    assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "unprotected"' in recipe
+    assert 'OCR_REVIEW_CONTEXT_MODE: "metadata"' in recipe
+    assert 'OCR_AUTO_APPROVE: "false"' in recipe
+
+    for document in (configuration, gitlab, security, bounded):
+        assert "OCR_GITLAB_TARGET_PROTECTION_MODE" in document
+        assert "required" in document
+        assert "unprotected" in document
+        assert "receipt v7" in document
+    for phrase in (
+        "Explicit empty strings",
+        "Context `off` and bounded untrusted `metadata`",
+        "any configured `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` value",
+        "direct external MCP",
+        "Structured target guidance and accepted decisions are omitted",
+        "approval executor and GitLab approval endpoint are not reached",
+    ):
+        assert phrase in configuration
+    limitation = (
+        "The target branch was not protected in GitLab. "
+        "This review ran in limited, comment-only mode."
+    )
+    assert limitation in configuration
+    assert limitation in gitlab
+    assert limitation in operations
+    assert "without turning complete coverage into partial coverage" in gitlab
+    assert "cannot reach the approval executor" in security
+    assert "does not change result completeness or status" in bounded
+
+    for phrase in (
+        "Use two merge requests for the recommended setup",
+        "Retrying that same merge request",
+        "generic fail-closed failure note",
+        "Code Owners and code-owner approval rules",
+        "green advisory pipeline",
+    ):
+        assert phrase in gitlab
+    assert "valid non-zero MR SHA takes precedence" in operations
+    assert "absent or all-zero MR SHA" in operations
+    assert "require a valid result, complete manifest coverage" in operations
 
 
 def test_examples_and_current_public_docs_use_product_oriented_language() -> None:

@@ -12,6 +12,8 @@ variables:
   OCR_SHA256: "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
+  # Secure default: reject an unprotected GitLab target before OCR.
+  OCR_GITLAB_TARGET_PROTECTION_MODE: "required"
   # Default-on receipt-bound approval; external MCP always remains comment-only.
   OCR_AUTO_APPROVE: "true"
   # Identity-only by default; use "metadata" to admit bounded MR text fields.

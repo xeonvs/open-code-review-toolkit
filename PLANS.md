@@ -74,8 +74,10 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    binds source/target/protection in receipt v7, renders the validated limitation, and cannot reach
    the approval executor. Hostile, orchestration, DLP-summary, and immutable-target regressions
    cover these boundaries.
-6. [ ] Implement #168 summary projection, complete public documentation, and synthetic examples
-   as one complete documentation contract commit.
+6. [x] Implement #168 summary projection, complete public documentation, and synthetic examples
+   as one complete documentation contract commit. The secure default, constrained capability matrix,
+   two-MR and one-MR setup paths, static limitation, fail-closed diagnostics, and separate GitLab
+   merge-policy boundary are now explicit and contract-tested.
 7. [ ] Implement #170 qualification, OCR 1.11.2 pins, Rules probes, and `maintenance` plus `rules`
    Towncrier entries.
 8. [ ] Review every commit and the complete `origin/main..HEAD` range, run all deterministic local
