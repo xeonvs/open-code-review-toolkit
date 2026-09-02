@@ -19,7 +19,6 @@ from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
-    TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -612,19 +611,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return 1
 
     toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
+    if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
+        return invalid_ocr_schema_exit(
+            config,
+            "receipt v7 is invalid",
+            intro="OCR result publication policy state could not be validated.",
+            title="**Open Code Review publication policy error**",
+        )
     constrained_target = unprotected_target_limitation(toolkit_metadata)
-    publication = (
-        toolkit_metadata.get("publication") if isinstance(toolkit_metadata, dict) else None
-    )
-    if toolkit_metadata is None:
-        publication_state = "direct"
-    elif (
-        isinstance(toolkit_metadata, dict)
-        and toolkit_metadata.get("schema_version") == TOOLKIT_RESULT_SCHEMA_VERSION
-    ):
-        publication_state = publication_dlp_state(publication)
-    else:
-        publication_state = None
+    publication = toolkit_metadata.get("publication") if toolkit_metadata is not None else None
+    publication_state = "direct" if toolkit_metadata is None else publication_dlp_state(publication)
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,

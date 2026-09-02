@@ -11,6 +11,7 @@ import subprocess
 import sys
 from contextlib import redirect_stderr
 from dataclasses import replace
+from itertools import product
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -47,13 +48,37 @@ BUILTIN_EVIDENCE_TOOLS = (
     "ocr_toolkit_evidence_search",
     "ocr_toolkit_evidence_coverage",
 )
-SUMMARY_ACTION_COUNTS = {
-    "summary": 1,
-    "list": 0,
-    "get": 0,
-    "search": 0,
-    "coverage": 0,
-}
+
+
+def action_counts(
+    *,
+    summary: int = 1,
+    list: int = 0,
+    get: int = 0,
+    search: int = 0,
+    coverage: int = 0,
+    unattributed: int = 0,
+    completed: dict[str, int] | None = None,
+) -> dict[str, dict[str, int]]:
+    """Return one exact synthetic action-receipt-v3 projection."""
+
+    attempted = {
+        "summary": summary,
+        "list": list,
+        "get": get,
+        "search": search,
+        "coverage": coverage,
+        "unattributed": unattributed,
+    }
+    return {
+        "attempted": attempted,
+        "completed": completed
+        if completed is not None
+        else {name: attempted[name] for name in ("summary", "list", "get", "search", "coverage")},
+    }
+
+
+SUMMARY_ACTION_COUNTS = action_counts()
 
 
 def enriched_identity() -> review_runner.ReviewIdentity:
@@ -548,7 +573,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         composition,
         identity,
         safe_enrichment,
-        {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+        SUMMARY_ACTION_COUNTS,
     )
     metadata["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
     eligible = approval.evaluate_approval_policy(
@@ -581,7 +606,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             composition,
             identity,
             changed,
-            {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+            SUMMARY_ACTION_COUNTS,
         )
         blocked["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
         decision = approval.evaluate_approval_policy(
@@ -703,7 +728,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         external_servers=(),
         secret_values=(),
     )
-    counts = {"summary": 1, "list": 1, "get": 0, "search": 0, "coverage": 0}
+    counts = action_counts(list=1)
     assert review_runner._record_ocr_result_mcp_usage(
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
@@ -893,7 +918,7 @@ def test_evidence_action_receipt_reconciles_each_fixed_tool_independently(
         external_servers=(),
         secret_values=(),
     )
-    counts = {"summary": 1, "list": 1, "get": 1, "search": 1, "coverage": 1}
+    counts = action_counts(list=1, get=1, search=1, coverage=1)
 
     usage = review_runner._record_ocr_result_mcp_usage(
         result,
@@ -910,6 +935,231 @@ def test_evidence_action_receipt_reconciles_each_fixed_tool_independently(
         "calls": 5,
         "actions": {"state": "verified", **counts},
     }
+
+
+def test_failed_attempts_reconcile_without_impersonating_completed_evidence(
+    tmp_path: Path,
+) -> None:
+    """Accept OCR attempt telemetry while retaining successful-use authority separately."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 5,
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 3,
+                        "ocr_toolkit_evidence_search": 1,
+                        "ocr_toolkit_evidence_coverage": 1,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    counts = action_counts(
+        get=1,
+        search=1,
+        coverage=1,
+        unattributed=1,
+        completed={"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
+    )
+
+    review_runner._record_ocr_result_mcp_usage(
+        result,
+        composition,
+        DEFAULT_IDENTITY,
+        evidence_action_counts=counts,
+    )
+    evidence = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]["evidence"]
+
+    assert evidence == {
+        "mandatory": True,
+        "used": True,
+        "calls": 5,
+        "actions": {"state": "verified", **counts},
+    }
+
+
+def test_ocr_preparse_attempts_become_unattributed_without_success_authority(
+    tmp_path: Path,
+) -> None:
+    """Model OCR's counter-before-argument-parse boundary exactly."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {
+                    "total": 5,
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 3,
+                        "ocr_toolkit_evidence_search": 1,
+                        "ocr_toolkit_evidence_coverage": 1,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    received = action_counts(
+        completed={"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0}
+    )
+
+    review_runner._record_ocr_result_mcp_usage(
+        result, composition, DEFAULT_IDENTITY, evidence_action_counts=received
+    )
+    evidence = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]["evidence"]
+
+    assert evidence["calls"] == 5
+    assert evidence["used"] is True
+    assert evidence["actions"]["attempted"] == {
+        "summary": 1,
+        "list": 0,
+        "get": 0,
+        "search": 0,
+        "coverage": 0,
+        "unattributed": 4,
+    }
+    assert evidence["actions"]["completed"] == received["completed"]
+
+
+def test_mcp_received_attempts_cannot_exceed_ocr_preparse_totals(tmp_path: Path) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="does not match OCR tool usage"):
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            DEFAULT_IDENTITY,
+            evidence_action_counts=action_counts(list=1),
+        )
+
+
+def test_evidence_action_reconciliation_exhaustively_covers_small_state_space() -> None:
+    """Prove every bounded attempted/completed transition and per-tool residual."""
+
+    named_actions = ("summary", "list", "get", "search", "coverage")
+    attempted_actions = (*named_actions, "unattributed")
+    accepted = 0
+    rejected = 0
+
+    for attempted_values in product(range(2), repeat=len(attempted_actions)):
+        attempted = dict(zip(attempted_actions, attempted_values, strict=True))
+        ocr_by_tool = {
+            "ocr_toolkit_evidence": sum(
+                attempted[action] for action in ("summary", "list", "get", "unattributed")
+            ),
+            "ocr_toolkit_evidence_search": attempted["search"],
+            "ocr_toolkit_evidence_coverage": attempted["coverage"],
+        }
+        for completed_values in product(range(2), repeat=len(named_actions)):
+            completed = dict(zip(named_actions, completed_values, strict=True))
+            counts = {"attempted": attempted, "completed": completed}
+            valid = all(completed[action] <= attempted[action] for action in named_actions)
+
+            if not valid:
+                with pytest.raises(ValueError, match="attribution is unavailable"):
+                    review_runner.verified_evidence_actions(ocr_by_tool, counts, mandatory=False)
+                rejected += 1
+                continue
+
+            projected = review_runner.verified_evidence_actions(
+                ocr_by_tool, counts, mandatory=False
+            )
+            assert projected == {"state": "verified", **counts}
+            accepted += 1
+
+            if completed["summary"] == 0:
+                with pytest.raises(ValueError, match="mandatory evidence summary"):
+                    review_runner.verified_evidence_actions(ocr_by_tool, counts, mandatory=True)
+
+    assert accepted == 486
+    assert rejected == 1_562
+
+    baseline = action_counts(list=1, get=1, search=1, coverage=1)
+    baseline_by_tool = {
+        "ocr_toolkit_evidence": 3,
+        "ocr_toolkit_evidence_search": 1,
+        "ocr_toolkit_evidence_coverage": 1,
+    }
+    for tool in baseline_by_tool:
+        with_residual = {**baseline_by_tool, tool: baseline_by_tool[tool] + 1}
+        projected = review_runner.verified_evidence_actions(with_residual, baseline, mandatory=True)
+        assert projected["attempted"] == {
+            **baseline["attempted"],
+            "unattributed": 1,
+        }
+
+    for tool in baseline_by_tool:
+        too_small = {**baseline_by_tool, tool: baseline_by_tool[tool] - 1}
+        with pytest.raises(ValueError, match="does not match OCR tool usage"):
+            review_runner.verified_evidence_actions(too_small, baseline, mandatory=True)
+
+
+def test_failed_summary_attempt_cannot_satisfy_mandatory_evidence(tmp_path: Path) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="mandatory evidence summary"):
+        review_runner._record_ocr_result_mcp_usage(
+            result,
+            composition,
+            DEFAULT_IDENTITY,
+            evidence_action_counts=action_counts(
+                completed={
+                    "summary": 0,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                }
+            ),
+        )
 
 
 def test_mandatory_evidence_rejects_available_receipt_without_summary(
@@ -942,13 +1192,7 @@ def test_mandatory_evidence_rejects_available_receipt_without_summary(
             result,
             composition,
             DEFAULT_IDENTITY,
-            evidence_action_counts={
-                "summary": 0,
-                "list": 1,
-                "get": 1,
-                "search": 0,
-                "coverage": 0,
-            },
+            evidence_action_counts=action_counts(summary=0, list=1, get=1),
         )
 
 
@@ -978,13 +1222,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
         review_runner.ReviewIdentity(
             "a" * 40, "b" * 40, 41, "metadata", None, "b" * 40, "protected"
         ),
-        evidence_action_counts={
-            "summary": 1,
-            "list": 0,
-            "get": 0,
-            "search": 0,
-            "coverage": 0,
-        },
+        evidence_action_counts=SUMMARY_ACTION_COUNTS,
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
@@ -1021,14 +1259,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             "mandatory": True,
             "used": True,
             "calls": 1,
-            "actions": {
-                "state": "verified",
-                "summary": 1,
-                "list": 0,
-                "get": 0,
-                "search": 0,
-                "coverage": 0,
-            },
+            "actions": {"state": "verified", **SUMMARY_ACTION_COUNTS},
         },
         "publication": {"state": "passed"},
         "cleanup": {"result": "passed"},
@@ -2343,14 +2574,63 @@ def test_ocr_result_allows_manifest_failure_without_tool_calls(tmp_path: Path) -
         "calls": 0,
         "actions": {
             "state": "verified",
-            "summary": 0,
-            "list": 0,
-            "get": 0,
-            "search": 0,
-            "coverage": 0,
+            **action_counts(summary=0),
         },
     }
     assert persisted["_ocr_toolkit"]["mcp"]["usage"] == {}
+
+
+def test_failed_result_preserves_attempts_without_claiming_successful_evidence(
+    tmp_path: Path,
+) -> None:
+    """A non-mandatory failed result may authenticate failed attempts without use."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "comments": [],
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "failed",
+                    "coverage": {
+                        "selected": [],
+                        "completed": [],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                    "run_failure": {"classification": "configuration"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    failed_attempt = action_counts(
+        summary=0,
+        unattributed=1,
+        completed={"summary": 0, "list": 0, "get": 0, "search": 0, "coverage": 0},
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(
+        result, composition, DEFAULT_IDENTITY, evidence_action_counts=failed_attempt
+    ) == {"ocr_toolkit_evidence": 1}
+    evidence = json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"]["evidence"]
+    assert evidence == {
+        "mandatory": False,
+        "used": False,
+        "calls": 1,
+        "actions": {"state": "verified", **failed_attempt},
+    }
 
 
 def test_ocr_result_allows_skipped_review_without_tool_calls(tmp_path: Path) -> None:
@@ -2549,7 +2829,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
         result,
         composition,
         DEFAULT_IDENTITY,
-        evidence_action_counts={"summary": 1, "list": 1, "get": 0, "search": 0, "coverage": 0},
+        evidence_action_counts=action_counts(list=1),
     ) == {
         "documentation": 5,
         "ocr_toolkit_evidence": 2,
@@ -2592,6 +2872,58 @@ def test_ocr_result_rejects_unbounded_known_mcp_usage(
         review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
+@pytest.mark.parametrize(
+    "tool_calls",
+    [
+        [],
+        {},
+        {"total": 0},
+        {"total": 0, "by_tool": []},
+        {"total": True, "by_tool": {}},
+        {"total": -1, "by_tool": {}},
+        {"total": 1_000_000_001, "by_tool": {}},
+    ],
+)
+def test_failed_result_rejects_explicit_malformed_aggregate_tool_usage(
+    tmp_path: Path, tool_calls: object
+) -> None:
+    """Only an absent failed-result telemetry envelope means no tool calls."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "comments": [],
+                "tool_calls": tool_calls,
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "failed",
+                    "coverage": {
+                        "selected": [],
+                        "completed": [],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                    "run_failure": {"classification": "configuration"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="aggregate MCP usage"):
+        review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
+
+
 def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> None:
     """Treat a budget stop as a partial completed review, not unsupported output."""
 
@@ -2621,7 +2953,7 @@ def test_budget_limited_result_preserves_verified_mcp_usage(tmp_path: Path) -> N
         result,
         composition,
         DEFAULT_IDENTITY,
-        evidence_action_counts={"summary": 1, "list": 1, "get": 0, "search": 0, "coverage": 0},
+        evidence_action_counts=action_counts(list=1),
     ) == {"ocr_toolkit_evidence": 2}
     persisted = json.loads(result.read_text(encoding="utf-8"))
     assert persisted["summary"] == {"budget_exceeded": True, "total_tokens": 321}

@@ -22,7 +22,6 @@ from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
-    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
     OcrToolkitAdvisory,
 )
@@ -59,6 +58,7 @@ from ocr_toolkit.posting.suggestions import (
     safe_repository_path,
 )
 from ocr_toolkit.result_usage import normalize_token_usage
+from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
 
 OCR_FINDING_CATEGORIES = {
     "bug",
@@ -493,10 +493,7 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
 def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     """Report MCP servers from the safe receipt produced by `ocr-ci review`."""
 
-    if (
-        not isinstance(toolkit_metadata, dict)
-        or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
-    ):
+    if not toolkit_receipt_is_valid(toolkit_metadata):
         return ""
     mcp = toolkit_metadata.get("mcp")
     mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
@@ -517,32 +514,43 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     if not used:
         return ""
     details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
-    lines = [f"- verified MCP calls: {len(used)} server(s) ({details})"]
+    lines = [f"- reconciled MCP attempts: {len(used)} server(s) ({details})"]
     evidence = toolkit_metadata.get("evidence")
     actions = evidence.get("actions") if isinstance(evidence, dict) else None
-    if isinstance(actions, dict) and set(actions) == {"state", *EVIDENCE_ACTIONS}:
-        action_counts = [actions[action] for action in EVIDENCE_ACTIONS]
+    if isinstance(actions, dict) and set(actions) == {"state", "attempted", "completed"}:
+        attempted = actions.get("attempted")
+        completed = actions.get("completed")
         evidence_calls = evidence.get("calls") if isinstance(evidence, dict) else None
+        mandatory = evidence.get("mandatory") if isinstance(evidence, dict) else None
+        evidence_used = evidence.get("used") if isinstance(evidence, dict) else None
         if not (
             actions.get("state") == "verified"
+            and isinstance(attempted, dict)
+            and set(attempted) == {*EVIDENCE_ACTIONS, "unattributed"}
+            and isinstance(completed, dict)
+            and set(completed) == set(EVIDENCE_ACTIONS)
             and all(
                 isinstance(count, int)
                 and not isinstance(count, bool)
                 and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-                for count in action_counts
+                for count in (*attempted.values(), *completed.values())
             )
             and isinstance(evidence_calls, int)
             and not isinstance(evidence_calls, bool)
             and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
-            and sum(action_counts) == evidence_calls
-            and (evidence_calls == 0 or actions["summary"] >= 1)
+            and isinstance(mandatory, bool)
+            and isinstance(evidence_used, bool)
+            and all(completed[action] <= attempted[action] for action in EVIDENCE_ACTIONS)
+            and sum(attempted.values()) == evidence_calls
+            and evidence_used is (sum(completed.values()) > 0)
+            and (not mandatory or completed["summary"] >= 1)
         ):
             return "\n".join(lines)
-        positive = [action for action in EVIDENCE_ACTIONS if actions[action] > 0]
+        positive = [action for action in EVIDENCE_ACTIONS if completed[action] > 0]
         if positive:
             lines.append(
-                "- built-in evidence actions: "
-                + ", ".join(f"{action}: {actions[action]}" for action in positive)
+                "- completed built-in evidence actions: "
+                + ", ".join(f"{action}: {completed[action]}" for action in positive)
             )
     return "\n".join(lines)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS
+from ocr_toolkit.evidence.actions import ACTION_RECEIPT_BUCKETS, EVIDENCE_ACTIONS
 from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOL_NAME_CHARS,
@@ -34,7 +34,7 @@ class ReceiptReviewIdentity:
 
 def verified_evidence_actions(
     evidence_by_tool: dict[str, int],
-    action_counts: dict[str, int] | None,
+    action_counts: dict[str, dict[str, int]] | None,
     *,
     mandatory: bool,
 ) -> dict[str, object]:
@@ -44,26 +44,52 @@ def verified_evidence_actions(
     if action_counts is None:
         if evidence_calls:
             raise ValueError("evidence action attribution is unavailable")
-        action_counts = dict.fromkeys(EVIDENCE_ACTIONS, 0)
-    if set(action_counts) != set(EVIDENCE_ACTIONS) or any(
+        action_counts = {
+            "attempted": dict.fromkeys(ACTION_RECEIPT_BUCKETS, 0),
+            "completed": dict.fromkeys(EVIDENCE_ACTIONS, 0),
+        }
+    if set(action_counts) != {"attempted", "completed"}:
+        raise ValueError("evidence action attribution is unavailable")
+    attempted = action_counts.get("attempted")
+    completed = action_counts.get("completed")
+    if (
+        not isinstance(attempted, dict)
+        or not isinstance(completed, dict)
+        or set(attempted) != set(ACTION_RECEIPT_BUCKETS)
+        or set(completed) != set(EVIDENCE_ACTIONS)
+    ):
+        raise ValueError("evidence action attribution is unavailable")
+    all_counts = (*attempted.values(), *completed.values())
+    if any(
         not isinstance(count, int)
         or isinstance(count, bool)
         or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-        for count in action_counts.values()
+        for count in all_counts
     ):
         raise ValueError("evidence action attribution is unavailable")
-    if mandatory and action_counts["summary"] < 1:
+    if any(completed[action] > attempted[action] for action in EVIDENCE_ACTIONS):
+        raise ValueError("evidence action attribution is unavailable")
+    if mandatory and completed["summary"] < 1:
         raise ValueError("OCR review did not call the mandatory evidence summary action")
-    if (
-        sum(action_counts[action] for action in ("summary", "list", "get"))
-        != evidence_by_tool[TOOL_NAME]
-        or action_counts["search"] != evidence_by_tool[SEARCH_TOOL_NAME]
-        or action_counts["coverage"] != evidence_by_tool[COVERAGE_TOOL_NAME]
-    ):
+    primary_received = sum(attempted[action] for action in ("summary", "list", "get"))
+    received_by_tool = {
+        TOOL_NAME: primary_received + attempted["unattributed"],
+        SEARCH_TOOL_NAME: attempted["search"],
+        COVERAGE_TOOL_NAME: attempted["coverage"],
+    }
+    if any(received_by_tool[tool] > evidence_by_tool[tool] for tool in received_by_tool):
         raise ValueError("evidence action attribution does not match OCR tool usage")
+    # OCR accounts for a dynamic tool attempt before its JSON arguments are parsed.
+    # Such a request never reaches the MCP owner, so retain only the count-only
+    # residual as unattributed and never let it establish successful evidence use.
+    undispatched = sum(evidence_by_tool[tool] - received_by_tool[tool] for tool in received_by_tool)
     return {
         "state": "verified",
-        **{action: action_counts[action] for action in EVIDENCE_ACTIONS},
+        "attempted": {
+            **{action: attempted[action] for action in EVIDENCE_ACTIONS},
+            "unattributed": attempted["unattributed"] + undispatched,
+        },
+        "completed": {action: completed[action] for action in EVIDENCE_ACTIONS},
     }
 
 
@@ -364,17 +390,17 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     used = evidence.get("used")
     evidence_calls = evidence.get("calls")
     evidence_actions = evidence.get("actions")
-    evidence_called = isinstance(evidence_calls, int) and evidence_calls > 0
+    evidence_completed = _completed_evidence_calls(evidence_actions)
     if (
         not isinstance(mandatory, bool)
         or not isinstance(used, bool)
         or not isinstance(evidence_calls, int)
         or isinstance(evidence_calls, bool)
         or not 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
-        or used is not evidence_called
+        or used is not (evidence_completed > 0)
         or (mandatory and not used)
         or usage.get(builtin_server, 0) != evidence_calls + sum(context_usage.values())
-        or not _valid_evidence_actions(evidence_actions, evidence_calls)
+        or not _valid_evidence_actions(evidence_actions, evidence_calls, mandatory=mandatory)
     ):
         return invalid
     publication = toolkit_metadata.get("publication")
@@ -483,15 +509,43 @@ def publication_outcome_for_summary(outcome: ReviewOutcome, publication: Any) ->
     )
 
 
-def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
+def _completed_evidence_calls(value: Any) -> int:
+    """Return the closed completed-action subtotal or a non-validating sentinel."""
+
+    if not isinstance(value, dict):
+        return -1
+    completed = value.get("completed")
+    if not isinstance(completed, dict) or set(completed) != set(EVIDENCE_ACTIONS):
+        return 0 if value == {"state": "unavailable"} else -1
+    values = completed.values()
+    if any(
+        not isinstance(count, int)
+        or isinstance(count, bool)
+        or not 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+        for count in values
+    ):
+        return -1
+    return sum(completed.values())
+
+
+def _valid_evidence_actions(value: Any, evidence_calls: Any, *, mandatory: bool) -> bool:
     """Validate verified counts or an explicit unavailable attribution state."""
 
     if value == {"state": "unavailable"}:
         return evidence_calls == 0
-    expected = {"state", *EVIDENCE_ACTIONS}
+    expected = {"state", "attempted", "completed"}
     if not isinstance(value, dict) or set(value) != expected:
         return False
-    counts = [value.get(action) for action in EVIDENCE_ACTIONS]
+    attempted = value.get("attempted")
+    completed = value.get("completed")
+    if (
+        not isinstance(attempted, dict)
+        or set(attempted) != set(ACTION_RECEIPT_BUCKETS)
+        or not isinstance(completed, dict)
+        or set(completed) != set(EVIDENCE_ACTIONS)
+    ):
+        return False
+    counts = [*attempted.values(), *completed.values()]
     return bool(
         value.get("state") == "verified"
         and all(
@@ -500,6 +554,7 @@ def _valid_evidence_actions(value: Any, evidence_calls: Any) -> bool:
             and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
             for count in counts
         )
-        and sum(counts) == evidence_calls
-        and (evidence_calls == 0 or value.get("summary", 0) >= 1)
+        and all(completed[action] <= attempted[action] for action in EVIDENCE_ACTIONS)
+        and sum(attempted.values()) == evidence_calls
+        and (not mandatory or completed["summary"] >= 1)
     )

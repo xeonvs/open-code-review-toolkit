@@ -134,7 +134,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
     for phrase in (
         "Source-to-signal matrix",
         "receipt v7",
-        "action-receipt-v2 attribution",
+        "action-receipt-v3 attempted/completed accounting",
         "Group labels are model-produced",
         "sorted changed paths",
         "no exporter of its own",
@@ -394,12 +394,14 @@ def test_builtin_search_coverage_and_receipt_v7_boundaries_are_public() -> None:
         "at most eight literal tokens",
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
-        "action receipt v2",
+        "action receipt v3",
         "Receipt v7",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
-    assert "Zero action counters, queries, scopes, IDs" in operations
+    assert (
+        "Zero completed action counters, unattributed attempts, queries, scopes, IDs" in operations
+    )
     assert "arguments, queries, scopes, IDs, and results stay private" in gitlab
 
 

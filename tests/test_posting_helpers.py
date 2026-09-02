@@ -49,6 +49,7 @@ from tests.support import (
     gitlab_config,
     patched_attr,
     patched_env,
+    review_receipt_v7,
 )
 
 
@@ -1340,7 +1341,10 @@ class PostingIdentityTests(unittest.TestCase):
                     "status": "completed_with_errors",
                     "comments": [old, new],
                     "warnings": [],
-                    "_ocr_toolkit": {"schema_version": 7, "publication": publication},
+                    "_ocr_toolkit": {
+                        **review_receipt_v7(),
+                        "publication": publication,
+                    },
                 },
             )
 
@@ -1351,6 +1355,40 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertNotIn("Existing safe finding.", rendered)
         self.assertIn("<summary>Publication filtering signal</summary>", rendered)
         self.assertIn('"carried_forward_comments":1', rendered)
+
+    def test_present_invalid_receipt_never_reaches_normal_publication(self) -> None:
+        notes: list[str] = []
+        collect_calls: list[str] = []
+        receipt = review_receipt_v7()
+        receipt.pop("review")
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: collect_calls.append("collect") or snapshot.BotCommentRefs(),
+            ),
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [{"path": "safe.py", "line": 1, "content": "finding"}],
+                    "warnings": [],
+                    "_ocr_toolkit": receipt,
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(collect_calls, [])
+        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
     def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
         notes: list[str] = []
@@ -3288,100 +3326,143 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 7,
-                "mcp": {
-                    "usage": {
-                        "ocr_toolkit_evidence": 2,
-                        "documentation": 1,
-                    }
+            review_receipt_v7(
+                usage={"ocr_toolkit_evidence": 2, "documentation": 1},
+                attempted={
+                    "summary": 1,
+                    "list": 1,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-                "evidence": {"actions": {"state": "unavailable"}},
-            }
+                completed={
+                    "summary": 0,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                mandatory=False,
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+            "- reconciled MCP attempts: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
         )
         self.assertNotIn("file_read", summary)
 
     def test_mcp_usage_summary_reads_receipt_v7_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 7,
-                "mcp": {
-                    "capabilities": [],
-                    "usage": {"ocr_toolkit_evidence": 3},
+            review_receipt_v7(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-                "evidence": {"actions": {"state": "unavailable"}},
-            }
+                completed={
+                    "summary": 0,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                mandatory=False,
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 3)",
         )
 
     def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 7,
-                "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
-                "evidence": {
-                    "calls": 4,
-                    "actions": {
-                        "state": "verified",
-                        "summary": 1,
-                        "list": 2,
-                        "get": 1,
-                        "search": 0,
-                        "coverage": 0,
-                    },
+            review_receipt_v7(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-            }
+                completed={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                },
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
-            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
+            "- completed built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
     def test_mcp_usage_summary_omits_zero_or_unavailable_action_breakdown(self) -> None:
-        """Publish only reconciled non-zero action counts."""
+        """Publish only reconciled non-zero completed action counts."""
 
-        for actions in (
-            {"state": "unavailable"},
-            {
-                "state": "verified",
-                "summary": 0,
-                "list": 0,
-                "get": 0,
-                "search": 0,
-                "coverage": 0,
-            },
-            {
-                "state": "verified",
-                "summary": 0,
-                "list": 2,
-                "get": 1,
-                "search": 0,
-                "coverage": 0,
-            },
-        ):
-            with self.subTest(actions=actions):
-                calls = sum(value for key, value in actions.items() if key != "state")
+        zero_completed = {
+            "summary": 0,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+        }
+        cases = (
+            (
+                {
+                    "summary": 0,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
+                },
+                zero_completed,
+            ),
+        )
+        for attempted, completed in cases:
+            with self.subTest(attempted=attempted):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
-                        {
-                            "schema_version": 7,
-                            "mcp": {"usage": {"ocr_toolkit_evidence": 3}},
-                            "evidence": {"calls": calls, "actions": actions},
-                        }
+                        review_receipt_v7(
+                            attempted=attempted,
+                            completed=completed,
+                            mandatory=False,
+                        )
                     ),
-                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+                    "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 3)",
                 )
+
+    def test_mcp_usage_summary_never_renders_unattributed_attempts(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            review_receipt_v7(
+                attempted={
+                    "summary": 1,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 4,
+                },
+            )
+        )
+
+        self.assertEqual(
+            summary,
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 5)\n"
+            "- completed built-in evidence actions: summary: 1",
+        )
+        self.assertNotIn("unattributed", summary)
 
     def test_mcp_usage_summary_omits_hostile_or_unreconciled_action_breakdown(self) -> None:
         for actions in (
@@ -3391,44 +3472,39 @@ class PostingSummaryTests(unittest.TestCase):
             {"state": "verified", "summary": 1, "list": 2, "get": 1, "extra": 0},
         ):
             with self.subTest(actions=actions):
-                summary = posting_formatting.format_mcp_usage_summary(
-                    {
-                        "schema_version": 7,
-                        "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
-                        "evidence": {"calls": 4, "actions": actions},
-                    }
-                )
+                receipt = review_receipt_v7()
+                receipt["evidence"]["actions"] = actions
+                summary = posting_formatting.format_mcp_usage_summary(receipt)
 
-                self.assertEqual(
-                    summary,
-                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)",
-                )
+                self.assertEqual(summary, "")
                 self.assertNotIn("/approve", summary)
 
     def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 7,
-                "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
-                "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
-                "evidence": {
-                    "calls": 4,
-                    "actions": {
-                        "state": "verified",
-                        "summary": 1,
-                        "list": 2,
-                        "get": 1,
-                        "search": 0,
-                        "coverage": 0,
-                    },
+            review_receipt_v7(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-            }
+                completed={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                context_tool_usage={"context_get": 1, "context_list": 2},
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
-            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
+            "- completed built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
     def test_mcp_usage_summary_rejects_malformed_usage_before_rendering(self) -> None:
@@ -3439,16 +3515,24 @@ class PostingSummaryTests(unittest.TestCase):
             {"ocr_toolkit_evidence": 0},
         ):
             with self.subTest(usage=usage):
+                receipt = review_receipt_v7()
+                receipt["mcp"]["usage"] = usage
                 self.assertEqual(
-                    posting_formatting.format_mcp_usage_summary(
-                        {
-                            "schema_version": 7,
-                            "mcp": {"usage": usage},
-                            "evidence": {"actions": {"state": "unavailable"}},
-                        }
-                    ),
+                    posting_formatting.format_mcp_usage_summary(receipt),
                     "",
                 )
+
+    def test_mcp_usage_summary_requires_complete_valid_receipt(self) -> None:
+        receipt = review_receipt_v7()
+        for mutate in (
+            lambda value: value.pop("review"),
+            lambda value: value["review"].update({"source_sha": "invalid"}),
+            lambda value: value["cleanup"].update({"result": "failed"}),
+        ):
+            candidate = json.loads(json.dumps(receipt))
+            mutate(candidate)
+            with self.subTest(candidate=candidate):
+                self.assertEqual(posting_formatting.format_mcp_usage_summary(candidate), "")
 
     def test_mcp_usage_summary_rejects_pre_v6_receipt(self) -> None:
         self.assertEqual(

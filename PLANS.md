@@ -103,10 +103,32 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    defect, and the repeated deterministic gates passed with 1,438 tests, 406 subtests, 86.35%
    coverage, all scoped risk floors, compatibility, Towncrier, Gitleaks, dependency audit,
    signatures, diff checks, clean build/Twine, archive privacy, and wheel/sdist CLI smokes green.
-10. [ ] Checksum-verify and atomically install PATH-effective OCR 1.11.2 with a rollback copy, then
-    run exactly one configured-provider local OCR review of the complete exact range with context
-    `off`, public Rules, concurrency 2, and owner-only artifacts. Inspect complete manifest coverage
-    and receipt/action attribution; fix findings and repeat deterministic validation only.
+10. [ ] The checksum-verified PATH-effective OCR 1.11.2 installation and its rollback copy are
+    complete. The one permitted configured-provider review ran over exact range
+    `b9a0e54af7f39a1db21e2a8f4780761e74782bf8..cb9f4d9f39305e4cfdae5d4c91be7138edd0c4e3`
+    with context `off`, public Rules, and concurrency 2, then failed closed before publication because
+    OCR counts a dynamic MCP tool attempt before argument parsing/execution while private action
+    receipt v2 counted only completed calls. No publishable result or complete manifest survived, no
+    posting occurred. The owner subsequently authorized one repeat diagnostic OCR run with all raw
+    private artifacts retained; it must run only after the root fix and relevant deterministic gates.
+    The deterministic root remediation is complete with count-only action receipt v3: it authenticates
+    MCP-received attempts and completed counts separately, retains a closed unattributed-attempt
+    counter for malformed primary-tool actions and OCR-counted requests that fail argument parsing
+    before MCP dispatch, reconciles received counts as subsets of OCR's authoritative by-tool
+    attempts, requires a completed `summary` for mandatory evidence, and exposes only completed
+    actions as successful evidence use.
+    Hostile, malformed, failed-call, concurrency, receipt-readback, formatting, approval, and publication
+    regressions restore the complete #167-#169 chain and adversarially cover parser, persistence,
+    reconciliation, receipt, approval, and publication transitions. A completion is recorded only when
+    that same request durably recorded its attempt, so it cannot consume an unmatched attempt retained
+    from an earlier failed call. Normal posting now rejects every present incomplete or invalid receipt
+    before reading prior review state or publishing findings; only a genuinely absent receipt keeps the
+    compatible direct path. The complete deterministic suite passed with 1,468 tests and 407 subtests at
+    86.31% coverage; compatibility, Towncrier, Gitleaks, dependency audit, signatures, diff checks,
+    deterministic double build, Twine, archive privacy, and clean wheel/sdist CLI smokes are green. The
+    owner-authorized retained-artifact OCR repeat remains pending. Close this gate only after its raw
+    result, terminal manifest coverage, action counters, and offline finalization all validate; do not
+    claim OCR completion or findings earlier.
 11. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
     threads, mark the Draft PR ready, and exact-head squash merge. Delete the feature branch.
 12. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set
@@ -126,6 +148,7 @@ staged diff for correctness, hostile inputs, DLP/privacy, and scope, then run `g
 
 Final deterministic gates are `scripts/quality.sh check`, compatibility validation, Towncrier draft,
 Gitleaks, build/Twine, archive/privacy checks, and clean wheel/sdist CLI smoke. OCR exit zero is not
-completion without complete selected-item coverage and exact receipt/action reconciliation. A second
-semantic local OCR run is prohibited. Stable delivery remains incomplete until external publication
-and independent reconciliation are complete.
+completion without complete selected-item coverage and exact receipt/action reconciliation. The one
+owner-authorized repeat semantic OCR run must preserve every private intermediate artifact and may run
+only after the root fix is committed; no additional semantic run is authorized. Stable delivery remains
+incomplete until external publication and independent reconciliation are complete.

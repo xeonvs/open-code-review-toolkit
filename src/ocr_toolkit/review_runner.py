@@ -340,7 +340,7 @@ def _review_receipt(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -352,6 +352,11 @@ def _review_receipt(
     tool_calls = payload.get("tool_calls")
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     total_calls = tool_calls.get("total") if isinstance(tool_calls, dict) else None
+    if tool_calls is None and outcome.kind == "failed":
+        by_tool = {}
+        total_calls = 0
+    elif not isinstance(tool_calls, dict) or not isinstance(by_tool, dict):
+        raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
     if outcome.kind == "skipped":
         legacy_message_invalid = (
             not outcome.manifest_present and payload.get("message") != "No supported files changed."
@@ -389,11 +394,10 @@ def _review_receipt(
                 raise ReviewRunnerError("OCR result exceeds the per-server MCP usage bound")
             usage[owner] = aggregate
     known_usage_total = sum(usage.values())
-    if tool_calls is None and outcome.kind == "failed":
-        total_calls = 0
     if (
         not isinstance(total_calls, int)
         or isinstance(total_calls, bool)
+        or not 0 <= total_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
         or total_calls < known_usage_total
     ):
         raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
@@ -402,7 +406,6 @@ def _review_receipt(
         for name in (TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME)
     }
     evidence_calls = sum(evidence_by_tool.values())
-    evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
     try:
@@ -413,6 +416,12 @@ def _review_receipt(
         )
     except ValueError as exc:
         raise ReviewRunnerError(str(exc)) from exc
+    completed_actions = action_attribution.get("completed")
+    evidence_used = (
+        isinstance(completed_actions, dict)
+        and all(isinstance(count, int) for count in completed_actions.values())
+        and sum(completed_actions.values()) > 0
+    )
     capabilities = [
         {
             "server": capability.server,
@@ -1008,7 +1017,7 @@ def _finalize_ocr_result(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
     *,
     forbidden: tuple[str, ...],
     toolkit_advisory: OcrToolkitAdvisory | None = None,
@@ -1068,7 +1077,7 @@ def _record_ocr_result_mcp_usage(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, int]:
     """Verify MCP use and bind the closed review-time receipt to the result."""
 
@@ -2004,7 +2013,7 @@ def run_evidence_review(
     usage: dict[str, int] = {}
     publication_filtered = False
     publication: dict[str, object] = {"state": "passed"}
-    evidence_action_counts: dict[str, int] | None = None
+    evidence_action_counts: dict[str, dict[str, int]] | None = None
     background_qualification = BackgroundQualification()
     preserve_authorized = False
     previous_handlers = _install_termination_handlers()

@@ -99,11 +99,21 @@ def receipt_v7(
             "calls": 1,
             "actions": {
                 "state": "verified",
-                "summary": 1,
-                "list": 0,
-                "get": 0,
-                "search": 0,
-                "coverage": 0,
+                "attempted": {
+                    "summary": 1,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
+                },
+                "completed": {
+                    "summary": 1,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
             },
         },
         "publication": {"state": "passed"},
@@ -425,20 +435,32 @@ class ApprovalPolicyTests(unittest.TestCase):
 
     def test_evidence_action_attribution_does_not_change_approval_eligibility(self) -> None:
         receipt = receipt_v7()
-        receipt["evidence"]["actions"] = {
-            "state": "verified",
-            "summary": 1,
-            "list": 0,
-            "get": 0,
-            "search": 0,
-            "coverage": 0,
-        }
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
         )
         self.assertTrue(decision.eligible)
 
-        receipt["evidence"]["actions"]["summary"] = 0
+        receipt["evidence"]["actions"]["completed"]["summary"] = 0
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertFalse(decision.eligible)
+        self.assertIn("receipt is missing or invalid", decision.result.reason)
+
+    def test_failed_attempts_do_not_authorize_successful_evidence_or_approval(self) -> None:
+        receipt = receipt_v7()
+        actions = receipt["evidence"]["actions"]
+        actions["attempted"]["get"] = 1
+        receipt["evidence"]["calls"] = 2
+        receipt["mcp"]["usage"]["ocr_toolkit_evidence"] = 2
+
+        decision = approval.evaluate_approval_policy(
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+        )
+        self.assertTrue(decision.eligible)
+
+        actions["completed"]["summary"] = 0
+        receipt["evidence"]["used"] = False
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
         )

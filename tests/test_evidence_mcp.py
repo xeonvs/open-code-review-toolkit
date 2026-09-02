@@ -22,7 +22,7 @@ from ocr_toolkit.evidence import (
     TrustClass,
 )
 from ocr_toolkit.evidence import mcp as evidence_mcp
-from ocr_toolkit.evidence.actions import read_action_receipt
+from ocr_toolkit.evidence.actions import read_action_receipt, record_action
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
     MAX_REQUEST_BYTES,
@@ -790,7 +790,7 @@ def test_initialized_notification_and_post_handshake_operations() -> None:
     assert called["result"]["content"][0]["type"] == "text"
 
 
-def test_server_records_only_completed_model_time_evidence_actions(tmp_path: Path) -> None:
+def test_server_records_attempted_and_completed_model_time_evidence_actions(tmp_path: Path) -> None:
     receipt = tmp_path / "actions.json"
     successful = handle_request(
         _store(),
@@ -816,12 +816,79 @@ def test_server_records_only_completed_model_time_evidence_actions(tmp_path: Pat
     assert successful and successful["result"].get("isError", False) is False
     assert failed and failed["result"].get("isError", False) is True
     assert read_action_receipt(receipt) == {
-        "summary": 1,
-        "list": 0,
-        "get": 0,
-        "search": 0,
-        "coverage": 0,
+        "attempted": {
+            "summary": 1,
+            "list": 0,
+            "get": 1,
+            "search": 0,
+            "coverage": 0,
+            "unattributed": 0,
+        },
+        "completed": {"summary": 1, "list": 0, "get": 0, "search": 0, "coverage": 0},
     }
+
+
+def test_server_binds_malformed_primary_action_to_unattributed_attempt(tmp_path: Path) -> None:
+    receipt = tmp_path / "actions.json"
+
+    for arguments in (
+        {},
+        {"action": "delete"},
+        {"action": []},
+        {"action": {}},
+        {"action": {"nested": []}},
+        {"action": [[]]},
+        {"action": True},
+        {"action": 1},
+        {"action": None},
+        "malformed",
+    ):
+        result = handle_request(
+            _store(),
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": TOOL_NAME, "arguments": arguments},
+            },
+            action_receipt_path=receipt,
+        )
+        assert result and result["result"].get("isError", False) is True
+
+    counts = read_action_receipt(receipt)
+    assert counts is not None
+    assert counts["attempted"]["unattributed"] == 10
+    assert sum(counts["completed"].values()) == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments", "action"),
+    [
+        (SEARCH_TOOL_NAME, {"query": ""}, "search"),
+        (COVERAGE_TOOL_NAME, {}, "coverage"),
+    ],
+)
+def test_dedicated_tool_errors_remain_authenticated_attempts(
+    tmp_path: Path, name: str, arguments: object, action: str
+) -> None:
+    receipt = tmp_path / "actions.json"
+
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+        action_receipt_path=receipt,
+    )
+
+    assert result and result["result"].get("isError", False) is True
+    counts = read_action_receipt(receipt)
+    assert counts is not None
+    assert counts["attempted"][action] == 1
+    assert counts["completed"][action] == 0
 
 
 @pytest.mark.parametrize("failure", [OSError("unwritable"), ValueError("malformed")])
@@ -831,7 +898,7 @@ def test_server_action_receipt_failure_cannot_change_tool_result(
     """Keep model behavior stable while finalization later fails closed on attribution."""
 
     monkeypatch.setattr(
-        evidence_mcp, "record_action", lambda *_args: (_ for _ in ()).throw(failure)
+        evidence_mcp, "record_action", lambda *_args, **_kwargs: (_ for _ in ()).throw(failure)
     )
     result = handle_request(
         _store(),
@@ -845,7 +912,72 @@ def test_server_action_receipt_failure_cannot_change_tool_result(
     )
 
     assert result and result["result"].get("isError", False) is False
-    assert not (tmp_path / "actions.json").exists()
+
+
+def test_failed_attempt_write_cannot_be_recovered_as_a_completed_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A transient attempt-write failure cannot consume an older unmatched attempt."""
+
+    receipt = tmp_path / "actions.json"
+    record_action(receipt, "summary")
+    original = evidence_mcp.record_action
+    calls = 0
+
+    def fail_first_record(path: Path, action: object, *, completed: bool = False) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("attempt write failed")
+        original(path, action, completed=completed)
+
+    monkeypatch.setattr(evidence_mcp, "record_action", fail_first_record)
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+        },
+        action_receipt_path=receipt,
+    )
+
+    assert result and result["result"].get("isError", False) is False
+    counts = read_action_receipt(receipt)
+    assert counts is not None
+    assert counts["attempted"]["summary"] == 1
+    assert counts["completed"]["summary"] == 0
+
+
+def test_completion_write_failure_retains_attempt_without_changing_tool_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    receipt = tmp_path / "actions.json"
+    original = evidence_mcp.record_action
+
+    def fail_completion(path: Path, action: object, *, completed: bool = False) -> None:
+        if completed:
+            raise OSError("completion write failed")
+        original(path, action, completed=False)
+
+    monkeypatch.setattr(evidence_mcp, "record_action", fail_completion)
+    result = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+        },
+        action_receipt_path=receipt,
+    )
+
+    assert result and result["result"].get("isError", False) is False
+    counts = read_action_receipt(receipt)
+    assert counts is not None
+    assert counts["attempted"]["summary"] == 1
+    assert counts["completed"]["summary"] == 0
 
 
 def test_notifications_never_receive_json_rpc_responses() -> None:
