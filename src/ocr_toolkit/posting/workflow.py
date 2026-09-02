@@ -109,6 +109,7 @@ from ocr_toolkit.provider_failure import (
     provider_failure_reason,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
+from ocr_toolkit.review_identity import effective_reviewed_sha
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -143,12 +144,9 @@ def inline_skip_reason(refs: dict[str, str] | None, path: str, line: int) -> str
 
 
 def reviewed_sha() -> str:
-    """Return the commit SHA OCR was expected to review in CI."""
+    """Return the validated commit SHA OCR was expected to review in CI."""
 
-    source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
-    if source_sha and not re.fullmatch(r"0+", source_sha):
-        return source_sha
-    return clean_text(os.environ.get("CI_COMMIT_SHA", ""))
+    return effective_reviewed_sha(os.environ)
 
 
 def mr_head_sha() -> str:
@@ -1300,7 +1298,7 @@ def post_ocr_failure(
 
     try:
         status_path = repository_artifacts().pre_execution_status
-        source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
+        source_sha = reviewed_sha()
         diff_base_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
         status = read_pre_execution_status(
             status_path,

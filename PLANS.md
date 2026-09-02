@@ -59,9 +59,9 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
 
 1. [x] Create milestone `v0.9.0`, assign #167-#170, create this feature branch, and record the
    complete release plan as the first signed commit.
-2. [ ] Push only the plan commit and open a Draft PR with all issue links and the delivery plan;
+2. [x] Push only the plan commit and open a Draft PR with all issue links and the delivery plan;
    do not use closing keywords because the stable Release workflow owns issue closure.
-3. [ ] Implement #167 as a focused signed identity/status commit with its synthetic regression
+3. [x] Implement #167 as a focused signed identity/status commit with its synthetic regression
    matrix.
 4. [ ] Implement #169 as a focused signed receipt/action-integrity commit.
 5. [ ] Implement #168 provider/config/snapshot, receipt v7, and approval boundary as one complete

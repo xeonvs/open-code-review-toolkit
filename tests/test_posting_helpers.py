@@ -44,6 +44,7 @@ from ocr_toolkit.pre_execution import (
 )
 from ocr_toolkit.provider_failure import ProviderFailureReason
 from ocr_toolkit.result_contract import CoverageFailure, OcrResultContractError, ReviewOutcome
+from ocr_toolkit.review_identity import effective_reviewed_sha
 from tests.support import (
     gitlab_config,
     patched_attr,
@@ -52,6 +53,27 @@ from tests.support import (
 
 
 class PostingIdentityTests(unittest.TestCase):
+    def test_effective_reviewed_sha_has_one_strict_detached_pipeline_fallback(self) -> None:
+        valid = "b" * 40
+        commit = "c" * 40
+        for merge_request_sha, commit_sha, expected in (
+            (valid, commit, valid),
+            ("", valid, valid),
+            ("0" * 40, valid, valid),
+            (valid, "", valid),
+            ("d" * 40, valid, "d" * 40),
+            ("B" * 40, valid, ""),
+            ("bad", valid, ""),
+            ("", "C" * 40, ""),
+            ("", "bad", ""),
+        ):
+            with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
+                environment = {
+                    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": merge_request_sha,
+                    "CI_COMMIT_SHA": commit_sha,
+                }
+                self.assertEqual(effective_reviewed_sha(environment), expected)
+
     def test_post_results_fails_closed_without_current_user(self) -> None:
         calls: list[str] = []
 
@@ -2081,6 +2103,19 @@ class PostingWorkflowTests(unittest.TestCase):
         ):
             self.assertEqual(workflow.reviewed_sha(), "b" * 40)
 
+        for merge_request_sha, commit_sha in (
+            ("B" * 40, "b" * 40),
+            ("bad", "b" * 40),
+            ("", "B" * 40),
+            ("0" * 40, "bad"),
+        ):
+            with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
+                with patched_env(
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
+                    CI_COMMIT_SHA=commit_sha,
+                ):
+                    self.assertEqual(workflow.reviewed_sha(), "")
+
     def test_coverage_diagnostics_are_deduplicated_redacted_and_fail_closed(self) -> None:
         """Count unique files while keeping malformed failure paths out of public notes."""
 
@@ -2466,6 +2501,134 @@ class PostingWorkflowTests(unittest.TestCase):
                 self.assertNotIn("/merge", notes[0][1])
                 self.assertNotIn("rules.json", notes[0][1])
                 self.assertEqual(setup_cleanup, [[9]])
+
+    def test_pre_execution_status_uses_effective_detached_pipeline_sha(self) -> None:
+        """Use the same strict SHA fallback for setup and background statuses."""
+
+        for reason, actual, limit, unit, expected_text in (
+            (PROTECTED_TARGET_RULE_PATH_PENDING, None, None, None, "did not run"),
+            (
+                BACKGROUND_CHARACTER_LIMIT_REASON,
+                8_001,
+                8_000,
+                "characters",
+                "rejected the generated review background",
+            ),
+        ):
+            for merge_request_sha in ("", "0" * 40):
+                with (
+                    self.subTest(reason=reason, merge_request_sha=merge_request_sha),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    root = Path(tmp)
+                    directory = root / ".review-context"
+                    directory.mkdir(mode=0o700)
+                    status_path = directory / "pre-execution-status.json"
+                    write_pre_execution_status(
+                        status_path,
+                        PreExecutionStatus(
+                            schema_version=STATUS_SCHEMA,
+                            reason=reason,
+                            diff_base_sha="a" * 40,
+                            source_sha="b" * 40,
+                            policy_sha="c" * 40,
+                            actual=actual,
+                            limit=limit,
+                            unit=unit,
+                        ),
+                    )
+                    stderr_path = root / "stderr.log"
+                    stderr_path.write_text("private details\n", encoding="utf-8")
+                    notes: list[str] = []
+
+                    def capture_note(
+                        _config: gitlab.GitLabConfig,
+                        _title: str,
+                        body: str,
+                        _transaction: PostingTransaction,
+                    ) -> dict[str, int]:
+                        notes.append(body)
+                        return {"id": 1}
+
+                    with (
+                        patched_env(
+                            CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
+                            CI_COMMIT_SHA="b" * 40,
+                        ),
+                        patched_attr(
+                            workflow,
+                            "repository_artifacts",
+                            lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                        ),
+                        patched_attr(workflow, "post_review_note_bounded", capture_note),
+                        patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                        patched_attr(
+                            workflow,
+                            "collect_previous_bot_comment_refs",
+                            lambda *_args: snapshot.BotCommentRefs(),
+                        ),
+                        patched_attr(workflow, "delete_previous_setup_notes", lambda *_args: None),
+                    ):
+                        self.assertEqual(
+                            workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0
+                        )
+
+                    self.assertEqual(len(notes), 1)
+                    self.assertIn(expected_text, notes[0])
+                    self.assertNotIn("private details", notes[0])
+
+    def test_malformed_mr_sha_does_not_fall_back_for_pre_execution_status(self) -> None:
+        """Do not hide a hostile populated MR identity behind CI_COMMIT_SHA."""
+
+        notes: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".review-context"
+            directory.mkdir(mode=0o700)
+            status_path = directory / "pre-execution-status.json"
+            write_pre_execution_status(
+                status_path,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                    diff_base_sha="a" * 40,
+                    source_sha="b" * 40,
+                    policy_sha="c" * 40,
+                ),
+            )
+            stderr_path = root / "stderr.log"
+            stderr_path.write_text("generic details\n", encoding="utf-8")
+
+            def capture_note(
+                _config: gitlab.GitLabConfig,
+                _title: str,
+                body: str,
+                _transaction: PostingTransaction,
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
+
+            with (
+                patched_env(
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="B" * 40,
+                    CI_COMMIT_SHA="b" * 40,
+                    OCR_POST_ERROR_DETAILS="1",
+                ),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture_note),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                self.assertEqual(workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0)
+
+        self.assertEqual(len(notes), 1)
+        self.assertIn("result may be partial", notes[0])
+        self.assertIn("generic details", notes[0])
 
     def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
         notes: list[str] = []
