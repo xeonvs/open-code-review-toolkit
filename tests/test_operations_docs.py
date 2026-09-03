@@ -90,6 +90,9 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     engineering_index = (PROJECT_ROOT / "docs" / "engineering" / "README.md").read_text(
         encoding="utf-8"
     )
+    context_contracts = (
+        PROJECT_ROOT / "docs" / "engineering" / "m5_context_contracts.md"
+    ).read_text(encoding="utf-8")
     readme = README.read_text(encoding="utf-8")
 
     for index in (docs_index, codex_index, engineering_index):
@@ -125,6 +128,9 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     assert "not a second source" in codex_index
     assert "without duplicating their rules" in engineering_index
     assert "docs/README.md" in readme
+    assert "current contracts live on `main`" in context_contracts
+    assert "active release branch" not in context_contracts
+    assert "active plan" not in context_contracts
 
 
 def test_release_archive_reconciles_current_external_delivery_truth() -> None:

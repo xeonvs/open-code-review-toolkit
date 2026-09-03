@@ -1,6 +1,6 @@
 # M5 Bounded Review-Context Contracts
 
-This checkpoint fixed the v0.7.0 production contracts before implementation and remains the engineering-level boundary record. The implementation now exists on the active release branch; production-owner evidence and remaining real-OCR/stable-release limits are recorded in the active plan and test-evidence matrix. Public operator behavior is owned by [Bounded review context](../review-context.md).
+This checkpoint fixed the v0.7.0 production contracts before implementation and remains the engineering-level boundary record. The implementation and current contracts live on `main`; production-owner evidence and explicit residual limits are recorded in the test-evidence matrix, while completed release evidence is archived in the execution history. Public operator behavior is owned by [Bounded review context](../review-context.md).
 
 ## Ownership and dependency direction
 
