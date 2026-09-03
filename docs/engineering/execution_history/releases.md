@@ -2,6 +2,90 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-9-0"></a>
+
+## Toolkit 0.9.0 — unprotected-target integrity and OCR 1.11.2/1.11.3
+
+Status: repository complete; external stable delivery pending
+Release classification: `release-required`
+Target stable version: `0.9.0`
+Repository completion date: 2026-09-03
+
+### Goal and delivered scope
+
+Toolkit 0.9.0 delivers the complete authorized scope of issues #167, #168, #169,
+#170, and #172. One strict effective reviewed-source SHA now binds review,
+pre-execution diagnostics, posting, and later actions, including the detached
+GitLab pipeline fallback. Explicitly permitted unprotected targets gain a
+separately constrained review path: normal findings and summaries remain
+publishable, but the run is always comment-only and cannot acquire protected
+policy, enriched context, adapters, accepted decisions, structured target
+guidance, or external MCP authority.
+
+Private action receipt v3 authenticates attempted and completed fixed evidence
+actions separately. Receipt v8 binds immutable source, target, and actual
+target-protection state and retains only a closed aggregate failed-tool state.
+Valid findings, summaries, manifests, and posting transactions survive absent,
+malformed, hostile, non-zero, or contradictory additive OCR diagnostics.
+Bounded credential-redacted failure details are console-only, and toolkit-owned
+OCR children remove inherited `OCR_RAW_LOGGING`.
+
+The release qualifies OCR 1.11.2 as adjacent compatibility evidence and promotes
+checksum-verified OCR 1.11.3 as the sole accepted and recommended runtime. The
+effective Rules contract adds `.mjs`/`.cjs` JavaScript and `.cxx`/`.hxx` C++
+routing while `.svh` remains excluded. The canonical
+`docs/review-decision-flow.md` supplies three contract-tested Mermaid maps and
+is linked from the root `AGENTS.md`, documentation index, and toolkit strategy.
+
+### Review, OCR, security, and test evidence
+
+- The completed local quality matrix passed 1,486 tests plus 408 subtests at
+  86.38% branch coverage; every scoped coverage floor passed. Compatibility,
+  Towncrier draft, frozen Ruff formatting, Gitleaks, dependency audit, signature
+  checks, deterministic double build, Twine, archive privacy, and separate clean
+  wheel/sdist CLI smokes also passed.
+- Codex Security diff scan `cecd81ce-bc01-42eb-bedf-a4a2a44a096c` covered the
+  complete changed range and reported zero reportable findings. It was not rerun.
+- The owner-authorized retained-artifact semantic OCR repeat completed all 20
+  selected items with zero failed, reused, or waived items and exactly reconciled
+  six attempted/completed evidence summaries. Its two supported findings were
+  corrected; offline finalization then proved valid receipt-less local output and
+  byte-identical retained diagnostics. No additional semantic OCR ran.
+- OCR 1.11.3 qualification used hosted run 33725971286, checksum-pinned evidence
+  SHA-256 `6ad0e1f607b2ddcbb9e7b25e4432d6102ec22d7ef6847c2858c8fb22d38cc0f2`,
+  independent Darwin arm64 readback, adjacent-source review, and deterministic
+  hostile boundary tests. It did not run another configured-provider review.
+
+### Repository and development-publication evidence
+
+- Feature PR #171 passed the complete hosted check set at reviewed head
+  `3441e8a77d71b026db89a896d6374f6cb0a09b99` and was exact-tree squash-merged
+  as `3c7e38c08a48c9af1d0b0c5e10ecf0ac8b5eacc3`.
+- Development workflow run 33732297187 published and independently verified
+  `0.8.8.dev83`. The TestPyPI wheel SHA-256 is
+  `706dfce3991a00b9e93aa65f19bb30baa6b323eab57d8c449d170310a63bbfaf`;
+  the sdist SHA-256 is
+  `b22e1fa5eacade47a130e21474442034aee28c93b5f6880a652981efb353de99`.
+  Workflow and registry bytes, PEP 740 provenance, hosted verifier installs, and
+  CLI smokes agree.
+
+### Stable delivery handoff
+
+The release PR is the final repository mutation. It sets
+`.release-version=0.9.0`, `.next-version=0.9.1`, deterministic source epoch
+`1788423271`, exact sorted issues `[167,168,169,170,172]`, generated Towncrier
+notes, the stable example pin, and this archive while returning `PLANS.md` to its
+inactive template.
+
+External closure remains pending until the exact reviewed release head is
+squash-merged and the protected workflow is independently reconciled across
+TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
+requires byte equality, PEP 740 provenance and GitHub attestations, annotated
+`v0.9.0` tag and peeled target, immutable five-asset Release, validated
+`release-receipt.json`, clean wheel and sdist installs on Python 3.12–3.14,
+Actions-owned receipts, closed #167/#168/#169/#170/#172 and milestone `v0.9.0`,
+deleted release branch, and clean `main == origin/main == v0.9.0^{}`.
+
 <a id="plan-toolkit-0-8-7"></a>
 
 ## Toolkit 0.8.7 — OCR 1.11.1, evidence integrity, and efficient built-in MCP

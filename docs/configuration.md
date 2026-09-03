@@ -97,7 +97,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | --- | --- | --- | --- | --- |
 | **`OCR_VERSION`** | Example pipeline | Yes | `v1.11.3` | Checksum-pinned recommended OCR binary release for toolkit 0.9.0. |
 | **`OCR_SHA256`** | Example pipeline | Yes | `9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb` | Expected Linux AMD64 OCR binary digest. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.8.7` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.9.0` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
