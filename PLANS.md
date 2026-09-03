@@ -26,6 +26,7 @@ package versions, OCR compatibility, release objects, or external artifacts.
 
 1. [x] Confirm from live repository state that v0.9.0 is published, externally reconciled, and
    its feature/release/closure branches are absent.
-2. [ ] Replace the stale branch-local wording with current-main and archived-release ownership.
+2. [x] Replace the stale branch-local wording with current-main, test-matrix, and archived-release
+   ownership, enforced by the existing documentation ownership contract.
 3. [ ] Run the focused documentation contract and `git diff --check`, self-review, reset this plan,
    pass protected checks, merge, delete the branch, and synchronize `main`.
