@@ -6,7 +6,7 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## Active Work
 
-### Release 0.9.0: unprotected-target integrity and OCR 1.11.2
+### Release 0.9.0: unprotected-target integrity and OCR 1.11.2/1.11.3
 
 Status: active
 Owner: Codex
@@ -14,20 +14,22 @@ Last Updated: 2026-09-03
 Release classification: `release-required`
 Target stable version: `0.9.0`
 Milestone: `v0.9.0`
-Authorization issues: `#167`, `#168`, `#169`, `#170`
+Authorization issues: `#167`, `#168`, `#169`, `#170`, `#172`
 Feature branch: `codex/v0.9.0-unprotected-target-integrity`
 
 #### Goal
 
 Deliver safe limited OCR reviews for explicitly permitted unprotected GitLab targets while
 preserving immutable identity, comment-only approval boundaries, valid receipt/action
-attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
+attribution, detached-pipeline diagnostics, and adjacent OCR 1.11.2/1.11.3 compatibility.
 
 #### Locked scope and decisions
 
 - The release snapshot contains every issue open at activation: #167-#170. Later issues are
-  not added automatically. Consumer repositories, B2B, `core/common`, and shared CI templates
-  are outside scope.
+  not added automatically. The owner explicitly authorized the late addition of qualification
+  issue #172 after OCR 1.11.3 was published, so #172 is part of this release without widening
+  scope to any other later issue. Consumer repositories, B2B, `core/common`, and shared CI
+  templates are outside scope.
 - Resolve one effective reviewed source SHA across review, posting, and pre-execution status
   validation. Accept only lowercase 40-hex values, prefer a valid non-zero MR SHA, and fall
   back to `CI_COMMIT_SHA` only for an absent or all-zero MR SHA. All malformed, conflicting,
@@ -54,6 +56,13 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
   `.mjs`/`.cjs` JavaScript and `.cxx`/`.hxx` C++ routing while `.svh` remains excluded. Viewer,
   remote-MCP documentation, localization, and Go module-boundary changes have no toolkit runtime
   impact.
+- Qualify OCR 1.11.3 against the branch-qualified 1.11.2 baseline without another semantic OCR
+  run. Map its raw-traffic capture, failed-tool telemetry, SIGTERM handling, untracked-file error
+  propagation, and editor-only dependency changes to consumed toolkit boundaries. Raw provider
+  traffic and private failure details must never enter a toolkit publication, receipt, telemetry,
+  or approval path; non-zero or malformed failed-tool telemetry must fail closed rather than turn
+  an attempted evidence action into completed use or approval authority. Promote 1.11.3 only after
+  deterministic/no-provider compatibility and hostile boundary tests pass.
 
 #### Delivery sequence
 
@@ -142,13 +151,19 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
     a passed publication projection, and corrected receipt-less, approval-ineligible local output. The
     finalizer made no network or posting attempt, and recursive before/after hashes confirmed all 15
     files in the retained OCR directory remained byte-identical. No additional semantic OCR ran.
-11. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
+11. [ ] Implement #172 as a separately reviewed signed slice. Reconcile the hosted 1.11.3 evidence
+    against branch-qualified 1.11.2, contain raw-capture inheritance and failed-tool diagnostics,
+    extend the #167-#169 hostile chain where the new additive schema crosses publication or
+    approval boundaries, promote tested/recommended pins and public contracts, then repeat the
+    complete deterministic and holistic range gates. This step may use deterministic/no-provider
+    compatibility probes only: Codex Security and semantic OCR must not run again.
+12. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
     threads, mark the Draft PR ready, and exact-head squash merge. Delete the feature branch.
-12. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set
+13. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set
     stable/next versions to `0.9.0`/`0.9.1`, record deterministic source epoch and authorization
-    issues `[167,168,169,170]`, render Towncrier, archive this plan, and finish the protected release
-    PR.
-13. [ ] Monitor stable publication and independently verify registry/workflow/Release byte equality,
+    issues `[167,168,169,170,172]`, render Towncrier, archive this plan, and finish the protected
+    release PR.
+14. [ ] Monitor stable publication and independently verify registry/workflow/Release byte equality,
     PEP 740 and GitHub attestations, annotated tag target, immutable five-asset Release, release
     receipt, Python 3.12-3.14 wheel/sdist installs, Actions-owned issue receipts, issue/milestone
     closure, branch cleanup, and clean `main == origin/main == v0.9.0^{}`.
@@ -162,6 +177,7 @@ staged diff for correctness, hostile inputs, DLP/privacy, and scope, then run `g
 Final deterministic gates are `scripts/quality.sh check`, compatibility validation, Towncrier draft,
 Gitleaks, build/Twine, archive/privacy checks, and clean wheel/sdist CLI smoke. OCR exit zero is not
 completion without complete selected-item coverage and exact receipt/action reconciliation. The one
-owner-authorized repeat semantic OCR run must preserve every private intermediate artifact and may run
-only after the root fix is committed; no additional semantic run is authorized. Stable delivery remains
-incomplete until external publication and independent reconciliation are complete.
+owner-authorized repeat semantic OCR run and its private intermediates remain retained; it is complete
+and no additional semantic run is authorized. The completed Codex Security scan must not be rerun.
+OCR 1.11.3 qualification is deterministic/no-provider only. Stable delivery remains incomplete until
+external publication and independent reconciliation are complete.
