@@ -558,7 +558,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact v7 DLP receipt."""
+    """Return one low-cardinality signal from an exact v8 DLP receipt."""
 
     state = publication_dlp_state(publication)
     if (

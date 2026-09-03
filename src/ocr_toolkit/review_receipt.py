@@ -114,7 +114,7 @@ def _sha256(value: Any) -> bool:
 
 
 def publication_dlp_state(value: Any) -> str | None:
-    """Validate the exact v7 publication-policy receipt."""
+    """Validate the exact current publication-policy receipt."""
 
     if value == {"state": "passed"}:
         return "passed"
@@ -212,13 +212,14 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    if toolkit_metadata.get("schema_version") != 7 or set(toolkit_metadata) != {
+    if toolkit_metadata.get("schema_version") != 8 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
         "mcp",
         "evidence",
         "publication",
+        "tool_execution",
         "cleanup",
     }:
         return invalid
@@ -404,9 +405,27 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     ):
         return invalid
     publication = toolkit_metadata.get("publication")
+    tool_execution = toolkit_metadata.get("tool_execution")
     cleanup = toolkit_metadata.get("cleanup")
     publication_state = publication_dlp_state(publication)
-    if publication_state is None or cleanup != {"result": "passed"}:
+    failure_state = tool_execution.get("state") if isinstance(tool_execution, dict) else None
+    failed_tools = tool_execution.get("failed") if isinstance(tool_execution, dict) else None
+    if (
+        publication_state is None
+        or not isinstance(tool_execution, dict)
+        or set(tool_execution) != {"state", "failed"}
+        or failure_state not in {"absent", "invalid", "conflicting", "verified"}
+        or (
+            failure_state == "verified"
+            and (
+                not isinstance(failed_tools, int)
+                or isinstance(failed_tools, bool)
+                or not 0 <= failed_tools <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            )
+        )
+        or (failure_state != "verified" and failed_tools is not None)
+        or cleanup != {"result": "passed"}
+    ):
         return invalid
     if review.get("target_protection") == "unprotected":
         if mode not in {"off", "metadata"} or external:
@@ -414,6 +433,10 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return UNPROTECTED_APPROVAL_REASON
     if publication_state == "publication-filtered":
         return "publication DLP filtered the complete review result"
+    if failure_state in {"invalid", "conflicting"}:
+        return "OCR tool failure diagnostics were malformed or contradictory"
+    if failure_state == "verified" and failed_tools:
+        return "one or more OCR tool calls failed"
     if context.get("state") == "degraded" or required_degraded:
         return "the selected review context was degraded"
     if mutable_admitted:
@@ -424,7 +447,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
 
 
 def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
-    """Return whether metadata is an exact receipt v7, including valid blockers."""
+    """Return whether metadata is an exact current receipt, including valid blockers."""
 
     return automatic_approval_metadata_reason(toolkit_metadata) != INVALID_APPROVAL_RECEIPT_REASON
 
@@ -432,7 +455,7 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
 def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
     """Parse the exact immutable identity section without granting approval authority."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 7:
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 8:
         return None
     review = toolkit_metadata.get("review")
     if (

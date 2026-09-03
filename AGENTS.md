@@ -14,7 +14,8 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 
 - `PLANS.md` - active or blocked repository work and its release classification.
 - `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` - durable direction and outcome state.
-- `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries; `docs/engineering/m5_context_contracts.md` owns the active v0.7.0 context checkpoint.
+- `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries; `docs/engineering/m5_context_contracts.md` owns the current context and evidence contracts.
+- `docs/review-decision-flow.md` - canonical detailed Mermaid map for review, diagnostics, receipts, DLP, publication, and later-action decisions; keep it synchronized with runtime and public contracts.
 - `docs/development.md` - implementation workflow, boundary checklists, and local validation.
 - `docs/release.md` - release classification, authorization, publication, and archival lifecycle.
 - `docs/codex/TASKS_BACKLOG.md` - inactive work with activation conditions.
@@ -25,7 +26,7 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 ## Work Startup
 
 1. Read `PLANS.md`. Before changing the repository, create or update the active plan and classify user-visible work as `no-release`, `release-required`, or `release-deferred`; record the target stable version when applicable.
-2. Select canonical guidance by scope: engineering invariants for runtime or trust-boundary work, development procedures for implementation and validation, release guidance for release lifecycle changes, and the relevant public contract for user-facing behavior. Consult the pitfalls catalogue only when diagnosing a matching failure class.
+2. Select canonical guidance by scope: engineering invariants for runtime or trust-boundary work, the review decision flow for execution or publication branch changes, development procedures for implementation and validation, release guidance for release lifecycle changes, and the relevant public contract for user-facing behavior. Consult the pitfalls catalogue only when diagnosing a matching failure class.
 3. Preserve the requested scope as coherent production-quality slices. Record service boundaries, trust inputs, validation, documentation, and closure gates in the plan before implementation.
 4. Use targeted tests while iterating and the boundary checklist for every changed parser, I/O, persistence, Git, subprocess, provider, or reporting boundary. Keep fixtures and public material synthetic and private-safe.
 5. Before staging or committing, update the plan and affected status/documentation to post-commit truth, inspect the complete diff, run `git diff --check`, and run the validation owned by the changed subsystem. Use `scripts/quality.sh` for the Python matrix and `scripts/gitleaks.sh` before publishing rewritten or newly committed branch history.

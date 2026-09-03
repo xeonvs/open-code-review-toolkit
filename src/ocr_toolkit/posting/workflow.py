@@ -165,7 +165,7 @@ def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
 
 
 def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
-    """Select the static limitation only from one fully validated receipt v7."""
+    """Select the static limitation only from one fully validated receipt v8."""
 
     identity = validated_review_identity(toolkit_metadata)
     return identity is not None and identity.target_protection == "unprotected"
@@ -614,7 +614,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
         return invalid_ocr_schema_exit(
             config,
-            "receipt v7 is invalid",
+            "receipt v8 is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -624,7 +624,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,
-            "receipt v7 publication state is invalid",
+            "receipt v8 publication state is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -638,7 +638,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not toolkit_receipt_is_valid(toolkit_metadata):
             return invalid_ocr_schema_exit(
                 config,
-                "OCR toolkit advisory is not bound to a valid receipt v7",
+                "OCR toolkit advisory is not bound to a valid receipt v8",
             )
     ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
 

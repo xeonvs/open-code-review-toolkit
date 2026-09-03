@@ -303,20 +303,20 @@ def test_public_docs_describe_the_established_m5_boundary() -> None:
         "ocr.context-adapter-response/v1",
         "context_list",
         "context_get",
-        "receipt v7",
+        "receipt v8",
         "schema_version",
         "no store or receipt migration path",
         "semantic paraphrase",
     ):
         assert contract in bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v7" in document
+        assert "receipt v8" in document
         assert "review-context.md" in document
     assert "M5's foundation is established in v0.7.0" in strategy
-    assert "Toolkit 0.9.0 advances the current result boundary to receipt v7" in strategy
+    assert "Toolkit 0.9.0 advances the current result boundary to receipt v8" in strategy
     assert "It is not protected-policy equivalence" in strategy
     assert "M5 Bounded review-context enrichment<br/>established" in roadmap
-    assert "Toolkit 0.9.0 adds receipt-v7 source/target/protection binding" in roadmap
+    assert "Toolkit 0.9.0 adds receipt-v8 source/target/protection binding" in roadmap
     assert "DLP-clean metadata, generic discussions, and adapter records" in strategy
     assert "v0.8.0 release tree completes its remediation/provider-neutral extension" in roadmap
     assert "explicit owner waiver for the separate enriched OCR+LLM receipt" in roadmap

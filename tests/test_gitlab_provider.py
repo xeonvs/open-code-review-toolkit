@@ -981,7 +981,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 7,
+        "schema_version": 8,
         "review": {
             "source_sha": head,
             "policy_sha": policy,
@@ -1038,6 +1038,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             },
         },
         "publication": {"state": "passed"},
+        "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }
     for path in (

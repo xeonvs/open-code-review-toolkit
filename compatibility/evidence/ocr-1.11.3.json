@@ -1,0 +1,240 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "e2dfc9a80f2368209c0238b94aab0bb2d4d9839eb08c7fcbebb7a5897e05634c",
+      "size": 57791184
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "515cd92ce300b62dea2bcaf53e910cdf57b681e1d58bbd0a9e8e49617bca52fa",
+      "size": 54828322
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb",
+      "size": 56049826
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "e04a44bec440c20c22141678412052e976a8bbb698824482a1f8832dfc7a0687",
+      "size": 52756642
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "d643d81f39eeba14c9439e2432ec263f9a2b90e606dd7e639eb5340dfbd3d643",
+      "size": 57510400
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "56d1a9e12dd053272649a1435484cf9c89bbdecf070a87c7c58e13dc84b9f0f9",
+      "size": 53474816
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "472a3ce64834f4909bc9fac50e6de08a3c8ef5c0489b755dd1d2b19c14c8792e",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "candidate is not a newer patch in the tested major/minor line",
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.11.2",
+  "contracts": {
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".mjs",
+        ".pug",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 10
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-03T03:32:58Z",
+  "release_changes": "## 🚀 Features\n\n- feat(raw): capture raw LLM traffic via SDK middleware (opt-in) (#1109)\n\n## 🐛 Bug Fixes\n\n- fix(tool): report tool call failures (#1144)\n- fix(diff): propagate untracked file listing errors (#1140)\n- fix(review): handle SIGTERM for graceful shutdown (#1111)\n\n## Other Changes\n\n- chore(deps-dev): bump the vscode-dependencies group (#1129)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.11.2...v1.11.3",
+  "release_notes_sha256": "a9b03fa2751a8094f5c9d89b336b52f9c17b62e5cec8fdc40601d4166d072313",
+  "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.3",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.11.3",
+  "tested_baseline_version": "1.11.2",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.11.3"
+}

@@ -49,7 +49,7 @@ from tests.support import (
     gitlab_config,
     patched_attr,
     patched_env,
-    review_receipt_v7,
+    review_receipt_v8,
 )
 
 
@@ -97,7 +97,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
-    def test_invalid_v7_publication_state_never_reaches_normal_result_flow(self) -> None:
+    def test_invalid_legacy_publication_state_never_reaches_normal_result_flow(self) -> None:
         notes: list[str] = []
         result_data = {
             "status": "failed",
@@ -122,7 +122,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
-    def test_advisory_without_exact_receipt_v7_never_reaches_normal_result_flow(self) -> None:
+    def test_advisory_without_exact_receipt_v8_never_reaches_normal_result_flow(self) -> None:
         """Treat a correctly shaped but unbound advisory as an invalid result."""
 
         notes: list[str] = []
@@ -908,6 +908,89 @@ class PostingIdentityTests(unittest.TestCase):
         summary = next(note for note in notes if "## Open Code Review" in note)
         self.assertNotIn("img.shields.io", summary)
 
+    def test_diagnostic_uncertainty_does_not_replace_a_valid_review_with_schema_error(self) -> None:
+        """Carry the review through GitLab writes when only additive diagnostics are uncertain."""
+
+        inline_bodies: list[str] = []
+        notes: list[tuple[str, str]] = []
+        receipt = review_receipt_v8()
+        receipt["tool_execution"] = {"state": "invalid", "failed": None}
+        result_data = {
+            "status": "complete",
+            "message": "Review completed with one actionable finding.",
+            "comments": [
+                {
+                    "path": "src/example.py",
+                    "line": 7,
+                    "content": "Guard the empty collection before indexing it.",
+                    "category": "bug",
+                    "severity": "medium",
+                }
+            ],
+            "warnings": [],
+            "tool_calls": {
+                "total": 2,
+                "by_tool": {"ocr_toolkit_evidence": 1, "file_read": 1},
+            },
+            "manifest": {
+                "schema_version": "ocr.run-manifest/v1",
+                "operation": "review",
+                "terminal_state": "complete",
+                "coverage": {
+                    "selected": [{"item_id": "synthetic-item"}],
+                    "completed": [{"item_id": "synthetic-item"}],
+                    "reused": [],
+                    "failed": [],
+                    "waived": [],
+                },
+            },
+            ocr_result.TOOLKIT_RESULT_KEY: receipt,
+        }
+
+        def capture_discussion(*_args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
+            inline_bodies.append(kwargs["body"])
+            return gitlab.GitLabWriteResult("posted")
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append((title, body))
+            return {"id": len(notes)}
+
+        with (
+            patched_attr(
+                workflow,
+                "get_diff_refs",
+                lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+            ),
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_discussion", capture_discussion),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: None,
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(inline_bodies), 1)
+        self.assertIn("Guard the empty collection", inline_bodies[0])
+        published = "\n".join(f"{title}\n{body}" for title, body in notes)
+        self.assertIn("Review complete — 1 finding published", published)
+        self.assertNotIn("result schema error", published)
+        self.assertNotIn("publication policy error", published)
+
     def test_retry_report_remains_private_from_gitlab_notes(self) -> None:
         notes: list[str] = []
 
@@ -1342,7 +1425,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "comments": [old, new],
                     "warnings": [],
                     "_ocr_toolkit": {
-                        **review_receipt_v7(),
+                        **review_receipt_v8(),
                         "publication": publication,
                     },
                 },
@@ -1359,7 +1442,7 @@ class PostingIdentityTests(unittest.TestCase):
     def test_present_invalid_receipt_never_reaches_normal_publication(self) -> None:
         notes: list[str] = []
         collect_calls: list[str] = []
-        receipt = review_receipt_v7()
+        receipt = review_receipt_v8()
         receipt.pop("review")
 
         with (
@@ -1421,7 +1504,7 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             },
             "_ocr_toolkit": {
-                "schema_version": 7,
+                "schema_version": 8,
                 "review": {
                     "source_sha": "a" * 40,
                     "policy_sha": "b" * 40,
@@ -1461,6 +1544,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "actions": {"state": "unavailable"},
                 },
                 "publication": {"state": "passed"},
+                "tool_execution": {"state": "absent", "failed": None},
                 "cleanup": {"result": "passed"},
             },
             ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
@@ -2854,6 +2938,35 @@ class PostingSummaryTests(unittest.TestCase):
         )
         self.assertNotIn("more", summary)
 
+    def test_tool_calls_never_renders_failure_detail_payloads(self) -> None:
+        """Keep additive OCR diagnostics in the CI console, not the MR summary."""
+
+        summary = posting_formatting.format_tool_calls_summary(
+            {
+                "total": 2,
+                "by_tool": {"file_read": 2},
+                "failure": 1,
+                "failure_by_tool": {"dynamic-private-tool": 1},
+                "failure_details": [
+                    {
+                        "tool_call_number": 2,
+                        "tool_name": "dynamic-private-tool",
+                        "file_path": "private/path.py",
+                        "error": "Authorization: Bearer private-token",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(summary, "- all OCR tool calls: 2 total (`file_read`: 2)")
+        for private_value in (
+            "failure",
+            "dynamic-private-tool",
+            "private/path.py",
+            "private-token",
+        ):
+            self.assertNotIn(private_value, summary)
+
     def test_tool_calls_omits_empty_zero_or_unknown_breakdowns(self) -> None:
         """Do not emit a technical line without a positive admitted counter list."""
 
@@ -3326,7 +3439,7 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            review_receipt_v7(
+            review_receipt_v8(
                 usage={"ocr_toolkit_evidence": 2, "documentation": 1},
                 attempted={
                     "summary": 1,
@@ -3353,9 +3466,9 @@ class PostingSummaryTests(unittest.TestCase):
         )
         self.assertNotIn("file_read", summary)
 
-    def test_mcp_usage_summary_reads_receipt_v7_inventory(self) -> None:
+    def test_mcp_usage_summary_reads_receipt_v8_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            review_receipt_v7(
+            review_receipt_v8(
                 attempted={
                     "summary": 1,
                     "list": 2,
@@ -3382,7 +3495,7 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            review_receipt_v7(
+            review_receipt_v8(
                 attempted={
                     "summary": 1,
                     "list": 2,
@@ -3434,7 +3547,7 @@ class PostingSummaryTests(unittest.TestCase):
             with self.subTest(attempted=attempted):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
-                        review_receipt_v7(
+                        review_receipt_v8(
                             attempted=attempted,
                             completed=completed,
                             mandatory=False,
@@ -3445,7 +3558,7 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_never_renders_unattributed_attempts(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            review_receipt_v7(
+            review_receipt_v8(
                 attempted={
                     "summary": 1,
                     "list": 0,
@@ -3472,7 +3585,7 @@ class PostingSummaryTests(unittest.TestCase):
             {"state": "verified", "summary": 1, "list": 2, "get": 1, "extra": 0},
         ):
             with self.subTest(actions=actions):
-                receipt = review_receipt_v7()
+                receipt = review_receipt_v8()
                 receipt["evidence"]["actions"] = actions
                 summary = posting_formatting.format_mcp_usage_summary(receipt)
 
@@ -3481,7 +3594,7 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            review_receipt_v7(
+            review_receipt_v8(
                 attempted={
                     "summary": 1,
                     "list": 2,
@@ -3515,7 +3628,7 @@ class PostingSummaryTests(unittest.TestCase):
             {"ocr_toolkit_evidence": 0},
         ):
             with self.subTest(usage=usage):
-                receipt = review_receipt_v7()
+                receipt = review_receipt_v8()
                 receipt["mcp"]["usage"] = usage
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(receipt),
@@ -3523,7 +3636,7 @@ class PostingSummaryTests(unittest.TestCase):
                 )
 
     def test_mcp_usage_summary_requires_complete_valid_receipt(self) -> None:
-        receipt = review_receipt_v7()
+        receipt = review_receipt_v8()
         for mutate in (
             lambda value: value.pop("review"),
             lambda value: value["review"].update({"source_sha": "invalid"}),
@@ -5653,7 +5766,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 7)
+            self.assertEqual(metadata["schema_version"], 8)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

@@ -101,6 +101,7 @@ from ocr_toolkit.ocr_result import (
     toolkit_advisory_payload,
     transform_ocr_result,
 )
+from ocr_toolkit.posting.comments import compact_text
 from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
@@ -178,10 +179,45 @@ PROVIDER_PRIVATE_RESULT_KEYS = frozenset(
         "tool_choice",
     }
 )
+OCR_RAW_LOGGING_ENV = "OCR_RAW_LOGGING"
+MAX_TOOL_FAILURE_DETAILS_LOGGED = 20
+MAX_TOOL_FAILURE_NAME_CHARS = 256
+MAX_TOOL_FAILURE_PATH_CHARS = 4_096
+MAX_TOOL_FAILURE_ERROR_CHARS = 32_768
+MAX_TOOL_FAILURE_LOG_FIELD_CHARS = 500
 
 
 class ReviewRunnerError(Exception):
     """The local OCR review process could not be started safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class ToolFailureDetail:
+    """Carry one validated OCR diagnostic before bounded CI rendering."""
+
+    number: int
+    tool: str
+    path: str | None
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolFailureTelemetry:
+    """Separate additive OCR diagnostics from the authoritative review result."""
+
+    present: bool
+    valid: bool
+    failed: int | None
+    by_tool: dict[str, int]
+    details: tuple[ToolFailureDetail, ...]
+
+
+def _ocr_child_environment() -> dict[str, str]:
+    """Keep configured OCR inputs while disabling unowned raw provider capture."""
+
+    environment = dict(os.environ)
+    environment.pop(OCR_RAW_LOGGING_ENV, None)
+    return environment
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +393,7 @@ def _review_receipt(
         total_calls = 0
     elif not isinstance(tool_calls, dict) or not isinstance(by_tool, dict):
         raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
+    failure_telemetry = _tool_failure_telemetry(tool_calls)
     if outcome.kind == "skipped":
         legacy_message_invalid = (
             not outcome.manifest_present and payload.get("message") != "No supported files changed."
@@ -416,6 +453,30 @@ def _review_receipt(
         )
     except ValueError as exc:
         raise ReviewRunnerError(str(exc)) from exc
+    completed = action_attribution.get("completed")
+    failure_state = (
+        "absent"
+        if not failure_telemetry.present
+        else "invalid"
+        if not failure_telemetry.valid
+        else "verified"
+    )
+    if failure_telemetry.valid and failure_telemetry.present and isinstance(completed, dict):
+        completed_by_tool = {
+            TOOL_NAME: sum(completed.get(name, 0) for name in ("summary", "list", "get")),
+            SEARCH_TOOL_NAME: completed.get("search", 0),
+            COVERAGE_TOOL_NAME: completed.get("coverage", 0),
+        }
+        if any(
+            completed_by_tool[name]
+            > evidence_by_tool[name] - failure_telemetry.by_tool.get(name, 0)
+            for name in completed_by_tool
+        ):
+            # The private action receipt is recorded by the toolkit MCP owner and
+            # remains the authority for completed evidence. OCR's additive
+            # diagnostic counters must not discard a valid review when the two
+            # observations disagree.
+            failure_state = "conflicting"
     completed_actions = action_attribution.get("completed")
     evidence_used = (
         isinstance(completed_actions, dict)
@@ -485,6 +546,10 @@ def _review_receipt(
             "actions": action_attribution,
         },
         "publication": {"state": "passed"},
+        "tool_execution": {
+            "state": failure_state,
+            "failed": failure_telemetry.failed if failure_state == "verified" else None,
+        },
         "cleanup": {"result": "passed"},
     }
 
@@ -835,7 +900,138 @@ def _safe_publication_warnings(
     return retained, len(value) - len(retained)
 
 
-def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[str, object]:
+def _tool_failure_telemetry(value: object) -> ToolFailureTelemetry:
+    """Parse additive OCR diagnostics without granting them result authority."""
+
+    if not isinstance(value, dict):
+        return ToolFailureTelemetry(False, True, None, {}, ())
+    present = {name for name in ("failure", "failure_by_tool", "failure_details") if name in value}
+    if not present:
+        return ToolFailureTelemetry(False, True, None, {}, ())
+    if present != {"failure", "failure_by_tool", "failure_details"}:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    total = value.get("total")
+    by_tool = value.get("by_tool")
+    failed = value.get("failure")
+    failed_by_tool = value.get("failure_by_tool")
+    details = value.get("failure_details")
+    if (
+        not isinstance(total, int)
+        or isinstance(total, bool)
+        or not 0 <= total <= MAX_TOOLKIT_MCP_USAGE_COUNT
+        or not isinstance(by_tool, dict)
+        or not isinstance(failed, int)
+        or isinstance(failed, bool)
+        or not 0 <= failed <= total
+        or not isinstance(failed_by_tool, dict)
+        or len(failed_by_tool) > MAX_TOOLKIT_MCP_USAGE_COUNT
+        or not isinstance(details, list)
+        or len(details) != failed
+    ):
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    normalized: dict[str, int] = {}
+    for name, count in failed_by_tool.items():
+        attempted = by_tool.get(name)
+        if (
+            not isinstance(name, str)
+            or not name
+            or len(name) > MAX_TOOL_FAILURE_NAME_CHARS
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            or not isinstance(attempted, int)
+            or isinstance(attempted, bool)
+            or count > attempted
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        normalized[name] = count
+    if sum(normalized.values()) != failed:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    detail_counts: Counter[str] = Counter()
+    call_numbers: set[int] = set()
+    normalized_details: list[ToolFailureDetail] = []
+    for detail in details:
+        if not isinstance(detail, dict) or set(detail) not in (
+            {"tool_call_number", "tool_name", "error"},
+            {"tool_call_number", "tool_name", "file_path", "error"},
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        number = detail.get("tool_call_number")
+        name = detail.get("tool_name")
+        error = detail.get("error")
+        file_path = detail.get("file_path")
+        if (
+            not isinstance(number, int)
+            or isinstance(number, bool)
+            or not 1 <= number <= total
+            or number in call_numbers
+            or not isinstance(name, str)
+            or name not in normalized
+            or not isinstance(error, str)
+            or not error
+            or len(error) > MAX_TOOL_FAILURE_ERROR_CHARS
+            or (
+                file_path is not None
+                and (not isinstance(file_path, str) or len(file_path) > MAX_TOOL_FAILURE_PATH_CHARS)
+            )
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        call_numbers.add(number)
+        detail_counts[name] += 1
+        normalized_details.append(ToolFailureDetail(number, name, file_path, error))
+    if dict(detail_counts) != normalized:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    normalized_details.sort(key=lambda detail: detail.number)
+    return ToolFailureTelemetry(True, True, failed, normalized, tuple(normalized_details))
+
+
+def _safe_tool_failure_log_field(value: str) -> str:
+    """Redact and compact one OCR-controlled field before CI console output."""
+
+    return compact_text(redact_sensitive(value), MAX_TOOL_FAILURE_LOG_FIELD_CHARS)
+
+
+def _render_tool_failure_diagnostics(telemetry: ToolFailureTelemetry) -> tuple[str, ...]:
+    """Render bounded diagnostics for the local/CI console, never MR publication."""
+
+    if not telemetry.present:
+        return ()
+    if not telemetry.valid:
+        return (
+            "OCR tool failure diagnostics: malformed additive telemetry ignored; "
+            "authoritative review result retained.",
+        )
+    if not telemetry.failed:
+        return ()
+    lines = [f"OCR tool failures: {telemetry.failed} failed call(s)."]
+    for detail in telemetry.details[:MAX_TOOL_FAILURE_DETAILS_LOGGED]:
+        tool = _safe_tool_failure_log_field(detail.tool)
+        path = (
+            f" path={_safe_tool_failure_log_field(detail.path)}" if detail.path is not None else ""
+        )
+        error = _safe_tool_failure_log_field(detail.error)
+        lines.append(f"- call={detail.number} tool={tool}{path} error={error}")
+    omitted = telemetry.failed - min(telemetry.failed, MAX_TOOL_FAILURE_DETAILS_LOGGED)
+    if omitted:
+        lines.append(f"- ... {omitted} additional failed call(s) omitted")
+    return tuple(lines)
+
+
+def _print_tool_failure_diagnostics(telemetry: ToolFailureTelemetry | None) -> None:
+    """Write safe failed-tool detail to the current process stderr/CI job log."""
+
+    if telemetry is None:
+        return
+    for line in _render_tool_failure_diagnostics(telemetry):
+        print(line, file=sys.stderr)
+
+
+def _closed_tool_calls(
+    value: object,
+    *,
+    allowed_tools: frozenset[str],
+    failures: ToolFailureTelemetry | None = None,
+) -> dict[str, object]:
     """Project only bounded counters needed to prove model-side toolkit use."""
 
     if not isinstance(value, dict):
@@ -858,10 +1054,18 @@ def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[
         and not isinstance(count, bool)
         and 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
     }
-    return {"total": total, "by_tool": dict(sorted(projected.items()))}
+    closed: dict[str, object] = {
+        "total": total,
+        "by_tool": dict(sorted(projected.items())),
+    }
+    if failures is not None and failures.present and failures.valid:
+        closed["failure"] = failures.failed
+    return closed
 
 
-def _canonical_result_projection(payload: dict[str, object]) -> bytes:
+def _canonical_result_projection(
+    payload: dict[str, object], *, failures: ToolFailureTelemetry | None = None
+) -> bytes:
     """Serialize every publication and approval input into one closed comparison."""
 
     outcome = parse_result_outcome(payload)
@@ -881,7 +1085,9 @@ def _canonical_result_projection(payload: dict[str, object]) -> bytes:
         for comment in comments
     ]
     projected_tool_calls = _closed_tool_calls(
-        payload.get("tool_calls"), allowed_tools=PUBLIC_REVIEW_TOOL_CALL_NAMES
+        payload.get("tool_calls"),
+        allowed_tools=PUBLIC_REVIEW_TOOL_CALL_NAMES,
+        failures=failures,
     )
     projection = {
         "outcome": {
@@ -924,7 +1130,7 @@ def _publication_projection(
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return a DLP-safe result plus one exact v7 publication state."""
+    """Return a DLP-safe result plus one exact v8 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
@@ -938,21 +1144,40 @@ def _publication_projection(
                 allow_horizontal_tabs=allow_horizontal_tabs,
             )
         )
+    failures = _tool_failure_telemetry(payload.get("tool_calls"))
+    sanitization_payload = payload
+    raw_tool_calls = payload.get("tool_calls")
+    if failures.present and isinstance(raw_tool_calls, dict):
+        # The details are a validated local/CI diagnostic channel, not an MR
+        # publication sink or approval input. Remove them before generic DLP;
+        # their dedicated console renderer applies redaction and tighter bounds.
+        sanitization_payload = dict(payload)
+        sanitization_payload["tool_calls"] = {
+            key: value
+            for key, value in raw_tool_calls.items()
+            if key not in {"failure", "failure_by_tool", "failure_details"}
+        }
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
-        payload, budgets=budgets, matcher=matcher
+        sanitization_payload, budgets=budgets, matcher=matcher
     )
+    if failures.present:
+        sanitized["tool_calls"] = _closed_tool_calls(
+            payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
+        )
     if not sink_reasons and not private_reasons and redacted_fields == 0:
-        return payload, {"state": "passed"}, False
+        return sanitized if failures.present else payload, {"state": "passed"}, False
 
     try:
-        original_projection = _canonical_result_projection(payload)
+        original_projection = _canonical_result_projection(payload, failures=failures)
     except OcrResultContractError:
         original_projection = None
     outcome = parse_result_outcome(payload)
     publication_changed = bool(sink_reasons)
     if not publication_changed:
         try:
-            publication_changed = original_projection != _canonical_result_projection(sanitized)
+            publication_changed = original_projection != _canonical_result_projection(
+                sanitized, failures=failures
+            )
         except OcrResultContractError:
             publication_changed = True
     if publication_changed:
@@ -972,7 +1197,7 @@ def _publication_projection(
             "comments": comments,
             "warnings": warnings,
             "tool_calls": _closed_tool_calls(
-                payload.get("tool_calls"), allowed_tools=allowed_tools
+                payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
             ),
         }
         if outcome.budget_exceeded:
@@ -1027,16 +1252,18 @@ def _finalize_ocr_result(
     filtered = False
     publication: dict[str, object] = {"state": "passed"}
     usage: dict[str, int] = {}
+    failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
-        nonlocal filtered, publication, usage
+        nonlocal failure_telemetry, filtered, publication, usage
         for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
+        failure_telemetry = _tool_failure_telemetry(payload.get("tool_calls"))
         metadata = _review_receipt(
             payload,
             composition,
@@ -1073,6 +1300,7 @@ def _finalize_ocr_result(
         except OSError:
             pass
         raise
+    _print_tool_failure_diagnostics(failure_telemetry)
     return usage, filtered, publication
 
 
@@ -1328,6 +1556,7 @@ def _qualify_review_background(
                     stdin=subprocess.DEVNULL,
                     stdout=stdout_file,
                     stderr=stderr_file,
+                    env=_ocr_child_environment(),
                 )
         except OSError as exc:
             raise ReviewRunnerError(f"could not execute OCR background preview: {exc}") from exc
@@ -1670,7 +1899,7 @@ def _bounded_combined_records(
 
 
 def _remediation_mutable_admitted(records: Sequence[ContextRecord]) -> bool:
-    """Report only admitted remediation as the receipt-v7 comment-only condition."""
+    """Report only admitted remediation as the receipt-v8 comment-only condition."""
 
     return any(
         record.mutable and record.resource_class == "remediation_thread" for record in records
@@ -2325,6 +2554,7 @@ def run_review(
                 stdin=subprocess.DEVNULL,
                 stdout=result_file,
                 stderr=stderr_file,
+                env=_ocr_child_environment(),
             )
     except OSError as exc:
         raise ReviewRunnerError(f"could not execute OCR: {exc}") from exc

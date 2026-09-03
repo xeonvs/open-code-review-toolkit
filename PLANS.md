@@ -59,10 +59,15 @@ attribution, detached-pipeline diagnostics, and adjacent OCR 1.11.2/1.11.3 compa
 - Qualify OCR 1.11.3 against the branch-qualified 1.11.2 baseline without another semantic OCR
   run. Map its raw-traffic capture, failed-tool telemetry, SIGTERM handling, untracked-file error
   propagation, and editor-only dependency changes to consumed toolkit boundaries. Raw provider
-  traffic and private failure details must never enter a toolkit publication, receipt, telemetry,
-  or approval path; non-zero or malformed failed-tool telemetry must fail closed rather than turn
-  an attempted evidence action into completed use or approval authority. Promote 1.11.3 only after
-  deterministic/no-provider compatibility and hostile boundary tests pass.
+  traffic must never be captured by a toolkit-owned OCR child, while bounded credential-redacted
+  failure details remain console/CI-job diagnostics only. The additive failure envelope is not
+  authoritative for the review result: absent, malformed, or contradictory diagnostics must not
+  discard or suppress a valid manifest, findings, summary, or posting transaction. Provider-backed
+  receipts retain only a closed diagnostic state and verified aggregate failed count; the
+  toolkit-owned action receipt remains authoritative for completed evidence. Non-zero or uncertain
+  diagnostics may block later approval authority, but never publication of an otherwise valid review
+  signal. Promote 1.11.3 only after deterministic/no-provider compatibility and hostile end-to-end
+  publication boundary tests pass.
 
 #### Delivery sequence
 
@@ -151,12 +156,24 @@ attribution, detached-pipeline diagnostics, and adjacent OCR 1.11.2/1.11.3 compa
     a passed publication projection, and corrected receipt-less, approval-ineligible local output. The
     finalizer made no network or posting attempt, and recursive before/after hashes confirmed all 15
     files in the retained OCR directory remained byte-identical. No additional semantic OCR ran.
-11. [ ] Implement #172 as a separately reviewed signed slice. Reconcile the hosted 1.11.3 evidence
-    against branch-qualified 1.11.2, contain raw-capture inheritance and failed-tool diagnostics,
-    extend the #167-#169 hostile chain where the new additive schema crosses publication or
-    approval boundaries, promote tested/recommended pins and public contracts, then repeat the
-    complete deterministic and holistic range gates. This step may use deterministic/no-provider
-    compatibility probes only: Codex Security and semantic OCR must not run again.
+11. [x] Implement #172 as a separately reviewed signed slice. Hosted workflow `33725971286`,
+    checksum-pinned schema-v3 evidence, adjacent-source audit, and independent Darwin arm64 readback
+    qualify OCR 1.11.3 against the branch-qualified 1.11.2 predecessor without another semantic OCR
+    run. Toolkit-owned preview and review children now remove inherited `OCR_RAW_LOGGING`; the strict
+    additive diagnostic parser keeps bounded credential-redacted detail in the local/CI console only,
+    strips detail and per-tool failure maps before finalization, and records only a closed receipt-v8
+    state plus a verified aggregate. Absent, malformed, hostile, non-zero, and action-receipt-conflicting
+    diagnostics preserve valid local and provider-backed findings, summary, manifest, DLP projection,
+    and actual posting transaction; toolkit action receipt v3 remains authoritative for completed
+    evidence, while uncertain or non-zero diagnostics independently block later approval authority.
+    The new canonical `docs/review-decision-flow.md` supplies three contract-tested Mermaid maps with
+    stable error, warning, success, auxiliary, and decision colors; the root `AGENTS.md`, strategy,
+    documentation index, runtime owners, hostile tests, and all affected public contracts link to and
+    agree with it. The complete deterministic suite passes with 1,486 tests and 408 subtests at 86.38%
+    coverage and every scoped risk floor green. Compatibility, Towncrier draft, pinned Gitleaks,
+    dependency audit, frozen Ruff format, signatures, diff checks, deterministic double build, Twine,
+    archive privacy, and separate clean wheel/sdist CLI smokes also pass. No additional semantic OCR or
+    Codex Security scan ran.
 12. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
     threads, mark the Draft PR ready, and exact-head squash merge. Delete the feature branch.
 13. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set

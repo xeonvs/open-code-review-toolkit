@@ -3,5 +3,5 @@ variables:
   OCR_GITLAB_TARGET_PROTECTION_MODE: "unprotected"
   # Only "off" and bounded untrusted "metadata" are allowed for an actual unprotected target.
   OCR_REVIEW_CONTEXT_MODE: "metadata"
-  # Defense in depth; receipt v7 also makes an actual unprotected target ineligible.
+  # Defense in depth; receipt v8 also makes an actual unprotected target ineligible.
   OCR_AUTO_APPROVE: "false"

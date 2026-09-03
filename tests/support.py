@@ -75,7 +75,7 @@ def gitlab_config(
     )
 
 
-def review_receipt_v7(
+def review_receipt_v8(
     *,
     usage: dict[str, int] | None = None,
     attempted: dict[str, int] | None = None,
@@ -83,7 +83,7 @@ def review_receipt_v7(
     context_tool_usage: dict[str, int] | None = None,
     mandatory: bool = True,
 ) -> dict[str, Any]:
-    """Return one exact synthetic receipt v7 for posting-boundary tests."""
+    """Return one exact synthetic receipt v8 for posting-boundary tests."""
 
     attempted = (
         attempted
@@ -141,7 +141,7 @@ def review_receipt_v7(
         if server != "ocr_toolkit_evidence"
     )
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -176,5 +176,6 @@ def review_receipt_v7(
             },
         },
         "publication": {"state": "passed"},
+        "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }

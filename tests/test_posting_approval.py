@@ -44,12 +44,13 @@ def finding(category: Any = "style", severity: Any = "low") -> dict[str, Any]:
     return {"category": category, "severity": severity}
 
 
-def receipt_v7(
+def receipt_v8(
     *,
     context_state: str = "disabled",
     external: bool = False,
     author_id: int | None = 41,
     target_protection: str = "protected",
+    failed_tools: int = 0,
 ) -> dict[str, Any]:
     """Return one closed synthetic review-time receipt."""
 
@@ -70,7 +71,7 @@ def receipt_v7(
             {"server": "documentation", "transport": "remote", "tools": ["docs_read"]}
         )
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -117,12 +118,13 @@ def receipt_v7(
             },
         },
         "publication": {"state": "passed"},
+        "tool_execution": {"state": "verified", "failed": failed_tools},
         "cleanup": {"result": "passed"},
     }
 
 
 def test_unprotected_receipt_is_valid_but_structurally_comment_only() -> None:
-    receipt = receipt_v7(target_protection="unprotected")
+    receipt = receipt_v8(target_protection="unprotected")
 
     assert approval.toolkit_receipt_is_valid(receipt)
     decision = approval.evaluate_approval_policy(
@@ -135,7 +137,7 @@ def test_unprotected_receipt_is_valid_but_structurally_comment_only() -> None:
 
 
 def test_unprotected_receipt_never_reaches_approval_mutation_path() -> None:
-    receipt = receipt_v7(target_protection="unprotected")
+    receipt = receipt_v8(target_protection="unprotected")
     eligibility = approval.evaluate_approval_policy(
         settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
     )
@@ -161,12 +163,29 @@ def test_unprotected_receipt_never_reaches_approval_mutation_path() -> None:
     assert result.result == eligibility.result
 
 
+@pytest.mark.parametrize("state", ["invalid", "conflicting"])
+def test_additive_failure_diagnostic_uncertainty_is_a_valid_nonapproval_receipt(
+    state: str,
+) -> None:
+    """Do not turn diagnostic uncertainty into an invalid publication receipt."""
+
+    receipt = receipt_v8()
+    receipt["tool_execution"] = {"state": state, "failed": None}
+
+    assert approval.toolkit_receipt_is_valid(receipt)
+    decision = approval.evaluate_approval_policy(
+        settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+    )
+    assert decision.eligible is False
+    assert decision.result.reason == "OCR tool failure diagnostics were malformed or contradictory"
+
+
 @pytest.mark.parametrize(
     "value",
     (None, "", "required", "UNPROTECTED", True, False, 0, {}, [], "unprotected "),
 )
 def test_hostile_target_protection_states_invalidate_receipt(value: Any) -> None:
-    receipt = receipt_v7()
+    receipt = receipt_v8()
     receipt["review"]["target_protection"] = value
     assert not approval.toolkit_receipt_is_valid(receipt)
     assert workflow.unprotected_target_limitation(receipt) is False
@@ -178,7 +197,7 @@ def test_target_sha_is_exactly_bound_to_policy_sha() -> None:
         lambda review: review.pop("target_sha"),
         lambda review: review.update({"extra": "c" * 40}),
     ):
-        receipt = receipt_v7()
+        receipt = receipt_v8()
         mutate(receipt["review"])
         assert not approval.toolkit_receipt_is_valid(receipt)
 
@@ -199,14 +218,14 @@ def eligibility(
         comments or [],
         warnings or [],
         omitted,
-        receipt_v7(),
+        receipt_v8(),
     )
 
 
 def enriched_receipt(*, mutable: bool = False, required_degraded: bool = False) -> dict[str, Any]:
-    """Return one v7 local-store-only enrichment receipt."""
+    """Return one v8 local-store-only enrichment receipt."""
 
-    receipt = receipt_v7()
+    receipt = receipt_v8()
     receipt["context"] = {
         "mode": "enriched",
         "state": "degraded" if required_degraded else "complete",
@@ -307,7 +326,7 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v7(context_state="degraded", author_id=41),
+            receipt_v8(context_state="degraded", author_id=41),
         )
 
         self.assertFalse(decision.eligible)
@@ -315,7 +334,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertEqual(decision.result.reason, "the selected review context was degraded")
 
     def test_publication_dlp_filtered_receipt_is_valid_but_never_eligible(self) -> None:
-        receipt = receipt_v7()
+        receipt = receipt_v8()
         receipt["publication"] = {
             "state": "publication-filtered",
             "reason_counts": {
@@ -358,7 +377,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         """Reject replay or request-control fields at the closed receipt boundary."""
 
         for field in ("reasoning_content", "native_payload", "tool_choice"):
-            receipt = receipt_v7()
+            receipt = receipt_v8()
             receipt[field] = "private"
 
             with self.subTest(field=field):
@@ -413,7 +432,7 @@ class ApprovalPolicyTests(unittest.TestCase):
                 self.assertIsNone(approval.publication_dlp_state(candidate))
 
     def test_private_only_sanitization_keeps_existing_approval_gates(self) -> None:
-        receipt = receipt_v7()
+        receipt = receipt_v8()
         receipt["publication"] = {
             "state": "private-sanitized",
             "reason_counts": {
@@ -434,7 +453,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertTrue(decision.eligible)
 
     def test_evidence_action_attribution_does_not_change_approval_eligibility(self) -> None:
-        receipt = receipt_v7()
+        receipt = receipt_v8()
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
         )
@@ -448,7 +467,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertIn("receipt is missing or invalid", decision.result.reason)
 
     def test_failed_attempts_do_not_authorize_successful_evidence_or_approval(self) -> None:
-        receipt = receipt_v7()
+        receipt = receipt_v8()
         actions = receipt["evidence"]["actions"]
         actions["attempted"]["get"] = 1
         receipt["evidence"]["calls"] = 2
@@ -474,10 +493,10 @@ class ApprovalPolicyTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v7(context_state="complete", author_id=41),
+            receipt_v8(context_state="complete", author_id=41),
         )
         external = approval.evaluate_approval_policy(
-            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v7(external=True)
+            settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt_v8(external=True)
         )
 
         self.assertTrue(complete_metadata.eligible)
@@ -527,7 +546,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertTrue(decision.eligible)
 
     def test_receipt_accepts_ocr_compatible_non_identifier_tool_names(self) -> None:
-        metadata = receipt_v7(external=True)
+        metadata = receipt_v8(external=True)
         metadata["mcp"]["capabilities"][1]["tools"] = ["repo.search", "records/read"]
 
         decision = approval.evaluate_approval_policy(
@@ -540,8 +559,8 @@ class ApprovalPolicyTests(unittest.TestCase):
             "external MCP was configured for a comment-only review",
         )
 
-    def test_every_pre_v7_receipt_is_rejected(self) -> None:
-        for version in range(1, 7):
+    def test_every_pre_v8_receipt_is_rejected(self) -> None:
+        for version in range(1, 8):
             with self.subTest(version=version):
                 decision = approval.evaluate_approval_policy(
                     settings.BooleanSetting(True),
@@ -558,15 +577,15 @@ class ApprovalPolicyTests(unittest.TestCase):
                     "the review-time approval receipt is missing or invalid",
                 )
 
-    def test_missing_or_malformed_v7_receipt_fails_closed(self) -> None:
-        cases: list[Any] = [None, {"schema_version": 7}]
+    def test_missing_or_malformed_v8_receipt_fails_closed(self) -> None:
+        cases: list[Any] = [None, {"schema_version": 8}]
         for mutate in (
             lambda value: value["context"].update({"state": "complete"}),
             lambda value: value["review"].update({"source_sha": "invalid"}),
             lambda value: value["mcp"].update({"usage": {"unknown": 1}}),
             lambda value: value["evidence"].update({"used": False}),
         ):
-            candidate = receipt_v7()
+            candidate = receipt_v8()
             mutate(candidate)
             cases.append(candidate)
         for metadata in cases:
@@ -587,7 +606,7 @@ class ApprovalPolicyTests(unittest.TestCase):
             ("groups", [{"label": "core", "files": ["src/core.py"]}]),
             ("review_rounds", 2),
         ):
-            receipt = receipt_v7()
+            receipt = receipt_v8()
             receipt[field] = value
 
             decision = approval.evaluate_approval_policy(
@@ -603,40 +622,40 @@ class ApprovalPolicyTests(unittest.TestCase):
     def test_impossible_v6_capability_and_evidence_states_fail_closed(self) -> None:
         cases: list[dict[str, Any]] = []
 
-        builtin_remote = receipt_v7()
+        builtin_remote = receipt_v8()
         builtin_remote["mcp"]["capabilities"][0]["transport"] = "remote"
         cases.append(builtin_remote)
 
-        external_builtin = receipt_v7(external=True)
+        external_builtin = receipt_v8(external=True)
         external_builtin["mcp"]["capabilities"][1]["transport"] = "builtin"
         cases.append(external_builtin)
 
-        wrong_builtin_tool = receipt_v7()
+        wrong_builtin_tool = receipt_v8()
         wrong_builtin_tool["mcp"]["capabilities"][0]["tools"] = ["other_read"]
         cases.append(wrong_builtin_tool)
 
-        duplicate_tool = receipt_v7(external=True)
+        duplicate_tool = receipt_v8(external=True)
         duplicate_tool["mcp"]["capabilities"][1]["tools"] = ["ocr_toolkit_evidence"]
         cases.append(duplicate_tool)
 
-        too_many_tools = receipt_v7(external=True)
+        too_many_tools = receipt_v8(external=True)
         too_many_tools["mcp"]["capabilities"][1]["tools"] = [
             f"tool_{index}" for index in range(129)
         ]
         cases.append(too_many_tools)
 
-        usage_mismatch = receipt_v7()
+        usage_mismatch = receipt_v8()
         usage_mismatch["mcp"]["usage"] = {}
         cases.append(usage_mismatch)
 
-        usage_overflow = receipt_v7()
+        usage_overflow = receipt_v8()
         usage_overflow["mcp"]["usage"] = {"ocr_toolkit_evidence": 1_000_000_001}
         cases.append(usage_overflow)
 
-        missing_author = receipt_v7(author_id=None)
+        missing_author = receipt_v8(author_id=None)
         cases.append(missing_author)
 
-        mandatory_mismatch = receipt_v7()
+        mandatory_mismatch = receipt_v8()
         mandatory_mismatch["evidence"] = {"mandatory": False, "used": True}
         cases.append(mandatory_mismatch)
 
@@ -1016,7 +1035,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         settings.post_mode.cache_clear()
 
     def test_receipt_identity_is_atomic_for_summary_and_approval(self) -> None:
-        valid = receipt_v7(author_id=41)
+        valid = receipt_v8(author_id=41)
         self.assertEqual(workflow.approval_receipt_identity(valid), ("a" * 40, 41))
 
         for mutate in (
@@ -1026,7 +1045,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             lambda value: value.update({"cleanup": {"result": "unknown"}}),
             lambda value: value.update({"extra": True}),
         ):
-            candidate = receipt_v7(author_id=41)
+            candidate = receipt_v8(author_id=41)
             mutate(candidate)
             with self.subTest(candidate=candidate):
                 self.assertEqual(workflow.approval_receipt_identity(candidate), ("", None))
@@ -1034,7 +1053,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_valid_receipt_binds_advisory_without_changing_summary_or_approval_inputs(self) -> None:
         """Publish one closed advisory in Technical details with ordinary clean status."""
 
-        receipt = receipt_v7(author_id=41)
+        receipt = receipt_v8(author_id=41)
         self.assertTrue(approval.toolkit_receipt_is_valid(receipt))
         notes: list[str] = []
 
@@ -1127,7 +1146,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         summary: dict[str, bool],
         comments: list[dict[str, Any]],
     ) -> None:
-        receipt = receipt_v7(target_protection="unprotected")
+        receipt = receipt_v8(target_protection="unprotected")
         if status in {"skipped", "failed"}:
             receipt["evidence"] = {
                 "mandatory": False,
@@ -1207,14 +1226,14 @@ class ApprovalWorkflowTests(unittest.TestCase):
         status_index = next(index for index, line in enumerate(visible) if "**Review" in line)
         assert visible[status_index + 1] == limitation
 
-    def test_unprotected_limitation_requires_fully_validated_v7_receipt(self) -> None:
-        valid = receipt_v7(target_protection="unprotected")
+    def test_unprotected_limitation_requires_fully_validated_v8_receipt(self) -> None:
+        valid = receipt_v8(target_protection="unprotected")
         assert workflow.unprotected_target_limitation(valid)
         for candidate in (
             {**valid, "schema_version": 6},
             {**valid, "cleanup": {"result": "unknown"}},
             {**valid, "extra": True},
-            receipt_v7(target_protection="unprotected", external=True),
+            receipt_v8(target_protection="unprotected", external=True),
         ):
             assert workflow.unprotected_target_limitation(candidate) is False
 
@@ -1223,7 +1242,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     ) -> None:
         """Render scenario B without inventing partial coverage or a failed item."""
 
-        receipt = receipt_v7(author_id=41, target_protection="unprotected")
+        receipt = receipt_v8(author_id=41, target_protection="unprotected")
         receipt["publication"] = {
             "state": "publication-filtered",
             "reason_counts": {
@@ -1311,7 +1330,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_private_sanitized_review_keeps_tool_and_token_activity_visible(self) -> None:
         """Keep independent numeric activity lines after private-only sanitization."""
 
-        receipt = receipt_v7(author_id=41)
+        receipt = receipt_v8(author_id=41)
         receipt["publication"] = {
             "state": "private-sanitized",
             "reason_counts": {
@@ -1468,7 +1487,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             [],
             [],
             0,
-            receipt_v7(target_protection="unprotected"),
+            receipt_v8(target_protection="unprotected"),
         )
         calls: list[str] = []
 
