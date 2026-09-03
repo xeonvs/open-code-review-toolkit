@@ -274,6 +274,33 @@ def test_087_release_notes_cover_evidence_integrity_and_mcp_routing() -> None:
         assert phrase in notes
 
 
+def test_090_release_notes_cover_limited_targets_and_ocr_diagnostic_boundaries() -> None:
+    """Keep the trust, publication, and direct OCR migration boundaries explicit."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.9.0")
+
+    for phrase in (
+        "OCR_GITLAB_TARGET_PROTECTION_MODE=unprotected",
+        "always comment-only",
+        "reject privileged context and external MCP before OCR",
+        "effective reviewed-source SHA",
+        "action receipt v3",
+        "receipt v8",
+        "Local reviews remain receipt-less",
+        "adjacent compatibility baseline",
+        "not a runtime fallback",
+        "sole accepted runtime for toolkit 0.9.0",
+        "Install OCR 1.11.3 directly",
+        "additive failed-tool diagnostics",
+        "canonical Mermaid maps",
+        ".mjs",
+        ".cxx",
+        ".svh",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

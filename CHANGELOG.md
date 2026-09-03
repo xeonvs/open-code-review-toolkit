@@ -1,3 +1,34 @@
+## 0.9.0 - 2026-09-03
+
+### 🚀 Features
+
+- Add `OCR_GITLAB_TARGET_PROTECTION_MODE=unprotected` as an explicit limited review path for an actually unprotected GitLab target. The secure `required` default is unchanged; limited runs retain normal result and finding publication but are always comment-only, reject privileged context and external MCP before OCR, omit protected-policy inputs, and bind immutable source, target, and actual protection state in receipt v8. ([#168](https://github.com/xeonvs/open-code-review-toolkit/issues/168))
+
+### 🐛 Bug Fixes
+
+- Use one strict effective reviewed-source SHA across review execution, pre-execution status diagnostics, posting, and later actions. Detached merge-request pipelines now use a valid `CI_COMMIT_SHA` only when the merge-request source SHA is absent or all zero, while malformed, conflicting, stale, and mismatched identities still fail closed. ([#167](https://github.com/xeonvs/open-code-review-toolkit/issues/167))
+- Reconcile OCR 1.11.2's attempted built-in evidence tool counts with private action receipt v3 while retaining completed actions as the only source of successful evidence use and approval authority; failed or malformed calls cannot satisfy the mandatory summary. Local reviews remain receipt-less instead of emitting receipt v8 with a non-GitLab protection state, while every present invalid receipt still fails closed. ([#169](https://github.com/xeonvs/open-code-review-toolkit/issues/169))
+
+### 🛠 Maintenance
+
+- Qualify checksum-verified Open Code Review 1.11.2 as the adjacent compatibility baseline for toolkit 0.9.0.
+
+  Changed: built-in language routing admits `.mjs` and `.cjs` under JavaScript Rules and `.cxx` and `.hxx` under C++ Rules; `.svh` remains excluded. Hosted Linux and independent Darwin qualification use checksum-verified release artifacts.
+
+  Unchanged: result and manifest schemas, inherited completion cap `16384`, explicit positive completion-cap transport, default `medium` effort, effective max-tools, private reasoning/session data, receipt v8, DLP, telemetry ownership, and approval authority.
+
+  Deployment: OCR 1.11.2 is qualification evidence, not a runtime fallback; install the final recommended OCR 1.11.3 directly. ([#170](https://github.com/xeonvs/open-code-review-toolkit/issues/170))
+- Promote checksum-verified Open Code Review 1.11.3 as the sole accepted runtime for toolkit 0.9.0, prevent inherited raw-provider capture, and preserve valid findings and summaries when additive failed-tool diagnostics are absent, malformed, non-zero, or contradictory. Install OCR 1.11.3 directly and verify the platform checksum from the compatibility manifest. ([#172](https://github.com/xeonvs/open-code-review-toolkit/issues/172))
+
+### 📖 Documentation
+
+- Document protected and limited unprotected-target setup, capability and failure boundaries, two-merge-request and supported one-merge-request rollout, and the complete review/publication decision process. The new canonical Mermaid maps distinguish error, warning, success, decision, and auxiliary states and are linked from the root agent instructions, documentation index, and toolkit strategy. ([#168](https://github.com/xeonvs/open-code-review-toolkit/issues/168))
+
+### 🧩 Rules
+
+- Route `.mjs` and `.cjs` through OCR 1.11.2's built-in JavaScript Rules and `.cxx` and `.hxx` through its C++ Rules; `.svh` remains excluded. ([#170](https://github.com/xeonvs/open-code-review-toolkit/issues/170))
+
+
 ## 0.8.7 - 2026-09-01
 
 ### 🚀 Features
