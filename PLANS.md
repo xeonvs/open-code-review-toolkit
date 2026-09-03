@@ -10,7 +10,7 @@ before handoff or commit. Completed stable plans are indexed in
 
 Status: active
 Owner: Codex
-Last Updated: 2026-09-02
+Last Updated: 2026-09-03
 Release classification: `release-required`
 Target stable version: `0.9.0`
 Milestone: `v0.9.0`
@@ -103,7 +103,7 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
    defect, and the repeated deterministic gates passed with 1,438 tests, 406 subtests, 86.35%
    coverage, all scoped risk floors, compatibility, Towncrier, Gitleaks, dependency audit,
    signatures, diff checks, clean build/Twine, archive privacy, and wheel/sdist CLI smokes green.
-10. [ ] The checksum-verified PATH-effective OCR 1.11.2 installation and its rollback copy are
+10. [x] The checksum-verified PATH-effective OCR 1.11.2 installation and its rollback copy are
     complete. The one permitted configured-provider review ran over exact range
     `b9a0e54af7f39a1db21e2a8f4780761e74782bf8..cb9f4d9f39305e4cfdae5d4c91be7138edd0c4e3`
     with context `off`, public Rules, and concurrency 2, then failed closed before publication because
@@ -136,9 +136,12 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
     `local` protection value. Local finalization still enforces result, action, and DLP contracts but
     remains receipt-less and approval-ineligible; any present invalid receipt still fails closed. The
     focused remediation and documentation matrix passes 253 tests, compatibility validation, Towncrier,
-    Ruff format/check, and diff checks. Close this gate only after a copied retained result passes
-    offline finalization/readback under the corrected code; do not modify either retained OCR run or
-    run another semantic OCR review.
+    Ruff format/check, and diff checks. Owner-only offline finalization of an exact copied result and
+    action receipt confirmed the retained manifest range, terminal 20/20 coverage, six attempted and
+    six completed evidence summaries, zero unattributed actions, the retained private DLP projection,
+    a passed publication projection, and corrected receipt-less, approval-ineligible local output. The
+    finalizer made no network or posting attempt, and recursive before/after hashes confirmed all 15
+    files in the retained OCR directory remained byte-identical. No additional semantic OCR ran.
 11. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
     threads, mark the Draft PR ready, and exact-head squash merge. Delete the feature branch.
 12. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set
