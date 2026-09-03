@@ -6,10 +6,11 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.9.0 — unprotected-target integrity and OCR 1.11.2/1.11.3
 
-Status: repository complete; external stable delivery pending
+Status: completed; stable v0.9.0 delivery and external reconciliation verified
 Release classification: `release-required`
 Target stable version: `0.9.0`
 Repository completion date: 2026-09-03
+External reconciliation date: 2026-09-03
 
 ### Goal and delivered scope
 
@@ -69,22 +70,39 @@ is linked from the root `AGENTS.md`, documentation index, and toolkit strategy.
   Workflow and registry bytes, PEP 740 provenance, hosted verifier installs, and
   CLI smokes agree.
 
-### Stable delivery handoff
+### Stable delivery and external closure
 
-The release PR is the final repository mutation. It sets
+The release PR was the final repository mutation before stable publication. It set
 `.release-version=0.9.0`, `.next-version=0.9.1`, deterministic source epoch
 `1788423271`, exact sorted issues `[167,168,169,170,172]`, generated Towncrier
 notes, the stable example pin, and this archive while returning `PLANS.md` to its
 inactive template.
 
-External closure remains pending until the exact reviewed release head is
-squash-merged and the protected workflow is independently reconciled across
-TestPyPI, PyPI, workflow artifacts, and the immutable GitHub Release. Closure
-requires byte equality, PEP 740 provenance and GitHub attestations, annotated
-`v0.9.0` tag and peeled target, immutable five-asset Release, validated
-`release-receipt.json`, clean wheel and sdist installs on Python 3.12–3.14,
-Actions-owned receipts, closed #167/#168/#169/#170/#172 and milestone `v0.9.0`,
-deleted release branch, and clean `main == origin/main == v0.9.0^{}`.
+Release PR #173 reviewed exact head
+`255fac862edc5ef525b8a580b40095bc8ec7ff44` on base
+`3c7e38c08a48c9af1d0b0c5e10ecf0ac8b5eacc3` and was squash-merged as
+`39ff90a5eb58072f4a5ef5ea6657ba4cadbe1bb0`. All 13 protected check names
+passed at the reviewed head with zero unresolved review threads. Protected
+Release workflow run 33734006965 then completed stable TestPyPI and PyPI
+publication, supported-Python verification, provenance and attestation checks,
+and GitHub Release publication successfully.
+
+Annotated tag object `9d23caa017b8776dfc9c922ed6a4834dcf4f174e` peels to the release merge. GitHub
+Release `v0.9.0` is immutable, non-draft, non-prerelease, and contains exactly
+the wheel, sdist, `SHA256SUMS`, `artifact-hashes.json`, and
+`release-receipt.json`. The receipt SHA-256 is
+`1cc0d0641ea76675f403084c21e0f35b97c611e1ea11ea8328d3af7de6236857` and
+validates the exact release PR, reviewed tree
+`6f9d5ccef4a39ebeb9d53e6019be58fc44f9bafb`, workflow, issue set, registry,
+provenance, attestation, tag, and Python 3.12–3.14 identities.
+
+GitHub Actions posted that receipt identity and closed #167, #168, #169, #170,
+and #172. Milestone 11 `v0.9.0` is closed with zero open and five closed issues.
+Both local and remote `release/v0.9.0` branches are absent, the worktree is
+clean, and the final readback proves
+`main == origin/main == v0.9.0^{}` at
+`39ff90a5eb58072f4a5ef5ea6657ba4cadbe1bb0`. Stable v0.9.0 delivery and its
+external reconciliation are complete.
 
 <a id="plan-toolkit-0-8-7"></a>
 
