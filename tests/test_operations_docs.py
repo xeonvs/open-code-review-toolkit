@@ -1,6 +1,7 @@
 """Contracts for the public GitLab operations documentation."""
 
 import json
+import re
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -124,6 +125,60 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     assert "not a second source" in codex_index
     assert "without duplicating their rules" in engineering_index
     assert "docs/README.md" in readme
+
+
+def test_release_archive_reconciles_current_external_delivery_truth() -> None:
+    """Bind the current archive status to the external-reconciliation marker."""
+
+    release_guide = (PROJECT_ROOT / "docs" / "release.md").read_text(encoding="utf-8")
+    release_archive = (
+        PROJECT_ROOT / "docs" / "engineering" / "execution_history" / "releases.md"
+    ).read_text(encoding="utf-8")
+    release_index = (
+        PROJECT_ROOT / "docs" / "engineering" / "execution_history" / "README.md"
+    ).read_text(encoding="utf-8")
+    release_version = (PROJECT_ROOT / ".release-version").read_text(encoding="utf-8").strip()
+    reconciled_version = (
+        (PROJECT_ROOT / ".release-reconciled-version").read_text(encoding="utf-8").strip()
+    )
+    anchors = list(
+        re.finditer(
+            r'^<a id="plan-toolkit-(\d+)-(\d+)-(\d+)"></a>$',
+            release_archive,
+            flags=re.MULTILINE,
+        )
+    )
+    assert anchors
+    archive_version = ".".join(anchors[0].groups())
+    current_release = release_archive[
+        anchors[0].start() : anchors[1].start() if len(anchors) > 1 else None
+    ]
+    status_match = re.search(r"^Status: (.+)$", current_release, flags=re.MULTILINE)
+    assert status_match
+    current_status = status_match.group(1)
+    release_version_key = tuple(int(part) for part in release_version.split("."))
+    reconciled_version_key = tuple(int(part) for part in reconciled_version.split("."))
+
+    assert "one protected `no-release` closure pull request" in release_guide
+    assert "do not leave its pre-publication status as the current release status" in release_guide
+    assert archive_version == release_version
+    assert reconciled_version_key <= release_version_key
+    if reconciled_version == release_version:
+        assert "completed" in current_status
+        assert "external reconciliation verified" in current_status
+        assert "pending" not in current_status
+        assert "External reconciliation date:" in current_release
+    else:
+        assert f"plan-toolkit-{reconciled_version.replace('.', '-')}" in release_archive
+        assert "pending" in current_status
+        assert "External reconciliation date:" not in current_release
+
+    current_index_row = next(
+        line for line in release_index.splitlines() if line.startswith(f"| `v{release_version}`")
+    )
+    if reconciled_version == release_version:
+        assert "external reconciliation" in current_index_row
+        assert "stable-delivery handoff" not in current_index_row
 
 
 def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:
