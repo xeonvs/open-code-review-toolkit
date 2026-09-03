@@ -44,14 +44,44 @@ from ocr_toolkit.pre_execution import (
 )
 from ocr_toolkit.provider_failure import ProviderFailureReason
 from ocr_toolkit.result_contract import CoverageFailure, OcrResultContractError, ReviewOutcome
+from ocr_toolkit.review_identity import effective_reviewed_sha
 from tests.support import (
     gitlab_config,
     patched_attr,
     patched_env,
+    review_receipt_v8,
 )
 
 
 class PostingIdentityTests(unittest.TestCase):
+    def test_effective_reviewed_sha_has_one_strict_detached_pipeline_fallback(self) -> None:
+        valid = "b" * 40
+        commit = "c" * 40
+        for merge_request_sha, commit_sha, expected in (
+            (valid, commit, valid),
+            ("", valid, valid),
+            ("0" * 40, valid, valid),
+            (valid, "", valid),
+            ("d" * 40, valid, "d" * 40),
+            ("B" * 40, valid, ""),
+            ("bad", valid, ""),
+            (f" {valid}", commit, ""),
+            (f"{valid} ", commit, ""),
+            (f"{valid}\n", commit, ""),
+            (f"{'0' * 40} ", commit, ""),
+            ("", "C" * 40, ""),
+            ("", "bad", ""),
+            ("", f" {valid}", ""),
+            ("", f"{valid} ", ""),
+            ("", f"{valid}\n", ""),
+        ):
+            with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
+                environment = {
+                    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": merge_request_sha,
+                    "CI_COMMIT_SHA": commit_sha,
+                }
+                self.assertEqual(effective_reviewed_sha(environment), expected)
+
     def test_post_results_fails_closed_without_current_user(self) -> None:
         calls: list[str] = []
 
@@ -67,13 +97,13 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(calls, [])
 
-    def test_invalid_v6_publication_state_never_reaches_normal_result_flow(self) -> None:
+    def test_invalid_legacy_publication_state_never_reaches_normal_result_flow(self) -> None:
         notes: list[str] = []
         result_data = {
             "status": "failed",
             "comments": [{"content": "locally retained safe finding"}],
             "_ocr_toolkit": {
-                "schema_version": 6,
+                "schema_version": 7,
                 "publication": {"dlp": "blocked"},
             },
         }
@@ -92,7 +122,7 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
-    def test_advisory_without_exact_receipt_v6_never_reaches_normal_result_flow(self) -> None:
+    def test_advisory_without_exact_receipt_v8_never_reaches_normal_result_flow(self) -> None:
         """Treat a correctly shaped but unbound advisory as an invalid result."""
 
         notes: list[str] = []
@@ -878,6 +908,89 @@ class PostingIdentityTests(unittest.TestCase):
         summary = next(note for note in notes if "## Open Code Review" in note)
         self.assertNotIn("img.shields.io", summary)
 
+    def test_diagnostic_uncertainty_does_not_replace_a_valid_review_with_schema_error(self) -> None:
+        """Carry the review through GitLab writes when only additive diagnostics are uncertain."""
+
+        inline_bodies: list[str] = []
+        notes: list[tuple[str, str]] = []
+        receipt = review_receipt_v8()
+        receipt["tool_execution"] = {"state": "invalid", "failed": None}
+        result_data = {
+            "status": "complete",
+            "message": "Review completed with one actionable finding.",
+            "comments": [
+                {
+                    "path": "src/example.py",
+                    "line": 7,
+                    "content": "Guard the empty collection before indexing it.",
+                    "category": "bug",
+                    "severity": "medium",
+                }
+            ],
+            "warnings": [],
+            "tool_calls": {
+                "total": 2,
+                "by_tool": {"ocr_toolkit_evidence": 1, "file_read": 1},
+            },
+            "manifest": {
+                "schema_version": "ocr.run-manifest/v1",
+                "operation": "review",
+                "terminal_state": "complete",
+                "coverage": {
+                    "selected": [{"item_id": "synthetic-item"}],
+                    "completed": [{"item_id": "synthetic-item"}],
+                    "reused": [],
+                    "failed": [],
+                    "waived": [],
+                },
+            },
+            ocr_result.TOOLKIT_RESULT_KEY: receipt,
+        }
+
+        def capture_discussion(*_args: Any, **kwargs: Any) -> gitlab.GitLabWriteResult:
+            inline_bodies.append(kwargs["body"])
+            return gitlab.GitLabWriteResult("posted")
+
+        def capture_note(
+            _config: gitlab.GitLabConfig,
+            title: str,
+            body: str,
+            _drafts: list[int],
+        ) -> dict[str, int]:
+            notes.append((title, body))
+            return {"id": len(notes)}
+
+        with (
+            patched_attr(
+                workflow,
+                "get_diff_refs",
+                lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+            ),
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: snapshot.BotCommentRefs(),
+            ),
+            patched_attr(workflow, "post_review_discussion", capture_discussion),
+            patched_attr(workflow, "post_review_note_bounded", capture_note),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            patched_attr(
+                workflow,
+                "delete_previous_bot_comments_if_collected",
+                lambda *_args: None,
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(gitlab_config(), result_data)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(inline_bodies), 1)
+        self.assertIn("Guard the empty collection", inline_bodies[0])
+        published = "\n".join(f"{title}\n{body}" for title, body in notes)
+        self.assertIn("Review complete — 1 finding published", published)
+        self.assertNotIn("result schema error", published)
+        self.assertNotIn("publication policy error", published)
+
     def test_retry_report_remains_private_from_gitlab_notes(self) -> None:
         notes: list[str] = []
 
@@ -1311,7 +1424,10 @@ class PostingIdentityTests(unittest.TestCase):
                     "status": "completed_with_errors",
                     "comments": [old, new],
                     "warnings": [],
-                    "_ocr_toolkit": {"schema_version": 6, "publication": publication},
+                    "_ocr_toolkit": {
+                        **review_receipt_v8(),
+                        "publication": publication,
+                    },
                 },
             )
 
@@ -1322,6 +1438,40 @@ class PostingIdentityTests(unittest.TestCase):
         self.assertNotIn("Existing safe finding.", rendered)
         self.assertIn("<summary>Publication filtering signal</summary>", rendered)
         self.assertIn('"carried_forward_comments":1', rendered)
+
+    def test_present_invalid_receipt_never_reaches_normal_publication(self) -> None:
+        notes: list[str] = []
+        collect_calls: list[str] = []
+        receipt = review_receipt_v8()
+        receipt.pop("review")
+
+        with (
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda _config: collect_calls.append("collect") or snapshot.BotCommentRefs(),
+            ),
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda _config, title, *_args: notes.append(title) or {"id": 1},
+            ),
+            patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            redirect_stderr(io.StringIO()),
+        ):
+            exit_code = workflow.post_results(
+                gitlab_config(),
+                {
+                    "status": "complete",
+                    "comments": [{"path": "safe.py", "line": 1, "content": "finding"}],
+                    "warnings": [],
+                    "_ocr_toolkit": receipt,
+                },
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(collect_calls, [])
+        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
 
     def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
         notes: list[str] = []
@@ -1354,10 +1504,12 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             },
             "_ocr_toolkit": {
-                "schema_version": 6,
+                "schema_version": 8,
                 "review": {
                     "source_sha": "a" * 40,
                     "policy_sha": "b" * 40,
+                    "target_sha": "b" * 40,
+                    "target_protection": "protected",
                     "mr_author_id": 41,
                 },
                 "context": {
@@ -1392,6 +1544,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "actions": {"state": "unavailable"},
                 },
                 "publication": {"state": "passed"},
+                "tool_execution": {"state": "absent", "failed": None},
                 "cleanup": {"result": "passed"},
             },
             ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
@@ -2057,9 +2210,9 @@ class PostingWorkflowTests(unittest.TestCase):
         for metadata in (
             None,
             {"schema_version": 4},
-            {"schema_version": 6, "review": []},
+            {"schema_version": 7, "review": []},
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "review": {"source_sha": "invalid", "mr_author_id": True},
             },
         ):
@@ -2068,11 +2221,17 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual(
             workflow.approval_receipt_identity(
                 {
-                    "schema_version": 6,
-                    "review": {"source_sha": "a" * 40, "mr_author_id": 41},
+                    "schema_version": 7,
+                    "review": {
+                        "source_sha": "a" * 40,
+                        "policy_sha": "b" * 40,
+                        "target_sha": "b" * 40,
+                        "target_protection": "protected",
+                        "mr_author_id": 41,
+                    },
                 }
             ),
-            ("a" * 40, 41),
+            ("", None),
         )
 
         with patched_env(
@@ -2080,6 +2239,19 @@ class PostingWorkflowTests(unittest.TestCase):
             CI_COMMIT_SHA="b" * 40,
         ):
             self.assertEqual(workflow.reviewed_sha(), "b" * 40)
+
+        for merge_request_sha, commit_sha in (
+            ("B" * 40, "b" * 40),
+            ("bad", "b" * 40),
+            ("", "B" * 40),
+            ("0" * 40, "bad"),
+        ):
+            with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
+                with patched_env(
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
+                    CI_COMMIT_SHA=commit_sha,
+                ):
+                    self.assertEqual(workflow.reviewed_sha(), "")
 
     def test_coverage_diagnostics_are_deduplicated_redacted_and_fail_closed(self) -> None:
         """Count unique files while keeping malformed failure paths out of public notes."""
@@ -2467,6 +2639,134 @@ class PostingWorkflowTests(unittest.TestCase):
                 self.assertNotIn("rules.json", notes[0][1])
                 self.assertEqual(setup_cleanup, [[9]])
 
+    def test_pre_execution_status_uses_effective_detached_pipeline_sha(self) -> None:
+        """Use the same strict SHA fallback for setup and background statuses."""
+
+        for reason, actual, limit, unit, expected_text in (
+            (PROTECTED_TARGET_RULE_PATH_PENDING, None, None, None, "did not run"),
+            (
+                BACKGROUND_CHARACTER_LIMIT_REASON,
+                8_001,
+                8_000,
+                "characters",
+                "rejected the generated review background",
+            ),
+        ):
+            for merge_request_sha in ("", "0" * 40):
+                with (
+                    self.subTest(reason=reason, merge_request_sha=merge_request_sha),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    root = Path(tmp)
+                    directory = root / ".review-context"
+                    directory.mkdir(mode=0o700)
+                    status_path = directory / "pre-execution-status.json"
+                    write_pre_execution_status(
+                        status_path,
+                        PreExecutionStatus(
+                            schema_version=STATUS_SCHEMA,
+                            reason=reason,
+                            diff_base_sha="a" * 40,
+                            source_sha="b" * 40,
+                            policy_sha="c" * 40,
+                            actual=actual,
+                            limit=limit,
+                            unit=unit,
+                        ),
+                    )
+                    stderr_path = root / "stderr.log"
+                    stderr_path.write_text("private details\n", encoding="utf-8")
+                    notes: list[str] = []
+
+                    def capture_note(
+                        _config: gitlab.GitLabConfig,
+                        _title: str,
+                        body: str,
+                        _transaction: PostingTransaction,
+                    ) -> dict[str, int]:
+                        notes.append(body)
+                        return {"id": 1}
+
+                    with (
+                        patched_env(
+                            CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
+                            CI_COMMIT_SHA="b" * 40,
+                        ),
+                        patched_attr(
+                            workflow,
+                            "repository_artifacts",
+                            lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                        ),
+                        patched_attr(workflow, "post_review_note_bounded", capture_note),
+                        patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                        patched_attr(
+                            workflow,
+                            "collect_previous_bot_comment_refs",
+                            lambda *_args: snapshot.BotCommentRefs(),
+                        ),
+                        patched_attr(workflow, "delete_previous_setup_notes", lambda *_args: None),
+                    ):
+                        self.assertEqual(
+                            workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0
+                        )
+
+                    self.assertEqual(len(notes), 1)
+                    self.assertIn(expected_text, notes[0])
+                    self.assertNotIn("private details", notes[0])
+
+    def test_malformed_mr_sha_does_not_fall_back_for_pre_execution_status(self) -> None:
+        """Do not hide a hostile populated MR identity behind CI_COMMIT_SHA."""
+
+        notes: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".review-context"
+            directory.mkdir(mode=0o700)
+            status_path = directory / "pre-execution-status.json"
+            write_pre_execution_status(
+                status_path,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+                    diff_base_sha="a" * 40,
+                    source_sha="b" * 40,
+                    policy_sha="c" * 40,
+                ),
+            )
+            stderr_path = root / "stderr.log"
+            stderr_path.write_text("generic details\n", encoding="utf-8")
+
+            def capture_note(
+                _config: gitlab.GitLabConfig,
+                _title: str,
+                body: str,
+                _transaction: PostingTransaction,
+            ) -> dict[str, int]:
+                notes.append(body)
+                return {"id": 1}
+
+            with (
+                patched_env(
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="B" * 40,
+                    CI_COMMIT_SHA="b" * 40,
+                    OCR_POST_ERROR_DETAILS="1",
+                ),
+                patched_attr(
+                    workflow,
+                    "repository_artifacts",
+                    lambda: type("Artifacts", (), {"pre_execution_status": status_path})(),
+                ),
+                patched_attr(workflow, "post_review_note_bounded", capture_note),
+                patched_attr(workflow, "finalize_posting", lambda *_args: True),
+            ):
+                self.assertEqual(workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0)
+
+        self.assertEqual(len(notes), 1)
+        self.assertIn("result may be partial", notes[0])
+        self.assertIn("generic details", notes[0])
+
     def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
         notes: list[str] = []
         with tempfile.TemporaryDirectory() as tmp:
@@ -2637,6 +2937,35 @@ class PostingSummaryTests(unittest.TestCase):
             "`context_list`: 1, `file_find`: 1, `task_done`: 1)",
         )
         self.assertNotIn("more", summary)
+
+    def test_tool_calls_never_renders_failure_detail_payloads(self) -> None:
+        """Keep additive OCR diagnostics in the CI console, not the MR summary."""
+
+        summary = posting_formatting.format_tool_calls_summary(
+            {
+                "total": 2,
+                "by_tool": {"file_read": 2},
+                "failure": 1,
+                "failure_by_tool": {"dynamic-private-tool": 1},
+                "failure_details": [
+                    {
+                        "tool_call_number": 2,
+                        "tool_name": "dynamic-private-tool",
+                        "file_path": "private/path.py",
+                        "error": "Authorization: Bearer private-token",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(summary, "- all OCR tool calls: 2 total (`file_read`: 2)")
+        for private_value in (
+            "failure",
+            "dynamic-private-tool",
+            "private/path.py",
+            "private-token",
+        ):
+            self.assertNotIn(private_value, summary)
 
     def test_tool_calls_omits_empty_zero_or_unknown_breakdowns(self) -> None:
         """Do not emit a technical line without a positive admitted counter list."""
@@ -3110,100 +3439,143 @@ class PostingSummaryTests(unittest.TestCase):
 
     def test_mcp_usage_summary_reports_only_servers_actually_called(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 6,
-                "mcp": {
-                    "usage": {
-                        "ocr_toolkit_evidence": 2,
-                        "documentation": 1,
-                    }
+            review_receipt_v8(
+                usage={"ocr_toolkit_evidence": 2, "documentation": 1},
+                attempted={
+                    "summary": 1,
+                    "list": 1,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-                "evidence": {"actions": {"state": "unavailable"}},
-            }
+                completed={
+                    "summary": 0,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                mandatory=False,
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+            "- reconciled MCP attempts: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
         )
         self.assertNotIn("file_read", summary)
 
-    def test_mcp_usage_summary_reads_receipt_v6_inventory(self) -> None:
+    def test_mcp_usage_summary_reads_receipt_v8_inventory(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 6,
-                "mcp": {
-                    "capabilities": [],
-                    "usage": {"ocr_toolkit_evidence": 3},
+            review_receipt_v8(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-                "evidence": {"actions": {"state": "unavailable"}},
-            }
+                completed={
+                    "summary": 0,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                mandatory=False,
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 3)",
         )
 
     def test_mcp_usage_summary_renders_verified_action_breakdown(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 6,
-                "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
-                "evidence": {
-                    "calls": 4,
-                    "actions": {
-                        "state": "verified",
-                        "summary": 1,
-                        "list": 2,
-                        "get": 1,
-                        "search": 0,
-                        "coverage": 0,
-                    },
+            review_receipt_v8(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-            }
+                completed={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                },
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
-            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 4)\n"
+            "- completed built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
     def test_mcp_usage_summary_omits_zero_or_unavailable_action_breakdown(self) -> None:
-        """Publish only reconciled non-zero action counts."""
+        """Publish only reconciled non-zero completed action counts."""
 
-        for actions in (
-            {"state": "unavailable"},
-            {
-                "state": "verified",
-                "summary": 0,
-                "list": 0,
-                "get": 0,
-                "search": 0,
-                "coverage": 0,
-            },
-            {
-                "state": "verified",
-                "summary": 0,
-                "list": 2,
-                "get": 1,
-                "search": 0,
-                "coverage": 0,
-            },
-        ):
-            with self.subTest(actions=actions):
-                calls = sum(value for key, value in actions.items() if key != "state")
+        zero_completed = {
+            "summary": 0,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+        }
+        cases = (
+            (
+                {
+                    "summary": 0,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
+                },
+                zero_completed,
+            ),
+        )
+        for attempted, completed in cases:
+            with self.subTest(attempted=attempted):
                 self.assertEqual(
                     posting_formatting.format_mcp_usage_summary(
-                        {
-                            "schema_version": 6,
-                            "mcp": {"usage": {"ocr_toolkit_evidence": 3}},
-                            "evidence": {"calls": calls, "actions": actions},
-                        }
+                        review_receipt_v8(
+                            attempted=attempted,
+                            completed=completed,
+                            mandatory=False,
+                        )
                     ),
-                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 3)",
+                    "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 3)",
                 )
+
+    def test_mcp_usage_summary_never_renders_unattributed_attempts(self) -> None:
+        summary = posting_formatting.format_mcp_usage_summary(
+            review_receipt_v8(
+                attempted={
+                    "summary": 1,
+                    "list": 0,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 4,
+                },
+            )
+        )
+
+        self.assertEqual(
+            summary,
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 5)\n"
+            "- completed built-in evidence actions: summary: 1",
+        )
+        self.assertNotIn("unattributed", summary)
 
     def test_mcp_usage_summary_omits_hostile_or_unreconciled_action_breakdown(self) -> None:
         for actions in (
@@ -3213,44 +3585,39 @@ class PostingSummaryTests(unittest.TestCase):
             {"state": "verified", "summary": 1, "list": 2, "get": 1, "extra": 0},
         ):
             with self.subTest(actions=actions):
-                summary = posting_formatting.format_mcp_usage_summary(
-                    {
-                        "schema_version": 6,
-                        "mcp": {"usage": {"ocr_toolkit_evidence": 4}},
-                        "evidence": {"calls": 4, "actions": actions},
-                    }
-                )
+                receipt = review_receipt_v8()
+                receipt["evidence"]["actions"] = actions
+                summary = posting_formatting.format_mcp_usage_summary(receipt)
 
-                self.assertEqual(
-                    summary,
-                    "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 4)",
-                )
+                self.assertEqual(summary, "")
                 self.assertNotIn("/approve", summary)
 
     def test_mcp_usage_summary_reconciles_actions_after_context_calls(self) -> None:
         summary = posting_formatting.format_mcp_usage_summary(
-            {
-                "schema_version": 6,
-                "context": {"tool_usage": {"context_get": 1, "context_list": 2}},
-                "mcp": {"usage": {"ocr_toolkit_evidence": 7}},
-                "evidence": {
-                    "calls": 4,
-                    "actions": {
-                        "state": "verified",
-                        "summary": 1,
-                        "list": 2,
-                        "get": 1,
-                        "search": 0,
-                        "coverage": 0,
-                    },
+            review_receipt_v8(
+                attempted={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
                 },
-            }
+                completed={
+                    "summary": 1,
+                    "list": 2,
+                    "get": 1,
+                    "search": 0,
+                    "coverage": 0,
+                },
+                context_tool_usage={"context_get": 1, "context_list": 2},
+            )
         )
 
         self.assertEqual(
             summary,
-            "- verified MCP calls: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
-            "- built-in evidence actions: summary: 1, list: 2, get: 1",
+            "- reconciled MCP attempts: 1 server(s) (`ocr_toolkit_evidence`: 7)\n"
+            "- completed built-in evidence actions: summary: 1, list: 2, get: 1",
         )
 
     def test_mcp_usage_summary_rejects_malformed_usage_before_rendering(self) -> None:
@@ -3261,16 +3628,24 @@ class PostingSummaryTests(unittest.TestCase):
             {"ocr_toolkit_evidence": 0},
         ):
             with self.subTest(usage=usage):
+                receipt = review_receipt_v8()
+                receipt["mcp"]["usage"] = usage
                 self.assertEqual(
-                    posting_formatting.format_mcp_usage_summary(
-                        {
-                            "schema_version": 6,
-                            "mcp": {"usage": usage},
-                            "evidence": {"actions": {"state": "unavailable"}},
-                        }
-                    ),
+                    posting_formatting.format_mcp_usage_summary(receipt),
                     "",
                 )
+
+    def test_mcp_usage_summary_requires_complete_valid_receipt(self) -> None:
+        receipt = review_receipt_v8()
+        for mutate in (
+            lambda value: value.pop("review"),
+            lambda value: value["review"].update({"source_sha": "invalid"}),
+            lambda value: value["cleanup"].update({"result": "failed"}),
+        ):
+            candidate = json.loads(json.dumps(receipt))
+            mutate(candidate)
+            with self.subTest(candidate=candidate):
+                self.assertEqual(posting_formatting.format_mcp_usage_summary(candidate), "")
 
     def test_mcp_usage_summary_rejects_pre_v6_receipt(self) -> None:
         self.assertEqual(
@@ -5391,7 +5766,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 6)
+            self.assertEqual(metadata["schema_version"], 8)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

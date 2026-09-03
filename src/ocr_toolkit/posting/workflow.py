@@ -19,7 +19,6 @@ from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_ADVISORY_KEY,
     TOOLKIT_RESULT_KEY,
-    TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -109,6 +108,8 @@ from ocr_toolkit.provider_failure import (
     provider_failure_reason,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
+from ocr_toolkit.review_identity import effective_reviewed_sha
+from ocr_toolkit.review_receipt import validated_review_identity
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -143,12 +144,9 @@ def inline_skip_reason(refs: dict[str, str] | None, path: str, line: int) -> str
 
 
 def reviewed_sha() -> str:
-    """Return the commit SHA OCR was expected to review in CI."""
+    """Return the validated commit SHA OCR was expected to review in CI."""
 
-    source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
-    if source_sha and not re.fullmatch(r"0+", source_sha):
-        return source_sha
-    return clean_text(os.environ.get("CI_COMMIT_SHA", ""))
+    return effective_reviewed_sha(os.environ)
 
 
 def mr_head_sha() -> str:
@@ -160,25 +158,17 @@ def mr_head_sha() -> str:
 def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     """Return only validated-by-policy receipt identities for provider readback."""
 
-    if (
-        not isinstance(toolkit_metadata, dict)
-        or toolkit_metadata.get("schema_version") != TOOLKIT_RESULT_SCHEMA_VERSION
-    ):
+    identity = validated_review_identity(toolkit_metadata)
+    if identity is None:
         return "", None
-    review = toolkit_metadata.get("review")
-    if not isinstance(review, dict):
-        return "", None
-    source_sha = review.get("source_sha")
-    author_id = review.get("mr_author_id")
-    if not (
-        isinstance(source_sha, str)
-        and re.fullmatch(r"[0-9a-f]{40}", source_sha)
-        and isinstance(author_id, int)
-        and not isinstance(author_id, bool)
-        and author_id > 0
-    ):
-        return "", None
-    return source_sha, author_id
+    return identity.source_sha, identity.mr_author_id
+
+
+def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
+    """Select the static limitation only from one fully validated receipt v8."""
+
+    identity = validated_review_identity(toolkit_metadata)
+    return identity is not None and identity.target_protection == "unprotected"
 
 
 def summary_with_run_marker(body: str, run_id: str) -> str:
@@ -257,11 +247,15 @@ def finalize_review_approval(
     if not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
 
-    execution = execute_approval(
-        config,
-        eligibility,
-        reviewed_commit,
-        reviewed_author_id,
+    execution = (
+        execute_approval(
+            config,
+            eligibility,
+            reviewed_commit,
+            reviewed_author_id,
+        )
+        if eligibility.eligible
+        else ApprovalExecution(eligibility.result)
     )
     final_body = summary_with_run_marker(
         render_summary(execution.result),
@@ -617,22 +611,20 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return 1
 
     toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
-    publication = (
-        toolkit_metadata.get("publication") if isinstance(toolkit_metadata, dict) else None
-    )
-    if toolkit_metadata is None:
-        publication_state = "direct"
-    elif (
-        isinstance(toolkit_metadata, dict)
-        and toolkit_metadata.get("schema_version") == TOOLKIT_RESULT_SCHEMA_VERSION
-    ):
-        publication_state = publication_dlp_state(publication)
-    else:
-        publication_state = None
+    if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
+        return invalid_ocr_schema_exit(
+            config,
+            "receipt v8 is invalid",
+            intro="OCR result publication policy state could not be validated.",
+            title="**Open Code Review publication policy error**",
+        )
+    constrained_target = unprotected_target_limitation(toolkit_metadata)
+    publication = toolkit_metadata.get("publication") if toolkit_metadata is not None else None
+    publication_state = "direct" if toolkit_metadata is None else publication_dlp_state(publication)
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,
-            "receipt v6 publication state is invalid",
+            "receipt v8 publication state is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -646,7 +638,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not toolkit_receipt_is_valid(toolkit_metadata):
             return invalid_ocr_schema_exit(
                 config,
-                "OCR toolkit advisory is not bound to a valid receipt v6",
+                "OCR toolkit advisory is not bound to a valid receipt v8",
             )
     ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
 
@@ -695,6 +687,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             mcp_usage_summary=mcp_usage_summary,
             token_usage_summary=token_usage_summary,
             ocr_core_advisory_summary=ocr_core_advisory_summary,
+            unprotected_target=constrained_target,
         )
 
     billing_reason = llm_billing_failure_reason(warnings)
@@ -808,6 +801,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 warnings=warnings,
                 suppressed_count=suppressed_count,
                 approval_result=approval_result,
+                unprotected_target=constrained_target,
                 emoji=emoji,
             )
 
@@ -996,6 +990,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             warnings=warnings,
             suppressed_count=suppressed_count,
             approval_result=approval_result,
+            unprotected_target=constrained_target,
             emoji=emoji,
         )
 
@@ -1105,6 +1100,7 @@ def post_manifest_failure(
     mcp_usage_summary: str = "",
     token_usage_summary: str = "",
     ocr_core_advisory_summary: str = "",
+    unprotected_target: bool = False,
 ) -> int:
     """Post a manifest-declared run failure while preserving prior review notes."""
 
@@ -1123,6 +1119,7 @@ def post_manifest_failure(
         coverage_summary=outcome.coverage_summary,
         coverage_diagnostics=normalize_coverage_diagnostics(outcome, warnings),
         warnings=warnings,
+        unprotected_target=unprotected_target,
         emoji=post_emoji(),
     )
 
@@ -1300,7 +1297,7 @@ def post_ocr_failure(
 
     try:
         status_path = repository_artifacts().pre_execution_status
-        source_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", ""))
+        source_sha = reviewed_sha()
         diff_base_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
         status = read_pre_execution_status(
             status_path,

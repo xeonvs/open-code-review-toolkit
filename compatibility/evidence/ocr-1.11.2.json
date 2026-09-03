@@ -2,37 +2,37 @@
   "assets": [
     {
       "name": "opencodereview-darwin-amd64",
-      "sha256": "53d50290903851948113910503f82f05e129087eb2c664c3b5d419b880de287b",
-      "size": 57736624
+      "sha256": "20bbf9ebcce58a1951068cb19fd27e012e42b24b18c4c7dff61d3d6870e3f5ea",
+      "size": 57749072
     },
     {
       "name": "opencodereview-darwin-arm64",
-      "sha256": "5fdf72e51aae021ac7bf43d7b9dcb160f04880f623c66e8ada5e6ae5a92e172c",
-      "size": 54777442
+      "sha256": "8c1a58cacca6d82d4616f121e07bd7c586a2e6c88d5b6688e3bfedf135d17ff4",
+      "size": 54794130
     },
     {
       "name": "opencodereview-linux-amd64",
-      "sha256": "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f",
-      "size": 55992482
+      "sha256": "fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731",
+      "size": 56008866
     },
     {
       "name": "opencodereview-linux-arm64",
-      "sha256": "a9ac65ebc4aabbc296f1ddae729ca6e553cca5040a565c002edf7d6fed597b00",
+      "sha256": "3d74d764d9a94e0113791a6f8a04da7aebb225838867d8445f6331fb23e26b99",
       "size": 52691106
     },
     {
       "name": "opencodereview-windows-amd64.exe",
-      "sha256": "967ba90f835964051c8b89718ba0725a11725416f799401d74f0726c426e1c30",
-      "size": 57453056
+      "sha256": "6adfb158fbf82c2f2fed05f920b9b4eedd369a14e7f36d4f60bd08041f8248dc",
+      "size": 57467392
     },
     {
       "name": "opencodereview-windows-arm64.exe",
-      "sha256": "abfec0c6c2c043f925a912a07551db51434047c0d0f074695d4903314d4dc35b",
-      "size": 53424128
+      "sha256": "5e82df7bad7cf2f35276bc50ec0d8c4a23dedf877543a73ef4fc51ef3e237933",
+      "size": 53436928
     },
     {
       "name": "sha256sum.txt",
-      "sha256": "8760d31184c12f947c182fcb00114730707892524ddf1beac78fc415cb61b37b",
+      "sha256": "1d997d5ced335750e50df8af0d8a0ec8b9978937d1f26047b0a2114b7a8fa9e1",
       "size": 572
     }
   ],
@@ -40,7 +40,7 @@
   "classification_reasons": [
     "release notes contain a material or ambiguous compatibility signal"
   ],
-  "comparison_version": "1.11.0",
+  "comparison_version": "1.11.1",
   "contracts": {
     "comment_thinking_probe": {
       "additive_field_preserved": true,
@@ -58,6 +58,10 @@
         ".svh"
       ],
       "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".mjs",
         ".pug",
         ".sv",
         ".v",
@@ -67,7 +71,7 @@
       ],
       "result": "passed",
       "rule_source": "system_builtin",
-      "selected": 6
+      "selected": 10
     },
     "numeric_cli_probe": {
       "max_tokens_budget": {
@@ -222,13 +226,13 @@
     },
     "version_probe": "passed"
   },
-  "published_at": "2026-08-31T10:06:30Z",
-  "release_changes": "## 🚀 Features\n\n- feat(allowlist): add Pug template support (#1114)\n- feat(grouping): skip the grouping LLM call for small change sets (#1103)\n- feat(allowlist): add Verilog, SystemVerilog, and VHDL support (#1050)\n\n## 🐛 Bug Fixes\n\n- fix(security): prevent rule.json from reading arbitrary files on the review host (#1100)\n- fix(viewer): report selected files from run manifest (#1096)\n\n## 📖 Documentation\n\n- docs(site): replace concurrency feature card with effort (#1116)\n- docs(skill): correct timeout description to reflect effort-scaled group timeout (#1110)\n\n## Other Changes\n\n- chore(skill): remove Prerequisites section from delegate SKILL.md (#1098)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.11.0...v1.11.1",
-  "release_notes_sha256": "ff00b801f0ce4cca6b2a0a0df941a65fed3cfe89738a84aff8532e3a9f39bd20",
+  "published_at": "2026-09-01T13:45:04Z",
+  "release_changes": "## 🚀 Features\n\n- feat(cmd, viewer): open viewer URL in default browser (#1108)\n\n## 🐛 Bug Fixes\n\n- fix(rules): route .cxx and .hxx files to C++ rules (#1123)\n- fix(rules): route JavaScript module files to JS rules (#1122)\n\n## 📖 Documentation\n\n- docs(mcp): document remote setup with Parallel Search example (#1107)\n- docs(zh-CN): improve branch range wording (#1124)\n\n## Other Changes\n\n- build: keep node_modules out of the Go package list via a module boundary (#1125)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.11.1...v1.11.2",
+  "release_notes_sha256": "949b338c7996d9aaba281a89081b55b8295919eb01d89311ad50438846e54690",
   "result": "compatible",
   "schema_version": 3,
-  "tag": "v1.11.1",
-  "tested_baseline_version": "1.11.0",
+  "tag": "v1.11.2",
+  "tested_baseline_version": "1.11.1",
   "upstream_repository": "alibaba/open-code-review",
-  "version": "1.11.1"
+  "version": "1.11.2"
 }

@@ -19,9 +19,11 @@ import pytest
 
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.pre_execution import read_pre_execution_status
 from ocr_toolkit.providers import gitlab
 from ocr_toolkit.review_runner import (
+    ReviewIdentity,
     ReviewRefs,
     ReviewRunnerError,
     _prepare_policy_context,
@@ -112,6 +114,10 @@ class _GitLabHandler(BaseHTTPRequestHandler):
             }
             if self.response_mode == "unprotected":
                 payload = {**payload, "protected": False}
+            if self.response_mode == "malformed_protection":
+                payload = {**payload, "protected": "false"}
+            if self.response_mode == "missing_target_commit":
+                payload = {**payload, "commit": {}}
         else:
             self.send_error(404)
             return
@@ -214,6 +220,7 @@ def test_gitlab_snapshot_crosses_real_https_adapter_and_binds_protected_target(
 
     assert snapshot.source_sha == SOURCE_SHA
     assert snapshot.target_sha == TARGET_SHA
+    assert snapshot.target_protection == "protected"
     assert snapshot.target_branch == "main"
     assert snapshot.author_id == 41
     assert snapshot.context.admitted is True
@@ -225,6 +232,68 @@ def test_gitlab_snapshot_crosses_real_https_adapter_and_binds_protected_target(
         ("/api/v4/projects/7/merge_requests/9", "synthetic-token"),
         ("/api/v4/projects/7/repository/branches/main", "synthetic-token"),
     ]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ("", " ", " REQUIRED", "required ", "Required", "UNPROTECTED", "optional", "required\n"),
+)
+def test_target_protection_mode_grammar_is_exact_and_fail_closed(raw: str) -> None:
+    with pytest.raises(gitlab.GitLabProviderError, match="must be exactly"):
+        gitlab.parse_target_protection_mode(raw)
+
+
+def test_target_protection_mode_defaults_to_required() -> None:
+    assert gitlab.parse_target_protection_mode(None) == "required"
+    assert gitlab.parse_target_protection_mode("required") == "required"
+    assert gitlab.parse_target_protection_mode("unprotected") == "unprotected"
+
+
+def test_explicit_unprotected_mode_binds_actual_unprotected_target_over_https(
+    tmp_path: Path,
+) -> None:
+    environment: dict[str, str]
+    with _https_gitlab(tmp_path, "unprotected") as api_root:
+        environment = _environment(api_root)
+        environment[gitlab.TARGET_PROTECTION_MODE_VARIABLE] = "unprotected"
+        snapshot = gitlab.acquire_review_snapshot(environment, expected_head=SOURCE_SHA)
+
+    assert snapshot.source_sha == SOURCE_SHA
+    assert snapshot.target_sha == TARGET_SHA
+    assert snapshot.target_protection == "unprotected"
+
+
+@pytest.mark.parametrize("setting", (None, "required", "unprotected"))
+def test_protected_target_behavior_is_unchanged_in_every_valid_mode(
+    tmp_path: Path, setting: str | None
+) -> None:
+    with _https_gitlab(tmp_path / (setting or "unset")) as api_root:
+        environment = _environment(api_root)
+        if setting is not None:
+            environment[gitlab.TARGET_PROTECTION_MODE_VARIABLE] = setting
+        snapshot = gitlab.acquire_review_snapshot(environment, expected_head=SOURCE_SHA)
+
+    assert snapshot.target_protection == "protected"
+    assert snapshot.target_sha == TARGET_SHA
+
+
+@pytest.mark.parametrize(
+    ("mode", "message"),
+    (
+        ("malformed_protection", "protection metadata"),
+        ("missing_target_commit", "target head"),
+    ),
+)
+def test_target_protection_and_identity_shapes_fail_closed_over_https(
+    tmp_path: Path, mode: str, message: str
+) -> None:
+    with (
+        _https_gitlab(tmp_path, mode) as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match=message),
+    ):
+        environment = _environment(api_root)
+        environment[gitlab.TARGET_PROTECTION_MODE_VARIABLE] = "unprotected"
+        gitlab.acquire_review_snapshot(environment, expected_head=SOURCE_SHA)
 
 
 def test_identity_only_snapshot_never_normalizes_provider_metadata(
@@ -391,6 +460,128 @@ def test_metadata_mode_requires_merge_request_before_ocr(
 
     with pytest.raises(ReviewRunnerError, match="requires a GitLab merge request"):
         _prepare_policy_context(ReviewRefs(sha, sha), [], artifacts)
+
+
+@pytest.mark.parametrize("context_mode", ("off", "metadata"))
+def test_unprotected_policy_context_reads_rules_only_from_exact_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, context_mode: str
+) -> None:
+    """Permit only bounded metadata and exact target Rules in constrained mode."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@example.invalid")
+    rules = tmp_path / "rules.json"
+    rules.write_text('{"target":true}\n', encoding="utf-8")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "unprotected target")
+    target = _git(tmp_path, "rev-parse", "HEAD")
+    rules.write_text('{"source":true}\n', encoding="utf-8")
+    (tmp_path / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source")
+    source = _git(tmp_path, "rev-parse", "HEAD")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", context_mode)
+    context = (
+        normalize_merge_request_context(
+            provider="gitlab",
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=source,
+            title="Synthetic review",
+            description="Bounded metadata only.",
+            labels=[],
+            source_branch="feature/synthetic",
+        )
+        if context_mode == "metadata"
+        else None
+    )
+    monkeypatch.setattr(
+        "ocr_toolkit.review_runner.acquire_review_snapshot",
+        lambda *_args, **_kwargs: gitlab.GitLabReviewSnapshot(
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=source,
+            target_branch="main",
+            target_sha=target,
+            target_protection="unprotected",
+            author_id=41,
+            context=context,
+        ),
+    )
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+
+    identity, arguments = _prepare_policy_context(
+        ReviewRefs(target, source), ["--rule", "rules.json"], artifacts
+    )
+
+    assert identity == ReviewIdentity(
+        source,
+        target,
+        41,
+        context_mode,
+        context,
+        target,
+        "unprotected",
+    )
+    assert artifacts.policy_rules.read_text(encoding="utf-8") == '{"target":true}\n'
+    assert arguments == ["--rule", str(artifacts.policy_rules)]
+
+
+@pytest.mark.parametrize(
+    ("context_mode", "adapters", "message"),
+    (
+        ("enriched", None, "enriched review context requires"),
+        ("off", "", "do not allow context adapters"),
+        ("metadata", "[]", "do not allow context adapters"),
+    ),
+)
+def test_unprotected_policy_context_rejects_privileged_context_before_rules_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    context_mode: str,
+    adapters: str | None,
+    message: str,
+) -> None:
+    """Reject even empty adapter settings and enriched mode before target policy reads."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@example.invalid")
+    (tmp_path / "rules.json").write_text("{}\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "target")
+    sha = _git(tmp_path, "rev-parse", "HEAD")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", context_mode)
+    if adapters is None:
+        monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    else:
+        monkeypatch.setenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", adapters)
+    monkeypatch.setattr(
+        "ocr_toolkit.review_runner.acquire_review_snapshot",
+        lambda *_args, **_kwargs: gitlab.GitLabReviewSnapshot(
+            "7", "9", sha, "main", sha, "unprotected", 41, None
+        ),
+    )
+    read_called = False
+
+    def fail_read(*_args: object, **_kwargs: object) -> bytes:
+        nonlocal read_called
+        read_called = True
+        raise AssertionError("target policy must not be read")
+
+    monkeypatch.setattr(GitRepositoryReader, "read_blob", fail_read)
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+
+    with pytest.raises(ReviewRunnerError, match=message):
+        _prepare_policy_context(ReviewRefs(sha, sha), ["--rule", "rules.json"], artifacts)
+    assert read_called is False
 
 
 def test_policy_rule_transport_rejects_unsafe_or_unavailable_repository_inputs(
@@ -790,8 +981,14 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 6,
-        "review": {"source_sha": head, "policy_sha": policy, "mr_author_id": 41},
+        "schema_version": 8,
+        "review": {
+            "source_sha": head,
+            "policy_sha": policy,
+            "target_sha": policy,
+            "target_protection": "protected",
+            "mr_author_id": 41,
+        },
         "context": {
             "mode": "metadata",
             "state": "complete",
@@ -823,14 +1020,25 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             "calls": 3,
             "actions": {
                 "state": "verified",
-                "summary": 1,
-                "list": 2,
-                "get": 0,
-                "search": 0,
-                "coverage": 0,
+                "attempted": {
+                    "summary": 1,
+                    "list": 2,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                    "unattributed": 0,
+                },
+                "completed": {
+                    "summary": 1,
+                    "list": 2,
+                    "get": 0,
+                    "search": 0,
+                    "coverage": 0,
+                },
             },
         },
         "publication": {"state": "passed"},
+        "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }
     for path in (

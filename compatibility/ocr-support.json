@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.1",
-  "recommended_version": "1.11.1",
+  "monitoring_floor": "1.11.3",
+  "recommended_version": "1.11.3",
   "releases": [
     {
       "assets": [
@@ -1393,12 +1393,118 @@
         "semantic_grouping"
       ],
       "evidence": "compatibility/evidence/ocr-1.11.1.json",
-      "evidence_sha256": "24fc4c6850503c1dc1b613fd9792e36f4e405ca97e919ef9bfc1d1918efe5ef2",
+      "evidence_sha256": "08a125d2f10c4f99ef47a99e913408868dcd85e105c5c85c88c0abb31d0c77d2",
       "human_conclusion": "Compatible after source and behavioral review. Toolkit consumes bounded small-change grouping, project-rule confinement, selected-file session correction, and Pug/Verilog/SystemVerilog/VHDL review coverage; .svh remains excluded. Result and manifest schemas, completion cap 16384, explicit positive completion-cap transport, medium effort, effective max-tools, private reasoning/session boundaries, receipts, DLP, and approval authority remain unchanged. The toolkit default remains unset and qualification does not recommend a provider-specific cap. Filter survivors are still labeled confirmed upstream, so toolkit treats them as unverified and requires current code, test, and trusted evidence re-checking.",
       "published_at": "2026-08-31T10:06:30Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.1",
       "status": "tested",
       "version": "1.11.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "20bbf9ebcce58a1951068cb19fd27e012e42b24b18c4c7dff61d3d6870e3f5ea",
+          "size": 57749072
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "8c1a58cacca6d82d4616f121e07bd7c586a2e6c88d5b6688e3bfedf135d17ff4",
+          "size": 54794130
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "fad3c62314478822c1e90f858f3e06b3f8dc5ff0034933927c3ecd7faa5d3731",
+          "size": 56008866
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "3d74d764d9a94e0113791a6f8a04da7aebb225838867d8445f6331fb23e26b99",
+          "size": 52691106
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "6adfb158fbf82c2f2fed05f920b9b4eedd369a14e7f36d4f60bd08041f8248dc",
+          "size": 57467392
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "5e82df7bad7cf2f35276bc50ec0d8c4a23dedf877543a73ef4fc51ef3e237933",
+          "size": 53436928
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "1d997d5ced335750e50df8af0d8a0ec8b9978937d1f26047b0a2114b7a8fa9e1",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.2.json",
+      "evidence_sha256": "b4aabea8626cf35102c563e2eaa678e950e53f464b3a1c1032ecb55083434559",
+      "human_conclusion": "Compatible after hosted checksum-verified Linux qualification in workflow 33508349494 and direct adjacent source review. OCR 1.11.2 corrects built-in language routing so .mjs/.cjs use JavaScript Rules and .cxx/.hxx use C++ Rules; .svh remains excluded. Result and manifest schemas, completion cap 16384, explicit positive completion-cap transport, default medium effort, effective max-tools, private session/reasoning boundaries, receipt v7, DLP, telemetry ownership, and approval authority remain unchanged. Viewer URL opening is not invoked by the toolkit; remote-MCP and localization changes are documentation-only; the nested pages Go module only excludes site node_modules from upstream Go package enumeration.",
+      "published_at": "2026-09-01T13:45:04Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.2",
+      "status": "tested",
+      "version": "1.11.2"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "e2dfc9a80f2368209c0238b94aab0bb2d4d9839eb08c7fcbebb7a5897e05634c",
+          "size": 57791184
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "515cd92ce300b62dea2bcaf53e910cdf57b681e1d58bbd0a9e8e49617bca52fa",
+          "size": 54828322
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb",
+          "size": 56049826
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "e04a44bec440c20c22141678412052e976a8bbb698824482a1f8832dfc7a0687",
+          "size": 52756642
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "d643d81f39eeba14c9439e2432ec263f9a2b90e606dd7e639eb5340dfbd3d643",
+          "size": 57510400
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "56d1a9e12dd053272649a1435484cf9c89bbdecf070a87c7c58e13dc84b9f0f9",
+          "size": 53474816
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "472a3ce64834f4909bc9fac50e6de08a3c8ef5c0489b755dd1d2b19c14c8792e",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.3.json",
+      "evidence_sha256": "6ad0e1f607b2ddcbb9e7b25e4432d6102ec22d7ef6847c2858c8fb22d38cc0f2",
+      "human_conclusion": "Compatible after hosted checksum-verified Linux qualification in workflow 33725971286, independent Darwin arm64 checksum/version readback, adjacent v1.11.2...v1.11.3 source review, and deterministic toolkit boundary tests. The toolkit removes inherited OCR_RAW_LOGGING from preview and review children. Failed-tool telemetry is bounded, credential-redacted console diagnostics only: valid review findings, summaries, manifests, and posting transactions survive absent, malformed, non-zero, hostile, or contradictory additive diagnostics, while receipt v8 keeps only a closed state and verified aggregate. Toolkit action receipt v3 remains authoritative for completed evidence. SIGTERM handling is compatible with toolkit masking and cleanup; untracked-file propagation concerns workspace mode while production uses immutable --from/--to refs; VS Code dependency updates are not consumed.",
+      "published_at": "2026-09-03T03:32:58Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.3",
+      "status": "tested",
+      "version": "1.11.3"
     }
   ],
   "schema_version": 1,

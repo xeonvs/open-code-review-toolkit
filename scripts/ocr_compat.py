@@ -429,13 +429,17 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 "threshold_files": 4,
             }:
                 _fail(f"evidence does not qualify small-change grouping behavior for {version}")
-            if _version(version) >= (1, 11, 1) and contracts.get("language_rule_probe") != {
+            expected_language_probe = {
                 "excluded_extensions": [".svh"],
-                "extensions": [".pug", ".sv", ".v", ".vhd", ".vhdl", ".vh"],
+                "extensions": _expected_language_rule_extensions(version),
                 "result": "passed",
                 "rule_source": "system_builtin",
-                "selected": 6,
-            }:
+                "selected": len(_expected_language_rule_extensions(version)),
+            }
+            if (
+                _version(version) >= (1, 11, 1)
+                and contracts.get("language_rule_probe") != expected_language_probe
+            ):
                 _fail(f"evidence does not qualify built-in language rules for {version}")
             if contracts.get("completion_cap_probe") != {
                 "explicit": 4_096,
@@ -2004,7 +2008,16 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
     }
 
 
-def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _expected_language_rule_extensions(version: str) -> list[str]:
+    """Return the canonical sorted extension projection for one OCR release."""
+
+    extensions = {".pug", ".sv", ".v", ".vh", ".vhd", ".vhdl"}
+    if _version(version) >= (1, 11, 2):
+        extensions.update({".cjs", ".cxx", ".hxx", ".mjs"})
+    return sorted(extensions)
+
+
+def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"
@@ -2015,14 +2028,31 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    supported_paths = (
+    qualified_rules = {
         "views/page.pug",
         "rtl/module.v",
         "rtl/include.vh",
         "rtl/module.sv",
         "rtl/entity.vhd",
         "rtl/entity.vhdl",
-    )
+    }
+    exact_patterns: dict[str, str] = {}
+    if _version(version) >= (1, 11, 2):
+        qualified_rules.update(
+            {
+                "src/module.mjs",
+                "src/module.cjs",
+                "native/source.cxx",
+                "native/header.hxx",
+            }
+        )
+        exact_patterns = {
+            "src/module.mjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
+            "src/module.cjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
+            "native/source.cxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
+            "native/header.hxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
+        }
+    supported_paths = tuple(sorted(qualified_rules))
     unsupported_path = "rtl/include.svh"
     paths = (*supported_paths, unsupported_path)
     for path in paths:
@@ -2082,8 +2112,15 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
             or "Pattern: " not in output
         ):
             _fail("candidate did not resolve a qualified built-in language rule")
+        expected_pattern = exact_patterns.get(path)
+        if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
+            _fail(f"candidate resolved the wrong built-in language rule for {path}")
+    extensions = sorted(Path(path).suffix for path in supported_paths)
+    expected_extensions = _expected_language_rule_extensions(version)
+    if extensions != expected_extensions:
+        _fail("language probe paths disagree with the canonical extension projection")
     return {
-        "extensions": [".pug", ".sv", ".v", ".vhd", ".vhdl", ".vh"],
+        "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
         "result": "passed",
         "rule_source": "system_builtin",
@@ -2241,7 +2278,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         contracts["small_change_grouping_probe"] = _small_change_grouping_probe(
             binary, version, directory
         )
-        contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
+        contracts["language_rule_probe"] = _language_rule_probe(binary, version, directory)
     if _version(version) >= (1, 9, 10):
         contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
     if thinking_probe is not None:

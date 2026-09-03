@@ -13,8 +13,11 @@ from typing import Any
 
 from ocr_toolkit.evidence.store.atomic import atomic_write
 
-ACTION_RECEIPT_SCHEMA = "ocr.evidence-action-receipt/v2"
+ACTION_RECEIPT_SCHEMA = "ocr.evidence-action-receipt/v3"
 EVIDENCE_ACTIONS = ("summary", "list", "get", "search", "coverage")
+UNATTRIBUTED_ACTION = "unattributed"
+ACTION_RECEIPT_BUCKETS = (*EVIDENCE_ACTIONS, UNATTRIBUTED_ACTION)
+ACTION_RECEIPT_STATES = ("attempted", "completed")
 MAX_ACTION_CALLS = 1_000_000_000
 MAX_ACTION_RECEIPT_BYTES = 4_096
 
@@ -45,23 +48,35 @@ def _serialized_receipt_update(path: Path) -> Iterator[None]:
         os.close(descriptor)
 
 
-def _validated_counts(value: Any) -> dict[str, int] | None:
+def _validated_counts(value: Any) -> dict[str, dict[str, int]] | None:
     if not isinstance(value, dict) or set(value) != {"schema_version", "actions"}:
         return None
     actions = value.get("actions")
     if value.get("schema_version") != ACTION_RECEIPT_SCHEMA or not isinstance(actions, dict):
         return None
-    if set(actions) != set(EVIDENCE_ACTIONS):
+    if set(actions) != set(ACTION_RECEIPT_STATES):
         return None
+    if any(not isinstance(actions[state], dict) for state in ACTION_RECEIPT_STATES):
+        return None
+    attempted = actions["attempted"]
+    completed = actions["completed"]
+    if set(attempted) != set(ACTION_RECEIPT_BUCKETS) or set(completed) != set(EVIDENCE_ACTIONS):
+        return None
+    counts = (*attempted.values(), *completed.values())
     if any(
         not isinstance(count, int) or isinstance(count, bool) or not 0 <= count <= MAX_ACTION_CALLS
-        for count in actions.values()
+        for count in counts
     ):
         return None
-    return {action: actions[action] for action in EVIDENCE_ACTIONS}
+    if any(completed[action] > attempted[action] for action in EVIDENCE_ACTIONS):
+        return None
+    return {
+        "attempted": {action: attempted[action] for action in ACTION_RECEIPT_BUCKETS},
+        "completed": {action: completed[action] for action in EVIDENCE_ACTIONS},
+    }
 
 
-def read_action_receipt(path: Path) -> dict[str, int] | None:
+def read_action_receipt(path: Path) -> dict[str, dict[str, int]] | None:
     """Read one bounded receipt or return unavailable for any unsafe shape."""
 
     flags = os.O_RDONLY
@@ -94,10 +109,10 @@ def read_action_receipt(path: Path) -> dict[str, int] | None:
     return _validated_counts(value)
 
 
-def record_action(path: Path, action: object) -> None:
-    """Atomically increment one completed action without retaining arguments."""
+def record_action(path: Path, action: object, *, completed: bool = False) -> None:
+    """Atomically increment one attempted or completed action without retaining arguments."""
 
-    if action not in EVIDENCE_ACTIONS:
+    if action not in ACTION_RECEIPT_BUCKETS or (completed and action not in EVIDENCE_ACTIONS):
         raise ValueError("evidence action is outside the closed receipt enum")
     with _serialized_receipt_update(path):
         counts = read_action_receipt(path)
@@ -110,13 +125,22 @@ def record_action(path: Path, action: object) -> None:
         if exists and counts is None:
             raise ValueError("evidence action receipt is malformed")
         if counts is None:
-            counts = dict.fromkeys(EVIDENCE_ACTIONS, 0)
-        if counts[action] >= MAX_ACTION_CALLS:
+            counts = {
+                "attempted": dict.fromkeys(ACTION_RECEIPT_BUCKETS, 0),
+                "completed": dict.fromkeys(EVIDENCE_ACTIONS, 0),
+            }
+        state = "completed" if completed else "attempted"
+        if counts[state][action] >= MAX_ACTION_CALLS:
             raise ValueError("evidence action receipt exceeds the count bound")
-        counts[action] += 1
+        if completed and counts["completed"][action] >= counts["attempted"][action]:
+            raise ValueError("completed evidence action has no authenticated attempt")
+        counts[state][action] += 1
         payload = {
             "schema_version": ACTION_RECEIPT_SCHEMA,
-            "actions": {name: counts[name] for name in EVIDENCE_ACTIONS},
+            "actions": {
+                "attempted": {name: counts["attempted"][name] for name in ACTION_RECEIPT_BUCKETS},
+                "completed": {name: counts["completed"][name] for name in EVIDENCE_ACTIONS},
+            },
         }
         atomic_write(
             path,

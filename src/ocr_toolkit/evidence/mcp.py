@@ -22,7 +22,7 @@ from ocr_toolkit.context.mcp import (
     tool_definitions,
 )
 from ocr_toolkit.context.store import ContextStore
-from ocr_toolkit.evidence.actions import record_action
+from ocr_toolkit.evidence.actions import UNATTRIBUTED_ACTION, record_action
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
@@ -785,21 +785,35 @@ def handle_request(
             return _error(request_id, -32602, "Invalid tool call")
         name = params.get("name")
         if isinstance(name, str) and name in {TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME}:
+            arguments = params.get("arguments", {})
+            if name == TOOL_NAME:
+                action = arguments.get("action") if isinstance(arguments, dict) else None
+                attempt_action = (
+                    action
+                    if isinstance(action, str) and action in {"summary", "list", "get"}
+                    else UNATTRIBUTED_ACTION
+                )
+            else:
+                action = "search" if name == SEARCH_TOOL_NAME else "coverage"
+                attempt_action = action
+            attempt_recorded = action_receipt_path is None
+            if action_receipt_path is not None:
+                try:
+                    record_action(action_receipt_path, attempt_action)
+                except (OSError, ValueError):
+                    pass
+                else:
+                    attempt_recorded = True
             try:
-                result = call_named_tool(store, str(name), params.get("arguments", {}))
+                result = call_named_tool(store, str(name), arguments)
             except EvidenceMCPError as exc:
                 return _success(
                     request_id,
                     {"content": [{"type": "text", "text": str(exc)}], "isError": True},
                 )
-            if action_receipt_path is not None:
-                arguments = params.get("arguments", {})
-                if name == TOOL_NAME:
-                    action = arguments.get("action") if isinstance(arguments, dict) else None
-                else:
-                    action = "search" if name == SEARCH_TOOL_NAME else "coverage"
+            if action_receipt_path is not None and attempt_recorded:
                 try:
-                    record_action(action_receipt_path, action)
+                    record_action(action_receipt_path, action, completed=True)
                 except (OSError, ValueError):
                     pass
             return _success(request_id, result)

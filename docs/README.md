@@ -10,6 +10,7 @@ This page routes readers to the canonical document for each topic. It does not r
 - [engineering/README.md](engineering/README.md)
 - [gitlab.md](gitlab.md)
 - [operations.md](operations.md)
+- [review-decision-flow.md](review-decision-flow.md)
 - [release.md](release.md)
 - [review-context.md](review-context.md)
 - [security.md](security.md)
@@ -20,6 +21,7 @@ This page routes readers to the canonical document for each topic. It does not r
 - [GitLab integration](gitlab.md) — installation, operating modes, bot setup, and provider behavior.
 - [Environment configuration](configuration.md) — supported variables, owners, exact defaults, and trust boundaries.
 - [GitLab review operations](operations.md) — posting, approval, discussion commands, reruns, and failure handling.
+- [Review decision flow](review-decision-flow.md) — canonical Mermaid maps for execution, diagnostics, DLP, publication, and later actions.
 - [Bounded review context](review-context.md) — context modes, policy selection, adapters, DLP, store/MCP, and remediation threads.
 - [OCR compatibility](compatibility.md) — supported upstream versions, qualification, and checksums.
 - [Security and trust model](security.md) — threat boundaries and safe deployment requirements.

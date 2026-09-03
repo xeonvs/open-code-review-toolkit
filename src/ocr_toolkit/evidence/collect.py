@@ -50,8 +50,9 @@ def collect_repository_evidence(
     base_ref: str | None = None,
     head_ref: str | None = None,
     policy_ref: str | None = None,
+    include_policy_records: bool = True,
 ) -> EvidenceStore:
-    """Build one evidence store from immutable refs and existing bounded collectors."""
+    """Build evidence, optionally omitting target-derived policy authority records."""
 
     reader = GitRepositoryReader(root or Path.cwd())
     base_sha, head_sha = _commit_refs(reader, base_ref, head_ref)
@@ -70,13 +71,16 @@ def collect_repository_evidence(
         changed_paths=changed,
         coverage_sink=base_coverage,
     )
-    policy_facts, policy_diagnostics = collect_ref_facts(
-        reader,
-        policy_sha,
-        RefRole.POLICY,
-        changed_paths=changed,
-    )
-    policy_facts = [record for record in policy_facts if record.kind in POLICY_KINDS]
+    if include_policy_records:
+        policy_facts, policy_diagnostics = collect_ref_facts(
+            reader,
+            policy_sha,
+            RefRole.POLICY,
+            changed_paths=changed,
+        )
+        policy_facts = [record for record in policy_facts if record.kind in POLICY_KINDS]
+    else:
+        policy_facts, policy_diagnostics = [], []
     policy = EvidenceSnapshot(
         RefRole.POLICY,
         policy_sha,

@@ -48,6 +48,78 @@ class MCPConfigTests(unittest.TestCase):
         ):
             mcp_config.verify_mcp_composition(composition)
 
+    def test_constrained_composition_rejects_direct_external_server(self) -> None:
+        external = mcp_config.MCPServerConfig(
+            name="synthetic_docs",
+            transport="remote",
+            command=None,
+            url="https://mcp.synthetic.invalid/v1",
+            args=[],
+            tools=["docs_read"],
+            setup="",
+            env=[],
+            headers={},
+            secret_values=[],
+        )
+        with self.assertRaisesRegex(mcp_config.MCPConfigError, "do not allow external"):
+            mcp_config.compose_mcp_servers(
+                [external], replace=True, profile="gitlab_mr", allow_external=False
+            )
+
+    def test_constrained_composition_rejects_inherited_external_even_with_replace(self) -> None:
+        current = {
+            "mcp_servers": {
+                "remote": {
+                    "type": "remote",
+                    "url": "https://mcp.synthetic.invalid/v1",
+                    "tools": ["docs_read"],
+                }
+            }
+        }
+        for replace in (False, True):
+            with (
+                self.subTest(replace=replace),
+                patched_attr(mcp_config, "read_ocr_config", lambda: current),
+                self.assertRaisesRegex(mcp_config.MCPConfigError, "inherited external"),
+            ):
+                mcp_config.compose_mcp_servers(
+                    [], replace=replace, profile="gitlab_mr", allow_external=False
+                )
+
+    def test_constrained_composition_rejects_malformed_inherited_registry(self) -> None:
+        for current in (
+            {"mcp_servers": []},
+            {"mcp_servers": {7: {}}},
+            {"mcp_servers": {"external": "malformed"}},
+        ):
+            with (
+                self.subTest(current=current),
+                patched_attr(mcp_config, "read_ocr_config", lambda: current),
+                self.assertRaises(mcp_config.MCPConfigError),
+            ):
+                mcp_config.compose_mcp_servers(
+                    [], replace=True, profile="gitlab_mr", allow_external=False
+                )
+
+    def test_constrained_composition_allows_only_rebuilt_builtin(self) -> None:
+        current = {
+            "mcp_servers": {
+                mcp_config.BUILTIN_EVIDENCE_SERVER: {
+                    "type": "stdio",
+                    "command": "stale",
+                    "tools": [mcp_config.TOOL_NAME],
+                }
+            }
+        }
+        with patched_attr(mcp_config, "read_ocr_config", lambda: current):
+            composition = mcp_config.compose_mcp_servers(
+                [], replace=True, profile="gitlab_mr", allow_external=False
+            )
+
+        self.assertEqual(set(composition.payload), {mcp_config.BUILTIN_EVIDENCE_SERVER})
+        self.assertEqual(composition.external_servers, ())
+        self.assertEqual(composition.capabilities[0].server, mcp_config.BUILTIN_EVIDENCE_SERVER)
+
         mismatched = {"mcp_servers": {mcp_config.BUILTIN_EVIDENCE_SERVER: {}}}
         with (
             patched_attr(mcp_config, "read_ocr_config", lambda: mismatched),
@@ -1497,7 +1569,7 @@ class MCPConfigTests(unittest.TestCase):
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.11.1\n", stderr=""
+            args=["ocr", "--version"], returncode=0, stdout="ocr 1.11.3\n", stderr=""
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

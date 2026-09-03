@@ -35,6 +35,7 @@ from ocr_toolkit.providers.gitlab_identity import (
     fetch_current_user_identity,
     valid_discussion_id,
 )
+from ocr_toolkit.review_identity import effective_reviewed_sha
 
 
 @dataclass(frozen=True)
@@ -900,14 +901,13 @@ def get_diff_refs(config: GitLabConfig) -> dict[str, str] | None:
         )
         return None
 
-    candidate_head_shas: list[str] = []
-    for sha in (
-        getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA").strip(),
-        getenv("CI_COMMIT_SHA").strip(),
-    ):
-        if sha and sha not in candidate_head_shas and not re.fullmatch(r"0+", sha):
-            candidate_head_shas.append(sha)
-    if not candidate_head_shas:
+    reviewed_head = effective_reviewed_sha(
+        {
+            "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA"),
+            "CI_COMMIT_SHA": getenv("CI_COMMIT_SHA"),
+        }
+    )
+    if not reviewed_head:
         print(
             "CI MR source/head commit SHA is unavailable; inline comments will fall back to notes.",
             file=sys.stderr,
@@ -915,20 +915,17 @@ def get_diff_refs(config: GitLabConfig) -> dict[str, str] | None:
         return None
 
     matching_version = None
-    for candidate_sha in candidate_head_shas:
-        for version in versions:
-            if not isinstance(version, dict):
-                continue
-            if str(version.get("head_commit_sha") or "") == candidate_sha:
-                matching_version = version
-                break
-        if matching_version is not None:
+    for version in versions:
+        if not isinstance(version, dict):
+            continue
+        if str(version.get("head_commit_sha") or "") == reviewed_head:
+            matching_version = version
             break
 
     if matching_version is None:
         print(
-            "GitLab MR versions do not include CI head SHA candidate(s) "
-            f"{', '.join(candidate_head_shas)}; "
+            "GitLab MR versions do not include the effective CI reviewed head "
+            f"{reviewed_head}; "
             "inline comments will fall back to notes.",
             file=sys.stderr,
         )

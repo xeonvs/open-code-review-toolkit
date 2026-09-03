@@ -66,11 +66,12 @@ GITLAB_DEFAULTS = {
     "CI_PIPELINE_ID": "Omitted",
     "CI_JOB_ID": "Omitted",
     "CI_PIPELINE_SOURCE": "None",
+    "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
 }
 
 EXAMPLE_DEFAULTS = {
-    "OCR_VERSION": "v1.11.1",
-    "OCR_SHA256": "1cdc7d1f776f1cdb69850130b930e40f64accc86ecaf09600573b3600456322f",
+    "OCR_VERSION": "v1.11.3",
+    "OCR_SHA256": "9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
@@ -109,6 +110,10 @@ REDACTION_ONLY = {
     "OCR_LLM_AUTH_TOKEN",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
+}
+
+CHILD_ENVIRONMENT_DENYLIST = {
+    "OCR_RAW_LOGGING",
 }
 
 REMOVED_PUBLIC_INPUTS = {
@@ -203,6 +208,7 @@ def test_documented_environment_tables_are_complete_and_exact() -> None:
 
     documented_names = set(RUNTIME_DEFAULTS) | set(GITLAB_DEFAULTS) | set(EXAMPLE_DEFAULTS)
     assert documented_names.isdisjoint(REDACTION_ONLY)
+    assert documented_names.isdisjoint(CHILD_ENVIRONMENT_DENYLIST)
     assert REDACTION_ONLY.issubset(SENSITIVE_ENV_NAMES)
     assert documented_names.isdisjoint(REMOVED_PUBLIC_INPUTS | {"OCR_USE_ANTHROPIC"})
 
@@ -229,6 +235,7 @@ def test_source_environment_inventory_matches_the_documented_contract() -> None:
         set(RUNTIME_DEFAULTS)
         | (set(GITLAB_DEFAULTS) - {"CI_PIPELINE_SOURCE"})
         | REDACTION_ONLY
+        | CHILD_ENVIRONMENT_DENYLIST
         | {"OCR_USE_ANTHROPIC"}
     )
     assert source_names == expected
@@ -299,12 +306,13 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         encoding="utf-8"
     )
     for name, value in {
-        "OCR_VERSION": "v1.11.1",
+        "OCR_VERSION": "v1.11.3",
         "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "0",
         "OCR_MAX_TOKENS_BUDGET": "0",
         "OCR_REVIEW_EFFORT": "medium",
+        "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
     }.items():
         assert f'{name}: "{value}"' in workflow
     assert (

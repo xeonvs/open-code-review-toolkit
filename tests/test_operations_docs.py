@@ -12,6 +12,7 @@ GITLAB_EXAMPLE = PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.ym
 GITLAB_EXAMPLES = PROJECT_ROOT / "examples" / "gitlab"
 CODE_OF_CONDUCT = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
 SIGNAL_OWNERSHIP = PROJECT_ROOT / "docs" / "engineering" / "review_signal_ownership.md"
+DECISION_FLOW = PROJECT_ROOT / "docs" / "review-decision-flow.md"
 
 
 def test_readme_product_and_security_badges_link_to_authoritative_results() -> None:
@@ -98,6 +99,7 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
         "configuration.md",
         "gitlab.md",
         "operations.md",
+        "review-decision-flow.md",
         "review-context.md",
         "security.md",
         "development.md",
@@ -133,6 +135,8 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
 
     for phrase in (
         "Source-to-signal matrix",
+        "receipt v8",
+        "action-receipt-v3 attempted/completed accounting",
         "Group labels are model-produced",
         "sorted changed paths",
         "no exporter of its own",
@@ -145,6 +149,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
         assert phrase in audit
     assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
     assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
+    assert "Current receipt v8 adds immutable target/protection identity" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
@@ -188,6 +193,35 @@ def test_operations_guide_documents_lifecycle_contract() -> None:
     assert "`api` scope" in operations
     assert "fingerprint" in operations
     assert "previous review" in operations
+
+
+def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> None:
+    """Keep one linked detailed flow aligned with signal-preserving publication."""
+
+    flow = DECISION_FLOW.read_text(encoding="utf-8")
+    strategy = (PROJECT_ROOT / "docs" / "engineering" / "toolkit_strategy.md").read_text(
+        encoding="utf-8"
+    )
+    root_instructions = (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert flow.count("```mermaid") == 3
+    for color in ("#d1fae5", "#ffedd5", "#fee2e2", "#f3f4f6", "#dbeafe"):
+        assert flow.count(color) == 3
+    for phrase in (
+        "core integrity boundary deliberately precedes additive diagnostics",
+        "cannot replace an otherwise valid manifest, findings, summary, or posting transaction",
+        "toolkit action receipt v3 remains authoritative",
+        "not a local-mode exception",
+        "not an automatic-approval feature",
+        "publication owns review-signal delivery",
+        "receipt v8",
+    ):
+        assert phrase in flow
+    assert "review-decision-flow.md" in strategy
+    assert "docs/review-decision-flow.md" in root_instructions
+    assert (
+        "the review decision flow for execution or publication branch changes" in root_instructions
+    )
 
 
 def test_legacy_commands_are_only_documented_as_removed() -> None:
@@ -249,7 +283,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         assert "provider-specific" in document
     for document in (configuration, operations, gitlab):
         assert "OCR_LLM_MAX_COMPLETION_TOKENS=4096" not in document
-    current_compatibility = compatibility.split("### OCR 1.11.1 — toolkit 0.8.7 target", 1)[1]
+    current_compatibility = compatibility.split("### OCR 1.11.3 — toolkit 0.9.0 target", 1)[1]
     assert "explicit positive completion-cap transport" in current_compatibility
     assert "default remains unset" in current_compatibility
     assert "provider-specific cap" in current_compatibility
@@ -360,9 +394,9 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v6" in configuration
-    assert "Receipt v1-v5" in configuration
-    assert "Receipt v1-v5" in operations
+    assert "receipt v8" in configuration
+    assert "Receipt v1-v7" in configuration
+    assert "Receipt v1-v7" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "Every configured direct external MCP" in configuration
     assert "required context degradation" in operations
@@ -371,7 +405,7 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
     assert "sole stdio exception" in configuration
 
 
-def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
+def test_builtin_search_coverage_and_receipt_v8_boundaries_are_public() -> None:
     """Document efficient routing without exposing search or coverage arguments."""
 
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -391,12 +425,14 @@ def test_builtin_search_coverage_and_receipt_v6_boundaries_are_public() -> None:
         "at most eight literal tokens",
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
-        "action receipt v2",
-        "Receipt v6",
+        "action receipt v3",
+        "Receipt v8",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
-    assert "Zero action counters, queries, scopes, IDs" in operations
+    assert (
+        "Zero completed action counters, unattributed attempts, queries, scopes, IDs" in operations
+    )
     assert "arguments, queries, scopes, IDs, and results stay private" in gitlab
 
 
@@ -439,6 +475,7 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         "enriched-discussions.gitlab-ci.yml",
         "identity-only.gitlab-ci.yml",
         "metadata.gitlab-ci.yml",
+        "unprotected-target.gitlab-ci.yml",
     }
     assert {path.name for path in mode_root.glob("*.yml")} == expected_modes
     for mode in expected_modes:
@@ -446,6 +483,60 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         assert recipe.startswith("variables:\n")
         assert "OCR_REVIEW_CONTEXT_MODE" in recipe
         assert "OCR_AUTO_APPROVE" in recipe
+
+
+def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
+    example = GITLAB_EXAMPLE.read_text(encoding="utf-8")
+    recipe = (GITLAB_EXAMPLES / "modes" / "unprotected-target.gitlab-ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "required"' in example
+    assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "unprotected"' in recipe
+    assert 'OCR_REVIEW_CONTEXT_MODE: "metadata"' in recipe
+    assert 'OCR_AUTO_APPROVE: "false"' in recipe
+
+    for document in (configuration, gitlab, security, bounded):
+        assert "OCR_GITLAB_TARGET_PROTECTION_MODE" in document
+        assert "required" in document
+        assert "unprotected" in document
+        assert "receipt v8" in document
+    for phrase in (
+        "Explicit empty strings",
+        "Context `off` and bounded untrusted `metadata`",
+        "any configured `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` value",
+        "direct external MCP",
+        "Structured target guidance and accepted decisions are omitted",
+        "approval executor and GitLab approval endpoint are not reached",
+    ):
+        assert phrase in configuration
+    limitation = (
+        "The target branch was not protected in GitLab. "
+        "This review ran in limited, comment-only mode."
+    )
+    assert limitation in configuration
+    assert limitation in gitlab
+    assert limitation in operations
+    assert "without turning complete coverage into partial coverage" in gitlab
+    assert "cannot reach the approval executor" in security
+    assert "does not change result completeness or status" in bounded
+
+    for phrase in (
+        "Use two merge requests for the recommended setup",
+        "Retrying that same merge request",
+        "generic fail-closed failure note",
+        "Code Owners and code-owner approval rules",
+        "green advisory pipeline",
+    ):
+        assert phrase in gitlab
+    assert "valid non-zero MR SHA takes precedence" in operations
+    assert "absent or all-zero MR SHA" in operations
+    assert "require a valid result, complete manifest coverage" in operations
 
 
 def test_examples_and_current_public_docs_use_product_oriented_language() -> None:
@@ -588,6 +679,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "OCR 1.10.2 — toolkit 0.8.5 target",
         "OCR 1.11.0 — toolkit 0.8.6 target",
         "OCR 1.11.1 — toolkit 0.8.7 target",
+        "OCR 1.11.2 — toolkit 0.9.0 qualification predecessor",
+        "OCR 1.11.3 — toolkit 0.9.0 target",
         "ocr.toolkit-advisory/v1",
         "ocr.llm-retry-report/v1",
         "not toolkit telemetry",
@@ -596,6 +689,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "Deploy toolkit 0.8.5 directly with OCR 1.10.2",
         "Deploy toolkit 0.8.6 directly with OCR 1.11.0",
         "Deploy toolkit 0.8.7 directly with OCR 1.11.1",
+        "Deploy toolkit 0.9.0 directly with OCR 1.11.3",
         "max-tools runtime behavior is unchanged",
         "max_completion_tokens=16384",
         "do not install OCR 1.9.10 as an intermediate step",

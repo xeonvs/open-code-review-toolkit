@@ -527,6 +527,7 @@ def compose_mcp_servers(
     replace: bool,
     profile: str = "local",
     context: MCPContextConfig | None = None,
+    allow_external: bool = True,
 ) -> MCPComposition:
     """Build OCR's registry from independent optional and mandatory MCP entries."""
 
@@ -534,17 +535,27 @@ def compose_mcp_servers(
         raise MCPConfigError("internal MCP execution profile is invalid")
     if profile == "gitlab_mr" and any(server.transport != "remote" for server in servers):
         raise MCPConfigError("GitLab merge-request reviews require external remote MCP")
+    if not allow_external and servers:
+        raise MCPConfigError("unprotected-target reviews do not allow external MCP servers")
 
     payload: dict[str, dict[str, Any]] = {}
     capabilities: list[MCPCapability] = []
     secret_values: list[str] = []
-    if not replace:
+    if not replace or not allow_external:
         try:
             current = read_ocr_config().get("mcp_servers", {})
         except OCRConfigError as exc:
             raise MCPConfigError(str(exc)) from exc
         if not isinstance(current, dict):
             raise MCPConfigError("Existing OCR mcp_servers value is not a JSON object")
+        if not allow_external and (
+            any(not isinstance(name, str) for name in current)
+            or any(name != BUILTIN_EVIDENCE_SERVER for name in current)
+        ):
+            raise MCPConfigError(
+                "unprotected-target reviews do not allow inherited external MCP servers"
+            )
+    if not replace:
         declared_names = {server.name for server in servers}
         for name, value in current.items():
             # Explicit operator input replaces the same named inherited entry;
@@ -632,7 +643,10 @@ def compose_mcp_servers(
 
 
 def build_mcp_composition(
-    *, profile: str = "local", context: MCPContextConfig | None = None
+    *,
+    profile: str = "local",
+    context: MCPContextConfig | None = None,
+    allow_external: bool = True,
 ) -> MCPComposition:
     """Parse environment settings into the complete profiled MCP composition."""
 
@@ -641,6 +655,7 @@ def build_mcp_composition(
         replace=_replace_configured_servers(),
         profile=profile,
         context=context,
+        allow_external=allow_external,
     )
 
 

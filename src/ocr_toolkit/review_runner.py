@@ -54,7 +54,7 @@ from ocr_toolkit.context.store import (
     ContextStoreError,
     PendingContextRecord,
 )
-from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS, read_action_receipt
+from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
     prepare_artifact_directory,
@@ -101,6 +101,7 @@ from ocr_toolkit.ocr_result import (
     toolkit_advisory_payload,
     transform_ocr_result,
 )
+from ocr_toolkit.posting.comments import compact_text
 from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
@@ -126,6 +127,7 @@ from ocr_toolkit.providers.gitlab_ci import acquire_gitlab_ci_outcomes
 from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
+from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
 BACKGROUND_PREVIEW_STDERR_BYTES = 64 * 1024
@@ -177,10 +179,45 @@ PROVIDER_PRIVATE_RESULT_KEYS = frozenset(
         "tool_choice",
     }
 )
+OCR_RAW_LOGGING_ENV = "OCR_RAW_LOGGING"
+MAX_TOOL_FAILURE_DETAILS_LOGGED = 20
+MAX_TOOL_FAILURE_NAME_CHARS = 256
+MAX_TOOL_FAILURE_PATH_CHARS = 4_096
+MAX_TOOL_FAILURE_ERROR_CHARS = 32_768
+MAX_TOOL_FAILURE_LOG_FIELD_CHARS = 500
 
 
 class ReviewRunnerError(Exception):
     """The local OCR review process could not be started safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class ToolFailureDetail:
+    """Carry one validated OCR diagnostic before bounded CI rendering."""
+
+    number: int
+    tool: str
+    path: str | None
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolFailureTelemetry:
+    """Separate additive OCR diagnostics from the authoritative review result."""
+
+    present: bool
+    valid: bool
+    failed: int | None
+    by_tool: dict[str, int]
+    details: tuple[ToolFailureDetail, ...]
+
+
+def _ocr_child_environment() -> dict[str, str]:
+    """Keep configured OCR inputs while disabling unowned raw provider capture."""
+
+    environment = dict(os.environ)
+    environment.pop(OCR_RAW_LOGGING_ENV, None)
+    return environment
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +313,8 @@ class ReviewIdentity:
     mr_author_id: int | None
     context_mode: str
     context: MergeRequestContext | None
+    target_sha: str
+    target_protection: str
 
     @property
     def context_state(self) -> str:
@@ -337,7 +376,7 @@ def _review_receipt(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -349,6 +388,12 @@ def _review_receipt(
     tool_calls = payload.get("tool_calls")
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     total_calls = tool_calls.get("total") if isinstance(tool_calls, dict) else None
+    if tool_calls is None and outcome.kind == "failed":
+        by_tool = {}
+        total_calls = 0
+    elif not isinstance(tool_calls, dict) or not isinstance(by_tool, dict):
+        raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
+    failure_telemetry = _tool_failure_telemetry(tool_calls)
     if outcome.kind == "skipped":
         legacy_message_invalid = (
             not outcome.manifest_present and payload.get("message") != "No supported files changed."
@@ -386,11 +431,10 @@ def _review_receipt(
                 raise ReviewRunnerError("OCR result exceeds the per-server MCP usage bound")
             usage[owner] = aggregate
     known_usage_total = sum(usage.values())
-    if tool_calls is None and outcome.kind == "failed":
-        total_calls = 0
     if (
         not isinstance(total_calls, int)
         or isinstance(total_calls, bool)
+        or not 0 <= total_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
         or total_calls < known_usage_total
     ):
         raise ReviewRunnerError("OCR result has inconsistent aggregate MCP usage")
@@ -399,35 +443,46 @@ def _review_receipt(
         for name in (TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME)
     }
     evidence_calls = sum(evidence_by_tool.values())
-    evidence_used = isinstance(evidence_calls, int) and evidence_calls > 0
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
         raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
-    if (
-        outcome.requires_evidence_mcp
-        and evidence_action_counts is not None
-        and evidence_action_counts.get("summary", 0) < 1
-    ):
-        raise ReviewRunnerError("OCR review did not call the mandatory evidence summary action")
-    action_attribution: dict[str, object]
-    if evidence_calls == 0 and evidence_action_counts is None:
-        action_attribution = {
-            "state": "verified",
-            **dict.fromkeys(EVIDENCE_ACTIONS, 0),
+    try:
+        action_attribution = verified_evidence_actions(
+            evidence_by_tool,
+            evidence_action_counts,
+            mandatory=outcome.requires_evidence_mcp,
+        )
+    except ValueError as exc:
+        raise ReviewRunnerError(str(exc)) from exc
+    completed = action_attribution.get("completed")
+    failure_state = (
+        "absent"
+        if not failure_telemetry.present
+        else "invalid"
+        if not failure_telemetry.valid
+        else "verified"
+    )
+    if failure_telemetry.valid and failure_telemetry.present and isinstance(completed, dict):
+        completed_by_tool = {
+            TOOL_NAME: sum(completed.get(name, 0) for name in ("summary", "list", "get")),
+            SEARCH_TOOL_NAME: completed.get("search", 0),
+            COVERAGE_TOOL_NAME: completed.get("coverage", 0),
         }
-    elif (
-        evidence_action_counts is not None
-        and set(evidence_action_counts) == set(EVIDENCE_ACTIONS)
-        and sum(evidence_action_counts[action] for action in ("summary", "list", "get"))
-        == evidence_by_tool[TOOL_NAME]
-        and evidence_action_counts["search"] == evidence_by_tool[SEARCH_TOOL_NAME]
-        and evidence_action_counts["coverage"] == evidence_by_tool[COVERAGE_TOOL_NAME]
-    ):
-        action_attribution = {
-            "state": "verified",
-            **{action: evidence_action_counts[action] for action in EVIDENCE_ACTIONS},
-        }
-    else:
-        action_attribution = {"state": "unavailable"}
+        if any(
+            completed_by_tool[name]
+            > evidence_by_tool[name] - failure_telemetry.by_tool.get(name, 0)
+            for name in completed_by_tool
+        ):
+            # The private action receipt is recorded by the toolkit MCP owner and
+            # remains the authority for completed evidence. OCR's additive
+            # diagnostic counters must not discard a valid review when the two
+            # observations disagree.
+            failure_state = "conflicting"
+    completed_actions = action_attribution.get("completed")
+    evidence_used = (
+        isinstance(completed_actions, dict)
+        and all(isinstance(count, int) for count in completed_actions.values())
+        and sum(completed_actions.values()) > 0
+    )
     capabilities = [
         {
             "server": capability.server,
@@ -475,6 +530,8 @@ def _review_receipt(
         "review": {
             "source_sha": identity.source_sha,
             "policy_sha": identity.policy_sha,
+            "target_sha": identity.target_sha,
+            "target_protection": identity.target_protection,
             "mr_author_id": identity.mr_author_id,
         },
         "context": context_receipt,
@@ -489,6 +546,10 @@ def _review_receipt(
             "actions": action_attribution,
         },
         "publication": {"state": "passed"},
+        "tool_execution": {
+            "state": failure_state,
+            "failed": failure_telemetry.failed if failure_state == "verified" else None,
+        },
         "cleanup": {"result": "passed"},
     }
 
@@ -839,7 +900,138 @@ def _safe_publication_warnings(
     return retained, len(value) - len(retained)
 
 
-def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[str, object]:
+def _tool_failure_telemetry(value: object) -> ToolFailureTelemetry:
+    """Parse additive OCR diagnostics without granting them result authority."""
+
+    if not isinstance(value, dict):
+        return ToolFailureTelemetry(False, True, None, {}, ())
+    present = {name for name in ("failure", "failure_by_tool", "failure_details") if name in value}
+    if not present:
+        return ToolFailureTelemetry(False, True, None, {}, ())
+    if present != {"failure", "failure_by_tool", "failure_details"}:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    total = value.get("total")
+    by_tool = value.get("by_tool")
+    failed = value.get("failure")
+    failed_by_tool = value.get("failure_by_tool")
+    details = value.get("failure_details")
+    if (
+        not isinstance(total, int)
+        or isinstance(total, bool)
+        or not 0 <= total <= MAX_TOOLKIT_MCP_USAGE_COUNT
+        or not isinstance(by_tool, dict)
+        or not isinstance(failed, int)
+        or isinstance(failed, bool)
+        or not 0 <= failed <= total
+        or not isinstance(failed_by_tool, dict)
+        or len(failed_by_tool) > MAX_TOOLKIT_MCP_USAGE_COUNT
+        or not isinstance(details, list)
+        or len(details) != failed
+    ):
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    normalized: dict[str, int] = {}
+    for name, count in failed_by_tool.items():
+        attempted = by_tool.get(name)
+        if (
+            not isinstance(name, str)
+            or not name
+            or len(name) > MAX_TOOL_FAILURE_NAME_CHARS
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            or not isinstance(attempted, int)
+            or isinstance(attempted, bool)
+            or count > attempted
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        normalized[name] = count
+    if sum(normalized.values()) != failed:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    detail_counts: Counter[str] = Counter()
+    call_numbers: set[int] = set()
+    normalized_details: list[ToolFailureDetail] = []
+    for detail in details:
+        if not isinstance(detail, dict) or set(detail) not in (
+            {"tool_call_number", "tool_name", "error"},
+            {"tool_call_number", "tool_name", "file_path", "error"},
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        number = detail.get("tool_call_number")
+        name = detail.get("tool_name")
+        error = detail.get("error")
+        file_path = detail.get("file_path")
+        if (
+            not isinstance(number, int)
+            or isinstance(number, bool)
+            or not 1 <= number <= total
+            or number in call_numbers
+            or not isinstance(name, str)
+            or name not in normalized
+            or not isinstance(error, str)
+            or not error
+            or len(error) > MAX_TOOL_FAILURE_ERROR_CHARS
+            or (
+                file_path is not None
+                and (not isinstance(file_path, str) or len(file_path) > MAX_TOOL_FAILURE_PATH_CHARS)
+            )
+        ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        call_numbers.add(number)
+        detail_counts[name] += 1
+        normalized_details.append(ToolFailureDetail(number, name, file_path, error))
+    if dict(detail_counts) != normalized:
+        return ToolFailureTelemetry(True, False, None, {}, ())
+    normalized_details.sort(key=lambda detail: detail.number)
+    return ToolFailureTelemetry(True, True, failed, normalized, tuple(normalized_details))
+
+
+def _safe_tool_failure_log_field(value: str) -> str:
+    """Redact and compact one OCR-controlled field before CI console output."""
+
+    return compact_text(redact_sensitive(value), MAX_TOOL_FAILURE_LOG_FIELD_CHARS)
+
+
+def _render_tool_failure_diagnostics(telemetry: ToolFailureTelemetry) -> tuple[str, ...]:
+    """Render bounded diagnostics for the local/CI console, never MR publication."""
+
+    if not telemetry.present:
+        return ()
+    if not telemetry.valid:
+        return (
+            "OCR tool failure diagnostics: malformed additive telemetry ignored; "
+            "authoritative review result retained.",
+        )
+    if not telemetry.failed:
+        return ()
+    lines = [f"OCR tool failures: {telemetry.failed} failed call(s)."]
+    for detail in telemetry.details[:MAX_TOOL_FAILURE_DETAILS_LOGGED]:
+        tool = _safe_tool_failure_log_field(detail.tool)
+        path = (
+            f" path={_safe_tool_failure_log_field(detail.path)}" if detail.path is not None else ""
+        )
+        error = _safe_tool_failure_log_field(detail.error)
+        lines.append(f"- call={detail.number} tool={tool}{path} error={error}")
+    omitted = telemetry.failed - min(telemetry.failed, MAX_TOOL_FAILURE_DETAILS_LOGGED)
+    if omitted:
+        lines.append(f"- ... {omitted} additional failed call(s) omitted")
+    return tuple(lines)
+
+
+def _print_tool_failure_diagnostics(telemetry: ToolFailureTelemetry | None) -> None:
+    """Write safe failed-tool detail to the current process stderr/CI job log."""
+
+    if telemetry is None:
+        return
+    for line in _render_tool_failure_diagnostics(telemetry):
+        print(line, file=sys.stderr)
+
+
+def _closed_tool_calls(
+    value: object,
+    *,
+    allowed_tools: frozenset[str],
+    failures: ToolFailureTelemetry | None = None,
+) -> dict[str, object]:
     """Project only bounded counters needed to prove model-side toolkit use."""
 
     if not isinstance(value, dict):
@@ -862,10 +1054,18 @@ def _closed_tool_calls(value: object, *, allowed_tools: frozenset[str]) -> dict[
         and not isinstance(count, bool)
         and 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
     }
-    return {"total": total, "by_tool": dict(sorted(projected.items()))}
+    closed: dict[str, object] = {
+        "total": total,
+        "by_tool": dict(sorted(projected.items())),
+    }
+    if failures is not None and failures.present and failures.valid:
+        closed["failure"] = failures.failed
+    return closed
 
 
-def _canonical_result_projection(payload: dict[str, object]) -> bytes:
+def _canonical_result_projection(
+    payload: dict[str, object], *, failures: ToolFailureTelemetry | None = None
+) -> bytes:
     """Serialize every publication and approval input into one closed comparison."""
 
     outcome = parse_result_outcome(payload)
@@ -885,7 +1085,9 @@ def _canonical_result_projection(payload: dict[str, object]) -> bytes:
         for comment in comments
     ]
     projected_tool_calls = _closed_tool_calls(
-        payload.get("tool_calls"), allowed_tools=PUBLIC_REVIEW_TOOL_CALL_NAMES
+        payload.get("tool_calls"),
+        allowed_tools=PUBLIC_REVIEW_TOOL_CALL_NAMES,
+        failures=failures,
     )
     projection = {
         "outcome": {
@@ -928,7 +1130,7 @@ def _publication_projection(
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return a DLP-safe result plus one exact v6 publication state."""
+    """Return a DLP-safe result plus one exact v8 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
@@ -942,21 +1144,40 @@ def _publication_projection(
                 allow_horizontal_tabs=allow_horizontal_tabs,
             )
         )
+    failures = _tool_failure_telemetry(payload.get("tool_calls"))
+    sanitization_payload = payload
+    raw_tool_calls = payload.get("tool_calls")
+    if failures.present and isinstance(raw_tool_calls, dict):
+        # The details are a validated local/CI diagnostic channel, not an MR
+        # publication sink or approval input. Remove them before generic DLP;
+        # their dedicated console renderer applies redaction and tighter bounds.
+        sanitization_payload = dict(payload)
+        sanitization_payload["tool_calls"] = {
+            key: value
+            for key, value in raw_tool_calls.items()
+            if key not in {"failure", "failure_by_tool", "failure_details"}
+        }
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
-        payload, budgets=budgets, matcher=matcher
+        sanitization_payload, budgets=budgets, matcher=matcher
     )
+    if failures.present:
+        sanitized["tool_calls"] = _closed_tool_calls(
+            payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
+        )
     if not sink_reasons and not private_reasons and redacted_fields == 0:
-        return payload, {"state": "passed"}, False
+        return sanitized if failures.present else payload, {"state": "passed"}, False
 
     try:
-        original_projection = _canonical_result_projection(payload)
+        original_projection = _canonical_result_projection(payload, failures=failures)
     except OcrResultContractError:
         original_projection = None
     outcome = parse_result_outcome(payload)
     publication_changed = bool(sink_reasons)
     if not publication_changed:
         try:
-            publication_changed = original_projection != _canonical_result_projection(sanitized)
+            publication_changed = original_projection != _canonical_result_projection(
+                sanitized, failures=failures
+            )
         except OcrResultContractError:
             publication_changed = True
     if publication_changed:
@@ -976,7 +1197,7 @@ def _publication_projection(
             "comments": comments,
             "warnings": warnings,
             "tool_calls": _closed_tool_calls(
-                payload.get("tool_calls"), allowed_tools=allowed_tools
+                payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
             ),
         }
         if outcome.budget_exceeded:
@@ -1021,7 +1242,7 @@ def _finalize_ocr_result(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
     *,
     forbidden: tuple[str, ...],
     toolkit_advisory: OcrToolkitAdvisory | None = None,
@@ -1031,16 +1252,18 @@ def _finalize_ocr_result(
     filtered = False
     publication: dict[str, object] = {"state": "passed"}
     usage: dict[str, int] = {}
+    failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
-        nonlocal filtered, publication, usage
+        nonlocal failure_telemetry, filtered, publication, usage
         for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
+        failure_telemetry = _tool_failure_telemetry(payload.get("tool_calls"))
         metadata = _review_receipt(
             payload,
             composition,
@@ -1053,11 +1276,17 @@ def _finalize_ocr_result(
         )
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
+        provider_receipt = identity.target_protection in {"protected", "unprotected"}
+        if provider_receipt:
+            if not toolkit_receipt_is_valid(metadata):
+                raise ReviewRunnerError("toolkit generated an invalid review receipt")
+        elif identity.target_protection != "local" or identity.mr_author_id is not None:
+            raise ReviewRunnerError("toolkit generated an invalid review identity")
         mcp = metadata.get("mcp")
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
-        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata}
-        if toolkit_advisory is not None:
+        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
+        if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
         return finalized
 
@@ -1065,6 +1294,13 @@ def _finalize_ocr_result(
         transform_ocr_result(result_path, finalize)
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
+    except ReviewRunnerError:
+        try:
+            result_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+    _print_tool_failure_diagnostics(failure_telemetry)
     return usage, filtered, publication
 
 
@@ -1073,7 +1309,7 @@ def _record_ocr_result_mcp_usage(
     composition: mcp_config.MCPComposition,
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
-    evidence_action_counts: dict[str, int] | None = None,
+    evidence_action_counts: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, int]:
     """Verify MCP use and bind the closed review-time receipt to the result."""
 
@@ -1320,6 +1556,7 @@ def _qualify_review_background(
                     stdin=subprocess.DEVNULL,
                     stdout=stdout_file,
                     stderr=stderr_file,
+                    env=_ocr_child_environment(),
                 )
         except OSError as exc:
             raise ReviewRunnerError(f"could not execute OCR background preview: {exc}") from exc
@@ -1510,6 +1747,7 @@ def _prepare_policy_context(
     reader = GitRepositoryReader(Path.cwd())
     context = None
     author_id = None
+    target_protection = "local"
     if is_merge_request_environment(os.environ):
         snapshot = acquire_review_snapshot(
             os.environ,
@@ -1520,27 +1758,53 @@ def _prepare_policy_context(
         policy_sha = reader.resolve_commit(snapshot.target_sha)
         context = snapshot.context
         author_id = snapshot.author_id
+        target_sha = policy_sha
+        target_protection = snapshot.target_protection
+        if target_protection == "unprotected":
+            if context_mode == "enriched":
+                raise ReviewRunnerError(
+                    "enriched review context requires a protected GitLab target branch"
+                )
+            if os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON") is not None:
+                raise ReviewRunnerError("unprotected-target reviews do not allow context adapters")
     else:
         if context_mode in {"metadata", "enriched"}:
             raise ReviewRunnerError(
                 f"{context_mode} review context requires a GitLab merge request"
             )
         policy_sha = refs.base
-    identity = ReviewIdentity(refs.head, policy_sha, author_id, context_mode, context)
+        target_sha = policy_sha
+    identity = ReviewIdentity(
+        refs.head,
+        policy_sha,
+        author_id,
+        context_mode,
+        context,
+        target_sha,
+        target_protection,
+    )
     rule = _one_option(ocr_args, "--rule")
     if rule is None:
+        if target_protection == "unprotected":
+            raise ReviewRunnerError(
+                "unprotected-target reviews require repository rules from the captured target commit"
+            )
         remove_private_artifact(artifacts.policy_rules)
         return identity, ocr_args
     repository_path = _repository_rule_path(rule, reader.root)
     if repository_path is None:
+        if target_protection == "unprotected":
+            raise ReviewRunnerError(
+                "unprotected-target reviews require repository rules from the captured target commit"
+            )
         remove_private_artifact(artifacts.policy_rules)
         return identity, ocr_args
     try:
         content = reader.read_blob(policy_sha, repository_path)
     except RepositoryEvidenceError as exc:
-        raise ReviewRunnerError("protected-target OCR rule is unavailable or unsafe") from exc
+        raise ReviewRunnerError("target OCR rule is unavailable or unsafe") from exc
     if content is None:
-        if author_id is not None:
+        if author_id is not None and target_protection == "protected":
             try:
                 setup_pending = _record_rules_path_setup(
                     reader,
@@ -1555,7 +1819,8 @@ def _prepare_policy_context(
                 ) from exc
             if setup_pending:
                 raise ReviewRunnerError("protected-target OCR rule path setup is pending")
-        raise ReviewRunnerError("protected-target OCR rule does not exist")
+        target_kind = "protected target" if target_protection == "protected" else "target"
+        raise ReviewRunnerError(f"{target_kind} OCR rule does not exist")
     policy_rules = artifacts.policy_rules
     write_private_bytes(policy_rules, content)
     return identity, _replace_rule_argument(ocr_args, rule, str(policy_rules))
@@ -1634,7 +1899,7 @@ def _bounded_combined_records(
 
 
 def _remediation_mutable_admitted(records: Sequence[ContextRecord]) -> bool:
-    """Report only admitted remediation as the receipt-v6 comment-only condition."""
+    """Report only admitted remediation as the receipt-v8 comment-only condition."""
 
     return any(
         record.mutable and record.resource_class == "remediation_thread" for record in records
@@ -1675,6 +1940,15 @@ def _prepare_enrichment(
 ) -> tuple[mcp_config.MCPContextConfig | None, EnrichmentReceipt | None]:
     """Acquire all external context before the one OCR model loop and commit it locally."""
 
+    if identity.target_protection == "unprotected":
+        if identity.context_mode == "enriched":
+            raise ReviewRunnerError(
+                "enriched review context requires a protected GitLab target branch"
+            )
+        if os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON") is not None:
+            raise ReviewRunnerError("unprotected-target reviews do not allow context adapters")
+        remove_private_artifact(artifacts.context_store)
+        return None, None
     if identity.context_mode != "enriched":
         remove_private_artifact(artifacts.context_store)
         return None, None
@@ -1972,7 +2246,7 @@ def run_evidence_review(
     usage: dict[str, int] = {}
     publication_filtered = False
     publication: dict[str, object] = {"state": "passed"}
-    evidence_action_counts: dict[str, int] | None = None
+    evidence_action_counts: dict[str, dict[str, int]] | None = None
     background_qualification = BackgroundQualification()
     preserve_authorized = False
     previous_handlers = _install_termination_handlers()
@@ -1984,7 +2258,10 @@ def run_evidence_review(
                 identity, requested=preserve_private_artifacts
             )
             store = collect_repository_evidence(
-                base_ref=refs.base, head_ref=refs.head, policy_ref=identity.policy_sha
+                base_ref=refs.base,
+                head_ref=refs.head,
+                policy_ref=identity.policy_sha,
+                include_policy_records=identity.target_protection != "unprotected",
             )
             head_sha = store.head.commit_sha if store.head else ""
             identifiers = invocation_identifiers(os.environ)
@@ -2003,11 +2280,13 @@ def run_evidence_review(
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
+                allow_external=identity.target_protection != "unprotected",
             )
             bootstrap = render_bootstrap(
                 store,
                 capabilities=composition.capabilities,
                 context_hints=enrichment.bootstrap_hints if enrichment is not None else None,
+                unprotected_target=identity.target_protection == "unprotected",
             )
             write_private_text(artifacts.bootstrap, bootstrap)
             mcp_config.apply_mcp_composition(composition)
@@ -2275,6 +2554,7 @@ def run_review(
                 stdin=subprocess.DEVNULL,
                 stdout=result_file,
                 stderr=stderr_file,
+                env=_ocr_child_environment(),
             )
     except OSError as exc:
         raise ReviewRunnerError(f"could not execute OCR: {exc}") from exc

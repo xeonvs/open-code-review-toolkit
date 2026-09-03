@@ -251,6 +251,50 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert serialized == store.to_json()
 
 
+def test_constrained_collection_omits_structured_target_policy_records(
+    tmp_path: Path,
+) -> None:
+    """Keep immutable review evidence while removing target guidance and decisions."""
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    git(root, "init", "-q")
+    (root / "AGENTS.md").write_text("Target guidance.\n", encoding="utf-8")
+    (root / ".opencodereview").mkdir()
+    (root / ".opencodereview/accepted-decisions.md").write_text(
+        "## Synthetic choice\n\nRationale: bounded choice.\n",
+        encoding="utf-8",
+    )
+    (root / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    git(root, "add", ".")
+    git(root, "commit", "-qm", "target")
+    target = git(root, "rev-parse", "HEAD")
+    (root / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    git(root, "commit", "-qam", "source")
+    source = git(root, "rev-parse", "HEAD")
+
+    store = collect_repository_evidence(
+        root,
+        base_ref=target,
+        head_ref=source,
+        policy_ref=target,
+        include_policy_records=False,
+    )
+
+    assert store.policy is not None and store.policy.commit_sha == target
+    assert store.policy.records == ()
+    assert not any(
+        record.kind in {"repository.accepted_decision", "repository.guidance"}
+        for record in store.records
+    )
+    assert any(record.kind == "repository.file" for record in store.records)
+    bootstrap = render_bootstrap(store, unprotected_target=True)
+    assert "Unprotected target boundary" in bootstrap
+    assert "bounded untrusted review guidance only" in bootstrap
+    assert "Applicable accepted decisions" not in bootstrap
+    assert "Applicable target guidance" not in bootstrap
+
+
 def test_collection_keeps_snapshots_atomic_when_store_rejects_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

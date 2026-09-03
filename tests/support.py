@@ -73,3 +73,109 @@ def gitlab_config(
         current_user_id=current_user_id,
         current_username=current_username,
     )
+
+
+def review_receipt_v8(
+    *,
+    usage: dict[str, int] | None = None,
+    attempted: dict[str, int] | None = None,
+    completed: dict[str, int] | None = None,
+    context_tool_usage: dict[str, int] | None = None,
+    mandatory: bool = True,
+) -> dict[str, Any]:
+    """Return one exact synthetic receipt v8 for posting-boundary tests."""
+
+    attempted = (
+        attempted
+        if attempted is not None
+        else {
+            "summary": 1,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+            "unattributed": 0,
+        }
+    )
+    completed = (
+        completed
+        if completed is not None
+        else {
+            "summary": 1,
+            "list": 0,
+            "get": 0,
+            "search": 0,
+            "coverage": 0,
+        }
+    )
+    context_tool_usage = (
+        context_tool_usage
+        if context_tool_usage is not None
+        else {"context_get": 0, "context_list": 0}
+    )
+    evidence_calls = sum(attempted.values())
+    builtin_calls = evidence_calls + sum(context_tool_usage.values())
+    usage = usage if usage is not None else {"ocr_toolkit_evidence": builtin_calls}
+    enriched = any(context_tool_usage.values())
+    builtin_tools = [
+        "ocr_toolkit_evidence",
+        "ocr_toolkit_evidence_search",
+        "ocr_toolkit_evidence_coverage",
+    ]
+    if enriched:
+        builtin_tools.extend(("context_list", "context_get"))
+    capabilities = [
+        {
+            "server": "ocr_toolkit_evidence",
+            "transport": "builtin",
+            "tools": builtin_tools,
+        }
+    ]
+    capabilities.extend(
+        {
+            "server": server,
+            "transport": "remote",
+            "tools": [f"{server}_read"],
+        }
+        for server in usage
+        if server != "ocr_toolkit_evidence"
+    )
+    return {
+        "schema_version": 8,
+        "review": {
+            "source_sha": "a" * 40,
+            "policy_sha": "b" * 40,
+            "target_sha": "b" * 40,
+            "target_protection": "protected",
+            "mr_author_id": 41,
+        },
+        "context": {
+            "mode": "enriched" if enriched else "off",
+            "state": "complete" if enriched else "disabled",
+            "classes": (
+                ["merge_request_metadata", "forge_discussions", "external_records"]
+                if enriched
+                else []
+            ),
+            "policy_digest": "c" * 64 if enriched else None,
+            "per_source": {},
+            "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
+            "required_degraded": False,
+            "mutable_admitted": False,
+            "tool_usage": context_tool_usage,
+        },
+        "mcp": {"capabilities": capabilities, "usage": usage},
+        "evidence": {
+            "mandatory": mandatory,
+            "used": sum(completed.values()) > 0,
+            "calls": evidence_calls,
+            "actions": {
+                "state": "verified",
+                "attempted": attempted,
+                "completed": completed,
+            },
+        },
+        "publication": {"state": "passed"},
+        "tool_execution": {"state": "absent", "failed": None},
+        "cleanup": {"result": "passed"},
+    }
