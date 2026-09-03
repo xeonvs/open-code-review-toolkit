@@ -1393,7 +1393,7 @@
         "semantic_grouping"
       ],
       "evidence": "compatibility/evidence/ocr-1.11.1.json",
-      "evidence_sha256": "24fc4c6850503c1dc1b613fd9792e36f4e405ca97e919ef9bfc1d1918efe5ef2",
+      "evidence_sha256": "08a125d2f10c4f99ef47a99e913408868dcd85e105c5c85c88c0abb31d0c77d2",
       "human_conclusion": "Compatible after source and behavioral review. Toolkit consumes bounded small-change grouping, project-rule confinement, selected-file session correction, and Pug/Verilog/SystemVerilog/VHDL review coverage; .svh remains excluded. Result and manifest schemas, completion cap 16384, explicit positive completion-cap transport, medium effort, effective max-tools, private reasoning/session boundaries, receipts, DLP, and approval authority remain unchanged. The toolkit default remains unset and qualification does not recommend a provider-specific cap. Filter survivors are still labeled confirmed upstream, so toolkit treats them as unverified and requires current code, test, and trusted evidence re-checking.",
       "published_at": "2026-08-31T10:06:30Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.1",

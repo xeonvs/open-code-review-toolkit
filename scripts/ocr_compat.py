@@ -431,29 +431,11 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
                 _fail(f"evidence does not qualify small-change grouping behavior for {version}")
             expected_language_probe = {
                 "excluded_extensions": [".svh"],
-                "extensions": [".pug", ".sv", ".v", ".vhd", ".vhdl", ".vh"],
+                "extensions": _expected_language_rule_extensions(version),
                 "result": "passed",
                 "rule_source": "system_builtin",
-                "selected": 6,
+                "selected": len(_expected_language_rule_extensions(version)),
             }
-            if _version(version) >= (1, 11, 2):
-                expected_language_probe.update(
-                    {
-                        "extensions": [
-                            ".cjs",
-                            ".cxx",
-                            ".hxx",
-                            ".mjs",
-                            ".pug",
-                            ".sv",
-                            ".v",
-                            ".vh",
-                            ".vhd",
-                            ".vhdl",
-                        ],
-                        "selected": 10,
-                    }
-                )
             if (
                 _version(version) >= (1, 11, 1)
                 and contracts.get("language_rule_probe") != expected_language_probe
@@ -2026,6 +2008,15 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
     }
 
 
+def _expected_language_rule_extensions(version: str) -> list[str]:
+    """Return the canonical sorted extension projection for one OCR release."""
+
+    extensions = {".pug", ".sv", ".v", ".vh", ".vhd", ".vhdl"}
+    if _version(version) >= (1, 11, 2):
+        extensions.update({".cjs", ".cxx", ".hxx", ".mjs"})
+    return sorted(extensions)
+
+
 def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
@@ -2124,8 +2115,12 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         expected_pattern = exact_patterns.get(path)
         if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
             _fail(f"candidate resolved the wrong built-in language rule for {path}")
+    extensions = sorted(Path(path).suffix for path in supported_paths)
+    expected_extensions = _expected_language_rule_extensions(version)
+    if extensions != expected_extensions:
+        _fail("language probe paths disagree with the canonical extension projection")
     return {
-        "extensions": sorted(Path(path).suffix for path in supported_paths),
+        "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
         "result": "passed",
         "rule_source": "system_builtin",

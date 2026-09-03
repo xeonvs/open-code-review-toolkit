@@ -126,9 +126,19 @@ attribution, detached-pipeline diagnostics, and OCR 1.11.2 compatibility.
     compatible direct path. The complete deterministic suite passed with 1,468 tests and 407 subtests at
     86.31% coverage; compatibility, Towncrier, Gitleaks, dependency audit, signatures, diff checks,
     deterministic double build, Twine, archive privacy, and clean wheel/sdist CLI smokes are green. The
-    owner-authorized retained-artifact OCR repeat remains pending. Close this gate only after its raw
-    result, terminal manifest coverage, action counters, and offline finalization all validate; do not
-    claim OCR completion or findings earlier.
+    owner-authorized retained-artifact OCR repeat then completed the exact
+    `b9a0e54af7f39a1db21e2a8f4780761e74782bf8..782b205b8f8a2a5a2491c4f25b2b444a5e40c16b`
+    range with all 20 selected items completed, no failed/reused/waived items, 144 total tool calls,
+    and six exactly reconciled attempted/completed evidence summaries. No posting occurred and every
+    raw private artifact remains retained. Its two supported findings are corrected in the current
+    reviewed slice: generated OCR 1.11.1 language evidence and validation now share one canonical
+    sorted extension projection, and local reviews no longer serialize receipt v7 with a non-GitLab
+    `local` protection value. Local finalization still enforces result, action, and DLP contracts but
+    remains receipt-less and approval-ineligible; any present invalid receipt still fails closed. The
+    focused remediation and documentation matrix passes 253 tests, compatibility validation, Towncrier,
+    Ruff format/check, and diff checks. Close this gate only after a copied retained result passes
+    offline finalization/readback under the corrected code; do not modify either retained OCR run or
+    run another semantic OCR review.
 11. [ ] Push the locally closed implementation, finish hosted checks and review with zero unresolved
     threads, mark the Draft PR ready, and exact-head squash merge. Delete the feature branch.
 12. [ ] Verify the protected-main TestPyPI development publication, create `release/v0.9.0`, set

@@ -78,6 +78,20 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     ]
 
 
+def test_language_probe_generation_and_validation_share_canonical_order() -> None:
+    """Keep regenerated evidence byte-compatible with the manifest validator."""
+
+    module = load_script()
+    for version in ("1.11.1", "1.11.2"):
+        evidence = module.load_json(
+            PROJECT_ROOT / "compatibility" / "evidence" / f"ocr-{version}.json"
+        )
+        extensions = evidence["contracts"]["language_rule_probe"]["extensions"]
+
+        assert extensions == module._expected_language_rule_extensions(version)
+        assert extensions == sorted(extensions)
+
+
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)

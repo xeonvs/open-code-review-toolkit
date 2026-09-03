@@ -1049,13 +1049,17 @@ def _finalize_ocr_result(
         )
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
-        if identity.mr_author_id is not None and not toolkit_receipt_is_valid(metadata):
-            raise ReviewRunnerError("toolkit generated an invalid review receipt")
+        provider_receipt = identity.target_protection in {"protected", "unprotected"}
+        if provider_receipt:
+            if not toolkit_receipt_is_valid(metadata):
+                raise ReviewRunnerError("toolkit generated an invalid review receipt")
+        elif identity.target_protection != "local" or identity.mr_author_id is not None:
+            raise ReviewRunnerError("toolkit generated an invalid review identity")
         mcp = metadata.get("mcp")
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
-        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata}
-        if toolkit_advisory is not None:
+        finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
+        if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
         return finalized
 

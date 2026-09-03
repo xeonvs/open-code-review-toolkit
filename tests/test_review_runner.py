@@ -28,13 +28,22 @@ from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore
 from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifacts
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
-from ocr_toolkit.posting import approval, settings
+from ocr_toolkit.posting import approval, settings, snapshot, workflow
 from ocr_toolkit.result_contract import parse_result_outcome
-from tests.support import patched_attr, patched_env
+from tests.support import gitlab_config, patched_attr, patched_env
 from tests.test_context_broker import ci_outcome
 from tests.test_context_policy import ci_policy_value, encoded_policy, remediation_policy_value
 
 DEFAULT_IDENTITY = review_runner.ReviewIdentity(
+    source_sha="a" * 40,
+    policy_sha="b" * 40,
+    mr_author_id=41,
+    context_mode="off",
+    context=None,
+    target_sha="b" * 40,
+    target_protection="protected",
+)
+LOCAL_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
     policy_sha="b" * 40,
     mr_author_id=None,
@@ -738,8 +747,8 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
             "target_sha": "b" * 40,
-            "target_protection": "local",
-            "mr_author_id": None,
+            "target_protection": "protected",
+            "mr_author_id": 41,
         },
         "context": {
             "mode": "off",
@@ -882,6 +891,117 @@ def test_generated_mr_receipt_is_validated_before_atomic_publication(
             result,
             composition,
             replace(DEFAULT_IDENTITY, mr_author_id=41),
+            None,
+            SUMMARY_ACTION_COUNTS,
+            forbidden=(),
+        )
+
+    assert not result.exists()
+
+
+def test_local_finalization_uses_direct_posting_without_a_provider_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local review must not invent GitLab protection while remaining postable."""
+
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "comments": [],
+                "warnings": [],
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+                "manifest": {
+                    "schema_version": "ocr.run-manifest/v1",
+                    "operation": "review",
+                    "terminal_state": "complete",
+                    "coverage": {
+                        "selected": [{"item_id": "synthetic-item"}],
+                        "completed": [{"item_id": "synthetic-item"}],
+                        "reused": [],
+                        "failed": [],
+                        "waived": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    assert review_runner._record_ocr_result_mcp_usage(
+        result,
+        composition,
+        LOCAL_IDENTITY,
+        evidence_action_counts=SUMMARY_ACTION_COUNTS,
+    ) == {"ocr_toolkit_evidence": 1}
+    persisted = json.loads(result.read_text(encoding="utf-8"))
+    assert "_ocr_toolkit" not in persisted
+    assert "_ocr_toolkit_advisory" not in persisted
+
+    notes: list[str] = []
+    monkeypatch.setattr(
+        workflow,
+        "collect_previous_bot_comment_refs",
+        lambda _config: snapshot.BotCommentRefs(),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "post_review_note_bounded",
+        lambda _config, _title, body, _transaction: notes.append(body) or {"id": 1},
+    )
+    monkeypatch.setattr(workflow, "finalize_posting", lambda *_args: True)
+    monkeypatch.setattr(
+        workflow,
+        "delete_previous_bot_comments_if_collected",
+        lambda *_args: None,
+    )
+
+    assert workflow.post_results(gitlab_config(), persisted) == 0
+    assert len(notes) == 1
+    assert "Review complete — no findings" in notes[0]
+    assert "verified MCP calls" not in notes[0]
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        replace(LOCAL_IDENTITY, mr_author_id=41),
+        replace(LOCAL_IDENTITY, target_protection="unknown"),
+    ],
+)
+def test_non_provider_identity_cannot_emit_receipt_metadata(
+    tmp_path: Path,
+    identity: review_runner.ReviewIdentity,
+) -> None:
+    result = tmp_path / "result.json"
+    result.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "tool_calls": {"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="invalid review identity"):
+        review_runner._finalize_ocr_result(
+            result,
+            composition,
+            identity,
             None,
             SUMMARY_ACTION_COUNTS,
             forbidden=(),
@@ -1430,7 +1550,7 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert blocked is True
 
 
-def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
+def test_publication_dlp_retains_only_safe_local_findings_without_provider_receipt(
     tmp_path: Path,
 ) -> None:
     result = tmp_path / "result.json"
@@ -1480,7 +1600,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
     usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
         composition,
-        DEFAULT_IDENTITY,
+        LOCAL_IDENTITY,
         None,
         SUMMARY_ACTION_COUNTS,
         forbidden=("private discussion sentence",),
@@ -1518,7 +1638,7 @@ def test_publication_dlp_retains_only_safe_local_findings_and_closed_receipt(
         "total": 2,
         "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
     }
-    assert persisted["_ocr_toolkit"]["publication"] == publication
+    assert "_ocr_toolkit" not in persisted
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
 
@@ -3908,7 +4028,7 @@ def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> No
 
     assert (
         review_runner._authorize_private_artifact_preservation(
-            DEFAULT_IDENTITY,
+            LOCAL_IDENTITY,
             requested=True,
         )
         is True

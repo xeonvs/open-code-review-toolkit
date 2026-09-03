@@ -53,6 +53,22 @@
       "result": "passed",
       "wire_field": "max_completion_tokens"
     },
+    "language_rule_probe": {
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".pug",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 6
+    },
     "numeric_cli_probe": {
       "max_tokens_budget": {
         "cases": {
@@ -187,22 +203,6 @@
       "recheck_instruction_requests": 3,
       "result": "passed",
       "review_rounds": 2
-    },
-    "language_rule_probe": {
-      "excluded_extensions": [
-        ".svh"
-      ],
-      "extensions": [
-        ".pug",
-        ".sv",
-        ".v",
-        ".vhd",
-        ".vhdl",
-        ".vh"
-      ],
-      "result": "passed",
-      "rule_source": "system_builtin",
-      "selected": 6
     },
     "small_change_grouping_probe": {
       "grouping_requests": 0,
