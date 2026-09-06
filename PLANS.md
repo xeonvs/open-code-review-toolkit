@@ -40,6 +40,7 @@ summary publication. External configured qualification owns the later release de
 | REQ-006 | Docs, decision flow, changelog and backlog reflect current behavior | WQ-05 | documentation checks and rendered Towncrier |
 | REQ-007 | Green pushed Draft with truthful external qualification | WQ-06 | local/hosted gates and remote readback |
 | REQ-008 | Forward-only live qualification, isolated historical readback and stable tests | WQ-04R | no live version branches, frozen-history validation, CLI and probe regressions |
+| REQ-009 | Version-neutral current guidance with exact compatibility identities preserved | WQ-07 | documentation contracts, pin validation, self-review and green Draft push |
 
 #### Explicit Non-Goals
 
@@ -91,6 +92,7 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-04R | done | Forward-only live qualification, frozen historical readback and maintenance instructions |
 | WQ-05 | done | Public docs, decision flow, changelog and backlog reconciliation |
 | WQ-06 | in_progress | Final local gate, push, hosted checks and external Draft handoff |
+| WQ-07 | done | Version-neutral guidance and generic fixtures validated and self-reviewed; Draft push/readback remains owned by WQ-06 |
 
 #### Locked Decisions
 
@@ -110,6 +112,11 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
   validation semantics in a separate owner. Promotion-policy tests use frozen
   baselines; current pin tests alone assert the current version. Update canonical
   development/compatibility instructions rather than adding duplicate agent rules.
+- Follow-up documentation maintenance is `no-release` within this deferred release
+  branch. Current guidance links to the compatibility manifest instead of repeating
+  OCR release numbers or asset hashes. Preserve executable pins, exact identity
+  checks, historical evidence, release notes and this release-specific plan.
+  No runtime behavior, supported-version policy or release authorization changes.
 
 #### Verification
 
@@ -155,6 +162,12 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   intentional private/public PII regression fixtures; no new hard-category finding.
   Aggregate self-review confirmed unchanged publication/summary/DLP authority,
   isolated historical readback and forward-only current qualification.
+- 2026-09-06: version-neutral follow-up passed 1525 tests and 408 subtests at
+  86.39% combined coverage, all scoped floors, Ruff, MyPy and Bandit. Focused
+  documentation/environment/integration tests passed 48 tests; manifest, lock,
+  Towncrier and diff checks passed. Self-review removed the remaining duplicated
+  documentation checksum and separated manifest-reference assertions from exact
+  executable-pin assertions. Runtime, pins and historical evidence are unchanged.
 
 #### Risks And Recovery
 
@@ -165,6 +178,11 @@ fixes receive the same self-review and commit gates. Preserve temporary private
 outputs until verification, then remove only task-owned files.
 
 #### Resume Point
+
+WQ-07's version-neutral follow-up is locally validated and self-reviewed. WQ-06
+owns the signed commit's pinned Gitleaks check, push to Draft #178 and current
+remote-head/hosted-check readback. The PR receipt records that external state;
+do not infer the latest head's checks from a predecessor's green result.
 
 Local implementation and validation are complete. WQ-06's external receipt is
 Draft PR #178: verify its current remote head and hosted checks before continuing.

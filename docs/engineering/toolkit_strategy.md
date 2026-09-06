@@ -154,7 +154,7 @@ Qualified OCR releases expose explicit per-run provider/model overrides, additiv
 The completed [BL-017 signal-ownership audit](review_signal_ownership.md) reaches
 `no-new-layer`. OCR owns provider, request, latency, cost, grouping, round, and
 tool telemetry. The toolkit owns only deterministic closed result, receipt,
-context, publication-DLP, posting, and approval projections. OCR 1.11.0 group
+context, publication-DLP, posting, and approval projections. OCR group
 keys contain changed paths, its labels are model-produced, and its private
 session can retain provider-native reasoning/tool state, so none becomes a
 toolkit metric, routing input, public summary, or approval authority. A single bounded

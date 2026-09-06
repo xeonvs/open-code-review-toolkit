@@ -1568,8 +1568,13 @@ class MCPConfigTests(unittest.TestCase):
 
 class PreflightTests(unittest.TestCase):
     def test_validate_ocr_binary_accepts_supported_version(self) -> None:
+        """Exercise the accepted identity using the production pin owner."""
+
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.11.5\n", stderr=""
+            args=["ocr", "--version"],
+            returncode=0,
+            stdout=f"ocr {preflight.EXPECTED_OCR_VERSION}\n",
+            stderr="",
         )
         with (
             patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),

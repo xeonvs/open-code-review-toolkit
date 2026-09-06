@@ -27,6 +27,14 @@ GitHub Actions storage is repository-owned infrastructure. Pull-request CI resto
 
 ## Maintaining OCR qualification
 
+Current operator guidance describes the qualified OCR contract without repeating
+release numbers or asset hashes; link to `compatibility/ocr-support.json` for the
+exact recommendation of the same toolkit revision. Keep exact versions in
+executable pins, binary-identity checks, release-specific plans/notes and historical
+evidence. Generic fixtures derive the current identity from its runtime owner;
+frozen historical fixtures must not follow the current pin. A version-neutral
+description still needs semantic review when the consumed contract changes.
+
 The live suite in `scripts/ocr_compat.py` qualifies the current toolkit-consumed
 OCR contract for every candidate. Do not add release-number branches, old parser
 fallbacks, or patch-specific fixture copies to live probes. Version checks belong

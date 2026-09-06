@@ -6,7 +6,7 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## Existing backlog reconciliation
 
-OCR 1.11.4/1.11.5 integration does not complete any remaining conditional item:
+The qualified OCR capabilities do not complete any remaining conditional item:
 Objective-C++ routing is an OCR Rules change rather than a framework evidence pack;
 viewer fixed/ignored marks are browser state rather than forge lifecycle support;
 private failure arguments add no telemetry exporter or model-profile capability.
@@ -56,9 +56,9 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Status:** parked
 - **Priority:** medium
 - **Roadmap theme:** M6 Profiles and quality measurement
-- **Dependencies:** Established built-in MCP lifecycle and OCR per-run model/provider overrides; OCR 1.8.7 satisfies the capability dependency.
+- **Dependencies:** Established built-in MCP lifecycle and qualified OCR per-run model/provider overrides satisfy the capability dependency.
 - **Activation trigger:** Not met. Activate only after repeated operations show direct settings are insufficient and the owner approves a closed model/provider matrix plus precedence contract.
-- **Upstream overlap:** OCR 1.8.7 supplies direct run-level selection; OCR 1.9.0 per-file and 1.9.5 aggregate budgets remain explicit completeness controls, not profile defaults.
+- **Upstream overlap:** OCR supplies direct run-level selection; per-file and aggregate budgets remain explicit completeness controls, not profile defaults.
 - **Goal:** If need appears, offer `economy`, `standard`, and `strong` aliases for one OCR run without hiding aggregate, per-file, or tool controls.
 - **Scoped deliverables:** Define an owner-approved closed matrix and precedence contract; map an alias to one OCR run; publish effective non-secret identity; validate compatibility and environment precedence.
 - **Acceptance criteria:** One model remains active per run, `standard` preserves current behavior, explicit provider/model settings override profile aliases, aggregate/per-file/tool limits remain independent explicit operator inputs, secrets remain environment-only, and unavailable combinations fail before OCR execution.
@@ -94,7 +94,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Acceptance criteria:** The use case and completion signal are documented before implementation; false-positive behavior and unsupported versions are explicit through the shared scoped coverage contract.
 - **Exclusions:** Checkbox coverage, network resolution, runtime execution, or unrelated bundles.
 - **Validation:** Pack fixtures plus common evidence/bootstrap/MCP contracts.
-- **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; OCR 1.11.0 Handlebars/Mustache selection improves review coverage but does not supply a framework evidence contract or activate an evidence pack.
+- **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; Handlebars/Mustache selection improves review coverage but does not supply a framework evidence contract or activate an evidence pack.
 - **Release classification expectation:** `release-required`.
 
 ### BL-019: Run a native fuzzing campaign
@@ -132,7 +132,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Roadmap theme:** M7 Later and conditional work
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
-- **Upstream overlap:** OCR 1.10.2 reusable GitHub Action checkpoint ranges and OCR 1.11.0 Action/plugin changes cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
+- **Upstream overlap:** OCR reusable GitHub Action checkpoint ranges and Action/plugin capabilities cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
 - **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, protected same-revision CI outcomes, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.

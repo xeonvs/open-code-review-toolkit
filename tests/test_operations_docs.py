@@ -1,6 +1,5 @@
 """Contracts for the public GitLab operations documentation."""
 
-import json
 import re
 from pathlib import Path
 
@@ -63,25 +62,43 @@ def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
 
     readme = README.read_text(encoding="utf-8")
     install = readme.split("## Install", 1)[1].split("## How reviews evolve", 1)[0]
-    manifest = json.loads(
-        (PROJECT_ROOT / "compatibility" / "ocr-support.json").read_text(encoding="utf-8")
-    )
-    recommended = manifest["recommended_version"]
-    release = next(item for item in manifest["releases"] if item["version"] == recommended)
-    digests = {asset["name"]: asset["sha256"] for asset in release["assets"]}
-
     assert "Python 3.12 through 3.14" in install
     assert "uv tool install open-code-review-toolkit" in install
     assert install.index(". .venv/bin/activate") < install.index(
         "python -m pip install open-code-review-toolkit"
     )
-    assert f"Open Code Review {recommended}" in install
-    assert f"open-code-review v{recommended}" in install
-    assert digests["opencodereview-linux-amd64"] in install
-    assert digests["opencodereview-darwin-arm64"] in install
+    assert "compatibility/ocr-support.json" in install
+    assert "`recommended_version`" in install
+    assert "for this toolkit revision" in install
+    assert "https://github.com/alibaba/open-code-review/releases)" in install
+    assert "release entry's asset SHA-256" in install
+    assert "Do not substitute the latest upstream" in install
+    assert "manifest's exact `recommended_version`" in install
+    assert not re.search(r"\b[a-f0-9]{64}\b", install)
     assert "ocr --version" in install
     assert "ocr-ci --help" in install
     assert "not the installation\nsmoke test" in install
+
+
+def test_current_operator_guidance_uses_manifest_without_ocr_release_literals() -> None:
+    """Keep living guidance tied to qualified pins without per-release text churn."""
+
+    for document in (
+        README,
+        CONFIGURATION,
+        OPERATIONS,
+        GITLAB_GUIDE,
+        GITLAB_EXAMPLES / "README.md",
+    ):
+        content = document.read_text(encoding="utf-8")
+        assert "compatibility/ocr-support.json" in content
+        assert not re.search(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
+        assert not re.search(r"open-code-review/releases/tag/v\d+\.\d+\.\d+", content)
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    assert "`v` + manifest `recommended_version`" in configuration
+    assert "not resolved dynamically" in configuration
+    assert "Manifest SHA-256 for `opencodereview-linux-amd64`" in configuration
+    assert not re.search(r"\b[a-f0-9]{64}\b", configuration)
 
 
 def test_documentation_indexes_route_to_canonical_owners() -> None:
@@ -785,7 +802,9 @@ def test_numeric_ocr_controls_use_behavioral_qualification_and_template_delegati
     assert "raw stderr is not added to\nfindings, result warnings" in configuration
     assert "receipts, DLP inputs, telemetry" in configuration
     assert "`OCR_MAX_TOOLS=0`" in operations
-    assert "corrects stale help text for the already-qualified behavior" in operations
+    assert "normalized to `50`" in operations
+    assert "explicit `50` remain effectively `100`" in operations
+    assert "only values above `100` raise the cap" in operations
     assert "effective `100` for omitted, sentinel `0`, `49`, and `50`" in compatibility
     assert "help text\n  alone is not compatibility evidence" in development
 

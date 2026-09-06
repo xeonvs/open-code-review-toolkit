@@ -70,8 +70,9 @@ GITLAB_DEFAULTS = {
 }
 
 EXAMPLE_DEFAULTS = {
-    "OCR_VERSION": "v1.11.5",
-    "OCR_SHA256": "53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95",
+    # Executable pin equality is checked against the manifest in integration contracts.
+    "OCR_VERSION": "`v` + manifest `recommended_version`",
+    "OCR_SHA256": "Manifest SHA-256 for `opencodereview-linux-amd64`",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",
     "OCR_TOOLKIT_WHEEL": "open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl",
@@ -302,12 +303,12 @@ def test_removed_and_redaction_only_names_do_not_reenter_public_configuration() 
 
 
 def test_example_local_defaults_match_the_pipeline() -> None:
+    """Check example controls; integration contracts own exact OCR pin equality."""
+
     workflow = (PROJECT_ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml").read_text(
         encoding="utf-8"
     )
     for name, value in {
-        "OCR_VERSION": "v1.11.5",
-        "OCR_SHA256": EXAMPLE_DEFAULTS["OCR_SHA256"],
         "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
         "OCR_MAX_TOOLS": "0",
         "OCR_MAX_TOKENS_BUDGET": "0",
