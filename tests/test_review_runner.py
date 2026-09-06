@@ -1157,7 +1157,7 @@ def test_private_failure_arguments_preserve_finalized_signal_and_gitlab_notes(
             payload["comments"][0]["content"] = "Contact person@example.invalid"
         elif public_case == "warning":
             payload["warnings"] = [
-                {"code": "comment_args_repaired", "message": "Repaired serialized comments"}
+                {"type": "comment_args_repaired", "message": "Repaired serialized comments"}
             ]
         elif public_case == "partial":
             payload["manifest"]["terminal_state"] = "partial"

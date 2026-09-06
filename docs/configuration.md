@@ -22,7 +22,7 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
 | `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
-| `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration; OCR 1.11.3 spans may include path-derived group keys, model-produced labels, and local grouping decisions. |
+| `OCR_TELEMETRY_ENABLED` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR telemetry configuration; OCR 1.11.5 spans may include path-derived group keys, model-produced labels, and local grouping decisions. |
 | `OCR_TELEMETRY_CONTENT_LOGGING` | Operator / `ocr-ci configure` | No | `false` | Exact `true` enables OCR content logging; keep disabled for private review data. |
 | `OCR_TELEMETRY_EXPORTER` | Operator / `ocr-ci configure` | No | Empty string | Exporter name written only when telemetry is enabled. |
 | `OCR_TELEMETRY_OTLP_ENDPOINT` | Operator / `ocr-ci configure` | No | Unset | OTLP endpoint written only when telemetry is enabled and the value is non-empty. |
@@ -60,13 +60,13 @@ If `OCR_LLM_EXTRA_BODY` already owns that field, an exactly equal JSON integer i
 
 The toolkit does not derive this value from `/models.max_completion_tokens`. That metadata is a model capability boundary, not an account spending limit or proof of how a gateway reserves request cost.
 
-The inherited value is version-owned and therefore changes with a qualified OCR upgrade. The toolkit observed `max_completion_tokens=58888` from OCR 1.9.10 and `16384` from OCR 1.10.0 through 1.11.3 when the variable was unset. Grouping requests use the same template-owned cap; an explicit toolkit override still applies to every protocol request. Deployments that require an invariant gateway-specific cap must set `OCR_LLM_MAX_COMPLETION_TOKENS` explicitly rather than depending on an OCR default.
+The inherited value is version-owned and therefore changes with a qualified OCR upgrade. The toolkit observed `max_completion_tokens=58888` from OCR 1.9.10 and `16384` from OCR 1.10.0 through 1.11.5 when the variable was unset. Grouping requests use the same template-owned cap; an explicit toolkit override still applies to every protocol request. Deployments that require an invariant gateway-specific cap must set `OCR_LLM_MAX_COMPLETION_TOKENS` explicitly rather than depending on an OCR default.
 
 ### Review effort
 
-`OCR_REVIEW_EFFORT` defaults to `medium` and is written to OCR's root `effort` configuration key. OCR 1.11.3 maps `low`, `medium`, and `high` to one, two, and three review rounds and scales its 15-minute subtask base to 15, 30, or 45 minutes. The environment is operator-owned; merge-request text cannot change it. An explicit caller `--effort` passed after `ocr-ci review --` has normal OCR CLI precedence over the generated config, while an unknown environment value fails configuration before preview or model execution.
+`OCR_REVIEW_EFFORT` defaults to `medium` and is written to OCR's root `effort` configuration key. OCR 1.11.5 maps `low`, `medium`, and `high` to one, two, and three review rounds and scales its 15-minute subtask base to 15, 30, or 45 minutes. The environment is operator-owned; merge-request text cannot change it. An explicit caller `--effort` passed after `ocr-ci review --` has normal OCR CLI precedence over the generated config, while an unknown environment value fails configuration before preview or model execution.
 
-OCR 1.11.3 may present filter-surviving comments to a later round as previously confirmed, but the toolkit does not accept that wording as validation. Its mandatory background prefix travels with every main request and requires prior/filter-surviving findings to remain unverified until current code, tests, or trusted evidence support them. Survival cannot change severity, suppress or resolve a finding, authorize approval, or enter a receipt as independent validation.
+OCR 1.11.5 may present filter-surviving comments to a later round as previously confirmed, but the toolkit does not accept that wording as validation. Its mandatory background prefix travels with every main request and requires prior/filter-surviving findings to remain unverified until current code, tests, or trusted evidence support them. Survival cannot change severity, suppress or resolve a finding, authorize approval, or enter a receipt as independent validation.
 
 Effort controls review depth, not the prompt/context ceiling, per-call completion cap, aggregate token budget, or per-round tool limit. Semantic grouping and filtering can add requests even at `low`; higher effort can add further rounds until OCR stops early, reaches a coverage/budget boundary, or completes the configured depth.
 
@@ -95,14 +95,18 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_VERSION`** | Example pipeline | Yes | `v1.11.3` | Checksum-pinned recommended OCR binary release for toolkit 0.9.0. |
-| **`OCR_SHA256`** | Example pipeline | Yes | `9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb` | Expected Linux AMD64 OCR binary digest. |
+| **`OCR_VERSION`** | Example pipeline | Yes | `v1.11.5` | Checksum-pinned recommended OCR binary release for toolkit 0.9.1. |
+| **`OCR_SHA256`** | Example pipeline | Yes | `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95` | Expected Linux AMD64 OCR binary digest. |
 | **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.9.0` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
-| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | OCR 1.11.3 uses template default `100`; `1-49` reports normalization to `50` but remains effectively `100`, and only a value above `100` raises the cap. |
+| `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | OCR 1.11.5 uses template default `100`; `1-49` reports normalization to `50` but remains effectively `100`, and only a value above `100` raises the cap. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
+
+During Draft qualification, install the toolkit artifact built from the reviewed
+commit. The example's published toolkit-version pin is advanced by the later
+release PR; published toolkit 0.9.0 does not support the new OCR runtime.
 
 ## Dynamic adapter and MCP inputs
 
@@ -177,7 +181,7 @@ finish and OCR accounts the provider-reported input plus output tokens.
 
 `OCR_MAX_TOOLS` is independent of all three token controls. Leave the example
 default at `0` so OCR uses its embedded template limit of `100` per subtask.
-OCR 1.11.3 reports values `1-49` as normalized to the minimum `50`, but both
+OCR 1.11.5 reports values `1-49` as normalized to the minimum `50`, but both
 that target and explicit `50` remain below the template default and therefore
 remain effectively `100`. Use `101` or greater only when deliberately raising
 the loop cap. OCR 1.11.0 corrected stale help text for this already-qualified

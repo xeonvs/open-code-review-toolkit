@@ -39,6 +39,7 @@ summary publication. External configured qualification owns the later release de
 | REQ-005 | Grouping, defaults, MCP and receipt boundaries remain correct | WQ-04 | compatibility and runtime tests |
 | REQ-006 | Docs, decision flow, changelog and backlog reflect current behavior | WQ-05 | documentation checks and rendered Towncrier |
 | REQ-007 | Green pushed Draft with truthful external qualification | WQ-06 | local/hosted gates and remote readback |
+| REQ-008 | Forward-only live qualification, isolated historical readback and stable tests | WQ-04R | no live version branches, frozen-history validation, CLI and probe regressions |
 
 #### Explicit Non-Goals
 
@@ -86,8 +87,9 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-01 | done | Signed planning commit pushed; Draft PR #178 opened |
 | WQ-02 | done | Verified assets and safely updated local OCR 1.11.5 |
 | WQ-03 | done | Bounded failure arguments and DLP/summary regressions |
-| WQ-04 | pending | Expanded real OCR qualification, adjacent evidence and final pins |
-| WQ-05 | pending | Public docs, decision flow, changelog and backlog reconciliation |
+| WQ-04 | done | Expanded real OCR qualification, adjacent evidence and final pins |
+| WQ-04R | done | Forward-only live qualification, frozen historical readback and maintenance instructions |
+| WQ-05 | in_progress | Public docs, decision flow, changelog and backlog reconciliation |
 | WQ-06 | pending | Final local gate, push, hosted checks and external Draft handoff |
 
 #### Locked Decisions
@@ -102,6 +104,12 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 - Current group terminology must distinguish group prompt ceiling from per-file
   preselection filtering. Viewer marks carry no GitLab lifecycle authority.
 - Existing scheduled discovery works and stays unchanged.
+- User requested a complete qualification-layer refactor during implementation.
+  Live probes target the current consumed contract without historical execution
+  branches or patch-specific fixtures. Historical evidence keeps its original
+  validation semantics in a separate owner. Promotion-policy tests use frozen
+  baselines; current pin tests alone assert the current version. Update canonical
+  development/compatibility instructions rather than adding duplicate agent rules.
 
 #### Verification
 
@@ -128,6 +136,17 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   Paired clean/finding/warning/partial/filtered results produced identical persisted
   projections, DLP state, console diagnostics and GitLab notes with/without private
   arguments. Malformed and oversized arguments remain diagnostic-only degradation.
+- 2026-09-06: expanded real-binary no-LLM suites passed for OCR 1.11.4 and 1.11.5.
+  Native/serialized/repaired two-comment batches preserve fields and anchors;
+  suspect truncation is rejected with raw arguments confined to private diagnostics.
+  Objective-C++ and both .m routing modes passed. Historical Linux asset proofs
+  remain linked to run 33962853525; new contract evidence explicitly names Darwin.
+- 2026-09-06: full live qualification refactor removed historical execution branches
+  and text/grouping fallbacks, separated frozen evidence readback, and made
+  promotion validate current contracts before writes. Generic tests now use frozen
+  baselines. Complete real-binary JSON proof is identical before/after refactoring
+  for both releases. Focused suite passed 389 tests and 109 subtests; documentation
+  and metadata suite passed 163 tests. Canonical maintenance instructions updated.
 
 #### Risks And Recovery
 
@@ -139,7 +158,7 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-Implement WQ-04 expanded real OCR probes and adjacent evidence promotion.
+Finish WQ-05 public contract review, then perform WQ-06 final local/hosted gates.
 After the initial Draft push, keep later implementation commits local until all
 slices and final local validation complete.
 

@@ -1,0 +1,257 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "09a57a9022071c19f82cec4d793bb8d93d3b308e0207bdd6b9ad823cbb1e5d17",
+      "size": 57803552
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "36a29bb525f59ad88f39f6fb4a8bd76a67df5ed95399c92f3d10143274c91b15",
+      "size": 54844930
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "7133465774aff6330fd8d25eecc57a28e5852bc55d1ae55fd00443ebc4c6b023",
+      "size": 56058018
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "981964ac4466f1ed20129ae46b63a31a929219c1228a7a94c345cb4c9b8155d3",
+      "size": 52822178
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "e9300d32877a1512e9571a5776c9173c2f7eccee58d2f7ef4aa54011bd70b9fb",
+      "size": 57519616
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "e08fc1d3896509b1589046f6180b92b921cd540c113faff60a98d4f79198450d",
+      "size": 53482496
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "2dccf4dccaabcb0be94e43766316acbf7c8ab6f7309001575ee9e0cd4862a273",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.11.3",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".mjs",
+        ".mm",
+        ".pug",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 11
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-04T12:38:24Z",
+  "qualification_provenance": {
+    "asset_verification_run": "https://github.com/xeonvs/open-code-review-toolkit/actions/runs/33962853525",
+    "contract_binary_sha256": "36a29bb525f59ad88f39f6fb4a8bd76a67df5ed95399c92f3d10143274c91b15",
+    "contract_platform": "darwin-arm64"
+  },
+  "release_changes": "## 🚀 Features\n\n- feat(tool): include arguments in failure details (#1152)\n\n## 🐛 Bug Fixes\n\n- fix(rules): route Objective-C++ files to Objective-C rules (#1166)\n- fix(tool): repair serialized code_comment arguments instead of losing the batch (#1153)\n\n## Other Changes\n\n- Keep repeated documentation headings independently addressable (#1151)\n- ci: add plugin distribution contract guardrails (#1117)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.11.3...v1.11.4",
+  "release_notes_sha256": "81f1a6a8b329e688b2575f69b779dc9593e407763783ffbff47cdcacb86febff",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.11.4",
+  "tested_baseline_version": "1.11.3",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.11.4"
+}

@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn, TypeVar
 
+import ocr_compat_history as history
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
 PREFLIGHT = ROOT / "src" / "ocr_toolkit" / "preflight.py"
@@ -64,6 +66,7 @@ MATERIAL_NOTES_RE = re.compile(
 )
 REQUIRED_REVIEW_FLAGS = {
     "--audience",
+    "--effort",
     "--background-file",
     "--format",
     "--max-tokens-budget",
@@ -118,6 +121,21 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
     },
     "result": "passed",
 }
+
+CURRENT_LANGUAGE_RULES = {
+    "views/page.pug": "**/*.pug",
+    "rtl/module.v": "**/*.{v,sv,vh}",
+    "rtl/include.vh": "**/*.{v,sv,vh}",
+    "rtl/module.sv": "**/*.{v,sv,vh}",
+    "rtl/entity.vhd": "**/*.{vhd,vhdl}",
+    "rtl/entity.vhdl": "**/*.{vhd,vhdl}",
+    "src/module.mjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
+    "src/module.cjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
+    "native/source.cxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
+    "native/header.hxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
+    "native/object.mm": "**/*.mm",
+}
+
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
     "opencodereview-darwin-arm64",
@@ -283,6 +301,96 @@ def load_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _validate_current_contracts(value: object) -> None:
+    """Require the live consumed contract, independent of candidate release numbering."""
+
+    if not isinstance(value, dict):
+        _fail("current qualification contracts are missing")
+    flags = value.get("required_review_flags")
+    capabilities = value.get("optional_capabilities")
+    if (
+        not isinstance(flags, list)
+        or not REQUIRED_REVIEW_FLAGS.issubset(flags)
+        or not isinstance(capabilities, list)
+        or not {"review_effort", "semantic_grouping"}.issubset(capabilities)
+    ):
+        _fail("current qualification omitted required CLI capabilities")
+    extensions = sorted(Path(path).suffix for path in CURRENT_LANGUAGE_RULES)
+    expected = {
+        "numeric_cli_probe": CURRENT_NUMERIC_CLI_CONTRACT,
+        "review_budget_probe": {
+            "budget": 30_000,
+            "completed": 2,
+            "failed_budget": 1,
+            "partial_findings_preserved": True,
+            "result": "passed",
+            "selected": 3,
+            "grouping_requests": 0,
+            "grouping_strategy": "per_file",
+        },
+        "semantic_grouping_probe": {
+            "default_effort": "medium",
+            "filter_requests": 1,
+            "grouping_requests": 1,
+            "main_requests": 3,
+            "result": "passed",
+            "review_rounds": 2,
+            "grouping_completion_cap": 16_384,
+            "files": 4,
+            "prior_finding_semantics": "filter_survivors_as_confirmed",
+            "recheck_instruction_requests": 3,
+        },
+        "small_change_grouping_probe": {
+            "grouping_requests": 0,
+            "high_churn": "per_file",
+            "low_churn": "bundle_all",
+            "result": "passed",
+            "single_file": "per_file",
+            "threshold_files": 4,
+        },
+        "language_rule_probe": {
+            "excluded_extensions": [".svh"],
+            "extensions": extensions,
+            "result": "passed",
+            "rule_source": "system_builtin",
+            "selected": len(extensions),
+            "m_routing": "matlab_and_objective_c",
+        },
+        "completion_cap_probe": {
+            "explicit": 4_096,
+            "inherited": 16_384,
+            "result": "passed",
+            "wire_field": "max_completion_tokens",
+        },
+        "comment_arguments_probe": {
+            "result": "passed",
+            "intact_cases": ["array", "serialized", "repaired"],
+            "comments_per_batch": 2,
+            "suspect_batch_rejected": True,
+            "failure_arguments_preserved": True,
+            "repair_warning": True,
+        },
+    }
+    for name, contract in expected.items():
+        if value.get(name) != contract:
+            _fail(f"current qualification contract disagrees: {name}")
+    if value.get("version_probe") != "passed" or value.get("preview_probe") != {
+        "format": "json",
+        "path": "example.py",
+        "result": "passed",
+        "session_store_created": False,
+    }:
+        _fail("current qualification omitted version or isolated JSON preview proof")
+    result = value.get("result_contract_probe")
+    if (
+        not isinstance(result, dict)
+        or result.get("result") != "passed"
+        or result.get("manifest_schema") != "ocr.run-manifest/v1"
+        or result.get("normalized_outcome") != "clean"
+    ):
+        _fail("current qualification omitted the review-result contract")
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -361,95 +469,10 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
         evidence = load_json(evidence_path)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             _fail(f"evidence does not qualify {version} as compatible")
-        if _version(version) >= (1, 9, 5):
-            contracts = evidence.get("contracts")
-            required_flags = (
-                contracts.get("required_review_flags") if isinstance(contracts, dict) else None
-            )
-            budget_probe = (
-                contracts.get("review_budget_probe") if isinstance(contracts, dict) else None
-            )
-            if not isinstance(required_flags, list) or "--max-tokens-budget" not in required_flags:
-                _fail(f"evidence does not qualify the review budget flag for {version}")
-            expected_budget_probe: dict[str, object] = {
-                "budget": 30_000,
-                "completed": 2,
-                "failed_budget": 1,
-                "partial_findings_preserved": True,
-                "result": "passed",
-                "selected": 3,
-            }
-            if _version(version) >= (1, 11, 1):
-                expected_budget_probe.update(
-                    {"grouping_requests": 0, "grouping_strategy": "per_file"}
-                )
-            if budget_probe != expected_budget_probe:
-                _fail(f"evidence does not qualify partial review budget behavior for {version}")
-        if _version(version) >= (1, 10, 0):
-            contracts = evidence.get("contracts")
-            required_flags = (
-                contracts.get("required_review_flags") if isinstance(contracts, dict) else None
-            )
-            capabilities = (
-                contracts.get("optional_capabilities") if isinstance(contracts, dict) else None
-            )
-            if not isinstance(required_flags, list) or "--effort" not in required_flags:
-                _fail(f"evidence does not qualify the review effort flag for {version}")
-            if not isinstance(capabilities, list) or not {
-                "review_effort",
-                "semantic_grouping",
-            }.issubset(capabilities):
-                _fail(f"evidence does not qualify effort and grouping for {version}")
-            expected_grouping_probe = {
-                "default_effort": "medium",
-                "filter_requests": 1,
-                "grouping_requests": 1,
-                "main_requests": 3,
-                "result": "passed",
-                "review_rounds": 2,
-            }
-            if _version(version) >= (1, 10, 2):
-                expected_grouping_probe["grouping_completion_cap"] = 16_384
-            if _version(version) >= (1, 11, 1):
-                expected_grouping_probe.update(
-                    {
-                        "files": 4,
-                        "prior_finding_semantics": "filter_survivors_as_confirmed",
-                        "recheck_instruction_requests": 3,
-                    }
-                )
-            if contracts.get("semantic_grouping_probe") != expected_grouping_probe:
-                _fail(f"evidence does not qualify semantic grouping behavior for {version}")
-            if _version(version) >= (1, 11, 1) and contracts.get("small_change_grouping_probe") != {
-                "grouping_requests": 0,
-                "high_churn": "per_file",
-                "low_churn": "bundle_all",
-                "result": "passed",
-                "single_file": "per_file",
-                "threshold_files": 4,
-            }:
-                _fail(f"evidence does not qualify small-change grouping behavior for {version}")
-            expected_language_probe = {
-                "excluded_extensions": [".svh"],
-                "extensions": _expected_language_rule_extensions(version),
-                "result": "passed",
-                "rule_source": "system_builtin",
-                "selected": len(_expected_language_rule_extensions(version)),
-            }
-            if (
-                _version(version) >= (1, 11, 1)
-                and contracts.get("language_rule_probe") != expected_language_probe
-            ):
-                _fail(f"evidence does not qualify built-in language rules for {version}")
-            if contracts.get("completion_cap_probe") != {
-                "explicit": 4_096,
-                "inherited": 16_384,
-                "result": "passed",
-                "wire_field": "max_completion_tokens",
-            }:
-                _fail(f"evidence does not qualify the completion cap for {version}")
-            if contracts.get("numeric_cli_probe") != CURRENT_NUMERIC_CLI_CONTRACT:
-                _fail(f"evidence does not qualify numeric CLI boundaries for {version}")
+        if _version(version) < history.HISTORICAL_CUTOFF:
+            history.validate_contracts(version, _version(version), evidence, _fail)
+        else:
+            _validate_current_contracts(evidence.get("contracts"))
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -811,9 +834,9 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     tokens_per_request = 2
     grouping_tokens_per_request = 2
     grouping_mode = "singletons"
-    grouping_inventory_version: str | None = None
     grouping_inventories: list[list[GroupingInventoryEntry]] = []
     main_mode = "findings"
+    comment_mode = "default"
     completion_caps: list[object] = []
     request_stages: list[str] = []
     prior_finding_semantics: set[str] = set()
@@ -833,9 +856,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     def _grouping_files(cls, messages: list[Any]) -> list[str]:
         """Extract one version-bound grouping inventory and retain structural evidence."""
 
-        if cls.grouping_inventory_version is None:
-            _fail("grouping inventory version is not configured")
-        entries = parse_grouping_inventory(messages, cls.grouping_inventory_version)
+        entries = parse_grouping_inventory(messages)
         cls.grouping_inventories.append(entries)
         return [entry.path for entry in entries]
 
@@ -973,6 +994,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                             ]
                         }
                     )
+                    if type(self).comment_mode != "default":
+                        arguments = _comment_probe_arguments(type(self).comment_mode, path)
                     function = {"name": "code_comment", "arguments": arguments}
                     call_id = "call-comment"
                 else:
@@ -1028,8 +1051,8 @@ def _stub_gateway(
     tokens_per_request: int = 2,
     grouping_tokens_per_request: int = 2,
     grouping_mode: str = "singletons",
-    grouping_inventory_version: str | None = None,
     main_mode: str = "findings",
+    comment_mode: str = "default",
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -1043,9 +1066,11 @@ def _stub_gateway(
     _StubHandler.tokens_per_request = tokens_per_request
     _StubHandler.grouping_tokens_per_request = grouping_tokens_per_request
     _StubHandler.grouping_mode = grouping_mode
-    _StubHandler.grouping_inventory_version = grouping_inventory_version
     _StubHandler.grouping_inventories = []
     _StubHandler.main_mode = main_mode
+    if comment_mode not in {"default", "array", "serialized", "repaired", "rejected"}:
+        _fail("stub comment mode is invalid")
+    _StubHandler.comment_mode = comment_mode
     _StubHandler.completion_caps = []
     _StubHandler.request_stages = []
     _StubHandler.prior_finding_semantics = set()
@@ -1061,24 +1086,14 @@ def _stub_gateway(
         thread.join(timeout=5)
 
 
-def parse_grouping_inventory(messages: list[Any], version: str) -> list[GroupingInventoryEntry]:
-    """Parse the exact grouping prompt shape qualified for one OCR release line."""
+def parse_grouping_inventory(messages: list[Any]) -> list[GroupingInventoryEntry]:
+    """Parse the current status-first inventory without legacy execution fallbacks."""
 
-    parsed_version = _version(version)
-    if (1, 10, 0) <= parsed_version < (1, 11, 0):
-        pattern = re.compile(
-            r"(?P<path>[^\r\n]{1,1000}) "
-            r"\((?P<status>ADDED|MODIFIED|DELETED|RENAMED), "
-            r"\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
-        )
-    elif parsed_version >= (1, 11, 0):
-        pattern = re.compile(
-            r"(?P<status>ADDED|MODIFIED|DELETED|RENAMED)   "
-            r"(?P<path>[^\r\n]{1,1000}) "
-            r"\(\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
-        )
-    else:
-        _fail(f"grouping inventory format is not qualified for OCR {version}")
+    pattern = re.compile(
+        r"(?P<status>ADDED|MODIFIED|DELETED|RENAMED)   "
+        r"(?P<path>[^\r\n]{1,1000}) "
+        r"\(\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
+    )
 
     prefix = "Group the following changed files:\n\n"
     suffix = "\n\nRespond with a JSON array:"
@@ -1101,7 +1116,7 @@ def parse_grouping_inventory(messages: list[Any], version: str) -> list[Grouping
     for line in lines:
         match = pattern.fullmatch(line)
         if match is None:
-            _fail(f"OCR {version} emitted an invalid grouping inventory entry")
+            _fail("OCR emitted an invalid grouping inventory entry")
         path = match.group("path")
         insertions = int(match.group("insertions"))
         deletions = int(match.group("deletions"))
@@ -1111,7 +1126,7 @@ def parse_grouping_inventory(messages: list[Any], version: str) -> list[Grouping
             or insertions > MAX_GROUPING_CHURN
             or deletions > MAX_GROUPING_CHURN
         ):
-            _fail(f"OCR {version} emitted an invalid grouping inventory value")
+            _fail("OCR emitted an invalid grouping inventory value")
         observed_paths.add(path)
         entries.append(
             GroupingInventoryEntry(
@@ -1199,7 +1214,7 @@ def _validate_file_groups(value: Any, expected_paths: set[str] | None = None) ->
         _fail("candidate semantic grouping did not cover the expected paths")
 
 
-def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _budget_result_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Drive the real OCR review budget gate and validate its partial manifest."""
 
     git_env = _isolated_probe_environment(directory / "budget-git-home")
@@ -1229,7 +1244,6 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
     env = _isolated_probe_environment(home)
     with _stub_gateway(
         tokens_per_request=20_000,
-        grouping_inventory_version=version,
     ) as gateway_url:
         env.update(
             {
@@ -1304,10 +1318,9 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
     if any(len(group.get("files", [])) != 1 for group in groups):
         _fail("budget-limited review did not preserve per-file group boundaries")
     grouping_requests = request_stages.count("grouping")
-    expected_grouping_requests = 0 if _version(version) >= (1, 11, 1) else 1
-    if grouping_requests != expected_grouping_requests:
+    if grouping_requests != 0:
         _fail("budget-limited review emitted an unexpected grouping request count")
-    if expected_grouping_requests == 0 and grouping_inventories:
+    if grouping_inventories:
         _fail("budget-limited small-change review unexpectedly emitted a grouping inventory")
     result: dict[str, object] = {
         "budget": 30_000,
@@ -1317,8 +1330,7 @@ def _budget_result_probe(binary: Path, version: str, directory: Path) -> dict[st
         "result": "passed",
         "selected": 3,
     }
-    if _version(version) >= (1, 11, 1):
-        result.update({"grouping_requests": 0, "grouping_strategy": "per_file"})
+    result.update({"grouping_requests": 0, "grouping_strategy": "per_file"})
     return result
 
 
@@ -1618,7 +1630,7 @@ def _numeric_cli_probe(
     }
 
 
-def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Drive a threshold-crossing group through grouping and medium review rounds."""
 
     root = directory / "semantic-grouping-probe"
@@ -1629,11 +1641,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    paths = (
-        ("01-first.py", "02-second.py", "03-third.py", "04-fourth.py")
-        if _version(version) >= (1, 11, 1)
-        else ("first.py", "second.py")
-    )
+    paths = ("01-first.py", "02-second.py", "03-third.py", "04-fourth.py")
     for path in paths:
         (repo / path).write_text("def value():\n    return 1\n", encoding="utf-8")
     _run(["git", "add", *paths], cwd=repo, env=git_env)
@@ -1654,7 +1662,6 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     env = _isolated_probe_environment(root / "review-home")
     with _stub_gateway(
         grouping_mode="combined",
-        grouping_inventory_version=version,
     ) as gateway_url:
         env.update(
             {
@@ -1710,7 +1717,7 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
     if len(grouping_inventories) != 1:
         _fail("semantic grouping review emitted an unexpected grouping inventory count")
     _require_exact_grouping_inventory(grouping_inventories[0], expected_inventory)
-    expected_grouping_cap = 16_384 if _version(version) >= (1, 10, 2) else 4_096
+    expected_grouping_cap = 16_384
     if len(completion_caps) != len(stages) or completion_caps[0] != expected_grouping_cap:
         _fail(
             "semantic grouping review emitted an unexpected grouping completion cap: "
@@ -1724,24 +1731,20 @@ def _semantic_grouping_probe(binary: Path, version: str, directory: Path) -> dic
         "result": "passed",
         "review_rounds": 2,
     }
-    if _version(version) >= (1, 10, 2):
-        result["grouping_completion_cap"] = expected_grouping_cap
-    if _version(version) >= (1, 11, 1):
-        if prior_finding_semantics != {"filter_survivors_as_confirmed"}:
-            _fail("multi-round review did not expose the qualified prior-finding semantics")
-        if recheck_instruction_requests != 3:
-            _fail("multi-round review did not retain toolkit re-check guidance in every round")
-        result["prior_finding_semantics"] = "filter_survivors_as_confirmed"
-        result["recheck_instruction_requests"] = recheck_instruction_requests
-        result["files"] = len(paths)
+    result["grouping_completion_cap"] = expected_grouping_cap
+    if prior_finding_semantics != {"filter_survivors_as_confirmed"}:
+        _fail("multi-round review did not expose the qualified prior-finding semantics")
+    if recheck_instruction_requests != 3:
+        _fail("multi-round review did not retain toolkit re-check guidance in every round")
+    result["prior_finding_semantics"] = "filter_survivors_as_confirmed"
+    result["recheck_instruction_requests"] = recheck_instruction_requests
+    result["files"] = len(paths)
     return result
 
 
-def _small_change_grouping_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _small_change_grouping_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove OCR keeps below-threshold grouping local and deterministic."""
 
-    if _version(version) < (1, 11, 1):
-        _fail("small-change grouping probe requires OCR 1.11.1 behavior")
     scenarios = (
         ("single_file", ("single.py",), 1, "per_file"),
         ("low_churn", ("first.py", "second.py"), 1, "bundle_all"),
@@ -1773,7 +1776,7 @@ def _small_change_grouping_probe(binary: Path, version: str, directory: Path) ->
         _run(["git", "commit", "-am", "small-change update"], cwd=repo, env=git_env)
         head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
         env = _isolated_probe_environment(root / "review-home")
-        with _stub_gateway(grouping_inventory_version=version) as gateway_url:
+        with _stub_gateway() as gateway_url:
             env.update(
                 {
                     "OCR_LLM_URL": gateway_url,
@@ -1831,7 +1834,7 @@ def _small_change_grouping_probe(binary: Path, version: str, directory: Path) ->
     }
 
 
-def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Observe the real OCR chat-completions output cap with and without an override."""
 
     probe_root = directory / "completion-cap-probe"
@@ -1839,7 +1842,7 @@ def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[s
     git_env = _isolated_probe_environment(probe_root / "git-home")
     repo, base, head = _synthetic_repo(probe_root, git_env)
     observed: dict[str, int] = {}
-    inherited = 16_384 if _version(version) >= (1, 10, 0) else 58_888
+    inherited = 16_384
     for label, expected in (("inherited", inherited), ("explicit", 4_096)):
         env = _isolated_probe_environment(probe_root / f"{label}-home")
         with _stub_gateway() as gateway_url:
@@ -1897,24 +1900,11 @@ def _completion_cap_probe(binary: Path, version: str, directory: Path) -> dict[s
     }
 
 
-def _preview_file_selection(payload: dict[str, Any] | str, path: str) -> tuple[bool, object]:
-    """Return one preview file's selected state and closed exclusion reason."""
+def _preview_file_selection(payload: object, path: str) -> tuple[bool, object]:
+    """Return one JSON preview file's selected state and closed exclusion reason."""
 
-    if isinstance(payload, str):
-        section: str | None = None
-        for raw_line in payload.splitlines():
-            line = re.sub(r"\x1b\[[0-9;]*m", "", raw_line).strip()
-            if line.startswith("Will review ("):
-                section = "selected"
-                continue
-            if line.startswith("Excluded from review ("):
-                section = "excluded"
-                continue
-            if path not in line:
-                continue
-            exclusion = "unsupported_ext" if "(unsupported_ext)" in line else None
-            return section == "selected", exclusion
-        return False, None
+    if not isinstance(payload, dict):
+        _fail("target-rule preview must be a JSON object")
     files = payload.get("files")
     if not isinstance(files, list):
         _fail("target-rule preview emitted an invalid file manifest")
@@ -1924,7 +1914,7 @@ def _preview_file_selection(payload: dict[str, Any] | str, path: str) -> tuple[b
     return records[0].get("will_review") is True, records[0].get("exclude_reason")
 
 
-def _target_rule_selection_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove the real OCR selector consumes target rules without changing its range."""
 
     git_env = _isolated_probe_environment(directory / "rule-git-home")
@@ -1958,9 +1948,7 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
         )
     )
 
-    json_preview = _version(version) >= (1, 9, 0)
-
-    def preview(home_name: str, *extra: str) -> dict[str, Any] | str:
+    def preview(home_name: str, *extra: str) -> dict[str, Any]:
         home = directory / home_name
         env = _isolated_probe_environment(home)
         command = [
@@ -1973,13 +1961,10 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
             "--preview",
             *extra,
         ]
-        if json_preview:
-            command.extend(["--format", "json"])
+        command.extend(["--format", "json"])
         output = _run(command, cwd=repo, env=env)
         if os.path.lexists(home / ".opencodereview" / "sessions"):
             _fail("target-rule preview created a review session store")
-        if not json_preview:
-            return output
         try:
             payload = json.loads(output)
         except json.JSONDecodeError as exc:
@@ -1999,7 +1984,7 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
     if not target_selected or target_reason not in {None, ""}:
         _fail("real OCR did not select the synthetic file from target rules")
     return {
-        "format": "json" if json_preview else "text",
+        "format": "json",
         "from_to_unchanged": True,
         "path": target.name,
         "result": "passed",
@@ -2008,16 +1993,7 @@ def _target_rule_selection_probe(binary: Path, version: str, directory: Path) ->
     }
 
 
-def _expected_language_rule_extensions(version: str) -> list[str]:
-    """Return the canonical sorted extension projection for one OCR release."""
-
-    extensions = {".pug", ".sv", ".v", ".vh", ".vhd", ".vhdl"}
-    if _version(version) >= (1, 11, 2):
-        extensions.update({".cjs", ".cxx", ".hxx", ".mjs"})
-    return sorted(extensions)
-
-
-def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
+def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"
@@ -2028,30 +2004,8 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    qualified_rules = {
-        "views/page.pug",
-        "rtl/module.v",
-        "rtl/include.vh",
-        "rtl/module.sv",
-        "rtl/entity.vhd",
-        "rtl/entity.vhdl",
-    }
-    exact_patterns: dict[str, str] = {}
-    if _version(version) >= (1, 11, 2):
-        qualified_rules.update(
-            {
-                "src/module.mjs",
-                "src/module.cjs",
-                "native/source.cxx",
-                "native/header.hxx",
-            }
-        )
-        exact_patterns = {
-            "src/module.mjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
-            "src/module.cjs": "**/*.{ts,js,tsx,jsx,mjs,cjs}",
-            "native/source.cxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
-            "native/header.hxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
-        }
+    exact_patterns = CURRENT_LANGUAGE_RULES
+    qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
     unsupported_path = "rtl/include.svh"
     paths = (*supported_paths, unsupported_path)
@@ -2116,15 +2070,143 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
             _fail(f"candidate resolved the wrong built-in language rule for {path}")
     extensions = sorted(Path(path).suffix for path in supported_paths)
-    expected_extensions = _expected_language_rule_extensions(version)
+    expected_extensions = sorted(Path(path).suffix for path in CURRENT_LANGUAGE_RULES)
     if extensions != expected_extensions:
         _fail("language probe paths disagree with the canonical extension projection")
-    return {
+    result: dict[str, object] = {
         "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
         "result": "passed",
         "rule_source": "system_builtin",
         "selected": len(supported_paths),
+    }
+    for name, source, heading in (
+        ("objective.m", "#import <Foundation/Foundation.h>\n", "Objective-C"),
+        ("matrix.m", "function y = sample(x)\ny = x + 1;\nend\n", "MATLAB"),
+    ):
+        (repo / name).write_text(source, encoding="utf-8")
+        output = _run([str(binary), "rules", "check", name], cwd=repo, env=env)
+        if "Pattern: **/*.m\n" not in output or heading not in output:
+            _fail("candidate changed content-dependent .m rule routing")
+    mm_output = _run([str(binary), "rules", "check", "native/object.mm"], cwd=repo, env=env)
+    if "Objective-C" not in mm_output:
+        _fail("candidate did not route Objective-C++ to Objective-C rules")
+    result["m_routing"] = "matlab_and_objective_c"
+    return result
+
+
+def _comment_probe_records(path: str) -> list[dict[str, str]]:
+    """Build a bounded comment batch whose public fields must survive intact."""
+
+    return [
+        {
+            "content": f'Use "guard" before step {number}.',
+            "existing_code": "    return 2",
+            "suggestion_code": "    return 3",
+            "path": path,
+            "severity": "low",
+            "category": "bug",
+        }
+        for number in (1, 2)
+    ]
+
+
+def _comment_probe_arguments(mode: str, path: str) -> str:
+    """Serialize controlled correct, recoverable and suspect tool arguments."""
+
+    records = _comment_probe_records(path)
+    if mode == "array":
+        return json.dumps({"comments": records})
+    serialized = json.dumps(records)
+    if mode == "repaired":
+        serialized = serialized.replace('\\"guard\\"', '"guard"')
+    elif mode == "rejected":
+        serialized = (
+            '[{"content":"Use "guard","existing_code":"    return 2",'
+            '"suggestion_code":"    return 3","path":' + json.dumps(path) + "}]"
+        )
+    return json.dumps({"comments": serialized})
+
+
+def _comment_arguments_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Cross OCR's real parser and failure serialization using a deterministic gateway."""
+
+    from ocr_toolkit.review_runner import _tool_failure_telemetry
+
+    root = directory / "comment-arguments-probe"
+    root.mkdir()
+    repo, base, head = _synthetic_repo(root, _isolated_probe_environment(root / "git-home"))
+    for mode in ("array", "serialized", "repaired", "rejected"):
+        env = _isolated_probe_environment(root / f"{mode}-home")
+        with _stub_gateway(comment_mode=mode) as gateway:
+            env.update(
+                {
+                    "OCR_LLM_URL": gateway,
+                    "OCR_LLM_TOKEN": "synthetic-token",
+                    "OCR_LLM_MODEL": "synthetic-model",
+                    "OCR_LLM_PROTOCOL": "openai",
+                    "OCR_TELEMETRY_ENABLED": "false",
+                }
+            )
+            raw = _run(
+                [
+                    str(binary),
+                    "review",
+                    "--from",
+                    base,
+                    "--to",
+                    head,
+                    "--format",
+                    "json",
+                    "--audience",
+                    "agent",
+                    "--concurrency",
+                    "1",
+                    "--effort",
+                    "low",
+                    "--no-filter",
+                ],
+                cwd=repo,
+                env=env,
+            )
+        payload = json.loads(raw)
+        comments = payload.get("comments")
+        warnings = payload.get("warnings", [])
+        if not isinstance(comments, list) or not isinstance(warnings, list):
+            _fail(f"comment arguments {mode}: invalid result shape")
+        if mode == "rejected":
+            calls = payload.get("tool_calls", {})
+            telemetry = _tool_failure_telemetry(calls)
+            details = calls.get("failure_details", [])
+            if (
+                comments
+                or not telemetry.valid
+                or telemetry.failed != 1
+                or len(details) != 1
+                or details[0].get("arguments") != _comment_probe_arguments(mode, "example.py")
+            ):
+                _fail("comment arguments rejection lost its closed failure evidence")
+        else:
+            expected = _comment_probe_records("example.py")
+            actual = [{key: comment.get(key) for key in expected[0]} for comment in comments]
+            if sorted(actual, key=lambda item: item["content"]) != expected:
+                _fail(f"comment arguments {mode}: changed or lost comment fields")
+            if any(comment.get("start_line") != 2 for comment in comments):
+                _fail(f"comment arguments {mode}: lost deterministic anchors")
+        repaired = [
+            item
+            for item in warnings
+            if isinstance(item, dict) and item.get("type") == "comment_args_repaired"
+        ]
+        if len(repaired) != int(mode == "repaired"):
+            _fail(f"comment arguments {mode}: wrong repair warning state")
+    return {
+        "result": "passed",
+        "intact_cases": ["array", "serialized", "repaired"],
+        "comments_per_batch": 2,
+        "suspect_batch_rejected": True,
+        "failure_arguments_preserved": True,
+        "repair_warning": True,
     }
 
 
@@ -2134,35 +2216,28 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
     git_env = _isolated_probe_environment(directory / "git-home")
     repo, base, head = _synthetic_repo(directory, git_env)
-    version_output = _run([str(binary), "--version"], cwd=repo)
+    version_output = _run([str(binary), "--version"], cwd=repo, env=git_env)
     if re.search(rf"(?<![0-9.])v?{re.escape(version)}(?![0-9.])", version_output) is None:
         _fail(f"OCR binary did not report candidate version {version}")
-    help_output = _run([str(binary), "review", "--help"], cwd=repo)
+    help_output = _run([str(binary), "review", "--help"], cwd=repo, env=git_env)
     required_review_flags = set(REQUIRED_REVIEW_FLAGS)
-    if _version(version) >= (1, 10, 0):
-        required_review_flags.add("--effort")
     missing = sorted(flag for flag in required_review_flags if flag not in help_output)
     if missing:
         _fail(f"candidate review help is missing required flags: {', '.join(missing)}")
     preview_home = directory / "preview-home"
     preview_env = _isolated_probe_environment(preview_home)
     preview_command = [str(binary), "review", "--from", base, "--to", head, "--preview"]
-    json_preview = _version(version) >= (1, 9, 0)
-    if json_preview:
-        preview_command.extend(["--format", "json"])
+    preview_command.extend(["--format", "json"])
     preview = _run(preview_command, cwd=repo, env=preview_env)
-    if json_preview:
-        try:
-            preview_payload = json.loads(preview)
-        except json.JSONDecodeError as exc:
-            raise CompatibilityError("candidate JSON preview did not emit JSON") from exc
-        preview_files = preview_payload.get("files") if isinstance(preview_payload, dict) else None
-        if not isinstance(preview_files, list) or not any(
-            isinstance(item, dict) and item.get("path") == "example.py" for item in preview_files
-        ):
-            _fail("candidate JSON preview did not select the synthetic changed file")
-    elif "example.py" not in preview:
-        _fail("candidate preview did not select the synthetic changed file")
+    try:
+        preview_payload = json.loads(preview)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("candidate JSON preview did not emit JSON") from exc
+    preview_files = preview_payload.get("files") if isinstance(preview_payload, dict) else None
+    if not isinstance(preview_files, list) or not any(
+        isinstance(item, dict) and item.get("path") == "example.py" for item in preview_files
+    ):
+        _fail("candidate JSON preview did not select the synthetic changed file")
     if os.path.lexists(preview_home / ".opencodereview" / "sessions"):
         _fail("candidate preview created a review session store")
 
@@ -2217,10 +2292,9 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     comments = sample.get("comments")
     if not isinstance(comments, list) or len(comments) != 1 or not isinstance(comments[0], dict):
         _fail("candidate full review did not emit the synthetic comment")
-    if _version(version) >= (1, 10, 0):
-        _validate_file_groups(sample.get("groups"), {"example.py"})
-        if review_stages != ["main", "main", "filter", "main"]:
-            _fail(f"default medium review emitted an unexpected stage sequence: {review_stages!r}")
+    _validate_file_groups(sample.get("groups"), {"example.py"})
+    if review_stages != ["main", "main", "filter", "main"]:
+        _fail(f"default medium review emitted an unexpected stage sequence: {review_stages!r}")
     sample["future_additive_field"] = {"accepted": True}
     from ocr_toolkit.posting.comments import comment_line
     from ocr_toolkit.posting.formatting import (
@@ -2239,27 +2313,25 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         _fail("toolkit token summary rejected the candidate result contract")
     if "1 total" not in format_tool_calls_summary(sample.get("tool_calls")):
         _fail("toolkit tool-call summary rejected the candidate result contract")
-    thinking_probe: dict[str, Any] | None = None
-    if _version(version) >= (1, 9, 0):
-        if comment.get("thinking") != "Synthetic private compatibility reasoning.":
-            _fail("candidate did not preserve additive comment thinking")
-        if "Synthetic private compatibility reasoning." in rendered:
-            _fail("toolkit posting consumer exposed private comment thinking")
-        thinking_probe = {
-            "additive_field_preserved": True,
-            "posting_exposes_thinking": False,
-            "result": "passed",
-        }
+    if comment.get("thinking") != "Synthetic private compatibility reasoning.":
+        _fail("candidate did not preserve additive comment thinking")
+    if "Synthetic private compatibility reasoning." in rendered:
+        _fail("toolkit posting consumer exposed private comment thinking")
+    thinking_probe = {
+        "additive_field_preserved": True,
+        "posting_exposes_thinking": False,
+        "result": "passed",
+    }
 
     contracts: dict[str, Any] = {
         "numeric_cli_probe": _numeric_cli_probe(binary, repo, base, head, directory),
         "optional_capabilities": optional_capabilities,
-        "review_budget_probe": _budget_result_probe(binary, version, directory),
-        "target_rule_selection_probe": _target_rule_selection_probe(binary, version, directory),
+        "review_budget_probe": _budget_result_probe(binary, directory),
+        "target_rule_selection_probe": _target_rule_selection_probe(binary, directory),
         "version_probe": "passed",
         "required_review_flags": sorted(required_review_flags),
         "preview_probe": {
-            "format": "json" if json_preview else "text",
+            "format": "json",
             "path": "example.py",
             "result": "passed",
             "session_store_created": False,
@@ -2272,17 +2344,13 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
             "result": "passed",
         },
     }
-    if _version(version) >= (1, 10, 0):
-        contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, version, directory)
-    if _version(version) >= (1, 11, 1):
-        contracts["small_change_grouping_probe"] = _small_change_grouping_probe(
-            binary, version, directory
-        )
-        contracts["language_rule_probe"] = _language_rule_probe(binary, version, directory)
-    if _version(version) >= (1, 9, 10):
-        contracts["completion_cap_probe"] = _completion_cap_probe(binary, version, directory)
-    if thinking_probe is not None:
-        contracts["comment_thinking_probe"] = thinking_probe
+    contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
+    contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
+    contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
+    contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
+    contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
+    contracts["comment_thinking_probe"] = thinking_probe
+    _validate_current_contracts(contracts)
     return contracts
 
 
@@ -2488,7 +2556,7 @@ def qualify_release(
         contracts_passed=True,
     )
     evidence = {
-        "schema_version": 3 if _version(version) >= (1, 11, 1) else 2,
+        "schema_version": 3,
         "upstream_repository": UPSTREAM_REPOSITORY,
         "version": version,
         "tag": tag,
@@ -2630,6 +2698,12 @@ def prepare_update(
     unknown_conclusions = set(conclusions).difference(versions)
     if unknown_conclusions:
         _fail("human conclusions may reference only evidence versions in this promotion")
+
+    for item in evidences:
+        if _version(str(item["version"])) >= history.HISTORICAL_CUTOFF:
+            if item.get("schema_version") != 3:
+                _fail("current candidate requires evidence schema 3")
+            _validate_current_contracts(item.get("contracts"))
 
     version = versions[-1]
     releases = manifest.get("releases")

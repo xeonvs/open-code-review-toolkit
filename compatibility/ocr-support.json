@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.3",
-  "recommended_version": "1.11.3",
+  "monitoring_floor": "1.11.5",
+  "recommended_version": "1.11.5",
   "releases": [
     {
       "assets": [
@@ -1505,6 +1505,112 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.3",
       "status": "tested",
       "version": "1.11.3"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "09a57a9022071c19f82cec4d793bb8d93d3b308e0207bdd6b9ad823cbb1e5d17",
+          "size": 57803552
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "36a29bb525f59ad88f39f6fb4a8bd76a67df5ed95399c92f3d10143274c91b15",
+          "size": 54844930
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "7133465774aff6330fd8d25eecc57a28e5852bc55d1ae55fd00443ebc4c6b023",
+          "size": 56058018
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "981964ac4466f1ed20129ae46b63a31a929219c1228a7a94c345cb4c9b8155d3",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "e9300d32877a1512e9571a5776c9173c2f7eccee58d2f7ef4aa54011bd70b9fb",
+          "size": 57519616
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "e08fc1d3896509b1589046f6180b92b921cd540c113faff60a98d4f79198450d",
+          "size": 53482496
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "2dccf4dccaabcb0be94e43766316acbf7c8ab6f7309001575ee9e0cd4862a273",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.4.json",
+      "evidence_sha256": "0ffd6f968f27a7e67a7abf034db3689292e546866ec38949f94e11304067e3cf",
+      "human_conclusion": "Reviewed adjacent source changes and verified hosted assets plus expanded Darwin no-LLM contracts: private failure arguments require toolkit parser adaptation; lossless comment repair preserves batch fields and rejects suspect truncation; Objective-C++ uses Objective-C rules. Site and plugin changes are upstream-only. Diagnostics remain independent from publication; no LLM quality claim.",
+      "published_at": "2026-09-04T12:38:24Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.4",
+      "status": "tested",
+      "version": "1.11.4"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "4b7cde2c86d6f6967b3fd43c9401326e11c63cdb336252b2e5a528591fe474b2",
+          "size": 57815904
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9",
+          "size": 54844978
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95",
+          "size": 56070306
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "ec10e788463ad405a7868d3803cb52d64fe8defb1934e70007165b3be3f222b2",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "667164fc0d58f711dbb04c4aa4f7c601174d10bb25f4041f6626e69f7e0e420e",
+          "size": 57533952
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "34c31dd218e47ba9ab8bc5d6fd57d2fa39fd70e33aa6b890ab0f38922f9ba166",
+          "size": 53496320
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.5.json",
+      "evidence_sha256": "18b56303554d3d8eee89f3f8db17c3d491f5f2bb990f5ffa412d64db685d1ada",
+      "human_conclusion": "Reviewed adjacent source changes and verified hosted assets plus expanded Darwin no-LLM contracts. Grouped-review renaming preserves consumed runtime behavior; grpc updates the binary dependency, while VS Code packages and browser-only viewer marks do not add toolkit surfaces. Exact 1.11.5 is the deployment target; configured LLM qualification remains pending.",
+      "published_at": "2026-09-05T04:23:21Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.5",
+      "status": "tested",
+      "version": "1.11.5"
     }
   ],
   "schema_version": 1,
