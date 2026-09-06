@@ -83,9 +83,9 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 
 | Queue | Status | Work |
 | --- | --- | --- |
-| WQ-01 | in_progress | Plan, milestone and branch ready; signed commit and Draft next |
+| WQ-01 | done | Signed planning commit pushed; Draft PR #178 opened |
 | WQ-02 | done | Verified assets and safely updated local OCR 1.11.5 |
-| WQ-03 | pending | Bounded failure arguments and DLP/summary regressions |
+| WQ-03 | done | Bounded failure arguments and DLP/summary regressions |
 | WQ-04 | pending | Expanded real OCR qualification, adjacent evidence and final pins |
 | WQ-05 | pending | Public docs, decision flow, changelog and backlog reconciliation |
 | WQ-06 | pending | Final local gate, push, hosted checks and external Draft handoff |
@@ -123,6 +123,11 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9 against
   GitHub and the verified upstream checksum file. Isolated version/help passed;
   config, credentials and user HOME were preserved. Milestone v0.9.1 tracks #176/#177.
+- 2026-09-06: Draft #178 opened. Baseline real OCR 1.11.5 no-LLM contracts passed.
+  Diagnostic/parser/finalization/posting tests passed 236 tests and 94 subtests.
+  Paired clean/finding/warning/partial/filtered results produced identical persisted
+  projections, DLP state, console diagnostics and GitLab notes with/without private
+  arguments. Malformed and oversized arguments remain diagnostic-only degradation.
 
 #### Risks And Recovery
 
@@ -134,7 +139,7 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-Finish WQ-01 coordination and WQ-02 local binary verification, then implement WQ-03.
+Implement WQ-04 expanded real OCR probes and adjacent evidence promotion.
 After the initial Draft push, keep later implementation commits local until all
 slices and final local validation complete.
 

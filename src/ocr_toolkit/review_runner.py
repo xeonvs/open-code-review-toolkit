@@ -184,6 +184,8 @@ MAX_TOOL_FAILURE_DETAILS_LOGGED = 20
 MAX_TOOL_FAILURE_NAME_CHARS = 256
 MAX_TOOL_FAILURE_PATH_CHARS = 4_096
 MAX_TOOL_FAILURE_ERROR_CHARS = 32_768
+MAX_TOOL_FAILURE_ARGUMENT_CHARS = 32_768
+MAX_TOOL_FAILURE_ARGUMENT_BYTES = 131_072
 MAX_TOOL_FAILURE_LOG_FIELD_CHARS = 500
 
 
@@ -900,6 +902,17 @@ def _safe_publication_warnings(
     return retained, len(value) - len(retained)
 
 
+def _bounded_tool_failure_arguments(value: object) -> bool:
+    """Validate opaque private arguments without retaining or interpreting their content."""
+
+    if not isinstance(value, str) or len(value) > MAX_TOOL_FAILURE_ARGUMENT_CHARS:
+        return False
+    try:
+        return len(value.encode("utf-8")) <= MAX_TOOL_FAILURE_ARGUMENT_BYTES
+    except UnicodeEncodeError:
+        return False
+
+
 def _tool_failure_telemetry(value: object) -> ToolFailureTelemetry:
     """Parse additive OCR diagnostics without granting them result authority."""
 
@@ -954,7 +967,11 @@ def _tool_failure_telemetry(value: object) -> ToolFailureTelemetry:
         if not isinstance(detail, dict) or set(detail) not in (
             {"tool_call_number", "tool_name", "error"},
             {"tool_call_number", "tool_name", "file_path", "error"},
+            {"tool_call_number", "tool_name", "arguments", "error"},
+            {"tool_call_number", "tool_name", "file_path", "arguments", "error"},
         ):
+            return ToolFailureTelemetry(True, False, None, {}, ())
+        if "arguments" in detail and not _bounded_tool_failure_arguments(detail["arguments"]):
             return ToolFailureTelemetry(True, False, None, {}, ())
         number = detail.get("tool_call_number")
         name = detail.get("tool_name")
