@@ -147,6 +147,14 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   baselines. Complete real-binary JSON proof is identical before/after refactoring
   for both releases. Focused suite passed 389 tests and 109 subtests; documentation
   and metadata suite passed 163 tests. Canonical maintenance instructions updated.
+- 2026-09-06: final quality gate passed 1524 tests and 408 subtests at 86.39%
+  combined coverage; risk groups passed at 85/82/86/88%. Ruff format/lint, MyPy,
+  Bandit, lock, manifest/evidence, Towncrier and plan lifecycle checks passed.
+  Pinned Gitleaks 8.24.3 passed full feature history and current tree. Value-free
+  privacy comparison against main found only two added email matches in the
+  intentional private/public PII regression fixtures; no new hard-category finding.
+  Aggregate self-review confirmed unchanged publication/summary/DLP authority,
+  isolated historical readback and forward-only current qualification.
 
 #### Risks And Recovery
 
@@ -158,12 +166,13 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-Complete WQ-06 local final gates and aggregate self-review, then push the completed
-history to Draft #178 and reconcile hosted checks. External model qualification
-will start from the final pushed commit/tree with a built toolkit artifact; the
-published example's toolkit package pin advances only in the later release PR.
-After the initial Draft push, keep later implementation commits local until all
-slices and final local validation complete.
+Local implementation and validation are complete. WQ-06's external receipt is
+Draft PR #178: verify its current remote head and hosted checks before continuing.
+If the head has green checks and the recorded runtime tree is unchanged, the next
+action is configured external model qualification with OCR 1.11.5 and the toolkit
+artifact built from that exact head. Otherwise inspect the failed hosted gate and
+apply only an evidence-driven correction. Keep the PR Draft and both issues open;
+the example's published toolkit package pin advances only in a later release PR.
 
 #### Plan Fidelity Check
 
