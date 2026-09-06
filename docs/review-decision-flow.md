@@ -89,7 +89,8 @@ flowchart TD
     present -- Yes --> absent[State: absent<br/>no diagnostic log]
     present -- No --> shape{failure, failure_by_tool, and<br/>failure_details form one bounded envelope?}
     shape -- No --> invalid[State: invalid<br/>static malformed notice in console]
-    shape -- Yes --> failed{Failed count is zero?}
+    shape -- Yes --> omit_args[Discard optional opaque arguments<br/>before normalized diagnostics and publication DLP]
+    omit_args --> failed{Failed count is zero?}
     failed -- Yes --> verified_zero[State: verified, failed: 0<br/>no detail lines]
     failed -- No --> reconcile{Contradicts toolkit-owned<br/>completed evidence actions?}
     reconcile -- Yes --> conflicting[State: conflicting<br/>toolkit completion remains authoritative]
@@ -112,7 +113,7 @@ flowchart TD
 
     class retain,later_ok success;
     class invalid,conflicting,verified,later_warn warning;
-    class raw,absent,verified_zero auxiliary;
+    class raw,absent,verified_zero,omit_args auxiliary;
     class present,shape,failed,reconcile,later decision;
 ```
 
@@ -122,6 +123,15 @@ finalized result, receipt, merge-request comments, publication-DLP telemetry, or
 inputs. Receipt v8 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
 `failed` integer for `verified`; the toolkit action receipt v3 remains authoritative for evidence
 attempts and completions.
+
+The optional raw `arguments` string is bounded to 32768 characters and 131072
+UTF-8 bytes, then discarded rather than rendered. Its private content alone cannot
+change publication-DLP counters, review status, findings, or summary text. Invalid
+arguments make the additive diagnostic envelope invalid while retaining the review
+signal. Public findings, warnings and suggestions still pass the full DLP checks.
+Raw OCR stderr can contain arguments and stays private. A recovered comment batch
+keeps its ordinary repair warning; neither repair nor diagnostic failure controls
+summary publication through the later-action branch.
 
 This separation applies in every execution profile. It is not a local-mode exception and it is
 not an automatic-approval feature: publication owns review-signal delivery, while any later action

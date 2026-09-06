@@ -4,6 +4,13 @@ The versioned support contract lives in [`compatibility/ocr-support.json`](../co
 
 ## Qualification lanes
 
+Live qualification runs one forward-only suite for the current consumed review
+contract. It does not select parsers, fixtures, or required probes by candidate
+version. Historical evidence before the suite boundary is checked separately by
+`scripts/ocr_compat_history.py` using frozen expectations; that reader never
+executes old binaries. Generic promotion tests use a frozen baseline. See
+[qualification maintenance](development.md#maintaining-ocr-qualification).
+
 The **OCR compatibility** workflow discovers stable upstream releases newer than the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`, after the observed upstream release window; GitHub may delay or omit scheduled delivery, so exact-tag manual dispatch remains the recovery path. Drafts, prereleases, non-semantic tags, unexpected asset sets, oversized metadata or downloads, redirects outside the reviewed GitHub origins, and checksum disagreement fail closed. Every binary digest must agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 
 Candidate execution uses the verified Linux amd64 binary on an Ubuntu runner. The harness checks the reported version, the CLI flags consumed by the GitLab integration, range preview behavior, an actual JSON review through a deterministic local gateway, an aggregate-budget review that must preserve completed findings and emit budget-attributed partial coverage, and the additive JSON fields consumed by posting. Toolkit-managed numeric OCR options are also exercised at omitted/default, sentinel, invalid-below-boundary, minimum minus one, minimum, representative, and maximum edges when bounded. The evidence records closed outcomes, recognized diagnostics, normalization, ownership, and effective values observed through real loop behavior; CLI help text is not accepted as runtime evidence. For OCR 1.9.0 and later the harness also requires JSON preview without a session-store side effect and proves that additive comment `thinking` is accepted but not published to GitLab. Upstream source review separately verifies how OCR derives that field; the toolkit probe does not claim to reproduce a provider's private reasoning channel. Evidence permits unknown new fields but requires the fields the toolkit reads. Legacy result statuses and the versioned `ocr.run-manifest/v1` outcome are normalized through one shared toolkit contract; manifest coverage sets, failure classifications, terminal state, and budget attribution must agree before a result can be published.
@@ -122,6 +129,50 @@ The new opt-in upstream raw-traffic capture is never inherited by a toolkit-owne
 Upstream SIGTERM handling is compatible with the toolkit's termination masking and cleanup boundary. Untracked-file listing error propagation affects OCR workspace discovery, while the production GitLab path supplies immutable explicit `--from`/`--to` refs. VS Code dependency updates are not consumed. Built-in language routing remains the exact ten-extension set qualified for 1.11.2, with `.svh` still excluded.
 
 Deploy toolkit 0.9.0 directly with OCR 1.11.3. The public Linux amd64 example verifies SHA-256 `9726204ac81baee153fd65b1ff357c380f73e9d8091c4a73c3c9fb541b5164cb`; Darwin arm64 verifies `515cd92ce300b62dea2bcaf53e910cdf57b681e1d58bbd0a9e8e49617bca52fa`; and upstream `sha256sum.txt` verifies `472a3ce64834f4909bc9fac50e6de08a3c8ef5c0489b755dd1d2b19c14c8792e`.
+
+### OCR 1.11.4 — toolkit 0.9.1 qualification predecessor
+
+OCR 1.11.4 adds raw `arguments` to failed-tool details. The toolkit accepts that
+optional field only as an opaque string up to 32768 characters and 131072 UTF-8
+bytes, then omits it from normalized diagnostics before publication DLP. It cannot
+enter toolkit console output, finalized results, receipts, GitLab notes, or toolkit
+telemetry. Raw OCR stderr remains a private artifact. Invalid diagnostic shape or
+bounds preserve a valid review publication and only affect the independent
+later-action decision under existing receipt v8 rules.
+
+The native `code_comment` parser can recover serialized batches with damaged
+escaping. Controlled real-binary probes verify native arrays, serialized arrays,
+intact repaired comments/anchors/suggestions, rejection of suspect truncation,
+and the ordinary `comment_args_repaired` warning. The toolkit does not implement
+another repair parser or treat a repair as independent finding validation.
+Objective-C++ `.mm` files use Objective-C rules; `.m` retains content-dependent
+MATLAB/Objective-C routing. Documentation-site headings and plugin distribution
+guardrails are upstream-only changes.
+
+### OCR 1.11.5 — toolkit 0.9.1 target
+
+Deploy toolkit 0.9.1 directly with exact OCR 1.11.5; an intermediate 1.11.4
+installation is unnecessary. The two releases retain separate adjacent source
+audits and evidence. Assets were verified by hosted run `33962853525`; expanded
+contract evidence explicitly identifies checksum-verified Darwin arm64 probes.
+Final hosted qualification and configured external model qualification remain
+distinct proofs.
+
+The grouped-review refactor preserves runtime behavior: concurrency counts groups,
+the conversation prompt ceiling applies per group, and large-diff preselection
+still checks each file separately. A diagnostic `file_path` may be a group key;
+it is not a validated GitLab file location. The inherited completion cap remains
+`16384`, an explicit positive override is still supported, default effort stays
+`medium`, and max-tools retains template-default semantics. No public environment,
+receipt v8, action receipt v3, summary, or approval contract is added.
+
+The binary updates grpc to 1.83.1; fast-uri and browserslist changes belong to the
+upstream VS Code extension. Viewer fixed/ignored marks are browser-local state and
+do not resolve or suppress GitLab findings. No viewer state is consumed by toolkit.
+
+Linux amd64 SHA-256: `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95`.
+Darwin arm64: `c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9`.
+Upstream checksum file: `0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a`.
 
 ## Promotion and rollback
 

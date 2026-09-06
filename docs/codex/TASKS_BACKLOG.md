@@ -6,6 +6,11 @@ Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Rel
 
 ## Existing backlog reconciliation
 
+OCR 1.11.4/1.11.5 integration does not complete any remaining conditional item:
+Objective-C++ routing is an OCR Rules change rather than a framework evidence pack;
+viewer fixed/ignored marks are browser state rather than forge lifecycle support;
+private failure arguments add no telemetry exporter or model-profile capability.
+
 | Previous item | Disposition | Result |
 | --- | --- | --- |
 | M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through shared evidence contracts. |

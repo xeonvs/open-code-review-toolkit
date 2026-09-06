@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Optional exact stable upstream tag, for example v1.7.18
+        description: Optional exact stable upstream tag to qualify against the current contract
         required: false
         type: string
 

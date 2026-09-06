@@ -63,6 +63,14 @@ Receipt v8 records the bounded configured capability inventory and positive call
 
 ## Preserved current safety properties
 
+Failed-tool `arguments` are opaque private diagnostic input. The toolkit validates
+their string type and bounded size, omits them from normalized diagnostics, and
+removes the diagnostic envelope before publication DLP. This prevents private-only
+arguments from creating false publication degradation without weakening DLP on
+public findings, warnings, or suggestions. The original OCR stderr may contain
+raw arguments and must remain a private artifact; `OCR_RAW_LOGGING` remains removed
+from toolkit-owned OCR child environments.
+
 - Repository reads are bounded, rooted, symlink-aware, immutable-object reads that exclude common dependency/build trees and never execute repository content.
 - Review context uses a closed `off|metadata|enriched` selector. `off` retains only validated source/protected-target/author identities; `metadata` admits bounded MR fields; `enriched` requires the immutable protected policy and admits only stable bounded discussion, CI-outcome, and adapter projections. Source policy, unknown fields/classes, raw display identities, arbitrary URLs/IDs, tokens, and ambient environment values cannot expand it.
 - Target protection uses a separate closed selector. Unset means exact `required`; explicit empty or unknown values fail closed. Exact `unprotected` changes behavior only when GitLab reports the actual target unprotected. That run permits `off|metadata`, built-in immutable evidence, and required exact-target Rules as untrusted guidance, while rejecting enriched acquisition, any adapter setting, direct or inherited external MCP, accepted decisions, and structured target guidance before OCR.

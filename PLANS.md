@@ -89,8 +89,8 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-03 | done | Bounded failure arguments and DLP/summary regressions |
 | WQ-04 | done | Expanded real OCR qualification, adjacent evidence and final pins |
 | WQ-04R | done | Forward-only live qualification, frozen historical readback and maintenance instructions |
-| WQ-05 | in_progress | Public docs, decision flow, changelog and backlog reconciliation |
-| WQ-06 | pending | Final local gate, push, hosted checks and external Draft handoff |
+| WQ-05 | done | Public docs, decision flow, changelog and backlog reconciliation |
+| WQ-06 | in_progress | Final local gate, push, hosted checks and external Draft handoff |
 
 #### Locked Decisions
 
@@ -158,7 +158,10 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-Finish WQ-05 public contract review, then perform WQ-06 final local/hosted gates.
+Complete WQ-06 local final gates and aggregate self-review, then push the completed
+history to Draft #178 and reconcile hosted checks. External model qualification
+will start from the final pushed commit/tree with a built toolkit artifact; the
+published example's toolkit package pin advances only in the later release PR.
 After the initial Draft push, keep later implementation commits local until all
 slices and final local validation complete.
 
