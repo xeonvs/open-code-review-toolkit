@@ -301,6 +301,27 @@ def test_090_release_notes_cover_limited_targets_and_ocr_diagnostic_boundaries()
         assert phrase in notes
 
 
+def test_091_release_notes_cover_private_diagnostics_and_direct_ocr_migration() -> None:
+    """Keep diagnostic containment and the exact OCR 1.11.5 deployment path explicit."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.9.1")
+
+    for phrase in (
+        "failure_details.arguments",
+        "never enter finalized results, receipts, GitLab notes, or toolkit telemetry",
+        "closed compatibility-status path",
+        "forward-only live OCR qualification",
+        "frozen historical evidence validation",
+        "only supported runtime for toolkit 0.9.1",
+        "install it directly without an intermediate OCR release",
+        "browser-only viewer fixed/ignored marks add no toolkit behavior",
+        "Objective-C++ `.mm` files",
+        "canonical review decision flow",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

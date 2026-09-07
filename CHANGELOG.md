@@ -1,3 +1,31 @@
+## 0.9.1 - 2026-09-07
+
+### 🐛 Bug Fixes
+
+- Accept bounded private `failure_details.arguments` from OCR without treating otherwise valid failed-tool diagnostics as malformed. Arguments are omitted before normalized console output and publication DLP; they never enter finalized results, receipts, GitLab notes, or toolkit telemetry. Invalid diagnostics still preserve valid review findings and summary publication. Existing DLP checks on public findings, warnings, and suggestions and independent later-action restrictions remain in effect.
+
+  Fail OCR qualification probes through the closed compatibility-status path when a review emits malformed JSON or invalid result, tool-call, failure-detail, or comment shapes. Private diagnostics remain available on stderr for CI troubleshooting without leaking into the public status artifact. ([#176](https://github.com/xeonvs/open-code-review-toolkit/issues/176))
+
+### 🛠 Maintenance
+
+- Qualify OCR 1.11.4 as the separately recorded predecessor to the final 1.11.5 target. Verify native comment-batch recovery and its repair warning through a deterministic gateway, while preserving finding fields, anchors, suggestions and rejection of suspect truncation. Upstream site and plugin-distribution changes do not add toolkit capabilities. See the separate diagnostic-parser fix and Objective-C++ Rules entries. ([#176](https://github.com/xeonvs/open-code-review-toolkit/issues/176))
+- Target checksum-verified OCR 1.11.5 as the only supported runtime for toolkit 0.9.1; install it directly without an intermediate OCR release. Separately qualify the 1.11.4 and 1.11.5 changes. Grouped-review naming now describes concurrency and prompt ceilings per group; per-file large-diff filtering, default medium effort, inherited completion cap, max-tools, result/manifest and receipt contracts remain unchanged. The OCR binary includes the grpc update; VS Code dependency updates and browser-only viewer fixed/ignored marks add no toolkit behavior or GitLab lifecycle authority. ([#177](https://github.com/xeonvs/open-code-review-toolkit/issues/177))
+
+### 🔧 Refactoring
+
+- Separate forward-only live OCR qualification from frozen historical evidence validation. Every candidate now runs the same current behavioral suite; legacy grouping/preview execution fallbacks are removed, promotion validates current contract evidence before writing, and generic promotion tests no longer track the latest runtime pin. Existing recorded evidence remains readable and unchanged. This changes repository qualification tooling, not the toolkit runtime API. ([#176](https://github.com/xeonvs/open-code-review-toolkit/issues/176))
+
+### 📖 Documentation
+
+- Document group-scoped concurrency and prompt ceilings, the separate per-file large-diff filter, and the diagnostic-argument discard step in the canonical review decision flow. Distinguish private OCR artifacts from published GitLab summaries and identify the built toolkit artifact required for pre-release qualification.
+
+  Keep current operator guidance version-neutral and point installation and pin lookup to the same toolkit revision's compatibility manifest; preserve exact executable pins and historical qualification evidence. ([#177](https://github.com/xeonvs/open-code-review-toolkit/issues/177))
+
+### 🧩 Rules
+
+- Route Objective-C++ `.mm` files through OCR's built-in Objective-C rules. Content-dependent MATLAB/Objective-C routing for `.m` remains qualified. ([#176](https://github.com/xeonvs/open-code-review-toolkit/issues/176))
+
+
 ## 0.9.0 - 2026-09-03
 
 ### 🚀 Features
