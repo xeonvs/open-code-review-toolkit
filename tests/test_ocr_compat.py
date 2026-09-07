@@ -2061,3 +2061,19 @@ def test_preview_file_selection_accepts_json_and_rejects_legacy_text(
             module._preview_file_selection(payload, "fixture.unknown")
     else:
         assert module._preview_file_selection(payload, "fixture.unknown") == expected
+
+
+@pytest.mark.parametrize("invalid_path", [None, 7])
+def test_selected_preview_paths_rejects_non_string_selected_path(invalid_path: object) -> None:
+    """Hostile preview paths fail closed instead of reaching mixed-type sorting."""
+
+    module = load_script()
+    payload = {
+        "files": [
+            {"path": "valid.py", "will_review": True},
+            {"path": invalid_path, "will_review": True},
+        ]
+    }
+
+    with pytest.raises(module.CompatibilityError, match="selected a file with an invalid path"):
+        module._selected_preview_paths(payload)

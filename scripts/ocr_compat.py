@@ -1914,6 +1914,25 @@ def _preview_file_selection(payload: object, path: str) -> tuple[bool, object]:
     return records[0].get("will_review") is True, records[0].get("exclude_reason")
 
 
+def _selected_preview_paths(payload: object) -> set[str]:
+    """Return selected paths from a language preview after validating their shape."""
+
+    if not isinstance(payload, dict):
+        _fail("language preview must be a JSON object")
+    files = payload.get("files")
+    if not isinstance(files, list):
+        _fail("language preview emitted an invalid file manifest")
+    selected: set[str] = set()
+    for item in files:
+        if not isinstance(item, dict) or item.get("will_review") is not True:
+            continue
+        path = item.get("path")
+        if not isinstance(path, str):
+            _fail("language preview selected a file with an invalid path")
+        selected.add(path)
+    return selected
+
+
 def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove the real OCR selector consumes target rules without changing its range."""
 
@@ -2040,14 +2059,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
         payload = json.loads(preview)
     except json.JSONDecodeError as exc:
         raise CompatibilityError("language preview did not emit JSON") from exc
-    files = payload.get("files") if isinstance(payload, dict) else None
-    if not isinstance(files, list):
-        _fail("language preview emitted an invalid file manifest")
-    selected = {
-        item.get("path")
-        for item in files
-        if isinstance(item, dict) and item.get("will_review") is True
-    }
+    selected = _selected_preview_paths(payload)
     if selected != set(supported_paths):
         missing = sorted(set(supported_paths) - selected)
         unexpected = sorted(selected - set(supported_paths))

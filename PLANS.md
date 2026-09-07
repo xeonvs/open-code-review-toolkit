@@ -105,7 +105,7 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-05 | done | Public docs, decision flow, changelog and backlog reconciliation |
 | WQ-06 | in_progress | Final local gate, push, hosted checks and external Draft handoff |
 | WQ-07 | done | Version-neutral guidance and generic fixtures validated and self-reviewed; Draft push/readback remains owned by WQ-06 |
-| WQ-08 | remediation_done | Malformed-output remediation and focused fuzz-style tests complete; holistic review and Codex Security diff scan remain |
+| WQ-08 | remediation_done | Malformed-output and hostile language-preview remediation complete; final Codex Security remains in WQ-06 |
 | WQ-09 | pending | Push completed feature head, make PR ready, verify checks/threads, squash-merge and verify development publication |
 | WQ-10 | pending | Prepare/merge `Release v0.9.1`, verify stable delivery and close issues/milestone; then no-release external reconciliation and cleanup |
 
@@ -196,6 +196,12 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   non-object detail entries through `CompatibilityError`. Sixteen focused cases pass,
   including the complete qualification CLI path to a private stderr diagnostic and
   closed `contracts/contract-probe-failed` status without traceback or evidence output.
+- 2026-09-07: holistic repository-script MyPy and trust-flow review found that a
+  selected language-preview entry with a non-string `path` could reach mixed-type set
+  sorting and raise `TypeError`. Explicit selected-path validation now rejects hostile
+  `null`/numeric values through `CompatibilityError`. Seven focused preview tests,
+  repository-script MyPy, Ruff and diff checks pass; self-review found no remaining
+  uncontrolled path in this slice.
 
 #### Risks And Recovery
 
