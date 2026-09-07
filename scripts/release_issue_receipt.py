@@ -42,7 +42,7 @@ def issue_state(payload: dict[str, Any], issue: int, *, require_closed: bool) ->
     reason = payload.get("state_reason")
     if state == "closed" and reason == "completed":
         return state
-    if not require_closed and state == "open" and reason is None:
+    if not require_closed and state == "open" and reason in (None, "reopened"):
         return state
     raise IssueReceiptError("tracked release issue has an incompatible state")
 

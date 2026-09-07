@@ -300,6 +300,14 @@ def test_issue_receipt_accepts_only_exact_actions_owned_comment_and_closed_state
     )
     assert (
         issue_receipt.issue_state(
+            {"number": 70, "state": "open", "state_reason": "reopened"},
+            70,
+            require_closed=False,
+        )
+        == "open"
+    )
+    assert (
+        issue_receipt.issue_state(
             {"number": 70, "state": "closed", "state_reason": "completed"},
             70,
             require_closed=True,
@@ -333,6 +341,18 @@ def test_issue_receipt_rejects_duplicate_wrong_body_or_incompatible_issue_state(
             {"number": 71, "state": "closed", "state_reason": "not_planned"},
             71,
             require_closed=False,
+        )
+    with pytest.raises(issue_receipt.IssueReceiptError, match="incompatible state"):
+        issue_receipt.issue_state(
+            {"number": 71, "state": "open", "state_reason": "not_planned"},
+            71,
+            require_closed=False,
+        )
+    with pytest.raises(issue_receipt.IssueReceiptError, match="incompatible state"):
+        issue_receipt.issue_state(
+            {"number": 71, "state": "open", "state_reason": "reopened"},
+            71,
+            require_closed=True,
         )
     with pytest.raises(issue_receipt.IssueReceiptError, match="response is invalid"):
         issue_receipt.issue_state(
