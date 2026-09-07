@@ -8,7 +8,7 @@ before handoff or commit. Completed stable plans are indexed in
 
 ### Toolkit 0.9.1 — OCR 1.11.4 and 1.11.5
 
-- **Status:** active; external model qualification complete, remediation in progress
+- **Status:** active; qualification, remediation and security review complete; final push pending
 - **Plan Origin:** plan_mode_approved
 - **Release classification:** release-required; stable delivery authorized
 - **Target stable version:** 0.9.1
@@ -103,9 +103,9 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-04 | done | Expanded real OCR qualification, adjacent evidence and final pins |
 | WQ-04R | done | Forward-only live qualification, frozen historical readback and maintenance instructions |
 | WQ-05 | done | Public docs, decision flow, changelog and backlog reconciliation |
-| WQ-06 | in_progress | Final local gate, push, hosted checks and external Draft handoff |
+| WQ-06 | in_progress | Final reconciliation commit, exact-head push and hosted checks |
 | WQ-07 | done | Version-neutral guidance and generic fixtures validated and self-reviewed; Draft push/readback remains owned by WQ-06 |
-| WQ-08 | remediation_done | Malformed-output and hostile language-preview remediation complete; final Codex Security remains in WQ-06 |
+| WQ-08 | done | Malformed-output and hostile language-preview remediation, regressions and Codex Security complete |
 | WQ-09 | pending | Push completed feature head, make PR ready, verify checks/threads, squash-merge and verify development publication |
 | WQ-10 | pending | Prepare/merge `Release v0.9.1`, verify stable delivery and close issues/milestone; then no-release external reconciliation and cleanup |
 
@@ -202,6 +202,17 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   `null`/numeric values through `CompatibilityError`. Seven focused preview tests,
   repository-script MyPy, Ruff and diff checks pass; self-review found no remaining
   uncontrolled path in this slice.
+- 2026-09-07: Codex Security scan `5db2da0c-3f84-46a4-b4dd-cf3521fd1402`
+  completed the security-relevant feature range `ae0a9ac..57f5236` with 7/7
+  surfaces closed and no reportable findings. Incremental scan
+  `90628f3c-10aa-4ce9-a3fa-b8c497e504d4` then covered the final
+  `57f5236..ecd7ecb` remediation commit, closed its sole runtime surface and found
+  no reportable issue. Both scans produced sealed reports and SARIF; the TAC status
+  was unavailable because its connector was not configured and did not gate review.
+- 2026-09-07: final completed-head gate passed 1537 tests and 408 subtests at
+  86.40% combined coverage; risk groups passed at 85/82/86/88%. Ruff, runtime
+  MyPy, Bandit, lock, manifest/evidence validation, rendered 0.9.1 Towncrier,
+  diff checks and pinned Gitleaks 8.24.3 passed.
 
 #### Risks And Recovery
 
@@ -213,9 +224,10 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-WQ-08's remediation is focused-tested and ready for its signed logical commit.
-Preserve the existing OCR evidence. Continue with one holistic branch review, full
-quality, pinned Gitleaks and Codex Security before pushing the finished head.
+Preserve the existing OCR evidence. Reconcile the current manifest and plan with the
+completed model qualification and two complementary Codex Security scans, run the
+final scoped/full local gates, commit the truthful state, then push only the finished
+head and complete WQ-09/WQ-10 through protected PR and release workflows.
 
 #### Plan Fidelity Check
 

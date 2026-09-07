@@ -1606,7 +1606,7 @@
       ],
       "evidence": "compatibility/evidence/ocr-1.11.5.json",
       "evidence_sha256": "18b56303554d3d8eee89f3f8db17c3d491f5f2bb990f5ffa412d64db685d1ada",
-      "human_conclusion": "Reviewed adjacent source changes and verified hosted assets plus expanded Darwin no-LLM contracts. Grouped-review renaming preserves consumed runtime behavior; grpc updates the binary dependency, while VS Code packages and browser-only viewer marks do not add toolkit surfaces. Exact 1.11.5 is the deployment target; configured LLM qualification remains pending.",
+      "human_conclusion": "Reviewed adjacent source changes and verified hosted assets plus expanded Darwin contracts. Grouped-review renaming preserves consumed runtime behavior; grpc updates the binary dependency, while VS Code packages and browser-only viewer marks do not add toolkit surfaces. A configured model-backed review completed all 9 selected items without GitLab posting; its malformed-output findings were remediated with fail-closed shape validation and focused hostile-input regressions. Exact 1.11.5 is the deployment target.",
       "published_at": "2026-09-05T04:23:21Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.5",
       "status": "tested",
