@@ -171,7 +171,22 @@ def test_manifest_rejects_assets_that_differ_from_evidence() -> None:
 
 @pytest.mark.parametrize(
     "corruption",
-    ["lost-comment", "changed-suggestion", "wrong-anchor", "missing-warning", "missing-arguments"],
+    [
+        "lost-comment",
+        "changed-suggestion",
+        "wrong-anchor",
+        "missing-warning",
+        "missing-arguments",
+        "malformed-json",
+        "top-level-list",
+        "top-level-string",
+        "top-level-null",
+        "tool-calls-list",
+        "tool-calls-string",
+        "tool-calls-null",
+        "failure-details-object",
+        "detail-string",
+    ],
 )
 def test_comment_probe_rejects_broken_boundary_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
@@ -190,6 +205,14 @@ def test_comment_probe_rejects_broken_boundary_observations(
         return contextlib.nullcontext("http://127.0.0.1:1/v1")
 
     def observation(*_args: object, **_kwargs: object) -> str:
+        invalid_top_levels = {
+            "malformed-json": "{",
+            "top-level-list": "[]",
+            "top-level-string": '"invalid"',
+            "top-level-null": "null",
+        }
+        if corruption in invalid_top_levels:
+            return invalid_top_levels[corruption]
         comments = [
             {**item, "start_line": 2} for item in module._comment_probe_records("example.py")
         ]
@@ -212,6 +235,17 @@ def test_comment_probe_rejects_broken_boundary_observations(
                 "failure_by_tool": {"code_comment": 1},
                 "failure_details": [detail],
             }
+            invalid_calls: dict[str, object] = {
+                "tool-calls-list": [],
+                "tool-calls-string": "invalid",
+                "tool-calls-null": None,
+            }
+            if corruption in invalid_calls:
+                calls = invalid_calls[corruption]
+            elif corruption == "failure-details-object":
+                calls["failure_details"] = {"detail": detail}
+            elif corruption == "detail-string":
+                calls["failure_details"] = ["invalid"]
         elif corruption == "lost-comment":
             comments.pop()
         elif corruption == "changed-suggestion":
@@ -226,6 +260,90 @@ def test_comment_probe_rejects_broken_boundary_observations(
     monkeypatch.setattr(module, "_run", observation)
     with pytest.raises(module.CompatibilityError, match="comment arguments"):
         module._comment_arguments_probe(tmp_path / "ocr", tmp_path)
+
+
+def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Malformed OCR JSON reaches a safe failed status without an uncaught traceback."""
+
+    import contextlib
+
+    module = load_script()
+    output = tmp_path / "evidence.json"
+    status_output = tmp_path / "status.json"
+    binary_digest = "0" * 64
+    assets = [
+        module.Asset(
+            name="opencodereview-linux-amd64",
+            size=1,
+            sha256=binary_digest,
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.11.6/bin",
+        ),
+        module.Asset(
+            name="sha256sum.txt",
+            size=1,
+            sha256="1" * 64,
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.11.6/sums",
+        ),
+    ]
+
+    def download(asset: Any, directory: Path) -> Path:
+        path = directory / asset.name
+        path.write_bytes(b"x")
+        return path
+
+    monkeypatch.setattr(module, "release_assets", lambda _release: assets)
+    monkeypatch.setattr(module, "_download", download)
+    monkeypatch.setattr(
+        module,
+        "parse_checksum_file",
+        lambda _path: {"opencodereview-linux-amd64": binary_digest},
+    )
+    monkeypatch.setattr(module, "_synthetic_repo", lambda root, _env: (root, "a" * 40, "b" * 40))
+    monkeypatch.setattr(
+        module,
+        "_stub_gateway",
+        lambda **_kwargs: contextlib.nullcontext("http://127.0.0.1:1/v1"),
+    )
+    monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "{")
+    monkeypatch.setattr(
+        module,
+        "run_contracts",
+        lambda binary, _version, directory: module._comment_arguments_probe(binary, directory),
+    )
+
+    with (
+        patched_env(RUNNER_OS="Linux"),
+        patched_attr(module, "_request_json", lambda _url: release("1.11.6")),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.11.6",
+                "--comparison-version",
+                "1.11.5",
+                "--tested-baseline-version",
+                "1.11.5",
+                "--output",
+                str(output),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "contracts"
+    assert status["reason"] == "contract-probe-failed"
+    assert status["result"] == "failed"
+    assert "comment arguments array: review did not emit JSON" in captured.err
+    assert "Traceback" not in captured.err
+    assert not output.exists()
 
 
 def test_discovery_filters_known_prerelease_and_old_versions() -> None:

@@ -2169,27 +2169,40 @@ def _comment_arguments_probe(binary: Path, directory: Path) -> dict[str, object]
                 cwd=repo,
                 env=env,
             )
-        payload = json.loads(raw)
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise CompatibilityError(f"comment arguments {mode}: review did not emit JSON") from exc
+        if not isinstance(payload, dict):
+            _fail(f"comment arguments {mode}: review result must be an object")
         comments = payload.get("comments")
         warnings = payload.get("warnings", [])
-        if not isinstance(comments, list) or not isinstance(warnings, list):
+        if (
+            not isinstance(comments, list)
+            or not all(isinstance(comment, dict) for comment in comments)
+            or not isinstance(warnings, list)
+        ):
             _fail(f"comment arguments {mode}: invalid result shape")
         if mode == "rejected":
             calls = payload.get("tool_calls", {})
+            if not isinstance(calls, dict):
+                _fail("comment arguments rejection emitted invalid tool-call evidence")
             telemetry = _tool_failure_telemetry(calls)
             details = calls.get("failure_details", [])
             if (
                 comments
                 or not telemetry.valid
                 or telemetry.failed != 1
+                or not isinstance(details, list)
                 or len(details) != 1
+                or not isinstance(details[0], dict)
                 or details[0].get("arguments") != _comment_probe_arguments(mode, "example.py")
             ):
                 _fail("comment arguments rejection lost its closed failure evidence")
         else:
             expected = _comment_probe_records("example.py")
             actual = [{key: comment.get(key) for key in expected[0]} for comment in comments]
-            if sorted(actual, key=lambda item: item["content"]) != expected:
+            if sorted(actual, key=lambda item: str(item["content"])) != expected:
                 _fail(f"comment arguments {mode}: changed or lost comment fields")
             if any(comment.get("start_line") != 2 for comment in comments):
                 _fail(f"comment arguments {mode}: lost deterministic anchors")

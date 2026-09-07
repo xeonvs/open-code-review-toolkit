@@ -8,17 +8,19 @@ before handoff or commit. Completed stable plans are indexed in
 
 ### Toolkit 0.9.1 — OCR 1.11.4 and 1.11.5
 
-- **Status:** active
+- **Status:** active; external model qualification complete, remediation in progress
 - **Plan Origin:** plan_mode_approved
-- **Release classification:** release-required; stable delivery release-deferred
+- **Release classification:** release-required; stable delivery authorized
 - **Target stable version:** 0.9.1
 - **Branch:** `codex/v0.9.1-ocr-1.11.5`
 
 #### Goal
 
-Integrate OCR 1.11.4 and 1.11.5 through a green published Draft PR, with exact
-1.11.5 runtime support and precise diagnostic/DLP boundaries that preserve GitLab
-summary publication. External configured qualification owns the later release decision.
+Integrate OCR 1.11.4 and 1.11.5 through a reviewed protected PR and complete the
+0.9.1 stable release, with exact 1.11.5 runtime support and precise diagnostic/DLP
+boundaries that preserve GitLab summary publication. Remediate the configured model
+qualification findings before feature merge and independently verify every published
+artifact, receipt and tracked issue before closure.
 
 #### Requested Scope
 
@@ -26,7 +28,13 @@ summary publication. External configured qualification owns the later release de
 - Accept bounded private failure arguments without exposing them or degrading publication.
 - Qualify serialized comment repair, Objective-C++ routing, grouped review and defaults.
 - Update local OCR to checksum-verified 1.11.5, current docs, examples and changelog.
-- Publish a green Draft with external qualification instructions; keep issues/milestone open.
+- Remediate the completed model-backed OCR findings without discarding its owner-only
+  evidence, then run the holistic quality and Codex Security gates.
+- Publish only the completed feature head, finish the protected feature and release PRs,
+  verify stable delivery, close #176/#177 and milestone `v0.9.1`, clean branches and
+  synchronize `main`.
+- Complete the required no-release external-reconciliation PR without producing another
+  stable release.
 
 #### Requirement Traceability
 
@@ -38,16 +46,20 @@ summary publication. External configured qualification owns the later release de
 | REQ-004 | Comment repair and Objective-C++ routing are qualified | WQ-04 | deterministic real OCR gateway and rules previews |
 | REQ-005 | Grouping, defaults, MCP and receipt boundaries remain correct | WQ-04 | compatibility and runtime tests |
 | REQ-006 | Docs, decision flow, changelog and backlog reflect current behavior | WQ-05 | documentation checks and rendered Towncrier |
-| REQ-007 | Green pushed Draft with truthful external qualification | WQ-06 | local/hosted gates and remote readback |
+| REQ-007 | Green protected feature PR with truthful model qualification | WQ-06, WQ-08 | local/hosted gates, OCR receipt and remote readback |
 | REQ-008 | Forward-only live qualification, isolated historical readback and stable tests | WQ-04R | no live version branches, frozen-history validation, CLI and probe regressions |
 | REQ-009 | Version-neutral current guidance with exact compatibility identities preserved | WQ-07 | documentation contracts, pin validation, self-review and green Draft push |
+| REQ-010 | Malformed probe output always fails through the closed qualification status path | WQ-08 | focused shape matrix and CLI status-output regression |
+| REQ-011 | Stable 0.9.1 is published and independently reconciled | WQ-09, WQ-10 | release workflow, registry/provenance/install readback and protected closure PR |
 
 #### Explicit Non-Goals
 
-No real LLM calls, merge, release PR, tags, package publication, or issue/milestone
-closure. No new environment variables, MCP tools, receipt schemas, upstream repair
-implementation, or runtime compatibility fallback. No OCR config/credentials or
-user HOME changes. No separate Codex Security scan.
+No GitLab posting, GitLab MR, new environment variables, MCP tools, receipt schemas,
+upstream repair implementation, runtime compatibility fallback, or unrelated B2B,
+`core/common` or shared-template work. Do not expose OCR configuration, credentials,
+raw private output or owner-only evidence. Do not repeat the completed model-backed
+OCR run without separate authorization; remediation is verified with deterministic
+tests and the required Codex Security diff scan.
 
 #### Constraints
 
@@ -68,9 +80,9 @@ New tests receive purpose-focused docstrings and stay with existing owners.
 
 #### User Decisions And Answers
 
-Delivery stops at a published green Draft. External configured environment owns
-real model testing and confirmation. Local OCR may immediately advance to 1.11.5
-after plan materialization; all local binary checks use isolated HOME and no LLM.
+Stable delivery is authorized through final reconciliation. The configured model-backed
+review has completed without GitLab posting and owns the two parser-hardening findings
+below. Local OCR is 1.11.5; all deterministic binary checks use isolated HOME.
 Private failure arguments alone must not alter DLP counts, review status, findings
 or GitLab summary. Public secrets remain subject to normal DLP filtering.
 
@@ -93,6 +105,9 @@ an extra diagnostic field. Workflow audit found canonical owners and valid index
 | WQ-05 | done | Public docs, decision flow, changelog and backlog reconciliation |
 | WQ-06 | in_progress | Final local gate, push, hosted checks and external Draft handoff |
 | WQ-07 | done | Version-neutral guidance and generic fixtures validated and self-reviewed; Draft push/readback remains owned by WQ-06 |
+| WQ-08 | remediation_done | Malformed-output remediation and focused fuzz-style tests complete; holistic review and Codex Security diff scan remain |
+| WQ-09 | pending | Push completed feature head, make PR ready, verify checks/threads, squash-merge and verify development publication |
+| WQ-10 | pending | Prepare/merge `Release v0.9.1`, verify stable delivery and close issues/milestone; then no-release external reconciliation and cleanup |
 
 #### Locked Decisions
 
@@ -168,6 +183,19 @@ owns OS/Python matrix, package checks, dependencies, Security and CodeQL.
   Towncrier and diff checks passed. Self-review removed the remaining duplicated
   documentation checksum and separated manifest-reference assertions from exact
   executable-pin assertions. Runtime, pins and historical evidence are unchanged.
+- 2026-09-07: configured model-backed OCR 1.11.5 completed on immutable range
+  `ae0a9ac..029cdf0`: 9/9 selected items completed, 0 failed/reused/waived,
+  77 tool calls and no GitLab posting. Owner-only result SHA-256 is
+  `3a5374a846c3033734da0c66d7a9032e54043e96b8a8322fd9724f37691c2873`.
+  The retained evidence is under `/tmp/ocr-v091-plan.1B3JOS` with mode 0700/0600.
+  Two medium findings identify uncontrolled `JSONDecodeError` and non-object
+  payload/detail shapes in `_comment_arguments_probe`; both must become controlled
+  contract-probe failures and preserve a safe `--status-output` result.
+- 2026-09-07: `_comment_arguments_probe` now rejects malformed JSON, non-object
+  top-level values, non-object comments, invalid `tool_calls`/`failure_details` and
+  non-object detail entries through `CompatibilityError`. Sixteen focused cases pass,
+  including the complete qualification CLI path to a private stderr diagnostic and
+  closed `contracts/contract-probe-failed` status without traceback or evidence output.
 
 #### Risks And Recovery
 
@@ -179,18 +207,9 @@ outputs until verification, then remove only task-owned files.
 
 #### Resume Point
 
-WQ-07's version-neutral follow-up is locally validated and self-reviewed. WQ-06
-owns the signed commit's pinned Gitleaks check, push to Draft #178 and current
-remote-head/hosted-check readback. The PR receipt records that external state;
-do not infer the latest head's checks from a predecessor's green result.
-
-Local implementation and validation are complete. WQ-06's external receipt is
-Draft PR #178: verify its current remote head and hosted checks before continuing.
-If the head has green checks and the recorded runtime tree is unchanged, the next
-action is configured external model qualification with OCR 1.11.5 and the toolkit
-artifact built from that exact head. Otherwise inspect the failed hosted gate and
-apply only an evidence-driven correction. Keep the PR Draft and both issues open;
-the example's published toolkit package pin advances only in a later release PR.
+WQ-08's remediation is focused-tested and ready for its signed logical commit.
+Preserve the existing OCR evidence. Continue with one holistic branch review, full
+quality, pinned Gitleaks and Codex Security before pushing the finished head.
 
 #### Plan Fidelity Check
 
@@ -206,18 +225,18 @@ the example's published toolkit package pin advances only in a later release PR.
 
 #### Closure Gate
 
-- [ ] Implementation and required local/hosted checks complete.
-- [ ] Draft open and mergeable; unresolved review threads absent.
-- [ ] Issues and milestone open; external qualification checklist recorded.
-- [ ] Worktree clean and resume point reflects external qualification.
+- [ ] Implementation, OCR remediation, Codex Security and local/hosted checks complete.
+- [ ] Feature and release PR exact heads merged through the protected process.
+- [ ] TestPyPI/PyPI bytes, provenance, attestations, tag, immutable Release and installs verified.
+- [ ] #176/#177 and milestone closed from exact receipts; branches cleaned and `main` synchronized.
+- [ ] No-release reconciliation PR merged without changing stable artifacts.
 
 #### Post-Close Delivery
 
-External agent starts with exact Draft head/tree and checksum-verified OCR 1.11.5
-in isolated HOME, then runs production ocr review using configured LLM. Verify
-MCP use, diagnostics/repair, grouping, findings/suggestions, privacy and cleanup.
-Publish only bounded structural evidence, hashes and pass/fail. Owner confirmation
-precedes the ordinary protected merge/release process.
+The configured review is complete. Publish only bounded structural evidence, hashes
+and pass/fail state in PR/issue receipts. After remediation, follow `docs/release.md`
+for feature merge, development artifact verification, release PR, stable publication,
+independent readback, issue/milestone closure and the separate no-release reconciliation.
 
 #### Handoff Notes
 
