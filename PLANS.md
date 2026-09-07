@@ -26,6 +26,10 @@ before handoff or commit. Completed stable plans are indexed in
 - **Verification:** focused validator matrix; release/operations documentation contracts;
   Ruff; `git diff --check`; pinned Gitleaks; complete diff and trust-boundary self-review;
   protected hosted checks and post-merge TestPyPI development workflow readback.
+- **Latest checkpoint:** independent workflow/TestPyPI/PyPI/Release byte comparison,
+  provenance, attestations, receipt, bot-owned issue receipts, Python 3.12–3.14 PyPI
+  installs, milestone closure, validator matrix, documentation contracts, Ruff, and
+  diff checks passed. The release branch is absent and stable metadata is unchanged.
 - **Closure:** return this file to its inactive template before the final commit, merge the
   exact protected PR head, verify no topic/release branch remains, synchronized clean
   `main`, equal release/reconciliation markers, and unchanged immutable v0.9.1 surfaces.
