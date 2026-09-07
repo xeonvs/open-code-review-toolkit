@@ -25,6 +25,36 @@ For package, executable-integration, or release-machinery changes, install the w
 
 GitHub Actions storage is repository-owned infrastructure. Pull-request CI restores setup-uv caches but does not save branch-specific entries; protected-main publication may refresh shared dependency state. CodeQL TRAP caching and the separately controlled v4 overlay-database mode are disabled, so the small repository receives a full analysis without per-run CodeQL cache writes. Workflow artifacts use a seven-day handoff window. The weekly **Actions storage maintenance** workflow grants `actions: write` only to its cleanup job and deletes all CodeQL caches, non-main or superseded setup-uv caches, superseded Gitleaks caches, artifacts older than seven days, ordinary logs older than 14 days, and release/TestPyPI logs older than 30 days. It deletes completed TestPyPI preview runs after 14 days, TestPyPI development and ordinary completed runs after 30 days, and stable Release runs after 60 days; deleting a run removes that run's metadata, logs, and check metadata, so a workflow run is never removed before its separately promised log window. Active and newer runs remain untouched. The scheduled collector reads a closed 74-day UTC window in daily shards, retaining a fail-closed ten-page limit per day instead of applying that limit to the aggregate run history. Scheduled log cleanup uses a bounded 14-day retry window so immutable run history does not get scanned and retried forever. Manual dispatch is a dry run unless `execute` is selected; the same plan is available locally with `python scripts/actions_cleanup.py`, requires `--execute` for deletion, and accepts `--include-all-old-logs` for a deliberate one-time historical log cleanup.
 
+## Maintaining OCR qualification
+
+Current operator guidance describes the qualified OCR contract without repeating
+release numbers or asset hashes; link to `compatibility/ocr-support.json` for the
+exact recommendation of the same toolkit revision. Keep exact versions in
+executable pins, binary-identity checks, release-specific plans/notes and historical
+evidence. Generic fixtures derive the current identity from its runtime owner;
+frozen historical fixtures must not follow the current pin. A version-neutral
+description still needs semantic review when the consumed contract changes.
+
+The live suite in `scripts/ocr_compat.py` qualifies the current toolkit-consumed
+OCR contract for every candidate. Do not add release-number branches, old parser
+fallbacks, or patch-specific fixture copies to live probes. Version checks belong
+to binary identity, release ordering, classification and promotion, not to choosing
+which behavioral checks execute. Change a probe only when a consumed upstream
+contract actually changes, and document the concrete before/after behavior.
+
+`scripts/ocr_compat_history.py` owns frozen validation of evidence from before the
+forward-only suite boundary. It never launches OCR and must not depend on current
+numeric defaults, language inventories or live fixtures. Preserve historical
+evidence bytes. Generic promotion tests use a frozen baseline; only current-pin
+tests assert the latest supported version. Current promotion validates all required
+contract evidence before writing any pin or evidence file.
+
+Qualification uses one existing deterministic gateway and bounded observations.
+Do not copy OCR's implementation, add another configuration framework, or turn
+unconsumed upstream wording/features into mandatory checks. Prove preservation
+with real no-LLM OCR runs and adversarial verifier tests. Separate those proofs
+from model-quality qualification in a configured external environment.
+
 ## Planning and documentation lifecycle
 
 `PLANS.md` contains complete active or blocked repository work, including release classification, target version, service boundaries, validation, and exact resume state. Before a logical commit, update the plan and every directly affected status-bearing document to describe post-commit truth. A milestone closes only after current implementation and tests prove its own outcome; reconcile the roadmap table and diagram, backlog, strategy, and README without deleting unfinished adjacent scope.

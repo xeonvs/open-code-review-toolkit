@@ -941,6 +941,30 @@ def test_generated_mr_receipt_is_validated_before_atomic_publication(
         {
             "failure": 1,
             "failure_by_tool": {"file_read": 1},
+            "failure_details": [
+                {
+                    "tool_call_number": 2,
+                    "tool_name": "file_read",
+                    "error": "Unavailable",
+                    "arguments": {},
+                }
+            ],
+        },
+        {
+            "failure": 1,
+            "failure_by_tool": {"file_read": 1},
+            "failure_details": [
+                {
+                    "tool_call_number": 2,
+                    "tool_name": "file_read",
+                    "error": "Unavailable",
+                    "arguments": "x" * 32_769,
+                }
+            ],
+        },
+        {
+            "failure": 1,
+            "failure_by_tool": {"file_read": 1},
             "failure_details": [],
         },
         {
@@ -1075,6 +1099,127 @@ def test_valid_failure_details_are_console_only_and_keep_the_review_postable(
     assert "Authorization: ***" in diagnostics
     assert secret not in diagnostics
     assert "\x1b" not in diagnostics
+
+
+@pytest.mark.parametrize("public_case", ["clean", "finding", "filtered", "warning", "partial"])
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        "",
+        '{"value":"private-argument-canary"}',
+        "person@example.invalid\x00\t\u202e",
+        "😀" * 32_768,
+    ],
+    ids=["empty", "private-value", "controls-pii", "utf8-limit"],
+)
+def test_private_failure_arguments_preserve_finalized_signal_and_gitlab_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, public_case: str, arguments: str
+) -> None:
+    """Drop opaque arguments before DLP and preserve the complete posting projection."""
+
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    notes: list[str] = []
+    monkeypatch.setattr(
+        workflow, "collect_previous_bot_comment_refs", lambda _: snapshot.BotCommentRefs()
+    )
+    monkeypatch.setattr(workflow, "get_diff_refs", lambda _: None)
+    monkeypatch.setattr(
+        workflow,
+        "post_review_note_bounded",
+        lambda _c, title, body, _t: notes.append(title + body) or {"id": len(notes)},
+    )
+    monkeypatch.setattr(workflow, "finalize_posting", lambda *_: True)
+    monkeypatch.setattr(workflow, "delete_previous_bot_comments_if_collected", lambda *_: None)
+    monkeypatch.setattr(workflow.secrets, "token_hex", lambda _: "a" * 32)
+    outputs = []
+    for include_arguments in (False, True):
+        detail = {"tool_call_number": 2, "tool_name": "file_read", "error": "Unavailable"}
+        if include_arguments:
+            detail["arguments"] = arguments
+        payload = complete_review_payload(
+            tool_calls={
+                "total": 2,
+                "by_tool": {"ocr_toolkit_evidence": 1, "file_read": 1},
+                "failure": 1,
+                "failure_by_tool": {"file_read": 1},
+                "failure_details": [detail],
+            }
+        )
+        payload["token_usage"] = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
+        if public_case == "clean":
+            payload["comments"] = []
+        elif public_case == "filtered":
+            payload["comments"][0]["content"] = "Contact person@example.invalid"
+        elif public_case == "warning":
+            payload["warnings"] = [
+                {"type": "comment_args_repaired", "message": "Repaired serialized comments"}
+            ]
+        elif public_case == "partial":
+            payload["manifest"]["terminal_state"] = "partial"
+            coverage = payload["manifest"]["coverage"]
+            coverage["selected"].append({"item_id": "unfinished"})
+            coverage["failed"].append(
+                {"item_id": "unfinished", "classification": "provider", "reason": "Unavailable"}
+            )
+            payload["status"] = "partial"
+        result = tmp_path / f"result-{include_arguments}.json"
+        result.write_text(json.dumps(payload), encoding="utf-8")
+        log = io.StringIO()
+        with redirect_stderr(log):
+            _, filtered, publication = review_runner._finalize_ocr_result(
+                result,
+                composition,
+                DEFAULT_IDENTITY,
+                None,
+                SUMMARY_ACTION_COUNTS,
+                forbidden=("private-argument-canary",),
+            )
+        persisted = json.loads(result.read_text(encoding="utf-8"))
+        serialized = result.read_text(encoding="utf-8")
+        notes.clear()
+        with patched_env(OCR_AUTO_APPROVE="false"):
+            assert workflow.post_results(gitlab_config(), persisted) == 0
+        assert notes and "Technical details" in notes[-1]
+        assert "private-argument-canary" not in serialized + log.getvalue() + "".join(notes)
+        assert "failure_details" not in serialized
+        assert filtered is (public_case == "filtered")
+        outputs.append((serialized, publication, log.getvalue(), list(notes)))
+    assert outputs[0] == outputs[1]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [None, [], {}, 1, True, "x" * 32_769, "\ud800"],
+    ids=["null", "array", "object", "integer", "bool", "oversized", "surrogate"],
+)
+def test_invalid_private_failure_arguments_are_only_diagnostic_degradation(
+    arguments: object,
+) -> None:
+    """Reject malformed or oversized private data without raising from the parser."""
+
+    telemetry = review_runner._tool_failure_telemetry(
+        {
+            "total": 1,
+            "by_tool": {"file_read": 1},
+            "failure": 1,
+            "failure_by_tool": {"file_read": 1},
+            "failure_details": [
+                {
+                    "tool_call_number": 1,
+                    "tool_name": "file_read",
+                    "error": "Unavailable",
+                    "arguments": arguments,
+                }
+            ],
+        }
+    )
+    assert telemetry.present and not telemetry.valid
+    assert telemetry.details == ()
 
 
 def test_local_review_also_keeps_signal_when_failure_diagnostics_are_malformed(

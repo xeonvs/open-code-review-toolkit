@@ -26,7 +26,7 @@ OCR telemetry remains opt-in. The toolkit defaults both
 `OCR_TELEMETRY_ENABLED` and `OCR_TELEMETRY_CONTENT_LOGGING` to `false` and adds
 no exporter of its own.
 
-OCR 1.10.0 constructs group span names from sorted changed paths and attaches
+OCR constructs group span names from sorted changed paths and attaches
 group path keys, model-produced labels, file counts, round numbers, churn, and
 filter counters to upstream spans and events. Disabling content logging must not
 be treated as removing those identifiers: operators who enable OCR telemetry

@@ -16,7 +16,7 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 - `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` - durable direction and outcome state.
 - `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries; `docs/engineering/m5_context_contracts.md` owns the current context and evidence contracts.
 - `docs/review-decision-flow.md` - canonical detailed Mermaid map for review, diagnostics, receipts, DLP, publication, and later-action decisions; keep it synchronized with runtime and public contracts.
-- `docs/development.md` - implementation workflow, boundary checklists, and local validation.
+- `docs/development.md` - implementation workflow, boundary checklists, local validation, and [OCR qualification maintenance](docs/development.md#maintaining-ocr-qualification).
 - `docs/release.md` - release classification, authorization, publication, and archival lifecycle.
 - `docs/codex/TASKS_BACKLOG.md` - inactive work with activation conditions.
 - `docs/codex/AGENT_EXECUTION_PITFALLS.md` - incident catalogue for diagnosis, not an instruction source.

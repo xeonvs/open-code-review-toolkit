@@ -189,6 +189,14 @@ Every top-level test module is classified below. A module can contain more than 
 | `test_runtime_helpers.py` | config filesystem boundaries and real local preflight HTTP transport; MCP/config parsing | mocked binary and `URL_OPENER` cases prove version/request/error policy only, not executable/network integration |
 | `test_testpypi_preview.py` | registry-manifest parser and static workflow contract | fixture index payloads do not prove publication; live TestPyPI/PyPI verification is a release gate |
 
+## v0.9.1 private arguments and qualification evidence
+
+| Boundary | Evidence | Claim limit |
+| --- | --- | --- |
+| Opaque failure arguments → finalization → DLP → GitLab posting | Paired clean/finding/warning/partial/filtered results in `test_review_runner.py` preserve byte-equivalent finalized artifacts and note bodies; malformed/oversized arguments degrade diagnostics only | Real toolkit parser and posting workflow; GitLab transport is replaced with a capture, not a live service |
+| Serialized comment repair and failure arguments | Checksum-verified OCR 1.11.4 and 1.11.5 use a local deterministic gateway; native, serialized and repaired batches preserve fields and anchors, suspect batches fail with original arguments in private failure data | Binary behavior and field preservation, not model judgment |
+| Forward-only suite and historical evidence | Complete real no-LLM runs before/after refactoring yield identical JSON contracts; frozen promotion-baseline and historical-independence tests reject missing proof before writes | Historical readback does not imply supported execution of old binaries |
+
 ## Unsafe or nondeterministic external boundaries
 
 The suite intentionally does not perform live GitLab comment, discussion, cleanup, or approval writes; live GitHub issue/release mutations; or PyPI publication. Their tests prove closed payloads, ordering, fail-closed decisions, transport serialization, and receipt parsing. Release completion requires independent live readback as defined in `docs/release.md`.
