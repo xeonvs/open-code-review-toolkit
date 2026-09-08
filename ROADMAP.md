@@ -40,6 +40,13 @@ flowchart LR
 
 ## Ordering notes
 
+- The active 0.10.0 Draft adds standalone local delivery, provider-neutral reporting,
+  private debug observations and explicit reasoning/progress controls to the same
+  execution engine. It does not reopen established milestones or activate the
+  conditional second-forge, model-profile, routing or evidence-pack backlog.
+  Draft readiness, configured external qualification and stable delivery remain
+  separate states in `PLANS.md`.
+
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 is established from BL-011's real-OCR characterization of the current generic composition boundary. Direct composition is an operator-configured privileged facility, not safe author-triggered reference resolution. BL-012 remains conditional and does not block M3 or M5 when reviewed static credentials or a stdio proxy suffice.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M7 and do not reopen M2.

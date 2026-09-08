@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.5",
-  "recommended_version": "1.11.5",
+  "monitoring_floor": "1.11.6",
+  "recommended_version": "1.11.6",
   "releases": [
     {
       "assets": [
@@ -1611,6 +1611,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.5",
       "status": "tested",
       "version": "1.11.5"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "311cc54cefcd51263ba07851aa6a32f259edfcc9ec9861039eab9da274657dce",
+          "size": 57828336
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "a60f101490ba9bb88e90becf23b78c1e2fd2d98219ea36384010d488ed32d7b0",
+          "size": 54861634
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "09f30595834f8297a592b51bf4707fb24728b2826a65915f1964c5563e4fb3bd",
+          "size": 56082594
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "1e4dc70445037fd06c3bbb0a0b09944a696703937c3287083321540d880729a2",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "c2652bb4f70c8c3af38bf69656ab05f10c13cd9457da77bc374f41ab9c25de25",
+          "size": 57546240
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "a5402e6bf927c5bd042ca67a4fad41e4a92c1d3d06f1dbeee147bf66fdb5486c",
+          "size": 53508608
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "5fe2640d8b521f7ac6ff4880a5227e452226998171c49e728fb23c02d858cd52",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.6.json",
+      "evidence_sha256": "254d58aa1e516ec686a196f59948ad6d92d219cbc8a3fdd1b756a09f4bcb8c57",
+      "human_conclusion": "Compatible after adjacent eight-commit source review and complete current Linux amd64 qualification in GitHub Actions run 34218232310, with independent Darwin arm64 no-LLM qualification. OCaml/ReasonML and Kotlin script rule selection is consumed and separately classified as Rules. Native timeout changes preserve the toolkit API; Action progress, Node/editor and viewer changes are not executed by the toolkit. Reasoning wire shape is verified for unset, none and high in both OpenAI protocols; provider acceptance and application remain untested. Protected PR and stable release gates remain required.",
+      "published_at": "2026-09-07T07:22:48Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.6",
+      "status": "tested",
+      "version": "1.11.6"
     }
   ],
   "schema_version": 1,

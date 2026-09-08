@@ -20,6 +20,9 @@ before handoff or commit. Completed stable plans are indexed in
   renamed. The user authorized replacing #183: first publish and verify the new
   branch and fully described Draft, then close #183 with a replacement link.
   Preserve the old remote branch until the replacement is verified.
+  Replacement Draft #184 is now open on the new branch with the full scope and
+  evidence description; #183 was closed with its replacement link. GitHub
+  verifies every published feature commit's SSH signature.
 - **Validation override:** the user waived further local test and probe runs.
   Preserve the already completed local evidence and finish remaining quality,
   qualification and hosted checks through GitHub Actions. Do not launch more
@@ -66,8 +69,8 @@ local review verified evidence without a GitLab receipt, while preflight assumed
 | WQ-03 | done | Explicit local preflight/review, private Markdown publication and installed end-to-end path |
 | WQ-04 | done | Fresh private debug bundle, actual decision journal and installed normal/debug parity |
 | WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
-| WQ-06 | in_progress | OCR promotion, assets, no-LLM qualification and local update |
-| WQ-07 | pending | Docs/backlog, full self-review, gates, push and Draft handoff |
+| WQ-06 | done | OCR promotion, verified hosted assets and current no-LLM qualification; installed Darwin binary updated without a post-waiver launch |
+| WQ-07 | in_progress | Docs/backlog, full self-review, security scan, hosted gates and Draft handoff |
 
 #### Locked Interfaces And Boundaries
 
@@ -293,9 +296,27 @@ The qualification-harness slice passed self-review, 114 maintainer tests, manife
 validation, formatting and Ruff. Its complete local native run passed all current
 contracts. Publish this reviewed slice and dispatch exact-tag Linux qualification
 from the new Draft branch before applying the resulting pinned update.
+Published qualification slice: c38ca40, followed by validation-override commit
+a8c214c. Fresh Linux workflow 34218232310 completed successfully on a8c214c
+from the replacement Draft branch: discovery, candidate qualification, asset
+readback and complete-chain assessment passed. Its evidence is committed with
+the reviewed human conclusion; manifest, preflight and example OCR pins now agree
+on 1.11.6. Stable toolkit example pins remain unchanged. The verified Darwin
+arm64 asset replaced the installed `/opt/homebrew/bin/ocr`; the former binary is
+temporarily retained for rollback. No local binary launch or validation followed
+the user's waiver.
+
+The first Draft CI matrix passed 1694 tests on each of five platforms but failed
+two exact environment-inventory assertions whose expected defaults omitted the
+new reasoning/progress variables. The expectations are synchronized with the
+already documented controls, without relaxing the tests. Quality, build,
+dependency, secrets, Bandit and CodeQL jobs passed. Final exact-head CI remains
+pending. README, strategy, roadmap, backlog, compatibility history, threat model
+and evidence matrix now describe the local provider and its non-claims; existing
+result/receipt/context schemas remain unchanged, while the private debug journal
+is documented separately and cannot authorize publication.
 Keep the plan active through deferred
-stable delivery; OCR qualification and final security/hosted
-gates are pending on Draft #183.
+stable delivery; final security/hosted gates are pending on Draft #184.
 
 #### Closure Gate
 

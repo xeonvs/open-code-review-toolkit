@@ -7,7 +7,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/xeonvs/open-code-review-toolkit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/xeonvs/open-code-review-toolkit)
 [![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml)
 
-Open Code Review Toolkit is an unofficial GitLab CI integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review). It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
+Open Code Review Toolkit is an unofficial review control and integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review), with GitLab CI and standalone local providers. It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, local Markdown reports, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
 > [!NOTE]
 > The project is under active development; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
@@ -55,7 +55,28 @@ The toolkit defaults `OCR_REVIEW_EFFORT` to `medium` for two review rounds. `low
 
 Stable distributions are published to [PyPI](https://pypi.org/project/open-code-review-toolkit/) and mirrored as checksum-listed, provenance-attested assets in the corresponding [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases). Development snapshots are published only to TestPyPI.
 
-## How reviews evolve
+## Standalone local quick start
+
+With the qualified OCR binary and LLM environment configured, review an immutable
+commit without forge credentials:
+
+```console
+ocr-ci preflight --local
+ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+```
+
+Local execution uses the same OCR, mandatory evidence MCP, validation and DLP
+pipeline as CI. It publishes every admitted finding to a fresh private Markdown
+file and the console, without GitLab acquisition, suppression, approval or a
+fabricated publication receipt. See [local review](docs/local.md) for ranges,
+failure behavior and optional private `--debug-dir` bundles.
+
+Optional [reasoning and progress controls](docs/configuration.md#provider-endpoint-and-completion-cap-contract)
+do not change review rounds or budgets. Reasoning is unset by default; explicit
+`none` is a wire value whose support depends on the provider/model. Progress is
+off by default and emits only bounded toolkit phases on stderr.
+
+## How GitLab reviews evolve
 
 On a successful rerun, the toolkit replaces untouched OCR-only notes instead of accumulating stale reviews. A human reply transfers that discussion to the team: the conversation is preserved and a matching finding is suppressed. Reply with `/ocr suppress` or `@<live-bot-username> suppress` to keep a discussion open without future repeats; use the corresponding `resolve` command to resolve it after the next successful posting transaction. For example, a bot named `mr.bot` accepts the exact reply `@mr.bot resolve`.
 

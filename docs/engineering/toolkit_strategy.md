@@ -11,9 +11,11 @@ The toolkit does not replace OCR. OCR owns diff review, file selection and bundl
 ```mermaid
 flowchart LR
     CI[GitLab CI today] --> CT[Toolkit control layer]
+    LOCAL[Explicit local immutable review] --> CT
     CT -->|validated config and bounded bootstrap| OCR[Alibaba OCR]
     OCR -->|review findings| CT
     CT -->|normalized bounded writes| GL[GitLab discussions today]
+    CT -->|all admitted findings| MD[Private Markdown and console]
     OCR -->|native repository tools| REPO[Repository]
 ```
 
@@ -30,6 +32,16 @@ The toolkit will not:
 Repository-maintenance analyzers such as Bandit remain valid quality controls for this codebase. They are not evidence providers or features offered to downstream repositories.
 
 ## Implemented architecture
+
+The explicit local provider supplies immutable Git identity and private Markdown
+delivery through the same OCR execution, evidence MCP and result finalization as
+GitLab. Pure shared reporting owns review facts and wording, not forge acquisition
+or actions. Local execution has no discussion-command channel, suppression,
+approval or fabricated platform receipt. Private debug observations follow actual
+production checks without rescanning or bypassing them; optional progress reads
+no review content. Reasoning effort is a protocol-specific configuration overlay,
+not a model-profile router. These capabilities do not activate a second forge,
+repository scanning, automatic profile routing or another telemetry layer.
 
 The M1 implementation provides a schema-versioned Repository Evidence Engine with bounded immutable base/head reads, typed dependency/runtime/image/guidance records and deltas, redaction-before-storage, a compact bootstrap, and the built-in read-only `ocr_toolkit_evidence` MCP server. MCP configuration registers that server alongside reviewed external stdio or remote servers with explicit tool allowlists.
 

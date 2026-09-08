@@ -178,6 +178,29 @@ Linux amd64 SHA-256: `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a
 Darwin arm64: `c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9`.
 Upstream checksum file: `0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a`.
 
+### OCR 1.11.6 — toolkit 0.10.0 Draft target
+
+The Draft recommends exact OCR 1.11.6. Hosted qualification
+[34218232310](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34218232310)
+verified every platform asset and the upstream checksum file, then passed the
+complete current Linux amd64 suite. Independent checksum-verified Darwin arm64
+probes passed the same consumed contracts. The committed evidence adds reasoning
+wire checks for unset, explicit `none` and `high` in both OpenAI protocols,
+including preserved Responses siblings. The capture peer rejects requests without
+model execution: provider acceptance and actual application remain untested.
+
+The adjacent eight-commit review identifies consumed OCaml/ReasonML allowlist and
+built-in Rules additions plus Kotlin script routing and default test exclusions.
+They are separately classified as Rules. Native HTTP header timeout changes retain
+the request timeout plus upstream margin without a new toolkit API. The toolkit
+does not execute the upstream Action, Node/editor launcher or viewer; its reasoning
+and progress controls are owned by the shared toolkit execution path.
+
+Historical 1.11.4/1.11.5 evidence remains unchanged. New promotions require the
+complete current contract even when historical evidence is still readable.
+This qualification does not establish stable toolkit delivery or configured
+GitLab/local/debug model quality; those remain separate gates.
+
 ## Promotion and rollback
 
 Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates every machine-readable or executable version/checksum pin. Never edit only one copy. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.
