@@ -105,3 +105,35 @@ directory fails before review. Later diagnostic write failures do not replace th
 review outcome or suppress cleanup: unavailable captures are marked in the journal,
 and a journal write failure emits a bounded stderr warning. An earlier incomplete
 snapshot can remain when the final journal cannot be written.
+
+## Configured external qualification
+
+Deterministic installed tests and real-OCR no-LLM probes do not establish model
+quality, live GitLab behavior or provider reasoning support. Before promoting a
+Draft, the external owner should record the exact Draft head, installed artifact
+digest, OCR asset identity and provider/model/protocol for these checks. Do not
+install the older stable toolkit pin from the GitLab example for this exercise;
+use the wheel built by the exact Draft's Build artifacts workflow in an isolated
+environment. Keep the example's stable toolkit pin unchanged until release.
+
+- GitLab: run the configured review and inspect admitted findings, mandatory
+  evidence use, receipt identity and the intended discussion/approval behavior
+  in an authorized test project. A green advisory job is not proof of model use.
+- Local: review the same immutable change with `--local`, confirm no forge
+  acquisition/publication, and compare admitted JSON, the complete private
+  Markdown artifact and console output. Include a clean case and a finding case.
+- Debug: repeat with a fresh `--debug-dir`, compare normalized outcomes with
+  ordinary local execution, and inspect actual journal phases, DLP decisions,
+  raw/safe separation, truncation and cleanup. Never publish raw private files.
+- Progress: compare enabled/disabled outcomes and artifact contents. Only bounded
+  toolkit phases and heartbeats should be added to stderr.
+- Reasoning: test unset, explicit `none` and the intended nonempty effort for
+  each selected provider/model/protocol. Record correct wire shape, explicit
+  provider acceptance/rejection and documented or server-observable application.
+  HTTP 200 and model prose alone do not prove the gateway applied the parameter.
+  Mark unprovable application as unverified; do not silently substitute a model,
+  effort value or weaker validation. Unset remains the no-overlay option.
+
+Record the outcome or explicit limitation for each scenario in the tracking
+issues and Draft. This checklist is a handoff, not a claim that those external
+checks have run or authorization to merge, release or close issues.

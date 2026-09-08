@@ -315,6 +315,13 @@ pending. README, strategy, roadmap, backlog, compatibility history, threat model
 and evidence matrix now describe the local provider and its non-claims; existing
 result/receipt/context schemas remain unchanged, while the private debug journal
 is documented separately and cannot authorize publication.
+Promotion/documentation commit bff811a is pushed and the Draft body was updated
+and read back in full. Its hosted checks are running. The external qualification
+checklist now lives in `docs/local.md`, covering exact Draft artifact identity,
+GitLab/local/debug/progress and unset/none/nonempty provider acceptance.
+Security diff-scan instructions require a local read-only configuration preflight;
+the user has been asked whether to allow that narrow exception to the local-check
+waiver. No security scan or preflight has started while that answer is pending.
 Keep the plan active through deferred
 stable delivery; final security/hosted gates are pending on Draft #184.
 
