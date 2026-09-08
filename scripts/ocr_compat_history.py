@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, NoReturn
 
-HISTORICAL_CUTOFF = (1, 11, 4)
+HISTORICAL_CUTOFF = (1, 11, 6)
 
 ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {
     "max_tokens_budget": {
@@ -41,6 +41,130 @@ ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {
 }
 
 
+ARCHIVED_1_11_4_CONTRACTS: dict[str, object] = {
+    "numeric_cli_probe": ARCHIVED_NUMERIC_CLI_CONTRACT,
+    "comment_arguments_probe": {
+        "comments_per_batch": 2,
+        "failure_arguments_preserved": True,
+        "intact_cases": ["array", "serialized", "repaired"],
+        "repair_warning": True,
+        "result": "passed",
+        "suspect_batch_rejected": True,
+    },
+    "comment_thinking_probe": {
+        "additive_field_preserved": True,
+        "posting_exposes_thinking": False,
+        "result": "passed",
+    },
+    "completion_cap_probe": {
+        "explicit": 4096,
+        "inherited": 16384,
+        "result": "passed",
+        "wire_field": "max_completion_tokens",
+    },
+    "language_rule_probe": {
+        "excluded_extensions": [".svh"],
+        "extensions": [
+            ".cjs",
+            ".cxx",
+            ".hxx",
+            ".mjs",
+            ".mm",
+            ".pug",
+            ".sv",
+            ".v",
+            ".vh",
+            ".vhd",
+            ".vhdl",
+        ],
+        "m_routing": "matlab_and_objective_c",
+        "result": "passed",
+        "rule_source": "system_builtin",
+        "selected": 11,
+    },
+    "optional_capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping",
+    ],
+    "preview_probe": {
+        "format": "json",
+        "path": "example.py",
+        "result": "passed",
+        "session_store_created": False,
+    },
+    "required_review_flags": [
+        "--audience",
+        "--background-file",
+        "--effort",
+        "--format",
+        "--from",
+        "--max-tokens-budget",
+        "--max-tools",
+        "--preview",
+        "--rule",
+        "--to",
+    ],
+    "result_contract_probe": {
+        "additive_fields_allowed": True,
+        "comment_fields": [
+            "category",
+            "content",
+            "end_line",
+            "existing_code",
+            "path",
+            "severity",
+            "start_line",
+            "thinking",
+        ],
+        "manifest_schema": "ocr.run-manifest/v1",
+        "normalized_outcome": "clean",
+        "result": "passed",
+    },
+    "review_budget_probe": {
+        "budget": 30000,
+        "completed": 2,
+        "failed_budget": 1,
+        "grouping_requests": 0,
+        "grouping_strategy": "per_file",
+        "partial_findings_preserved": True,
+        "result": "passed",
+        "selected": 3,
+    },
+    "semantic_grouping_probe": {
+        "default_effort": "medium",
+        "files": 4,
+        "filter_requests": 1,
+        "grouping_completion_cap": 16384,
+        "grouping_requests": 1,
+        "main_requests": 3,
+        "prior_finding_semantics": "filter_survivors_as_confirmed",
+        "recheck_instruction_requests": 3,
+        "result": "passed",
+        "review_rounds": 2,
+    },
+    "small_change_grouping_probe": {
+        "grouping_requests": 0,
+        "high_churn": "per_file",
+        "low_churn": "bundle_all",
+        "result": "passed",
+        "single_file": "per_file",
+        "threshold_files": 4,
+    },
+    "target_rule_selection_probe": {
+        "format": "json",
+        "from_to_unchanged": True,
+        "path": "synthetic-template.ocrfixture",
+        "result": "passed",
+        "source_exclusion": "unsupported_ext",
+        "target_selected": True,
+    },
+    "version_probe": "passed",
+}
+
+
 def language_extensions(version_tuple: tuple[int, int, int]) -> list[str]:
     """Return the language inventory recorded in the historical evidence epochs."""
 
@@ -60,6 +184,10 @@ def validate_contracts(
 
     if version_tuple >= HISTORICAL_CUTOFF:
         fail("current evidence cannot use historical validation")
+    if version_tuple >= (1, 11, 4):
+        if evidence.get("contracts") != ARCHIVED_1_11_4_CONTRACTS:
+            fail(f"historical qualification contract disagrees for {version}")
+        return
     if version_tuple >= (1, 9, 5):
         contracts = evidence.get("contracts")
         required_flags = (

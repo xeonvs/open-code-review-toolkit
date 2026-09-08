@@ -134,7 +134,13 @@ CURRENT_LANGUAGE_RULES = {
     "native/source.cxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
     "native/header.hxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
     "native/object.mm": "**/*.mm",
+    "src/parser.ml": "**/*.{ml,mli}",
+    "src/parser.mli": "**/*.{ml,mli}",
+    "src/component.re": "**/*.{re,rei}",
+    "src/component.rei": "**/*.{re,rei}",
+    "scripts/setup.kts": "**/*.{kt,kts}",
 }
+CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
 
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
@@ -350,6 +356,7 @@ def _validate_current_contracts(value: object) -> None:
         },
         "language_rule_probe": {
             "excluded_extensions": [".svh"],
+            "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
             "extensions": extensions,
             "result": "passed",
             "rule_source": "system_builtin",
@@ -361,6 +368,13 @@ def _validate_current_contracts(value: object) -> None:
             "inherited": 16_384,
             "result": "passed",
             "wire_field": "max_completion_tokens",
+        },
+        "reasoning_effort_probe": {
+            "result": "passed",
+            "protocols": ["openai", "openai-responses"],
+            "efforts": ["unset", "none", "high"],
+            "responses_siblings_preserved": True,
+            "provider_acceptance": "not-tested",
         },
         "comment_arguments_probe": {
             "result": "passed",
@@ -2152,7 +2166,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
     unsupported_path = "rtl/include.svh"
-    paths = (*supported_paths, unsupported_path)
+    paths = (*supported_paths, unsupported_path, *CURRENT_DEFAULT_EXCLUDED_PATHS)
     for path in paths:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2195,6 +2209,10 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     unsupported_selected, unsupported_reason = _preview_file_selection(payload, unsupported_path)
     if unsupported_selected or unsupported_reason != "unsupported_ext":
         _fail("candidate unexpectedly selected the unqualified .svh extension")
+    for path in CURRENT_DEFAULT_EXCLUDED_PATHS:
+        selected_test, reason = _preview_file_selection(payload, path)
+        if selected_test or not isinstance(reason, str) or not reason:
+            _fail(f"candidate did not preserve the default test-path exclusion: {path}")
     for path in supported_paths:
         output = _run([str(binary), "rules", "check", path], cwd=repo, env=env)
         if (
@@ -2213,6 +2231,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     result: dict[str, object] = {
         "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
+        "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
         "result": "passed",
         "rule_source": "system_builtin",
         "selected": len(supported_paths),
@@ -2498,6 +2517,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
     contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
     contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
+    contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
     contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
     contracts["comment_thinking_probe"] = thinking_probe
     _validate_current_contracts(contracts)
@@ -2850,10 +2870,9 @@ def prepare_update(
         _fail("human conclusions may reference only evidence versions in this promotion")
 
     for item in evidences:
-        if _version(str(item["version"])) >= history.HISTORICAL_CUTOFF:
-            if item.get("schema_version") != 3:
-                _fail("current candidate requires evidence schema 3")
-            _validate_current_contracts(item.get("contracts"))
+        if item.get("schema_version") != 3:
+            _fail("current candidate requires evidence schema 3")
+        _validate_current_contracts(item.get("contracts"))
 
     version = versions[-1]
     releases = manifest.get("releases")

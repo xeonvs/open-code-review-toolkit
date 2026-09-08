@@ -10,6 +10,10 @@ version. Historical evidence before the suite boundary is checked separately by
 `scripts/ocr_compat_history.py` using frozen expectations; that reader never
 executes old binaries. Generic promotion tests use a frozen baseline. See
 [qualification maintenance](development.md#maintaining-ocr-qualification).
+Historical readback is not promotion authority: every newly promoted candidate
+must provide the current evidence schema and complete live consumed contract,
+regardless of the historical archive boundary. The live suite includes explicit
+reasoning wire capture and the current built-in language/test-exclusion inventory.
 
 The **OCR compatibility** workflow discovers stable upstream releases newer than the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`, after the observed upstream release window; GitHub may delay or omit scheduled delivery, so exact-tag manual dispatch remains the recovery path. Drafts, prereleases, non-semantic tags, unexpected asset sets, oversized metadata or downloads, redirects outside the reviewed GitHub origins, and checksum disagreement fail closed. Every binary digest must agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 

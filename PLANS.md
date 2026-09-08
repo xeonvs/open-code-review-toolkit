@@ -12,7 +12,14 @@ before handoff or commit. Completed stable plans are indexed in
 - **Plan Origin:** plan_mode_approved
 - **Release classification:** release-required; stable delivery release-deferred
 - **Target stable version:** 0.10.0 (raised from 0.9.2 by user decision)
-- **Branch:** `codex/v0.9.2-ocr-1.11.6`
+- **Branch:** `codex/v0.10.0-local-review`
+- **PR presentation:** before pushing implementation, replace the planning-only
+  Draft body with the complete implemented scope, considered boundaries,
+  validation evidence and remaining external qualification. The user requested
+  a branch rename if feasible; GitHub closes an open PR when its head branch is
+  renamed. The user authorized replacing #183: first publish and verify the new
+  branch and fully described Draft, then close #183 with a replacement link.
+  Preserve the old remote branch until the replacement is verified.
 
 #### Goal
 
@@ -28,10 +35,11 @@ in hosted run 34127679854. Upstream #1154 is the product focus; other adjacent
 changes are compatibility inputs, not separate product projects. The approved
 conversation plan and subsequent provider-support/none clarification are binding.
 Local delivery is tracked by #182; both issues belong to milestone v0.10.0.
-Retain the existing branch name and Draft #183; no history rewrite is needed.
+The user subsequently authorized a renamed branch and replacement Draft for
+#183; no commit-history rewrite is needed.
 Canonical owners: project principles, development/release guides, configuration,
-operations, security, review decision flow, strategy and backlog. Existing local
-review verifies evidence but omits GitLab receipt; preflight still assumes GitLab.
+operations, security, review decision flow, strategy and backlog. At the baseline,
+local review verified evidence without a GitLab receipt, while preflight assumed GitLab.
 
 #### Requirement Traceability
 
@@ -54,7 +62,7 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 | WQ-03 | done | Explicit local preflight/review, private Markdown publication and installed end-to-end path |
 | WQ-04 | done | Fresh private debug bundle, actual decision journal and installed normal/debug parity |
 | WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
-| WQ-06 | pending | OCR promotion, assets, no-LLM qualification and local update |
+| WQ-06 | in_progress | OCR promotion, assets, no-LLM qualification and local update |
 | WQ-07 | pending | Docs/backlog, full self-review, gates, push and Draft handoff |
 
 #### Locked Interfaces And Boundaries
@@ -245,6 +253,42 @@ remains explicitly not tested. WQ-06 must incorporate this probe into the live
 qualification contract while preserving older evidence, then promote exact pins
 and update the local installed binary. Do not equate the private wire receipt
 with full candidate qualification or stable release delivery.
+WQ-05 is committed as b585bd4. WQ-06 froze the identical recorded 1.11.4
+and 1.11.5 contracts in the historical reader and added mandatory reasoning
+wire evidence to the version-neutral live suite. Existing evidence bytes remain
+unchanged; live probes will not branch on candidate release numbers.
+The updated live suite passed a complete checksum-verified Darwin 1.11.6 run:
+16 language/rule selections, default OCaml/Kotlin-script test exclusions and the
+new reasoning wire matrix, alongside every existing consumed probe. Historical
+1.11.4/1.11.5 contracts remain byte-identical. Promotion now requires current
+schema/contract proof regardless of the historical reader cutoff.
+
+#### OCR 1.11.6 Adjacent Source Review
+
+The adjacent `v1.11.5...v1.11.6` comparison contains eight commits. Classification:
+
+- OCaml/ReasonML allowlist and built-in Rules (`4cea5011`), plus Kotlin `.kts`
+  routing/test exclusions (`e967f3f4`), change consumed review selection. The live
+  language probe now verifies those additions; classify their delivery as Rules.
+- Upstream Action controls/progress (`0a747205`) inform this feature, but the
+  toolkit does not execute that Action or adopt human-audience stderr streaming.
+  Existing toolkit effort and aggregate budgets are preserved; explicit reasoning
+  and bounded private-safe progress are implemented at toolkit-owned boundaries.
+- HTTP header timeout wiring (`71375c16`) affects native OpenAI, Responses and
+  Anthropic transport: request timeout remains authoritative, with a 30-second
+  header margin. No toolkit timeout API or response-schema adaptation is added.
+- Node launcher signal forwarding (`c590b6b6`) and associated editor cancellation
+  are upstream launcher/editor behavior; qualification uses standalone assets.
+- Viewer line numbering (`7f8fa44f`) and Pages documentation (`0ca5668f`,
+  `04284b5d`) are not toolkit execution/publication contracts.
+
+No independent provider-profile, scan or telemetry backlog activation follows
+from those adjacent changes. Fresh hosted Linux evidence and full asset readback
+are still required before pin promotion; the earlier #181 run predates this suite.
+The qualification-harness slice passed self-review, 114 maintainer tests, manifest
+validation, formatting and Ruff. Its complete local native run passed all current
+contracts. Publish this reviewed slice and dispatch exact-tag Linux qualification
+from the new Draft branch before applying the resulting pinned update.
 Keep the plan active through deferred
 stable delivery; OCR qualification and final security/hosted
 gates are pending on Draft #183.
