@@ -6,12 +6,12 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## Active Work
 
-### Toolkit 0.9.2 — local provider, diagnostics and OCR controls
+### Toolkit 0.10.0 — local provider, diagnostics and OCR controls
 
 - **Status:** active
 - **Plan Origin:** plan_mode_approved
 - **Release classification:** release-required; stable delivery release-deferred
-- **Target stable version:** 0.9.2
+- **Target stable version:** 0.10.0 (raised from 0.9.2 by user decision)
 - **Branch:** `codex/v0.9.2-ocr-1.11.6`
 
 #### Goal
@@ -27,7 +27,8 @@ the old feature branch is complete. #181 qualifies OCR 1.11.6 against 1.11.5
 in hosted run 34127679854. Upstream #1154 is the product focus; other adjacent
 changes are compatibility inputs, not separate product projects. The approved
 conversation plan and subsequent provider-support/none clarification are binding.
-Local delivery is tracked by #182; both issues belong to milestone v0.9.2.
+Local delivery is tracked by #182; both issues belong to milestone v0.10.0.
+Retain the existing branch name and Draft #183; no history rewrite is needed.
 Canonical owners: project principles, development/release guides, configuration,
 operations, security, review decision flow, strategy and backlog. Existing local
 review verifies evidence but omits GitLab receipt; preflight still assumes GitLab.
@@ -48,9 +49,9 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 
 | Queue | Status | Work |
 | --- | --- | --- |
-| WQ-01 | in_progress | Plan and milestone recorded; #181/#182 assigned; planning push/Draft pending |
-| WQ-02 | pending | Shared report model/formatting and local provider |
-| WQ-03 | pending | Explicit local preflight/review and end-to-end path |
+| WQ-01 | done | Signed planning commit 4e50f78 pushed; Draft #183, milestone and #181/#182 recorded |
+| WQ-02 | done | Shared reporting package, characterized GitLab delegation and local Markdown adapter; execution-owner facts remain separate |
+| WQ-03 | in_progress | Explicit local preflight/review and end-to-end path |
 | WQ-04 | pending | Fresh private debug bundle and actual decision journal |
 | WQ-05 | pending | Reasoning environment control and bounded progress |
 | WQ-06 | pending | OCR promotion, assets, no-LLM qualification and local update |
@@ -64,6 +65,11 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
   Console Markdown has no HTML disclosure or remote badges, and prints every
   admitted finding without posting caps. JSON remains in --result; progress
   and diagnostic output use stderr. Every failure has an honest summary.
+  Keep this core reusable by a future GitHub adapter: no GitLab MR identity,
+  receipt, API, settings or posting imports in shared report contracts/rendering.
+  Review health and admitted data are common; publication state, discussion
+  anchors, suppression and approval remain adapter-owned. GitHub implementation,
+  credentials and a generic forge API framework are outside this release scope.
 - Add `preflight --local` and `review --local`, with required result/stderr
   paths and existing immutable commit/from/to input. Ignore inherited CI
   identity for local runs; never acquire or mutate GitLab. Reject requested
@@ -98,6 +104,40 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
   version-neutral current documentation. BL-016/018, BL-010 and BL-021 remain
   conditional: none of their independent activation criteria is satisfied.
 
+#### Provider Architecture Decisions
+
+- Separate provider input acquisition, common review execution/report data and
+  provider output/actions. A provider is not merely a formatter and is not a
+  mandatory all-methods base class. Local supplies immutable Git identity and
+  console output; forge adapters additionally own authenticated API acquisition
+  and platform mutations. Do not implement dummy discussion or approval methods
+  for local execution.
+- Shared report data describes the admitted review, not an MR/PR or a posting
+  transaction. Keep immutable repository refs distinct from optional forge
+  identity/context. No fabricated author, change-request ID, protection state,
+  discussion history or publication receipt when those inputs do not exist.
+- Distinguish unsupported capabilities, an empty successful acquisition,
+  disabled acquisition and failed acquisition. In particular, local absence of
+  discussions does not mean that discussions were fetched and no commands found.
+  Explicit unsupported requests fail before execution; they are not successful
+  no-ops or inferred from inherited CI variables.
+- Commands from discussions require a supported input channel, authenticated
+  actor/provenance and action authorization. Common parsers and decision rules
+  may be reusable, but provider identity, permissions and mutation guards must
+  not be generalized from GitLab assumptions. Local review does not accept
+  discussion commands from repository text or model output.
+- Share pure calculations and wording; adapt delivery separately. Findings
+  admitted by DLP, findings selected for posting, and findings actually posted
+  are distinct facts. Publication limits, suppression and failed delivery must
+  not rewrite core review health or silently remove local findings. MCP usage
+  is execution evidence; a forge receipt is a separate platform-bound artifact.
+- Preserve existing GitLab acquisition/publication lifecycles in this release.
+  Do not mechanically equate GitLab discussions/approval with future GitHub
+  threads/reviews or promise identical retry, transaction and race guarantees.
+  Future GitHub work must characterize those API boundaries before reuse.
+  Add dependency tests for the shared report boundary and local tests proving
+  unsupported channels never acquire data or perform provider writes.
+
 #### Validation And Commit Gates
 
 Before each logical signed commit: format changed Python, targeted tests,
@@ -105,6 +145,13 @@ complete diff/self-review, repository Ruff format check and git diff --check.
 Final gate: quality with scoped coverage floors, lock, manifest/evidence,
 Towncrier, package/installed wheel and sdist tests, pinned Gitleaks for tree and
 complete feature history. Hosted checks bind the exact final head.
+Before overall final self-review, run the Codex Security diff-scan skill over
+the complete immutable feature range, triage findings, fix confirmed problems
+within this scope and verify remediation. Record scan coverage and unresolved
+limitations; a scanner score is not a substitute for semantic self-review.
+Organize shared runtime and tests by layer, preserving characterized code through
+mechanical moves where appropriate. Reconcile all affected public documentation,
+decision-flow diagrams, contract schemas, threat model and test-evidence matrix.
 
 Required matrices: same normalized GitLab/local report data; clean/findings/
 warnings/partial/budget/failure, true DLP filtering and diagnostic-only input;
@@ -133,8 +180,12 @@ No automatic weakening of security/DLP or fallback to a different model/value.
 
 #### Resume Point
 
-Materialize tracking and signed planning Draft, then implement WQ-02. Keep
-the plan active through deferred stable delivery and record precise checkpoints.
+WQ-02 is implemented with 475 passing targeted tests and 283 subtests, plus two
+adapter-parity tests; Ruff, formatting, mypy and diff checks passed. Mechanical
+AST comparison preserves 22 extracted definitions apart from their docstrings.
+The local output adapter is not yet wired to the CLI: implement WQ-03 next on
+Draft #183. Keep the plan active through deferred stable delivery; remaining
+debug, controls, OCR qualification and final security/hosted gates are pending.
 
 #### Closure Gate
 

@@ -197,6 +197,13 @@ Every top-level test module is classified below. A module can contain more than 
 | Serialized comment repair and failure arguments | Checksum-verified OCR 1.11.4 and 1.11.5 use a local deterministic gateway; native, serialized and repaired batches preserve fields and anchors, suspect batches fail with original arguments in private failure data | Binary behavior and field preservation, not model judgment |
 | Forward-only suite and historical evidence | Complete real no-LLM runs before/after refactoring yield identical JSON contracts; frozen promotion-baseline and historical-independence tests reject missing proof before writes | Historical readback does not imply supported execution of old binaries |
 
+## Shared reporting and local output
+
+| Boundary | Owner and entry point | Evidence | Claim limit |
+| --- | --- | --- | --- |
+| Provider-neutral reporting | `reporting.model.report_from_result` and shared pure formatters | `tests/reporting/` exercises outcome, invalid admission, coverage recovery, mandatory action counts, snapshot isolation and forbidden forge dependencies; existing posting and approval tests preserve GitLab behavior | synthetic execution facts stand in for the runner's verified output; these tests do not prove OCR or MCP execution |
+| Local Markdown delivery | `providers.local.write_local_report` into a real text stream | all admitted findings and code fields, posting-environment independence, fence/control escaping and truthful failure output | proves the output adapter, not standalone CLI acquisition, subprocess execution or debug retention |
+
 ## Unsafe or nondeterministic external boundaries
 
 The suite intentionally does not perform live GitLab comment, discussion, cleanup, or approval writes; live GitHub issue/release mutations; or PyPI publication. Their tests prove closed payloads, ordering, fail-closed decisions, transport serialization, and receipt parsing. Release completion requires independent live readback as defined in `docs/release.md`.
