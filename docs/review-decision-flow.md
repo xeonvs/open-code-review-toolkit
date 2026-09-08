@@ -52,6 +52,14 @@ flowchart TD
     partial --> mode
     mode -- Local diagnostic retention --> local[Owner-only artifacts retained;<br/>no provider receipt or posting authority]
     mode -- Local ordinary --> local_result[Validated receipt-less local result]
+    local_result --> local_output{Explicit local provider?}
+    local_output -- Yes --> local_file[Shared admitted summary and all findings<br/>to fresh private Markdown artifact and console]
+    local_file --> local_delivery{Artifact and console delivery succeed?}
+    local_delivery -- Yes --> local_done[Local delivery complete;<br/>no platform actions]
+    local_delivery -- No --> local_error[Nonzero delivery failure;<br/>preserve any completed artifact]
+    runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
+    integrity_error -- Explicit local --> local_failure
+    local_output -- No --> local_handoff[Private JSON handoff only]
     mode -- GitLab MR --> receipt[Attach exact receipt v8]
     receipt --> post{Posting input valid at readback?}
     post -- No --> posting_error[Publication-policy error;<br/>findings transaction not started]

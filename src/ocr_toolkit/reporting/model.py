@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from ocr_toolkit.ocr_result import OcrToolkitAdvisory
-from ocr_toolkit.reporting.dlp import publication_dlp_state, publication_outcome_for_summary
+from ocr_toolkit.reporting.dlp import admission_dlp_state, admitted_outcome_for_summary
 from ocr_toolkit.reporting.metadata import format_token_usage_summary
 from ocr_toolkit.reporting.result import CoverageDiagnostics, normalize_coverage_diagnostics
 from ocr_toolkit.reporting.usage import (
@@ -78,10 +78,10 @@ def report_from_result(
         raise OcrResultContractError("report comments must be a list of objects")
     if not isinstance(warnings, list):
         raise OcrResultContractError("report warnings must be a list")
-    state = publication_dlp_state(execution.publication)
+    state = admission_dlp_state(execution.publication)
     if state is None:
         raise OcrResultContractError("report DLP admission facts are unavailable")
-    outcome = publication_outcome_for_summary(parse_result_outcome(result), execution.publication)
+    outcome = admitted_outcome_for_summary(parse_result_outcome(result), execution.publication)
     mcp_summary = format_verified_mcp_usage(
         mcp_usage=execution.mcp_usage, evidence=execution.evidence
     )

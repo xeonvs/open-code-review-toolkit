@@ -1,5 +1,10 @@
 # Environment configuration
 
+Provider selection is an explicit CLI choice: [standalone local review](local.md)
+uses `preflight --local` and `review --local`, independently of inherited CI
+identity. It preserves the configured LLM and optional external MCP inputs, but
+rejects unsupported change-request context channels.
+
 Open Code Review Toolkit uses environment variables for CI/runtime configuration. Empty values are generally treated as absent. Exact defaults and safety caps are enforced by the runtime modules. **Bold variable names are required in the command, mode, example, or declaration scope stated in their `Required` cell.**
 
 OCR behavior below refers to the exact `recommended_version` in the

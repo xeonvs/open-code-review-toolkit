@@ -117,7 +117,7 @@ forge acquisition, forge receipts, environment configuration or provider actions
 Posting facades preserve existing imports while GitLab retains its publication
 transactions, discussion anchors, suppression and approval policy.
 
-`providers/local.py` writes plain Markdown from that shared report, with every
+`providers/local.py` publishes private Markdown artifacts and console output from that shared report, with every
 admitted finding and no posting cap, remote badge or HTML disclosure. It does not
 acquire forge data or accept discussion commands. The runner, not the formatter,
 must establish immutable identity, mandatory completed evidence use and DLP

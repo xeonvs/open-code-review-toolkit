@@ -1,5 +1,8 @@
 # GitLab review operations
 
+For local Markdown artifacts and console output without forge acquisition or publication, use the
+[standalone local review](local.md) provider.
+
 This guide is for developers and CI operators who connect Open Code Review Toolkit to a GitLab merge-request pipeline and need to understand what happens after the first review. Installation and the [production bot recipes](gitlab.md#production-bot-configuration) remain in `gitlab.md`; the complete environment contract is in [configuration.md](configuration.md), and enriched acquisition is in [bounded review context](review-context.md).
 
 OCR behavior below refers to the exact recommended release in the

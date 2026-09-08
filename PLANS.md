@@ -51,7 +51,7 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 | --- | --- | --- |
 | WQ-01 | done | Signed planning commit 4e50f78 pushed; Draft #183, milestone and #181/#182 recorded |
 | WQ-02 | done | Shared reporting package, characterized GitLab delegation and local Markdown adapter; execution-owner facts remain separate |
-| WQ-03 | in_progress | Explicit local preflight/review and end-to-end path |
+| WQ-03 | done | Explicit local preflight/review, private Markdown publication and installed end-to-end path |
 | WQ-04 | pending | Fresh private debug bundle and actual decision journal |
 | WQ-05 | pending | Reasoning environment control and bounded progress |
 | WQ-06 | pending | OCR promotion, assets, no-LLM qualification and local update |
@@ -70,6 +70,16 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
   Review health and admitted data are common; publication state, discussion
   anchors, suppression and approval remain adapter-owned. GitHub implementation,
   credentials and a generic forge API framework are outside this release scope.
+  User clarification: this is the same toolkit/OCR/LLM/tool-use pipeline as CI,
+  not a separate local engine. Local publication must persist the complete
+  admitted Markdown report as an artifact as well as the existing JSON result;
+  console output is an additional view, not the only report delivery. Keep one
+  execution/finalization path and put filesystem delivery at the local adapter.
+  Local --report defaults to the --result path plus .md; require a fresh target,
+  reject collisions with JSON/stderr, publish complete UTF-8 Markdown privately
+  without replacing existing files, and report delivery failures as nonzero.
+  Synthetic child processes belong only to integration tests; they must never
+  replace OCR or model-driven tool use in production.
 - Add `preflight --local` and `review --local`, with required result/stderr
   paths and existing immutable commit/from/to input. Ignore inherited CI
   identity for local runs; never acquire or mutate GitLab. Reject requested
@@ -109,7 +119,7 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 - Separate provider input acquisition, common review execution/report data and
   provider output/actions. A provider is not merely a formatter and is not a
   mandatory all-methods base class. Local supplies immutable Git identity and
-  console output; forge adapters additionally own authenticated API acquisition
+  Markdown artifacts and console output; forge adapters additionally own authenticated API acquisition
   and platform mutations. Do not implement dummy discussion or approval methods
   for local execution.
 - Shared report data describes the admitted review, not an MR/PR or a posting
@@ -183,9 +193,24 @@ No automatic weakening of security/DLP or fallback to a different model/value.
 WQ-02 is implemented with 475 passing targeted tests and 283 subtests, plus two
 adapter-parity tests; Ruff, formatting, mypy and diff checks passed. Mechanical
 AST comparison preserves 22 extracted definitions apart from their docstrings.
-The local output adapter is not yet wired to the CLI: implement WQ-03 next on
-Draft #183. Keep the plan active through deferred stable delivery; remaining
-debug, controls, OCR qualification and final security/hosted gates are pending.
+WQ-02 is committed as 9d0b999. WQ-03 CLI/preflight wiring is implemented:
+unsupported local context fails before I/O, inherited forge identity is ignored,
+and result admission supplies actual MCP/DLP facts to the console adapter.
+Legacy unknown coverage is accepted only as execution-owner admission data, not
+as a platform publication receipt. The affected runner/reporting/posting matrix
+passes 491 tests and 283 subtests; Ruff, formatting, mypy and diff checks pass.
+Installed wheel and sdist scenarios now cross real Git/process/MCP with optional
+external MCP and polluted CI identity; forged mandatory use is rejected. Local
+publication now persists complete Markdown (default --result plus .md) through
+the local adapter after common finalization, with a fresh owner-only atomic file
+and console parity. The final CLI/runtime/report/artifact/GitLab regression matrix
+passed 631 tests and 400 subtests, including both installed distributions with
+hostile repository imports; Ruff, mypy, repository formatting and diff checks
+passed. WQ-03 self-review is complete, including failure delivery and private
+file lifecycle; the logical commit contains these completed results. Next start
+WQ-04's bounded debug capture and actual decision journal. Keep the plan active through deferred
+stable delivery; debug, controls, OCR qualification and final security/hosted
+gates are pending on Draft #183.
 
 #### Closure Gate
 

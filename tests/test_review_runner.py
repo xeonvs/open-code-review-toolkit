@@ -29,6 +29,7 @@ from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifac
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import approval, settings, snapshot, workflow
+from ocr_toolkit.reporting.dlp import publication_dlp_state
 from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import gitlab_config, patched_attr, patched_env
 from tests.test_context_broker import ci_outcome
@@ -2009,6 +2010,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         secret_values=(),
     )
 
+    local_state = review_runner.ReviewRunState(local=True)
     usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
         composition,
@@ -2016,6 +2018,8 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         None,
         SUMMARY_ACTION_COUNTS,
         forbidden=("private discussion sentence",),
+        report_consumer=local_state.admit_report,
+        state=local_state,
     )
 
     assert usage == {"ocr_toolkit_evidence": 1}
@@ -2053,6 +2057,21 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
     assert "_ocr_toolkit" not in persisted
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
+    assert local_state.report is not None
+    assert list(local_state.report.comments) == persisted["comments"]
+    assert local_state.report.publication == publication
+    assert local_state.report.outcome.kind == "clean"
+    assert local_state.report.outcome.manifest_present is False
+    assert local_state.report.outcome.coverage_summary == ""
+    assert publication_dlp_state(publication) is None
+    console = io.StringIO()
+    review_runner.write_local_report(local_state.report, console)
+    rendered = console.getvalue()
+    assert "Guard the empty collection" in rendered
+    assert "Validate the safe branch" in rendered
+    assert "private discussion sentence" not in rendered
+    assert "synthetic@example.invalid" not in rendered
+    assert "ocr_toolkit_evidence" in rendered
 
 
 def test_background_preview_advisory_is_atomically_finalized_without_blocking_approval(

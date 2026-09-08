@@ -211,3 +211,19 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         assert receipt["private_modes"] is True
         assert receipt["read_only"] is True
         assert receipt["repository_clean"] is True
+        local_output = _run(
+            [
+                str(python),
+                "-I",
+                str(PROJECT_ROOT / "tests" / "providers" / "installed_local_review.py"),
+                str(root / "local-review"),
+                str(cli),
+            ],
+            cwd=root,
+            env=protocol_environment,
+        )
+        assert json.loads(local_output) == {
+            "verified": True,
+            "forged_usage_rejected": True,
+            "ci_identity_ignored": True,
+        }

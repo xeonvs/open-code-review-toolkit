@@ -11,7 +11,7 @@ from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
 def format_dlp_admission(publication: Any) -> str:
     """Render only closed DLP facts, without implying a provider mutation."""
 
-    state = publication_dlp_state(publication)
+    state = admission_dlp_state(publication)
     if state is None:
         return "- DLP admission: unavailable"
     if state == "passed":
@@ -36,6 +36,21 @@ def format_dlp_admission(publication: Any) -> str:
 
 def publication_dlp_state(value: Any) -> str | None:
     """Validate the exact current publication-policy receipt."""
+
+    return _dlp_state(value, allow_unknown_coverage=False)
+
+
+def admission_dlp_state(value: Any) -> str | None:
+    """Validate execution-owner admission facts, including unknown legacy coverage.
+
+    This does not validate or authorize a platform publication receipt.
+    """
+
+    return _dlp_state(value, allow_unknown_coverage=True)
+
+
+def _dlp_state(value: Any, *, allow_unknown_coverage: bool) -> str | None:
+    """Validate closed DLP facts with an explicit coverage-knowledge boundary."""
 
     if value == {"state": "passed"}:
         return "passed"
@@ -109,6 +124,8 @@ def publication_dlp_state(value: Any) -> str | None:
         if failed == selected
         else {"partial"}
     )
+    if allow_unknown_coverage and selected == completed == reused == failed == waived == 0:
+        derived_outcomes |= {"clean", "warning", "partial"}
     if selected != completed + reused + failed + waived or outcome not in derived_outcomes:
         return None
     return "publication-filtered"
@@ -132,6 +149,20 @@ def publication_outcome_for_summary(outcome: ReviewOutcome, publication: Any) ->
 
     if publication_dlp_state(publication) != "publication-filtered":
         return outcome
+    return _original_outcome(outcome, publication)
+
+
+def admitted_outcome_for_summary(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome:
+    """Recover owner-observed outcome without inventing legacy coverage counts."""
+
+    if admission_dlp_state(publication) != "publication-filtered":
+        return outcome
+    return _original_outcome(outcome, publication)
+
+
+def _original_outcome(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome:
+    """Recover original outcome only after the caller validates its DLP facts."""
+
     if outcome.kind != "partial" or outcome.manifest_present:
         raise OcrResultContractError(
             "publication-filtered receipt is not bound to a safe result projection"
