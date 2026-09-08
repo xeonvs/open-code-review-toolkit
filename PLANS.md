@@ -20,6 +20,10 @@ before handoff or commit. Completed stable plans are indexed in
   renamed. The user authorized replacing #183: first publish and verify the new
   branch and fully described Draft, then close #183 with a replacement link.
   Preserve the old remote branch until the replacement is verified.
+- **Validation override:** the user waived further local test and probe runs.
+  Preserve the already completed local evidence and finish remaining quality,
+  qualification and hosted checks through GitHub Actions. Do not launch more
+  local validation runs; ordinary implementation and Git publication continue.
 
 #### Goal
 
