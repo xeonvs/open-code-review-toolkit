@@ -9,6 +9,7 @@ before handoff or commit. Completed stable plans are indexed in
 ### Toolkit 0.10.0 — local provider, diagnostics and OCR controls
 
 - **Status:** active
+- **Draft implementation:** complete; plan retained for deferred stable delivery
 - **Plan Origin:** plan_mode_approved
 - **Release classification:** release-required; stable delivery release-deferred
 - **Target stable version:** 0.10.0 (raised from 0.9.2 by user decision)
@@ -70,7 +71,7 @@ local review verified evidence without a GitLab receipt, while preflight assumed
 | WQ-04 | done | Fresh private debug bundle, actual decision journal and installed normal/debug parity |
 | WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
 | WQ-06 | done | OCR promotion, verified hosted assets and current no-LLM qualification; installed Darwin binary updated without a post-waiver launch |
-| WQ-07 | in_progress | Docs/backlog, full self-review, security scan, hosted gates and Draft handoff |
+| WQ-07 | done | Docs/backlog, full self-review, security review with recorded artifact limitation, green implementation checks and external handoff checklist |
 
 #### Locked Interfaces And Boundaries
 
@@ -316,7 +317,8 @@ and evidence matrix now describe the local provider and its non-claims; existing
 result/receipt/context schemas remain unchanged, while the private debug journal
 is documented separately and cannot authorize publication.
 Promotion/documentation commit bff811a is pushed and the Draft body was updated
-and read back in full. Its hosted checks are running. The external qualification
+and read back in full. Its initial test failures are resolved below. The external
+qualification
 checklist now lives in `docs/local.md`, covering exact Draft artifact identity,
 GitLab/local/debug/progress and unset/none/nonempty provider acceptance.
 The user authorized the local read-only security configuration preflight and
@@ -354,13 +356,38 @@ exact non-semantic correction is applied and reviewed before the next push.
 The old remote branch was deleted with an expected-head lease after GitHub proved
 its planning commit is an ancestor of the replacement. #182 now records target
 0.10.0, Markdown delivery, replacement #184 and the configured external checklist.
-Three obsolete task temporary directories were moved to Trash for recovery.
-Keep the plan active through deferred
-stable delivery; final exact-head hosted gates are pending on Draft #184.
+The owned probe/download/tree-check directories and local validation logs were
+moved to Trash for recovery, including the previous installed OCR binary backup.
+The security report bundle and PR handoff text are retained as private delivery
+artifacts under ignored `.quality-logs/ocr0100-handoff/`.
+
+#### Draft Readiness Receipt
+
+Implementation head `5a33e0fce8cefad2917c720bb5a734cc862e58d8` has all 13 checks
+green. CI run `34221252576` passed the five supported OS/Python combinations,
+including 1700 tests and 86.73% total coverage on its Linux coverage owner;
+all four scoped floors passed. Build run `34221252503`, security run
+`34221252488`, CodeQL run `34221252685` and dependency review run `34221252618`
+passed. Gitleaks 8.24.3 scanned all 11 feature commits through that head and found
+no leaks. GitHub verifies the signed feature commits. Draft #184 has the complete
+scope, boundaries, evidence and explicit security-artifact limitation; #183 is
+closed as superseded, and #181/#182 and milestone v0.10.0 remain open.
+
+This final documentation-only closure does not change the reviewed runtime.
+Before handing it off, read back its own exact-head CI, signature, branch and
+Draft state; the live Draft checks/body are the authority for that last external
+readback. No further source work is queued. Keep this plan active for the deferred
+stable lifecycle: the external owner next qualifies the exact Draft artifact
+with configured providers using `docs/local.md`, then separately authorizes
+merge and the protected release sequence. No merge, publication or issue closure
+has occurred in this work.
 
 #### Closure Gate
 
-- [ ] All scoped implementation and required local verification complete.
-- [ ] Full self-review and signed commits; current Draft checks green.
-- [ ] Local and remote heads agree, tree clean, temporary owned data cleaned.
-- [ ] External qualification checklist recorded; issues/milestone remain open.
+- [x] Scoped implementation and pre-waiver local evidence complete; remaining validation moved to hosted CI.
+- [x] Full self-review, security review with explicit artifact limitation, signed commits and green implementation-head checks.
+- [x] Published replacement branch and complete Draft description; owned temporary data cleaned recoverably.
+- [x] External qualification checklist recorded; issues/milestone remain open and stable delivery deferred.
+
+Final docs-head green-check and clean-tree readback is required at handoff, as
+described above; it is not authorization for any later release action.
