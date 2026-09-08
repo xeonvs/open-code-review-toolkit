@@ -2796,7 +2796,7 @@ def _run_evidence_review(
             artifacts=artifacts,
             refs=refs,
             identity=identity,
-            **({"state": state} if state.local else {}),
+            **({"state": state} if state.local or state.progress is not None else {}),
         )
     finally:
         previous_mask = _block_termination_signals()
@@ -2833,9 +2833,10 @@ def _run_evidence_review(
                         evidence_action_counts,
                         forbidden=forbidden,
                         toolkit_advisory=background_qualification.advisory,
+                        **({"report_consumer": state.admit_report} if state.local else {}),
                         **(
-                            {"report_consumer": state.admit_report, "state": state}
-                            if state.local
+                            {"state": state}
+                            if state.local or state.progress is not None
                             else {}
                         ),
                     )

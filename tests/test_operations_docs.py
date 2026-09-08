@@ -54,7 +54,7 @@ def test_readme_and_gitlab_guide_link_to_operations() -> None:
 
     assert "docs/operations.md" in readme
     assert "operations.md" in gitlab
-    assert "## How reviews evolve" in readme
+    assert "## How GitLab reviews evolve" in readme
 
 
 def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:

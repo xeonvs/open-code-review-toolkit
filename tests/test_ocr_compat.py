@@ -79,8 +79,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.11.5"
-    assert manifest["monitoring_floor"] == "1.11.5"
+    assert manifest["recommended_version"] == "1.11.6"
+    assert manifest["monitoring_floor"] == "1.11.6"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -114,6 +114,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.11.3", "tested"),
         ("1.11.4", "tested"),
         ("1.11.5", "tested"),
+        ("1.11.6", "tested"),
     ]
 
 

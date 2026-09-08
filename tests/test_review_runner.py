@@ -4195,14 +4195,19 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
         (False, 0, "unprotected"),
     ],
 )
+@pytest.mark.parametrize("progress_on", [False, True])
 def test_evidence_review_prepares_internal_context_before_ocr(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     preserve_private_artifacts: bool,
     ocr_exit_code: int,
     target_protection: str,
+    progress_on: bool,
 ) -> None:
     """Clean ordinary success/failure while retaining requested local diagnostics."""
 
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true" if progress_on else "false")
     events: list[object] = []
     composition_inputs: list[dict[str, object]] = []
     bootstrap_inputs: list[dict[str, object]] = []
@@ -4263,6 +4268,13 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     def finalize(
         *_args: object, **kwargs: object
     ) -> tuple[dict[str, int], bool, dict[str, object]]:
+        assert "report_consumer" not in kwargs
+        if progress_on:
+            state = kwargs["state"]
+            assert isinstance(state, review_runner.ReviewRunState)
+            assert state.local is False and state.progress is not None
+        else:
+            assert "state" not in kwargs
         finalized.append(kwargs)
         events.append("ocr-usage")
         return {"ocr_toolkit_evidence": 1}, False, {"state": "passed"}
@@ -4358,6 +4370,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             preserve_private_artifacts=preserve_private_artifacts,
         )
 
+    output = capsys.readouterr()
+    assert ("OCR progress: phase=subprocess" in output.err) is progress_on
+    assert "OCR progress:" not in output.out
     assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1

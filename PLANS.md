@@ -319,11 +319,36 @@ Promotion/documentation commit bff811a is pushed and the Draft body was updated
 and read back in full. Its hosted checks are running. The external qualification
 checklist now lives in `docs/local.md`, covering exact Draft artifact identity,
 GitLab/local/debug/progress and unset/none/nonempty provider acceptance.
-Security diff-scan instructions require a local read-only configuration preflight;
-the user has been asked whether to allow that narrow exception to the local-check
-waiver. No security scan or preflight has started while that answer is pending.
+The user authorized the local read-only security configuration preflight and
+corrected publication ordering: no further push before security review and
+confirmed fixes are complete. Prior publication before the full-range scan was
+an execution error, not satisfaction of that gate. Preflight passed without
+configuration changes. Scan `0431df4b-1ce4-4d8b-9771-9395c8b45298` reviews immutable
+`8ae890b...63387c3`; TAC access could not be verified because the advisory service
+is disconnected. Discovery completed with disjoint source-file assignments.
+The second hosted matrix exposed the current-pin test's stale 1.11.5 expectation
+and the README heading expectation; those are corrected without changing the
+frozen historical fixtures. These corrections passed bounded pre-push review.
+Overall self-review found a non-security progress-routing defect: CI enabled the
+timer but withheld subprocess/finalization phase notifications unless `--local`
+was selected. Observation state now reaches both local and enabled-progress paths
+while the report consumer stays local-only. The existing orchestrator matrix adds
+progress on/off assertions. A separate pre-push static review of that delta found
+no authority, receipt, DLP or cleanup changes; its test double proves wiring only.
+Hosted verification remains pending under the local-test waiver.
+
+The Codex Security scan is sealed/completed with zero findings. All 25 source
+inventory files and 32 supplemental changed test/config/documentation files were
+reviewed. Important artifact limitation: the service retained the intermediate
+`final-coverage-reconciliation` deferred row and reports `partial` even after the
+final submission supplied all six completed surfaces and an empty deferred list.
+The sealed artifact was not edited or replaced; its partial marker is not claimed
+as a fully clean automated coverage result. Actual source review and the bounded
+post-scan progress/test correction review are complete. Scan token accounting was
+unavailable (`scan_thread_unavailable`). Overall semantic self-review is complete;
+no confirmed security finding or unresolved implementation defect remains.
 Keep the plan active through deferred
-stable delivery; final security/hosted gates are pending on Draft #184.
+stable delivery; final exact-head hosted gates are pending on Draft #184.
 
 #### Closure Gate
 
