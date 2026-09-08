@@ -347,6 +347,14 @@ as a fully clean automated coverage result. Actual source review and the bounded
 post-scan progress/test correction review are complete. Scan token accounting was
 unavailable (`scan_thread_unavailable`). Overall semantic self-review is complete;
 no confirmed security finding or unresolved implementation defect remains.
+Commit 084ccf3's hosted matrix passed all test executions, including 1700 tests on
+the Linux coverage owner, 86.73% total coverage and all four scoped floors. Its
+quality job requested a formatting-only collapse of one observer argument; that
+exact non-semantic correction is applied and reviewed before the next push.
+The old remote branch was deleted with an expected-head lease after GitHub proved
+its planning commit is an ancestor of the replacement. #182 now records target
+0.10.0, Markdown delivery, replacement #184 and the configured external checklist.
+Three obsolete task temporary directories were moved to Trash for recovery.
 Keep the plan active through deferred
 stable delivery; final exact-head hosted gates are pending on Draft #184.
 

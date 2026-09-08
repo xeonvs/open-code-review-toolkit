@@ -2834,11 +2834,7 @@ def _run_evidence_review(
                         forbidden=forbidden,
                         toolkit_advisory=background_qualification.advisory,
                         **({"report_consumer": state.admit_report} if state.local else {}),
-                        **(
-                            {"state": state}
-                            if state.local or state.progress is not None
-                            else {}
-                        ),
+                        **({"state": state} if state.local or state.progress is not None else {}),
                     )
                 except ReviewRunnerError:
                     try:
