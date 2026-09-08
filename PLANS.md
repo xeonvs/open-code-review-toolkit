@@ -53,7 +53,7 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 | WQ-02 | done | Shared reporting package, characterized GitLab delegation and local Markdown adapter; execution-owner facts remain separate |
 | WQ-03 | done | Explicit local preflight/review, private Markdown publication and installed end-to-end path |
 | WQ-04 | done | Fresh private debug bundle, actual decision journal and installed normal/debug parity |
-| WQ-05 | pending | Reasoning environment control and bounded progress |
+| WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
 | WQ-06 | pending | OCR promotion, assets, no-LLM qualification and local update |
 | WQ-07 | pending | Docs/backlog, full self-review, gates, push and Draft handoff |
 
@@ -227,10 +227,26 @@ attribution were corrected before the commit gate. The complete affected matrix
 passes 654 tests and 400 subtests; an additional installed wheel/sdist SIGTERM
 scenario confirms equal nonzero outcomes, cleanup and no safe-result admission.
 Ruff, formatting, mypy, Bandit and diff checks pass. The logical WQ-04 commit
-contains these results. Next implement WQ-05 reasoning controls and bounded
-progress; actual OCR qualification remains WQ-06.
+contains these results. Actual OCR qualification remains WQ-06.
+WQ-04 is committed as 5715c8d. Official OpenAI reasoning
+documentation confirms protocol-specific effort paths and model-dependent support.
+The reasoning shortcut is implemented in the shared provider configuration owner:
+unset adds no overlay, explicit none is retained, Responses siblings survive,
+conflicting values/types and Anthropic shortcuts fail in configure and preflight.
+Its targeted matrix passes 162 tests and 109 subtests; Ruff and mypy pass.
+WQ-05 now includes toolkit-only progress, output backpressure/error handling,
+timer shutdown and installed on/off parity (including SIGTERM to OCR and the
+toolkit parent). The complete affected matrix passes 829 tests and 400 subtests.
+Checksum-verified Darwin OCR 1.11.6 independently passes real request capture
+for unset, none and high in both OpenAI protocols, preserving Responses siblings;
+the local gateway deliberately rejects requests without model execution.
+Self-review, Ruff, mypy and formatting pass. Provider acceptance/application
+remains explicitly not tested. WQ-06 must incorporate this probe into the live
+qualification contract while preserving older evidence, then promote exact pins
+and update the local installed binary. Do not equate the private wire receipt
+with full candidate qualification or stable release delivery.
 Keep the plan active through deferred
-stable delivery; controls, OCR qualification and final security/hosted
+stable delivery; OCR qualification and final security/hosted
 gates are pending on Draft #183.
 
 #### Closure Gate

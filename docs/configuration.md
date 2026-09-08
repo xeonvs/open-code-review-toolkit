@@ -25,9 +25,11 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
 | `OCR_LLM_EXTRA_BODY` | Operator / `ocr-ci configure` | No | Unset | JSON object merged into the OCR LLM request configuration; completion-cap field conflicts are checked against the dedicated variable. |
 | `OCR_LLM_MAX_COMPLETION_TOKENS` | Operator / `ocr-ci configure` | No | Unset (inherits OCR) | Positive decimal integer from `1` through `1000000`; sets the protocol-specific completion/output cap without changing prompt/context or aggregate review budgets. |
+| `OCR_LLM_REASONING_EFFORT` | Operator / configure and preflight | No | Unset (no overlay) | Case-insensitive `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; explicit `none` is sent, not omitted. Nonempty values require an OpenAI protocol. |
 | `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
 | `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
 | `OCR_REVIEW_EFFORT` | Operator / `ocr-ci configure` | No | `medium` | Closed OCR quality preset: `low`, `medium`, or `high`; maps to one, two, or three review rounds. |
+| `OCR_REVIEW_PROGRESS` | Operator / `ocr-ci review` | No | Empty / `false` | Case-insensitive `true` enables toolkit-only phase messages and a 30-second heartbeat on stderr, capped at 120 messages per run. |
 | `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
 | `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
@@ -57,6 +59,24 @@ Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fail
 
 `OCR_LLM_PROTOCOL` is authoritative; the URL never selects a protocol. `OCR_LLM_URL` accepts an API root or the matching terminal endpoint: `/chat/completions` for `openai`, `/responses` for `openai-responses`, and `/v1/messages` for `anthropic`. Configure and preflight use the same normalized API root, reject a terminal endpoint belonging to another protocol, and reject credentials or fragments embedded in either provider URL. A query is preserved for inference. Because copying it to an auxiliary endpoint is ambiguous, model validation with a queried inference URL requires an explicit `OCR_LLM_MODELS_URL`.
 
+`OCR_LLM_REASONING_EFFORT` is independent of the existing OCR review effort and
+token budgets. Unset or empty leaves the request overlay unchanged. A nonempty
+value is normalized to lowercase and sets `reasoning_effort` for `openai`, or
+`reasoning.effort` for `openai-responses`, preserving other `reasoning` members.
+When the shortcut is set, an equal value at the corresponding path in
+`OCR_LLM_EXTRA_BODY` is allowed;
+different values, incompatible field types or a non-object Responses `reasoning`
+value fail before inference. Manual JSON values must already use the exact
+lowercase wire spelling. Nonempty shortcuts are rejected for `anthropic`.
+
+These paths follow the [official OpenAI reasoning contract](https://developers.openai.com/api/docs/guides/reasoning#reasoning-effort).
+Supported values and defaults depend on the exact provider/model/protocol;
+`none` is an explicit request and is not universally supported. Toolkit parsing
+does not prove provider acceptance or application. Qualify unset, explicit `none`
+and the intended effort in the deployment; HTTP success alone does not prove
+that a gateway applied the setting. The toolkit never silently substitutes an
+effort, model or protocol after rejection.
+
 `OCR_LLM_MAX_COMPLETION_TOKENS` is optional and defaults to **unset**, which inherits the qualified OCR version's behavior. It accepts a positive decimal integer from `1` through `1000000` and writes one protocol-specific field:
 
 | `OCR_LLM_PROTOCOL` | Generated `llm.extra_body` field |
@@ -74,6 +94,17 @@ The inherited value is version-owned and may change with a qualified OCR upgrade
 ### Review effort
 
 `OCR_REVIEW_EFFORT` defaults to `medium` and is written to OCR's root `effort` configuration key. OCR maps `low`, `medium`, and `high` to one, two, and three review rounds and scales its 15-minute subtask base to 15, 30, or 45 minutes. The environment is operator-owned; merge-request text cannot change it. An explicit caller `--effort` passed after `ocr-ci review --` has normal OCR CLI precedence over the generated config, while an unknown environment value fails configuration before preview or model execution.
+
+`OCR_REVIEW_PROGRESS=true` observes the same review in local and CI execution.
+Messages contain only closed toolkit phase names; the observer never reads OCR
+results, stderr artifacts or sessions, and does not change the agent audience.
+Progress is not copied into results, Markdown, receipts or DLP inputs. The timer
+stops on completion, exceptions, signals or the 120-message cap. Output is
+best-effort: closed or currently unwritable descriptors disable progress, without
+changing stderr status flags, review admission or exit status. As with ordinary
+console output, this is not a hard real-time guarantee for a stalled filesystem
+or a concurrently replaced output device. Values other than empty, `false` or
+`true` fail before review execution without echoing their contents.
 
 OCR may present filter-surviving comments to a later round as previously confirmed, but the toolkit does not accept that wording as validation. Its mandatory background prefix travels with every main request and requires prior/filter-surviving findings to remain unverified until current code, tests, or trusted evidence support them. Survival cannot change severity, suppress or resolve a finding, authorize approval, or enter a receipt as independent validation.
 

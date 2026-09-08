@@ -1317,6 +1317,46 @@ def test_compatibility_gateway_distinguishes_tool_free_plan_requests() -> None:
     assert content == "Summary: Review the changed code.\n\nIssues\n(none)"
 
 
+@pytest.mark.parametrize("protocol", ["chat/completions", "responses"])
+def test_reasoning_gateway_captures_wire_fields_without_model_reply(protocol: str) -> None:
+    module = load_script()
+    payload = (
+        {"reasoning_effort": "none"}
+        if protocol == "chat/completions"
+        else {"reasoning": {"effort": "none", "summary": "auto"}}
+    )
+    with module._stub_gateway(capture_reasoning=True) as gateway:
+        request = module.urllib.request.Request(
+            f"{gateway}/{protocol}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(module.urllib.error.HTTPError) as error:
+            module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        assert error.value.code == 400
+        observed = module._StubHandler.reasoning_requests
+        assert len(observed) == 1 and observed[0]["path"] == f"/v1/{protocol}"
+        assert observed[0]["root_present"] is (protocol == "chat/completions")
+        assert observed[0]["nested_present"] is (protocol == "responses")
+        assert module._StubHandler.request_count == 0
+        assert module._StubHandler.reasoning_overflow is False
+
+
+def test_reasoning_gateway_records_capture_overflow() -> None:
+    module = load_script()
+    with module._stub_gateway(capture_reasoning=True) as gateway:
+        for _ in range(33):
+            request = module.urllib.request.Request(
+                f"{gateway}/responses",
+                data=b'{"reasoning":{"effort":"none"}}',
+                headers={"Content-Type": "application/json"},
+            )
+            with pytest.raises(module.urllib.error.HTTPError):
+                module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        assert len(module._StubHandler.reasoning_requests) == 32
+        assert module._StubHandler.reasoning_overflow is True
+
+
 def test_grouping_inventory_strictly_parses_current_shape() -> None:
     """Live qualification accepts status-first data and rejects legacy wire grammar."""
 

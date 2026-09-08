@@ -112,6 +112,7 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatusError,
     write_pre_execution_status,
 )
+from ocr_toolkit.provider_config import REASONING_EFFORTS
 from ocr_toolkit.provider_failure import (
     ProviderFailureProjection,
     provider_failure_projection,
@@ -142,6 +143,7 @@ from ocr_toolkit.reporting.model import (
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
+from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -330,6 +332,14 @@ class ReviewRunState:
     reviewed_sha: str = ""
     report: ReviewReport | None = None
     debug: DebugBundle | None = None
+    progress: ReviewProgress | None = None
+
+    def enter(self, stage: FailureStage) -> None:
+        """Enter a real execution phase and notify the optional progress observer."""
+
+        self.stage = stage
+        if self.progress is not None:
+            self.progress.phase(stage)
 
     def observe(
         self, stage: FailureStage, status: DebugStatus, *, facts: dict[str, object] | None = None
@@ -383,6 +393,15 @@ def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
     updates = configure.build_config_updates()
     update_ocr_config(updates)
     if debug is not None:
+        body = updates.get("llm.extra_body")
+        reasoning = body.get("reasoning") if isinstance(body, dict) else None
+        effort = (
+            reasoning.get("effort")
+            if updates["llm.protocol"] == "openai-responses" and isinstance(reasoning, dict)
+            else body.get("reasoning_effort")
+            if updates["llm.protocol"] == "openai" and isinstance(body, dict)
+            else None
+        )
         debug.phase(
             "configuration",
             "passed",
@@ -401,6 +420,11 @@ def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
                 "extra_headers_present": "llm.extra_headers" in updates,
                 "telemetry_enabled": updates["telemetry.enabled"],
                 "content_logging": updates["telemetry.content_logging"],
+                **(
+                    {"reasoning_effort": effort}
+                    if isinstance(effort, str) and effort in REASONING_EFFORTS
+                    else {}
+                ),
             },
         )
 
@@ -1431,7 +1455,7 @@ def _finalize_ocr_result(
             raise OcrResultMalformed("OCR result warnings must be a list")
         failure_telemetry = _tool_failure_telemetry(payload.get("tool_calls"))
         if state is not None:
-            state.stage = "mcp-use"
+            state.enter("mcp-use")
         metadata = _review_receipt(
             payload,
             composition,
@@ -1450,7 +1474,7 @@ def _finalize_ocr_result(
                     "summary_completed": completed.get("summary"),
                 }
             state.observe("mcp-use", "passed", facts=facts)
-            state.stage = "dlp"
+            state.enter("dlp")
         projected, publication, filtered = _publication_projection(
             payload,
             forbidden=forbidden,
@@ -1463,7 +1487,7 @@ def _finalize_ocr_result(
                 "degraded" if publication.get("state") != "passed" else "passed",
                 facts={"dlp_state": publication["state"]},
             )
-            state.stage = "result-validation"
+            state.enter("result-validation")
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
@@ -1842,7 +1866,7 @@ def _run_background_qualified_review(
         print(f"OCR argument qualification notice: {notice}", file=sys.stderr)
     if state is not None:
         state.observe("preview", "degraded" if qualification.advisory is not None else "passed")
-        state.stage = "subprocess"
+        state.enter("subprocess")
     try:
         code = run_review(
             result_path,
@@ -2451,6 +2475,13 @@ def run_evidence_review(
     state = ReviewRunState(local=local)
     report_destination: Path | None = None
     try:
+        try:
+            enabled = progress_enabled(os.environ.get("OCR_REVIEW_PROGRESS", ""))
+        except ValueError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
+        if enabled:
+            state.progress = ReviewProgress(sys.stderr)
+            state.progress.start()
         if debug_dir is not None:
             if not local or preserve_private_artifacts:
                 raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
@@ -2502,7 +2533,7 @@ def run_evidence_review(
                 else failed_report(state.stage, reviewed_sha=state.reviewed_sha)
             )
             assert report is not None
-            state.stage = "reporting"
+            state.enter("reporting")
             try:
                 assert report_destination is not None
                 publish_local_report(report, report_destination)
@@ -2559,6 +2590,8 @@ def run_evidence_review(
             )
         raise
     finally:
+        if state.progress is not None:
+            state.progress.close()
         if state.debug is not None:
             try:
                 if state.report is not None:
@@ -2611,7 +2644,7 @@ def _run_evidence_review(
         remove_private_artifact(artifacts.dlp_decisions)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
-    state.stage = "identity"
+    state.enter("identity")
     try:
         refs = _immutable_review_refs(_review_refs(ocr_args))
     except RepositoryEvidenceError as exc:
@@ -2636,11 +2669,11 @@ def _run_evidence_review(
     previous_handlers = _install_termination_handlers()
     try:
         try:
-            state.stage = "configuration"
+            state.enter("configuration")
             _write_isolated_runtime_config(
                 **({"debug": state.debug} if state.debug is not None else {})
             )
-            state.stage = "identity"
+            state.enter("identity")
             identity, effective_ocr_args = _prepare_policy_context(
                 refs, ocr_args, artifacts, **({"local": True} if state.local else {})
             )
@@ -2656,7 +2689,7 @@ def _run_evidence_review(
                     "policy_sha": identity.policy_sha,
                 },
             )
-            state.stage = "evidence"
+            state.enter("evidence")
             store = collect_repository_evidence(
                 base_ref=refs.base,
                 head_ref=refs.head,
@@ -2688,7 +2721,7 @@ def _run_evidence_review(
                     "degraded" if diagnostic_count else "passed",
                     facts={"diagnostic_count": diagnostic_count},
                 )
-            state.stage = "mcp-preflight"
+            state.enter("mcp-preflight")
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
@@ -2752,8 +2785,8 @@ def _run_evidence_review(
             "--background-file",
             str(artifacts.bootstrap),
         ]
+        state.enter("preview")
         ocr_binary = _resolve_ocr_binary()
-        state.stage = "preview"
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
@@ -2768,6 +2801,8 @@ def _run_evidence_review(
     finally:
         previous_mask = _block_termination_signals()
         try:
+            if state.progress is not None:
+                state.progress.phase("cleanup")
             if exit_code == 0 and not preserve_authorized:
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
             if not preserve_authorized:
@@ -2785,7 +2820,7 @@ def _run_evidence_review(
             else:
                 os.environ["HOME"] = previous_home
             if cleanup_error is None and exit_code == 0 and not preserve_authorized:
-                state.stage = "result-validation"
+                state.enter("result-validation")
                 forbidden = (*composition.secret_values,)
                 if enrichment is not None:
                     forbidden += enrichment.forbidden_publication
@@ -2823,7 +2858,7 @@ def _run_evidence_review(
             _restore_termination_handlers(previous_handlers)
             _restore_signal_mask(previous_mask)
     if cleanup_error is not None:
-        state.stage = "cleanup"
+        state.enter("cleanup")
         try:
             result_path.unlink(missing_ok=True)
         except OSError:

@@ -31,6 +31,7 @@ def peer(mode: str) -> int:
     if "--preview" in sys.argv:
         return 0
     config = json.loads((Path.home() / ".opencodereview" / "config.json").read_text())
+    assert config["llm"]["extra_body"]["reasoning_effort"] == "none"
     server = config["mcp_servers"]["ocr_toolkit_evidence"]
     if mode != "forged":
         process = subprocess.Popen(
@@ -127,6 +128,9 @@ def peer(mode: str) -> int:
     if mode == "process-signaled":
         sys.stdout.flush()
         os.kill(os.getpid(), signal.SIGTERM)
+    if mode == "parent-signaled":
+        sys.stdout.flush()
+        os.kill(os.getppid(), signal.SIGTERM)
     return 2 if mode == "process-failed" else 0
 
 
@@ -189,6 +193,7 @@ def main(root: Path, cli: Path) -> int:
         "CI_API_V4_URL": "https://forge.example.invalid/api/v4",
         "OCR_LLM_MODEL": "openai/synthetic-model",
         "OCR_LLM_PROTOCOL": "openai",
+        "OCR_LLM_REASONING_EFFORT": "none",
         "OCR_REVIEW_LANGUAGE": "English (UK)",
         "OCR_LLM_TOKEN": "synthetic-provider-token",
         "OCR_LLM_URL": "https://provider.example.invalid/v1",
@@ -204,7 +209,7 @@ def main(root: Path, cli: Path) -> int:
         ),
     }
     baselines: dict[str, tuple[int, str, bytes | None]] = {}
-    for mode, debug in product(
+    for mode, (debug, progress) in product(
         (
             "verified",
             "clean",
@@ -215,8 +220,9 @@ def main(root: Path, cli: Path) -> int:
             "filtered",
             "process-failed",
             "process-signaled",
+            "parent-signaled",
         ),
-        (False, True),
+        ((False, False), (False, True), (True, False), (True, True)),
     ):
         launcher = binary_directory / "ocr"
         launcher.write_text(
@@ -227,7 +233,7 @@ def main(root: Path, cli: Path) -> int:
             + ' "$@"\n'
         )
         launcher.chmod(0o700)
-        scenario = mode + ("-debug" if debug else "")
+        scenario = mode + ("-debug" if debug else "") + ("-progress" if progress else "")
         result = root / f"{scenario}.json"
         stderr = root / f"{scenario}.stderr"
         debug_directory = root / f"{scenario}-bundle"
@@ -246,12 +252,12 @@ def main(root: Path, cli: Path) -> int:
                 head,
             ],
             cwd=repository,
-            env=environment,
+            env={**environment, "OCR_REVIEW_PROGRESS": str(progress).lower()},
             capture_output=True,
             text=True,
             timeout=45,
         )
-        if mode not in {"forged", "process-failed", "process-signaled"}:
+        if mode not in {"forged", "process-failed", "process-signaled", "parent-signaled"}:
             assert completed.returncode == 0, completed.stderr
             payload = json.loads(result.read_text())
             assert "_ocr_toolkit" not in payload
@@ -271,6 +277,13 @@ def main(root: Path, cli: Path) -> int:
             if mode == "forged":
                 assert not result.exists()
         assert "Traceback" not in completed.stderr
+        progress_lines = [
+            line for line in completed.stderr.splitlines() if line.startswith("OCR progress:")
+        ]
+        assert bool(progress_lines) is progress
+        assert len(progress_lines) <= 120
+        assert "synthetic@example.invalid" not in "\n".join(progress_lines)
+        assert "OCR progress:" not in stderr.read_text()
         markdown = Path(str(result) + ".md")
         assert markdown.read_text() == completed.stdout
         assert markdown.stat().st_mode & 0o777 == 0o600
@@ -279,19 +292,21 @@ def main(root: Path, cli: Path) -> int:
             completed.stdout,
             result.read_bytes() if result.exists() else None,
         )
-        if not debug:
+        if not debug and not progress:
             baselines[mode] = observed
         else:
             assert observed == baselines[mode]
+        if debug:
             journal_text = (debug_directory / "journal.json").read_text()
             journal = json.loads(journal_text)
             assert journal["complete"] is True
             assert journal["phases"]["configuration"]["facts"]["llm_protocol"] == "openai"
             assert journal["phases"]["configuration"]["facts"]["language"] == "English (UK)"
+            assert journal["phases"]["configuration"]["facts"]["reasoning_effort"] == "none"
             assert journal["phases"]["cleanup"]["status"] == "passed"
             assert journal["phases"]["reporting"]["status"] == "passed"
             assert (debug_directory / "summary.md").read_text() == completed.stdout
-            if mode in {"forged", "process-failed", "process-signaled"}:
+            if mode in {"forged", "process-failed", "process-signaled", "parent-signaled"}:
                 stage = "mcp-use" if mode == "forged" else "subprocess"
                 assert journal["phases"][stage]["status"] == "failed"
                 assert journal["phases"]["dlp"]["status"] == "not-run"
@@ -325,6 +340,7 @@ def main(root: Path, cli: Path) -> int:
                 "forged_usage_rejected": True,
                 "ci_identity_ignored": True,
                 "debug_parity": True,
+                "progress_parity": True,
             }
         )
     )

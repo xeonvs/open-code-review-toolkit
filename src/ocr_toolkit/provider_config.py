@@ -13,6 +13,7 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 POSITIVE_DECIMAL_RE = re.compile(r"^[1-9][0-9]*$")
 LLM_PROTOCOLS = frozenset({"anthropic", "openai", "openai-responses"})
+REASONING_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "max"})
 MAX_COMPLETION_TOKENS_LIMIT = 1_000_000
 COMPLETION_TOKEN_FIELDS = {
     "anthropic": "max_tokens",
@@ -230,6 +231,35 @@ def _canonical_provider_urls(
     return inference, api_root, explicit_models or derived_models
 
 
+def _apply_reasoning_effort(extra_body: dict[str, Any], *, protocol: str, value: str) -> None:
+    """Overlay one explicit reasoning value without replacing operator siblings."""
+
+    effort = value.lower()
+    if not effort:
+        return
+    if effort not in REASONING_EFFORTS:
+        raise ProviderConfigError(
+            "OCR_LLM_REASONING_EFFORT must be none, minimal, low, medium, high, xhigh, or max"
+        )
+    if protocol == "anthropic":
+        raise ProviderConfigError("OCR_LLM_REASONING_EFFORT is not supported with anthropic")
+    target = extra_body
+    key = "reasoning_effort"
+    if protocol == "openai-responses":
+        if "reasoning" in extra_body and not isinstance(extra_body["reasoning"], dict):
+            raise ProviderConfigError(
+                "OCR_LLM_EXTRA_BODY.reasoning must be an object when setting effort"
+            )
+        target = extra_body.setdefault("reasoning", {})
+        key = "effort"
+    if key in target and target[key] != effort:
+        raise ProviderConfigError(
+            "OCR_LLM_REASONING_EFFORT conflicts with OCR_LLM_EXTRA_BODY; "
+            "remove one setting or make the effort values equal"
+        )
+    target[key] = effort
+
+
 def request_controls_from_environment(
     environment: Mapping[str, str] | None = None,
 ) -> ProviderRequestControls:
@@ -246,6 +276,9 @@ def request_controls_from_environment(
         raise ProviderConfigError("OCR_LLM_EXTRA_HEADERS must not duplicate OCR_LLM_AUTH_HEADER")
 
     extra_body, explicit_body = _parse_extra_body(_env(values, "OCR_LLM_EXTRA_BODY"))
+    _apply_reasoning_effort(
+        extra_body, protocol=protocol, value=_env(values, "OCR_LLM_REASONING_EFFORT")
+    )
     completion_cap = _parse_completion_cap(_env(values, "OCR_LLM_MAX_COMPLETION_TOKENS"))
     if completion_cap is not None:
         field = COMPLETION_TOKEN_FIELDS[protocol]
