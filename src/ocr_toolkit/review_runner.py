@@ -126,6 +126,7 @@ from ocr_toolkit.providers.gitlab import (
 from ocr_toolkit.providers.gitlab_ci import acquire_gitlab_ci_outcomes
 from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
 from ocr_toolkit.providers.local import (
+    local_report_parts,
     prepare_local_report_path,
     publish_local_report,
     write_local_report,
@@ -140,6 +141,7 @@ from ocr_toolkit.reporting.model import (
 )
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
+from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -327,6 +329,15 @@ class ReviewRunState:
     stage: FailureStage = "configuration"
     reviewed_sha: str = ""
     report: ReviewReport | None = None
+    debug: DebugBundle | None = None
+
+    def observe(
+        self, stage: FailureStage, status: DebugStatus, *, facts: dict[str, object] | None = None
+    ) -> None:
+        """Record a result only when the production owner reaches that branch."""
+
+        if self.debug is not None:
+            self.debug.phase(stage, status, facts=facts)
 
     def admit_report(self, report: ReviewReport) -> None:
         """Accept only the finalizer's result after its atomic safe replacement."""
@@ -366,10 +377,32 @@ class EnrichmentReceipt:
     bootstrap_hints: dict[str, int]
 
 
-def _write_isolated_runtime_config() -> None:
+def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
     """Rebuild only validated runtime settings inside the fresh OCR home."""
 
-    update_ocr_config(configure.build_config_updates())
+    updates = configure.build_config_updates()
+    update_ocr_config(updates)
+    if debug is not None:
+        debug.phase(
+            "configuration",
+            "passed",
+            facts={
+                "provider": "local",
+                "context_mode": "off",
+                "output_format": "json",
+                "audience": "agent",
+                "llm_protocol": updates["llm.protocol"],
+                "review_effort": updates["effort"],
+                "language": updates["language"],
+                "llm_model_sha256": hashlib.sha256(
+                    updates["llm.model"].encode("utf-8")
+                ).hexdigest(),
+                "extra_body_present": "llm.extra_body" in updates,
+                "extra_headers_present": "llm.extra_headers" in updates,
+                "telemetry_enabled": updates["telemetry.enabled"],
+                "content_logging": updates["telemetry.content_logging"],
+            },
+        )
 
 
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
@@ -590,20 +623,31 @@ def _dlp_reasons(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     allow_horizontal_tabs: bool = False,
+    debug: DebugBundle | None = None,
+    path: tuple[object, ...] = (),
+    action: str = "detect-sink",
 ) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
-    stack = [value]
+    stack = [(value, path)]
     while stack:
-        nested = stack.pop()
+        nested, nested_path = stack.pop()
         if isinstance(nested, dict):
             for key, value in nested.items():
                 if isinstance(key, str) and key in PROVIDER_PRIVATE_RESULT_KEYS:
                     reasons["invalid_text"] += 1
-                stack.extend((key, value))
+                    if debug is not None:
+                        debug.decision(
+                            path=(*nested_path, key),
+                            action=action,
+                            reason="invalid_text",
+                            detector="reserved_field",
+                            value=key,
+                        )
+                stack.extend(((key, (*nested_path, key)), (value, (*nested_path, key))))
         elif isinstance(nested, list):
-            stack.extend(nested)
+            stack.extend((item, (*nested_path, index)) for index, item in enumerate(nested))
         elif isinstance(nested, str):
             checked = check_text(
                 nested,
@@ -614,6 +658,14 @@ def _dlp_reasons(
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
+                if debug is not None:
+                    debug.decision(
+                        path=nested_path,
+                        action=action,
+                        reason=checked.reason,
+                        detector=checked.detector,
+                        value=nested,
+                    )
     return reasons
 
 
@@ -746,36 +798,41 @@ def _write_private_dlp_decisions(
         raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
-def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
+def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool, tuple[object, ...]]]:
     """Select only OCR-controlled values that the posting owner can render."""
 
-    sinks: list[tuple[object, bool]] = []
+    sinks: list[tuple[object, bool, tuple[object, ...]]] = []
     message = payload.get("message")
     if message is not None:
-        sinks.append((message, False))
+        sinks.append((message, False, ("message",)))
     comments = payload.get("comments")
     if isinstance(comments, list):
-        for item in comments:
+        for index, item in enumerate(comments):
             if not isinstance(item, dict):
                 continue
             sinks.extend(
                 (
                     value,
                     isinstance(value, str) and key in {"existing_code", "suggestion_code"},
+                    ("comments", index, key),
                 )
                 for key, value in item.items()
                 if key in QUARANTINE_COMMENT_FIELDS
             )
     warnings = payload.get("warnings")
     if warnings is not None:
-        sinks.append((warnings, False))
+        sinks.append((warnings, False, ("warnings",)))
     manifest = payload.get("manifest")
     coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
     failed = coverage.get("failed") if isinstance(coverage, dict) else None
     if isinstance(failed, list):
-        for item in failed:
+        for index, item in enumerate(failed):
             if isinstance(item, dict):
-                sinks.extend((item[key], False) for key in ("path", "reason") if key in item)
+                sinks.extend(
+                    (item[key], False, ("manifest", "coverage", "failed", index, key))
+                    for key in ("path", "reason")
+                    if key in item
+                )
     return sinks
 
 
@@ -810,7 +867,11 @@ def _is_static_public_tool_key_path(path: tuple[object, ...]) -> bool:
 
 
 def _sanitize_nonpublication_fields(
-    payload: dict[str, object], *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    payload: dict[str, object],
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], Counter[str], int]:
     """Redact unsafe private result fields without changing publication sinks."""
 
@@ -834,6 +895,14 @@ def _sanitize_nonpublication_fields(
                     child_path
                 ):
                     redacted_fields += 1
+                    if debug is not None:
+                        debug.decision(
+                            path=child_path,
+                            action="remove-private-field",
+                            reason="invalid_text",
+                            detector="reserved_field",
+                            value=key,
+                        )
                     continue
                 if not _is_publication_sink_path(
                     child_path
@@ -847,6 +916,14 @@ def _sanitize_nonpublication_fields(
                     if not checked_key.admitted:
                         reasons[checked_key.reason] += 1
                         redacted_fields += 1
+                        if debug is not None:
+                            debug.decision(
+                                path=child_path,
+                                action="reject-key",
+                                reason=checked_key.reason,
+                                detector=checked_key.detector,
+                                value=key,
+                            )
                         continue
             if isinstance(value, dict):
                 nested: dict[str, object] = {}
@@ -875,6 +952,14 @@ def _sanitize_nonpublication_fields(
                 if not checked.admitted:
                     reasons[checked.reason] += 1
                     redacted_fields += 1
+                    if debug is not None:
+                        debug.decision(
+                            path=child_path,
+                            action="redact-value",
+                            reason=checked.reason,
+                            detector=checked.detector,
+                            value=value,
+                        )
                     projected = replacements.setdefault(
                         value, f"ocr-redacted-{len(replacements) + 1:06d}"
                     )
@@ -886,7 +971,11 @@ def _sanitize_nonpublication_fields(
 
 
 def _safe_publication_comments(
-    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
 
@@ -894,7 +983,7 @@ def _safe_publication_comments(
         return [], 0, 0
     retained: list[dict[str, object]] = []
     omitted_fields = 0
-    for item in value:
+    for index, item in enumerate(value):
         if not isinstance(item, dict):
             continue
         projected: dict[str, object] = {}
@@ -909,6 +998,9 @@ def _safe_publication_comments(
                 allow_horizontal_tabs=(
                     isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
+                debug=debug,
+                path=("comments", index, key),
+                action="omit-field",
             ):
                 omitted_fields += 1
                 content_unsafe = content_unsafe or key == "content"
@@ -916,17 +1008,40 @@ def _safe_publication_comments(
             projected[key] = field_value
         if projected and not content_unsafe:
             retained.append(projected)
+        elif debug is not None:
+            debug.decision(
+                path=("comments", index),
+                action="omit-finding",
+                reason="unsafe_content" if content_unsafe else "empty_projection",
+                detector=None,
+                value=None,
+            )
     return retained, len(value) - len(retained), omitted_fields
 
 
 def _safe_publication_warnings(
-    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[list[object], int]:
     """Retain DLP-safe warnings while dropping unsafe or malformed items atomically."""
 
     if not isinstance(value, list):
         return [], 0
-    retained = [item for item in value if not _dlp_reasons(item, budgets=budgets, matcher=matcher)]
+    retained = [
+        item
+        for index, item in enumerate(value)
+        if not _dlp_reasons(
+            item,
+            budgets=budgets,
+            matcher=matcher,
+            debug=debug,
+            path=("warnings", index),
+            action="omit-warning",
+        )
+    ]
     return retained, len(value) - len(retained)
 
 
@@ -1174,19 +1289,22 @@ def _publication_projection(
     *,
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
+    debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
     """Return a DLP-safe result plus one exact v8 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     sink_reasons: Counter[str] = Counter()
-    for sink, allow_horizontal_tabs in _publication_sinks(payload):
+    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(payload):
         sink_reasons.update(
             _dlp_reasons(
                 sink,
                 budgets=budgets,
                 matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                debug=debug,
+                path=sink_path,
             )
         )
     failures = _tool_failure_telemetry(payload.get("tool_calls"))
@@ -1203,7 +1321,7 @@ def _publication_projection(
             if key not in {"failure", "failure_by_tool", "failure_details"}
         }
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
-        sanitization_payload, budgets=budgets, matcher=matcher
+        sanitization_payload, budgets=budgets, matcher=matcher, debug=debug
     )
     if failures.present:
         sanitized["tool_calls"] = _closed_tool_calls(
@@ -1227,10 +1345,10 @@ def _publication_projection(
             publication_changed = True
     if publication_changed:
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
-            payload.get("comments"), budgets=budgets, matcher=matcher
+            payload.get("comments"), budgets=budgets, matcher=matcher, debug=debug
         )
         warnings, omitted_warnings = _safe_publication_warnings(
-            payload.get("warnings"), budgets=budgets, matcher=matcher
+            payload.get("warnings"), budgets=budgets, matcher=matcher, debug=debug
         )
         projected: dict[str, object] = {
             "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
@@ -1322,10 +1440,30 @@ def _finalize_ocr_result(
             evidence_action_counts,
         )
         if state is not None:
+            evidence = metadata.get("evidence")
+            actions = evidence.get("actions") if isinstance(evidence, dict) else None
+            completed = actions.get("completed") if isinstance(actions, dict) else None
+            facts = None
+            if isinstance(evidence, dict) and isinstance(completed, dict):
+                facts = {
+                    "used": evidence.get("used"),
+                    "summary_completed": completed.get("summary"),
+                }
+            state.observe("mcp-use", "passed", facts=facts)
             state.stage = "dlp"
         projected, publication, filtered = _publication_projection(
-            payload, forbidden=forbidden, allowed_tools=allowed_tools
+            payload,
+            forbidden=forbidden,
+            allowed_tools=allowed_tools,
+            **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
+        if state is not None:
+            state.observe(
+                "dlp",
+                "degraded" if publication.get("state") != "passed" else "passed",
+                facts={"dlp_state": publication["state"]},
+            )
+            state.stage = "result-validation"
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
@@ -1365,6 +1503,8 @@ def _finalize_ocr_result(
             pass
         raise
     _print_tool_failure_diagnostics(failure_telemetry)
+    if state is not None:
+        state.observe("result-validation", "passed")
     if report_consumer is not None and report is not None:
         report_consumer(report)
     return usage, filtered, publication
@@ -1664,6 +1804,8 @@ def _run_background_qualified_review(
             session_home=session_home,
         )
     except BackgroundQualificationRejected as exc:
+        if state is not None:
+            state.observe("preview", "failed")
         try:
             write_pre_execution_status(
                 artifacts.pre_execution_status,
@@ -1699,16 +1841,22 @@ def _run_background_qualified_review(
     for notice in qualification.operator_notices:
         print(f"OCR argument qualification notice: {notice}", file=sys.stderr)
     if state is not None:
+        state.observe("preview", "degraded" if qualification.advisory is not None else "passed")
         state.stage = "subprocess"
-    return (
-        run_review(
+    try:
+        code = run_review(
             result_path,
             stderr_path,
             production_args,
             ocr_binary=ocr_binary,
-        ),
-        qualification,
-    )
+        )
+    finally:
+        if state is not None and state.debug is not None:
+            state.debug.capture("raw-result.json", result_path)
+            state.debug.capture("raw-stderr.log", stderr_path)
+    if state is not None:
+        state.observe("subprocess", "passed" if code == 0 else "failed", facts={"exit_code": code})
+    return code, qualification
 
 
 def _prepare_review_output_artifacts(result_path: Path, stderr_path: Path) -> None:
@@ -2296,12 +2444,28 @@ def run_evidence_review(
     preserve_private_artifacts: bool = False,
     local: bool = False,
     report_path: Path | None = None,
+    debug_dir: Path | None = None,
 ) -> int:
     """Run the review and deliver an admitted local report or a closed failure summary."""
 
     state = ReviewRunState(local=local)
     report_destination: Path | None = None
     try:
+        if debug_dir is not None:
+            if not local or preserve_private_artifacts:
+                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
+            try:
+                state.debug = DebugBundle(
+                    debug_dir,
+                    other_outputs=(
+                        result_path,
+                        stderr_path,
+                        report_path or Path(str(result_path) + ".md"),
+                    ),
+                )
+                state.debug.flush()
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise ReviewRunnerError("debug directory could not be prepared safely") from exc
         if report_path is not None and not local:
             raise ReviewRunnerError("--report requires --local")
         if local and preserve_private_artifacts:
@@ -2342,9 +2506,14 @@ def run_evidence_review(
             try:
                 assert report_destination is not None
                 publish_local_report(report, report_destination)
+                if state.debug is not None:
+                    state.debug.capture("summary.md", report_destination)
             except (OSError, ValueError) as exc:
+                failure = failed_report("reporting")
+                if state.debug is not None:
+                    state.debug.capture_parts("summary.md", local_report_parts(failure))
                 try:
-                    write_local_report(failed_report("reporting"), sys.stdout)
+                    write_local_report(failure, sys.stdout)
                 except (OSError, ValueError):
                     pass
                 raise ReviewRunnerError("local report artifact output failed") from exc
@@ -2352,13 +2521,22 @@ def run_evidence_review(
                 write_local_report(report, sys.stdout)
             except (OSError, ValueError) as exc:
                 raise ReviewRunnerError("local report output failed") from exc
+            state.observe("reporting", "passed", facts={"report_artifact": True, "console": True})
         return code
     except BaseException:
+        state.observe(state.stage, "failed")
         if local and state.stage != "reporting":
             failure = failed_report(state.stage, reviewed_sha=state.reviewed_sha)
+            artifact_delivered = False
+            console_delivered = False
+            if state.debug is not None:
+                state.debug.capture_parts("summary.md", local_report_parts(failure))
             if report_destination is not None:
                 try:
                     publish_local_report(failure, report_destination)
+                    artifact_delivered = True
+                    if state.debug is not None:
+                        state.debug.capture("summary.md", report_destination)
                 except (OSError, ValueError):
                     try:
                         print("Local failure report artifact output failed.", file=sys.stderr)
@@ -2366,12 +2544,33 @@ def run_evidence_review(
                         pass
             try:
                 write_local_report(failure, sys.stdout)
+                console_delivered = True
             except (OSError, ValueError):
                 try:
                     print("Local failure summary output failed.", file=sys.stderr)
                 except (OSError, ValueError):
                     pass
+            state.observe(
+                "reporting",
+                "passed"
+                if console_delivered and (report_destination is None or artifact_delivered)
+                else "failed",
+                facts={"report_artifact": artifact_delivered, "console": console_delivered},
+            )
         raise
+    finally:
+        if state.debug is not None:
+            try:
+                if state.report is not None:
+                    state.debug.capture("safe-result.json", result_path)
+                state.debug.flush(complete=True)
+            except (OSError, ValueError):
+                try:
+                    print("Local debug journal output failed.", file=sys.stderr)
+                except (OSError, ValueError):
+                    pass
+            finally:
+                state.debug.close()
 
 
 def _local_review_options(args: list[str]) -> list[str]:
@@ -2438,13 +2637,24 @@ def _run_evidence_review(
     try:
         try:
             state.stage = "configuration"
-            _write_isolated_runtime_config()
+            _write_isolated_runtime_config(
+                **({"debug": state.debug} if state.debug is not None else {})
+            )
             state.stage = "identity"
             identity, effective_ocr_args = _prepare_policy_context(
                 refs, ocr_args, artifacts, **({"local": True} if state.local else {})
             )
             preserve_authorized = _authorize_private_artifact_preservation(
                 identity, requested=preserve_private_artifacts
+            )
+            state.observe(
+                "identity",
+                "passed",
+                facts={
+                    "base_sha": refs.base,
+                    "head_sha": refs.head,
+                    "policy_sha": identity.policy_sha,
+                },
             )
             state.stage = "evidence"
             store = collect_repository_evidence(
@@ -2467,6 +2677,17 @@ def _run_evidence_review(
             context_config, enrichment = _prepare_enrichment(
                 identity, artifacts, GitRepositoryReader(Path.cwd())
             )
+            if state.debug is not None:
+                diagnostic_count = len(store.diagnostics) + sum(
+                    len(snapshot.diagnostics)
+                    for snapshot in (store.base, store.head, store.policy)
+                    if snapshot is not None
+                )
+                state.observe(
+                    "evidence",
+                    "degraded" if diagnostic_count else "passed",
+                    facts={"diagnostic_count": diagnostic_count},
+                )
             state.stage = "mcp-preflight"
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
@@ -2503,6 +2724,14 @@ def _run_evidence_review(
         records = summary.get("records")
         if not isinstance(records, int) or isinstance(records, bool) or records < 0:
             raise ReviewRunnerError("OCR evidence preflight returned an invalid MCP summary")
+        state.observe(
+            "mcp-preflight",
+            "passed",
+            facts={
+                "record_count": records,
+                "server_count": len(composition.capabilities),
+            },
+        )
         print(
             "OCR evidence preflight: ready "
             f"base={summary.get('base')} head={summary.get('head')} records={records} "
@@ -2550,6 +2779,7 @@ def _run_evidence_review(
                     shutil.rmtree(session_home)
                 except OSError as exc:
                     cleanup_error = cleanup_error or exc
+                state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
             if previous_home is None:
                 os.environ.pop("HOME", None)
             else:

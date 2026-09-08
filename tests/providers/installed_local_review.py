@@ -6,8 +6,10 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,7 @@ def peer(mode: str) -> int:
         return 0
     config = json.loads((Path.home() / ".opencodereview" / "config.json").read_text())
     server = config["mcp_servers"]["ocr_toolkit_evidence"]
-    if mode == "verified":
+    if mode != "forged":
         process = subprocess.Popen(
             [server["command"], *server["args"]],
             stdin=subprocess.PIPE,
@@ -92,9 +94,29 @@ def peer(mode: str) -> int:
     print(
         json.dumps(
             {
-                "status": "success",
-                "comments": [{"path": "app.py", "line": 1, "content": "Check the boundary."}],
-                "warnings": [],
+                "status": {
+                    "warning": "completed_with_warnings",
+                    "partial": "completed_with_errors",
+                    "budget": "budget_exceeded",
+                }.get(mode, "success"),
+                "comments": []
+                if mode in {"clean", "warning"}
+                else [
+                    {"path": "app.py", "line": 1, "content": "Check the boundary."},
+                    *(
+                        [
+                            {
+                                "path": "app.py",
+                                "line": 1,
+                                "content": "Contact synthetic@example.invalid",
+                            }
+                        ]
+                        if mode == "filtered"
+                        else []
+                    ),
+                ],
+                "warnings": ["Some context was unavailable."] if mode == "warning" else [],
+                "summary": {"budget_exceeded": mode == "budget"},
                 "tool_calls": {
                     "total": 2,
                     "by_tool": {"ocr_toolkit_evidence": 1, "synthetic_lookup": 1},
@@ -102,7 +124,10 @@ def peer(mode: str) -> int:
             }
         )
     )
-    return 0
+    if mode == "process-signaled":
+        sys.stdout.flush()
+        os.kill(os.getpid(), signal.SIGTERM)
+    return 2 if mode == "process-failed" else 0
 
 
 def external_server() -> int:
@@ -164,6 +189,7 @@ def main(root: Path, cli: Path) -> int:
         "CI_API_V4_URL": "https://forge.example.invalid/api/v4",
         "OCR_LLM_MODEL": "openai/synthetic-model",
         "OCR_LLM_PROTOCOL": "openai",
+        "OCR_REVIEW_LANGUAGE": "English (UK)",
         "OCR_LLM_TOKEN": "synthetic-provider-token",
         "OCR_LLM_URL": "https://provider.example.invalid/v1",
         "OCR_MCP_SERVERS_JSON": json.dumps(
@@ -177,7 +203,21 @@ def main(root: Path, cli: Path) -> int:
             }
         ),
     }
-    for mode in ("verified", "forged"):
+    baselines: dict[str, tuple[int, str, bytes | None]] = {}
+    for mode, debug in product(
+        (
+            "verified",
+            "clean",
+            "warning",
+            "partial",
+            "budget",
+            "forged",
+            "filtered",
+            "process-failed",
+            "process-signaled",
+        ),
+        (False, True),
+    ):
         launcher = binary_directory / "ocr"
         launcher.write_text(
             "#!/bin/sh\nexec "
@@ -187,8 +227,10 @@ def main(root: Path, cli: Path) -> int:
             + ' "$@"\n'
         )
         launcher.chmod(0o700)
-        result = root / f"{mode}.json"
-        stderr = root / f"{mode}.stderr"
+        scenario = mode + ("-debug" if debug else "")
+        result = root / f"{scenario}.json"
+        stderr = root / f"{scenario}.stderr"
+        debug_directory = root / f"{scenario}-bundle"
         completed = subprocess.run(
             [
                 str(cli),
@@ -198,6 +240,7 @@ def main(root: Path, cli: Path) -> int:
                 str(result),
                 "--stderr",
                 str(stderr),
+                *(["--debug-dir", str(debug_directory)] if debug else []),
                 "--",
                 "--commit",
                 head,
@@ -208,29 +251,82 @@ def main(root: Path, cli: Path) -> int:
             text=True,
             timeout=45,
         )
-        if mode == "verified":
+        if mode not in {"forged", "process-failed", "process-signaled"}:
             assert completed.returncode == 0, completed.stderr
             payload = json.loads(result.read_text())
             assert "_ocr_toolkit" not in payload
-            assert "Check the boundary." in completed.stdout
+            assert ("Check the boundary." in completed.stdout) == (mode not in {"clean", "warning"})
             assert "ocr_toolkit_evidence" in completed.stdout
             assert "synthetic_context" in completed.stdout
             assert head in completed.stdout
             assert result.stat().st_mode & 0o777 == 0o600
         else:
-            assert completed.returncode == 2, completed.stderr
+            assert completed.returncode == (
+                256 - signal.SIGTERM if mode == "process-signaled" else 2
+            ), completed.stderr
             assert "Review failed" in completed.stdout
-            assert "Stopped at: `mcp-use`" in completed.stdout
+            stage = "mcp-use" if mode == "forged" else "subprocess"
+            assert f"Stopped at: `{stage}`" in completed.stdout
             assert "Check the boundary." not in completed.stdout
-            assert not result.exists()
+            if mode == "forged":
+                assert not result.exists()
         assert "Traceback" not in completed.stderr
         markdown = Path(str(result) + ".md")
         assert markdown.read_text() == completed.stdout
         assert markdown.stat().st_mode & 0o777 == 0o600
+        observed = (
+            completed.returncode,
+            completed.stdout,
+            result.read_bytes() if result.exists() else None,
+        )
+        if not debug:
+            baselines[mode] = observed
+        else:
+            assert observed == baselines[mode]
+            journal_text = (debug_directory / "journal.json").read_text()
+            journal = json.loads(journal_text)
+            assert journal["complete"] is True
+            assert journal["phases"]["configuration"]["facts"]["llm_protocol"] == "openai"
+            assert journal["phases"]["configuration"]["facts"]["language"] == "English (UK)"
+            assert journal["phases"]["cleanup"]["status"] == "passed"
+            assert journal["phases"]["reporting"]["status"] == "passed"
+            assert (debug_directory / "summary.md").read_text() == completed.stdout
+            if mode in {"forged", "process-failed", "process-signaled"}:
+                stage = "mcp-use" if mode == "forged" else "subprocess"
+                assert journal["phases"][stage]["status"] == "failed"
+                assert journal["phases"]["dlp"]["status"] == "not-run"
+                assert not (debug_directory / "safe-result.json").exists()
+            else:
+                assert (debug_directory / "safe-result.json").read_bytes() == result.read_bytes()
+                assert journal["phases"]["mcp-use"]["status"] == "passed"
+                assert journal["phases"]["result-validation"]["status"] == "passed"
+            if mode == "filtered":
+                assert (
+                    "synthetic@example.invalid" in (debug_directory / "raw-result.json").read_text()
+                )
+                assert "synthetic@example.invalid" not in completed.stdout + journal_text
+                assert journal["phases"]["dlp"]["status"] == "degraded"
+                assert "omit-finding" in {item["action"] for item in journal["dlp_decisions"]}
+            assert {item.name for item in debug_directory.iterdir()} <= {
+                "raw-result.json",
+                "raw-stderr.log",
+                "safe-result.json",
+                "summary.md",
+                "journal.json",
+            }
+            assert debug_directory.stat().st_mode & 0o777 == 0o700
+            assert all(item.stat().st_mode & 0o777 == 0o600 for item in debug_directory.iterdir())
         assert not (repository / ".review-context" / "evidence.json").exists()
         assert not (repository / ".review-context" / "evidence-actions.json").exists()
     print(
-        json.dumps({"verified": True, "forged_usage_rejected": True, "ci_identity_ignored": True})
+        json.dumps(
+            {
+                "verified": True,
+                "forged_usage_rejected": True,
+                "ci_identity_ignored": True,
+                "debug_parity": True,
+            }
+        )
     )
     return 0
 

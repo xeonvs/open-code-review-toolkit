@@ -62,3 +62,46 @@ available if the console fails afterward.
 `--local` cannot be combined with legacy `--preserve-private-artifacts`, because
 that diagnostic path intentionally bypasses ordinary result finalization. The
 legacy option without `--local` retains its existing sensitive-artifact semantics.
+
+## Private debug bundle
+
+Add `--debug-dir PATH` to retain diagnostics from the same review execution.
+The directory must be fresh, must not traverse symlinks, and must not contain
+the normal result, stderr or report destinations. It is created with mode `0700`;
+its files use `0600`. This option requires `--local` and rejects legacy private
+artifact retention. It does not bypass validation, DLP or ordinary session cleanup.
+
+| Artifact | Contents | Maximum retained bytes |
+| --- | --- | --- |
+| `raw-result.json` | Original OCR output before finalization, when execution reached OCR | 20,000,000 |
+| `raw-stderr.log` | Original OCR diagnostic stream | 2,000,000 |
+| `safe-result.json` | Successfully finalized JSON, if available | 20,000,000 |
+| `summary.md` | Admitted report or closed failure summary | 20,000,000 |
+| `journal.json` | Actual phase observations and value-free DLP decisions | 1,000,000 |
+
+Raw files can contain rejected confidential content. Do not upload the bundle
+as a public CI artifact. No environment dump, authentication token, full runtime
+configuration or OCR session is copied into it. Configuration observations name
+the selected protocol, language, review effort and logging flags; the model
+selection is represented by a SHA-256 fingerprint, not provider acceptance.
+
+The journal records passed, failed, degraded and not-run checks at their execution
+owners. Passing a collection phase does not imply complete repository coverage;
+coverage remains a separate review fact. DLP entries describe real detection,
+omission or redaction branches, with bounded locations, sizes and value digests.
+They are not the results of a second DLP scan and do not authorize publication.
+At most 1,000 DLP decisions and 128 phase transitions are retained; omitted counts
+remain explicit. Unknown field names are fingerprinted rather than copied.
+
+Capture metadata distinguishes missing, unavailable and not-run artifacts.
+Truncation and source changes are explicit. `sha256_captured` covers only the
+retained bytes, never an implied complete source. A truncated Markdown/JSON copy
+may end inside a UTF-8 character or JSON value; use the normal artifact for the
+complete admitted output.
+
+`complete: true` means the journal's observation lifecycle finished, not that the
+review succeeded. Initial snapshots have `complete: false`. An unsafe initial
+directory fails before review. Later diagnostic write failures do not replace the
+review outcome or suppress cleanup: unavailable captures are marked in the journal,
+and a journal write failure emits a bounded stderr warning. An earlier incomplete
+snapshot can remain when the final journal cannot be written.

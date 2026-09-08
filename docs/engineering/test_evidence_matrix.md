@@ -206,6 +206,18 @@ Every top-level test module is classified below. A module can contain more than 
 | Private report persistence | `providers.local.publish_local_report`; local CLI failure delivery | `tests/providers/test_local_artifact.py` crosses real exclusive atomic file publication, permissions, hostile targets, output collisions, partial-render failure and destination races | proves filesystem delivery, not OCR/model execution; same-user hostile ancestor replacement is outside this path check |
 | Installed standalone execution | installed `ocr-ci review --local` through the common runner and finalizer | `tests/test_installed_policy_e2e.py` invokes `tests/providers/installed_local_review.py` for direct wheel and sdist-derived wheel; real immutable Git, subprocess, built-in stdio MCP, optional external MCP, polluted CI identity, admitted JSON/Markdown parity and forged mandatory-usage rejection | synthetic OCR process is beyond the real toolkit launcher; proves installed toolkit boundaries, not actual OCR protocol compatibility or model judgment; real-OCR qualification remains WQ-06 |
 
+The local debug boundary is exercised by `tests/test_review_debug.py` through
+real private files, descriptor-pinned directories, atomic journal publication,
+capture bounds and hostile targets. DLP observer tests compare both the complete
+projection and the number of production checks, proving no diagnostic rescan.
+The installed wheel/sdist scenario compares normal/debug exit codes, JSON and
+Markdown for clean, finding, warning, partial, budget, DLP-filtered, forged-use
+and subprocess-failure results, including an actual SIGTERM to the synthetic
+OCR child. The external OCR collaborator is synthetic in
+that matrix; actual OCR qualification and model judgment remain separate gates.
+Injected late write failures prove error handling, not operating-system fault
+frequency or durability after host failure.
+
 ## Unsafe or nondeterministic external boundaries
 
 The suite intentionally does not perform live GitLab comment, discussion, cleanup, or approval writes; live GitHub issue/release mutations; or PyPI publication. Their tests prove closed payloads, ordering, fail-closed decisions, transport serialization, and receipt parsing. Release completion requires independent live readback as defined in `docs/release.md`.

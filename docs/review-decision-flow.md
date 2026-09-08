@@ -1,5 +1,11 @@
 # Review decision flow
 
+With `review --local --debug-dir`, a private observer records these same checks;
+it does not add an execution or admission branch. Raw output is captured before
+finalization, safe output only after admission, and the journal records cleanup
+and successful or failed report delivery. See [local debug bundles](local.md#private-debug-bundle)
+for bounds, missing artifacts and incomplete journal semantics.
+
 This document is the canonical visual map of the toolkit's end-to-end review decisions. It
 connects configuration and immutable identity, OCR execution, result and action-receipt
 validation, additive diagnostics, publication DLP, GitLab posting, and optional later actions.

@@ -44,6 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--report", help="Fresh local Markdown path (default: --result path plus .md)."
     )
     review_parser.add_argument(
+        "--debug-dir", help="Fresh private diagnostic bundle directory (requires --local)."
+    )
+    review_parser.add_argument(
         "--preserve-private-artifacts",
         action="store_true",
         help="Retain sensitive OCR session artifacts after a local diagnostic review.",
@@ -88,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 preserve_private_artifacts=args.preserve_private_artifacts,
                 **({"local": True} if args.local else {}),
                 **({"report_path": Path(args.report)} if args.report is not None else {}),
+                **({"debug_dir": Path(args.debug_dir)} if args.debug_dir is not None else {}),
             )
         except review_runner.ReviewRunnerError as exc:
             print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)

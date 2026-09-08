@@ -52,7 +52,7 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
 | WQ-01 | done | Signed planning commit 4e50f78 pushed; Draft #183, milestone and #181/#182 recorded |
 | WQ-02 | done | Shared reporting package, characterized GitLab delegation and local Markdown adapter; execution-owner facts remain separate |
 | WQ-03 | done | Explicit local preflight/review, private Markdown publication and installed end-to-end path |
-| WQ-04 | pending | Fresh private debug bundle and actual decision journal |
+| WQ-04 | done | Fresh private debug bundle, actual decision journal and installed normal/debug parity |
 | WQ-05 | pending | Reasoning environment control and bounded progress |
 | WQ-06 | pending | OCR promotion, assets, no-LLM qualification and local update |
 | WQ-07 | pending | Docs/backlog, full self-review, gates, push and Draft handoff |
@@ -97,6 +97,14 @@ review verifies evidence but omits GitLab receipt; preflight still assumes GitLa
   Raw rejected content stays in private files, never automatic console output.
   No environment dump or unnecessary retained session/config. Keep normal
   checks and cleanup; reject combination with legacy private-artifact retention.
+  Bundle ownership is separate from review execution: capture at most 20 MB each
+  for raw/safe JSON and Markdown, 2 MB for raw stderr, and 1 MB for the journal.
+  Fixed artifact names and at most 1,000 value-free DLP decisions keep storage
+  bounded. Record prefix digests and explicit truncation/missing/unavailable
+  status; do not imply a truncated digest covers the complete source. Normal
+  result/stderr/report paths must remain outside the fresh debug directory.
+  Observe actual phases and DLP decisions through optional callbacks at their
+  production owners; debug observation never substitutes for their checks.
 - Preserve existing effort/budget behavior. OCR_LLM_REASONING_EFFORT accepts
   unset/empty or case-insensitive none|minimal|low|medium|high|xhigh|max.
   Unset adds nothing; none is an explicit wire value, not an omission sentinel.
@@ -207,9 +215,22 @@ and console parity. The final CLI/runtime/report/artifact/GitLab regression matr
 passed 631 tests and 400 subtests, including both installed distributions with
 hostile repository imports; Ruff, mypy, repository formatting and diff checks
 passed. WQ-03 self-review is complete, including failure delivery and private
-file lifecycle; the logical commit contains these completed results. Next start
-WQ-04's bounded debug capture and actual decision journal. Keep the plan active through deferred
-stable delivery; debug, controls, OCR qualification and final security/hosted
+file lifecycle; the logical commit contains these completed results.
+WQ-03 is committed as f864be2. WQ-04 now has fresh private storage, actual phase
+and DLP observations, bounded raw/safe/summary captures and explicit incomplete
+journal handling. The 264-test matrix passes, including installed wheel/sdist
+normal/debug parity for clean, finding, warning, partial, budget, filtered,
+forged mandatory usage and subprocess failure outcomes. Observer tests prove no
+extra DLP checks and unchanged projections. Ruff, mypy and formatting pass.
+WQ-04 self-review is complete: failure-summary delivery and empty-projection
+attribution were corrected before the commit gate. The complete affected matrix
+passes 654 tests and 400 subtests; an additional installed wheel/sdist SIGTERM
+scenario confirms equal nonzero outcomes, cleanup and no safe-result admission.
+Ruff, formatting, mypy, Bandit and diff checks pass. The logical WQ-04 commit
+contains these results. Next implement WQ-05 reasoning controls and bounded
+progress; actual OCR qualification remains WQ-06.
+Keep the plan active through deferred
+stable delivery; controls, OCR qualification and final security/hosted
 gates are pending on Draft #183.
 
 #### Closure Gate
