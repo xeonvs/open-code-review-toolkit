@@ -10,6 +10,10 @@ version. Historical evidence before the suite boundary is checked separately by
 `scripts/ocr_compat_history.py` using frozen expectations; that reader never
 executes old binaries. Generic promotion tests use a frozen baseline. See
 [qualification maintenance](development.md#maintaining-ocr-qualification).
+Historical readback is not promotion authority: every newly promoted candidate
+must provide the current evidence schema and complete live consumed contract,
+regardless of the historical archive boundary. The live suite includes explicit
+reasoning wire capture and the current built-in language/test-exclusion inventory.
 
 The **OCR compatibility** workflow discovers stable upstream releases newer than the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`, after the observed upstream release window; GitHub may delay or omit scheduled delivery, so exact-tag manual dispatch remains the recovery path. Drafts, prereleases, non-semantic tags, unexpected asset sets, oversized metadata or downloads, redirects outside the reviewed GitHub origins, and checksum disagreement fail closed. Every binary digest must agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 
@@ -173,6 +177,29 @@ do not resolve or suppress GitLab findings. No viewer state is consumed by toolk
 Linux amd64 SHA-256: `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95`.
 Darwin arm64: `c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9`.
 Upstream checksum file: `0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a`.
+
+### OCR 1.11.6 — toolkit 0.10.0 Draft target
+
+The Draft recommends exact OCR 1.11.6. Hosted qualification
+[34218232310](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34218232310)
+verified every platform asset and the upstream checksum file, then passed the
+complete current Linux amd64 suite. Independent checksum-verified Darwin arm64
+probes passed the same consumed contracts. The committed evidence adds reasoning
+wire checks for unset, explicit `none` and `high` in both OpenAI protocols,
+including preserved Responses siblings. The capture peer rejects requests without
+model execution: provider acceptance and actual application remain untested.
+
+The adjacent eight-commit review identifies consumed OCaml/ReasonML allowlist and
+built-in Rules additions plus Kotlin script routing and default test exclusions.
+They are separately classified as Rules. Native HTTP header timeout changes retain
+the request timeout plus upstream margin without a new toolkit API. The toolkit
+does not execute the upstream Action, Node/editor launcher or viewer; its reasoning
+and progress controls are owned by the shared toolkit execution path.
+
+Historical 1.11.4/1.11.5 evidence remains unchanged. New promotions require the
+complete current contract even when historical evidence is still readable.
+This qualification does not establish stable toolkit delivery or configured
+GitLab/local/debug model quality; those remain separate gates.
 
 ## Promotion and rollback
 

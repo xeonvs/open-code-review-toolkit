@@ -20,6 +20,7 @@ from ocr_toolkit.provider_config import (
     ProviderConfigError,
     provider_config_from_environment,
 )
+from ocr_toolkit.providers.local_config import validate_local_context
 
 HTTP_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BODY_BYTES = 2_000_000
@@ -28,7 +29,7 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-EXPECTED_OCR_VERSION = "1.11.5"
+EXPECTED_OCR_VERSION = "1.11.6"
 
 
 class PreflightError(Exception):
@@ -331,12 +332,18 @@ def validate_llm_model() -> None:
     print(f"LLM model validated: {model_id} context_length={context_length}")
 
 
-def main() -> int:
+def main(*, local: bool = False) -> int:
     """Run all fail-fast checks."""
 
     try:
+        if local:
+            try:
+                validate_local_context(os.environ)
+            except ValueError as exc:
+                raise PreflightError(str(exc)) from exc
         validate_ocr_binary()
-        validate_gitlab_access()
+        if not local:
+            validate_gitlab_access()
         validate_llm_model()
     except PreflightError as exc:
         print(f"OCR preflight failed: {redact_sensitive(str(exc))}", file=sys.stderr)

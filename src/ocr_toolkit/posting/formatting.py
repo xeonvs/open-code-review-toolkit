@@ -16,15 +16,6 @@ from ocr_toolkit.common.markdown import (
 from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
-from ocr_toolkit.common.redaction import redact_sensitive
-from ocr_toolkit.evidence.actions import EVIDENCE_ACTIONS
-from ocr_toolkit.ocr_result import (
-    MAX_TOOLKIT_MCP_USAGE_COUNT,
-    MAX_TOOLKIT_MCP_USAGE_SERVERS,
-    PUBLIC_REVIEW_TOOL_CALL_NAMES,
-    TOOLKIT_MCP_SERVER_NAME_RE,
-    OcrToolkitAdvisory,
-)
 from ocr_toolkit.posting.approval import (
     ApprovalResult,
     approval_summary_line,
@@ -39,7 +30,7 @@ from ocr_toolkit.posting.comments import (
     line_number,
 )
 from ocr_toolkit.posting.payloads import truncate_code_text, truncate_note_body
-from ocr_toolkit.posting.result import CoverageDiagnostics, ocr_warning_text
+from ocr_toolkit.posting.result import CoverageDiagnostics
 from ocr_toolkit.posting.settings import (
     FALLBACK_NOTE_CHUNK_BUDGET,
     MAX_FALLBACK_CODE_DETAILS_CHARS,
@@ -57,49 +48,38 @@ from ocr_toolkit.posting.suggestions import (
     SuggestionState,
     safe_repository_path,
 )
-from ocr_toolkit.result_usage import normalize_token_usage
-from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
-
-OCR_FINDING_CATEGORIES = {
-    "bug",
-    "security",
-    "performance",
-    "maintainability",
-    "test",
-    "style",
-    "documentation",
-    "other",
-}
-
-OCR_FINDING_SEVERITIES = {"critical", "high", "medium", "low"}
-OCR_FINDING_SEVERITY_ORDER = ("critical", "high", "medium", "low")
-OCR_FINDING_CATEGORY_ORDER = (
-    "security",
-    "bug",
-    "performance",
-    "maintainability",
-    "test",
-    "documentation",
-    "style",
-    "other",
+from ocr_toolkit.reporting.metadata import (
+    CATEGORY_EMOJI as CATEGORY_EMOJI,
 )
-
-SEVERITY_EMOJI = {
-    "critical": "❌",
-    "high": "🚨",
-    "medium": "⚠️",
-    "low": "ℹ️",  # noqa: RUF001 - intentional information emoji
-}
-CATEGORY_EMOJI = {
-    "bug": "🐛",
-    "security": "🔒",
-    "performance": "⚡",
-    "maintainability": "🛠️",
-    "test": "🧪",
-    "style": "🎨",
-    "documentation": "📚",
-    "other": "📌",
-}
+from ocr_toolkit.reporting.metadata import (
+    OCR_FINDING_CATEGORIES as OCR_FINDING_CATEGORIES,
+)
+from ocr_toolkit.reporting.metadata import (
+    OCR_FINDING_CATEGORY_ORDER,
+    OCR_FINDING_SEVERITY_ORDER,
+    finding_metadata,
+)
+from ocr_toolkit.reporting.metadata import (
+    OCR_FINDING_SEVERITIES as OCR_FINDING_SEVERITIES,
+)
+from ocr_toolkit.reporting.metadata import (
+    SEVERITY_EMOJI as SEVERITY_EMOJI,
+)
+from ocr_toolkit.reporting.metadata import format_ocr_core_advisory as format_ocr_core_advisory
+from ocr_toolkit.reporting.metadata import (
+    format_token_usage_summary as format_token_usage_summary,
+)
+from ocr_toolkit.reporting.metadata import (
+    normalized_ocr_metadata as normalized_ocr_metadata,
+)
+from ocr_toolkit.reporting.outcome import FindingVisibility, review_outcome_line
+from ocr_toolkit.reporting.sections import report_sections
+from ocr_toolkit.reporting.usage import format_tool_calls_summary as format_tool_calls_summary
+from ocr_toolkit.reporting.usage import format_verified_mcp_usage
+from ocr_toolkit.reporting.usage import nonnegative_int as nonnegative_int
+from ocr_toolkit.reporting.usage import tool_call_counts_from_items as tool_call_counts_from_items
+from ocr_toolkit.reporting.usage import tool_call_name as tool_call_name
+from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
 
 SHIELDS_BADGE_BASE_URL = "https://img.shields.io/badge"
 SHIELDS_SEVERITY_COLORS = {
@@ -119,23 +99,6 @@ def inline_code(value: str) -> str:
     """Return a Markdown inline-code representation safe for backticks."""
 
     return _inline_code(value, escape_controls=True)
-
-
-def normalized_ocr_metadata(value: Any, allowed_values: set[str]) -> str:
-    """Return a whitelisted OCR metadata value suitable for display."""
-
-    text = clean_text(value).casefold()
-    return text if text in allowed_values else ""
-
-
-def finding_metadata(comment: dict[str, Any]) -> tuple[str, str]:
-    """Return structured OCR category/severity metadata from a finding."""
-
-    severity = normalized_ocr_metadata(
-        comment.get("severity"), OCR_FINDING_SEVERITIES
-    ) or normalized_ocr_metadata(comment.get("priority"), OCR_FINDING_SEVERITIES)
-    category = normalized_ocr_metadata(comment.get("category"), OCR_FINDING_CATEGORIES)
-    return severity, category
 
 
 def _finding_badge_label(*, severity: str, category: str) -> str:
@@ -355,204 +318,16 @@ def format_metadata_counts(
     return ", ".join(parts)
 
 
-def nonnegative_int(value: Any) -> int | None:
-    """Parse a non-negative integer from OCR JSON, ignoring malformed values."""
-
-    if isinstance(value, bool) or value is None:
-        return None
-
-    if isinstance(value, int):
-        return value if value >= 0 else None
-
-    if isinstance(value, float):
-        if value.is_integer() and value >= 0:
-            return int(value)
-        return None
-
-    if isinstance(value, str):
-        try:
-            parsed = int(value.strip())
-        except ValueError:
-            return None
-        return parsed if parsed >= 0 else None
-
-    return None
-
-
-def tool_call_name(value: Any) -> str:
-    """Extract one closed public tool name from common OCR call shapes."""
-
-    if isinstance(value, str):
-        name = clean_text(value)
-        return name if name in PUBLIC_REVIEW_TOOL_CALL_NAMES else ""
-
-    if not isinstance(value, dict):
-        return ""
-
-    for key in ("name", "tool", "tool_name"):
-        name = clean_text(value.get(key))
-        if name in PUBLIC_REVIEW_TOOL_CALL_NAMES:
-            return name
-
-    function_value = value.get("function")
-    if isinstance(function_value, dict):
-        name = clean_text(function_value.get("name"))
-        return name if name in PUBLIC_REVIEW_TOOL_CALL_NAMES else ""
-
-    return ""
-
-
-def tool_call_counts_from_items(
-    items: list[Any],
-) -> tuple[int | None, list[tuple[str, int]]]:
-    """Summarize admitted calls from a legacy list-style OCR payload."""
-
-    counts: dict[str, int] = {}
-    for item in items:
-        name = tool_call_name(item)
-        if not name:
-            continue
-        count = counts.get(name, 0) + 1
-        if count > MAX_TOOLKIT_MCP_USAGE_COUNT:
-            return None, []
-        counts[name] = count
-
-    total = sum(counts.values())
-    if total == 0 and items:
-        return None, []
-
-    return total, list(counts.items())
-
-
-def format_tool_calls_summary(tool_calls: Any) -> str:
-    """Return one bounded MR line for admitted non-zero OCR tool counts."""
-
-    entries: list[tuple[str, int]]
-    total: int | None
-    if isinstance(tool_calls, list):
-        total, entries = tool_call_counts_from_items(tool_calls)
-    elif isinstance(tool_calls, dict):
-        by_tool_value = tool_calls.get("by_tool")
-        entries = []
-        admitted_total = 0
-
-        if isinstance(by_tool_value, dict):
-            for raw_name, raw_count in by_tool_value.items():
-                if not isinstance(raw_name, str) or raw_name not in PUBLIC_REVIEW_TOOL_CALL_NAMES:
-                    continue
-                if (
-                    not isinstance(raw_count, int)
-                    or isinstance(raw_count, bool)
-                    or not 0 < raw_count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-                ):
-                    continue
-                admitted_total += raw_count
-                if admitted_total > MAX_TOOLKIT_MCP_USAGE_COUNT:
-                    return ""
-                entries.append((raw_name, raw_count))
-
-        calls_value = tool_calls.get("calls")
-        if not by_tool_value and isinstance(calls_value, list):
-            list_total, entries = tool_call_counts_from_items(calls_value)
-        else:
-            list_total = None
-
-        if "total" in tool_calls:
-            raw_total = tool_calls["total"]
-            if (
-                not isinstance(raw_total, int)
-                or isinstance(raw_total, bool)
-                or not 0 < raw_total <= MAX_TOOLKIT_MCP_USAGE_COUNT
-            ):
-                return ""
-            total = raw_total
-        else:
-            if list_total is not None:
-                total = list_total
-            elif entries:
-                total = admitted_total
-            else:
-                return ""
-    else:
-        return ""
-
-    if total is None:
-        return ""
-    if total == 0 or not entries:
-        return ""
-    if sum(count for _name, count in entries) > total:
-        return ""
-
-    line = f"- all OCR tool calls: {total} total"
-    entries.sort(key=lambda item: (-item[1], item[0]))
-    detail_parts = [f"{inline_code(name)}: {count}" for name, count in entries]
-
-    return f"{line} ({', '.join(detail_parts)})"
-
-
 def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     """Report MCP servers from the safe receipt produced by `ocr-ci review`."""
 
     if not toolkit_receipt_is_valid(toolkit_metadata):
         return ""
     mcp = toolkit_metadata.get("mcp")
-    mcp_usage = mcp.get("usage") if isinstance(mcp, dict) else None
-    if (
-        not isinstance(mcp_usage, dict)
-        or len(mcp_usage) > MAX_TOOLKIT_MCP_USAGE_SERVERS
-        or any(
-            not isinstance(server, str)
-            or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
-            or not isinstance(count, int)
-            or isinstance(count, bool)
-            or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-            for server, count in mcp_usage.items()
-        )
-    ):
-        return ""
-    used = sorted(mcp_usage.items())
-    if not used:
-        return ""
-    details = ", ".join(f"{inline_code(server)}: {count}" for server, count in used)
-    lines = [f"- reconciled MCP attempts: {len(used)} server(s) ({details})"]
-    evidence = toolkit_metadata.get("evidence")
-    actions = evidence.get("actions") if isinstance(evidence, dict) else None
-    if isinstance(actions, dict) and set(actions) == {"state", "attempted", "completed"}:
-        attempted = actions.get("attempted")
-        completed = actions.get("completed")
-        evidence_calls = evidence.get("calls") if isinstance(evidence, dict) else None
-        mandatory = evidence.get("mandatory") if isinstance(evidence, dict) else None
-        evidence_used = evidence.get("used") if isinstance(evidence, dict) else None
-        if not (
-            actions.get("state") == "verified"
-            and isinstance(attempted, dict)
-            and set(attempted) == {*EVIDENCE_ACTIONS, "unattributed"}
-            and isinstance(completed, dict)
-            and set(completed) == set(EVIDENCE_ACTIONS)
-            and all(
-                isinstance(count, int)
-                and not isinstance(count, bool)
-                and 0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
-                for count in (*attempted.values(), *completed.values())
-            )
-            and isinstance(evidence_calls, int)
-            and not isinstance(evidence_calls, bool)
-            and 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
-            and isinstance(mandatory, bool)
-            and isinstance(evidence_used, bool)
-            and all(completed[action] <= attempted[action] for action in EVIDENCE_ACTIONS)
-            and sum(attempted.values()) == evidence_calls
-            and evidence_used is (sum(completed.values()) > 0)
-            and (not mandatory or completed["summary"] >= 1)
-        ):
-            return "\n".join(lines)
-        positive = [action for action in EVIDENCE_ACTIONS if completed[action] > 0]
-        if positive:
-            lines.append(
-                "- completed built-in evidence actions: "
-                + ", ".join(f"{action}: {completed[action]}" for action in positive)
-            )
-    return "\n".join(lines)
+    return format_verified_mcp_usage(
+        mcp_usage=mcp.get("usage") if isinstance(mcp, dict) else None,
+        evidence=toolkit_metadata.get("evidence"),
+    )
 
 
 def publication_dlp_signal(
@@ -637,27 +412,6 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
             "</details>",
         ]
     )
-
-
-def format_token_usage_summary(result: dict[str, Any]) -> str:
-    """Return one bounded MR summary line for structured OCR token usage."""
-
-    usage = normalize_token_usage(result)
-    if usage is None:
-        return ""
-
-    total = usage.get("total")
-    details: list[str] = []
-    for bucket in ("input", "output", "cached", "reasoning", "other"):
-        if (count := usage.get(bucket)) is not None and count > 0:
-            details.append(f"{bucket}: {count}")
-
-    if total is None:
-        return f"- token usage: {', '.join(details)}" if details else ""
-    line = f"- token usage: {total} total"
-    if details:
-        line += f" ({', '.join(details)})"
-    return line
 
 
 SECURITY_SIGNAL_RE = re.compile(
@@ -890,75 +644,15 @@ def _review_outcome_line(
 ) -> str:
     """Combine review health and finding publication into one visible status."""
 
-    budget_stop = outcome_status == "budget_exceeded" or (
-        outcome_status == "partial" and "budget" in outcome_message.casefold()
-    )
-    partial_result = outcome_status in {"partial", "completed_with_errors", "budget_exceeded"}
-    has_finding_state = total > 0 or omitted_count > 0 or suppressed_count > 0
-    if outcome_status == "skipped":
-        marker, status_text = "ℹ️", "Review skipped"  # noqa: RUF001
-        result_text = "no supported files changed"
-    elif outcome_status == "failed":
-        marker, status_text = "❌", "Review failed"
-        result_text = "no reliable review result was produced"
-    else:
-        if budget_stop:
-            marker, status_text = "⚠️", "Review stopped at token budget"
-        elif partial_result:
-            marker, status_text = "⚠️", "Review incomplete"
-        elif outcome_status == "publication-filtered":
-            marker, status_text = "⚠️", "Review complete with publication filtering"
-        elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
-            marker, status_text = "⚠️", "Review complete with warnings"
-        elif has_finding_state:
-            marker, status_text = "🔎", "Review complete"
-        else:
-            marker, status_text = "✅", "Review complete"
-
-        if total:
-            noun = "finding" if total == 1 else "findings"
-            result_text = f"{total} {noun} published"
-            if partial_result:
-                result_text += " from reviewed files"
-        elif omitted_count:
-            result_text = (
-                "no findings published from reviewed files"
-                if partial_result
-                else "no findings published"
-            )
-        elif suppressed_count:
-            result_text = (
-                "no new findings published from reviewed files"
-                if partial_result
-                else "no new findings published"
-            )
-        elif partial_result:
-            result_text = "no findings in reviewed files"
-        else:
-            result_text = "no findings"
-
-        if omitted_count:
-            noun = "finding" if omitted_count == 1 else "findings"
-            result_text += f"; {omitted_count} {noun} omitted by posting limit"
-        if suppressed_count:
-            noun = "finding" if suppressed_count == 1 else "findings"
-            result_text += f"; {suppressed_count} {noun} matched prior reviewer decisions"
-        if partial_result and diagnostics.file_count is not None:
-            noun = "file" if diagnostics.file_count == 1 else "files"
-            result_text += f"; {diagnostics.file_count} {noun} not reviewed"
-
-    prefix = f"{marker} " if emoji else ""
-    return f"{prefix}**{status_text} — {result_text}**"
-
-
-def format_ocr_core_advisory(advisory: OcrToolkitAdvisory | None) -> str:
-    """Render one validated numeric OCR advisory for Technical details only."""
-
-    if advisory is None:
-        return ""
-    return (
-        f"- OCR core advisory: background {advisory.actual} characters; recommended "
-        f"{advisory.recommended} characters; accepted by OCR core"
+    return review_outcome_line(
+        findings=FindingVisibility(
+            count=total, published=True, omitted=omitted_count, suppressed=suppressed_count
+        ),
+        warning_count=warning_count,
+        outcome_status=outcome_status,
+        outcome_message=outcome_message,
+        unreviewed_file_count=diagnostics.file_count,
+        emoji=emoji,
     )
 
 
@@ -1014,51 +708,7 @@ def summarize_result(
             ]
         )
 
-    severity_counts: dict[str, int] = {}
-    category_counts: dict[str, int] = {}
-    for comment in comments:
-        severity, category = finding_metadata(comment)
-        if severity:
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-        if category:
-            category_counts[category] = category_counts.get(category, 0) + 1
-    if severity_counts or category_counts:
-        lines.extend(["", "### Findings", ""])
-        for value in OCR_FINDING_SEVERITY_ORDER:
-            count = severity_counts.get(value, 0)
-            if count:
-                icon = f"{SEVERITY_EMOJI[value]} " if use_emoji else ""
-                lines.append(f"- {icon}{inline_code(value)}: {count}")
-        for value in OCR_FINDING_CATEGORY_ORDER:
-            count = category_counts.get(value, 0)
-            if count:
-                icon = f"{CATEGORY_EMOJI[value]} " if use_emoji else ""
-                lines.append(f"- {icon}{inline_code(value)}: {count}")
-
-    if diagnostics.records or diagnostics.invalid or diagnostics.omitted:
-        lines.extend(["", "### Incomplete coverage", ""])
-        for diagnostic in diagnostics.records:
-            detail = f" — {diagnostic.detail}" if diagnostic.detail else ""
-            lines.append(f"- {inline_code(diagnostic.path)} — {diagnostic.reason}{detail}")
-        if diagnostics.invalid:
-            lines.append(
-                f"- {diagnostics.invalid} failed item(s) had no safe repository-relative path"
-            )
-        if diagnostics.omitted:
-            lines.append(f"- ... and {diagnostics.omitted} more failed file record(s)")
-
-    safe_warnings = []
-    for warning in warnings[:10]:
-        safe = compact_escaped_text(
-            neutralize_quick_actions(redact_sensitive(ocr_warning_text(warning))), 500
-        )
-        if safe:
-            safe_warnings.append(safe)
-    if safe_warnings and not diagnostics.records:
-        lines.extend(["", "### Review warnings", ""])
-        lines.extend(f"- {warning}" for warning in safe_warnings)
-        if len(warnings) > len(safe_warnings):
-            lines.append(f"- ... and {len(warnings) - len(safe_warnings)} more warning(s)")
+    lines.extend(report_sections(comments, diagnostics, warnings, use_emoji=use_emoji))
 
     if reviewer_guide:
         lines.extend(["", reviewer_guide.strip()])

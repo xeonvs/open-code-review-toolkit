@@ -26,6 +26,27 @@ An operator controls CI configuration, direct MCP servers, adapter commands/endp
 8. The complete successful OCR result crosses independent publication DLP, deterministic GitLab publication, suppression, and receipt-v8 later-action policy. Receipt v8 binds exact source/target identity and actual protection state. Additive failed-tool diagnostics can limit a later action but cannot suppress a valid review publication; dynamic detail is console-only. An unprotected receipt can add only the static limitation and is structurally barred from the approval executor. On non-zero OCR exit with a valid bounded `ocr.llm-retry-report/v1`, only a closed provider-neutral reason may cross into a toolkit-authored failure note; one separate local line may contain closed protocol detail, a shared HTTP status, and bounded aggregate counts from the same strict parser. Raw result fields and stderr remain private, normal findings are ignored, and approval is unreachable. Missing or invalid retry diagnostics use the pre-existing generic failure boundary. See the [review decision flow](review-decision-flow.md) for the complete branch ordering.
 9. A release candidate crosses protected-base authorization, publication, provenance, and live readback.
 
+### Local delivery and diagnostic observations
+
+Explicit local execution ignores inherited forge identity and has no provider
+acquisition or mutation channel. It still requires the common immutable Git,
+mandatory MCP, result admission, DLP and cleanup checks. Shared reporting consumes
+admitted review facts; a local Markdown file is not a forge publication receipt.
+Fresh private report publication rejects existing targets and output collisions.
+
+The optional debug bundle is a distinct sensitive retention surface. Raw OCR
+result/stderr may contain rejected content; owner-only permissions are not
+redaction. Bounded descriptor-pinned captures and value-free observations of
+actual DLP decisions do not authorize egress or prove host integrity. No session,
+environment dump or full configuration is copied. A journal's completion flag
+describes observation completion, not review success. Same-user host compromise,
+host failure and operator disclosure of raw artifacts remain residual risks.
+See [local debug semantics](local.md#private-debug-bundle) for bounds and failures.
+
+Progress emits a closed bounded toolkit phase vocabulary without reading raw
+results or stderr. Reasoning configuration validates protocol shape and conflicts;
+it does not establish model capability or that a gateway applied an accepted value.
+
 ### Security objectives
 
 - Repository and provider-controlled content remains data. It cannot promote itself into policy, tools, permissions, suppression, posting, approval, or release authority.

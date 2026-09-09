@@ -106,6 +106,29 @@ New runtime modules, classes, and functions need purpose-focused docstrings. Com
 
 Apply the [cohesive-module invariant](engineering/project_principles.md#product-and-architecture) during self-review. Prefer an extract-and-delegate refactor that moves already characterized functions or classes intact, preserves the intentional package facade, and reruns the same contract suite before and after each move. Split on distinct responsibility and dependency direction, not an arbitrary line count; do not rewrite a working algorithm merely to make a file shorter. Architecture tests should protect required owners and forbidden upward dependencies without freezing every future helper-module name.
 
+## Review reporting and provider adapters
+
+`reporting/` owns provider-neutral report data and pure presentation: `model.py`
+snapshots admitted results and execution-owner facts, `outcome.py` describes
+review health separately from finding delivery, `result.py` normalizes coverage
+and warnings, and `metadata.py`, `usage.py`, `dlp.py`, `sections.py`, and `text.py`
+own their respective pure calculations. Shared reporting must not import posting,
+forge acquisition, forge receipts, environment configuration or provider actions.
+Posting facades preserve existing imports while GitLab retains its publication
+transactions, discussion anchors, suppression and approval policy.
+
+`providers/local.py` publishes private Markdown artifacts and console output from that shared report, with every
+admitted finding and no posting cap, remote badge or HTML disclosure. It does not
+acquire forge data or accept discussion commands. The runner, not the formatter,
+must establish immutable identity, mandatory completed evidence use and DLP
+admission before constructing a successful report. Passing a model-authored
+receipt to a formatter is not evidence of successful execution.
+
+New shared reporting tests live in `tests/reporting/`; keep GitLab transaction
+regressions with their existing owners. Dependency tests enforce the downward
+boundary, while outcome and rendering tests prove the pure report contract.
+Provider I/O and executable CLI claims require separate production-boundary tests.
+
 ## Extending ecosystem evidence
 
 Normalized source adapters live under `src/ocr_toolkit/evidence/ecosystems/`. Shared parser result contracts belong in `ecosystems/contracts.py`; Python, JavaScript, Go, and PHP package metadata each have one adapter module. Ansible keeps Galaxy requirements and topology/inventory analysis as separate modules under `ecosystems/ansible/`. These adapters consume text or already bounded metadata and return normalized facts: they do not own Git or filesystem reads, subprocesses, network access, framework derivation, persistence, or MCP lifecycle.

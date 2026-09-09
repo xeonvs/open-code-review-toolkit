@@ -28,6 +28,29 @@ def load_script() -> ModuleType:
     return module
 
 
+def current_contracts(module: ModuleType) -> dict[str, Any]:
+    """Extend a frozen fixture with the current, version-neutral consumed controls."""
+
+    contracts = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
+        "contracts"
+    ]
+    contracts["reasoning_effort_probe"] = {
+        "result": "passed",
+        "protocols": ["openai", "openai-responses"],
+        "efforts": ["unset", "none", "high"],
+        "responses_siblings_preserved": True,
+        "provider_acceptance": "not-tested",
+    }
+    contracts["language_rule_probe"].update(
+        {
+            "extensions": sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES),
+            "selected": len(module.CURRENT_LANGUAGE_RULES),
+            "default_excluded_paths": list(module.CURRENT_DEFAULT_EXCLUDED_PATHS),
+        }
+    )
+    return contracts
+
+
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
     return {
         "tag_name": f"v{version}",
@@ -56,8 +79,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.11.5"
-    assert manifest["monitoring_floor"] == "1.11.5"
+    assert manifest["recommended_version"] == "1.11.6"
+    assert manifest["monitoring_floor"] == "1.11.6"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -91,6 +114,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.11.3", "tested"),
         ("1.11.4", "tested"),
         ("1.11.5", "tested"),
+        ("1.11.6", "tested"),
     ]
 
 
@@ -98,14 +122,13 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    for version in ("1.11.4", "1.11.5"):
-        evidence = module.load_json(
-            PROJECT_ROOT / "compatibility" / "evidence" / f"ocr-{version}.json"
-        )
-        extensions = evidence["contracts"]["language_rule_probe"]["extensions"]
-
-        assert extensions == sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES)
-        assert extensions == sorted(extensions)
+    contracts = current_contracts(module)
+    extensions = contracts["language_rule_probe"]["extensions"]
+    assert extensions == sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES)
+    module._validate_current_contracts(contracts)
+    extensions.reverse()
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module._validate_current_contracts(contracts)
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
@@ -1317,6 +1340,46 @@ def test_compatibility_gateway_distinguishes_tool_free_plan_requests() -> None:
     assert content == "Summary: Review the changed code.\n\nIssues\n(none)"
 
 
+@pytest.mark.parametrize("protocol", ["chat/completions", "responses"])
+def test_reasoning_gateway_captures_wire_fields_without_model_reply(protocol: str) -> None:
+    module = load_script()
+    payload = (
+        {"reasoning_effort": "none"}
+        if protocol == "chat/completions"
+        else {"reasoning": {"effort": "none", "summary": "auto"}}
+    )
+    with module._stub_gateway(capture_reasoning=True) as gateway:
+        request = module.urllib.request.Request(
+            f"{gateway}/{protocol}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(module.urllib.error.HTTPError) as error:
+            module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        assert error.value.code == 400
+        observed = module._StubHandler.reasoning_requests
+        assert len(observed) == 1 and observed[0]["path"] == f"/v1/{protocol}"
+        assert observed[0]["root_present"] is (protocol == "chat/completions")
+        assert observed[0]["nested_present"] is (protocol == "responses")
+        assert module._StubHandler.request_count == 0
+        assert module._StubHandler.reasoning_overflow is False
+
+
+def test_reasoning_gateway_records_capture_overflow() -> None:
+    module = load_script()
+    with module._stub_gateway(capture_reasoning=True) as gateway:
+        for _ in range(33):
+            request = module.urllib.request.Request(
+                f"{gateway}/responses",
+                data=b'{"reasoning":{"effort":"none"}}',
+                headers={"Content-Type": "application/json"},
+            )
+            with pytest.raises(module.urllib.error.HTTPError):
+                module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        assert len(module._StubHandler.reasoning_requests) == 32
+        assert module._StubHandler.reasoning_overflow is True
+
+
 def test_grouping_inventory_strictly_parses_current_shape() -> None:
     """Live qualification accepts status-first data and rejects legacy wire grammar."""
 
@@ -1771,7 +1834,7 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
     for asset in assets:
         asset["sha256"] = "a" * 64
     evidence_187 = {
-        "schema_version": 2,
+        "schema_version": 3,
         "upstream_repository": module.UPSTREAM_REPOSITORY,
         "version": "1.8.7",
         "tag": "v1.8.7",
@@ -1782,7 +1845,14 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "comparison_version": "1.8.6",
         "tested_baseline_version": "1.8.6",
         "assets": assets,
-        "contracts": {"optional_capabilities": ["per_run_model_override"]},
+        "contracts": {
+            **current_contracts(module),
+            "optional_capabilities": [
+                "per_run_model_override",
+                "review_effort",
+                "semantic_grouping",
+            ],
+        },
     }
     final_assets = [dict(asset) for asset in assets]
     for asset in final_assets:
@@ -1794,11 +1864,14 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "comparison_version": "1.8.7",
         "assets": final_assets,
         "contracts": {
+            **current_contracts(module),
             "optional_capabilities": [
                 "llm_result_identity",
                 "per_run_model_override",
                 "per_run_provider_override",
-            ]
+                "review_effort",
+                "semantic_grouping",
+            ],
         },
     }
 
@@ -1830,6 +1903,8 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "llm_result_identity",
         "per_run_model_override",
         "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping",
     ]
     example_text = example.read_text(encoding="utf-8")
     assert 'OCR_VERSION: "v1.8.8"' in example_text
@@ -1886,16 +1961,21 @@ def test_historical_evidence_is_independent_of_live_contract_defaults(
     module.validate_manifest(module.load_json(promotion_manifest), PROJECT_ROOT)
 
 
+@pytest.mark.parametrize(
+    "missing_probe", ["comment_arguments_probe", "reasoning_effort_probe", "language_rule_probe"]
+)
 def test_current_promotion_rejects_missing_contract_before_writing(
     promotion_manifest: Path,
+    missing_probe: str,
 ) -> None:
     """A compatible label alone cannot promote a candidate missing consumed proof."""
 
     module = load_script()
     evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.4.json")
-    evidence["contracts"].pop("comment_arguments_probe")
+    evidence["contracts"] = current_contracts(module)
+    evidence["contracts"].pop(missing_probe)
     before = promotion_manifest.read_bytes()
-    with pytest.raises(module.CompatibilityError, match="comment_arguments_probe"):
+    with pytest.raises(module.CompatibilityError, match=missing_probe):
         module.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
@@ -1904,6 +1984,21 @@ def test_current_promotion_rejects_missing_contract_before_writing(
             root=PROJECT_ROOT,
         )
     assert promotion_manifest.read_bytes() == before
+
+
+def test_recent_historical_evidence_is_independent_of_live_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    manifest["recommended_version"] = manifest["monitoring_floor"] = "1.11.5"
+    manifest["releases"] = [
+        item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 5)
+    ]
+    monkeypatch.setattr(module, "CURRENT_NUMERIC_CLI_CONTRACT", {})
+    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {})
+    monkeypatch.setattr(module, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
+    module.validate_manifest(manifest, PROJECT_ROOT)
 
 
 def test_prepare_update_requires_human_review_for_minor_transition(

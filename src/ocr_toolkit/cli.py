@@ -24,7 +24,12 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("preflight", help="Validate OCR, GitLab, and LLM access.")
+    preflight_parser = subparsers.add_parser(
+        "preflight", help="Validate review prerequisites and configured access."
+    )
+    preflight_parser.add_argument(
+        "--local", action="store_true", help="Validate standalone local review prerequisites."
+    )
     subparsers.add_parser("configure", help="Write the OCR runtime configuration.")
     subparsers.add_parser("mcp-config", help="Write OCR MCP server configuration.")
     review_parser = subparsers.add_parser(
@@ -32,6 +37,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_parser.add_argument("--result", required=True, help="OCR JSON output path.")
     review_parser.add_argument("--stderr", required=True, help="Full OCR stderr artifact path.")
+    review_parser.add_argument(
+        "--local", action="store_true", help="Review immutable Git refs and publish local Markdown."
+    )
+    review_parser.add_argument(
+        "--report", help="Fresh local Markdown path (default: --result path plus .md)."
+    )
+    review_parser.add_argument(
+        "--debug-dir", help="Fresh private diagnostic bundle directory (requires --local)."
+    )
     review_parser.add_argument(
         "--preserve-private-artifacts",
         action="store_true",
@@ -62,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = build_parser().parse_args(argv)
     if args.command == "preflight":
-        return preflight.main()
+        return preflight.main(local=True) if args.local else preflight.main()
     if args.command == "configure":
         return configure.main()
     if args.command == "mcp-config":
@@ -75,6 +89,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 Path(args.stderr),
                 ocr_args,
                 preserve_private_artifacts=args.preserve_private_artifacts,
+                **({"local": True} if args.local else {}),
+                **({"report_path": Path(args.report)} if args.report is not None else {}),
+                **({"debug_dir": Path(args.debug_dir)} if args.debug_dir is not None else {}),
             )
         except review_runner.ReviewRunnerError as exc:
             print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)

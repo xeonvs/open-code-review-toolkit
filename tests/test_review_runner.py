@@ -29,6 +29,7 @@ from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifac
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import approval, settings, snapshot, workflow
+from ocr_toolkit.reporting.dlp import publication_dlp_state
 from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import gitlab_config, patched_attr, patched_env
 from tests.test_context_broker import ci_outcome
@@ -2009,6 +2010,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         secret_values=(),
     )
 
+    local_state = review_runner.ReviewRunState(local=True)
     usage, blocked, publication = review_runner._finalize_ocr_result(
         result,
         composition,
@@ -2016,6 +2018,8 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         None,
         SUMMARY_ACTION_COUNTS,
         forbidden=("private discussion sentence",),
+        report_consumer=local_state.admit_report,
+        state=local_state,
     )
 
     assert usage == {"ocr_toolkit_evidence": 1}
@@ -2053,6 +2057,21 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
     assert "_ocr_toolkit" not in persisted
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
+    assert local_state.report is not None
+    assert list(local_state.report.comments) == persisted["comments"]
+    assert local_state.report.publication == publication
+    assert local_state.report.outcome.kind == "clean"
+    assert local_state.report.outcome.manifest_present is False
+    assert local_state.report.outcome.coverage_summary == ""
+    assert publication_dlp_state(publication) is None
+    console = io.StringIO()
+    review_runner.write_local_report(local_state.report, console)
+    rendered = console.getvalue()
+    assert "Guard the empty collection" in rendered
+    assert "Validate the safe branch" in rendered
+    assert "private discussion sentence" not in rendered
+    assert "synthetic@example.invalid" not in rendered
+    assert "ocr_toolkit_evidence" in rendered
 
 
 def test_background_preview_advisory_is_atomically_finalized_without_blocking_approval(
@@ -4171,19 +4190,25 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
     ("preserve_private_artifacts", "ocr_exit_code", "target_protection"),
     [
         (False, 0, "local"),
+        (False, 0, "protected"),
         (False, 1, "local"),
         (True, 0, "local"),
         (False, 0, "unprotected"),
     ],
 )
+@pytest.mark.parametrize("progress_on", [False, True])
 def test_evidence_review_prepares_internal_context_before_ocr(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     preserve_private_artifacts: bool,
     ocr_exit_code: int,
     target_protection: str,
+    progress_on: bool,
 ) -> None:
     """Clean ordinary success/failure while retaining requested local diagnostics."""
 
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true" if progress_on else "false")
     events: list[object] = []
     composition_inputs: list[dict[str, object]] = []
     bootstrap_inputs: list[dict[str, object]] = []
@@ -4244,6 +4269,13 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     def finalize(
         *_args: object, **kwargs: object
     ) -> tuple[dict[str, int], bool, dict[str, object]]:
+        assert "report_consumer" not in kwargs
+        if progress_on:
+            state = kwargs["state"]
+            assert isinstance(state, review_runner.ReviewRunState)
+            assert state.local is False and state.progress is not None
+        else:
+            assert "state" not in kwargs
         finalized.append(kwargs)
         events.append("ocr-usage")
         return {"ocr_toolkit_evidence": 1}, False, {"state": "passed"}
@@ -4266,7 +4298,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         policy_sha="a" * 40,
         target_sha="a" * 40,
         target_protection=target_protection,
-        mr_author_id=41 if target_protection == "unprotected" else None,
+        mr_author_id=41 if target_protection != "local" else None,
     )
 
     with (
@@ -4339,6 +4371,12 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             preserve_private_artifacts=preserve_private_artifacts,
         )
 
+    output = capsys.readouterr()
+    # pytest exposes a conventional blocking descriptor-backed stderr here.
+    # Optional progress must never alter it or risk blocking review execution.
+    assert "OCR progress:" not in output.err
+    assert "OCR progress:" not in output.out
+    assert "OCR progress:" not in (tmp_path / "stderr.log").read_text(encoding="utf-8")
     assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1
@@ -4355,7 +4393,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     )
     assert composition_inputs == [
         {
-            "profile": "gitlab_mr" if target_protection == "unprotected" else "local",
+            "profile": "gitlab_mr" if target_protection != "local" else "local",
             "context": None,
             "allow_external": target_protection != "unprotected",
         }

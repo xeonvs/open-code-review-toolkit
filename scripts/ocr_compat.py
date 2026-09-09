@@ -134,7 +134,13 @@ CURRENT_LANGUAGE_RULES = {
     "native/source.cxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
     "native/header.hxx": "**/*.{cpp,cc,cxx,hpp,hxx}",
     "native/object.mm": "**/*.mm",
+    "src/parser.ml": "**/*.{ml,mli}",
+    "src/parser.mli": "**/*.{ml,mli}",
+    "src/component.re": "**/*.{re,rei}",
+    "src/component.rei": "**/*.{re,rei}",
+    "scripts/setup.kts": "**/*.{kt,kts}",
 }
+CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
 
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
@@ -350,6 +356,7 @@ def _validate_current_contracts(value: object) -> None:
         },
         "language_rule_probe": {
             "excluded_extensions": [".svh"],
+            "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
             "extensions": extensions,
             "result": "passed",
             "rule_source": "system_builtin",
@@ -361,6 +368,13 @@ def _validate_current_contracts(value: object) -> None:
             "inherited": 16_384,
             "result": "passed",
             "wire_field": "max_completion_tokens",
+        },
+        "reasoning_effort_probe": {
+            "result": "passed",
+            "protocols": ["openai", "openai-responses"],
+            "efforts": ["unset", "none", "high"],
+            "responses_siblings_preserved": True,
+            "provider_acceptance": "not-tested",
         },
         "comment_arguments_probe": {
             "result": "passed",
@@ -841,6 +855,9 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     request_stages: list[str] = []
     prior_finding_semantics: set[str] = set()
     recheck_instruction_requests = 0
+    capture_reasoning = False
+    reasoning_requests: list[dict[str, object]] = []
+    reasoning_overflow = False
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -880,7 +897,10 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         return None
 
     def do_POST(self) -> None:
-        if self.path != "/v1/chat/completions":
+        allowed_paths = {"/v1/chat/completions"}
+        if type(self).capture_reasoning:
+            allowed_paths.add("/v1/responses")
+        if self.path not in allowed_paths:
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -894,6 +914,27 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             return
         if not isinstance(request, dict):
             self.send_error(400)
+            return
+        if type(self).capture_reasoning:
+            reasoning = request.get("reasoning")
+            if len(type(self).reasoning_requests) < 32:
+                type(self).reasoning_requests.append(
+                    {
+                        "path": self.path,
+                        "root_present": "reasoning_effort" in request,
+                        "root_effort": request.get("reasoning_effort"),
+                        "nested_present": isinstance(reasoning, dict) and "effort" in reasoning,
+                        "nested_effort": reasoning.get("effort")
+                        if isinstance(reasoning, dict)
+                        else None,
+                        "summary": reasoning.get("summary")
+                        if isinstance(reasoning, dict)
+                        else None,
+                    }
+                )
+            else:
+                type(self).reasoning_overflow = True
+            self.send_error(400, "Synthetic request capture; no model execution")
             return
         type(self).completion_caps.append(request.get("max_completion_tokens"))
         messages = request.get("messages")
@@ -1053,6 +1094,7 @@ def _stub_gateway(
     grouping_mode: str = "singletons",
     main_mode: str = "findings",
     comment_mode: str = "default",
+    capture_reasoning: bool = False,
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -1075,6 +1117,9 @@ def _stub_gateway(
     _StubHandler.request_stages = []
     _StubHandler.prior_finding_semantics = set()
     _StubHandler.recheck_instruction_requests = 0
+    _StubHandler.capture_reasoning = capture_reasoning
+    _StubHandler.reasoning_requests = []
+    _StubHandler.reasoning_overflow = False
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -1900,6 +1945,100 @@ def _completion_cap_probe(binary: Path, directory: Path) -> dict[str, object]:
     }
 
 
+def _reasoning_effort_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Capture real OCR effort fields without claiming provider/model acceptance."""
+
+    from ocr_toolkit.config_writer import write_ocr_config
+    from ocr_toolkit.provider_config import request_controls_from_environment
+
+    root = directory / "reasoning-effort-probe"
+    root.mkdir()
+    git_env = _isolated_probe_environment(root / "git-home")
+    repo, base, head = _synthetic_repo(root, git_env)
+    for protocol in ("openai", "openai-responses"):
+        for effort in ("", "none", "high"):
+            label = effort or "unset"
+            env = _isolated_probe_environment(root / f"{protocol}-{label}-home")
+            settings = {"OCR_LLM_PROTOCOL": protocol, "OCR_LLM_REASONING_EFFORT": effort}
+            if protocol == "openai-responses" and effort:
+                settings["OCR_LLM_EXTRA_BODY"] = '{"reasoning":{"summary":"auto"}}'
+            controls = request_controls_from_environment(settings)
+            with _stub_gateway(capture_reasoning=True) as gateway_url:
+                config: dict[str, object] = {
+                    "auth_token": "synthetic-token",
+                    "model": "synthetic-model",
+                    "protocol": protocol,
+                    "url": gateway_url,
+                    "use_anthropic": False,
+                }
+                if controls.extra_body is not None:
+                    config["extra_body"] = controls.extra_body
+                write_ocr_config(
+                    {"llm": config, "telemetry": {"enabled": False}},
+                    Path(env["HOME"]) / ".opencodereview" / "config.json",
+                )
+                try:
+                    completed = subprocess.run(  # nosec B603
+                        [
+                            str(binary),
+                            "review",
+                            "--from",
+                            base,
+                            "--to",
+                            head,
+                            "--format",
+                            "json",
+                            "--audience",
+                            "agent",
+                            "--effort",
+                            "low",
+                            "--concurrency",
+                            "1",
+                        ],
+                        cwd=repo,
+                        env=env,
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=30,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise CompatibilityError(
+                        f"reasoning wire probe did not finish: {protocol}/{label}"
+                    ) from exc
+                if completed.returncode < 0:
+                    _fail(f"reasoning wire probe was interrupted: {protocol}/{label}")
+                observed = list(_StubHandler.reasoning_requests)
+                overflow = _StubHandler.reasoning_overflow
+            if overflow:
+                _fail(
+                    f"reasoning wire probe exceeded its request capture limit: {protocol}/{label}"
+                )
+            if not observed:
+                _fail(f"reasoning wire probe received no request: {protocol}/{label}")
+            expected_path = "/v1/chat/completions" if protocol == "openai" else "/v1/responses"
+            prefix = "root" if protocol == "openai" else "nested"
+            other_prefix = "nested" if protocol == "openai" else "root"
+            for request in observed:
+                if (
+                    request["path"] != expected_path
+                    or request[f"{other_prefix}_present"] is not False
+                    or request[f"{prefix}_present"] is not bool(effort)
+                    or request[f"{prefix}_effort"] != (effort or None)
+                    or (protocol == "openai-responses" and effort and request["summary"] != "auto")
+                ):
+                    _fail(
+                        f"reasoning wire fields differ from configured controls: {protocol}/{label}"
+                    )
+    return {
+        "result": "passed",
+        "protocols": ["openai", "openai-responses"],
+        "efforts": ["unset", "none", "high"],
+        "responses_siblings_preserved": True,
+        "provider_acceptance": "not-tested",
+    }
+
+
 def _preview_file_selection(payload: object, path: str) -> tuple[bool, object]:
     """Return one JSON preview file's selected state and closed exclusion reason."""
 
@@ -2027,7 +2166,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
     unsupported_path = "rtl/include.svh"
-    paths = (*supported_paths, unsupported_path)
+    paths = (*supported_paths, unsupported_path, *CURRENT_DEFAULT_EXCLUDED_PATHS)
     for path in paths:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2070,6 +2209,10 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     unsupported_selected, unsupported_reason = _preview_file_selection(payload, unsupported_path)
     if unsupported_selected or unsupported_reason != "unsupported_ext":
         _fail("candidate unexpectedly selected the unqualified .svh extension")
+    for path in CURRENT_DEFAULT_EXCLUDED_PATHS:
+        selected_test, reason = _preview_file_selection(payload, path)
+        if selected_test or not isinstance(reason, str) or not reason:
+            _fail(f"candidate did not preserve the default test-path exclusion: {path}")
     for path in supported_paths:
         output = _run([str(binary), "rules", "check", path], cwd=repo, env=env)
         if (
@@ -2088,6 +2231,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     result: dict[str, object] = {
         "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
+        "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
         "result": "passed",
         "rule_source": "system_builtin",
         "selected": len(supported_paths),
@@ -2373,6 +2517,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
     contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
     contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
+    contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
     contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
     contracts["comment_thinking_probe"] = thinking_probe
     _validate_current_contracts(contracts)
@@ -2725,10 +2870,9 @@ def prepare_update(
         _fail("human conclusions may reference only evidence versions in this promotion")
 
     for item in evidences:
-        if _version(str(item["version"])) >= history.HISTORICAL_CUTOFF:
-            if item.get("schema_version") != 3:
-                _fail("current candidate requires evidence schema 3")
-            _validate_current_contracts(item.get("contracts"))
+        if item.get("schema_version") != 3:
+            _fail("current candidate requires evidence schema 3")
+        _validate_current_contracts(item.get("contracts"))
 
     version = versions[-1]
     releases = manifest.get("releases")

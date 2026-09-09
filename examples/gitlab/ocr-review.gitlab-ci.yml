@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.11.5"
+  OCR_VERSION: "v1.11.6"
   OCR_TOOLKIT_VERSION: "0.9.1"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a983d95"
+  OCR_SHA256: "09f30595834f8297a592b51bf4707fb24728b2826a65915f1964c5563e4fb3bd"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Secure default: reject an unprotected GitLab target before OCR.
@@ -28,6 +28,8 @@ variables:
   OCR_MAX_TOOLS: "0"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"
+  # Do not set OCR_REVIEW_PROGRESS for the standard GitLab stderr job-log pipe:
+  # optional progress is safely unavailable there rather than risking a blocked review.
   # Reviews default to English. To request another language, for example Russian, set:
   # OCR_REVIEW_LANGUAGE: "Russian"
 

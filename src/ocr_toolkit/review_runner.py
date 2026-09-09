@@ -16,7 +16,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
 from io import BufferedWriter
@@ -112,6 +112,7 @@ from ocr_toolkit.pre_execution import (
     PreExecutionStatusError,
     write_pre_execution_status,
 )
+from ocr_toolkit.provider_config import REASONING_EFFORTS
 from ocr_toolkit.provider_failure import (
     ProviderFailureProjection,
     provider_failure_projection,
@@ -125,8 +126,24 @@ from ocr_toolkit.providers.gitlab import (
 )
 from ocr_toolkit.providers.gitlab_ci import acquire_gitlab_ci_outcomes
 from ocr_toolkit.providers.gitlab_discussions import acquire_gitlab_context
+from ocr_toolkit.providers.local import (
+    local_report_parts,
+    prepare_local_report_path,
+    publish_local_report,
+    write_local_report,
+)
+from ocr_toolkit.providers.local_config import validate_local_context
+from ocr_toolkit.reporting.model import (
+    ExecutionFacts,
+    FailureStage,
+    ReviewReport,
+    failed_report,
+    report_from_result,
+)
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
+from ocr_toolkit.review_debug import DebugBundle, DebugStatus
+from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -306,6 +323,38 @@ class ReviewRefs:
     head: str
 
 
+@dataclass(slots=True)
+class ReviewRunState:
+    """Track the actual execution owner reached and its admitted report."""
+
+    local: bool = False
+    stage: FailureStage = "configuration"
+    reviewed_sha: str = ""
+    report: ReviewReport | None = None
+    debug: DebugBundle | None = None
+    progress: ReviewProgress | None = None
+
+    def enter(self, stage: FailureStage) -> None:
+        """Enter a real execution phase and notify the optional progress observer."""
+
+        self.stage = stage
+        if self.progress is not None:
+            self.progress.phase(stage)
+
+    def observe(
+        self, stage: FailureStage, status: DebugStatus, *, facts: dict[str, object] | None = None
+    ) -> None:
+        """Record a result only when the production owner reaches that branch."""
+
+        if self.debug is not None:
+            self.debug.phase(stage, status, facts=facts)
+
+    def admit_report(self, report: ReviewReport) -> None:
+        """Accept only the finalizer's result after its atomic safe replacement."""
+
+        self.report = report
+
+
 @dataclass(frozen=True, slots=True)
 class ReviewIdentity:
     """Bind immutable review/provider identities to context selection."""
@@ -338,10 +387,46 @@ class EnrichmentReceipt:
     bootstrap_hints: dict[str, int]
 
 
-def _write_isolated_runtime_config() -> None:
+def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
     """Rebuild only validated runtime settings inside the fresh OCR home."""
 
-    update_ocr_config(configure.build_config_updates())
+    updates = configure.build_config_updates()
+    update_ocr_config(updates)
+    if debug is not None:
+        body = updates.get("llm.extra_body")
+        reasoning = body.get("reasoning") if isinstance(body, dict) else None
+        effort = (
+            reasoning.get("effort")
+            if updates["llm.protocol"] == "openai-responses" and isinstance(reasoning, dict)
+            else body.get("reasoning_effort")
+            if updates["llm.protocol"] == "openai" and isinstance(body, dict)
+            else None
+        )
+        debug.phase(
+            "configuration",
+            "passed",
+            facts={
+                "provider": "local",
+                "context_mode": "off",
+                "output_format": "json",
+                "audience": "agent",
+                "llm_protocol": updates["llm.protocol"],
+                "review_effort": updates["effort"],
+                "language": updates["language"],
+                "llm_model_sha256": hashlib.sha256(
+                    updates["llm.model"].encode("utf-8")
+                ).hexdigest(),
+                "extra_body_present": "llm.extra_body" in updates,
+                "extra_headers_present": "llm.extra_headers" in updates,
+                "telemetry_enabled": updates["telemetry.enabled"],
+                "content_logging": updates["telemetry.content_logging"],
+                **(
+                    {"reasoning_effort": effort}
+                    if isinstance(effort, str) and effort in REASONING_EFFORTS
+                    else {}
+                ),
+            },
+        )
 
 
 def _verify_evidence_mcp(store: EvidenceStore) -> None:
@@ -562,20 +647,31 @@ def _dlp_reasons(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     allow_horizontal_tabs: bool = False,
+    debug: DebugBundle | None = None,
+    path: tuple[object, ...] = (),
+    action: str = "detect-sink",
 ) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
-    stack = [value]
+    stack = [(value, path)]
     while stack:
-        nested = stack.pop()
+        nested, nested_path = stack.pop()
         if isinstance(nested, dict):
             for key, value in nested.items():
                 if isinstance(key, str) and key in PROVIDER_PRIVATE_RESULT_KEYS:
                     reasons["invalid_text"] += 1
-                stack.extend((key, value))
+                    if debug is not None:
+                        debug.decision(
+                            path=(*nested_path, key),
+                            action=action,
+                            reason="invalid_text",
+                            detector="reserved_field",
+                            value=key,
+                        )
+                stack.extend(((key, (*nested_path, key)), (value, (*nested_path, key))))
         elif isinstance(nested, list):
-            stack.extend(nested)
+            stack.extend((item, (*nested_path, index)) for index, item in enumerate(nested))
         elif isinstance(nested, str):
             checked = check_text(
                 nested,
@@ -586,6 +682,14 @@ def _dlp_reasons(
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
+                if debug is not None:
+                    debug.decision(
+                        path=nested_path,
+                        action=action,
+                        reason=checked.reason,
+                        detector=checked.detector,
+                        value=nested,
+                    )
     return reasons
 
 
@@ -718,36 +822,41 @@ def _write_private_dlp_decisions(
         raise ReviewRunnerError("OCR private DLP diagnostics could not be written") from exc
 
 
-def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool]]:
+def _publication_sinks(payload: dict[str, object]) -> list[tuple[object, bool, tuple[object, ...]]]:
     """Select only OCR-controlled values that the posting owner can render."""
 
-    sinks: list[tuple[object, bool]] = []
+    sinks: list[tuple[object, bool, tuple[object, ...]]] = []
     message = payload.get("message")
     if message is not None:
-        sinks.append((message, False))
+        sinks.append((message, False, ("message",)))
     comments = payload.get("comments")
     if isinstance(comments, list):
-        for item in comments:
+        for index, item in enumerate(comments):
             if not isinstance(item, dict):
                 continue
             sinks.extend(
                 (
                     value,
                     isinstance(value, str) and key in {"existing_code", "suggestion_code"},
+                    ("comments", index, key),
                 )
                 for key, value in item.items()
                 if key in QUARANTINE_COMMENT_FIELDS
             )
     warnings = payload.get("warnings")
     if warnings is not None:
-        sinks.append((warnings, False))
+        sinks.append((warnings, False, ("warnings",)))
     manifest = payload.get("manifest")
     coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
     failed = coverage.get("failed") if isinstance(coverage, dict) else None
     if isinstance(failed, list):
-        for item in failed:
+        for index, item in enumerate(failed):
             if isinstance(item, dict):
-                sinks.extend((item[key], False) for key in ("path", "reason") if key in item)
+                sinks.extend(
+                    (item[key], False, ("manifest", "coverage", "failed", index, key))
+                    for key in ("path", "reason")
+                    if key in item
+                )
     return sinks
 
 
@@ -782,7 +891,11 @@ def _is_static_public_tool_key_path(path: tuple[object, ...]) -> bool:
 
 
 def _sanitize_nonpublication_fields(
-    payload: dict[str, object], *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    payload: dict[str, object],
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], Counter[str], int]:
     """Redact unsafe private result fields without changing publication sinks."""
 
@@ -806,6 +919,14 @@ def _sanitize_nonpublication_fields(
                     child_path
                 ):
                     redacted_fields += 1
+                    if debug is not None:
+                        debug.decision(
+                            path=child_path,
+                            action="remove-private-field",
+                            reason="invalid_text",
+                            detector="reserved_field",
+                            value=key,
+                        )
                     continue
                 if not _is_publication_sink_path(
                     child_path
@@ -819,6 +940,14 @@ def _sanitize_nonpublication_fields(
                     if not checked_key.admitted:
                         reasons[checked_key.reason] += 1
                         redacted_fields += 1
+                        if debug is not None:
+                            debug.decision(
+                                path=child_path,
+                                action="reject-key",
+                                reason=checked_key.reason,
+                                detector=checked_key.detector,
+                                value=key,
+                            )
                         continue
             if isinstance(value, dict):
                 nested: dict[str, object] = {}
@@ -847,6 +976,14 @@ def _sanitize_nonpublication_fields(
                 if not checked.admitted:
                     reasons[checked.reason] += 1
                     redacted_fields += 1
+                    if debug is not None:
+                        debug.decision(
+                            path=child_path,
+                            action="redact-value",
+                            reason=checked.reason,
+                            detector=checked.detector,
+                            value=value,
+                        )
                     projected = replacements.setdefault(
                         value, f"ocr-redacted-{len(replacements) + 1:06d}"
                     )
@@ -858,7 +995,11 @@ def _sanitize_nonpublication_fields(
 
 
 def _safe_publication_comments(
-    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
 
@@ -866,7 +1007,7 @@ def _safe_publication_comments(
         return [], 0, 0
     retained: list[dict[str, object]] = []
     omitted_fields = 0
-    for item in value:
+    for index, item in enumerate(value):
         if not isinstance(item, dict):
             continue
         projected: dict[str, object] = {}
@@ -881,6 +1022,9 @@ def _safe_publication_comments(
                 allow_horizontal_tabs=(
                     isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
+                debug=debug,
+                path=("comments", index, key),
+                action="omit-field",
             ):
                 omitted_fields += 1
                 content_unsafe = content_unsafe or key == "content"
@@ -888,17 +1032,40 @@ def _safe_publication_comments(
             projected[key] = field_value
         if projected and not content_unsafe:
             retained.append(projected)
+        elif debug is not None:
+            debug.decision(
+                path=("comments", index),
+                action="omit-finding",
+                reason="unsafe_content" if content_unsafe else "empty_projection",
+                detector=None,
+                value=None,
+            )
     return retained, len(value) - len(retained), omitted_fields
 
 
 def _safe_publication_warnings(
-    value: object, *, budgets: TextBudgets, matcher: ForbiddenMatcher
+    value: object,
+    *,
+    budgets: TextBudgets,
+    matcher: ForbiddenMatcher,
+    debug: DebugBundle | None = None,
 ) -> tuple[list[object], int]:
     """Retain DLP-safe warnings while dropping unsafe or malformed items atomically."""
 
     if not isinstance(value, list):
         return [], 0
-    retained = [item for item in value if not _dlp_reasons(item, budgets=budgets, matcher=matcher)]
+    retained = [
+        item
+        for index, item in enumerate(value)
+        if not _dlp_reasons(
+            item,
+            budgets=budgets,
+            matcher=matcher,
+            debug=debug,
+            path=("warnings", index),
+            action="omit-warning",
+        )
+    ]
     return retained, len(value) - len(retained)
 
 
@@ -1146,19 +1313,22 @@ def _publication_projection(
     *,
     forbidden: tuple[str, ...],
     allowed_tools: frozenset[str],
+    debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
     """Return a DLP-safe result plus one exact v8 publication state."""
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     sink_reasons: Counter[str] = Counter()
-    for sink, allow_horizontal_tabs in _publication_sinks(payload):
+    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(payload):
         sink_reasons.update(
             _dlp_reasons(
                 sink,
                 budgets=budgets,
                 matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                debug=debug,
+                path=sink_path,
             )
         )
     failures = _tool_failure_telemetry(payload.get("tool_calls"))
@@ -1175,7 +1345,7 @@ def _publication_projection(
             if key not in {"failure", "failure_by_tool", "failure_details"}
         }
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
-        sanitization_payload, budgets=budgets, matcher=matcher
+        sanitization_payload, budgets=budgets, matcher=matcher, debug=debug
     )
     if failures.present:
         sanitized["tool_calls"] = _closed_tool_calls(
@@ -1199,10 +1369,10 @@ def _publication_projection(
             publication_changed = True
     if publication_changed:
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
-            payload.get("comments"), budgets=budgets, matcher=matcher
+            payload.get("comments"), budgets=budgets, matcher=matcher, debug=debug
         )
         warnings, omitted_warnings = _safe_publication_warnings(
-            payload.get("warnings"), budgets=budgets, matcher=matcher
+            payload.get("warnings"), budgets=budgets, matcher=matcher, debug=debug
         )
         projected: dict[str, object] = {
             "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
@@ -1263,6 +1433,8 @@ def _finalize_ocr_result(
     *,
     forbidden: tuple[str, ...],
     toolkit_advisory: OcrToolkitAdvisory | None = None,
+    report_consumer: Callable[[ReviewReport], None] | None = None,
+    state: ReviewRunState | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1271,9 +1443,10 @@ def _finalize_ocr_result(
     usage: dict[str, int] = {}
     failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
+    report: ReviewReport | None = None
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
-        nonlocal failure_telemetry, filtered, publication, usage
+        nonlocal failure_telemetry, filtered, publication, usage, report
         for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
@@ -1281,6 +1454,8 @@ def _finalize_ocr_result(
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
         failure_telemetry = _tool_failure_telemetry(payload.get("tool_calls"))
+        if state is not None:
+            state.enter("mcp-use")
         metadata = _review_receipt(
             payload,
             composition,
@@ -1288,9 +1463,31 @@ def _finalize_ocr_result(
             enrichment,
             evidence_action_counts,
         )
+        if state is not None:
+            evidence = metadata.get("evidence")
+            actions = evidence.get("actions") if isinstance(evidence, dict) else None
+            completed = actions.get("completed") if isinstance(actions, dict) else None
+            facts = None
+            if isinstance(evidence, dict) and isinstance(completed, dict):
+                facts = {
+                    "used": evidence.get("used"),
+                    "summary_completed": completed.get("summary"),
+                }
+            state.observe("mcp-use", "passed", facts=facts)
+            state.enter("dlp")
         projected, publication, filtered = _publication_projection(
-            payload, forbidden=forbidden, allowed_tools=allowed_tools
+            payload,
+            forbidden=forbidden,
+            allowed_tools=allowed_tools,
+            **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
+        if state is not None:
+            state.observe(
+                "dlp",
+                "degraded" if publication.get("state") != "passed" else "passed",
+                facts={"dlp_state": publication["state"]},
+            )
+            state.enter("result-validation")
         metadata["publication"] = publication
         metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
@@ -1305,6 +1502,18 @@ def _finalize_ocr_result(
         finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
+        if report_consumer is not None:
+            evidence = metadata.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ReviewRunnerError("verified evidence facts are unavailable")
+            try:
+                report = report_from_result(
+                    projected,
+                    execution=ExecutionFacts(usage, evidence, publication, toolkit_advisory),
+                    reviewed_sha=identity.source_sha,
+                )
+            except OcrResultContractError as exc:
+                raise ReviewRunnerError("admitted review report is inconsistent") from exc
         return finalized
 
     try:
@@ -1318,6 +1527,10 @@ def _finalize_ocr_result(
             pass
         raise
     _print_tool_failure_diagnostics(failure_telemetry)
+    if state is not None:
+        state.observe("result-validation", "passed")
+    if report_consumer is not None and report is not None:
+        report_consumer(report)
     return usage, filtered, publication
 
 
@@ -1604,6 +1817,7 @@ def _run_background_qualified_review(
     artifacts: EvidenceArtifacts,
     refs: ReviewRefs,
     identity: ReviewIdentity,
+    state: ReviewRunState | None = None,
 ) -> tuple[int, BackgroundQualification]:
     """Run the model review only after installed OCR accepts its background."""
 
@@ -1614,6 +1828,8 @@ def _run_background_qualified_review(
             session_home=session_home,
         )
     except BackgroundQualificationRejected as exc:
+        if state is not None:
+            state.observe("preview", "failed")
         try:
             write_pre_execution_status(
                 artifacts.pre_execution_status,
@@ -1648,15 +1864,23 @@ def _run_background_qualified_review(
         )
     for notice in qualification.operator_notices:
         print(f"OCR argument qualification notice: {notice}", file=sys.stderr)
-    return (
-        run_review(
+    if state is not None:
+        state.observe("preview", "degraded" if qualification.advisory is not None else "passed")
+        state.enter("subprocess")
+    try:
+        code = run_review(
             result_path,
             stderr_path,
             production_args,
             ocr_binary=ocr_binary,
-        ),
-        qualification,
-    )
+        )
+    finally:
+        if state is not None and state.debug is not None:
+            state.debug.capture("raw-result.json", result_path)
+            state.debug.capture("raw-stderr.log", stderr_path)
+    if state is not None:
+        state.observe("subprocess", "passed" if code == 0 else "failed", facts={"exit_code": code})
+    return code, qualification
 
 
 def _prepare_review_output_artifacts(result_path: Path, stderr_path: Path) -> None:
@@ -1753,7 +1977,7 @@ def _record_rules_path_setup(
 
 
 def _prepare_policy_context(
-    refs: ReviewRefs, ocr_args: list[str], artifacts: EvidenceArtifacts
+    refs: ReviewRefs, ocr_args: list[str], artifacts: EvidenceArtifacts, *, local: bool = False
 ) -> tuple[ReviewIdentity, list[str]]:
     """Capture policy identity and selected context, then materialize rules."""
 
@@ -1761,11 +1985,16 @@ def _prepare_policy_context(
         context_mode = parse_review_context_mode(os.environ.get("OCR_REVIEW_CONTEXT_MODE"))
     except ReviewContextModeError as exc:
         raise ReviewRunnerError(str(exc)) from exc
+    if local:
+        try:
+            validate_local_context(os.environ)
+        except ValueError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
     reader = GitRepositoryReader(Path.cwd())
     context = None
     author_id = None
     target_protection = "local"
-    if is_merge_request_environment(os.environ):
+    if not local and is_merge_request_environment(os.environ):
         snapshot = acquire_review_snapshot(
             os.environ,
             expected_head=refs.head,
@@ -2237,6 +2466,172 @@ def run_evidence_review(
     ocr_args: list[str],
     *,
     preserve_private_artifacts: bool = False,
+    local: bool = False,
+    report_path: Path | None = None,
+    debug_dir: Path | None = None,
+) -> int:
+    """Run the review and deliver an admitted local report or a closed failure summary."""
+
+    state = ReviewRunState(local=local)
+    report_destination: Path | None = None
+    try:
+        try:
+            enabled = progress_enabled(os.environ.get("OCR_REVIEW_PROGRESS", ""))
+        except ValueError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
+        if enabled:
+            state.progress = ReviewProgress(sys.stderr)
+            state.progress.start()
+        if debug_dir is not None:
+            if not local or preserve_private_artifacts:
+                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
+            try:
+                state.debug = DebugBundle(
+                    debug_dir,
+                    other_outputs=(
+                        result_path,
+                        stderr_path,
+                        report_path or Path(str(result_path) + ".md"),
+                    ),
+                )
+                state.debug.flush()
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise ReviewRunnerError("debug directory could not be prepared safely") from exc
+        if report_path is not None and not local:
+            raise ReviewRunnerError("--report requires --local")
+        if local and preserve_private_artifacts:
+            raise ReviewRunnerError(
+                "--local requires result finalization and cannot preserve legacy private artifacts"
+            )
+        if local:
+            try:
+                validate_local_context(os.environ)
+            except ValueError as exc:
+                raise ReviewRunnerError(str(exc)) from exc
+            ocr_args = _local_review_options(ocr_args)
+            destination = report_path or Path(str(result_path) + ".md")
+            try:
+                prepare_local_report_path(destination, other_outputs=(result_path, stderr_path))
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise ReviewRunnerError(
+                    "local report destination is unavailable or unsafe"
+                ) from exc
+            report_destination = destination
+        code = _run_evidence_review(
+            result_path,
+            stderr_path,
+            ocr_args,
+            preserve_private_artifacts=preserve_private_artifacts,
+            state=state,
+        )
+        if local:
+            if code == 0 and state.report is None:
+                raise ReviewRunnerError("local review did not produce an admitted report")
+            report = (
+                state.report
+                if code == 0
+                else failed_report(state.stage, reviewed_sha=state.reviewed_sha)
+            )
+            assert report is not None
+            state.enter("reporting")
+            try:
+                assert report_destination is not None
+                publish_local_report(report, report_destination)
+                if state.debug is not None:
+                    state.debug.capture("summary.md", report_destination)
+            except (OSError, ValueError) as exc:
+                failure = failed_report("reporting")
+                if state.debug is not None:
+                    state.debug.capture_parts("summary.md", local_report_parts(failure))
+                try:
+                    write_local_report(failure, sys.stdout)
+                except (OSError, ValueError):
+                    pass
+                raise ReviewRunnerError("local report artifact output failed") from exc
+            try:
+                write_local_report(report, sys.stdout)
+            except (OSError, ValueError) as exc:
+                raise ReviewRunnerError("local report output failed") from exc
+            state.observe("reporting", "passed", facts={"report_artifact": True, "console": True})
+        return code
+    except Exception:
+        state.observe(state.stage, "failed")
+        if local and state.stage != "reporting":
+            failure = failed_report(state.stage, reviewed_sha=state.reviewed_sha)
+            artifact_delivered = False
+            console_delivered = False
+            if state.debug is not None:
+                state.debug.capture_parts("summary.md", local_report_parts(failure))
+            if report_destination is not None:
+                try:
+                    publish_local_report(failure, report_destination)
+                    artifact_delivered = True
+                    if state.debug is not None:
+                        state.debug.capture("summary.md", report_destination)
+                except (OSError, ValueError):
+                    try:
+                        print("Local failure report artifact output failed.", file=sys.stderr)
+                    except (OSError, ValueError):
+                        pass
+            try:
+                write_local_report(failure, sys.stdout)
+                console_delivered = True
+            except (OSError, ValueError):
+                try:
+                    print("Local failure summary output failed.", file=sys.stderr)
+                except (OSError, ValueError):
+                    pass
+            state.observe(
+                "reporting",
+                "passed"
+                if console_delivered and (report_destination is None or artifact_delivered)
+                else "failed",
+                facts={"report_artifact": artifact_delivered, "console": console_delivered},
+            )
+        raise
+    finally:
+        if state.progress is not None:
+            state.progress.close()
+        if state.debug is not None:
+            try:
+                if state.report is not None:
+                    state.debug.capture("safe-result.json", result_path)
+                state.debug.flush(complete=True)
+            except (OSError, ValueError):
+                try:
+                    print("Local debug journal output failed.", file=sys.stderr)
+                except (OSError, ValueError):
+                    pass
+            finally:
+                state.debug.close()
+
+
+def _local_review_options(args: list[str]) -> list[str]:
+    """Require JSON/agent output and refuse competing local execution inputs."""
+
+    for option in ("--repo", "--resume", "--background", "--background-file"):
+        if _option_values(args, option):
+            raise ReviewRunnerError(f"{option} is not supported by standalone local review")
+    if any(arg.startswith(("-b", "-B")) and not arg.startswith("--") for arg in args):
+        raise ReviewRunnerError("local review background is managed by the toolkit")
+    formats = _option_values(args, "--format", "-f")
+    formats.extend(
+        arg[2:].removeprefix("=") for arg in args if arg.startswith("-f") and len(arg) > 2
+    )
+    if any(value != "json" for value in formats):
+        raise ReviewRunnerError("local review requires --format json")
+    if any(value != "agent" for value in _option_values(args, "--audience")):
+        raise ReviewRunnerError("local review requires --audience agent")
+    return [*args, "--format", "json", "--audience", "agent"]
+
+
+def _run_evidence_review(
+    result_path: Path,
+    stderr_path: Path,
+    ocr_args: list[str],
+    *,
+    preserve_private_artifacts: bool,
+    state: ReviewRunState,
 ) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
@@ -2249,7 +2644,12 @@ def run_evidence_review(
         remove_private_artifact(artifacts.dlp_decisions)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
-    refs = _immutable_review_refs(_review_refs(ocr_args))
+    state.enter("identity")
+    try:
+        refs = _immutable_review_refs(_review_refs(ocr_args))
+    except RepositoryEvidenceError as exc:
+        raise ReviewRunnerError("immutable review refs could not be resolved") from exc
+    state.reviewed_sha = refs.head
     _reject_owned_review_options(ocr_args)
     _prepare_review_output_artifacts(result_path, stderr_path)
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
@@ -2269,11 +2669,27 @@ def run_evidence_review(
     previous_handlers = _install_termination_handlers()
     try:
         try:
-            _write_isolated_runtime_config()
-            identity, effective_ocr_args = _prepare_policy_context(refs, ocr_args, artifacts)
+            state.enter("configuration")
+            _write_isolated_runtime_config(
+                **({"debug": state.debug} if state.debug is not None else {})
+            )
+            state.enter("identity")
+            identity, effective_ocr_args = _prepare_policy_context(
+                refs, ocr_args, artifacts, **({"local": True} if state.local else {})
+            )
             preserve_authorized = _authorize_private_artifact_preservation(
                 identity, requested=preserve_private_artifacts
             )
+            state.observe(
+                "identity",
+                "passed",
+                facts={
+                    "base_sha": refs.base,
+                    "head_sha": refs.head,
+                    "policy_sha": identity.policy_sha,
+                },
+            )
+            state.enter("evidence")
             store = collect_repository_evidence(
                 base_ref=refs.base,
                 head_ref=refs.head,
@@ -2281,7 +2697,7 @@ def run_evidence_review(
                 include_policy_records=identity.target_protection != "unprotected",
             )
             head_sha = store.head.commit_sha if store.head else ""
-            identifiers = invocation_identifiers(os.environ)
+            identifiers = () if state.local else invocation_identifiers(os.environ)
             for record in collect_invocation_evidence(identifiers, head_sha=head_sha):
                 if not store.add(record):
                     store.add_diagnostic("review invocation evidence was truncated by store limits")
@@ -2294,6 +2710,18 @@ def run_evidence_review(
             context_config, enrichment = _prepare_enrichment(
                 identity, artifacts, GitRepositoryReader(Path.cwd())
             )
+            if state.debug is not None:
+                diagnostic_count = len(store.diagnostics) + sum(
+                    len(snapshot.diagnostics)
+                    for snapshot in (store.base, store.head, store.policy)
+                    if snapshot is not None
+                )
+                state.observe(
+                    "evidence",
+                    "degraded" if diagnostic_count else "passed",
+                    facts={"diagnostic_count": diagnostic_count},
+                )
+            state.enter("mcp-preflight")
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
@@ -2329,6 +2757,14 @@ def run_evidence_review(
         records = summary.get("records")
         if not isinstance(records, int) or isinstance(records, bool) or records < 0:
             raise ReviewRunnerError("OCR evidence preflight returned an invalid MCP summary")
+        state.observe(
+            "mcp-preflight",
+            "passed",
+            facts={
+                "record_count": records,
+                "server_count": len(composition.capabilities),
+            },
+        )
         print(
             "OCR evidence preflight: ready "
             f"base={summary.get('base')} head={summary.get('head')} records={records} "
@@ -2349,6 +2785,7 @@ def run_evidence_review(
             "--background-file",
             str(artifacts.bootstrap),
         ]
+        state.enter("preview")
         ocr_binary = _resolve_ocr_binary()
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
@@ -2359,10 +2796,13 @@ def run_evidence_review(
             artifacts=artifacts,
             refs=refs,
             identity=identity,
+            **({"state": state} if state.local or state.progress is not None else {}),
         )
     finally:
         previous_mask = _block_termination_signals()
         try:
+            if state.progress is not None:
+                state.progress.phase("cleanup")
             if exit_code == 0 and not preserve_authorized:
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
             if not preserve_authorized:
@@ -2374,11 +2814,13 @@ def run_evidence_review(
                     shutil.rmtree(session_home)
                 except OSError as exc:
                     cleanup_error = cleanup_error or exc
+                state.observe("cleanup", "failed" if cleanup_error is not None else "passed")
             if previous_home is None:
                 os.environ.pop("HOME", None)
             else:
                 os.environ["HOME"] = previous_home
             if cleanup_error is None and exit_code == 0 and not preserve_authorized:
+                state.enter("result-validation")
                 forbidden = (*composition.secret_values,)
                 if enrichment is not None:
                     forbidden += enrichment.forbidden_publication
@@ -2391,6 +2833,8 @@ def run_evidence_review(
                         evidence_action_counts,
                         forbidden=forbidden,
                         toolkit_advisory=background_qualification.advisory,
+                        **({"report_consumer": state.admit_report} if state.local else {}),
+                        **({"state": state} if state.local or state.progress is not None else {}),
                     )
                 except ReviewRunnerError:
                     try:
@@ -2411,6 +2855,7 @@ def run_evidence_review(
             _restore_termination_handlers(previous_handlers)
             _restore_signal_mask(previous_mask)
     if cleanup_error is not None:
+        state.enter("cleanup")
         try:
             result_path.unlink(missing_ok=True)
         except OSError:

@@ -197,6 +197,36 @@ Every top-level test module is classified below. A module can contain more than 
 | Serialized comment repair and failure arguments | Checksum-verified OCR 1.11.4 and 1.11.5 use a local deterministic gateway; native, serialized and repaired batches preserve fields and anchors, suspect batches fail with original arguments in private failure data | Binary behavior and field preservation, not model judgment |
 | Forward-only suite and historical evidence | Complete real no-LLM runs before/after refactoring yield identical JSON contracts; frozen promotion-baseline and historical-independence tests reject missing proof before writes | Historical readback does not imply supported execution of old binaries |
 
+## Shared reporting and local output
+
+| Boundary | Owner and entry point | Evidence | Claim limit |
+| --- | --- | --- | --- |
+| Provider-neutral reporting | `reporting.model.report_from_result` and shared pure formatters | `tests/reporting/` exercises outcome, invalid admission, coverage recovery, mandatory action counts, snapshot isolation and forbidden forge dependencies; existing posting and approval tests preserve GitLab behavior | synthetic execution facts stand in for the runner's verified output; these tests do not prove OCR or MCP execution |
+| Local Markdown delivery | `providers.local.write_local_report` into a real text stream | all admitted findings and code fields, posting-environment independence, fence/control escaping and truthful failure output | proves the output adapter, not standalone CLI acquisition, subprocess execution or debug retention |
+| Private report persistence | `providers.local.publish_local_report`; local CLI failure delivery | `tests/providers/test_local_artifact.py` crosses real descriptor-relative exclusive atomic file publication, permissions, hostile targets, output collisions, partial-render failure, destination races and same-user ancestor replacement | proves filesystem delivery, not OCR/model execution |
+| Installed standalone execution | installed `ocr-ci review --local` through the common runner and finalizer | `tests/test_installed_policy_e2e.py` invokes `tests/providers/installed_local_review.py` for direct wheel and sdist-derived wheel; real immutable Git, subprocess, built-in stdio MCP, optional external MCP, polluted CI identity, admitted JSON/Markdown parity and forged mandatory-usage rejection | synthetic OCR process is beyond the real toolkit launcher; proves installed toolkit boundaries, not actual OCR protocol compatibility or model judgment; actual OCR evidence is recorded separately below |
+| Reasoning configuration and wire shape | shared provider configuration -> actual native OCR -> capture-only HTTP peer | configuration/preflight conflict and protocol tests; checksum-verified OCR 1.11.6 current qualification checks unset, none and high for OpenAI and Responses with preserved siblings, on Linux amd64 and Darwin arm64 | deliberate HTTP rejection prevents model execution; provider acceptance and application remain untested |
+| Content-independent progress | `review_progress` owner -> real stderr descriptor and bounded heartbeat lifecycle | on/off installed wheel/sdist parity across normal/debug outcomes, parent and child SIGTERM; closed/full sink, nonblocking and terminal writers, late tick and timer failures | toolkit lifecycle and output isolation, not upstream Action streaming or model progress; conventional blocking CI stderr deliberately disables the optional observer |
+
+The local debug boundary is exercised by `tests/test_review_debug.py` through
+real private files, descriptor-pinned directories, atomic journal publication,
+capture bounds and hostile targets. DLP observer tests compare both the complete
+projection and the number of production checks, proving no diagnostic rescan.
+The installed wheel/sdist scenario compares normal/debug exit codes, JSON and
+Markdown for clean, finding, warning, partial, budget, DLP-filtered, forged-use
+and subprocess-failure results, including an actual SIGTERM to the synthetic
+OCR child. The external OCR collaborator is synthetic in
+that matrix; actual OCR qualification and model judgment remain separate gates.
+Injected late write failures prove error handling, not operating-system fault
+frequency or durability after host failure.
+
+The v0.10.0 hosted matrix initially passed 1694 tests per platform and identified
+two stale environment-inventory expectations for the new controls; their exact
+default entries are synchronized without removing the inventory assertions.
+Current real-OCR evidence is committed in `compatibility/evidence/ocr-1.11.6.json`
+from hosted run `34218232310`; it preserves the older evidence snapshots and
+qualifies all current consumed probes, including expanded language selection.
+
 ## Unsafe or nondeterministic external boundaries
 
 The suite intentionally does not perform live GitLab comment, discussion, cleanup, or approval writes; live GitHub issue/release mutations; or PyPI publication. Their tests prove closed payloads, ordering, fail-closed decisions, transport serialization, and receipt parsing. Release completion requires independent live readback as defined in `docs/release.md`.
