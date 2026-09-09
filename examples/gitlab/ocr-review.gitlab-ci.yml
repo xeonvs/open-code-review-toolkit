@@ -28,6 +28,8 @@ variables:
   OCR_MAX_TOOLS: "0"
   # Optional aggregate review ceiling; 0 keeps OCR's unlimited default.
   OCR_MAX_TOKENS_BUDGET: "0"
+  # Opt in to bounded toolkit phase/heartbeat messages in the CI job log.
+  # OCR_REVIEW_PROGRESS: "true"
   # Reviews default to English. To request another language, for example Russian, set:
   # OCR_REVIEW_LANGUAGE: "Russian"
 

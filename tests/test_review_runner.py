@@ -4190,6 +4190,7 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
     ("preserve_private_artifacts", "ocr_exit_code", "target_protection"),
     [
         (False, 0, "local"),
+        (False, 0, "protected"),
         (False, 1, "local"),
         (True, 0, "local"),
         (False, 0, "unprotected"),
@@ -4297,7 +4298,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         policy_sha="a" * 40,
         target_sha="a" * 40,
         target_protection=target_protection,
-        mr_author_id=41 if target_protection == "unprotected" else None,
+        mr_author_id=41 if target_protection != "local" else None,
     )
 
     with (
@@ -4373,6 +4374,23 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     output = capsys.readouterr()
     assert ("OCR progress: phase=subprocess" in output.err) is progress_on
     assert "OCR progress:" not in output.out
+    assert "OCR progress:" not in (tmp_path / "stderr.log").read_text(encoding="utf-8")
+    if progress_on:
+        for phase in (
+            "configuration",
+            "identity",
+            "evidence",
+            "mcp-preflight",
+            "preview",
+            "subprocess",
+            "cleanup",
+        ):
+            assert f"OCR progress: phase={phase}" in output.err
+        if ocr_exit_code == 0 and not preserve_private_artifacts:
+            assert "OCR progress: phase=result-validation" in output.err
+        else:
+            assert "OCR progress: phase=result-validation" not in output.err
+        assert "OCR progress: phase=reporting" not in output.err
     assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1
@@ -4389,7 +4407,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     )
     assert composition_inputs == [
         {
-            "profile": "gitlab_mr" if target_protection == "unprotected" else "local",
+            "profile": "gitlab_mr" if target_protection != "local" else "local",
             "context": None,
             "allow_external": target_protection != "unprotected",
         }
