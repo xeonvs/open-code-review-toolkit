@@ -12,6 +12,7 @@ build/
 dist/
 .review-context/
 .quality-logs/
+.tgrep-index/
 .idea/
 *.log
 .codex
