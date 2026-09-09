@@ -114,6 +114,32 @@ def test_directory_swap_never_writes_to_replacement(tmp_path: Path) -> None:
         bundle.close()
 
 
+def test_parent_replacement_keeps_debug_writes_in_pinned_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "private"
+    parent.mkdir()
+    destination = parent / "debug"
+    replacement = tmp_path / "replacement"
+    replacement.mkdir()
+    original = review_debug.open_private_parent_directory
+
+    def replace_after_open(path: Path) -> tuple[int, str]:
+        descriptor, name = original(path)
+        parent.rename(tmp_path / "moved")
+        parent.symlink_to(replacement, target_is_directory=True)
+        return descriptor, name
+
+    monkeypatch.setattr(review_debug, "open_private_parent_directory", replace_after_open)
+    bundle = DebugBundle(destination, other_outputs=())
+    try:
+        bundle.flush()
+        assert (tmp_path / "moved" / "debug" / "journal.json").is_file()
+        assert list(replacement.iterdir()) == []
+    finally:
+        bundle.close()
+
+
 def test_value_free_decisions_and_event_bounds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -254,7 +280,7 @@ def test_summary_capture_stops_at_byte_bound(
     bundle = DebugBundle(tmp_path / "debug", other_outputs=())
 
     def parts():
-        yield "界界"
+        yield "界界!"
         pytest.fail("rendering continued beyond capture bound")
 
     try:
@@ -262,6 +288,20 @@ def test_summary_capture_stops_at_byte_bound(
         assert (bundle.directory / "summary.md").read_bytes() == "界界".encode()[:4]
         assert bundle.artifacts["summary.md"]["truncated"] is True
         assert bundle.artifacts["summary.md"]["source_bytes_observed"] is None
+    finally:
+        bundle.close()
+
+
+def test_summary_capture_marks_exact_multi_part_boundary_as_truncated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(review_debug.ARTIFACT_LIMITS, "summary.md", 4)
+    bundle = DebugBundle(tmp_path / "debug", other_outputs=())
+    try:
+        bundle.capture_parts("summary.md", ["four", "more"])
+        assert (bundle.directory / "summary.md").read_bytes() == b"four"
+        assert bundle.artifacts["summary.md"]["truncated"] is True
+        assert bundle.artifacts["summary.md"]["status"] == "degraded"
     finally:
         bundle.close()
 

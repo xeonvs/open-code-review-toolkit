@@ -74,7 +74,9 @@ failure behavior and optional private `--debug-dir` bundles.
 Optional [reasoning and progress controls](docs/configuration.md#provider-endpoint-and-completion-cap-contract)
 do not change review rounds or budgets. Reasoning is unset by default; explicit
 `none` is a wire value whose support depends on the provider/model. Progress is
-off by default and emits only bounded toolkit phases on stderr.
+off by default and emits only bounded toolkit phases to an interactive terminal
+or an explicitly nonblocking embedding stream; a conventional CI stderr pipe is
+intentionally not used because it can block a review.
 
 ## How GitLab reviews evolve
 

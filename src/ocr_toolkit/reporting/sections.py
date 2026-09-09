@@ -73,7 +73,7 @@ def report_sections(
         )
         if safe:
             safe_warnings.append(safe)
-    if safe_warnings and not diagnostics.records:
+    if safe_warnings:
         lines.extend(["", "### Review warnings", ""])
         lines.extend(f"- {warning}" for warning in safe_warnings)
         if len(warnings) > len(safe_warnings):

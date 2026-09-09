@@ -78,7 +78,7 @@ def test_real_broken_pipe_disables_progress_and_releases_thread() -> None:
         progress.phase("subprocess")
         progress.close()
         assert progress._stop.is_set()
-        assert thread is not None and not thread.is_alive()
+        assert thread is None or not thread.is_alive()
 
 
 def test_thread_start_failure_does_not_escape(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,6 +92,87 @@ def test_thread_start_failure_does_not_escape(monkeypatch: pytest.MonkeyPatch) -
     assert progress._thread is None
 
 
+def test_nonblocking_descriptor_writes_without_mutating_the_caller_stream() -> None:
+    reader, writer = os.pipe()
+    try:
+        os.set_blocking(writer, False)
+        with io.TextIOWrapper(io.FileIO(writer, "w", closefd=False), write_through=True) as sink:
+            progress = ReviewProgress(sink)
+            progress.start()
+            progress.phase("subprocess")
+        assert os.get_blocking(writer) is False
+        os.set_blocking(reader, False)
+        output = os.read(reader, 4096).decode("ascii")
+        assert "OCR progress: phase=configuration" in output
+        assert "OCR progress: phase=subprocess" in output
+        progress.close()
+    finally:
+        os.close(writer)
+        os.close(reader)
+
+
+def test_terminal_gets_an_independent_nonblocking_progress_writer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_reader, original, terminal_reader, terminal = *os.pipe(), *os.pipe()
+    opened_terminal = -1
+    try:
+        calls: list[tuple[object, ...]] = []
+        os.set_blocking(terminal, False)
+        with io.TextIOWrapper(io.FileIO(original, "w", closefd=False), write_through=True) as sink:
+            progress = ReviewProgress(sink)
+            monkeypatch.setattr(
+                review_progress.os, "isatty", lambda descriptor: descriptor == original
+            )
+            monkeypatch.setattr(review_progress.os, "ttyname", lambda _descriptor: "/synthetic/tty")
+
+            def open_terminal(path: str, flags: int) -> int:
+                nonlocal opened_terminal
+                calls.append((path, flags))
+                assert path == "/synthetic/tty"
+                assert flags & os.O_NONBLOCK
+                opened_terminal = os.dup(terminal)
+                return opened_terminal
+
+            monkeypatch.setattr(review_progress.os, "open", open_terminal)
+            progress.start()
+            progress.phase("subprocess")
+            assert os.get_blocking(original) is True
+            os.set_blocking(terminal_reader, False)
+            output = os.read(terminal_reader, 4096).decode("ascii")
+            assert "OCR progress: phase=configuration" in output
+            assert "OCR progress: phase=subprocess" in output
+            progress.close()
+            with pytest.raises(OSError):
+                os.fstat(opened_terminal)
+        assert calls
+    finally:
+        os.close(terminal_reader)
+        os.close(terminal)
+        os.close(original_reader)
+        os.close(original)
+
+
+def test_blocking_pipe_disables_progress_without_mutating_stream() -> None:
+    reader, writer = os.pipe()
+    try:
+        with io.TextIOWrapper(io.FileIO(writer, "w", closefd=False), write_through=True) as sink:
+            progress = ReviewProgress(sink)
+            progress.start()
+            progress.phase("subprocess")
+            assert progress._thread is None
+            progress.close()
+        assert progress._stop.is_set()
+        assert progress._thread is None
+        assert os.get_blocking(writer) is True
+        os.set_blocking(reader, False)
+        with pytest.raises(BlockingIOError):
+            os.read(reader, 1)
+    finally:
+        os.close(writer)
+        os.close(reader)
+
+
 def test_full_pipe_disables_progress_without_blocking() -> None:
     reader, writer = os.pipe()
     try:
@@ -101,14 +182,13 @@ def test_full_pipe_disables_progress_without_blocking() -> None:
                 os.write(writer, b"x" * 4096)
         except BlockingIOError:
             pass
-        os.set_blocking(writer, True)
         with io.TextIOWrapper(io.FileIO(writer, "w", closefd=False), write_through=True) as sink:
             progress = ReviewProgress(sink)
             progress.start()
             progress.close()
             assert progress._stop.is_set()
             assert progress._thread is None
-            assert os.get_blocking(writer) is True
+            assert os.get_blocking(writer) is False
     finally:
         os.close(writer)
         os.close(reader)

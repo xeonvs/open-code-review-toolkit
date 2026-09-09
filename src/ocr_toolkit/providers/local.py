@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import os
-import tempfile
+import secrets
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TextIO
 
+from ocr_toolkit.common.filesystem import (
+    fsync_directory,
+    open_private_parent_directory,
+    same_file_identity,
+)
 from ocr_toolkit.common.markdown import inline_code, markdown_code_block
 from ocr_toolkit.reporting.dlp import admission_dlp_state, format_dlp_admission
 from ocr_toolkit.reporting.metadata import finding_metadata, format_ocr_core_advisory
@@ -109,25 +114,51 @@ def prepare_local_report_path(path: Path, *, other_outputs: tuple[Path, ...]) ->
         raise ValueError("local report path must differ from result and stderr")
     if path.is_symlink() or path.exists():
         raise ValueError("local report path must be fresh")
-    if any(parent.is_symlink() for parent in path.absolute().parents):
-        raise ValueError("local report parent must not be a symlink")
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 def publish_local_report(report: ReviewReport, path: Path) -> None:
     """Publish complete private Markdown atomically without replacing another file."""
 
     prepare_local_report_path(path, other_outputs=())
-    descriptor, temporary = tempfile.mkstemp(prefix=".ocr-report-", dir=path.parent)
+    parent_descriptor, destination = open_private_parent_directory(path)
+    temporary = ".ocr-report-" + secrets.token_hex(12)
+    descriptor = -1
+    temporary_identity: os.stat_result | None = None
     try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=parent_descriptor,
+        )
         os.fchmod(descriptor, 0o600)
+        temporary_identity = os.fstat(descriptor)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             descriptor = -1
             write_local_report(report, stream)
             os.fsync(stream.fileno())
         # Unlike replace(), link() rejects a destination created since preflight.
-        os.link(temporary, path)
+        current = os.stat(temporary, dir_fd=parent_descriptor, follow_symlinks=False)
+        if not same_file_identity(temporary_identity, current) or current.st_nlink != 1:
+            raise OSError("private report temporary artifact changed")
+        os.link(
+            temporary,
+            destination,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        os.unlink(temporary, dir_fd=parent_descriptor)
+        temporary_identity = None
+        fsync_directory(parent_descriptor)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        os.unlink(temporary)
+        if temporary_identity is not None:
+            try:
+                current = os.stat(temporary, dir_fd=parent_descriptor, follow_symlinks=False)
+                if same_file_identity(temporary_identity, current):
+                    os.unlink(temporary, dir_fd=parent_descriptor)
+            except FileNotFoundError:
+                pass
+        os.close(parent_descriptor)

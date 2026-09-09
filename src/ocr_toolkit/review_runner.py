@@ -2554,7 +2554,7 @@ def run_evidence_review(
                 raise ReviewRunnerError("local report output failed") from exc
             state.observe("reporting", "passed", facts={"report_artifact": True, "console": True})
         return code
-    except BaseException:
+    except Exception:
         state.observe(state.stage, "failed")
         if local and state.stage != "reporting":
             failure = failed_report(state.stage, reviewed_sha=state.reviewed_sha)

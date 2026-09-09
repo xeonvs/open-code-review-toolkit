@@ -46,6 +46,10 @@ JSON/stderr; existing files and symlinks are never overwritten. Publication is
 atomic with owner-only (`0600`) permissions. This is the same OCR/LLM/tool-use,
 validation and DLP pipeline as CI, with local filesystem delivery instead of
 forge API publication. It does not replace OCR with another local review engine.
+The private report parent is opened descriptor-relative without following any
+pathname symlink, then the temporary and final entries are created through that
+pinned directory. A same-user replacement of a parent path cannot redirect
+report delivery.
 
 Successful execution still requires result validation, DLP and cleanup. The
 admitted JSON has no fabricated forge receipt. Filtered findings stay absent from
@@ -70,6 +74,9 @@ The directory must be fresh, must not traverse symlinks, and must not contain
 the normal result, stderr or report destinations. It is created with mode `0700`;
 its files use `0600`. This option requires `--local` and rejects legacy private
 artifact retention. It does not bypass validation, DLP or ordinary session cleanup.
+Its parent directory is pinned before the bundle is created, and every later
+write is descriptor-relative; replacing a visible ancestor path cannot redirect
+diagnostics to a different directory.
 
 | Artifact | Contents | Maximum retained bytes |
 | --- | --- | --- |

@@ -75,7 +75,7 @@ local review verified evidence without a GitLab receipt, while preflight assumed
 | WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
 | WQ-06 | done | OCR promotion, verified hosted assets and current no-LLM qualification; installed Darwin binary updated without a post-waiver launch |
 | WQ-07 | done | Docs/backlog, full self-review, security review with recorded artifact limitation, green implementation checks and external handoff checklist |
-| WQ-08 | active | Final holistic review, one retained local OCR review, remediation if required, protected release lifecycle and minimal external artifact readback |
+| WQ-08 | active | Final holistic review and retained local OCR review complete; deterministic remediation, protected release lifecycle and minimal external artifact readback remain |
 
 #### Locked Interfaces And Boundaries
 
@@ -364,6 +364,37 @@ The owned probe/download/tree-check directories and local validation logs were
 moved to Trash for recovery, including the previous installed OCR binary backup.
 The security report bundle and PR handoff text are retained as private delivery
 artifacts under ignored `.quality-logs/ocr0100-handoff/`.
+
+#### Final local OCR and remediation
+
+The owner-authorized final local OCR review completed once against the complete
+Draft range with the checksum-verified OCR 1.11.6 binary, the configured Waibee
+provider, and `openai/gpt-5.6-terra`. It completed all selected items and
+preserved its private result, stderr, report, and debug journal for diagnosis.
+The initial debug-directory attempt was rejected before OCR execution because
+the supplied macOS temporary path traversed a symlink; it is retained as a
+pre-execution diagnostic, not counted as a second review.
+
+Review of the retained output identified seven concrete maintenance defects.
+The remediation preserves the one-review boundary: no second OCR launch is
+authorized or needed. It pins private report and debug parents with
+descriptor-relative filesystem operations; detects exact-boundary summary
+truncation; keeps independent safe warnings visible with incomplete coverage;
+lets interruption and termination propagate without local report delivery; and
+makes optional progress fail closed on a full, closed, or conventional blocking
+stderr pipe without changing the caller-owned stream. Interactive terminal and
+explicitly nonblocking embedding streams retain bounded progress. The GitLab
+example and contracts state that the ordinary job-log pipe intentionally does
+not carry optional progress, while normal reports and CI logging are unchanged.
+
+Focused runtime, reporting, installed-artifact, filesystem-race, terminal,
+nonblocking-pipe, blocking-pipe, full-pipe, and documentation tests pass
+locally. The complete quality matrix passed with 1711 tests, 408 subtests and
+86.72% total coverage; Gitleaks, Ruff, mypy, Bandit, `git diff --check`, and a
+Towncrier 0.10.0 draft also pass. Before push, perform a fresh narrow security
+diff review for only the signed remediation commit. Do not publish raw OCR
+diagnostics, provider values, or private artifact locations. After that review,
+push the remediation commit to Draft #184 and wait for exact-head hosted checks.
 
 #### Draft Readiness Receipt
 

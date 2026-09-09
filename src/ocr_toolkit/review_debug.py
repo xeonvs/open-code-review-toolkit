@@ -12,7 +12,11 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal, get_args
 
-from ocr_toolkit.common.filesystem import fsync_directory
+from ocr_toolkit.common.filesystem import (
+    fsync_directory,
+    open_private_parent_directory,
+    same_file_identity,
+)
 from ocr_toolkit.reporting.model import FailureStage
 
 DEBUG_SCHEMA = "ocr.toolkit-debug/v1"
@@ -98,21 +102,30 @@ class DebugBundle:
 
     def __init__(self, directory: Path, *, other_outputs: tuple[Path, ...]) -> None:
         absolute = directory.absolute()
-        if any(parent.is_symlink() for parent in (absolute, *absolute.parents)):
-            raise ValueError("debug directory must not traverse symlinks")
         resolved = absolute.resolve()
         if any(output.resolve().is_relative_to(resolved) for output in other_outputs):
             raise ValueError("review outputs must be outside the debug directory")
-        absolute.mkdir(mode=0o700, parents=True, exist_ok=False)
+        parent_descriptor, leaf = open_private_parent_directory(absolute)
         self.directory = absolute
-        self._descriptor = os.open(absolute, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        self._parent_descriptor = parent_descriptor
+        self._leaf = leaf
+        self._descriptor = -1
         try:
+            os.mkdir(leaf, mode=0o700, dir_fd=parent_descriptor)
+            self._descriptor = os.open(
+                leaf,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=parent_descriptor,
+            )
             os.fchmod(self._descriptor, 0o700)
             self._identity = os.fstat(self._descriptor)
             self._validate_directory()
         except BaseException:
-            os.close(self._descriptor)
+            if self._descriptor >= 0:
+                os.close(self._descriptor)
             self._descriptor = -1
+            os.close(self._parent_descriptor)
+            self._parent_descriptor = -1
             raise
         self.phases: dict[FailureStage, dict[str, object]] = {
             stage: {"status": "not-run"} for stage in get_args(FailureStage)
@@ -127,10 +140,13 @@ class DebugBundle:
         self.omitted_decisions = 0
 
     def _validate_directory(self) -> None:
-        current = self.directory.stat(follow_symlinks=False)
+        if self._descriptor < 0 or self._parent_descriptor < 0:
+            raise OSError("debug directory is closed")
+        current = os.fstat(self._descriptor)
+        named = os.stat(self._leaf, dir_fd=self._parent_descriptor, follow_symlinks=False)
         if (
-            self._descriptor < 0
-            or not os.path.samestat(self._identity, current)
+            not same_file_identity(self._identity, current)
+            or not same_file_identity(self._identity, named)
             or not stat.S_ISDIR(current.st_mode)
             or current.st_uid != os.getuid()
             or stat.S_IMODE(current.st_mode) != 0o700
@@ -306,11 +322,20 @@ class DebugBundle:
 
         limit = ARTIFACT_LIMITS[name]
         data = bytearray()
+        truncated = False
         for part in parts:
-            data.extend(part.encode("utf-8")[: limit + 1 - len(data)])
-            if len(data) > limit:
+            encoded = part.encode("utf-8")
+            remaining = limit - len(data)
+            if remaining == 0:
+                if encoded:
+                    truncated = True
+                    break
+                continue
+            if len(encoded) > remaining:
+                data.extend(encoded[:remaining])
+                truncated = True
                 break
-        truncated = len(data) > limit
+            data.extend(encoded)
         prefix = bytes(data[:limit])
         try:
             self._write(name, prefix)
@@ -333,3 +358,6 @@ class DebugBundle:
         if self._descriptor >= 0:
             os.close(self._descriptor)
             self._descriptor = -1
+        if self._parent_descriptor >= 0:
+            os.close(self._parent_descriptor)
+            self._parent_descriptor = -1

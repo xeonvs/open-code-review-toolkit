@@ -125,6 +125,37 @@ def test_failed_check_does_not_claim_clean_review() -> None:
     assert "no findings" not in summary
 
 
+def test_independent_warnings_remain_visible_with_incomplete_coverage() -> None:
+    result = {
+        "status": "partial",
+        "comments": [],
+        "warnings": [{"message": "Synthetic safe warning"}],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": "partial",
+            "coverage": {
+                "selected": [{"item_id": "src/a.py"}, {"item_id": "src/b.py"}],
+                "completed": [{"item_id": "src/b.py"}],
+                "reused": [],
+                "failed": [
+                    {
+                        "item_id": "src/a.py",
+                        "path": "src/a.py",
+                        "classification": "provider",
+                        "reason": "review failed",
+                    }
+                ],
+                "waived": [],
+            },
+        },
+    }
+    output = local_summary(report_from_result(result, execution=execution_facts()))
+    assert "### Incomplete coverage" in output
+    assert "### Review warnings" in output
+    assert "Synthetic safe warning" in output
+
+
 def test_missing_execution_verification_is_not_a_clean_report() -> None:
     facts = execution_facts()
     facts.evidence["actions"]["completed"]["summary"] = 0

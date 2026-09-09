@@ -282,9 +282,9 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
     )
     root_instructions = (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-    assert flow.count("```mermaid") == 3
+    assert flow.count("```mermaid") == 4
     for color in ("#d1fae5", "#ffedd5", "#fee2e2", "#f3f4f6", "#dbeafe"):
-        assert flow.count(color) == 3
+        assert flow.count(color) == 4
     for phrase in (
         "core integrity boundary deliberately precedes additive diagnostics",
         "cannot replace an otherwise valid manifest, findings, summary, or posting transaction",
@@ -293,6 +293,9 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         "not an automatic-approval feature",
         "publication owns review-signal delivery",
         "receipt v8",
+        "OCR_REVIEW_PROGRESS",
+        "Blocking pipe or unavailable",
+        "Review continues unchanged",
     ):
         assert phrase in flow
     assert "review-decision-flow.md" in strategy

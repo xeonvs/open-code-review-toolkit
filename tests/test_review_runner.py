@@ -4372,25 +4372,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         )
 
     output = capsys.readouterr()
-    assert ("OCR progress: phase=subprocess" in output.err) is progress_on
+    # pytest exposes a conventional blocking descriptor-backed stderr here.
+    # Optional progress must never alter it or risk blocking review execution.
+    assert "OCR progress:" not in output.err
     assert "OCR progress:" not in output.out
     assert "OCR progress:" not in (tmp_path / "stderr.log").read_text(encoding="utf-8")
-    if progress_on:
-        for phase in (
-            "configuration",
-            "identity",
-            "evidence",
-            "mcp-preflight",
-            "preview",
-            "subprocess",
-            "cleanup",
-        ):
-            assert f"OCR progress: phase={phase}" in output.err
-        if ocr_exit_code == 0 and not preserve_private_artifacts:
-            assert "OCR progress: phase=result-validation" in output.err
-        else:
-            assert "OCR progress: phase=result-validation" not in output.err
-        assert "OCR progress: phase=reporting" not in output.err
     assert result == ocr_exit_code
     assert not artifacts.pre_execution_status.exists()
     assert len(session_homes) == 1

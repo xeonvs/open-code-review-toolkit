@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import os
-import select
 import threading
 from typing import TextIO, get_args
 
@@ -36,11 +35,15 @@ class ReviewProgress:
         self._stage: FailureStage = "configuration"
         self._messages = 0
         self._thread: threading.Thread | None = None
+        self._terminal_descriptor: int | None = None
 
     def start(self) -> None:
         """Start optional observation; resource failures cannot reject a review."""
 
         if self._thread is not None or self._stop.is_set():
+            return
+        self.phase("configuration")
+        if self._stop.is_set():
             return
         thread = threading.Thread(target=self._heartbeat, name="ocr-review-progress", daemon=True)
         try:
@@ -49,33 +52,52 @@ class ReviewProgress:
             self._stop.set()
             return
         self._thread = thread
-        self.phase("configuration")
+
+    def _write_descriptor(self, descriptor: int, encoded: bytes) -> bool:
+        """Write one optional record only through a nonblocking descriptor.
+
+        ``dup()`` and common ``/dev/fd`` reopens may share the caller's
+        open-file status flags.  For a terminal, opening its device path gives
+        this observer its own nonblocking writer.  A conventional blocking
+        stderr pipe is unavailable rather than a risk of stalling the review.
+        """
+
+        if not os.get_blocking(descriptor):
+            return os.write(descriptor, encoded) == len(encoded)
+        if not os.isatty(descriptor):
+            return False
+        if self._terminal_descriptor is None:
+            self._terminal_descriptor = os.open(
+                os.ttyname(descriptor), os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK
+            )
+        return os.write(self._terminal_descriptor, encoded) == len(encoded)
 
     def _emit(self, *, waiting: bool) -> None:
+        """Write one optional update only through a nonblocking transport."""
+
         with self._lock:
             if self._stop.is_set() or self._messages >= MAX_PROGRESS_MESSAGES:
                 return
-            self._messages += 1
             prefix = "waiting " if waiting else ""
+            message = f"OCR progress: {prefix}phase={self._stage}\n"
             try:
-                message = f"OCR progress: {prefix}phase={self._stage}\n"
                 try:
                     descriptor = self._stream.fileno()
                 except (AttributeError, io.UnsupportedOperation):
                     descriptor = None
                 if descriptor is None:
+                    if not isinstance(self._stream, io.StringIO):
+                        self._stop.set()
+                        return
                     self._stream.write(message)
                     self._stream.flush()
-                elif select.select([], [descriptor], [], 0)[1]:
-                    # One short ASCII record, below PIPE_BUF, with no read or
-                    # mutation of the shared stderr descriptor's status flags.
-                    encoded = message.encode("ascii")
-                    if os.write(descriptor, encoded) != len(encoded):
-                        self._stop.set()
-                else:
+                elif not self._write_descriptor(descriptor, message.encode("ascii")):
                     self._stop.set()
-            except (OSError, ValueError):
+                    return
+            except (BlockingIOError, OSError, ValueError):
                 self._stop.set()
+                return
+            self._messages += 1
             if self._messages >= MAX_PROGRESS_MESSAGES:
                 self._stop.set()
 
@@ -99,3 +121,6 @@ class ReviewProgress:
         if self._thread is not None:
             self._thread.join()
             self._thread = None
+        if self._terminal_descriptor is not None:
+            os.close(self._terminal_descriptor)
+            self._terminal_descriptor = None

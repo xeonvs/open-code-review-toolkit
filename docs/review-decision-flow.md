@@ -4,7 +4,9 @@ With `review --local --debug-dir`, a private observer records these same checks;
 it does not add an execution or admission branch. Raw output is captured before
 finalization, safe output only after admission, and the journal records cleanup
 and successful or failed report delivery. See [local debug bundles](local.md#private-debug-bundle)
-for bounds, missing artifacts and incomplete journal semantics.
+for bounds, missing artifacts and incomplete journal semantics. Local report and
+debug delivery pin their private parent directory before creating entries, so a
+same-user replacement of a visible ancestor cannot redirect a retained artifact.
 
 This document is the canonical visual map of the toolkit's end-to-end review decisions. It
 connects configuration and immutable identity, OCR execution, result and action-receipt
@@ -29,6 +31,44 @@ and every affected public contract together before release.
 
 The same palette is repeated in every diagram so a terminal state never changes meaning between
 views.
+
+## Optional progress observer
+
+`OCR_REVIEW_PROGRESS` is an observer, not an input to OCR or an execution gate.
+It can emit only closed toolkit phase labels and never reads review content,
+artifacts, or session state. A conventional GitLab stderr job-log pipe remains a
+valid review transport but is not a valid optional-progress transport: the
+observer stops instead of risking a blocked review or changing the caller-owned
+file-descriptor flags.
+
+```mermaid
+flowchart TD
+    requested[Review starts] --> enabled{Progress explicitly enabled?}
+    enabled -- No --> absent[No observer]
+    enabled -- Yes --> stream{Safe output transport?}
+    stream -- Interactive terminal --> terminal[Open an owned nonblocking terminal writer]
+    stream -- Explicitly nonblocking --> nonblocking[Use the supplied nonblocking stream]
+    stream -- Blocking pipe or unavailable --> disabled[Disable optional observer]
+    terminal --> emit[Emit bounded closed phase and heartbeat messages]
+    nonblocking --> emit
+    emit --> writable{Write accepted?}
+    writable -- Yes --> next[Continue until review ends or message cap]
+    writable -- Full or closed --> disabled
+    next --> stopped[Stop and release observer]
+    disabled --> review[Review continues unchanged]
+    absent --> review
+    stopped --> review
+
+    classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
+    classDef warning fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px;
+    classDef error fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+    classDef auxiliary fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
+    classDef decision fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+
+    class emit,next success;
+    class disabled,absent,stopped,review,requested,terminal,nonblocking auxiliary;
+    class enabled,stream,writable decision;
+```
 
 ## End-to-end control flow
 

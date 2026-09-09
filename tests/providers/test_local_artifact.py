@@ -67,15 +67,44 @@ def test_link_race_preserves_new_destination(
     destination = tmp_path / "report.md"
     real_link = os.link
 
-    def race(source: str, target: Path) -> None:
-        target.write_text("concurrent caller")
-        real_link(source, target)
+    def race(source: str, target: str, **kwargs: object) -> None:
+        descriptor = os.open(
+            target,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+            dir_fd=kwargs["dst_dir_fd"],  # type: ignore[arg-type]
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write("concurrent caller")
+        real_link(source, target, **kwargs)
 
     monkeypatch.setattr(local.os, "link", race)
     with pytest.raises(FileExistsError):
         local.publish_local_report(failed_report("identity"), destination)
     assert destination.read_text() == "concurrent caller"
     assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_parent_replacement_cannot_redirect_private_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "private"
+    parent.mkdir()
+    destination = parent / "report.md"
+    replacement = tmp_path / "replacement"
+    replacement.mkdir()
+    original = local.open_private_parent_directory
+
+    def replace_after_open(path: Path) -> tuple[int, str]:
+        descriptor, name = original(path)
+        parent.rename(tmp_path / "moved")
+        parent.symlink_to(replacement, target_is_directory=True)
+        return descriptor, name
+
+    monkeypatch.setattr(local, "open_private_parent_directory", replace_after_open)
+    local.publish_local_report(failed_report("identity"), destination)
+    assert (tmp_path / "moved" / "report.md").is_file()
+    assert not (replacement / "report.md").exists()
 
 
 @pytest.mark.parametrize("target", ["result.json", "stderr.log"])
@@ -121,6 +150,28 @@ def test_explicit_report_persists_closed_execution_failure(
     )
     assert destination.read_text() == capsys.readouterr().out
     assert "Review failed" in destination.read_text()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_interruption_propagates_without_local_failure_delivery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: type[BaseException],
+) -> None:
+    def interrupt(*_args: object, **_kwargs: object) -> int:
+        raise interruption()
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", interrupt)
+    destination = tmp_path / "report.md"
+    with pytest.raises(interruption):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            [],
+            local=True,
+            report_path=destination,
+        )
+    assert not destination.exists()
 
 
 def test_report_requires_local(tmp_path: Path) -> None:

@@ -280,7 +280,9 @@ def main(root: Path, cli: Path) -> int:
         progress_lines = [
             line for line in completed.stderr.splitlines() if line.startswith("OCR progress:")
         ]
-        assert bool(progress_lines) is progress
+        # capture_output=True supplies a conventional blocking stderr pipe. The
+        # observer must not risk blocking the review or mutate that descriptor.
+        assert not progress_lines
         assert len(progress_lines) <= 120
         assert "synthetic@example.invalid" not in "\n".join(progress_lines)
         assert "OCR progress:" not in stderr.read_text()

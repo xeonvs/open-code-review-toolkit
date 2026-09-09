@@ -29,7 +29,7 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 | `OCR_ANTHROPIC_DISABLE_THINKING` | Operator / `ocr-ci configure` | No | `false` | With the Anthropic protocol, exact `true` adds `thinking.type=disabled`. |
 | `OCR_REVIEW_LANGUAGE` | Operator / shared language resolver | No | `English` | Allowed language label or BCP-47 tag used for the review. |
 | `OCR_REVIEW_EFFORT` | Operator / `ocr-ci configure` | No | `medium` | Closed OCR quality preset: `low`, `medium`, or `high`; maps to one, two, or three review rounds. |
-| `OCR_REVIEW_PROGRESS` | Operator / `ocr-ci review` | No | Empty / `false` | Case-insensitive `true` enables toolkit-only phase messages and a 30-second heartbeat on stderr, capped at 120 messages per run. |
+| `OCR_REVIEW_PROGRESS` | Operator / `ocr-ci review` | No | Empty / `false` | Case-insensitive `true` enables toolkit-only phase messages and a 30-second heartbeat on an interactive terminal or explicitly nonblocking embedding stream, capped at 120 messages per run. Conventional CI stderr pipes are deliberately unsupported. |
 | `OCR_LLM_VALIDATE_MODEL` | Operator / `ocr-ci preflight` | No | `false` | `true` validates through `/models`; `auto` may use the offline allowlist; false values skip validation. |
 | `OCR_LLM_MODELS_URL` | Operator / `ocr-ci preflight` | No | Derived from `OCR_LLM_URL` | Explicit absolute credential-free HTTPS metadata URL when validation is enabled or inference query parameters make derivation ambiguous. |
 | `OCR_LLM_ALLOWED_MODELS` | Operator / `ocr-ci preflight` | No | Empty list | Comma-separated exact model identifiers for offline or `auto` validation. |
@@ -99,12 +99,18 @@ The inherited value is version-owned and may change with a qualified OCR upgrade
 Messages contain only closed toolkit phase names; the observer never reads OCR
 results, stderr artifacts or sessions, and does not change the agent audience.
 Progress is not copied into results, Markdown, receipts or DLP inputs. The timer
-stops on completion, exceptions, signals or the 120-message cap. Output is
-best-effort: closed or currently unwritable descriptors disable progress, without
-changing stderr status flags, review admission or exit status. As with ordinary
-console output, this is not a hard real-time guarantee for a stalled filesystem
-or a concurrently replaced output device. Values other than empty, `false` or
-`true` fail before review execution without echoing their contents.
+stops on completion, exceptions, signals or the 120-message cap.
+
+For a conventional blocking stderr pipe, including a GitLab runner job-log pipe,
+the optional observer disables itself. A short write can still block after a
+readiness check, while `dup()` and common `/dev/fd` reopens may share the
+caller-owned descriptor's status flags; the toolkit does neither. A full
+nonblocking pipe also disables progress rather than blocking the review. This has
+no review, admission, output, or exit-status effect and does not suppress normal
+final reports or CI logs. The toolkit does not create a tee, FIFO, background
+writer, or another process to simulate a logging transport. Values other than
+empty, `false` or `true` fail before review execution without echoing their
+contents.
 
 OCR may present filter-surviving comments to a later round as previously confirmed, but the toolkit does not accept that wording as validation. Its mandatory background prefix travels with every main request and requires prior/filter-surviving findings to remain unverified until current code, tests, or trusted evidence support them. Survival cannot change severity, suppress or resolve a finding, authorize approval, or enter a receipt as independent validation.
 
