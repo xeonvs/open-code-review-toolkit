@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.10.0 — local provider, diagnostics and OCR controls
 
-Status: repository-complete; stable v0.10.0 delivery and external reconciliation pending
+Status: completed; stable v0.10.0 delivery and external reconciliation verified
 - **Plan Origin:** plan_mode_approved
 - **Release classification:** release-required; stable delivery authorized
 - **Target stable version:** 0.10.0
@@ -59,7 +59,7 @@ local review verified evidence without a GitLab receipt, while preflight assumed
 | WQ-06 | done | OCR promotion, verified hosted assets and current no-LLM qualification; installed Darwin binary updated without a post-waiver launch |
 | WQ-07 | done | Docs/backlog, full self-review, security review with recorded artifact limitation, green implementation checks and external handoff checklist |
 | WQ-08 | done | Final holistic review, retained local OCR review, deterministic remediation, protected feature merge, and development publication are complete |
-| WQ-09 | done | Signed `release/v0.10.0` is prepared for protected review; stable delivery, compact external identity readback, issue/milestone closure, and no-release reconciliation remain post-merge gates |
+| WQ-09 | done | Protected release #185, stable delivery, compact independent identity readback, Actions-owned issue closure, milestone closure, and this no-release reconciliation are complete |
 
 #### Locked Interfaces And Boundaries
 
@@ -446,6 +446,43 @@ repository-side preparation. Stable TestPyPI/PyPI publication, provenance,
 attestations, annotated tag, immutable GitHub Release and assets, receipt,
 issue closure, milestone closure, branch cleanup and external reconciliation
 are post-merge Release-workflow gates and are not yet claimed.
+
+#### Stable Delivery And External Reconciliation
+
+The protected release PR #185 was squash-merged as
+`f33674ebe88eab10406123299e8a9c8728171781` on 2026-09-09. Its first Release
+workflow run [34347350040](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34347350040)
+completed every build, TestPyPI, PyPI, provenance, attestation and supported-Python
+verification gate, but failed before tag creation when GitHub rejected the tag push
+with an `Internal Server Error`. No tag, GitHub Release or issue receipt existed at
+that point. The exact authorized recovery dispatch reused release PR #185, reviewed
+base `9cfa6b645119ed9230e790cca585376dd906dacc`, reviewed head
+`1192787b8a150964f0d99d832552273019163ac0`, and merge
+`f33674ebe88eab10406123299e8a9c8728171781`; successful workflow
+[34348030036](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34348030036)
+performed the idempotent completion.
+
+Minimal independent readback confirms annotated `v0.10.0` targets the protected
+merge, and immutable GitHub Release
+[385475554](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.10.0)
+was published at `2026-09-09T11:59:51Z` with exactly the wheel, sdist,
+`artifact-hashes.json`, `SHA256SUMS`, and `release-receipt.json`. The immutable
+receipt (SHA-256 `9b6c53fdf2ed786f3d2242bb6d5639dea5ccda1951f5e39baea69ada144b4ddc`)
+identifies v0.10.0, #185, the reviewed base/head/merge/tree, workflow 34348030036,
+and issues [181, 182]. Both PyPI and TestPyPI expose version 0.10.0 with the exact
+wheel and sdist filenames.
+
+GitHub Actions posted one matching receipt comment and closed #181 at
+`2026-09-09T11:59:58Z` and #182 at `2026-09-09T12:00:02Z`; milestone `v0.10.0`
+was then closed at `2026-09-09T12:01:30Z` with zero open issues. The feature and
+release remote branches were deleted by GitHub. **External reconciliation date:
+2026-09-09.**
+
+The accidental early closure of #181 was caused by the release-PR body phrase
+“it then closes #181 and #182”, which GitHub interpreted as a closing reference
+on merge. Future release-PR prose must treat tracked issues as an ordinary list or
+bare references only; the Release workflow remains the sole owner of their closure
+after its immutable receipt readback.
 
 <a id="plan-toolkit-0-9-1"></a>
 

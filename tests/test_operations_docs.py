@@ -184,6 +184,8 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
 
     assert "one protected `no-release` closure pull request" in release_guide
     assert "do not leave its pre-publication status as the current release status" in release_guide
+    assert "List tracked release issues in a release PR as bare references" in release_guide
+    assert "The Release workflow is the sole closure owner" in release_guide
     assert archive_version == release_version
     assert reconciled_version_key <= release_version_key
     if reconciled_version == release_version:
