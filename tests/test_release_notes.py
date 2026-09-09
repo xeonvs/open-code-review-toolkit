@@ -322,6 +322,28 @@ def test_091_release_notes_cover_private_diagnostics_and_direct_ocr_migration() 
         assert phrase in notes
 
 
+def test_0100_release_notes_cover_local_delivery_and_ocr_1116() -> None:
+    """Keep local delivery, diagnostic, control, and OCR deltas actionable."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.10.0")
+
+    for phrase in (
+        "standalone local preflight and immutable-diff review",
+        "private Markdown artifacts and console summaries",
+        "DLP-admitted finding",
+        "private local debug bundle",
+        "protocol-specific reasoning effort",
+        "bounded, opt-in review",
+        "debug parents against replacement races",
+        "warnings beside\n  incomplete coverage",
+        "checksum-verified Open Code Review 1.11.6",
+        "OCaml and ReasonML",
+        "Kotlin script files",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 
