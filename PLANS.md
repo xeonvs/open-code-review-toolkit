@@ -9,9 +9,9 @@ before handoff or commit. Completed stable plans are indexed in
 ### Toolkit 0.10.0 — local provider, diagnostics and OCR controls
 
 - **Status:** active
-- **Draft implementation:** complete; plan retained for deferred stable delivery
+- **Draft implementation:** resumed for final qualification and stable delivery
 - **Plan Origin:** plan_mode_approved
-- **Release classification:** release-required; stable delivery release-deferred
+- **Release classification:** release-required; stable delivery authorized
 - **Target stable version:** 0.10.0 (raised from 0.9.2 by user decision)
 - **Branch:** `codex/v0.10.0-local-review`
 - **PR presentation:** before pushing implementation, replace the planning-only
@@ -24,16 +24,19 @@ before handoff or commit. Completed stable plans are indexed in
   Replacement Draft #184 is now open on the new branch with the full scope and
   evidence description; #183 was closed with its replacement link. GitHub
   verifies every published feature commit's SSH signature.
-- **Validation override:** the user waived further local test and probe runs.
-  Preserve the already completed local evidence and finish remaining quality,
-  qualification and hosted checks through GitHub Actions. Do not launch more
-  local validation runs; ordinary implementation and Git publication continue.
+- **Final validation authorization:** retain the completed Draft evidence and
+  run the one final local OCR review only after the final engineering review.
+  Preserve every resulting private diagnostic artifact until its outcome is
+  analyzed. A confirmed finding is fixed with deterministic regressions; no
+  second OCR run follows that remediation. The owner has authorized protected
+  merge, publication, release reconciliation, issue and milestone closure.
 
 #### Goal
 
 Deliver OCR 1.11.6, a standalone local provider with shared review summaries,
-truthful local debug diagnostics, explicit reasoning controls and safe progress
-through a green published Draft. No merge, stable release or issue closure.
+truthful local debug diagnostics, explicit reasoning controls and safe progress,
+then complete protected merge, artifact publication, minimal independent
+readback, and closure of #181, #182 and milestone v0.10.0.
 
 #### Baseline And Sources
 
@@ -72,6 +75,7 @@ local review verified evidence without a GitLab receipt, while preflight assumed
 | WQ-05 | done | Reasoning controls, actual OCR wire probes and bounded progress with installed parity |
 | WQ-06 | done | OCR promotion, verified hosted assets and current no-LLM qualification; installed Darwin binary updated without a post-waiver launch |
 | WQ-07 | done | Docs/backlog, full self-review, security review with recorded artifact limitation, green implementation checks and external handoff checklist |
+| WQ-08 | active | Final holistic review, one retained local OCR review, remediation if required, protected release lifecycle and minimal external artifact readback |
 
 #### Locked Interfaces And Boundaries
 
