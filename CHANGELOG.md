@@ -1,3 +1,36 @@
+## 0.10.0 - 2026-09-09
+
+### 🚀 Features
+
+- Add explicit standalone local preflight and immutable-diff review with shared
+  private Markdown artifacts and console summaries, every DLP-admitted finding, and verified evidence usage,
+  independently of inherited CI identity or forge publication.
+  Add a private local debug bundle with bounded original and finalized artifacts,
+  actual check outcomes and value-free DLP decisions, without bypassing the shared
+  review pipeline or retaining its temporary runtime session.
+  Expose explicit protocol-specific reasoning effort and bounded, opt-in review
+  progress that remains independent of OCR output and result admission. ([#182](https://github.com/xeonvs/open-code-review-toolkit/issues/182))
+
+### 🐛 Bug Fixes
+
+- Keep standalone local review delivery truthful and available: pin private report
+  and debug parents against replacement races, retain independent warnings beside
+  incomplete coverage, preserve interruption semantics, and skip optional progress
+  when its output stream cannot be written safely. ([#182](https://github.com/xeonvs/open-code-review-toolkit/issues/182))
+
+### 🛠 Maintenance
+
+- Target checksum-verified Open Code Review 1.11.6 after qualifying 1.11.6. ([#181](https://github.com/xeonvs/open-code-review-toolkit/issues/181))
+
+### 🔧 Refactoring
+
+- Separate common review outcome, coverage, finding metadata, usage and DLP reporting from GitLab publication, preserving existing GitLab summaries and approval behavior. ([#182](https://github.com/xeonvs/open-code-review-toolkit/issues/182))
+
+### 🧩 Rules
+
+- Review OCaml and ReasonML files with the recommended OCR release's built-in rules, and route Kotlin script files to Kotlin rules while preserving its default test-file exclusions. ([#181](https://github.com/xeonvs/open-code-review-toolkit/issues/181))
+
+
 ## 0.9.1 - 2026-09-07
 
 ### 🐛 Bug Fixes
