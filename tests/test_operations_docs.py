@@ -288,10 +288,13 @@ def test_terminal_merge_request_race_contract_is_public_and_fail_closed() -> Non
         "immediately before the publication transaction",
         "automatic approval explicitly skipped",
         "stops before the first publication write",
+        "again immediately before successful exit",
+        "marker-like finding text cannot select, overwrite, or delete",
     ):
         assert phrase in operations
     assert "ocr.pre-execution-status/v3" in configuration
     assert "findings, summaries, suppression, discussions, or approval state" in gitlab
+    assert "close/reopen timing therefore fails" in gitlab
     assert "Unknown, malformed, unavailable, or mismatched provider data fails closed" in security
     assert "Merged or closed" in flow
     assert "skip approval" in flow

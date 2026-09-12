@@ -1434,6 +1434,17 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
             "Terminal merge-request status identity does not match posting target.", file=sys.stderr
         )
         return 1
+    try:
+        lifecycle = current_merge_request_lifecycle(config, status.source_sha)
+    except GitLabProviderError as exc:
+        print(f"Cannot revalidate terminal merge-request lifecycle: {exc}", file=sys.stderr)
+        return 1
+    if lifecycle.state == "opened":
+        print(
+            "Merge request reopened after terminal review admission; a new review is required.",
+            file=sys.stderr,
+        )
+        return 1
     terminal_note_ids = collect_terminal_status_note_ids(config)
     if terminal_note_ids is None:
         print("Cannot collect previous OCR terminal status notes reliably.", file=sys.stderr)
@@ -1442,21 +1453,20 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
         print("Cannot identify exactly one previous OCR terminal status note.", file=sys.stderr)
         return 1
 
-    state = status.terminal_state
+    state = lifecycle.state
     heading = (
         f"**⏭️ Open Code Review skipped — merge request is already {state}**"
         if post_emoji()
         else f"**Open Code Review skipped — merge request is already {state}**"
     )
     body = (
-        f"{TERMINAL_MR_MARKER}\n"
         "No model review was run because the merge request reached an expected terminal "
         f"lifecycle state (`{state}`) before review admission.\n\n"
         "- No review findings were produced.\n"
         "- Automatic approval was not attempted.\n"
         "- Previous Open Code Review comments and reviewer state were preserved."
     )
-    note_body = f"{heading}\n\n{body}"
+    note_body = f"{TERMINAL_MR_MARKER}\n{heading}\n\n{body}"
     if terminal_note_ids:
         note_id = terminal_note_ids[0]
         write = update_plain_note(config, note_id, note_body)
@@ -1477,6 +1487,17 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
     ):
         print("Failed to upsert and verify OCR terminal merge-request note.", file=sys.stderr)
         return 1 if strict_posting() else 0
+    try:
+        final_lifecycle = current_merge_request_lifecycle(config, status.source_sha)
+    except GitLabProviderError as exc:
+        print(f"Cannot confirm terminal merge-request lifecycle: {exc}", file=sys.stderr)
+        return 1
+    if final_lifecycle.state == "opened":
+        print(
+            "Merge request reopened while terminal status was published; a new review is required.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

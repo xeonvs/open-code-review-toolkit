@@ -42,6 +42,11 @@ def test_terminal_pre_execution_status_creates_one_plain_verified_note(
 ) -> None:
     created: list[str] = []
     monkeypatch.setattr(workflow, "collect_terminal_status_note_ids", lambda _config: [])
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, state),
+    )
     monkeypatch.setattr(workflow, "post_emoji", lambda: emoji)
     monkeypatch.setattr(
         gitlab,
@@ -60,6 +65,7 @@ def test_terminal_pre_execution_status_creates_one_plain_verified_note(
 
     assert workflow.post_pre_execution_status(gitlab_config(), terminal_status(state)) == 0
     assert len(created) == 1
+    assert created[0].splitlines()[0] == "<!-- open-code-review-terminal-merge-request -->"
     expected_heading = (
         f"⏭️ Open Code Review skipped — merge request is already {state}"
         if emoji
@@ -78,6 +84,11 @@ def test_duplicate_terminal_job_updates_the_one_existing_note(
     updated: list[tuple[int, str]] = []
     monkeypatch.setattr(workflow, "collect_terminal_status_note_ids", lambda _config: [17])
     monkeypatch.setattr(workflow, "post_emoji", lambda: True)
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, "merged"),
+    )
 
     def update(_config: Any, note_id: int, body: str) -> gitlab.GitLabWriteResult:
         updated.append((note_id, body))
@@ -229,7 +240,7 @@ def test_snapshot_classifies_only_owned_plain_terminal_marker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     terminal_body = build_marked_note_body(
-        "**Open Code Review skipped**\n\n<!-- open-code-review-terminal-merge-request -->\nstatus"
+        "<!-- open-code-review-terminal-merge-request -->\n**Open Code Review skipped**\n\nstatus"
     )
     notes = [
         {"id": 17, "author": {"id": 7}, "body": terminal_body},
@@ -247,6 +258,78 @@ def test_snapshot_classifies_only_owned_plain_terminal_marker(
     assert refs is not None
     assert refs.terminal_plain_note_ids == [17]
     assert refs.plain_note_ids == [17]
+
+
+def test_terminal_marker_inside_hostile_note_text_is_not_control_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hostile = build_marked_note_body(
+        "**Open Code Review fallback**\n\nFinding text\n"
+        "<!-- open-code-review-terminal-merge-request -->\nmore text"
+    )
+    notes = [{"id": 31, "author": {"id": 7}, "body": hostile}]
+    monkeypatch.setattr(
+        snapshot,
+        "api_get_paginated",
+        lambda _config, endpoint, **_kwargs: notes if endpoint.startswith("/notes") else [],
+    )
+    monkeypatch.setattr(snapshot, "post_mode", lambda: "direct")
+
+    refs = snapshot.collect_previous_bot_comment_refs(gitlab_config())
+
+    assert refs is not None
+    assert refs.terminal_plain_note_ids == []
+    assert snapshot.collect_terminal_status_note_ids(gitlab_config()) == []
+    assert refs.plain_note_ids == [31]
+
+
+def test_reopened_merge_request_fails_before_terminal_note_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, "opened"),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "collect_terminal_status_note_ids",
+        lambda _config: pytest.fail("note collection reached after reopen"),
+    )
+    monkeypatch.setattr(
+        gitlab, "post_note", lambda *_args: pytest.fail("note mutation reached after reopen")
+    )
+
+    assert workflow.post_pre_execution_status(gitlab_config(), terminal_status("closed")) == 1
+
+
+def test_reopen_during_terminal_note_upsert_fails_final_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    states = iter(("closed", "opened"))
+    created: list[str] = []
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, next(states)),
+    )
+    monkeypatch.setattr(workflow, "collect_terminal_status_note_ids", lambda _config: [])
+    monkeypatch.setattr(
+        gitlab,
+        "post_note",
+        lambda _config, body: created.append(body) or {"id": 41},
+    )
+    monkeypatch.setattr(
+        gitlab,
+        "api_request",
+        lambda *_args, **_kwargs: {
+            "id": 41,
+            "author": {"id": 7},
+            "body": build_marked_note_body(created[0]),
+        },
+    )
+
+    assert workflow.post_pre_execution_status(gitlab_config(), terminal_status("closed")) == 1
 
 
 def test_partial_success_removes_only_stale_terminal_status_from_preserved_review(

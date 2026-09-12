@@ -83,9 +83,12 @@ def build_summary_run_marker(run_id: str) -> str:
 
 
 def has_terminal_mr_marker(body: str) -> bool:
-    """Return whether an owned note carries the exact terminal-MR marker line."""
+    """Parse terminal control metadata only from its reserved preamble line."""
 
-    return TERMINAL_MR_MARKER in body.splitlines()
+    if not note_starts_with_marker(body):
+        return False
+    lines = body.splitlines()
+    return len(lines) >= 2 and lines[1] == TERMINAL_MR_MARKER
 
 
 def _digest_payload(parts: list[str], digest_size: int = FINGERPRINT_LEN // 2) -> str:
