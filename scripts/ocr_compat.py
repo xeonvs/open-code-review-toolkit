@@ -139,6 +139,7 @@ CURRENT_LANGUAGE_RULES = {
     "src/component.re": "**/*.{re,rei}",
     "src/component.rei": "**/*.{re,rei}",
     "scripts/setup.kts": "**/*.{kt,kts}",
+    "policies/authz.rego": "**/*.rego",
 }
 CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
 
@@ -405,6 +406,16 @@ def _validate_current_contracts(value: object) -> None:
         _fail("current qualification omitted the review-result contract")
 
 
+def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
+    """Select the frozen or live qualification epoch from the candidate version."""
+
+    version_tuple = _version(version)
+    if version_tuple < history.HISTORICAL_CUTOFF:
+        history.validate_contracts(version, version_tuple, evidence, _fail)
+    else:
+        _validate_current_contracts(evidence.get("contracts"))
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -483,10 +494,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
         evidence = load_json(evidence_path)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             _fail(f"evidence does not qualify {version} as compatible")
-        if _version(version) < history.HISTORICAL_CUTOFF:
-            history.validate_contracts(version, _version(version), evidence, _fail)
-        else:
-            _validate_current_contracts(evidence.get("contracts"))
+        _validate_evidence_contracts(version, evidence)
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -2872,7 +2880,10 @@ def prepare_update(
     for item in evidences:
         if item.get("schema_version") != 3:
             _fail("current candidate requires evidence schema 3")
-        _validate_current_contracts(item.get("contracts"))
+        candidate_version = item.get("version")
+        if not isinstance(candidate_version, str):
+            _fail("candidate evidence version must be a string")
+        _validate_evidence_contracts(candidate_version, item)
 
     version = versions[-1]
     releases = manifest.get("releases")

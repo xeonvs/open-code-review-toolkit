@@ -65,7 +65,10 @@ before handoff or commit. Completed stable plans are indexed in
 - [x] Implemented and documented the strict terminal GitLab MR lifecycle,
   pre-execution status v3, idempotent terminal note, admitted-result guard,
   approval suppression, and successful-publication cleanup for `#194`.
-- [ ] Freeze the historical OCR qualification contract, add the current Rego
-  probe, and qualify/promote OCR `1.11.7` through `1.11.9`.
+- [x] Freeze the historical OCR `1.11.6`/`1.11.7` qualification contract and add
+  the current Rego probe plus shared version-selected validation for OCR
+  `1.11.8` and later.
+- [ ] Qualify and promote OCR `1.11.7` through `1.11.9` from exact hosted
+  evidence and the recorded source-review conclusions.
 - [ ] Complete pre-push security/Gitleaks gates, feature PR and hosted evidence,
   stable release, external receipt, issue/milestone closure, and reconciliation.

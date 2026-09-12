@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, NoReturn
 
-HISTORICAL_CUTOFF = (1, 11, 6)
+HISTORICAL_CUTOFF = (1, 11, 8)
 
 ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {
     "max_tokens_budget": {
@@ -165,6 +165,47 @@ ARCHIVED_1_11_4_CONTRACTS: dict[str, object] = {
 }
 
 
+ARCHIVED_1_11_6_CONTRACTS: dict[str, object] = {
+    **ARCHIVED_1_11_4_CONTRACTS,
+    "language_rule_probe": {
+        "default_excluded_paths": [
+            "src/test/kotlin/scripts/Example.kts",
+            "test/parser.ml",
+        ],
+        "excluded_extensions": [".svh"],
+        "extensions": [
+            ".cjs",
+            ".cxx",
+            ".hxx",
+            ".kts",
+            ".mjs",
+            ".ml",
+            ".mli",
+            ".mm",
+            ".pug",
+            ".re",
+            ".rei",
+            ".sv",
+            ".v",
+            ".vh",
+            ".vhd",
+            ".vhdl",
+        ],
+        "m_routing": "matlab_and_objective_c",
+        "result": "passed",
+        "rule_source": "system_builtin",
+        "selected": 16,
+    },
+    "reasoning_effort_probe": {
+        "efforts": ["unset", "none", "high"],
+        "protocols": ["openai", "openai-responses"],
+        "provider_acceptance": "not-tested",
+        "responses_siblings_preserved": True,
+        "result": "passed",
+    },
+}
+
+
 def language_extensions(version_tuple: tuple[int, int, int]) -> list[str]:
     """Return the language inventory recorded in the historical evidence epochs."""
 
@@ -184,6 +225,10 @@ def validate_contracts(
 
     if version_tuple >= HISTORICAL_CUTOFF:
         fail("current evidence cannot use historical validation")
+    if version_tuple >= (1, 11, 6):
+        if evidence.get("contracts") != ARCHIVED_1_11_6_CONTRACTS:
+            fail(f"historical qualification contract disagrees for {version}")
+        return
     if version_tuple >= (1, 11, 4):
         if evidence.get("contracts") != ARCHIVED_1_11_4_CONTRACTS:
             fail(f"historical qualification contract disagrees for {version}")

@@ -1972,6 +1972,10 @@ def test_current_promotion_rejects_missing_contract_before_writing(
 
     module = load_script()
     evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.4.json")
+    evidence["version"] = "1.12.0"
+    evidence["tag"] = "v1.12.0"
+    evidence["comparison_version"] = "1.11.3"
+    evidence["tested_baseline_version"] = "1.11.3"
     evidence["contracts"] = current_contracts(module)
     evidence["contracts"].pop(missing_probe)
     before = promotion_manifest.read_bytes()
@@ -1980,7 +1984,7 @@ def test_current_promotion_rejects_missing_contract_before_writing(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=176,
-            human_conclusions={"1.11.4": "Reviewed candidate."},
+            human_conclusions={"1.12.0": "Reviewed candidate."},
             root=PROJECT_ROOT,
         )
     assert promotion_manifest.read_bytes() == before
@@ -1999,6 +2003,83 @@ def test_recent_historical_evidence_is_independent_of_live_inventory(
     monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {})
     monkeypatch.setattr(module, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
     module.validate_manifest(manifest, PROJECT_ROOT)
+
+
+def test_ocr_1117_uses_frozen_contract_independent_of_live_rego_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_script()
+    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
+    evidence["version"] = "1.11.7"
+
+    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
+    module._validate_evidence_contracts("1.11.7", evidence)
+
+    evidence["contracts"]["language_rule_probe"]["selected"] = 17
+    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
+        module._validate_evidence_contracts("1.11.7", evidence)
+
+
+@pytest.mark.parametrize("version", ["1.11.8", "1.11.9"])
+def test_current_ocr_evidence_requires_rego_probe_before_promotion(version: str) -> None:
+    module = load_script()
+    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
+    evidence["version"] = version
+    evidence["contracts"] = current_contracts(module)
+
+    module._validate_evidence_contracts(version, evidence)
+    language = evidence["contracts"]["language_rule_probe"]
+    language["extensions"].remove(".rego")
+    language["selected"] -= 1
+
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module._validate_evidence_contracts(version, evidence)
+
+
+def test_ocr_1117_to_1119_chain_crosses_frozen_and_current_epochs_before_writes(
+    tmp_path: Path,
+) -> None:
+    module = load_script()
+    manifest_path = tmp_path / "ocr-support.json"
+    manifest_path.write_bytes(MANIFEST.read_bytes())
+    base = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
+    evidence: list[dict[str, object]] = []
+    comparison = "1.11.6"
+    for version in ("1.11.7", "1.11.8", "1.11.9"):
+        item = {
+            **base,
+            "schema_version": 3,
+            "version": version,
+            "tag": f"v{version}",
+            "classification": "human-review-required",
+            "comparison_version": comparison,
+            "tested_baseline_version": "1.11.6",
+            "contracts": (base["contracts"] if version == "1.11.7" else current_contracts(module)),
+        }
+        evidence.append(item)
+        comparison = version
+    current = evidence[-1]["contracts"]
+    assert isinstance(current, dict)
+    language = current["language_rule_probe"]
+    assert isinstance(language, dict)
+    extensions = language["extensions"]
+    assert isinstance(extensions, list)
+    extensions.remove(".rego")
+    language["selected"] = len(extensions)
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module.prepare_update(
+            manifest_path=manifest_path,
+            evidence=evidence,
+            fragment_number=196,
+            human_conclusions={
+                version: "Reviewed candidate." for version in ("1.11.7", "1.11.8", "1.11.9")
+            },
+            root=PROJECT_ROOT,
+        )
+
+    assert manifest_path.read_bytes() == before
 
 
 def test_prepare_update_requires_human_review_for_minor_transition(

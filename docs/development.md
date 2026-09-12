@@ -49,6 +49,14 @@ evidence bytes. Generic promotion tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required
 contract evidence before writing any pin or evidence file.
 
+When a consumed upstream contract changes, first freeze the last unaffected
+evidence epoch exactly, then advance the cutoff. The same version-selected
+validator must be used by manifest readback and `prepare-update`; a candidate
+cannot bypass a newly required probe merely because an older release remains
+readable. OCR 1.11.6 and 1.11.7 share the frozen pre-Rego contract. OCR 1.11.8 and
+later use the live contract, whose language probe includes `policies/authz.rego`
+and exact built-in pattern `**/*.rego`.
+
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn
 unconsumed upstream wording/features into mandatory checks. Prove preservation

@@ -201,6 +201,14 @@ complete current contract even when historical evidence is still readable.
 This qualification does not establish stable toolkit delivery or configured
 GitLab/local/debug model quality; those remain separate gates.
 
+The qualification validator freezes the unchanged OCR 1.11.6/1.11.7 contract as
+one historical epoch. From OCR 1.11.8 onward, the live language/Rules probe also
+requires a representative `policies/authz.rego` file to select exact built-in
+pattern `**/*.rego`. Both manifest validation and cumulative promotion use this
+version-selected owner, so missing Rego proof fails before any evidence or pin is
+written. This harness change is not itself a compatibility promotion; exact
+1.11.7–1.11.9 evidence and source-review conclusions remain required.
+
 ## Promotion and rollback
 
 Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates every machine-readable or executable version/checksum pin. Never edit only one copy. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.
