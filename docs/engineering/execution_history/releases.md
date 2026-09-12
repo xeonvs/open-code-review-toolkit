@@ -2,6 +2,110 @@
 
 This archive preserves completed execution plans moved out of the active registry; the release index associates each plan with the stable tag or release cycle it supported. `PLANS.md` remains the source for active or blocked repository work; historical receipts here remain part of the audit trail.
 
+<a id="plan-toolkit-0-10-1"></a>
+
+## Toolkit 0.10.1 — terminal merge-request lifecycle and OCR 1.11.9
+
+Status: repository work complete; protected feature merge and development publication verified; stable external delivery pending
+- **Plan origin:** user-authorized execution of the v0.10.x dependency and bug scope
+- **Release classification:** release-required
+- **Target stable version:** 0.10.1; the release PR advances `.next-version` to 0.11.0
+- **Tracked issues:** #187, #194, #195 and #196 in milestone v0.10.1
+- **Feature branch:** `codex/v0.10.1-terminal-mr-ocr-1.11.9`; PR #197 merged
+- **Release branch:** `release/v0.10.1`
+- **Repository completion date:** 2026-09-12
+
+#### Goal And Scope
+
+Deliver only the v0.10.x dependency work and terminal GitLab merge-request bug.
+Parse lifecycle and identity through one strict shared contract; stop safely when
+an MR is already merged or closed; revalidate an admitted MR immediately before
+publication; preserve normal findings, DLP, limits, transaction semantics and
+prior review state; suppress terminal approval; and qualify OCR 1.11.7 through
+1.11.9 without changing the v0.11.0 feature backlog. Local OCR was explicitly
+excluded because this checkout has no configured LLM.
+
+#### Implementation And Qualification
+
+- Terminal pre-admission writes `ocr.pre-execution-status/v3` and one owned,
+  idempotent status note without fabricating policy evidence or invoking OCR.
+  Admitted results re-read exact project, IID, source SHA and lifecycle before
+  the first publication mutation. Strict mode stays nonzero for reopenable
+  closed MRs; merged MRs are irreversible terminal success.
+- Owned terminal markers are restricted to the reserved note preamble, so
+  hostile finding text cannot select, overwrite or delete another review note.
+  Terminal races preserve the reviewed commit and skip approval; a later normal
+  successful publication removes the stale terminal note.
+- OCR 1.11.6/1.11.7 share the frozen pre-Rego epoch. OCR 1.11.8 and later require
+  exact built-in `**/*.rego` selection. Historical live qualification keeps
+  Rego as an explicit unsupported control. Manual `through_tag` bounds a
+  contiguous chain so newer OCR 1.12.0 work cannot enter this release scope.
+- Bounded hosted run
+  [34710401633](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34710401633)
+  qualified the exact adjacent 1.11.7→1.11.8→1.11.9 chain from feature head
+  `0f0d8079ad5c270614314f69f4f2e37e10990366`. Committed evidence is byte-exact;
+  manifest, runtime preflight and GitLab example pin OCR 1.11.9 and its Linux
+  amd64 checksum.
+
+#### Review And Feature Delivery Receipts
+
+- Focused terminal/compatibility matrices and the final local gate passed. The
+  release head ran 1,749 tests plus 408 subtests at 86.71% coverage, with
+  Ruff, mypy, Bandit and compatibility validation green. Pinned Gitleaks 8.24.3
+  passed before every push. No local OCR was run.
+- Codex Security scans remediated terminal-note ownership and reopen races, then
+  the final full-range scan `4d87525d-442a-4b66-aac5-8135740e67bf` reported no
+  findings. Incremental scans `21dedbf4-e95d-4142-9931-6849d87caf77` and
+  `34e99d11-e25e-4905-a782-24f4386e61ce` closed the bounded-chain changes; scan
+  `60391bde-310f-4eaf-9ead-9539cb3b79b5` identified the missing historical Rego
+  negative control and the following scan verified its remediation. Promotion
+  scan `5a4d612d-a8d5-4bff-b31f-551ffd66eb7d` reported no findings.
+- Feature PR [#197](https://github.com/xeonvs/open-code-review-toolkit/pull/197)
+  reviewed head `f8b8119f8b33f82746afcdd6df9615189d9e6296`, passed all 13 remote checks and
+  squash-merged to protected `main` as
+  `31e0b06afdb955479895df289b32ae37ecb37c16`.
+- TestPyPI development run
+  [34711113049](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34711113049)
+  published `0.10.1.dev93`. Independent readback verified provenance, install
+  and CLI smoke for wheel SHA-256
+  `c28a67c95f8225313d7e6375343e13d16058de04382e4391d14d033e98b526ef`
+  and sdist SHA-256
+  `b727be7ce96ac79683bf579b5a37f9113d6ea24628c69f9e4d462a0c2b9b24ee`.
+
+#### Repository-Complete Release Checkpoint
+
+- This release PR is the final repository mutation. It sets
+  `.release-version=0.10.1`, `.next-version=0.11.0`, deterministic source epoch
+  `1789237493`, and the exact sorted issue set `[187, 194, 195, 196]`; renders
+  Towncrier notes; pins the stable GitLab example; archives this plan; and
+  returns `PLANS.md` to its empty template.
+- `.release-reconciled-version` intentionally remains 0.10.0 until independent
+  external readback completes.
+- Release preparation passed 1,749 tests plus 408 subtests at 86.71% coverage,
+  the 223-test focused release suite, Ruff, mypy, Bandit, lock/OCR manifest and
+  release-note validation, `git diff --check`, and clean wheel/sdist CLI smokes.
+  Two source-epoch-controlled builds are byte-identical: wheel SHA-256
+  `df225c39a7f47248933bc0dc46c791d331ae2e6b3b4ba93e1491c58dc294727c` and
+  sdist SHA-256
+  `afd1055203ab7f0ec1ece1821229500323aede26bd9304c689f2e0bfb8c68690`;
+  both pass Twine.
+- Stable TestPyPI/PyPI bytes, registry and GitHub provenance, supported-Python
+  installs, annotated tag, immutable GitHub Release and assets, release receipt,
+  Actions-owned issue closure, milestone closure and final reconciliation do not
+  exist yet and remain post-merge gates.
+
+#### Required External Closure
+
+Squash-merge the exact protected `Release v0.10.1` PR only after all required
+checks pass. Then independently verify the Release workflow, stable TestPyPI and
+PyPI artifact equality, PEP 740 and GitHub attestations, Python 3.12–3.14
+installs, annotated `v0.10.1` target, immutable Release and
+`release-receipt.json`. Confirm the workflow-owned receipt comments and closure
+of #187, #194, #195 and #196, close milestone v0.10.1 only after those receipts,
+delete the release branch, and finish with one protected documentation-only
+reconciliation PR that advances `.release-reconciled-version` without changing
+the published release.
+
 <a id="plan-toolkit-0-10-0"></a>
 
 ## Toolkit 0.10.0 — local provider, diagnostics and OCR controls
