@@ -60,6 +60,13 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
     assert "_validate_current_contracts(contracts)" not in source
 
 
+def test_live_language_probe_paths_follow_candidate_epoch() -> None:
+    module = load_script()
+
+    assert "policies/authz.rego" not in module._language_rules_for_version("1.11.7")
+    assert module._language_rules_for_version("1.11.8")["policies/authz.rego"] == "**/*.rego"
+
+
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
     return {
         "tag_name": f"v{version}",

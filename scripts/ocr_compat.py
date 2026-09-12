@@ -422,6 +422,15 @@ def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None
     _validate_contracts_for_version(version, evidence.get("contracts"))
 
 
+def _language_rules_for_version(version: str) -> dict[str, str]:
+    """Return live probe paths for the frozen or current candidate epoch."""
+
+    rules = dict(CURRENT_LANGUAGE_RULES)
+    if _version(version) < history.HISTORICAL_CUTOFF:
+        rules.pop("policies/authz.rego")
+    return rules
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -2180,7 +2189,7 @@ def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, obj
     }
 
 
-def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"
@@ -2191,7 +2200,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    exact_patterns = CURRENT_LANGUAGE_RULES
+    exact_patterns = _language_rules_for_version(version)
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
     unsupported_path = "rtl/include.svh"
@@ -2254,7 +2263,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
         if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
             _fail(f"candidate resolved the wrong built-in language rule for {path}")
     extensions = sorted(Path(path).suffix for path in supported_paths)
-    expected_extensions = sorted(Path(path).suffix for path in CURRENT_LANGUAGE_RULES)
+    expected_extensions = sorted(Path(path).suffix for path in exact_patterns)
     if extensions != expected_extensions:
         _fail("language probe paths disagree with the canonical extension projection")
     result: dict[str, object] = {
@@ -2544,7 +2553,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     }
     contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
     contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
-    contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
+    contracts["language_rule_probe"] = _language_rule_probe(binary, version, directory)
     contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
     contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
