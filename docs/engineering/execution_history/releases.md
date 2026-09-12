@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.10.1 — terminal merge-request lifecycle and OCR 1.11.9
 
-Status: repository work complete; protected feature merge and development publication verified; stable external delivery pending
+Status: completed; stable v0.10.1 delivery and external reconciliation verified
 - **Plan origin:** user-authorized execution of the v0.10.x dependency and bug scope
 - **Release classification:** release-required
 - **Target stable version:** 0.10.1; the release PR advances `.next-version` to 0.11.0
@@ -14,6 +14,7 @@ Status: repository work complete; protected feature merge and development public
 - **Feature branch:** `codex/v0.10.1-terminal-mr-ocr-1.11.9`; PR #197 merged
 - **Release branch:** `release/v0.10.1`
 - **Repository completion date:** 2026-09-12
+- **External reconciliation date:** 2026-09-12
 
 #### Goal And Scope
 
@@ -89,22 +90,54 @@ excluded because this checkout has no configured LLM.
   sdist SHA-256
   `afd1055203ab7f0ec1ece1821229500323aede26bd9304c689f2e0bfb8c68690`;
   both pass Twine.
-- Stable TestPyPI/PyPI bytes, registry and GitHub provenance, supported-Python
-  installs, annotated tag, immutable GitHub Release and assets, release receipt,
-  Actions-owned issue closure, milestone closure and final reconciliation do not
-  exist yet and remain post-merge gates.
+- At the release-PR handoff, stable TestPyPI/PyPI bytes, registry and GitHub
+  provenance, supported-Python installs, annotated tag, immutable GitHub Release
+  and assets, release receipt, Actions-owned issue closure, milestone closure and
+  final reconciliation did not yet exist and remained post-merge gates.
 
-#### Required External Closure
+#### Release-PR External Closure Handoff
 
-Squash-merge the exact protected `Release v0.10.1` PR only after all required
-checks pass. Then independently verify the Release workflow, stable TestPyPI and
-PyPI artifact equality, PEP 740 and GitHub attestations, Python 3.12–3.14
-installs, annotated `v0.10.1` target, immutable Release and
-`release-receipt.json`. Confirm the workflow-owned receipt comments and closure
-of #187, #194, #195 and #196, close milestone v0.10.1 only after those receipts,
-delete the release branch, and finish with one protected documentation-only
-reconciliation PR that advances `.release-reconciled-version` without changing
-the published release.
+The release PR required the exact protected `Release v0.10.1` PR to pass all
+required checks before squash merge. Its handoff required independent Release
+workflow, stable TestPyPI and PyPI artifact equality, PEP 740 and GitHub
+attestation, Python 3.12–3.14 install, annotated-tag, immutable Release and
+`release-receipt.json` verification before issue and milestone closure, branch
+cleanup, and this protected documentation-only reconciliation.
+
+#### Stable Delivery And External Reconciliation
+
+- Release PR [#198](https://github.com/xeonvs/open-code-review-toolkit/pull/198)
+  reviewed signed head `67fd2448476cb6ea8071324152b1040118798c8f` on protected
+  base `31e0b06afdb955479895df289b32ae37ecb37c16`, passed all 13
+  exact-head checks, and squash-merged as
+  `ee55ddabba9c94e53e6f1d93fd391852b7c83cc6`. Stable Release workflow
+  [34712012203](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34712012203)
+  completed successfully from that authorized release head.
+- Stable TestPyPI and PyPI independently returned the exact reviewed wheel and
+  sdist bytes recorded above. Both PEP 740 provenance statements name the
+  trusted `release.yml` workflow; clean wheel and sdist install/CLI smokes
+  passed, and hosted Python 3.12, 3.13 and 3.14 verification passed. The GitHub
+  build attestation also verified the same distributions.
+- Annotated tag `v0.10.1` targets the protected merge exactly. Immutable GitHub
+  Release [387670282](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.10.1)
+  was published at `2026-09-12T18:49:04Z` with exactly the wheel, sdist,
+  `artifact-hashes.json`, `SHA256SUMS`, and `release-receipt.json`; independently
+  downloaded Release distributions are byte-identical to workflow artifact
+  `reviewed-release-distributions`.
+- The immutable receipt SHA-256 is
+  `8ac5e34f13b963858d4028f7cc2e8af88d2fe78a2d9553a24dc59406b4f2411a`.
+  Its validator confirms v0.10.1, release PR #198, reviewed base/head/merge/tree
+  `d88ba5e445dd53cc60ba7f79c65a44287446502d`, workflow run 34712012203
+  attempt 1, issues `[187, 194, 195, 196]`, both distribution hashes, both
+  registries and provenance statements, the tag target, GitHub attestation, and
+  Python 3.12–3.14 smokes.
+- GitHub Actions posted one matching receipt comment and closed #187, #194,
+  #195 and #196 as completed. Milestone `v0.10.1` was then closed at
+  `2026-09-12T18:53:28Z` with zero open and four closed issues. The remote
+  feature and release branches are absent, and local `main` matched
+  `origin/main` at the stable merge before this no-release reconciliation.
+
+**External reconciliation date: 2026-09-12.**
 
 <a id="plan-toolkit-0-10-0"></a>
 
