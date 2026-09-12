@@ -67,12 +67,13 @@ before handoff or commit. Completed stable plans are indexed in
   approval suppression, and successful-publication cleanup for `#194`.
 - [x] Remediated the first pre-push scan and follow-up rescan findings: terminal
   markers are preamble-bound; every advisory-success path revalidates lifecycle;
-  and strict gates stay nonzero for reopenable `closed` MRs. A final full-range
-  security rescan remains required before push.
+  and strict gates stay nonzero for reopenable `closed` MRs. Final full-range
+  scan `4d87525d-442a-4b66-aac5-8135740e67bf` completed at `efc6281` with no
+  findings; the pinned Gitleaks gate and full local gate also passed before push.
 - [x] Freeze the historical OCR `1.11.6`/`1.11.7` qualification contract and add
   the current Rego probe plus shared version-selected validation for OCR
   `1.11.8` and later.
 - [ ] Qualify and promote OCR `1.11.7` through `1.11.9` from exact hosted
   evidence and the recorded source-review conclusions.
-- [ ] Complete pre-push security/Gitleaks gates, feature PR and hosted evidence,
-  stable release, external receipt, issue/milestone closure, and reconciliation.
+- [ ] Complete the feature PR and hosted evidence, stable release, external
+  receipt, issue/milestone closure, and reconciliation.
