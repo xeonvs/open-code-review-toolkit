@@ -65,9 +65,10 @@ before handoff or commit. Completed stable plans are indexed in
 - [x] Implemented and documented the strict terminal GitLab MR lifecycle,
   pre-execution status v3, idempotent terminal note, admitted-result guard,
   approval suppression, and successful-publication cleanup for `#194`.
-- [x] Remediated the first pre-push security scan findings: terminal markers are
-  preamble-bound, and terminal status revalidates live lifecycle before mutation
-  and successful exit. Full-range security rescan remains required before push.
+- [x] Remediated the first pre-push scan and follow-up rescan findings: terminal
+  markers are preamble-bound; every advisory-success path revalidates lifecycle;
+  and strict gates stay nonzero for reopenable `closed` MRs. A final full-range
+  security rescan remains required before push.
 - [x] Freeze the historical OCR `1.11.6`/`1.11.7` qualification contract and add
   the current Rego probe plus shared version-selected validation for OCR
   `1.11.8` and later.

@@ -332,6 +332,53 @@ def test_reopen_during_terminal_note_upsert_fails_final_confirmation(
     assert workflow.post_pre_execution_status(gitlab_config(), terminal_status("closed")) == 1
 
 
+@pytest.mark.parametrize(("state", "expected"), [("merged", 0), ("closed", 1)])
+def test_strict_gate_succeeds_only_for_irreversible_terminal_state(
+    monkeypatch: pytest.MonkeyPatch, state: str, expected: int
+) -> None:
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, state),
+    )
+    monkeypatch.setattr(workflow, "strict_posting", lambda: True)
+
+    assert (
+        workflow.terminal_status_exit(gitlab_config(), SOURCE, posting_succeeded=True) == expected
+    )
+
+
+def test_note_collection_failure_cannot_skip_final_reopen_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    states = iter(("closed", "opened"))
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, next(states)),
+    )
+    monkeypatch.setattr(workflow, "collect_terminal_status_note_ids", lambda _config: None)
+    monkeypatch.setattr(workflow, "strict_posting", lambda: False)
+
+    assert workflow.post_pre_execution_status(gitlab_config(), terminal_status("closed")) == 1
+
+
+def test_note_verification_failure_cannot_skip_final_reopen_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    states = iter(("closed", "opened"))
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, next(states)),
+    )
+    monkeypatch.setattr(workflow, "collect_terminal_status_note_ids", lambda _config: [])
+    monkeypatch.setattr(gitlab, "post_note", lambda *_args: None)
+    monkeypatch.setattr(workflow, "strict_posting", lambda: False)
+
+    assert workflow.post_pre_execution_status(gitlab_config(), terminal_status("closed")) == 1
+
+
 def test_partial_success_removes_only_stale_terminal_status_from_preserved_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

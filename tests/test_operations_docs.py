@@ -288,7 +288,8 @@ def test_terminal_merge_request_race_contract_is_public_and_fail_closed() -> Non
         "immediately before the publication transaction",
         "automatic approval explicitly skipped",
         "stops before the first publication write",
-        "again immediately before successful exit",
+        "Every non-strict success path re-reads that exact lifecycle",
+        "`closed` MR remains reopenable",
         "marker-like finding text cannot select, overwrite, or delete",
     ):
         assert phrase in operations

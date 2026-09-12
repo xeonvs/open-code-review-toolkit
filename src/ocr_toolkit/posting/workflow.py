@@ -1426,6 +1426,30 @@ def post_ocr_failure(
     return 1 if strict_posting() else 0
 
 
+def terminal_status_exit(config: GitLabConfig, source_sha: str, *, posting_succeeded: bool) -> int:
+    """Confirm terminal state on every advisory-success path and protect strict gates."""
+
+    try:
+        lifecycle = current_merge_request_lifecycle(config, source_sha)
+    except GitLabProviderError as exc:
+        print(f"Cannot confirm terminal merge-request lifecycle: {exc}", file=sys.stderr)
+        return 1
+    if lifecycle.state == "opened":
+        print(
+            "Merge request reopened while terminal status was handled; a new review is required.",
+            file=sys.stderr,
+        )
+        return 1
+    if strict_posting() and (not posting_succeeded or lifecycle.state == "closed"):
+        if lifecycle.state == "closed" and posting_succeeded:
+            print(
+                "Closed merge request remains reopenable; strict review gates require a new review.",
+                file=sys.stderr,
+            )
+        return 1
+    return 0
+
+
 def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
     """Upsert one plain terminal-MR status note without touching prior review state."""
 
@@ -1448,7 +1472,7 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
     terminal_note_ids = collect_terminal_status_note_ids(config)
     if terminal_note_ids is None:
         print("Cannot collect previous OCR terminal status notes reliably.", file=sys.stderr)
-        return 1 if strict_posting() else 0
+        return terminal_status_exit(config, status.source_sha, posting_succeeded=False)
     if len(terminal_note_ids) > 1:
         print("Cannot identify exactly one previous OCR terminal status note.", file=sys.stderr)
         return 1
@@ -1486,19 +1510,8 @@ def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutio
         and readback.get("body") == build_marked_note_body(note_body)
     ):
         print("Failed to upsert and verify OCR terminal merge-request note.", file=sys.stderr)
-        return 1 if strict_posting() else 0
-    try:
-        final_lifecycle = current_merge_request_lifecycle(config, status.source_sha)
-    except GitLabProviderError as exc:
-        print(f"Cannot confirm terminal merge-request lifecycle: {exc}", file=sys.stderr)
-        return 1
-    if final_lifecycle.state == "opened":
-        print(
-            "Merge request reopened while terminal status was published; a new review is required.",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
+        return terminal_status_exit(config, status.source_sha, posting_succeeded=False)
+    return terminal_status_exit(config, status.source_sha, posting_succeeded=True)
 
 
 def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
