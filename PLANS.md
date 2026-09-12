@@ -74,9 +74,10 @@ before handoff or commit. Completed stable plans are indexed in
   the current Rego probe plus shared version-selected validation for OCR
   `1.11.8` and later.
 - [x] Route live candidate probe inventories and observations through that same
-  version-selected epoch, and add an exact `through_tag` ceiling for
-  release-scoped hosted chains. The exploratory unbounded run was cancelled
-  before creating an OCR 1.12.0 issue or artifact.
+  version-selected epoch, retain next-epoch language paths as negative controls,
+  and add an exact `through_tag` ceiling for release-scoped hosted chains. The
+  exploratory unbounded run was cancelled before creating an OCR 1.12.0 issue
+  or artifact.
 - [ ] Qualify and promote OCR `1.11.7` through `1.11.9` from exact hosted
   evidence and the recorded source-review conclusions.
 - [ ] Complete the feature PR and hosted evidence, stable release, external

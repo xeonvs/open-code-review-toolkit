@@ -65,6 +65,11 @@ def test_live_language_probe_paths_follow_candidate_epoch() -> None:
 
     assert "policies/authz.rego" not in module._language_rules_for_version("1.11.7")
     assert module._language_rules_for_version("1.11.8")["policies/authz.rego"] == "**/*.rego"
+    assert module._language_negative_paths_for_version("1.11.7") == (
+        "rtl/include.svh",
+        "policies/authz.rego",
+    )
+    assert module._language_negative_paths_for_version("1.11.8") == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:

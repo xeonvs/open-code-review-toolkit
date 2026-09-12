@@ -431,6 +431,15 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
     return rules
 
 
+def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
+    """Keep next-epoch languages observable as negative controls."""
+
+    paths = ["rtl/include.svh"]
+    if _version(version) < history.HISTORICAL_CUTOFF:
+        paths.append("policies/authz.rego")
+    return tuple(paths)
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -2203,8 +2212,8 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     exact_patterns = _language_rules_for_version(version)
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
-    unsupported_path = "rtl/include.svh"
-    paths = (*supported_paths, unsupported_path, *CURRENT_DEFAULT_EXCLUDED_PATHS)
+    unsupported_paths = _language_negative_paths_for_version(version)
+    paths = (*supported_paths, *unsupported_paths, *CURRENT_DEFAULT_EXCLUDED_PATHS)
     for path in paths:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2244,9 +2253,12 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
             "candidate did not select the qualified built-in language set: "
             f"missing={missing!r}, unexpected={unexpected!r}"
         )
-    unsupported_selected, unsupported_reason = _preview_file_selection(payload, unsupported_path)
-    if unsupported_selected or unsupported_reason != "unsupported_ext":
-        _fail("candidate unexpectedly selected the unqualified .svh extension")
+    for unsupported_path in unsupported_paths:
+        unsupported_selected, unsupported_reason = _preview_file_selection(
+            payload, unsupported_path
+        )
+        if unsupported_selected or unsupported_reason != "unsupported_ext":
+            _fail(f"candidate unexpectedly selected unqualified path {unsupported_path}")
     for path in CURRENT_DEFAULT_EXCLUDED_PATHS:
         selected_test, reason = _preview_file_selection(payload, path)
         if selected_test or not isinstance(reason, str) or not reason:
