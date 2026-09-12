@@ -73,6 +73,10 @@ before handoff or commit. Completed stable plans are indexed in
 - [x] Freeze the historical OCR `1.11.6`/`1.11.7` qualification contract and add
   the current Rego probe plus shared version-selected validation for OCR
   `1.11.8` and later.
+- [x] Route live candidate observations through that same version-selected
+  validator and add an exact `through_tag` ceiling for release-scoped hosted
+  chains. The exploratory unbounded run was cancelled before creating an OCR
+  1.12.0 issue or artifact.
 - [ ] Qualify and promote OCR `1.11.7` through `1.11.9` from exact hosted
   evidence and the recorded source-review conclusions.
 - [ ] Complete the feature PR and hosted evidence, stable release, external

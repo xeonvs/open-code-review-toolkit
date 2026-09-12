@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import sys
 from contextlib import contextmanager
@@ -49,6 +50,14 @@ def current_contracts(module: ModuleType) -> dict[str, Any]:
         }
     )
     return contracts
+
+
+def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
+    module = load_script()
+    source = inspect.getsource(module.run_contracts)
+
+    assert "_validate_contracts_for_version(version, contracts)" in source
+    assert "_validate_current_contracts(contracts)" not in source
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -403,6 +412,33 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
 
     assert [item["tag_name"] for item in unseen] == ["v1.11.3"]
     assert len(requested) == 2
+
+
+def test_discovery_honors_exact_stable_release_ceiling() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    payload = [
+        release("1.12.0"),
+        release("1.11.9"),
+        release("1.11.8"),
+        release("1.11.7"),
+        release("1.11.6"),
+    ]
+
+    with patched_attr(module, "_request_json", lambda _url: payload):
+        unseen = module.discover_unseen(manifest, through_tag="v1.11.9")
+
+    assert [item["tag_name"] for item in unseen] == ["v1.11.7", "v1.11.8", "v1.11.9"]
+
+
+def test_discovery_rejects_missing_release_ceiling() -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    payload = [release("1.11.8"), release("1.11.7"), release("1.11.6")]
+
+    with patched_attr(module, "_request_json", lambda _url: payload):
+        with pytest.raises(module.CompatibilityError, match="ceiling was not found"):
+            module.discover_unseen(manifest, through_tag="v1.11.9")
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:

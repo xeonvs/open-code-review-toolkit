@@ -9,6 +9,10 @@ on:
         description: Optional exact stable upstream tag to qualify against the current contract
         required: false
         type: string
+      through_tag:
+        description: Optional stable upper bound for one contiguous unseen-release chain
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -33,13 +37,30 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+      - name: Validate manual selection
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+          THROUGH_TAG: ${{ inputs.through_tag }}
+        run: |
+          if [ -n "${REQUESTED_TAG}" ] && [ -n "${THROUGH_TAG}" ]; then
+            echo "tag and through_tag are mutually exclusive" >&2
+            exit 1
+          fi
       - name: Validate support manifest
         run: PYTHONPATH=src python scripts/ocr_compat.py validate
       - name: Discover unseen stable releases
         if: inputs.tag == ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: PYTHONPATH=src python scripts/ocr_compat.py discover --output /tmp/ocr-releases.json
+          THROUGH_TAG: ${{ inputs.through_tag }}
+        run: |
+          args=()
+          if [ -n "${THROUGH_TAG}" ]; then
+            args+=(--through-tag "${THROUGH_TAG}")
+          fi
+          PYTHONPATH=src python scripts/ocr_compat.py discover \
+            "${args[@]}" \
+            --output /tmp/ocr-releases.json
       - name: Use requested stable release
         if: inputs.tag != ''
         env:

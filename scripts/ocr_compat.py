@@ -406,14 +406,20 @@ def _validate_current_contracts(value: object) -> None:
         _fail("current qualification omitted the review-result contract")
 
 
-def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
-    """Select the frozen or live qualification epoch from the candidate version."""
+def _validate_contracts_for_version(version: str, contracts: Any) -> None:
+    """Validate observed contracts against the epoch owned by the candidate version."""
 
     version_tuple = _version(version)
     if version_tuple < history.HISTORICAL_CUTOFF:
-        history.validate_contracts(version, version_tuple, evidence, _fail)
+        history.validate_contracts(version, version_tuple, {"contracts": contracts}, _fail)
     else:
-        _validate_current_contracts(evidence.get("contracts"))
+        _validate_current_contracts(contracts)
+
+
+def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
+    """Select the frozen or live qualification epoch from the candidate version."""
+
+    _validate_contracts_for_version(version, evidence.get("contracts"))
 
 
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
@@ -593,10 +599,21 @@ def _issue_api_request(
     return value
 
 
-def discover_unseen(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def discover_unseen(
+    manifest: dict[str, Any], *, through_tag: str | None = None
+) -> list[dict[str, Any]]:
     """Return bounded unseen stable upstream releases above the monitoring floor."""
 
     floor = _version(str(manifest["monitoring_floor"]))
+    ceiling: tuple[int, int, int] | None = None
+    ceiling_version: str | None = None
+    if through_tag is not None:
+        if VERSION_RE.fullmatch(through_tag) is None:
+            _fail("qualification ceiling must be a stable semantic version tag")
+        ceiling_version = through_tag.removeprefix("v")
+        ceiling = _version(ceiling_version)
+        if ceiling <= floor:
+            _fail("qualification ceiling must be newer than the monitoring floor")
     known = {str(entry["version"]) for entry in manifest["releases"]}
     unseen: list[dict[str, Any]] = []
     reached_floor = False
@@ -621,12 +638,16 @@ def discover_unseen(manifest: dict[str, Any]) -> list[dict[str, Any]]:
             parsed = _version(version)
             if parsed <= floor:
                 reached_floor = True
-            elif version not in known:
+            elif version not in known and (ceiling is None or parsed <= ceiling):
                 unseen.append(release)
         if reached_floor or len(payload) < MAX_RELEASES_PER_PAGE:
             break
     if not reached_floor and len(payload) == MAX_RELEASES_PER_PAGE:
         _fail("monitoring floor was not reached within the bounded release pages")
+    if ceiling_version is not None and not any(
+        str(item.get("tag_name", "")).removeprefix("v") == ceiling_version for item in unseen
+    ):
+        _fail("qualification ceiling was not found among unseen stable releases")
     return sorted(unseen, key=lambda item: _version(str(item["tag_name"]).removeprefix("v")))
 
 
@@ -2528,7 +2549,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
     contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
     contracts["comment_thinking_probe"] = thinking_probe
-    _validate_current_contracts(contracts)
+    _validate_contracts_for_version(version, contracts)
     return contracts
 
 
@@ -3257,6 +3278,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("validate")
     discover = subparsers.add_parser("discover")
     discover.add_argument("--output", type=Path, required=True)
+    discover.add_argument("--through-tag")
     matrix = subparsers.add_parser("build-matrix")
     matrix.add_argument("--releases", type=Path, required=True)
     matrix.add_argument("--output", type=Path, required=True)
@@ -3314,7 +3336,7 @@ def main(argv: list[str] | None = None) -> int:
             print("OCR support manifest validated")
             return 0
         if args.command == "discover":
-            unseen = discover_unseen(manifest)
+            unseen = discover_unseen(manifest, through_tag=args.through_tag)
             args.output.write_bytes(canonical_json({"releases": unseen}))
             print(f"discovered {len(unseen)} unseen stable OCR release(s)")
             return 0

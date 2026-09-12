@@ -4,18 +4,29 @@ The versioned support contract lives in [`compatibility/ocr-support.json`](../co
 
 ## Qualification lanes
 
-Live qualification runs one forward-only suite for the current consumed review
-contract. It does not select parsers, fixtures, or required probes by candidate
-version. Historical evidence before the suite boundary is checked separately by
-`scripts/ocr_compat_history.py` using frozen expectations; that reader never
-executes old binaries. Generic promotion tests use a frozen baseline. See
+Live qualification runs one forward-only probe implementation and validates its
+observations against the consumed review contract owned by the candidate epoch.
+Historical candidates before the suite boundary use frozen expectations from
+`scripts/ocr_compat_history.py`; the same frozen data also protects historical
+evidence readback and never supplies executable code. Generic promotion tests
+use a frozen baseline. See
 [qualification maintenance](development.md#maintaining-ocr-qualification).
 Historical readback is not promotion authority: every newly promoted candidate
-must provide the current evidence schema and complete live consumed contract,
-regardless of the historical archive boundary. The live suite includes explicit
-reasoning wire capture and the current built-in language/test-exclusion inventory.
+must provide the current evidence schema and its complete version-selected
+consumed contract. The current epoch includes explicit reasoning wire capture and
+the current built-in language/test-exclusion inventory.
 
-The **OCR compatibility** workflow discovers stable upstream releases newer than the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`, after the observed upstream release window; GitHub may delay or omit scheduled delivery, so exact-tag manual dispatch remains the recovery path. Drafts, prereleases, non-semantic tags, unexpected asset sets, oversized metadata or downloads, redirects outside the reviewed GitHub origins, and checksum disagreement fail closed. Every binary digest must agree with both GitHub release metadata and the upstream `sha256sum.txt`.
+The **OCR compatibility** workflow discovers stable upstream releases newer than
+the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`,
+after the observed upstream release window; GitHub may delay or omit scheduled
+delivery, so exact-tag manual dispatch remains the single-candidate recovery
+path. A manual `through_tag` instead qualifies the complete contiguous unseen
+chain only through that exact stable release, preventing a scoped maintenance
+run from absorbing a newer upstream release. The two inputs are mutually
+exclusive. Drafts, prereleases, non-semantic tags, missing ceilings, unexpected
+asset sets, oversized metadata or downloads, redirects outside the reviewed
+GitHub origins, and checksum disagreement fail closed. Every binary digest must
+agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 
 Candidate execution uses the verified Linux amd64 binary on an Ubuntu runner. The harness checks the reported version, the CLI flags consumed by the GitLab integration, range preview behavior, an actual JSON review through a deterministic local gateway, an aggregate-budget review that must preserve completed findings and emit budget-attributed partial coverage, and the additive JSON fields consumed by posting. Toolkit-managed numeric OCR options are also exercised at omitted/default, sentinel, invalid-below-boundary, minimum minus one, minimum, representative, and maximum edges when bounded. The evidence records closed outcomes, recognized diagnostics, normalization, ownership, and effective values observed through real loop behavior; CLI help text is not accepted as runtime evidence. The harness also requires JSON preview without a session-store side effect and proves that additive comment `thinking` is accepted but not published to GitLab. Upstream source review separately verifies how OCR derives that field; the toolkit probe does not claim to reproduce a provider's private reasoning channel. Evidence permits unknown new fields but requires the fields the toolkit reads. Legacy result statuses and the versioned `ocr.run-manifest/v1` outcome are normalized through one shared toolkit contract; manifest coverage sets, failure classifications, terminal state, and budget attribution must agree before a result can be published.
 

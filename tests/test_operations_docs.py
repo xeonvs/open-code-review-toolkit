@@ -747,6 +747,9 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert '- cron: "15 7 * * *"' in workflow
     assert '- cron: "41 5 * * *"' not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "through_tag:" in workflow
+    assert "tag and through_tag are mutually exclusive" in workflow
+    assert '--through-tag "${THROUGH_TAG}"' in workflow
     assert "contents: read" in workflow
     assert "issues: write" in workflow
     assert "pull-requests: write" not in workflow
