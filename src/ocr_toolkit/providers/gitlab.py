@@ -31,10 +31,29 @@ PROVIDER_TIMEOUT_SECONDS = 30
 TARGET_PROTECTION_MODE_VARIABLE = "OCR_GITLAB_TARGET_PROTECTION_MODE"
 TargetProtectionMode = Literal["required", "unprotected"]
 TargetProtectionState = Literal["protected", "unprotected"]
+MergeRequestState = Literal["opened", "merged", "closed"]
 
 
 class GitLabProviderError(ValueError):
     """Report unavailable or unsafe GitLab review identity."""
+
+
+@dataclass(frozen=True, slots=True)
+class GitLabMergeRequestLifecycle:
+    """Bind one closed GitLab lifecycle state to exact review identities."""
+
+    project_id: str
+    merge_request_iid: str
+    source_sha: str
+    state: MergeRequestState
+
+
+class GitLabMergeRequestTerminal(GitLabProviderError):
+    """Report a valid reviewed MR that reached a terminal lifecycle state."""
+
+    def __init__(self, lifecycle: GitLabMergeRequestLifecycle) -> None:
+        super().__init__(f"GitLab merge request is already {lifecycle.state}")
+        self.lifecycle = lifecycle
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +129,8 @@ def _numeric_identifier(environment: Mapping[str, str], name: str) -> str:
         or len(value) > MAX_CI_IDENTIFIER_CHARS
         or not value.isascii()
         or not value.isdecimal()
+        or int(value) <= 0
+        or str(int(value)) != value
     ):
         raise GitLabProviderError(f"{name} must be a bounded decimal identifier")
     return value
@@ -212,6 +233,54 @@ def _positive_identifier(value: object, label: str) -> int:
     return value
 
 
+def parse_merge_request_lifecycle(
+    value: object,
+    *,
+    expected_project_id: str,
+    expected_merge_request_iid: str,
+    expected_head: str,
+) -> GitLabMergeRequestLifecycle:
+    """Hostile-parse exact MR identity before accepting its closed lifecycle state."""
+
+    expected_head = _sha(expected_head, "reviewed source head")
+    if (
+        not expected_project_id.isascii()
+        or not expected_project_id.isdecimal()
+        or not 1 <= len(expected_project_id) <= MAX_CI_IDENTIFIER_CHARS
+        or int(expected_project_id) <= 0
+        or str(int(expected_project_id)) != expected_project_id
+    ):
+        raise GitLabProviderError("expected GitLab project id is invalid")
+    if (
+        not expected_merge_request_iid.isascii()
+        or not expected_merge_request_iid.isdecimal()
+        or not 1 <= len(expected_merge_request_iid) <= MAX_CI_IDENTIFIER_CHARS
+        or int(expected_merge_request_iid) <= 0
+        or str(int(expected_merge_request_iid)) != expected_merge_request_iid
+    ):
+        raise GitLabProviderError("expected GitLab merge-request iid is invalid")
+    if not isinstance(value, dict):
+        raise GitLabProviderError("GitLab merge-request metadata must be an object")
+    project_id = _positive_identifier(value.get("target_project_id"), "target project id")
+    merge_request_iid = _positive_identifier(value.get("iid"), "merge-request iid")
+    source_sha = _sha(value.get("sha"), "merge-request source head")
+    state = value.get("state")
+    if str(project_id) != expected_project_id:
+        raise GitLabProviderError("GitLab merge request targets a different project")
+    if str(merge_request_iid) != expected_merge_request_iid:
+        raise GitLabProviderError("GitLab returned a different merge request")
+    if source_sha != expected_head:
+        raise GitLabProviderError("GitLab merge-request head does not match the reviewed head")
+    if state not in {"opened", "merged", "closed"}:
+        raise GitLabProviderError("GitLab returned an invalid merge-request lifecycle state")
+    return GitLabMergeRequestLifecycle(
+        project_id=expected_project_id,
+        merge_request_iid=expected_merge_request_iid,
+        source_sha=source_sha,
+        state=state,
+    )
+
+
 def parse_target_protection_mode(raw: str | None) -> TargetProtectionMode:
     """Parse the exact fail-closed target-protection policy setting."""
 
@@ -259,14 +328,15 @@ def acquire_review_snapshot(
     )
     if not isinstance(mr, dict):
         raise GitLabProviderError("GitLab merge-request metadata must be an object")
-    if mr.get("state") != "opened":
-        raise GitLabProviderError("GitLab merge request is not open")
-    source_sha = _sha(mr.get("sha"), "merge-request source head")
-    if source_sha != expected_head:
-        raise GitLabProviderError("GitLab merge-request head does not match the reviewed head")
-    target_project = mr.get("target_project_id")
-    if isinstance(target_project, bool) or str(target_project) != project_id:
-        raise GitLabProviderError("GitLab merge request targets a different project")
+    lifecycle = parse_merge_request_lifecycle(
+        mr,
+        expected_project_id=project_id,
+        expected_merge_request_iid=merge_request_iid,
+        expected_head=expected_head,
+    )
+    if lifecycle.state != "opened":
+        raise GitLabMergeRequestTerminal(lifecycle)
+    source_sha = lifecycle.source_sha
     target_branch = _branch(mr.get("target_branch"))
     author = mr.get("author")
     if not isinstance(author, dict):

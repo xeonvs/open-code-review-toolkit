@@ -275,6 +275,28 @@ def test_operations_guide_documents_lifecycle_contract() -> None:
     assert "previous review" in operations
 
 
+def test_terminal_merge_request_race_contract_is_public_and_fail_closed() -> None:
+    operations = OPERATIONS.read_text(encoding="utf-8")
+    configuration = CONFIGURATION.read_text(encoding="utf-8")
+    gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
+    security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
+    flow = DECISION_FLOW.read_text(encoding="utf-8")
+
+    for phrase in (
+        "stops before evidence collection and OCR",
+        "Duplicate jobs update the same note",
+        "immediately before the publication transaction",
+        "automatic approval explicitly skipped",
+        "stops before the first publication write",
+    ):
+        assert phrase in operations
+    assert "ocr.pre-execution-status/v3" in configuration
+    assert "findings, summaries, suppression, discussions, or approval state" in gitlab
+    assert "Unknown, malformed, unavailable, or mismatched provider data fails closed" in security
+    assert "Merged or closed" in flow
+    assert "skip approval" in flow
+
+
 def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> None:
     """Keep one linked detailed flow aligned with signal-preserving publication."""
 

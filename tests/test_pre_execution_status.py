@@ -11,6 +11,7 @@ import pytest
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
+    GITLAB_MERGE_REQUEST_TERMINAL,
     MAX_STATUS_BYTES,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
@@ -78,6 +79,10 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
         "actual": None,
         "limit": None,
         "unit": None,
+        "provider": None,
+        "project_id": None,
+        "change_id": None,
+        "terminal_state": None,
     }
 
     variants = (
@@ -210,3 +215,75 @@ def test_pre_execution_status_round_trips_closed_background_rejection(
     serialized = path.read_text(encoding="utf-8")
     assert "background.md" not in serialized
     assert "please provide" not in serialized
+
+
+@pytest.mark.parametrize("terminal_state", ["merged", "closed"])
+def test_pre_execution_status_round_trips_identity_bound_terminal_mr(
+    tmp_path: Path, terminal_state: str
+) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=GITLAB_MERGE_REQUEST_TERMINAL,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=None,
+        provider="gitlab",
+        project_id="17",
+        change_id="23",
+        terminal_state=terminal_state,
+    )
+
+    write_pre_execution_status(path, expected)
+
+    assert (
+        read_pre_execution_status(
+            path,
+            expected_diff_base_sha=BASE,
+            expected_source_sha=SOURCE,
+        )
+        == expected
+    )
+    assert '"policy_sha":null' in path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("provider", "github"),
+        ("project_id", "../17"),
+        ("project_id", "017"),
+        ("project_id", "0"),
+        ("change_id", True),
+        ("terminal_state", "locked"),
+        ("policy_sha", POLICY),
+    ],
+)
+def test_pre_execution_status_rejects_hostile_terminal_identity(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    payload = {
+        "schema_version": STATUS_SCHEMA,
+        "reason": GITLAB_MERGE_REQUEST_TERMINAL,
+        "diff_base_sha": BASE,
+        "source_sha": SOURCE,
+        "policy_sha": None,
+        "actual": None,
+        "limit": None,
+        "unit": None,
+        "provider": "gitlab",
+        "project_id": "17",
+        "change_id": "23",
+        "terminal_state": "merged",
+    }
+    payload[field] = value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    path.chmod(0o600)
+
+    with pytest.raises(PreExecutionStatusError, match="fields"):
+        read_pre_execution_status(
+            path,
+            expected_diff_base_sha=BASE,
+            expected_source_sha=SOURCE,
+        )

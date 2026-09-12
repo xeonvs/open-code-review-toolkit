@@ -11,8 +11,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-STATUS_SCHEMA = "ocr.pre-execution-status/v2"
+STATUS_SCHEMA = "ocr.pre-execution-status/v3"
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
+GITLAB_MERGE_REQUEST_TERMINAL = "gitlab_merge_request_terminal"
 BACKGROUND_CHARACTER_LIMIT_REASON = "ocr_background_character_limit"
 BACKGROUND_FILE_SIZE_LIMIT_REASON = "ocr_background_file_size_limit"
 BACKGROUND_REASONS = {
@@ -35,10 +36,14 @@ class PreExecutionStatus:
     reason: str
     diff_base_sha: str
     source_sha: str
-    policy_sha: str
+    policy_sha: str | None
     actual: int | None = None
     limit: int | None = None
     unit: str | None = None
+    provider: str | None = None
+    project_id: str | None = None
+    change_id: str | None = None
+    terminal_state: str | None = None
 
 
 def _sha(value: str) -> bool:
@@ -47,7 +52,39 @@ def _sha(value: str) -> bool:
 
 def _validate(status: PreExecutionStatus) -> None:
     if status.schema_version != STATUS_SCHEMA or any(
-        not _sha(value) for value in (status.diff_base_sha, status.source_sha, status.policy_sha)
+        not _sha(value) for value in (status.diff_base_sha, status.source_sha)
+    ):
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason == GITLAB_MERGE_REQUEST_TERMINAL:
+        if (
+            status.policy_sha is not None
+            or any(value is not None for value in (status.actual, status.limit, status.unit))
+            or status.provider != "gitlab"
+            or status.terminal_state not in {"merged", "closed"}
+            or any(
+                not isinstance(value, str)
+                or not value.isascii()
+                or not value.isdecimal()
+                or not 1 <= len(value) <= 32
+                or int(value) <= 0
+                or str(int(value)) != value
+                for value in (status.project_id, status.change_id)
+            )
+        ):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
+    if (
+        not isinstance(status.policy_sha, str)
+        or not _sha(status.policy_sha)
+        or any(
+            value is not None
+            for value in (
+                status.provider,
+                status.project_id,
+                status.change_id,
+                status.terminal_state,
+            )
+        )
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.reason == PROTECTED_TARGET_RULE_PATH_PENDING:
@@ -204,17 +241,15 @@ def read_pre_execution_status(
             "actual",
             "limit",
             "unit",
+            "provider",
+            "project_id",
+            "change_id",
+            "terminal_state",
         }:
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         if any(
             not isinstance(value.get(key), str)
-            for key in (
-                "schema_version",
-                "reason",
-                "diff_base_sha",
-                "source_sha",
-                "policy_sha",
-            )
+            for key in ("schema_version", "reason", "diff_base_sha", "source_sha")
         ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         status = PreExecutionStatus(**value)

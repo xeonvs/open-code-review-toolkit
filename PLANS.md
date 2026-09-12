@@ -57,3 +57,15 @@ before handoff or commit. Completed stable plans are indexed in
 - Close issues and milestone only after the stable PyPI/GitHub/tag/smoke receipt
   is verified. Finish with the no-release reconciliation PR, archived execution
   plan, and release-branch cleanup.
+
+#### Progress
+
+- [x] Activated the release plan and assigned `#187`, `#194`, `#195`, and
+  `#196` to milestone v0.10.1.
+- [x] Implemented and documented the strict terminal GitLab MR lifecycle,
+  pre-execution status v3, idempotent terminal note, admitted-result guard,
+  approval suppression, and successful-publication cleanup for `#194`.
+- [ ] Freeze the historical OCR qualification contract, add the current Rego
+  probe, and qualify/promote OCR `1.11.7` through `1.11.9`.
+- [ ] Complete pre-push security/Gitleaks gates, feature PR and hosted evidence,
+  stable release, external receipt, issue/milestone closure, and reconciliation.

@@ -68,6 +68,7 @@ from ocr_toolkit.posting.gitlab import (
 from ocr_toolkit.posting.gitlab_approval import ApprovalExecution, execute_approval
 from ocr_toolkit.posting.markers import (
     SETUP_PENDING_MARKER,
+    TERMINAL_MR_MARKER,
     annotate_comment_fingerprints,
     build_summary_run_marker,
     is_own_bot_note,
@@ -80,9 +81,11 @@ from ocr_toolkit.posting.result import (
 from ocr_toolkit.posting.snapshot import (
     BotCommentRefs,
     collect_previous_bot_comment_refs,
+    collect_terminal_status_note_ids,
     delete_previous_bot_comments_if_collected,
     delete_previous_setup_notes,
     delete_previous_summary_notes,
+    delete_previous_terminal_notes,
     filter_previously_published_comments,
     filter_suppressed_comments,
     posting_failure_exit,
@@ -98,6 +101,7 @@ from ocr_toolkit.posting.suggestions import (
 from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
     BACKGROUND_REASONS,
+    GITLAB_MERGE_REQUEST_TERMINAL,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     PreExecutionStatus,
     PreExecutionStatusError,
@@ -106,6 +110,11 @@ from ocr_toolkit.pre_execution import (
 from ocr_toolkit.provider_failure import (
     ProviderFailureReason,
     provider_failure_reason,
+)
+from ocr_toolkit.providers.gitlab import (
+    GitLabMergeRequestLifecycle,
+    GitLabProviderError,
+    parse_merge_request_lifecycle,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.review_identity import effective_reviewed_sha
@@ -162,6 +171,49 @@ def approval_receipt_identity(toolkit_metadata: Any) -> tuple[str, int | None]:
     if identity is None:
         return "", None
     return identity.source_sha, identity.mr_author_id
+
+
+def current_merge_request_lifecycle(
+    config: GitLabConfig, reviewed_commit: str
+) -> GitLabMergeRequestLifecycle:
+    """Read and identity-bind the live MR state immediately before publication."""
+
+    payload = gitlab_api.api_request(config, "", method="GET")
+    if payload is None:
+        raise GitLabProviderError("GitLab merge-request lifecycle is unavailable")
+    return parse_merge_request_lifecycle(
+        payload,
+        expected_project_id=config.project_id,
+        expected_merge_request_iid=config.merge_request_iid,
+        expected_head=reviewed_commit,
+    )
+
+
+def terminal_approval_eligibility(state: str) -> ApprovalEligibility:
+    """Return one explicit comment-only outcome for a terminal merge request."""
+
+    return ApprovalEligibility(
+        False,
+        ApprovalResult(
+            ApprovalStatus.SKIPPED,
+            f"merge request was already {state} when publication began; no approval was attempted",
+        ),
+    )
+
+
+def publication_lifecycle_or_exit(
+    config: GitLabConfig, toolkit_metadata: Any, reviewed_commit: str
+) -> tuple[GitLabMergeRequestLifecycle | None, int | None]:
+    """Fail closed on live identity errors; preserve legacy result behavior."""
+
+    if toolkit_metadata is None:
+        return None, None
+    try:
+        return current_merge_request_lifecycle(config, reviewed_commit), None
+    except GitLabProviderError as exc:
+        print(f"Cannot validate GitLab merge-request lifecycle: {exc}", file=sys.stderr)
+        print_posting_failure_banner()
+        return None, 1
 
 
 def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
@@ -760,6 +812,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     summary_run_id = secrets.token_hex(16)
     receipt_sha, reviewed_author_id = approval_receipt_identity(result.get(TOOLKIT_RESULT_KEY))
     reviewed_commit = receipt_sha or reviewed_sha()
+    publication_lifecycle: GitLabMergeRequestLifecycle | None = None
     summary_status = (
         "publication-filtered"
         if publication_state == "publication-filtered"
@@ -776,6 +829,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     )
 
     if publishable_comment_count == 0:
+        publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
+            config, toolkit_metadata, reviewed_commit
+        )
+        if lifecycle_exit is not None:
+            return lifecycle_exit
+        if publication_lifecycle is not None and publication_lifecycle.state != "opened":
+            approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
 
         def render_no_comments_summary(approval_result: ApprovalResult) -> str:
             """Render the no-findings summary with one approval state."""
@@ -802,6 +862,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 suppressed_count=suppressed_count,
                 approval_result=approval_result,
                 unprotected_target=constrained_target,
+                merge_request_lifecycle=(
+                    publication_lifecycle.state
+                    if publication_lifecycle is not None and publication_lifecycle.state != "opened"
+                    else ""
+                ),
                 emoji=emoji,
             )
 
@@ -831,6 +896,13 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
 
     refs = get_diff_refs(config)
+    publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
+        config, toolkit_metadata, reviewed_commit
+    )
+    if lifecycle_exit is not None:
+        return lifecycle_exit
+    if publication_lifecycle is not None and publication_lifecycle.state != "opened":
+        approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
     inline_count = 0
     failed_comments: list[tuple[dict[str, Any], SuggestionDecision]] = []
     fallback_reasons: Counter[str] = Counter()
@@ -991,6 +1063,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             suppressed_count=suppressed_count,
             approval_result=approval_result,
             unprotected_target=constrained_target,
+            merge_request_lifecycle=(
+                publication_lifecycle.state
+                if publication_lifecycle is not None and publication_lifecycle.state != "opened"
+                else ""
+            ),
             emoji=emoji,
         )
 
@@ -1038,6 +1115,7 @@ def finalize_previous_review_state(
     if outcome.kind == "partial":
         print("OCR coverage is partial; preserving previous review comments until a complete run.")
         delete_previous_summary_notes(config, previous_refs)
+        delete_previous_terminal_notes(config, previous_refs)
     else:
         delete_previous_bot_comments_if_collected(config, previous_refs)
     resolve_requested_discussions(config, previous_refs)
@@ -1348,9 +1426,65 @@ def post_ocr_failure(
     return 1 if strict_posting() else 0
 
 
+def post_terminal_merge_request_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
+    """Upsert one plain terminal-MR status note without touching prior review state."""
+
+    if status.project_id != config.project_id or status.change_id != config.merge_request_iid:
+        print(
+            "Terminal merge-request status identity does not match posting target.", file=sys.stderr
+        )
+        return 1
+    terminal_note_ids = collect_terminal_status_note_ids(config)
+    if terminal_note_ids is None:
+        print("Cannot collect previous OCR terminal status notes reliably.", file=sys.stderr)
+        return 1 if strict_posting() else 0
+    if len(terminal_note_ids) > 1:
+        print("Cannot identify exactly one previous OCR terminal status note.", file=sys.stderr)
+        return 1
+
+    state = status.terminal_state
+    heading = (
+        f"**⏭️ Open Code Review skipped — merge request is already {state}**"
+        if post_emoji()
+        else f"**Open Code Review skipped — merge request is already {state}**"
+    )
+    body = (
+        f"{TERMINAL_MR_MARKER}\n"
+        "No model review was run because the merge request reached an expected terminal "
+        f"lifecycle state (`{state}`) before review admission.\n\n"
+        "- No review findings were produced.\n"
+        "- Automatic approval was not attempted.\n"
+        "- Previous Open Code Review comments and reviewer state were preserved."
+    )
+    note_body = f"{heading}\n\n{body}"
+    if terminal_note_ids:
+        note_id = terminal_note_ids[0]
+        write = update_plain_note(config, note_id, note_body)
+        posted = write.posted
+    else:
+        response = gitlab_api.post_note(config, note_body)
+        note_id = gitlab_api.plain_note_id(response)
+        posted = note_id is not None
+    readback = (
+        gitlab_api.api_request(config, f"/notes/{note_id}", method="GET")
+        if posted and note_id is not None
+        else None
+    )
+    if not (
+        isinstance(readback, dict)
+        and is_own_bot_note(config, readback, "body")
+        and readback.get("body") == build_marked_note_body(note_body)
+    ):
+        print("Failed to upsert and verify OCR terminal merge-request note.", file=sys.stderr)
+        return 1 if strict_posting() else 0
+    return 0
+
+
 def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) -> int:
     """Render static toolkit text for one already hostile-validated closed outcome."""
 
+    if status.reason == GITLAB_MERGE_REQUEST_TERMINAL:
+        return post_terminal_merge_request_status(config, status)
     if status.reason in BACKGROUND_REASONS:
         transaction = PostingTransaction()
         heading = (

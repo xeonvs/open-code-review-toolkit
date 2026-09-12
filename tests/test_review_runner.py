@@ -1128,6 +1128,11 @@ def test_private_failure_arguments_preserve_finalized_signal_and_gitlab_notes(
     monkeypatch.setattr(
         workflow, "collect_previous_bot_comment_refs", lambda _: snapshot.BotCommentRefs()
     )
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+    )
     monkeypatch.setattr(workflow, "get_diff_refs", lambda _: None)
     monkeypatch.setattr(
         workflow,
@@ -4155,12 +4160,16 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
     persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
     assert persisted == {
         "actual": 8_001,
+        "change_id": None,
         "diff_base_sha": "a" * 40,
         "limit": 8_000,
         "policy_sha": "c" * 40,
+        "project_id": None,
+        "provider": None,
         "reason": "ocr_background_character_limit",
-        "schema_version": "ocr.pre-execution-status/v2",
+        "schema_version": "ocr.pre-execution-status/v3",
         "source_sha": "b" * 40,
+        "terminal_state": None,
         "unit": "characters",
     }
 
