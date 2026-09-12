@@ -29,7 +29,7 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-EXPECTED_OCR_VERSION = "1.11.6"
+EXPECTED_OCR_VERSION = "1.11.9"
 
 
 class PreflightError(Exception):

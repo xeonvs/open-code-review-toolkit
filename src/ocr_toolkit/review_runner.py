@@ -106,6 +106,7 @@ from ocr_toolkit.posting.result import ocr_warning_text
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
+    GITLAB_MERGE_REQUEST_TERMINAL,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     STATUS_SCHEMA,
     PreExecutionStatus,
@@ -119,6 +120,7 @@ from ocr_toolkit.provider_failure import (
     render_provider_diagnostics,
 )
 from ocr_toolkit.providers.gitlab import (
+    GitLabMergeRequestTerminal,
     GitLabProviderError,
     acquire_review_snapshot,
     invocation_identifiers,
@@ -1995,11 +1997,29 @@ def _prepare_policy_context(
     author_id = None
     target_protection = "local"
     if not local and is_merge_request_environment(os.environ):
-        snapshot = acquire_review_snapshot(
-            os.environ,
-            expected_head=refs.head,
-            include_metadata=context_mode in {"metadata", "enriched"},
-        )
+        try:
+            snapshot = acquire_review_snapshot(
+                os.environ,
+                expected_head=refs.head,
+                include_metadata=context_mode in {"metadata", "enriched"},
+            )
+        except GitLabMergeRequestTerminal as exc:
+            lifecycle = exc.lifecycle
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=GITLAB_MERGE_REQUEST_TERMINAL,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=None,
+                    provider="gitlab",
+                    project_id=lifecycle.project_id,
+                    change_id=lifecycle.merge_request_iid,
+                    terminal_state=lifecycle.state,
+                ),
+            )
+            raise ReviewRunnerError(str(exc)) from exc
         reader.fetch_commit(snapshot.target_sha)
         policy_sha = reader.resolve_commit(snapshot.target_sha)
         context = snapshot.context

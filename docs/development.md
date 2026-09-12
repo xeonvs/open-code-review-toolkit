@@ -35,12 +35,14 @@ evidence. Generic fixtures derive the current identity from its runtime owner;
 frozen historical fixtures must not follow the current pin. A version-neutral
 description still needs semantic review when the consumed contract changes.
 
-The live suite in `scripts/ocr_compat.py` qualifies the current toolkit-consumed
-OCR contract for every candidate. Do not add release-number branches, old parser
-fallbacks, or patch-specific fixture copies to live probes. Version checks belong
-to binary identity, release ordering, classification and promotion, not to choosing
-which behavioral checks execute. Change a probe only when a consumed upstream
-contract actually changes, and document the concrete before/after behavior.
+The live suite in `scripts/ocr_compat.py` runs the same forward-only probes for
+every candidate, then validates observations against the contract epoch owned by
+that candidate. Do not add old parser fallbacks or patch-specific fixture copies
+to live probes. Version checks belong to binary identity, release ordering,
+classification, promotion, and the frozen-versus-current contract boundary—not
+to choosing which behavioral checks execute. Change a probe only when a consumed
+upstream contract actually changes, and document the concrete before/after
+behavior.
 
 `scripts/ocr_compat_history.py` owns frozen validation of evidence from before the
 forward-only suite boundary. It never launches OCR and must not depend on current
@@ -48,6 +50,18 @@ numeric defaults, language inventories or live fixtures. Preserve historical
 evidence bytes. Generic promotion tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required
 contract evidence before writing any pin or evidence file.
+
+When a consumed upstream contract changes, first freeze the last unaffected
+evidence epoch exactly, then advance the cutoff. The same version-selected
+validator must be used by manifest readback and `prepare-update`; a candidate
+and the live runner; a candidate cannot bypass a newly required probe merely
+because an older release remains readable. OCR 1.11.6 and 1.11.7 share the frozen
+pre-Rego contract. OCR 1.11.8 and later use the current contract, whose language
+probe includes `policies/authz.rego` and exact built-in pattern `**/*.rego`.
+
+Use exact-tag dispatch for one candidate. When several unseen releases must be
+qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
+never use an unbounded discovery run for a release-scoped task.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn

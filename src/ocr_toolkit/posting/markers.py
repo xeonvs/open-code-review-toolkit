@@ -21,6 +21,7 @@ MARKER_WITH_FINGERPRINT_RE = re.compile(
 )
 SUMMARY_RUN_MARKER_RE = re.compile(r"(?m)^<!-- open-code-review-summary run=[0-9a-f]{32} -->$")
 SETUP_PENDING_MARKER = "<!-- open-code-review-setup-pending -->"
+TERMINAL_MR_MARKER = "<!-- open-code-review-terminal-merge-request -->"
 
 
 OCR_REPLY_COMMAND_RE = re.compile(
@@ -79,6 +80,15 @@ def build_summary_run_marker(run_id: str) -> str:
     if not re.fullmatch(r"[0-9a-f]{32}", run_id):
         raise ValueError("summary run id must be 32 lowercase hexadecimal characters")
     return f"<!-- open-code-review-summary run={run_id} -->"
+
+
+def has_terminal_mr_marker(body: str) -> bool:
+    """Parse terminal control metadata only from its reserved preamble line."""
+
+    if not note_starts_with_marker(body):
+        return False
+    lines = body.splitlines()
+    return len(lines) >= 2 and lines[1] == TERMINAL_MR_MARKER
 
 
 def _digest_payload(parts: list[str], digest_size: int = FINGERPRINT_LEN // 2) -> str:

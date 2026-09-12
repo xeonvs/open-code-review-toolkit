@@ -76,7 +76,10 @@ flowchart TD
 flowchart TD
     start[CI or local review request] --> input{Configuration, immutable refs,<br/>target state, and paths valid?}
     input -- No --> preflight_error[Review blocked before OCR]
-    input -- Yes --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
+    input -- Yes --> initial_state{GitLab MR identity and<br/>lifecycle valid?}
+    initial_state -- Invalid --> preflight_error
+    initial_state -- Merged or closed --> terminal_note[Upsert expected terminal status;<br/>no evidence, OCR, findings, or approval]
+    initial_state -- Open or local --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
     acquire --> acquire_ok{Evidence, context, and MCP<br/>composition valid?}
     acquire_ok -- No --> preflight_error
     acquire_ok -- Yes --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
@@ -109,7 +112,11 @@ flowchart TD
     mode -- GitLab MR --> receipt[Attach exact receipt v8]
     receipt --> post{Posting input valid at readback?}
     post -- No --> posting_error[Publication-policy error;<br/>findings transaction not started]
-    post -- Yes --> transaction[Publish current findings and summary atomically]
+    post -- Yes --> live_state{Exact MR identity and<br/>lifecycle still valid?}
+    live_state -- Invalid or mismatched --> posting_error
+    live_state -- Open --> transaction[Publish current findings and summary atomically]
+    live_state -- Merged or closed --> terminal_result[Keep normal result/DLP transaction;<br/>name state and reviewed SHA; skip approval]
+    terminal_result --> transaction
     transaction --> transaction_ok{All required writes succeed?}
     transaction_ok -- No --> posting_error
     transaction_ok -- Yes --> published{Projection complete?}
@@ -122,12 +129,12 @@ flowchart TD
     classDef auxiliary fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
     classDef decision fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
 
-    class success,local_result success;
+    class success,local_result,terminal_note success;
     class warning warning;
     class local auxiliary;
     class preflight_error,preview_error,runtime_error,integrity_error,posting_error error;
-    class start,acquire,preview,review,finalize,diag,dlp,publishable,partial,receipt,transaction auxiliary;
-    class input,acquire_ok,preview_ok,exit,core,dlp_state,mode,post,transaction_ok,published decision;
+    class start,acquire,preview,review,finalize,diag,dlp,publishable,partial,receipt,transaction,terminal_result auxiliary;
+    class input,initial_state,acquire_ok,preview_ok,exit,core,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,

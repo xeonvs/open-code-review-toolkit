@@ -28,6 +28,7 @@ from ocr_toolkit.posting.markers import (
     fingerprint_from_marker,
     has_setup_pending_marker,
     has_summary_run_marker,
+    has_terminal_mr_marker,
     is_diff_note,
     is_own_bot_note,
     legacy_comment_fingerprint,
@@ -65,6 +66,7 @@ class BotCommentRefs:
     summary_draft_note_ids: list[int] = field(default_factory=list)
     setup_plain_note_ids: list[int] = field(default_factory=list)
     setup_draft_note_ids: list[int] = field(default_factory=list)
+    terminal_plain_note_ids: list[int] = field(default_factory=list)
     # Discussions that the bot should resolve after successful posting.
     discussions_to_resolve: list[str] = field(default_factory=list)
 
@@ -356,6 +358,8 @@ def collect_previous_bot_comment_refs(
                 refs.summary_plain_note_ids.append(note_id)
             if has_setup_pending_marker(str(note.get("body") or "")):
                 refs.setup_plain_note_ids.append(note_id)
+            if has_terminal_mr_marker(str(note.get("body") or "")):
+                refs.terminal_plain_note_ids.append(note_id)
             fingerprints = finding_fingerprints_from_marked_body(str(note.get("body") or ""))
             refs.published_fingerprints.update(fingerprints)
             for fingerprint in fingerprints:
@@ -391,6 +395,27 @@ def collect_previous_bot_comment_refs(
                 )
 
     return refs
+
+
+def collect_terminal_status_note_ids(config: GitLabConfig) -> list[int] | None:
+    """Collect only owned plain terminal-status notes for an idempotent status upsert."""
+
+    notes = api_get_paginated(config, "/notes?sort=desc&order_by=created_at", max_pages=50)
+    if notes is None:
+        return None
+    result: list[int] = []
+    for note in notes:
+        if not isinstance(note, dict) or not is_own_bot_note(config, note, body_field="body"):
+            continue
+        note_id = note.get("id")
+        if (
+            isinstance(note_id, int)
+            and not isinstance(note_id, bool)
+            and note_id > 0
+            and has_terminal_mr_marker(str(note.get("body") or ""))
+        ):
+            result.append(note_id)
+    return result
 
 
 def delete_collected_bot_comments(config: GitLabConfig, refs: BotCommentRefs) -> None:
@@ -456,6 +481,14 @@ def delete_previous_setup_notes(config: GitLabConfig, refs: BotCommentRefs) -> N
             deleted += 1
     if deleted:
         print(f"Deleted {deleted} previous OCR setup-pending note(s).")
+
+
+def delete_previous_terminal_notes(config: GitLabConfig, refs: BotCommentRefs) -> None:
+    """Remove a stale no-model terminal note after a result was published successfully."""
+
+    deleted = sum(delete_plain_note(config, note_id) for note_id in refs.terminal_plain_note_ids)
+    if deleted:
+        print(f"Deleted {deleted} previous terminal merge-request note(s).")
 
 
 def rollback_current_run_comments(

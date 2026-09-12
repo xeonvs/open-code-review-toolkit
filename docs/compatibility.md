@@ -4,18 +4,29 @@ The versioned support contract lives in [`compatibility/ocr-support.json`](../co
 
 ## Qualification lanes
 
-Live qualification runs one forward-only suite for the current consumed review
-contract. It does not select parsers, fixtures, or required probes by candidate
-version. Historical evidence before the suite boundary is checked separately by
-`scripts/ocr_compat_history.py` using frozen expectations; that reader never
-executes old binaries. Generic promotion tests use a frozen baseline. See
+Live qualification runs one forward-only probe implementation and validates its
+observations against the consumed review contract owned by the candidate epoch.
+Historical candidates before the suite boundary use frozen expectations from
+`scripts/ocr_compat_history.py`; the same frozen data also protects historical
+evidence readback and never supplies executable code. Generic promotion tests
+use a frozen baseline. See
 [qualification maintenance](development.md#maintaining-ocr-qualification).
 Historical readback is not promotion authority: every newly promoted candidate
-must provide the current evidence schema and complete live consumed contract,
-regardless of the historical archive boundary. The live suite includes explicit
-reasoning wire capture and the current built-in language/test-exclusion inventory.
+must provide the current evidence schema and its complete version-selected
+consumed contract. The current epoch includes explicit reasoning wire capture and
+the current built-in language/test-exclusion inventory.
 
-The **OCR compatibility** workflow discovers stable upstream releases newer than the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`, after the observed upstream release window; GitHub may delay or omit scheduled delivery, so exact-tag manual dispatch remains the recovery path. Drafts, prereleases, non-semantic tags, unexpected asset sets, oversized metadata or downloads, redirects outside the reviewed GitHub origins, and checksum disagreement fail closed. Every binary digest must agree with both GitHub release metadata and the upstream `sha256sum.txt`.
+The **OCR compatibility** workflow discovers stable upstream releases newer than
+the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`,
+after the observed upstream release window; GitHub may delay or omit scheduled
+delivery, so exact-tag manual dispatch remains the single-candidate recovery
+path. A manual `through_tag` instead qualifies the complete contiguous unseen
+chain only through that exact stable release, preventing a scoped maintenance
+run from absorbing a newer upstream release. The two inputs are mutually
+exclusive. Drafts, prereleases, non-semantic tags, missing ceilings, unexpected
+asset sets, oversized metadata or downloads, redirects outside the reviewed
+GitHub origins, and checksum disagreement fail closed. Every binary digest must
+agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 
 Candidate execution uses the verified Linux amd64 binary on an Ubuntu runner. The harness checks the reported version, the CLI flags consumed by the GitLab integration, range preview behavior, an actual JSON review through a deterministic local gateway, an aggregate-budget review that must preserve completed findings and emit budget-attributed partial coverage, and the additive JSON fields consumed by posting. Toolkit-managed numeric OCR options are also exercised at omitted/default, sentinel, invalid-below-boundary, minimum minus one, minimum, representative, and maximum edges when bounded. The evidence records closed outcomes, recognized diagnostics, normalization, ownership, and effective values observed through real loop behavior; CLI help text is not accepted as runtime evidence. The harness also requires JSON preview without a session-store side effect and proves that additive comment `thinking` is accepted but not published to GitLab. Upstream source review separately verifies how OCR derives that field; the toolkit probe does not claim to reproduce a provider's private reasoning channel. Evidence permits unknown new fields but requires the fields the toolkit reads. Legacy result statuses and the versioned `ocr.run-manifest/v1` outcome are normalized through one shared toolkit contract; manifest coverage sets, failure classifications, terminal state, and budget attribution must agree before a result can be published.
 
@@ -178,9 +189,9 @@ Linux amd64 SHA-256: `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a
 Darwin arm64: `c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9`.
 Upstream checksum file: `0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a`.
 
-### OCR 1.11.6 — toolkit 0.10.0 Draft target
+### OCR 1.11.6 — toolkit 0.10.0 target
 
-The Draft recommends exact OCR 1.11.6. Hosted qualification
+Toolkit 0.10.0 recommends exact OCR 1.11.6. Hosted qualification
 [34218232310](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34218232310)
 verified every platform asset and the upstream checksum file, then passed the
 complete current Linux amd64 suite. Independent checksum-verified Darwin arm64
@@ -197,9 +208,39 @@ does not execute the upstream Action, Node/editor launcher or viewer; its reason
 and progress controls are owned by the shared toolkit execution path.
 
 Historical 1.11.4/1.11.5 evidence remains unchanged. New promotions require the
-complete current contract even when historical evidence is still readable.
+complete version-selected contract even when historical evidence is still readable.
 This qualification does not establish stable toolkit delivery or configured
 GitLab/local/debug model quality; those remain separate gates.
+
+The qualification validator freezes the unchanged OCR 1.11.6/1.11.7 contract as
+one historical epoch. From OCR 1.11.8 onward, the live language/Rules probe also
+requires a representative `policies/authz.rego` file to select exact built-in
+pattern `**/*.rego`. Both manifest validation and cumulative promotion use this
+version-selected owner, so missing Rego proof fails before any evidence or pin is
+written. The historical live probe also keeps the next-epoch Rego path as an
+explicit unsupported control, so the frozen projection cannot hide unexpected
+early admission.
+
+### OCR 1.11.7–1.11.9 — toolkit 0.10.1 target
+
+Toolkit 0.10.1 recommends exact OCR 1.11.9. Bounded hosted run
+[34710401633](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34710401633)
+qualified the adjacent 1.11.7, 1.11.8 and 1.11.9 chain from the exact feature
+head. Every platform asset and upstream checksum file matched; Linux amd64 passed
+the complete no-model deterministic suite. OCR 1.11.7 retained the frozen
+pre-Rego contract, including an explicit unsupported Rego control. OCR 1.11.8
+and 1.11.9 selected `policies/authz.rego` through exact built-in pattern
+`**/*.rego` and passed the current 17-language contract.
+
+OCR 1.11.7 atomic output, bounded MCP shutdown, second-signal exit and
+`timeout_sec` changes do not alter toolkit-owned output, subprocess or
+configuration boundaries. OCR 1.11.8 adds the consumed Rego rule; its stream
+usage override remains operator-owned, while `scan` preview is outside the
+toolkit `review` path. OCR 1.11.9 aligns review preview with execution selection;
+the DeepSeek model and viewer comparison page are not consumed. The result,
+manifest, budget, reasoning, comment, DLP, posting, receipt and approval
+contracts remain compatible. Stable toolkit delivery and configured model
+quality remain separate release gates.
 
 ## Promotion and rollback
 

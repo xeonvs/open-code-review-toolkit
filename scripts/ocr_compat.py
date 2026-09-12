@@ -139,6 +139,7 @@ CURRENT_LANGUAGE_RULES = {
     "src/component.re": "**/*.{re,rei}",
     "src/component.rei": "**/*.{re,rei}",
     "scripts/setup.kts": "**/*.{kt,kts}",
+    "policies/authz.rego": "**/*.rego",
 }
 CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
 
@@ -405,6 +406,40 @@ def _validate_current_contracts(value: object) -> None:
         _fail("current qualification omitted the review-result contract")
 
 
+def _validate_contracts_for_version(version: str, contracts: Any) -> None:
+    """Validate observed contracts against the epoch owned by the candidate version."""
+
+    version_tuple = _version(version)
+    if version_tuple < history.HISTORICAL_CUTOFF:
+        history.validate_contracts(version, version_tuple, {"contracts": contracts}, _fail)
+    else:
+        _validate_current_contracts(contracts)
+
+
+def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
+    """Select the frozen or live qualification epoch from the candidate version."""
+
+    _validate_contracts_for_version(version, evidence.get("contracts"))
+
+
+def _language_rules_for_version(version: str) -> dict[str, str]:
+    """Return live probe paths for the frozen or current candidate epoch."""
+
+    rules = dict(CURRENT_LANGUAGE_RULES)
+    if _version(version) < history.HISTORICAL_CUTOFF:
+        rules.pop("policies/authz.rego")
+    return rules
+
+
+def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
+    """Keep next-epoch languages observable as negative controls."""
+
+    paths = ["rtl/include.svh"]
+    if _version(version) < history.HISTORICAL_CUTOFF:
+        paths.append("policies/authz.rego")
+    return tuple(paths)
+
+
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
@@ -483,10 +518,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
         evidence = load_json(evidence_path)
         if evidence.get("version") != version or evidence.get("result") != "compatible":
             _fail(f"evidence does not qualify {version} as compatible")
-        if _version(version) < history.HISTORICAL_CUTOFF:
-            history.validate_contracts(version, _version(version), evidence, _fail)
-        else:
-            _validate_current_contracts(evidence.get("contracts"))
+        _validate_evidence_contracts(version, evidence)
         evidence_assets = evidence.get("assets")
         if not isinstance(evidence_assets, list):
             _fail(f"evidence assets are missing for {version}")
@@ -585,10 +617,21 @@ def _issue_api_request(
     return value
 
 
-def discover_unseen(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def discover_unseen(
+    manifest: dict[str, Any], *, through_tag: str | None = None
+) -> list[dict[str, Any]]:
     """Return bounded unseen stable upstream releases above the monitoring floor."""
 
     floor = _version(str(manifest["monitoring_floor"]))
+    ceiling: tuple[int, int, int] | None = None
+    ceiling_version: str | None = None
+    if through_tag is not None:
+        if VERSION_RE.fullmatch(through_tag) is None:
+            _fail("qualification ceiling must be a stable semantic version tag")
+        ceiling_version = through_tag.removeprefix("v")
+        ceiling = _version(ceiling_version)
+        if ceiling <= floor:
+            _fail("qualification ceiling must be newer than the monitoring floor")
     known = {str(entry["version"]) for entry in manifest["releases"]}
     unseen: list[dict[str, Any]] = []
     reached_floor = False
@@ -613,12 +656,16 @@ def discover_unseen(manifest: dict[str, Any]) -> list[dict[str, Any]]:
             parsed = _version(version)
             if parsed <= floor:
                 reached_floor = True
-            elif version not in known:
+            elif version not in known and (ceiling is None or parsed <= ceiling):
                 unseen.append(release)
         if reached_floor or len(payload) < MAX_RELEASES_PER_PAGE:
             break
     if not reached_floor and len(payload) == MAX_RELEASES_PER_PAGE:
         _fail("monitoring floor was not reached within the bounded release pages")
+    if ceiling_version is not None and not any(
+        str(item.get("tag_name", "")).removeprefix("v") == ceiling_version for item in unseen
+    ):
+        _fail("qualification ceiling was not found among unseen stable releases")
     return sorted(unseen, key=lambda item: _version(str(item["tag_name"]).removeprefix("v")))
 
 
@@ -2151,7 +2198,7 @@ def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, obj
     }
 
 
-def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
+def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[str, object]:
     """Prove consumed built-in language selection and rule ownership without an LLM."""
 
     root = directory / "language-rule-probe"
@@ -2162,11 +2209,11 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
-    exact_patterns = CURRENT_LANGUAGE_RULES
+    exact_patterns = _language_rules_for_version(version)
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
-    unsupported_path = "rtl/include.svh"
-    paths = (*supported_paths, unsupported_path, *CURRENT_DEFAULT_EXCLUDED_PATHS)
+    unsupported_paths = _language_negative_paths_for_version(version)
+    paths = (*supported_paths, *unsupported_paths, *CURRENT_DEFAULT_EXCLUDED_PATHS)
     for path in paths:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2206,9 +2253,12 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
             "candidate did not select the qualified built-in language set: "
             f"missing={missing!r}, unexpected={unexpected!r}"
         )
-    unsupported_selected, unsupported_reason = _preview_file_selection(payload, unsupported_path)
-    if unsupported_selected or unsupported_reason != "unsupported_ext":
-        _fail("candidate unexpectedly selected the unqualified .svh extension")
+    for unsupported_path in unsupported_paths:
+        unsupported_selected, unsupported_reason = _preview_file_selection(
+            payload, unsupported_path
+        )
+        if unsupported_selected or unsupported_reason != "unsupported_ext":
+            _fail(f"candidate unexpectedly selected unqualified path {unsupported_path}")
     for path in CURRENT_DEFAULT_EXCLUDED_PATHS:
         selected_test, reason = _preview_file_selection(payload, path)
         if selected_test or not isinstance(reason, str) or not reason:
@@ -2225,7 +2275,7 @@ def _language_rule_probe(binary: Path, directory: Path) -> dict[str, object]:
         if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
             _fail(f"candidate resolved the wrong built-in language rule for {path}")
     extensions = sorted(Path(path).suffix for path in supported_paths)
-    expected_extensions = sorted(Path(path).suffix for path in CURRENT_LANGUAGE_RULES)
+    expected_extensions = sorted(Path(path).suffix for path in exact_patterns)
     if extensions != expected_extensions:
         _fail("language probe paths disagree with the canonical extension projection")
     result: dict[str, object] = {
@@ -2515,12 +2565,12 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     }
     contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
     contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
-    contracts["language_rule_probe"] = _language_rule_probe(binary, directory)
+    contracts["language_rule_probe"] = _language_rule_probe(binary, version, directory)
     contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
     contracts["comment_arguments_probe"] = _comment_arguments_probe(binary, directory)
     contracts["comment_thinking_probe"] = thinking_probe
-    _validate_current_contracts(contracts)
+    _validate_contracts_for_version(version, contracts)
     return contracts
 
 
@@ -2872,7 +2922,10 @@ def prepare_update(
     for item in evidences:
         if item.get("schema_version") != 3:
             _fail("current candidate requires evidence schema 3")
-        _validate_current_contracts(item.get("contracts"))
+        candidate_version = item.get("version")
+        if not isinstance(candidate_version, str):
+            _fail("candidate evidence version must be a string")
+        _validate_evidence_contracts(candidate_version, item)
 
     version = versions[-1]
     releases = manifest.get("releases")
@@ -3246,6 +3299,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("validate")
     discover = subparsers.add_parser("discover")
     discover.add_argument("--output", type=Path, required=True)
+    discover.add_argument("--through-tag")
     matrix = subparsers.add_parser("build-matrix")
     matrix.add_argument("--releases", type=Path, required=True)
     matrix.add_argument("--output", type=Path, required=True)
@@ -3303,7 +3357,7 @@ def main(argv: list[str] | None = None) -> int:
             print("OCR support manifest validated")
             return 0
         if args.command == "discover":
-            unseen = discover_unseen(manifest)
+            unseen = discover_unseen(manifest, through_tag=args.through_tag)
             args.output.write_bytes(canonical_json({"releases": unseen}))
             print(f"discovered {len(unseen)} unseen stable OCR release(s)")
             return 0

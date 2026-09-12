@@ -963,6 +963,11 @@ class PostingIdentityTests(unittest.TestCase):
         with (
             patched_attr(
                 workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
+            patched_attr(
+                workflow,
                 "get_diff_refs",
                 lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
             ),
@@ -1406,6 +1411,11 @@ class PostingIdentityTests(unittest.TestCase):
             return {"id": len(notes)}
 
         with (
+            patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
             patched_attr(workflow, "collect_previous_bot_comment_refs", lambda _config: previous),
             patched_attr(workflow, "get_diff_refs", lambda _config: None),
             patched_attr(workflow, "post_review_note_bounded", capture_note),

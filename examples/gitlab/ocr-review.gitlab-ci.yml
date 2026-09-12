@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.11.6"
+  OCR_VERSION: "v1.11.9"
   OCR_TOOLKIT_VERSION: "0.10.0"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "09f30595834f8297a592b51bf4707fb24728b2826a65915f1964c5563e4fb3bd"
+  OCR_SHA256: "427291e93934cd77e2f8082d9ef8c66a4ed9dd02fd1b441935bdb76211d22e0a"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Secure default: reject an unprotected GitLab target before OCR.

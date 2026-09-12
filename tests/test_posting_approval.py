@@ -1063,6 +1063,11 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
         with (
             patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
+            patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
@@ -1210,6 +1215,11 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
         with (
             patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
+            patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
             patched_attr(workflow, "get_diff_refs", lambda _config: None),
@@ -1276,6 +1286,11 @@ class ApprovalWorkflowTests(unittest.TestCase):
             return {"id": len(notes)}
 
         with (
+            patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
@@ -1350,6 +1365,11 @@ class ApprovalWorkflowTests(unittest.TestCase):
             return {"id": 1}
 
         with (
+            patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
+            ),
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),

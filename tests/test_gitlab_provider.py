@@ -80,6 +80,7 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                     pass
                 return
             payload: object = {
+                "iid": 9,
                 "sha": type(self).source_sha,
                 "state": "opened",
                 "target_project_id": 7,
@@ -96,6 +97,8 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                 payload = {**payload, "sha": "c" * 40}  # type: ignore[arg-type]
             if self.response_mode == "closed":
                 payload = {**payload, "state": "closed"}  # type: ignore[arg-type]
+            if self.response_mode == "merged":
+                payload = {**payload, "state": "merged"}  # type: ignore[arg-type]
             if self.response_mode == "adversarial":
                 payload = {
                     **payload,  # type: ignore[arg-type]
@@ -344,7 +347,6 @@ def test_adversarial_provider_text_stays_bounded_untrusted_data_through_real_htt
     ("mode", "message"),
     (
         ("mismatch", "does not match"),
-        ("closed", "is not open"),
         ("unprotected", "not the captured protected"),
     ),
 )
@@ -356,6 +358,52 @@ def test_gitlab_snapshot_rejects_identity_failures_through_real_https(
         pytest.raises(gitlab.GitLabProviderError, match=message),
     ):
         gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+
+@pytest.mark.parametrize("state", ["merged", "closed"])
+def test_terminal_snapshot_is_identity_bound_before_skipping_target_reads(
+    tmp_path: Path, state: str
+) -> None:
+    with _https_gitlab(tmp_path, state) as api_root:
+        with pytest.raises(gitlab.GitLabMergeRequestTerminal) as raised:
+            gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert raised.value.lifecycle == gitlab.GitLabMergeRequestLifecycle(
+        project_id="7",
+        merge_request_iid="9",
+        source_sha=SOURCE_SHA,
+        state=state,
+    )
+    assert _GitLabHandler.requests == [("/api/v4/projects/7/merge_requests/9", "synthetic-token")]
+
+
+def test_terminal_policy_context_persists_status_without_collecting_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setattr(
+        "ocr_toolkit.review_runner.acquire_review_snapshot",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            gitlab.GitLabMergeRequestTerminal(
+                gitlab.GitLabMergeRequestLifecycle("7", "9", SOURCE_SHA, "merged")
+            )
+        ),
+    )
+
+    with pytest.raises(ReviewRunnerError, match="already merged"):
+        _prepare_policy_context(ReviewRefs(TARGET_SHA, SOURCE_SHA), ["--format", "json"], artifacts)
+
+    status = read_pre_execution_status(
+        artifacts.pre_execution_status,
+        expected_diff_base_sha=TARGET_SHA,
+        expected_source_sha=SOURCE_SHA,
+    )
+    assert status.policy_sha is None
+    assert status.project_id == "7"
+    assert status.change_id == "9"
+    assert status.terminal_state == "merged"
 
 
 @pytest.mark.parametrize(

@@ -681,6 +681,7 @@ def summarize_result(
     suppressed_count: int = 0,
     approval_result: ApprovalResult | None = None,
     unprotected_target: bool = False,
+    merge_request_lifecycle: str = "",
     emoji: bool | None = None,
 ) -> str:
     """Build one decision-first summary for every validated OCR outcome."""
@@ -721,6 +722,12 @@ def summarize_result(
         technical.append(f"- Reviewed commit: {_inline_code(reviewed_sha)}")
     if mr_head_sha and mr_head_sha != reviewed_sha:
         technical.append(f"- MR head commit: {_inline_code(mr_head_sha)}")
+    if merge_request_lifecycle:
+        technical.append(
+            "- Merge request lifecycle at publication: "
+            f"`{merge_request_lifecycle}`; result remains bound to reviewed commit "
+            f"{_inline_code(reviewed_sha)}"
+        )
     technical.append(
         f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} omitted"
     )
