@@ -143,7 +143,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | --- | --- | --- | --- | --- |
 | **`OCR_VERSION`** | Example pipeline | Yes | `v` + manifest `recommended_version` | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
 | **`OCR_SHA256`** | Example pipeline | Yes | Manifest SHA-256 for `opencodereview-linux-amd64` | Exact digest pinned alongside `OCR_VERSION` in the pipeline; must belong to the same release entry. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.10.0` | Exact toolkit wheel release installed by the current published example. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.10.1` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
@@ -152,7 +152,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 During Draft qualification, install the toolkit artifact built from the reviewed
 commit. The example's toolkit-version pin becomes usable after the later stable
-release publication; toolkit 0.10.0 supports the qualified OCR runtime.
+release publication; toolkit 0.10.1 supports the qualified OCR runtime.
 
 ## Dynamic adapter and MCP inputs
 

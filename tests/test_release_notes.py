@@ -344,6 +344,27 @@ def test_0100_release_notes_cover_local_delivery_and_ocr_1116() -> None:
         assert phrase in notes
 
 
+def test_0101_release_notes_cover_terminal_lifecycle_and_ocr_1119() -> None:
+    """Keep the terminal-race fix and complete OCR qualification visible."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.10.1")
+
+    for phrase in (
+        "merged or closed without reporting a false review failure",
+        "preserve prior review state",
+        "without attempting approval",
+        "frozen or current OCR qualification contract",
+        "next-epoch language rules as negative controls",
+        "exact stable release ceiling",
+        "Open Code Review 1.11.9",
+        "qualifying 1.11.7 through 1.11.9",
+        "Rego policy files",
+        "**/*.rego",
+    ):
+        assert phrase in notes
+
+
 def test_extracts_only_the_exact_release_section() -> None:
     changelog = "# Changelog\n\n## 0.2.0 - later\n\nnew\n\n## 0.1.0 - now\n\nfirst\n"
 

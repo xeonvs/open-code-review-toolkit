@@ -1,3 +1,19 @@
+## 0.10.1 - 2026-09-12
+
+### 🐛 Bug Fixes
+
+- Handle merge requests that become merged or closed without reporting a false review failure: skip OCR before admission, preserve prior review state, and publish already-admitted results without attempting approval. ([#194](https://github.com/xeonvs/open-code-review-toolkit/issues/194))
+- Select the frozen or current OCR qualification contract by candidate version, retain next-epoch language rules as negative controls, and let manual compatibility chains stop at an exact stable release ceiling. ([#195](https://github.com/xeonvs/open-code-review-toolkit/issues/195))
+
+### 🛠 Maintenance
+
+- Target checksum-verified Open Code Review 1.11.9 after qualifying 1.11.7 through 1.11.9. ([#196](https://github.com/xeonvs/open-code-review-toolkit/issues/196))
+
+### 🧩 Rules
+
+- Review Rego policy files through the OCR 1.11.8 and later built-in `**/*.rego` rule contract. ([#195](https://github.com/xeonvs/open-code-review-toolkit/issues/195))
+
+
 ## 0.10.0 - 2026-09-09
 
 ### 🚀 Features
