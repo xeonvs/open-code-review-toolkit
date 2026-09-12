@@ -78,7 +78,7 @@ before handoff or commit. Completed stable plans are indexed in
   and add an exact `through_tag` ceiling for release-scoped hosted chains. The
   exploratory unbounded run was cancelled before creating an OCR 1.12.0 issue
   or artifact.
-- [ ] Qualify and promote OCR `1.11.7` through `1.11.9` from exact hosted
-  evidence and the recorded source-review conclusions.
+- [x] Qualified and promoted OCR `1.11.7` through `1.11.9` from exact bounded
+  hosted run `34710401633` and the recorded source-review conclusions.
 - [ ] Complete the feature PR and hosted evidence, stable release, external
   receipt, issue/milestone closure, and reconciliation.

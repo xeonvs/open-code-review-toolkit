@@ -189,9 +189,9 @@ Linux amd64 SHA-256: `53a4ab7c8ce6dc07d5362c7c4984bf8d98b55e4e8d4c01b9399d488a2a
 Darwin arm64: `c041b03cc840957b52df28514e8dbb51f798e6cb1259d97555a41a2e3e3ccaf9`.
 Upstream checksum file: `0519c13b03d69dd6c4aa5470a8eb52727f5e3fd2ce43e5887d8a67cdf107aa1a`.
 
-### OCR 1.11.6 — toolkit 0.10.0 Draft target
+### OCR 1.11.6 — toolkit 0.10.0 target
 
-The Draft recommends exact OCR 1.11.6. Hosted qualification
+Toolkit 0.10.0 recommends exact OCR 1.11.6. Hosted qualification
 [34218232310](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34218232310)
 verified every platform asset and the upstream checksum file, then passed the
 complete current Linux amd64 suite. Independent checksum-verified Darwin arm64
@@ -208,7 +208,7 @@ does not execute the upstream Action, Node/editor launcher or viewer; its reason
 and progress controls are owned by the shared toolkit execution path.
 
 Historical 1.11.4/1.11.5 evidence remains unchanged. New promotions require the
-complete current contract even when historical evidence is still readable.
+complete version-selected contract even when historical evidence is still readable.
 This qualification does not establish stable toolkit delivery or configured
 GitLab/local/debug model quality; those remain separate gates.
 
@@ -217,8 +217,30 @@ one historical epoch. From OCR 1.11.8 onward, the live language/Rules probe also
 requires a representative `policies/authz.rego` file to select exact built-in
 pattern `**/*.rego`. Both manifest validation and cumulative promotion use this
 version-selected owner, so missing Rego proof fails before any evidence or pin is
-written. This harness change is not itself a compatibility promotion; exact
-1.11.7–1.11.9 evidence and source-review conclusions remain required.
+written. The historical live probe also keeps the next-epoch Rego path as an
+explicit unsupported control, so the frozen projection cannot hide unexpected
+early admission.
+
+### OCR 1.11.7–1.11.9 — toolkit 0.10.1 target
+
+Toolkit 0.10.1 recommends exact OCR 1.11.9. Bounded hosted run
+[34710401633](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/34710401633)
+qualified the adjacent 1.11.7, 1.11.8 and 1.11.9 chain from the exact feature
+head. Every platform asset and upstream checksum file matched; Linux amd64 passed
+the complete no-model deterministic suite. OCR 1.11.7 retained the frozen
+pre-Rego contract, including an explicit unsupported Rego control. OCR 1.11.8
+and 1.11.9 selected `policies/authz.rego` through exact built-in pattern
+`**/*.rego` and passed the current 17-language contract.
+
+OCR 1.11.7 atomic output, bounded MCP shutdown, second-signal exit and
+`timeout_sec` changes do not alter toolkit-owned output, subprocess or
+configuration boundaries. OCR 1.11.8 adds the consumed Rego rule; its stream
+usage override remains operator-owned, while `scan` preview is outside the
+toolkit `review` path. OCR 1.11.9 aligns review preview with execution selection;
+the DeepSeek model and viewer comparison page are not consumed. The result,
+manifest, budget, reasoning, comment, DLP, posting, receipt and approval
+contracts remain compatible. Stable toolkit delivery and configured model
+quality remain separate release gates.
 
 ## Promotion and rollback
 

@@ -224,9 +224,10 @@ frequency or durability after host failure.
 The v0.10.0 hosted matrix initially passed 1694 tests per platform and identified
 two stale environment-inventory expectations for the new controls; their exact
 default entries are synchronized without removing the inventory assertions.
-Current real-OCR evidence is committed in `compatibility/evidence/ocr-1.11.6.json`
-from hosted run `34218232310`; it preserves the older evidence snapshots and
-qualifies all current consumed probes, including expanded language selection.
+Current real-OCR evidence is committed through
+`compatibility/evidence/ocr-1.11.9.json` from bounded hosted run `34710401633`.
+It preserves the older evidence snapshots, freezes the 1.11.7 pre-Rego epoch,
+and qualifies the current Rego-aware language selection from 1.11.8 onward.
 
 ## Unsafe or nondeterministic external boundaries
 

@@ -94,14 +94,26 @@ def manifest_before_1_11_3(module: ModuleType) -> dict[str, Any]:
     return manifest
 
 
+def manifest_before_1_11_7(module: ModuleType) -> dict[str, Any]:
+    """Return the committed support chain immediately before this promotion."""
+
+    manifest = module.load_json(MANIFEST)
+    manifest["recommended_version"] = "1.11.6"
+    manifest["monitoring_floor"] = "1.11.6"
+    manifest["releases"] = [
+        item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 6)
+    ]
+    return manifest
+
+
 def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.11.6"
-    assert manifest["monitoring_floor"] == "1.11.6"
+    assert manifest["recommended_version"] == "1.11.9"
+    assert manifest["monitoring_floor"] == "1.11.9"
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -136,6 +148,9 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.11.4", "tested"),
         ("1.11.5", "tested"),
         ("1.11.6", "tested"),
+        ("1.11.7", "tested"),
+        ("1.11.8", "tested"),
+        ("1.11.9", "tested"),
     ]
 
 
@@ -428,7 +443,7 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
 
 def test_discovery_honors_exact_stable_release_ceiling() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = manifest_before_1_11_7(module)
     payload = [
         release("1.12.0"),
         release("1.11.9"),
@@ -445,7 +460,7 @@ def test_discovery_honors_exact_stable_release_ceiling() -> None:
 
 def test_discovery_rejects_missing_release_ceiling() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = manifest_before_1_11_7(module)
     payload = [release("1.11.8"), release("1.11.7"), release("1.11.6")]
 
     with patched_attr(module, "_request_json", lambda _url: payload):
@@ -2089,7 +2104,7 @@ def test_ocr_1117_to_1119_chain_crosses_frozen_and_current_epochs_before_writes(
 ) -> None:
     module = load_script()
     manifest_path = tmp_path / "ocr-support.json"
-    manifest_path.write_bytes(MANIFEST.read_bytes())
+    manifest_path.write_bytes(module.canonical_json(manifest_before_1_11_7(module)))
     base = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
     evidence: list[dict[str, object]] = []
     comparison = "1.11.6"

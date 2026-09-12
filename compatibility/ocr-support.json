@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.11.6",
-  "recommended_version": "1.11.6",
+  "monitoring_floor": "1.11.9",
+  "recommended_version": "1.11.9",
   "releases": [
     {
       "assets": [
@@ -1664,6 +1664,165 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.6",
       "status": "tested",
       "version": "1.11.6"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "05bf946f0e79604d6e2f2c7b6e8bbe6f4383c132dc76dcd484d2ea626c416a3a",
+          "size": 57840736
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "81b0cbefd0268f465695141bafa3c3a667d4b741539ac1e1742bc9b380ca646d",
+          "size": 54878274
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "6ddb11c0d46a0f5df5742efb8f03d35a8cc7b87d7de02fccd2315eaea597b488",
+          "size": 56098978
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "2b2e0774bc1e093917d7194eadaafc6bf180cbccd4a7fcf515ab540800dcf4c0",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "31d638bfe6ebc9c6f95c423e88dd7add49d7ceb13a1ddddbd8db95d7efe28894",
+          "size": 57561088
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "3149f2d26e0c4db16f6da43767349da881bc9e340a5974930648ba17a5973251",
+          "size": 53521920
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "d33586c59183a81f4988e1a1d046bb30f896814d22f6ac55ae8c96e5ed75ea98",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.7.json",
+      "evidence_sha256": "92aaf07cce2251c9f3edde3e08cd7e904b47a835f9eaa18140fc4327bcf2f0ed",
+      "human_conclusion": "Compatible. Atomic output writes, bounded MCP shutdown, second-signal exit, timeout_sec configuration, and skill guidance do not change toolkit-consumed review, JSON, posting, receipt, or approval contracts; hosted run 34710401633 passed the frozen pre-Rego probes.",
+      "published_at": "2026-09-09T12:54:09Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.7",
+      "status": "tested",
+      "version": "1.11.7"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "c9d28ed839054fa3b0fb01c925ddd84f2d34cf4871cef833804ffa7089a754f7",
+          "size": 57853120
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "995adc01fcbab4020db06310a8ff179679c6715932cd9d365054d940d8d5db22",
+          "size": 54894882
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "d6654cc065c1e844f32e15290bcdb2fe1b7c5d5d6f46e6484987985bc5300f77",
+          "size": 56107170
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "ccc206fcb2be26a177ee665d4b768188232108b5bed978a58c5ac988ae00143e",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "0a1f3be92d239c4f8eb2a303de36fed8fd7f7e7ecb70fa460f34687f52e1c713",
+          "size": 57571840
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "11df808c86ba8bc0b965daf0b57163e2e1fbc2892e13cab5bce4dc604cb32454",
+          "size": 53531648
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "c9ccc9a9351913ea750eabd7b6dcef664c9a240c23d49177bb828ac79e128e97",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.8.json",
+      "evidence_sha256": "4eb62379ad9d51b501704975004e4deb5160ea076fef0584bb1aab6139082190",
+      "human_conclusion": "Compatible. Rego is consumed as a built-in reviewable rule and is covered by the explicit current probe. Stream-usage transport remains operator-owned through extra_body, scan-preview behavior is outside the toolkit review path, and no other runtime adaptation is required.",
+      "published_at": "2026-09-10T14:43:26Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.8",
+      "status": "tested",
+      "version": "1.11.8"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "b20b2bf3d781470bb93b0d4bb116945e222c02e3d11ed9741c779f0710e56b54",
+          "size": 57869792
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "903efbe0e75099f3ac4d4b829a0dd7e9fa2d086397a7c193fcf4f781cf389349",
+          "size": 54895154
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "427291e93934cd77e2f8082d9ef8c66a4ed9dd02fd1b441935bdb76211d22e0a",
+          "size": 56123554
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "7dd6e85407b733621f62b800da89dc6788888377b1ecc89e51a8a0202dcd879d",
+          "size": 52822178
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "2e17415c2c9397607815d25301b574bab0c720bfc40e14ac26ed72c415a49aa5",
+          "size": 57590272
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d39dad6149649f4f6b8b9ad93a752e7ae798e145b2249ebde95b403f56d783b1",
+          "size": 53546496
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "95393e257bc2756942b0287ff3129df9c79f1b516f7961718213bf0a626e9ae7",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.11.9.json",
+      "evidence_sha256": "c2306ec0d367b1f1938c2b3bb2e88539ebea71ae0a188c3ffc986f9a82494711",
+      "human_conclusion": "Compatible. Review preview and execution selection are aligned and preserve the toolkit range contract. The DeepSeek model addition and viewer comparison page are not consumed by the toolkit; hosted run 34710401633 passed every current probe.",
+      "published_at": "2026-09-11T11:41:27Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.11.9",
+      "status": "tested",
+      "version": "1.11.9"
     }
   ],
   "schema_version": 1,
