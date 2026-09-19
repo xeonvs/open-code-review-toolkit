@@ -62,9 +62,9 @@ flowchart LR
     MODEL --> PLAN[Bootstrap planner]
     PLAN --> BOOT[Compact OCR bootstrap]
     MODEL --> MCP[Built-in evidence MCP]
-    EXT[External read-only MCP] --> COMPOSE[MCP composition]
-    MCP --> COMPOSE
-    COMPOSE --> OCR[OCR tool loop]
+    EXT[Allowlisted external read-only MCP] --> GATE[Toolkit federation gateway]
+    GATE --> OCR[OCR tool loop]
+    MCP --> OCR
     BOOT --> OCR
 ```
 

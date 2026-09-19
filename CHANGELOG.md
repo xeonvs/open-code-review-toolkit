@@ -1,3 +1,31 @@
+## 0.11.0 - 2026-09-19
+
+### 🚀 Features
+
+- Add governed MCP registry v2 federation through a bounded toolkit gateway while
+  keeping the internal repository-evidence MCP mandatory. External SDK v1/v2 peers
+  negotiate independently, legacy policy references no longer execute, and receipt
+  v9 records content-free actual-use and cleanup evidence for publication and
+  approval decisions. ([#188](https://github.com/xeonvs/open-code-review-toolkit/issues/188))
+- Make DLP diagnostics stage-aware and source-attributed. `OCR_DLP_ENABLED=false`
+  is an explicit comment-only escape hatch with prominent local and GitLab risk
+  warnings; DLP stays enabled by default and all non-DLP bounds and identity gates
+  remain active. ([#203](https://github.com/xeonvs/open-code-review-toolkit/issues/203))
+
+### 🛠 Maintenance
+
+- Update the qualified OCR rolling window, dependency lock, pinned Actions and local
+  privacy gates used before commits and pushes.
+
+  Use a 7/14/30-day Actions retention window for TestPyPI previews, ordinary and
+  TestPyPI development runs, and stable Release runs respectively. ([#188](https://github.com/xeonvs/open-code-review-toolkit/issues/188))
+
+### 🧩 Rules
+
+- Qualify OCR 1.12.7's built-in `**/test_*.py` exclusion while preserving review
+  of neighboring Python names and non-Python `test_*` files. ([#188](https://github.com/xeonvs/open-code-review-toolkit/issues/188))
+
+
 ## 0.10.1 - 2026-09-12
 
 ### 🐛 Bug Fixes

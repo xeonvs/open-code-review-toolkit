@@ -344,6 +344,25 @@ def test_0100_release_notes_cover_local_delivery_and_ocr_1116() -> None:
         assert phrase in notes
 
 
+def test_0110_release_notes_cover_governed_federation_and_ocr_1127() -> None:
+    """Keep federation, DLP and OCR selection contracts visible."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = release.release_notes(changelog, "0.11.0")
+
+    for phrase in (
+        "governed MCP registry v2 federation",
+        "internal repository-evidence MCP mandatory",
+        "receipt\n  v9 records content-free actual-use",
+        "DLP diagnostics stage-aware and source-attributed",
+        "OCR_DLP_ENABLED=false",
+        "DLP stays enabled by default",
+        "7/14/30-day Actions retention window",
+        "OCR 1.12.7's built-in `**/test_*.py` exclusion",
+    ):
+        assert phrase in notes
+
+
 def test_0101_release_notes_cover_terminal_lifecycle_and_ocr_1119() -> None:
     """Keep the terminal-race fix and complete OCR qualification visible."""
 
