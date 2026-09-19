@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.11.0 — governed MCP federation and OCR 1.12.7
 
-Status: repository work complete; protected feature/corrective merges and development publication verified; stable external delivery pending
+Status: completed; stable v0.11.0 delivery and external reconciliation verified
 - **Plan origin:** approved plan-mode execution, extended by user-authorized release closure
 - **Release classification:** release-required
 - **Target stable version:** 0.11.0; the release PR advances `.next-version` to 0.12.0
@@ -15,6 +15,7 @@ Status: repository work complete; protected feature/corrective merges and develo
 - **Corrective branch:** `fix/registry-runtime-dependencies`; PR #211 merged
 - **Release branch:** `release/v0.11.0`
 - **Repository completion date:** 2026-09-19
+- **External reconciliation date:** 2026-09-19
 
 ### Repository-Complete Release Checkpoint
 
@@ -46,10 +47,47 @@ Status: repository work complete; protected feature/corrective merges and develo
   Towncrier fragments; pins the public GitLab example to toolkit 0.11.0 and OCR
   1.12.7; and leaves `.release-reconciled-version=0.10.1` until live external
   delivery is independently read back.
-- Stable TestPyPI/PyPI publication, provenance, the annotated tag, immutable
-  five-asset GitHub Release, release receipt, workflow-owned issue receipts,
-  milestone closure, and external reconciliation intentionally remain pending the
-  protected release merge and Release workflow.
+- At the release-PR handoff, stable TestPyPI/PyPI publication, provenance, the
+  annotated tag, immutable five-asset GitHub Release, release receipt,
+  workflow-owned issue receipts, milestone closure, and external reconciliation
+  did not yet exist and remained post-merge gates.
+
+### Stable Delivery And External Reconciliation
+
+- Release PR [#212](https://github.com/xeonvs/open-code-review-toolkit/pull/212)
+  reviewed signed head `9fdabc74e5dc26566105a086d924e609bbe426cb` on protected
+  base `3f402948ce4606b935587af63920c467af43fa3b`, passed all 13
+  exact-head checks, and squash-merged as
+  `db180259141f3092bc163ca58ee0cc9b906a93d8`. Stable Release workflow
+  [35446513596](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/35446513596)
+  completed successfully from that authorized release head.
+- Stable TestPyPI and PyPI independently returned the exact reviewed wheel and
+  sdist bytes. The workflow verified registry provenance and clean installs on
+  Python 3.12, 3.13, and 3.14. Wheel SHA-256 is
+  `fa64701e627e1045cb9b597f79c05f834265f160f127564dcec9702375e2f072`;
+  sdist SHA-256 is
+  `7a03f4bd1ff657f333111ef9155380fadcbd83f4beac0dce1f44d6818e0d103e`.
+- Annotated tag `v0.11.0` targets the protected merge exactly. Immutable GitHub
+  Release [392088657](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.11.0)
+  was published at `2026-09-19T13:52:14Z` with exactly the wheel, sdist,
+  `artifact-hashes.json`, `SHA256SUMS`, and `release-receipt.json`.
+- The immutable receipt SHA-256 is
+  `d8295d4e2a51f1d486229cf614fbb6afea92e80e331bafe8ebf356e469129c4a`.
+  It records v0.11.0, release PR #212, reviewed base/head/merge/tree
+  `3f402948ce4606b935587af63920c467af43fa3b`,
+  `9fdabc74e5dc26566105a086d924e609bbe426cb`,
+  `db180259141f3092bc163ca58ee0cc9b906a93d8`, and
+  `80768dedf327114ffd84ecffd7112907300a4f01`; workflow run 35446513596
+  attempt 1; issues `[188, 189, 190, 191, 192, 193, 201, 202, 203, 204, 205,
+  206, 207, 209, 210]`; both distribution hashes; both registries and provenance
+  states; the exact tag target; GitHub attestation; and Python 3.12–3.14 smokes.
+- GitHub Actions posted matching receipt comments and closed all 15 tracked
+  issues as completed. Milestone `v0.11.0` was then closed at
+  `2026-09-19T13:54:16Z` with zero open and 15 closed issues. The remote feature,
+  corrective, and release branches are absent, and local `main` matched
+  `origin/main` at the stable merge before this no-release reconciliation.
+
+**External reconciliation date: 2026-09-19.**
 
 ### Archived Feature Plan
 
