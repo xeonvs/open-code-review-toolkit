@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit.federation import FederationError, parse_registry, start_gateway
+from ocr_toolkit.federation import FederationError, parse_registry, runtime, start_gateway
 
 PEER = Path(__file__).with_name("hostile_peer.py")
 
@@ -73,3 +73,25 @@ def test_leader_exit_does_not_skip_descendant_kill(tmp_path: Path) -> None:
     finally:
         if exists(child):
             os.kill(child, signal.SIGKILL)
+
+
+def test_gateway_preparation_uses_registry_wide_deadline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    observed: list[float | None] = []
+    original_wait = runtime.threading.Event.wait
+
+    def recording_wait(event: object, timeout: float | None = None) -> bool:
+        observed.append(timeout)
+        return original_wait(event, timeout)
+
+    monkeypatch.setattr(runtime.threading.Event, "wait", recording_wait)
+    gateway = start_gateway(
+        parse_registry(configured("descendant", tmp_path / "pid")),
+        environment={},
+        run_id="a" * 32,
+    )
+    try:
+        assert runtime.RUN_SECONDS in observed
+    finally:
+        gateway.close()

@@ -8,7 +8,7 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## v0.11.0 governed MCP federation and feature draft
 
-Status: active
+Status: complete; release handoff authorized
 Plan Origin: plan_mode_approved
 Release classification: release-required
 Target stable version: 0.11.0
@@ -17,7 +17,7 @@ Target stable version: 0.11.0
 
 Implement M7 governed model-directed MCP federation, stage-aware publication DLP
 diagnostics, OCR compatibility and dependency updates, and deliver a verified
-draft feature PR. Stable delivery remains pending after this handoff.
+feature PR ready for protected merge and stable delivery.
 
 ### Requested Scope
 
@@ -30,7 +30,7 @@ check for newer stable OCR again near final qualification.
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Full plan, plan-only push, then local work until final draft | WQ-01, WQ-10 | in_progress |
+| REQ-001 | Full plan, plan-only push, then local work until final draft | WQ-01, WQ-10 | done |
 | REQ-002 | #189 architecture, mandatory internal evidence MCP, M7/M8 reconciliation | WQ-03 | done |
 | REQ-003 | #190 registry and bounded multi-service gateway | WQ-04 | done |
 | REQ-004 | #191 schema/origin/DLP/budget/lifecycle controls | WQ-04, WQ-05 | done |
@@ -39,7 +39,7 @@ check for newer stable OCR again near final qualification.
 | REQ-007 | #203 stage-aware DLP and source-class accounting | WQ-06 | done |
 | REQ-008 | #201/#202/#204–#207 latest stable OCR qualification/local update | WQ-02, WQ-08 | done |
 | REQ-009 | Dependency updates and pre-commit/pre-push privacy gates | WQ-02, WQ-09 | done |
-| REQ-010 | Independent architecture/security reviews, full acceptance and draft handoff | WQ-03, WQ-09, WQ-10 | in_progress |
+| REQ-010 | Independent architecture/security reviews, full acceptance and draft handoff | WQ-03, WQ-09, WQ-10 | done |
 | REQ-012 | Rolling runtime support of verified OCR versions, two active lines plus one deprecated | WQ-08 | done |
 | REQ-013 | Explicit CI-controlled DLP disable mode with risk warnings and local/GitLab parity | WQ-06, WQ-07 | done |
 | REQ-011 | Adopt material workflow 0.9.6 improvements preserving canonical owners | WQ-03 | done |
@@ -148,7 +148,7 @@ Existing Gitleaks wrapper scans committed history only, not candidate content.
 | WQ-07 | Public configuration/migration/security/operations/examples/decision-flow and evidence matrix | done |
 | WQ-08 | Near-final latest OCR check, adjacent-chain qualification, verified local binary update and pins | done |
 | WQ-09 | Independent security/architecture review, remediation, full local quality/package/privacy acceptance | done |
-| WQ-10 | Final signed commits/push, draft feature PR, exact-head CI readback and next-environment handoff | in_progress |
+| WQ-10 | Final signed commits/push, draft feature PR, exact-head CI readback and release handoff | done |
 
 ### Locked Decisions
 
@@ -341,13 +341,21 @@ handoff. All implementation remains local until that push.
 - [ ] Handoff preserves outstanding DLP/configured-OCR and stable-delivery work.
 - [ ] No issues/milestone or stable release are falsely closed at feature draft.
 
-### Post-Close Delivery
+### Release Handoff
 
-Current authorization ends at feature draft. Continue the same draft in an
-environment with configured OCR/model provider for new DLP additions and external
-qualification. Later: feature merge, TestPyPI development verification, separate
-release PR, stable publication and independent receipts under docs/release.md.
-Keep the release-required plan active at this checkpoint rather than closing it.
+The feature implementation plan is complete before its final push. OCR v1.12.7
+was checksum-verified and the production local wrapper completed the exact
+`458d967...e5057d5` range with 61/61 selected reviews, 22 mandatory evidence-MCP
+calls, passed DLP admission and four actionable findings. Those findings are
+fixed in the final local delta with focused regression coverage. Codex Security
+completed the same immutable range with complete coverage and no reportable
+security findings. The final acceptance matrix and incremental review cover the
+post-OCR fixes before the single closure push.
+
+Protected merge, TestPyPI development verification, the separate v0.11.0
+release PR, immutable stable publication and external reconciliation continue
+under `docs/release.md`; they are release lifecycle states, not unfinished
+feature implementation.
 
 ### Handoff Notes
 

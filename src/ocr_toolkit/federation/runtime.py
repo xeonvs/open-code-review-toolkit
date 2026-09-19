@@ -16,7 +16,7 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
-from .contracts import CALL_SECONDS, RUN_SECONDS, FederationError, Registry
+from .contracts import RUN_SECONDS, FederationError, Registry
 from .gateway import Gateway
 
 
@@ -85,7 +85,9 @@ class RunningGateway:
             daemon=True,
         )
         self._thread.start()
-        if not self._ready.wait(CALL_SECONDS + 5):
+        # Preparation may inventory every configured peer. Keep it within the
+        # registry-wide run budget rather than one peer-call deadline.
+        if not self._ready.wait(RUN_SECONDS):
             self._request_stop(cancel=True)
             self._thread.join(20)
             if not self._thread.is_alive():

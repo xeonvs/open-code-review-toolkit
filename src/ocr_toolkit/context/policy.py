@@ -457,6 +457,14 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         raise ContextContractError("context policy references are invalid")
     if schema_version == POLICY_SCHEMA_V4 and "references" in root:
         raise ContextContractError("current context policy does not support legacy references")
+    if (
+        schema_version != POLICY_SCHEMA_V4
+        and discussion is None
+        and remediation is None
+        and ci_outcomes is None
+        and not references_value
+    ):
+        raise ContextContractError("context policy must select at least one source")
     references = tuple(_reference(value) for value in references_value)
     identities = [(item.adapter, item.tenant, item.resource_class) for item in references]
     if len(identities) != len(set(identities)):

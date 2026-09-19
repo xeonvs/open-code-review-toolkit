@@ -107,6 +107,17 @@ def test_local_summary_prominently_reports_disabled_dlp() -> None:
     assert "automatic approval is blocked" in summary
 
 
+def test_local_summary_reports_legacy_policy_limitation() -> None:
+    facts = replace(execution_facts(), legacy_policy=True)
+
+    summary = local_summary(
+        report_from_result({"status": "success", "comments": [], "warnings": []}, execution=facts)
+    )
+
+    assert "legacy policy" in summary
+    assert "references not executed" in summary
+
+
 def test_model_content_cannot_escape_literal_fences_or_control_terminal() -> None:
     result = {
         "status": "success",
