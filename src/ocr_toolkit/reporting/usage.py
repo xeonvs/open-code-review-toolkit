@@ -155,7 +155,9 @@ def format_tool_calls_summary(tool_calls: Any) -> str:
     return f"{line} ({', '.join(detail_parts)})"
 
 
-def format_verified_mcp_usage(*, mcp_usage: Any, evidence: Any) -> str:
+def format_verified_mcp_usage(
+    *, mcp_usage: Any, evidence: Any, federation: Any = None, legacy_policy: bool = False
+) -> str:
     """Format execution-owner-verified facts, never model-supplied usage claims."""
 
     if (
@@ -184,6 +186,14 @@ def format_verified_mcp_usage(*, mcp_usage: Any, evidence: Any) -> str:
                 "- completed built-in evidence actions: "
                 + ", ".join(f"{action}: {completed[action]}" for action in positive)
             )
+    if legacy_policy is True:
+        lines.append("- Context policy migration v1: legacy policy; references not executed")
+    if federation is not None:
+        from ocr_toolkit.reporting.federation import format_federation
+
+        line = format_federation(federation)
+        if line:
+            lines.append(line)
     return "\n".join(lines)
 
 

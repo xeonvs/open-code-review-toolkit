@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ocr_toolkit.context.dlp import FORBIDDEN_SOURCE_CLASSES
 from ocr_toolkit.ocr_result import MAX_TOOLKIT_MCP_USAGE_COUNT
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
 
@@ -14,6 +15,11 @@ def format_dlp_admission(publication: Any) -> str:
     state = admission_dlp_state(publication)
     if state is None:
         return "- DLP admission: unavailable"
+    if state == "disabled":
+        return (
+            "- DLP admission: **disabled** — sensitive context or model output may have "
+            "crossed configured service and output boundaries; automatic approval is blocked"
+        )
     if state == "passed":
         return "- DLP admission: passed"
     reasons = ", ".join(
@@ -30,7 +36,8 @@ def format_dlp_admission(publication: Any) -> str:
     return (
         f"- DLP admission: filtered; retained {retained['comments']} finding(s), "
         f"{retained['warnings']} warning(s); omitted {omitted['comments']} finding(s), "
-        f"{omitted['warnings']} warning(s), {omitted['fields']} field(s); reasons: {reasons}"
+        f"{omitted['warnings']} warning(s), {omitted['fields']} field(s) before posting; reasons: {reasons}"
+        + format_forbidden_sources(publication)
     )
 
 
@@ -52,6 +59,29 @@ def admission_dlp_state(value: Any) -> str | None:
 def _dlp_state(value: Any, *, allow_unknown_coverage: bool) -> str | None:
     """Validate closed DLP facts with an explicit coverage-knowledge boundary."""
 
+    if isinstance(value, dict) and "source_attribution" in value:
+        attribution = value["source_attribution"]
+        if (
+            not isinstance(attribution, dict)
+            or set(attribution) != {"schema", "counts"}
+            or attribution["schema"] != "ocr.forbidden-sources/v1"
+            or not isinstance(attribution["counts"], dict)
+            or set(attribution["counts"]) != FORBIDDEN_SOURCE_CLASSES
+            or any(
+                type(v) is not int or not 0 <= v <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                for v in attribution["counts"].values()
+            )
+            or value.get("state") not in {"private-sanitized", "publication-filtered"}
+        ):
+            return None
+        counts = value.get("reason_counts")
+        if not isinstance(counts, dict) or type(counts.get("forbidden")) is not int:
+            return None
+        if any(v > counts["forbidden"] for v in attribution["counts"].values()):
+            return None
+        value = {key: item for key, item in value.items() if key != "source_attribution"}
+    if value == {"state": "disabled"}:
+        return "disabled"
     if value == {"state": "passed"}:
         return "passed"
     if not isinstance(value, dict):
@@ -195,3 +225,16 @@ def _original_outcome(outcome: ReviewOutcome, publication: Any) -> ReviewOutcome
         failed_count=counts["failed"],
         waived_count=counts["waived"],
     )
+
+
+def format_forbidden_sources(publication: Any) -> str:
+    """Only validated closed aggregate classes can enter shared reporting."""
+
+    if admission_dlp_state(publication) is None or "source_attribution" not in publication:
+        return ""
+    entries = [
+        f"{key}={value}"
+        for key, value in sorted(publication["source_attribution"]["counts"].items())
+        if value
+    ]
+    return "; forbidden sources: " + ", ".join(entries) if entries else ""

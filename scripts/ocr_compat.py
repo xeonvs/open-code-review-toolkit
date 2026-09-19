@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import hashlib
 import html
@@ -51,8 +52,14 @@ MAX_CLI_PROBE_BYTES = 100_000
 MAX_GROUPING_INVENTORY_ENTRIES = 100
 MAX_GROUPING_PATH_CHARS = 1_000
 MAX_GROUPING_CHURN = 1_000_000_000
+GROUPING_PROMPT_PREFIX = "Group the following changed files:\n\n"
+GROUPING_RESPONSE_BOUNDARY = (
+    '\n\nRespond with a JSON array, where "files" holds the integer indices shown in '
+    "brackets beside each file:"
+)
 DOWNLOAD_ATTEMPTS = 3
 VERSION_RE = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+VERSION_LINE_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PUBLISHED_AT_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
@@ -140,8 +147,15 @@ CURRENT_LANGUAGE_RULES = {
     "src/component.rei": "**/*.{re,rei}",
     "scripts/setup.kts": "**/*.{kt,kts}",
     "policies/authz.rego": "**/*.rego",
+    "types/interface.pyi": "**/*.{py,pyi,ipynb}",
 }
 CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
+PYI_SELECTION_CUTOFF = (1, 12, 0)
+PYI_PYTHON_RULE_CUTOFF = (1, 12, 1)
+PROVIDER_DIRECTORY_PREVIEW_CUTOFF = (1, 12, 1)
+PYTEST_PREFIX_EXCLUSION_CUTOFF = (1, 12, 7)
+PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
+PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
 
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
@@ -199,6 +213,7 @@ class QualificationStageError(CompatibilityError):
 class GroupingInventoryEntry:
     """One strictly parsed, qualification-only grouping inventory entry."""
 
+    index: int
     status: str
     path: str
     insertions: int
@@ -308,8 +323,8 @@ def load_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _validate_current_contracts(value: object) -> None:
-    """Require the live consumed contract, independent of candidate release numbering."""
+def _validate_current_contracts(value: object, version: str) -> None:
+    """Require the live consumed contract epoch selected for one candidate version."""
 
     if not isinstance(value, dict):
         _fail("current qualification contracts are missing")
@@ -322,7 +337,10 @@ def _validate_current_contracts(value: object) -> None:
         or not {"review_effort", "semantic_grouping"}.issubset(capabilities)
     ):
         _fail("current qualification omitted required CLI capabilities")
-    extensions = sorted(Path(path).suffix for path in CURRENT_LANGUAGE_RULES)
+    extensions = sorted(Path(path).suffix for path in _language_rules_for_version(version))
+    provider_directory_state = (
+        "reported" if _version(version) >= PROVIDER_DIRECTORY_PREVIEW_CUTOFF else "omitted"
+    )
     expected = {
         "numeric_cli_probe": CURRENT_NUMERIC_CLI_CONTRACT,
         "review_budget_probe": {
@@ -355,9 +373,13 @@ def _validate_current_contracts(value: object) -> None:
             "single_file": "per_file",
             "threshold_files": 4,
         },
+        "provider_directory_preview_probe": {
+            "result": "passed",
+            "tracked_provider_directory": provider_directory_state,
+        },
         "language_rule_probe": {
             "excluded_extensions": [".svh"],
-            "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
+            "default_excluded_paths": list(_default_excluded_paths_for_version(version)),
             "extensions": extensions,
             "result": "passed",
             "rule_source": "system_builtin",
@@ -413,7 +435,7 @@ def _validate_contracts_for_version(version: str, contracts: Any) -> None:
     if version_tuple < history.HISTORICAL_CUTOFF:
         history.validate_contracts(version, version_tuple, {"contracts": contracts}, _fail)
     else:
-        _validate_current_contracts(contracts)
+        _validate_current_contracts(contracts, version)
 
 
 def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None:
@@ -426,8 +448,12 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
     """Return live probe paths for the frozen or current candidate epoch."""
 
     rules = dict(CURRENT_LANGUAGE_RULES)
-    if _version(version) < history.HISTORICAL_CUTOFF:
+    if _version(version) < history.REGO_CONTRACT_CUTOFF:
         rules.pop("policies/authz.rego")
+    if _version(version) < PYI_SELECTION_CUTOFF:
+        rules.pop("types/interface.pyi")
+    elif _version(version) < PYI_PYTHON_RULE_CUTOFF:
+        rules["types/interface.pyi"] = "default"
     return rules
 
 
@@ -435,16 +461,94 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
     """Keep next-epoch languages observable as negative controls."""
 
     paths = ["rtl/include.svh"]
-    if _version(version) < history.HISTORICAL_CUTOFF:
+    if _version(version) < history.REGO_CONTRACT_CUTOFF:
         paths.append("policies/authz.rego")
+    if _version(version) < PYI_SELECTION_CUTOFF:
+        paths.append("types/interface.pyi")
     return tuple(paths)
+
+
+def _default_excluded_paths_for_version(version: str) -> tuple[str, ...]:
+    """Return the exact built-in test exclusions owned by one OCR epoch."""
+
+    paths = list(CURRENT_DEFAULT_EXCLUDED_PATHS)
+    if _version(version) >= PYTEST_PREFIX_EXCLUSION_CUTOFF:
+        paths.append(PYTEST_PREFIX_EXCLUDED_PATH)
+    return tuple(paths)
+
+
+def _rolling_runtime_support(version: str) -> dict[str, object]:
+    """Return the three-line runtime policy for one qualified recommendation."""
+
+    major, minor, _patch = _version(version)
+    if minor < 2:
+        _fail("rolling runtime support requires two preceding minor lines")
+    return {
+        "deprecated_lines": [f"{major}.{minor - 2}"],
+        "qualified_patches_only": True,
+        "rejected_before": f"{major}.{minor - 2}.0",
+        "supported_lines": [f"{major}.{minor - 1}", f"{major}.{minor}"],
+    }
+
+
+def qualified_runtime_versions(manifest: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Project exact supported and deprecated patches from tested evidence."""
+
+    policy = manifest.get("runtime_support")
+    releases = manifest.get("releases")
+    if not isinstance(policy, dict) or not isinstance(releases, list):
+        _fail("runtime support requires a policy and release inventory")
+    supported_lines = policy.get("supported_lines")
+    deprecated_lines = policy.get("deprecated_lines")
+    if not isinstance(supported_lines, list) or not isinstance(deprecated_lines, list):
+        _fail("runtime support lines must be lists")
+    supported_set = set(supported_lines)
+    deprecated_set = set(deprecated_lines)
+    supported: list[str] = []
+    deprecated: list[str] = []
+    for entry in releases:
+        if not isinstance(entry, dict) or entry.get("status") != "tested":
+            continue
+        version = entry.get("version")
+        if not isinstance(version, str):
+            continue
+        major, minor, _patch = _version(version)
+        line = f"{major}.{minor}"
+        if line in supported_set:
+            supported.append(version)
+        elif line in deprecated_set:
+            deprecated.append(version)
+    supported.sort(key=_version)
+    deprecated.sort(key=_version)
+    return supported, deprecated
+
+
+def _validate_runtime_support(manifest: dict[str, Any], recommended: str) -> None:
+    """Validate policy shape separately from discovery and historical evidence."""
+
+    expected = _rolling_runtime_support(recommended)
+    policy = manifest.get("runtime_support")
+    if not isinstance(policy, dict) or set(policy) != set(expected):
+        _fail("runtime_support must use the closed rolling-window schema")
+    if policy != expected:
+        _fail("runtime_support does not match the recommended release line")
+    for field in ("supported_lines", "deprecated_lines"):
+        lines = policy[field]
+        assert isinstance(lines, list)
+        if any(
+            not isinstance(line, str) or VERSION_LINE_RE.fullmatch(line) is None for line in lines
+        ):
+            _fail(f"runtime_support {field} contains an invalid version line")
+    supported, _deprecated = qualified_runtime_versions(manifest)
+    if not supported or supported[-1] != recommended:
+        _fail("runtime_support must resolve the recommendation to an exact tested patch")
 
 
 def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the versioned OCR support contract and evidence linkage."""
 
-    if manifest.get("schema_version") != 1:
-        _fail("manifest schema_version must be 1")
+    if manifest.get("schema_version") != 2:
+        _fail("manifest schema_version must be 2")
     if manifest.get("upstream_repository") != UPSTREAM_REPOSITORY:
         _fail(f"manifest upstream_repository must be {UPSTREAM_REPOSITORY}")
     recommended = manifest.get("recommended_version")
@@ -536,6 +640,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path = ROOT) -> None:
             _fail(f"manifest and evidence assets disagree for {version}")
     if not recommended_found:
         _fail("recommended_version is missing from releases")
+    _validate_runtime_support(manifest, recommended)
 
 
 def _request_json(url: str) -> dict[str, Any] | list[Any]:
@@ -917,20 +1022,19 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         ]
 
     @classmethod
-    def _grouping_files(cls, messages: list[Any]) -> list[str]:
+    def _grouping_files(cls, messages: list[Any]) -> list[int]:
         """Extract one version-bound grouping inventory and retain structural evidence."""
 
         entries = parse_grouping_inventory(messages)
         cls.grouping_inventories.append(entries)
-        return [entry.path for entry in entries]
+        return [entry.index for entry in entries]
 
     @classmethod
     def _is_grouping_request(cls, messages: list[Any]) -> bool:
         """Distinguish the tool-free grouping task from OCR's tool-free plan task."""
 
         return any(
-            content.startswith("Group the following changed files:\n\n")
-            and "\n\nRespond with a JSON array:\n" in content
+            content.startswith(GROUPING_PROMPT_PREFIX) and GROUPING_RESPONSE_BOUNDARY in content
             for content in cls._message_contents(messages)
         )
 
@@ -998,14 +1102,14 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                     tool_names.add(function["name"])
         message: dict[str, Any]
         if not tool_names and type(self)._is_grouping_request(messages):
-            paths = type(self)._grouping_files(messages)
-            if not paths:
+            indices = type(self)._grouping_files(messages)
+            if not indices:
                 self.send_error(400)
                 return
             groups = (
-                [{"label": "compatibility-group", "files": paths}]
+                [{"label": "compatibility-group", "files": indices}]
                 if type(self).grouping_mode == "combined"
-                else [{"label": path, "files": [path]} for path in paths]
+                else [{"label": str(index), "files": [index]} for index in indices]
             )
             message = {"role": "assistant", "content": json.dumps(groups)}
             finish_reason = "stop"
@@ -1179,22 +1283,26 @@ def _stub_gateway(
 
 
 def parse_grouping_inventory(messages: list[Any]) -> list[GroupingInventoryEntry]:
-    """Parse the current status-first inventory without legacy execution fallbacks."""
+    """Parse the current indexed, status-first inventory without legacy fallbacks."""
 
     pattern = re.compile(
+        r"\[(?P<index>0|[1-9][0-9]{0,2})\] "
         r"(?P<status>ADDED|MODIFIED|DELETED|RENAMED)   "
         r"(?P<path>[^\r\n]{1,1000}) "
         r"\(\+(?P<insertions>0|[1-9][0-9]{0,9})/-(?P<deletions>0|[1-9][0-9]{0,9})\)"
     )
 
-    prefix = "Group the following changed files:\n\n"
-    suffix = "\n\nRespond with a JSON array:"
     blocks: list[str] = []
     for content in _StubHandler._message_contents(messages):
-        if not content.startswith(prefix) or suffix not in content:
+        if (
+            not content.startswith(GROUPING_PROMPT_PREFIX)
+            or GROUPING_RESPONSE_BOUNDARY not in content
+        ):
             continue
-        inventory, remainder = content[len(prefix) :].split(suffix, 1)
-        if suffix in remainder:
+        inventory, remainder = content[len(GROUPING_PROMPT_PREFIX) :].split(
+            GROUPING_RESPONSE_BOUNDARY, 1
+        )
+        if GROUPING_RESPONSE_BOUNDARY in remainder:
             _fail("grouping prompt contains duplicate response boundaries")
         blocks.append(inventory)
     if len(blocks) != 1:
@@ -1209,11 +1317,13 @@ def parse_grouping_inventory(messages: list[Any]) -> list[GroupingInventoryEntry
         match = pattern.fullmatch(line)
         if match is None:
             _fail("OCR emitted an invalid grouping inventory entry")
+        index = int(match.group("index"))
         path = match.group("path")
         insertions = int(match.group("insertions"))
         deletions = int(match.group("deletions"))
         if (
-            len(path) > MAX_GROUPING_PATH_CHARS
+            index != len(entries)
+            or len(path) > MAX_GROUPING_PATH_CHARS
             or path in observed_paths
             or insertions > MAX_GROUPING_CHURN
             or deletions > MAX_GROUPING_CHURN
@@ -1222,6 +1332,7 @@ def parse_grouping_inventory(messages: list[Any]) -> list[GroupingInventoryEntry
         observed_paths.add(path)
         entries.append(
             GroupingInventoryEntry(
+                index=index,
                 status=match.group("status"),
                 path=path,
                 insertions=insertions,
@@ -1805,7 +1916,9 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
         _fail("semantic grouping review did not preserve the accepted group")
     if stages != ["grouping", "main", "main", "filter", "main"]:
         _fail(f"default medium review emitted an unexpected stage sequence: {stages!r}")
-    expected_inventory = [GroupingInventoryEntry("MODIFIED", path, 1, 1) for path in paths]
+    expected_inventory = [
+        GroupingInventoryEntry(index, "MODIFIED", path, 1, 1) for index, path in enumerate(paths)
+    ]
     if len(grouping_inventories) != 1:
         _fail("semantic grouping review emitted an unexpected grouping inventory count")
     _require_exact_grouping_inventory(grouping_inventories[0], expected_inventory)
@@ -2119,6 +2232,96 @@ def _selected_preview_paths(payload: object) -> set[str]:
     return selected
 
 
+def _provider_directory_preview_probe(
+    binary: Path, version: str, directory: Path
+) -> dict[str, object]:
+    """Prove the tracked provider-directory preview transition on an exact range."""
+
+    root = directory / "provider-directory-preview"
+    root.mkdir()
+    git_env = _isolated_probe_environment(root / "git-home")
+    repo = root / "review"
+    repo.mkdir()
+    _run(["git", "init", "--initial-branch=main"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=git_env)
+    _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=git_env)
+    paths = ("src/main.py", "vendor/dependency.py")
+    for path in paths:
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("value = 1\n", encoding="utf-8")
+    _run(["git", "add", *paths], cwd=repo, env=git_env)
+    _run(["git", "commit", "-m", "preview baseline"], cwd=repo, env=git_env)
+    base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    for path in paths:
+        (repo / path).write_text("value = 2\n", encoding="utf-8")
+    _run(["git", "commit", "-am", "preview changes"], cwd=repo, env=git_env)
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=git_env).strip()
+    env = _isolated_probe_environment(root / "review-home")
+    output = _run(
+        [
+            str(binary),
+            "review",
+            "--from",
+            base,
+            "--to",
+            head,
+            "--preview",
+            "--format",
+            "json",
+        ],
+        cwd=repo,
+        env=env,
+    )
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise CompatibilityError("provider-directory preview did not emit JSON") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+        _fail("provider-directory preview emitted an invalid file manifest")
+    file_records = payload["files"]
+    if any(
+        not isinstance(item, dict) or not isinstance(item.get("path"), str) for item in file_records
+    ):
+        _fail("provider-directory preview emitted an invalid file record")
+    records = {item["path"]: item for item in file_records}
+    selected = records.get("src/main.py")
+    if not isinstance(selected, dict) or selected.get("will_review") is not True:
+        _fail("provider-directory preview omitted the reviewable control file")
+    reports_provider_directory = _version(version) >= PROVIDER_DIRECTORY_PREVIEW_CUTOFF
+    expected_paths = set(paths) if reports_provider_directory else {"src/main.py"}
+    if len(records) != len(file_records) or set(records) != expected_paths:
+        _fail("provider-directory preview changed its exact tracked-file inventory")
+    provider_record = records.get("vendor/dependency.py")
+    expected_counts = (2, 1, 1) if reports_provider_directory else (1, 1, 0)
+    observed_counts = (
+        payload.get("total_files"),
+        payload.get("reviewable_count"),
+        payload.get("excluded_count"),
+    )
+    if reports_provider_directory:
+        if (
+            not isinstance(provider_record, dict)
+            or provider_record.get("will_review") is not False
+            or provider_record.get("exclude_reason") != "provider_directory"
+        ):
+            _fail("candidate did not report the tracked provider-directory exclusion")
+    elif provider_record is not None:
+        _fail("candidate reported provider-directory preview data before its contract epoch")
+    if observed_counts != expected_counts:
+        _fail("candidate changed provider-directory preview counts")
+    expected_churn = 2 if reports_provider_directory else 1
+    if (
+        payload.get("total_insertions") != expected_churn
+        or payload.get("total_deletions") != expected_churn
+    ):
+        _fail("candidate changed provider-directory preview churn totals")
+    return {
+        "result": "passed",
+        "tracked_provider_directory": "reported" if reports_provider_directory else "omitted",
+    }
+
+
 def _target_rule_selection_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove the real OCR selector consumes target rules without changing its range."""
 
@@ -2213,7 +2416,18 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     qualified_rules = set(exact_patterns)
     supported_paths = tuple(sorted(qualified_rules))
     unsupported_paths = _language_negative_paths_for_version(version)
-    paths = (*supported_paths, *unsupported_paths, *CURRENT_DEFAULT_EXCLUDED_PATHS)
+    default_excluded_paths = _default_excluded_paths_for_version(version)
+    paths = tuple(
+        sorted(
+            {
+                *supported_paths,
+                *unsupported_paths,
+                *default_excluded_paths,
+                *PYTEST_PREFIX_CONTROL_PATHS,
+                PYTEST_PREFIX_EXCLUDED_PATH,
+            }
+        )
+    )
     for path in paths:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2246,9 +2460,12 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     except json.JSONDecodeError as exc:
         raise CompatibilityError("language preview did not emit JSON") from exc
     selected = _selected_preview_paths(payload)
-    if selected != set(supported_paths):
-        missing = sorted(set(supported_paths) - selected)
-        unexpected = sorted(selected - set(supported_paths))
+    expected_selected = set(supported_paths) | set(PYTEST_PREFIX_CONTROL_PATHS)
+    if _version(version) < PYTEST_PREFIX_EXCLUSION_CUTOFF:
+        expected_selected.add(PYTEST_PREFIX_EXCLUDED_PATH)
+    if selected != expected_selected:
+        missing = sorted(expected_selected - selected)
+        unexpected = sorted(selected - expected_selected)
         _fail(
             "candidate did not select the qualified built-in language set: "
             f"missing={missing!r}, unexpected={unexpected!r}"
@@ -2259,10 +2476,14 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         )
         if unsupported_selected or unsupported_reason != "unsupported_ext":
             _fail(f"candidate unexpectedly selected unqualified path {unsupported_path}")
-    for path in CURRENT_DEFAULT_EXCLUDED_PATHS:
+    for path in default_excluded_paths:
         selected_test, reason = _preview_file_selection(payload, path)
         if selected_test or not isinstance(reason, str) or not reason:
             _fail(f"candidate did not preserve the default test-path exclusion: {path}")
+    for path in PYTEST_PREFIX_CONTROL_PATHS:
+        selected_control, reason = _preview_file_selection(payload, path)
+        if not selected_control or reason not in {None, ""}:
+            _fail(f"candidate overmatched the pytest-prefix exclusion: {path}")
     for path in supported_paths:
         output = _run([str(binary), "rules", "check", path], cwd=repo, env=env)
         if (
@@ -2281,7 +2502,7 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     result: dict[str, object] = {
         "extensions": expected_extensions,
         "excluded_extensions": [".svh"],
-        "default_excluded_paths": list(CURRENT_DEFAULT_EXCLUDED_PATHS),
+        "default_excluded_paths": list(default_excluded_paths),
         "result": "passed",
         "rule_source": "system_builtin",
         "selected": len(supported_paths),
@@ -2565,6 +2786,9 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
     }
     contracts["semantic_grouping_probe"] = _semantic_grouping_probe(binary, directory)
     contracts["small_change_grouping_probe"] = _small_change_grouping_probe(binary, directory)
+    contracts["provider_directory_preview_probe"] = _provider_directory_preview_probe(
+        binary, version, directory
+    )
     contracts["language_rule_probe"] = _language_rule_probe(binary, version, directory)
     contracts["completion_cap_probe"] = _completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = _reasoning_effort_probe(binary, directory)
@@ -2808,6 +3032,55 @@ def _replace_exact(text: str, old: str, new: str, *, source: str) -> str:
     return text.replace(old, new)
 
 
+def _render_python_constant(name: str, value: str | tuple[str, ...]) -> str:
+    """Render one Ruff-stable top-level string or tuple assignment."""
+
+    if isinstance(value, str):
+        return f"{name} = {json.dumps(value)}"
+    items = "".join(f"    {json.dumps(item)},\n" for item in value)
+    return f"{name} = (\n{items})"
+
+
+def _replace_python_constant(
+    text: str,
+    name: str,
+    old: str | tuple[str, ...],
+    new: str | tuple[str, ...],
+) -> str:
+    """Replace one literal assignment after exact AST ownership validation."""
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise CompatibilityError("preflight source is not valid Python") from exc
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == name
+    ]
+    if len(matches) != 1:
+        _fail(f"preflight must define exactly one {name} assignment")
+    node = matches[0]
+    try:
+        observed = ast.literal_eval(node.value)
+    except (ValueError, TypeError) as exc:
+        raise CompatibilityError(f"preflight {name} must be a literal") from exc
+    if observed != old:
+        _fail(f"preflight {name} does not match the manifest")
+    source = ast.get_source_segment(text, node)
+    if source is None:
+        _fail(f"preflight {name} source range is unavailable")
+    return _replace_exact(
+        text,
+        source,
+        _render_python_constant(name, new),
+        source=f"preflight {name}",
+    )
+
+
 def assess_automatic_chain(
     manifest: dict[str, Any], evidences: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -2867,6 +3140,7 @@ def prepare_update(
     manifest = load_json(manifest_path)
     validate_manifest(manifest, root)
     old_version = str(manifest["recommended_version"])
+    old_supported, old_deprecated = qualified_runtime_versions(manifest)
     evidences = [evidence] if isinstance(evidence, dict) else list(evidence)
     if not evidences or len(evidences) > MAX_QUALIFICATION_CHAIN:
         _fail("candidate evidence chain must be a non-empty bounded list")
@@ -3017,17 +3291,31 @@ def prepare_update(
     releases.sort(
         key=lambda item: _version(str(item["version"])) if isinstance(item, dict) else (0, 0, 0)
     )
-    manifest["monitoring_floor"] = version
     manifest["recommended_version"] = version
+    manifest["monitoring_floor"] = version
+    manifest["runtime_support"] = _rolling_runtime_support(version)
+    new_supported, new_deprecated = qualified_runtime_versions(manifest)
     manifest_payload = canonical_json(manifest)
 
     preflight_path = root / PREFLIGHT.relative_to(ROOT)
     preflight = preflight_path.read_text(encoding="utf-8")
-    preflight = _replace_exact(
+    preflight = _replace_python_constant(
         preflight,
-        f'EXPECTED_OCR_VERSION = "{old_version}"',
-        f'EXPECTED_OCR_VERSION = "{version}"',
-        source="preflight version",
+        "RECOMMENDED_OCR_VERSION",
+        old_version,
+        version,
+    )
+    preflight = _replace_python_constant(
+        preflight,
+        "SUPPORTED_OCR_VERSIONS",
+        tuple(old_supported),
+        tuple(new_supported),
+    )
+    preflight = _replace_python_constant(
+        preflight,
+        "DEPRECATED_OCR_VERSIONS",
+        tuple(old_deprecated),
+        tuple(new_deprecated),
     )
     final_assets = evidences[-1].get("assets")
     assert isinstance(final_assets, list)

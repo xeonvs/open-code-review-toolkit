@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from ocr_toolkit import mcp_config
+from ocr_toolkit.context.dlp import dlp_mode
 from ocr_toolkit.context.mcp import ContextMCPError, call_context_tool, tool_definitions
 from ocr_toolkit.evidence.mcp import TOOL_NAME, handle_request
 from tests.test_context_store import (
@@ -312,3 +315,60 @@ def test_real_stdio_mcp_serves_evidence_and_committed_context_in_one_process(
     ]
     assert handle in responses[1]["result"]["content"][0]["text"]
     assert "Synthetic admitted issue context." in responses[2]["result"]["content"][0]["text"]
+
+
+def test_real_stdio_mcp_preserves_explicit_disabled_dlp_mode(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / ".review-context"
+    artifact_dir.mkdir()
+    _store().write(artifact_dir / "evidence.json")
+    context_path = artifact_dir / "context.json"
+    now = int(time.time())
+    text = "synthetic@example.invalid"
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    base = pending(expiry=now + 100)
+    record = replace(
+        base,
+        digest=digest,
+        projections={
+            **base.projections,
+            "model": {"descriptor": "issue", "text": text},
+            "retain": {**base.projections["retain"], "digest": digest},
+        },
+    )
+    with dlp_mode(False):
+        context_store = commit(
+            context_path,
+            created_at=now,
+            expiry=now + 100,
+            records=[record],
+        )
+    handle = context_store.records[0].handle
+    composition = mcp_config.compose_mcp_servers(
+        [],
+        context=mcp_config.MCPContextConfig(
+            store_path=str(context_path.resolve()),
+            run_id=RUN_ID,
+            policy_digest=POLICY_DIGEST,
+            dlp_enabled=False,
+        ),
+    )
+    builtin = composition.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "context_get", "arguments": {"handle": handle}},
+    }
+    completed = subprocess.run(
+        [str(builtin["command"]), *map(str, builtin["args"])],
+        cwd=tmp_path,
+        env={"PATH": "", "OCR_DLP_ENABLED": "true"},
+        input=json.dumps(request) + "\n",
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert text in json.loads(completed.stdout)["result"]["content"][0]["text"]

@@ -1,0 +1,281 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "f980c979cb14693f6593e06ce3928f186c29795fb47ccf94eb7737b5ecde974a",
+      "size": 57952768
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "324e3c20826a9346181e203118cc4bf1e68dd926a72aa9fce3af54e1e7cf4f31",
+      "size": 54978786
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "ead086f239e650a30dca133c7dc5731d903ef0c8c473c190f7735366d13beb03",
+      "size": 56205474
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "944caa2fdd08c58cbfb15a06cdc95ba252594b09597442f6f763bdb47e48dc56",
+      "size": 52887714
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "d1fe455a196e0109fabac92b87055088144cdd5f3f73cf9b7676f9ba9234c9d7",
+      "size": 57669632
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "2fbfe62cdcebff236fb384247297698f8fdc74b629a0bee2abb76cf517111191",
+      "size": 53623296
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "d057db8eb662b4ebe9bf48e50987ee1e3a1869682921ef4de1725813d68565ba",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.12.5",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 18
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-18T14:38:35Z",
+  "release_changes": "## 🚀 Features\n\n- feat(viewer): restyle the review comments section (#1387)\n- feat(viewer): restyle session detail header and meta bar (#1384)\n- feat(viewer): restyle the sessions list page (#1377)\n- feat(viewer): restyle the repositories page (#1382)\n\n## 🐛 Bug Fixes\n\n- fix(test): add TestMain to isolate session writes from real HOME (#1416)\n- fix(npm): hide the updater's console window on Windows (#1406)\n- fix(viewer): make --surface white to match the mockup backgrounds (#1404)\n\n## 🔧 Refactoring\n\n- refactor(viewer): dedupe shared viewer chrome (pager + back-link) (#1400)\n\n## Other Changes\n\n- chore(idea): rename the Marketplace listing and set version 0.1.0 (#1438)\n- chore: clear non-code blockers ahead of the english-only cleanup (#1417)\n- Feat/idea plugin (#1031)\n- chore: extend license and english-only gates to kt, py and css (#1407)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.12.5...v1.12.6",
+  "release_notes_sha256": "465bfcbdece29e5179ccc16b5b51004e87d69418e0011ea7c82040863b290ede",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.12.6",
+  "tested_baseline_version": "1.11.9",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.12.6"
+}

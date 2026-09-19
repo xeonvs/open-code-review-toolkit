@@ -1,6 +1,6 @@
 # Open Code Review compatibility
 
-The versioned support contract lives in [`compatibility/ocr-support.json`](../compatibility/ocr-support.json). It records the recommended OCR version, every tested or observed release, exact upstream asset digests, and a SHA-256 link to normalized machine evidence. The toolkit package never downloads OCR; deployments keep using an explicitly pinned, checksum-verified binary.
+The versioned support contract lives in [`compatibility/ocr-support.json`](../compatibility/ocr-support.json). Schema v2 records the recommended OCR version, every tested or observed release, exact upstream asset digests, normalized evidence hashes, and a rolling runtime window. The newest two qualified major/minor lines are supported (`1.11` and `1.12`); the preceding line (`1.10`) is deprecated and emits a warning. Versions before `1.10.0` and patches absent from the qualified manifest are rejected. `monitoring_floor` controls release discovery only and never grants runtime support. The toolkit package never downloads OCR; deployments keep using an explicitly pinned, checksum-verified binary.
 
 ## Qualification lanes
 
@@ -30,7 +30,7 @@ agree with both GitHub release metadata and the upstream `sha256sum.txt`.
 
 Candidate execution uses the verified Linux amd64 binary on an Ubuntu runner. The harness checks the reported version, the CLI flags consumed by the GitLab integration, range preview behavior, an actual JSON review through a deterministic local gateway, an aggregate-budget review that must preserve completed findings and emit budget-attributed partial coverage, and the additive JSON fields consumed by posting. Toolkit-managed numeric OCR options are also exercised at omitted/default, sentinel, invalid-below-boundary, minimum minus one, minimum, representative, and maximum edges when bounded. The evidence records closed outcomes, recognized diagnostics, normalization, ownership, and effective values observed through real loop behavior; CLI help text is not accepted as runtime evidence. The harness also requires JSON preview without a session-store side effect and proves that additive comment `thinking` is accepted but not published to GitLab. Upstream source review separately verifies how OCR derives that field; the toolkit probe does not claim to reproduce a provider's private reasoning channel. Evidence permits unknown new fields but requires the fields the toolkit reads. Legacy result statuses and the versioned `ocr.run-manifest/v1` outcome are normalized through one shared toolkit contract; manifest coverage sets, failure classifications, terminal state, and budget attribution must agree before a result can be published.
 
-Built-in MCP qualification follows the protocol revisions supported by the recommended OCR release's exact MCP SDK. The current recommended release uses Go MCP SDK v1.6.1 and initiates revision `2025-11-25`; the evidence server also retains `2025-06-18`, `2025-03-26`, and `2024-11-05` for qualified older clients. For an unknown client revision the server follows MCP negotiation semantics by returning its current supported revision, leaving acceptance or termination to the client. Qualification exercises initialize, the initialized notification, ping, tool discovery, and bounded summary/list/get calls through the exact SDK rather than relying only on handcrafted JSON-RPC fixtures.
+Built-in MCP qualification follows the protocol revisions supported by the recommended OCR release's exact MCP SDK. The current recommended release uses Go MCP SDK v1.7.0 and initiates revision `2025-11-25`; the evidence server also retains `2025-06-18`, `2025-03-26`, and `2024-11-05` for qualified older clients. For an unknown client revision the server follows MCP negotiation semantics by returning its current supported revision, leaving acceptance or termination to the client. Qualification exercises initialize, the initialized notification, ping, tool discovery, and bounded summary/list/get calls through the exact SDK rather than relying only on handcrafted JSON-RPC fixtures.
 
 The built-in stdio entry uses the toolkit's current absolute Python executable in isolated mode. OCR therefore does not depend on `PATH` lookup, and untrusted repository modules cannot shadow the installed toolkit when the MCP subprocess starts.
 
@@ -241,6 +241,31 @@ the DeepSeek model and viewer comparison page are not consumed. The result,
 manifest, budget, reasoning, comment, DLP, posting, receipt and approval
 contracts remain compatible. Stable toolkit delivery and configured model
 quality remain separate release gates.
+
+### OCR 1.12.0–1.12.7 — toolkit 0.11.0 target
+
+Toolkit 0.11.0 recommends exact OCR 1.12.7. The complete adjacent chain from
+1.12.0 through 1.12.7 has checksum-verified manifest entries and current
+version-selected evidence. OCR 1.12.0 changed semantic-grouping exchange from
+paths to integer file indices; the toolkit qualification parser and deterministic
+gateway validate those indices and preserve final path/group membership. Later
+patches retain the consumed range, preview, manifest, suggestion, provider,
+language and result contracts recorded in their evidence. OCR 1.12.7 adds the
+default `**/test_*.py` exclusion; qualification proves the exact pytest-style
+path is excluded while neighboring `contest_*.py` and `test_*.go` controls remain
+reviewable.
+
+Runtime support is rolling and exact-patch-only. Qualified 1.11.x and 1.12.x
+entries are supported, qualified 1.10.x entries are accepted with a deprecation
+warning, and earlier or unqualified patches fail preflight. Historical evidence
+remains readable without widening current execution support. The manifest's
+`monitoring_floor: 1.12.7` means release discovery starts above that tag; it is
+not a minimum accepted runtime and cannot silently admit an unseen patch.
+
+The public GitLab example pins `v1.12.7` and its Linux amd64 SHA-256. Deployments
+must still verify the exact platform asset against the matching manifest entry.
+The compatibility chain establishes deterministic toolkit boundaries, not
+configured provider/model quality or stable toolkit delivery.
 
 ## Promotion and rollback
 

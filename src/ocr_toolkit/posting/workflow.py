@@ -217,7 +217,7 @@ def publication_lifecycle_or_exit(
 
 
 def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
-    """Select the static limitation only from one fully validated receipt v8."""
+    """Select the static limitation only from one fully validated receipt v9."""
 
     identity = validated_review_identity(toolkit_metadata)
     return identity is not None and identity.target_protection == "unprotected"
@@ -293,6 +293,7 @@ def finalize_review_approval(
     reviewed_author_id: int | None,
     run_id: str,
     render_summary: Callable[[ApprovalResult], str],
+    publication: object = None,
 ) -> int:
     """Publish notes, manage exact-SHA approval, update summary, then clean old state."""
 
@@ -334,7 +335,10 @@ def finalize_review_approval(
             file=sys.stderr,
         )
 
-    finalize_previous_review_state(config, previous_refs, outcome)
+    if publication is None:
+        finalize_previous_review_state(config, previous_refs, outcome)
+    else:
+        finalize_previous_review_state(config, previous_refs, outcome, publication=publication)
     if execution.result.status is ApprovalStatus.FAILED and strict_posting():
         return 1
     return 0
@@ -666,7 +670,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
         return invalid_ocr_schema_exit(
             config,
-            "receipt v8 is invalid",
+            "receipt v9 is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -676,7 +680,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     if publication_state is None:
         return invalid_ocr_schema_exit(
             config,
-            "receipt v8 publication state is invalid",
+            "receipt v9 publication state is invalid",
             intro="OCR result publication policy state could not be validated.",
             title="**Open Code Review publication policy error**",
         )
@@ -690,7 +694,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not toolkit_receipt_is_valid(toolkit_metadata):
             return invalid_ocr_schema_exit(
                 config,
-                "OCR toolkit advisory is not bound to a valid receipt v8",
+                "OCR toolkit advisory is not bound to a valid receipt v9",
             )
     ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
 
@@ -893,6 +897,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             reviewed_author_id,
             summary_run_id,
             render_no_comments_summary,
+            publication=publication,
         )
 
     refs = get_diff_refs(config)
@@ -1095,6 +1100,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         reviewed_author_id,
         summary_run_id,
         render_findings_summary,
+        publication=publication,
     )
 
     print(
@@ -1109,11 +1115,23 @@ def finalize_previous_review_state(
     config: GitLabConfig,
     previous_refs: BotCommentRefs,
     outcome: ReviewOutcome,
+    *,
+    publication: object = None,
 ) -> None:
     """Replace prior notes only after a complete outcome; preserve them for partial coverage."""
 
     if outcome.kind == "partial":
-        print("OCR coverage is partial; preserving previous review comments until a complete run.")
+        if publication_dlp_state(publication) == "publication-filtered":
+            original = publication["original"]
+            coverage = "complete" if original["outcome"] in {"clean", "warning"} else "incomplete"
+            print(
+                f"OCR coverage is {coverage}; publication projection is incomplete, "
+                "so previous review comments are preserved."
+            )
+        else:
+            print(
+                "OCR coverage is partial; preserving previous review comments until a complete run."
+            )
         delete_previous_summary_notes(config, previous_refs)
         delete_previous_terminal_notes(config, previous_refs)
     else:

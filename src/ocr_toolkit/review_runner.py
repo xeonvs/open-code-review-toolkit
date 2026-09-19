@@ -18,23 +18,15 @@ import time
 from collections import Counter
 from collections.abc import Callable, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BufferedWriter
 from pathlib import Path
 
 from ocr_toolkit import configure, mcp_config
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
-from ocr_toolkit.context.adapters import (
-    ContextAdapterError,
-    configured_secret_values,
-    parse_adapter_config,
-)
 from ocr_toolkit.context.broker import (
-    BrokerResult,
-    CandidateSelection,
     ContextOrigin,
-    acquire_external_records,
     prepare_discussion_records,
     prepare_remediation_records,
 )
@@ -45,9 +37,15 @@ from ocr_toolkit.context.contracts import (
     ContextPolicy,
     TextBudgets,
 )
-from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
+from ocr_toolkit.context.dlp import (
+    FORBIDDEN_SOURCE_CLASSES,
+    ForbiddenMatcher,
+    ForbiddenValue,
+    check_text,
+    dlp_mode,
+    resolve_dlp_enabled,
+)
 from ocr_toolkit.context.policy import load_protected_policy
-from ocr_toolkit.context.recognizers import recognize
 from ocr_toolkit.context.store import (
     ContextRecord,
     ContextStore,
@@ -85,6 +83,8 @@ from ocr_toolkit.evidence.review_context import (
     parse_review_context_mode,
 )
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.federation import start_gateway
+from ocr_toolkit.federation.contracts import Registry
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
@@ -135,6 +135,7 @@ from ocr_toolkit.providers.local import (
     write_local_report,
 )
 from ocr_toolkit.providers.local_config import validate_local_context
+from ocr_toolkit.reporting.federation import reconcile as reconcile_federation
 from ocr_toolkit.reporting.model import (
     ExecutionFacts,
     FailureStage,
@@ -387,6 +388,8 @@ class EnrichmentReceipt:
     mutable_admitted: bool
     forbidden_publication: tuple[str, ...]
     bootstrap_hints: dict[str, int]
+    forbidden_sources: tuple[ForbiddenValue, ...] = ()
+    legacy_policy: bool = False
 
 
 def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
@@ -466,6 +469,8 @@ def _review_receipt(
     identity: ReviewIdentity,
     enrichment: EnrichmentReceipt | None = None,
     evidence_action_counts: dict[str, dict[str, int]] | None = None,
+    *,
+    dlp_enabled: bool = True,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -594,6 +599,7 @@ def _review_receipt(
         "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
         "required_degraded": False,
         "mutable_admitted": False,
+        "legacy_policy": False,
         "tool_usage": {"context_get": 0, "context_list": 0},
     }
     if enrichment is not None:
@@ -605,6 +611,7 @@ def _review_receipt(
                 "degradation_counts": enrichment.degradation_counts,
                 "required_degraded": enrichment.required_degraded,
                 "mutable_admitted": enrichment.mutable_admitted,
+                "legacy_policy": enrichment.legacy_policy,
                 "tool_usage": {
                     "context_get": (
                         by_tool.get("context_get", 0) if isinstance(by_tool, dict) else 0
@@ -627,6 +634,20 @@ def _review_receipt(
         "mcp": {
             "capabilities": capabilities,
             "usage": dict(sorted(usage.items())),
+            "federation": (
+                reconcile_federation(
+                    composition.federation_receipt,
+                    by_tool,
+                    {
+                        tool
+                        for cap in composition.capabilities
+                        if not cap.builtin
+                        for tool in cap.tools
+                    },
+                )
+                if composition.external_servers
+                else None
+            ),
         },
         "evidence": {
             "mandatory": outcome.requires_evidence_mcp,
@@ -634,6 +655,7 @@ def _review_receipt(
             "calls": evidence_calls,
             "actions": action_attribution,
         },
+        "dlp": {"enabled": dlp_enabled},
         "publication": {"state": "passed"},
         "tool_execution": {
             "state": failure_state,
@@ -652,6 +674,7 @@ def _dlp_reasons(
     debug: DebugBundle | None = None,
     path: tuple[object, ...] = (),
     action: str = "detect-sink",
+    source_classes: set[str] | None = None,
 ) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
@@ -684,6 +707,8 @@ def _dlp_reasons(
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
+                if source_classes is not None:
+                    source_classes.update(checked.source_classes)
                 if debug is not None:
                     debug.decision(
                         path=nested_path,
@@ -898,6 +923,7 @@ def _sanitize_nonpublication_fields(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     debug: DebugBundle | None = None,
+    source_counts: Counter[str] | None = None,
 ) -> tuple[dict[str, object], Counter[str], int]:
     """Redact unsafe private result fields without changing publication sinks."""
 
@@ -941,6 +967,8 @@ def _sanitize_nonpublication_fields(
                     )
                     if not checked_key.admitted:
                         reasons[checked_key.reason] += 1
+                        if source_counts is not None:
+                            source_counts.update(checked_key.source_classes)
                         redacted_fields += 1
                         if debug is not None:
                             debug.decision(
@@ -977,6 +1005,8 @@ def _sanitize_nonpublication_fields(
                 )
                 if not checked.admitted:
                     reasons[checked.reason] += 1
+                    if source_counts is not None:
+                        source_counts.update(checked.source_classes)
                     redacted_fields += 1
                     if debug is not None:
                         debug.decision(
@@ -1313,16 +1343,33 @@ def _canonical_result_projection(
 def _publication_projection(
     payload: dict[str, object],
     *,
-    forbidden: tuple[str, ...],
+    forbidden: tuple[str | ForbiddenValue, ...],
     allowed_tools: frozenset[str],
+    dlp_enabled: bool = True,
     debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
     """Return a DLP-safe result plus one exact v8 publication state."""
 
+    failures = _tool_failure_telemetry(payload.get("tool_calls"))
+    if not dlp_enabled:
+        projected = payload
+        if failures.present:
+            projected = dict(payload)
+            projected["tool_calls"] = _closed_tool_calls(
+                payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
+            )
+        return projected, {"state": "disabled"}, False
+
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     sink_reasons: Counter[str] = Counter()
+    source_units: dict[tuple[object, ...], set[str]] = {}
+    source_counts: Counter[str] = Counter()
     for sink, allow_horizontal_tabs, sink_path in _publication_sinks(payload):
+        unit = (
+            sink_path[:2] if sink_path and sink_path[0] in {"comments", "warnings"} else sink_path
+        )
+        sources = source_units.setdefault(unit, set())
         sink_reasons.update(
             _dlp_reasons(
                 sink,
@@ -1331,9 +1378,11 @@ def _publication_projection(
                 allow_horizontal_tabs=allow_horizontal_tabs,
                 debug=debug,
                 path=sink_path,
+                source_classes=sources,
             )
         )
-    failures = _tool_failure_telemetry(payload.get("tool_calls"))
+    for sources in source_units.values():
+        source_counts.update(sources)
     sanitization_payload = payload
     raw_tool_calls = payload.get("tool_calls")
     if failures.present and isinstance(raw_tool_calls, dict):
@@ -1347,8 +1396,16 @@ def _publication_projection(
             if key not in {"failure", "failure_by_tool", "failure_details"}
         }
     sanitized, private_reasons, redacted_fields = _sanitize_nonpublication_fields(
-        sanitization_payload, budgets=budgets, matcher=matcher, debug=debug
+        sanitization_payload,
+        budgets=budgets,
+        matcher=matcher,
+        debug=debug,
+        source_counts=source_counts,
     )
+    attribution = {
+        "schema": "ocr.forbidden-sources/v1",
+        "counts": {name: source_counts[name] for name in sorted(FORBIDDEN_SOURCE_CLASSES)},
+    }
     if failures.present:
         sanitized["tool_calls"] = _closed_tool_calls(
             payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
@@ -1379,7 +1436,7 @@ def _publication_projection(
         projected: dict[str, object] = {
             "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
             "message": (
-                "Publication policy produced a safe partial OCR result. Independently safe "
+                "Publication projection is incomplete. Independently safe "
                 "findings may be published, but the result must not be treated as a complete "
                 "review."
             ),
@@ -1401,12 +1458,14 @@ def _publication_projection(
                 "state": "private-sanitized",
                 "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
                 "sanitized_fields": redacted_fields,
+                "source_attribution": attribution,
             },
             False,
         )
     reasons = sink_reasons + private_reasons
     publication: dict[str, object] = {
         "state": "publication-filtered",
+        "source_attribution": attribution,
         "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
         "retained": {"comments": len(comments), "warnings": len(warnings)},
         "omitted": {
@@ -1433,7 +1492,8 @@ def _finalize_ocr_result(
     enrichment: EnrichmentReceipt | None,
     evidence_action_counts: dict[str, dict[str, int]] | None = None,
     *,
-    forbidden: tuple[str, ...],
+    forbidden: tuple[str | ForbiddenValue, ...],
+    dlp_enabled: bool = True,
     toolkit_advisory: OcrToolkitAdvisory | None = None,
     report_consumer: Callable[[ReviewReport], None] | None = None,
     state: ReviewRunState | None = None,
@@ -1464,6 +1524,7 @@ def _finalize_ocr_result(
             identity,
             enrichment,
             evidence_action_counts,
+            dlp_enabled=dlp_enabled,
         )
         if state is not None:
             evidence = metadata.get("evidence")
@@ -1481,6 +1542,7 @@ def _finalize_ocr_result(
             payload,
             forbidden=forbidden,
             allowed_tools=allowed_tools,
+            dlp_enabled=dlp_enabled,
             **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
         if state is not None:
@@ -1511,7 +1573,14 @@ def _finalize_ocr_result(
             try:
                 report = report_from_result(
                     projected,
-                    execution=ExecutionFacts(usage, evidence, publication, toolkit_advisory),
+                    execution=ExecutionFacts(
+                        usage,
+                        evidence,
+                        publication,
+                        toolkit_advisory,
+                        mcp.get("federation") if isinstance(mcp, dict) else None,
+                        enrichment.legacy_policy if enrichment is not None else False,
+                    ),
                     reviewed_sha=identity.source_sha,
                 )
             except OcrResultContractError as exc:
@@ -2172,39 +2241,19 @@ def _remediation_mutable_admitted(records: Sequence[ContextRecord]) -> bool:
     )
 
 
-def _select_reference_candidates(
-    policy: ContextPolicy, candidate_texts: list[str]
-) -> list[CandidateSelection]:
-    """Bind each distinct syntax candidate to its independent protected source."""
-
-    selections: list[CandidateSelection] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
-    for reference in policy.references:
-        for text in candidate_texts:
-            for candidate in recognize(
-                text,
-                resource_class=reference.resource_class,
-                policy=reference.recognizer,
-            ):
-                key = (
-                    reference.adapter,
-                    reference.tenant,
-                    reference.resource_class,
-                    candidate.recognizer,
-                    candidate.value,
-                )
-                if key not in seen:
-                    seen.add(key)
-                    selections.append(CandidateSelection(reference, candidate))
-    return selections
-
-
 def _prepare_enrichment(
     identity: ReviewIdentity,
     artifacts: EvidenceArtifacts,
     reader: GitRepositoryReader,
+    *,
+    dlp_enabled: bool = True,
 ) -> tuple[mcp_config.MCPContextConfig | None, EnrichmentReceipt | None]:
-    """Acquire all external context before the one OCR model loop and commit it locally."""
+    """Acquire forge context; legacy references are parsed but never executed."""
+
+    if os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON") is not None:
+        raise ReviewRunnerError(
+            "OCR_REVIEW_CONTEXT_ADAPTERS_JSON was removed; configure governed MCP"
+        )
 
     if identity.target_protection == "unprotected":
         if identity.context_mode == "enriched":
@@ -2221,6 +2270,12 @@ def _prepare_enrichment(
     if identity.context is None:
         raise ReviewRunnerError("enriched review context requires validated MR metadata")
     policy = load_protected_policy(reader.read_blob, policy_sha=identity.policy_sha)
+    legacy_policy = policy.schema_version != "ocr.review-context-policy/v4"
+    if legacy_policy:
+        print(
+            "OCR context policy migration v1: legacy policy consumed; references not executed",
+            file=sys.stderr,
+        )
     now = int(time.time())
     acquisition_deadline = time.monotonic() + policy.budgets.timeout_ms / 1000
     run_id = secrets.token_urlsafe(24)
@@ -2228,9 +2283,7 @@ def _prepare_enrichment(
     degradation = {"invalid": 0, "limit": 0, "unavailable": 0}
     required_degraded = False
     pending: list[PendingContextRecord] = []
-    candidate_texts = list(_context_texts(identity.context))
-    adapters = parse_adapter_config(os.environ.get("OCR_REVIEW_CONTEXT_ADAPTERS_JSON"))
-    adapter_secrets = configured_secret_values(adapters, os.environ)
+    adapter_secrets: tuple[str, ...] = ()
     discussion_policy = policy.forge_discussions
     remediation_policy = policy.remediation_threads
     ci_policy = policy.ci_outcomes
@@ -2292,11 +2345,6 @@ def _prepare_enrichment(
                     # A DLP/shape rejection cannot silently make automatic approval eligible.
                     required_degraded = True
                 pending.extend(discussion_records)
-                candidate_texts.extend(
-                    text
-                    for record in discussion_records
-                    if isinstance((text := record.projections["model"].get("text")), str)
-                )
             if remediation_policy is not None and snapshot.remediation_threads is not None:
                 remediation_snapshot = snapshot.remediation_threads
                 completeness[remediation_origin.source] = remediation_snapshot.state
@@ -2355,22 +2403,13 @@ def _prepare_enrichment(
                 degradation["invalid"] += len(ci_snapshot.records) - len(ci_records)
                 required_degraded = required_degraded or ci_policy.required
             pending.extend(ci_records)
-    selections = _select_reference_candidates(policy, candidate_texts)
-    external: BrokerResult = acquire_external_records(
-        policy=policy,
-        adapters=adapters,
-        selections=selections,
-        run_id=run_id,
-        now=now,
-        environment=os.environ,
-        forbidden=adapter_secrets,
-        deadline=acquisition_deadline,
-    )
-    pending.extend(external.records)
-    completeness.update(external.completeness)
-    for reason, count in external.degradation_counts.items():
-        degradation[reason] += count
-    required_degraded = required_degraded or external.required_degraded
+    if policy.references:
+        completeness["legacy:references"] = "unavailable"
+        required_degraded = (
+            any(reference.required for reference in policy.references) or required_degraded
+        )
+        if required_degraded:
+            degradation["unavailable"] += 1
     admitted, limited_sources = _bounded_combined_records(pending, policy)
     if limited_sources:
         degradation["limit"] += 1
@@ -2399,7 +2438,17 @@ def _prepare_enrichment(
         expiry=store_expiry,
     )
     forbidden_values: list[str] = []
+    forbidden_sources = [ForbiddenValue(v, "operator_secret") for v in adapter_secrets]
     for record in context_store.records:
+        source_class = (
+            "remediation_threads"
+            if record.resource_class == "remediation_thread"
+            else "ci_outcomes"
+            if record.resource_class == "ci_outcome"
+            else "forge_discussions"
+            if record.source.startswith("forge:")
+            else "external_context"
+        )
         published = record.projections["publish"]
         for field, value in record.projections["model"].items():
             if field in published:
@@ -2421,6 +2470,7 @@ def _prepare_enrichment(
                     stack.extend(nested)
                 elif isinstance(nested, str) and nested:
                     forbidden_values.append(nested)
+                    forbidden_sources.append(ForbiddenValue(nested, source_class))
     forbidden = (*adapter_secrets, *forbidden_values)
     ci_hints: dict[str, int] = {}
     for record in context_store.records:
@@ -2439,6 +2489,8 @@ def _prepare_enrichment(
         required_degraded=required_degraded,
         mutable_admitted=_remediation_mutable_admitted(context_store.records),
         forbidden_publication=forbidden,
+        forbidden_sources=tuple(forbidden_sources),
+        legacy_policy=legacy_policy,
         bootstrap_hints=dict(sorted(ci_hints.items())),
     )
     return (
@@ -2446,6 +2498,7 @@ def _prepare_enrichment(
             store_path=str(artifacts.context_store.resolve()),
             run_id=run_id,
             policy_digest=policy.digest,
+            dlp_enabled=dlp_enabled,
         ),
         receipt,
     )
@@ -2496,6 +2549,17 @@ def run_evidence_review(
     report_destination: Path | None = None
     try:
         try:
+            dlp_enabled = resolve_dlp_enabled(os.environ)
+        except ValueError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
+        if not dlp_enabled:
+            print(
+                "WARNING: OCR DLP IS DISABLED by OCR_DLP_ENABLED. Sensitive context or "
+                "model output may be sent to configured services and written to local or "
+                "GitLab output; automatic approval is blocked for this run.",
+                file=sys.stderr,
+            )
+        try:
             enabled = progress_enabled(os.environ.get("OCR_REVIEW_PROGRESS", ""))
         except ValueError as exc:
             raise ReviewRunnerError(str(exc)) from exc
@@ -2537,13 +2601,15 @@ def run_evidence_review(
                     "local report destination is unavailable or unsafe"
                 ) from exc
             report_destination = destination
-        code = _run_evidence_review(
-            result_path,
-            stderr_path,
-            ocr_args,
-            preserve_private_artifacts=preserve_private_artifacts,
-            state=state,
-        )
+        with dlp_mode(dlp_enabled):
+            code = _run_evidence_review(
+                result_path,
+                stderr_path,
+                ocr_args,
+                preserve_private_artifacts=preserve_private_artifacts,
+                state=state,
+                dlp_enabled=dlp_enabled,
+            )
         if local:
             if code == 0 and state.report is None:
                 raise ReviewRunnerError("local review did not produce an admitted report")
@@ -2652,6 +2718,7 @@ def _run_evidence_review(
     *,
     preserve_private_artifacts: bool,
     state: ReviewRunState,
+    dlp_enabled: bool,
 ) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
@@ -2685,6 +2752,8 @@ def _run_evidence_review(
     publication: dict[str, object] = {"state": "passed"}
     evidence_action_counts: dict[str, dict[str, int]] | None = None
     background_qualification = BackgroundQualification()
+    gateway = None
+    federation_forbidden: tuple[str, ...] = ()
     preserve_authorized = False
     previous_handlers = _install_termination_handlers()
     try:
@@ -2728,7 +2797,10 @@ def _run_evidence_review(
                 store.add_diagnostic("merge-request context was truncated by store limits")
             store.write(artifacts.store)
             context_config, enrichment = _prepare_enrichment(
-                identity, artifacts, GitRepositoryReader(Path.cwd())
+                identity,
+                artifacts,
+                GitRepositoryReader(Path.cwd()),
+                dlp_enabled=dlp_enabled,
             )
             if state.debug is not None:
                 diagnostic_count = len(store.diagnostics) + sum(
@@ -2742,10 +2814,25 @@ def _run_evidence_review(
                     facts={"diagnostic_count": diagnostic_count},
                 )
             state.enter("mcp-preflight")
+            profile = "gitlab_mr" if identity.mr_author_id is not None else "local"
+            servers = mcp_config.parse_mcp_servers(profile=profile)
+            if servers and identity.target_protection == "unprotected":
+                raise mcp_config.MCPConfigError(
+                    "unprotected-target reviews do not allow external MCP"
+                )
+            if servers:
+                gateway = start_gateway(
+                    Registry(tuple(servers)),
+                    environment=dict(os.environ),
+                    forbidden=enrichment.forbidden_publication if enrichment is not None else (),
+                    dlp_enabled=dlp_enabled,
+                    run_id=secrets.token_hex(16),
+                )
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
                 allow_external=identity.target_protection != "unprotected",
+                **({"gateway": gateway} if gateway is not None else {}),
             )
             bootstrap = render_bootstrap(
                 store,
@@ -2759,7 +2846,6 @@ def _run_evidence_review(
             summary = evidence_summary(store)
             _verify_evidence_mcp(store)
         except (
-            ContextAdapterError,
             ContextContractError,
             ContextStoreError,
             EvidenceStoreError,
@@ -2821,6 +2907,13 @@ def _run_evidence_review(
     finally:
         previous_mask = _block_termination_signals()
         try:
+            if gateway is not None:
+                try:
+                    federation_forbidden = gateway.forbidden_publication
+                    receipt = gateway.close()
+                    composition = replace(composition, federation_receipt=receipt)
+                except (ValueError, OSError):
+                    cleanup_error = OSError("federation cleanup could not be verified")
             if state.progress is not None:
                 state.progress.phase("cleanup")
             if exit_code == 0 and not preserve_authorized:
@@ -2841,9 +2934,16 @@ def _run_evidence_review(
                 os.environ["HOME"] = previous_home
             if cleanup_error is None and exit_code == 0 and not preserve_authorized:
                 state.enter("result-validation")
-                forbidden = (*composition.secret_values,)
+                forbidden: tuple[str | ForbiddenValue, ...] = tuple(
+                    ForbiddenValue(v, "operator_secret") for v in composition.secret_values
+                )
+                forbidden += tuple(
+                    ForbiddenValue(v, "external_context") for v in federation_forbidden
+                )
                 if enrichment is not None:
-                    forbidden += enrichment.forbidden_publication
+                    forbidden += enrichment.forbidden_sources or tuple(
+                        ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
+                    )
                 try:
                     usage, publication_filtered, publication = _finalize_ocr_result(
                         result_path,
@@ -2852,6 +2952,7 @@ def _run_evidence_review(
                         enrichment,
                         evidence_action_counts,
                         forbidden=forbidden,
+                        dlp_enabled=dlp_enabled,
                         toolkit_advisory=background_qualification.advisory,
                         **({"report_consumer": state.admit_report} if state.local else {}),
                         **({"state": state} if state.local or state.progress is not None else {}),
@@ -2863,9 +2964,16 @@ def _run_evidence_review(
                         pass
                     raise
             if cleanup_error is None and exit_code == 0 and preserve_authorized:
-                forbidden = (*composition.secret_values,)
+                forbidden = tuple(
+                    ForbiddenValue(v, "operator_secret") for v in composition.secret_values
+                )
+                forbidden += tuple(
+                    ForbiddenValue(v, "external_context") for v in federation_forbidden
+                )
                 if enrichment is not None:
-                    forbidden += enrichment.forbidden_publication
+                    forbidden += enrichment.forbidden_sources or tuple(
+                        ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
+                    )
                 _write_private_dlp_decisions(
                     result_path,
                     artifacts.dlp_decisions,

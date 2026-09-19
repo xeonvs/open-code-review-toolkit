@@ -1,0 +1,281 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "8801401cb101c6fbeb20b3a3813a450b8b6d75f10796b2d259ed7390ae87659f",
+      "size": 57932224
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "505bfce5c3d609efb358dfcb911b5ed6726bfcf5ee7f1ed0a57acce13bec4751",
+      "size": 54962194
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "a9c29355f4b540b809e0b032a3299b7acfc9fb7fbfdf84ef5673c8457e518f9b",
+      "size": 56189090
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "d0fcdb4f8d5764c8e0f78b8ad5fb04a1b03716edc966bec2c42dc2d6201b1a31",
+      "size": 52887714
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "30d3337c55cc15fc5dba8b88337c10126f8b872ddff5434bb3af635ba595ebb5",
+      "size": 57650688
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "9a99d5f83046446788a5e4a26afd8700fb89a6b25b6fd61f4c03ea665c07355c",
+      "size": 53604352
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "2e1450946ef4a7074da7565ffe2c369f4b9e419fb38f617282f7c5b73f782388",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.12.4",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 18
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-17T13:33:32Z",
+  "release_changes": "## 🚀 Features\n\n- feat(viewer): restyle session detail sections (#1358)\n- feat(action): opt-in resolution of the bot's own outdated review threads (#567) (#944)\n- feat(viewer): integrate a shared SVG icon set (#1367)\n- feat(viewer): align design-token values to the mockup palette (#1365)\n- feat(plugin): add kimi code plugin (#1355)\n- feat(pages): standardize web crawler policy (#939)\n- feat(viewer): restyle the session compare page (#1328) (#1331)\n- feat(viewer): restyle Coverage and Token Usage cards (#1346)\n- feat(viewer): add shared design foundation (#1338)\n- feat(viewer): align suggested change indentation with existing code gutter (#1313) (#1315)\n\n## 🐛 Bug Fixes\n\n- fix(agent): enforce --max-tokens-budget inside a running group (#1248)\n- fix: dedupe overlapping incremental review comments (#1359)\n- fix(install): add download timeout to asset fetch in install.sh (#1292)\n- fix(tool): enforce the global code search result limit (#1306)\n- fix(session): tolerate truncated resume tail (#1312)\n- fix(diff): strip trailing CR from CRLF diff text (#1302)\n\n## 📖 Documentation\n\n- docs(skill): skip ocr install pre-check on the common path (#1356)\n- docs(telemetry): document existing LLM and tool spans (#1348)\n\n## Other Changes\n\n- chore(pages): remove MacPorts install channel (#1334)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.12.4...v1.12.5",
+  "release_notes_sha256": "7dd6ce8507b5a640086fb5aefce4a19e8cdcb7e804374695138df4f4b7797c01",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.12.5",
+  "tested_baseline_version": "1.11.9",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.12.5"
+}

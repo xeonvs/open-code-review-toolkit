@@ -1,5 +1,11 @@
 # M5 Bounded Review-Context Contracts
 
+> Historical checkpoint: M7 supersedes executable adapters and direct MCP
+> passthrough. Current policy v4 has no references; v1-v3 references are parsed
+> only for migration and never execute. Current behavior is owned by
+> [M7 federation contracts](m7_federation_contracts.md) and the public
+> [bounded review-context contract](../review-context.md).
+
 This checkpoint fixed the v0.7.0 production contracts before implementation and remains the engineering-level boundary record. The implementation and current contracts live on `main`; production-owner evidence and explicit residual limits are recorded in the test-evidence matrix, while completed release evidence is archived in the execution history. Public operator behavior is owned by [Bounded review context](../review-context.md).
 
 ## Ownership and dependency direction

@@ -326,6 +326,8 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
     mcp = toolkit_metadata.get("mcp")
     return format_verified_mcp_usage(
         mcp_usage=mcp.get("usage") if isinstance(mcp, dict) else None,
+        federation=mcp.get("federation") if isinstance(mcp, dict) else None,
+        legacy_policy=(toolkit_metadata.get("context", {}).get("legacy_policy") is True),
         evidence=toolkit_metadata.get("evidence"),
     )
 
@@ -337,18 +339,22 @@ def publication_dlp_signal(
 
     state = publication_dlp_state(publication)
     if (
-        state not in {"private-sanitized", "publication-filtered"}
+        state not in {"disabled", "private-sanitized", "publication-filtered"}
         or not isinstance(carried_forward_comments, int)
         or isinstance(carried_forward_comments, bool)
         or carried_forward_comments < 0
-        or (state == "private-sanitized" and carried_forward_comments != 0)
+        or (state in {"disabled", "private-sanitized"} and carried_forward_comments != 0)
     ):
         return None
     signal: dict[str, Any] = {
-        "schema_version": "ocr.publication-dlp-signal/v2",
+        "schema_version": "ocr.publication-dlp-signal/v3",
         "state": state,
-        "reason_counts": dict(publication["reason_counts"]),
     }
+    if state == "disabled":
+        return signal
+    signal["reason_counts"] = dict(publication["reason_counts"])
+    if "source_attribution" in publication:
+        signal["source_attribution"] = publication["source_attribution"]
     if state == "private-sanitized":
         signal["sanitized_fields"] = publication["sanitized_fields"]
     else:
@@ -369,6 +375,23 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
     if signal is None:
         return ""
     marker = json.dumps(signal, sort_keys=True, separators=(",", ":"))
+    if signal["state"] == "disabled":
+        return "\n".join(
+            [
+                "<details open>",
+                "<summary>DLP disabled: sensitive-data risk</summary>",
+                "",
+                (
+                    "`OCR_DLP_ENABLED=false` disabled context and publication DLP for this "
+                    "run. Sensitive context or model output may have been sent to configured "
+                    "services or published. Automatic approval is blocked."
+                ),
+                "",
+                f"<!-- ocr-toolkit-signal {marker} -->",
+                "",
+                "</details>",
+            ]
+        )
     if signal["state"] == "private-sanitized":
         return "\n".join(
             [
@@ -400,8 +423,8 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
             "<summary>Publication filtering signal</summary>",
             "",
             (
-                f"Published safe subset: {retained['comments']} finding(s) and "
-                f"{retained['warnings']} warning(s). Omitted: {omitted['comments']} "
+                f"DLP-admitted subset: {retained['comments']} finding(s) and "
+                f"{retained['warnings']} warning(s). Omitted before posting: {omitted['comments']} "
                 f"finding(s), {omitted['warnings']} warning(s), and {omitted['fields']} "
                 "result field(s)."
             ),
@@ -729,7 +752,7 @@ def summarize_result(
             f"{_inline_code(reviewed_sha)}"
         )
     technical.append(
-        f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} omitted"
+        f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} posting-stage omitted"
     )
     if approval_result is not None:
         technical.append(approval_summary_line(approval_result))

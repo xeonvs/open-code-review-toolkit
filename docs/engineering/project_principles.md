@@ -5,7 +5,7 @@ This document owns durable cross-cutting engineering invariants for Open Code Re
 ## Product And Architecture
 
 1. Keep provider-neutral behavior in the core and provider-specific behavior behind explicit adapters.
-2. Keep runtime dependencies at zero until a documented package boundary justifies one.
+2. Keep runtime dependencies at zero until a documented package boundary justifies one. The [M7 federation boundary](m7_federation_contracts.md) owns the explicit MCP SDK, JSON Schema, HTTP transport and async-runtime exception; do not let transport dependencies enter pure reporting contracts.
 3. Keep the Open Code Review binary external; the toolkit verifies but does not install it.
 4. Keep supported user configuration environment-driven and documented in one public contract. A future non-secret file format requires an explicit schema, trust source, and precedence design.
 5. Deliver large changes as coherent production-quality slices with explicit module and service boundaries rather than placeholder architecture.

@@ -125,7 +125,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         python = binary_directory / ("python.exe" if os.name == "nt" else "python")
         cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
         _run(
-            [uv_binary, "pip", "install", "--python", str(python), "--no-deps", str(artifact)],
+            [uv_binary, "pip", "install", "--python", str(python), str(artifact)],
             cwd=root,
         )
         _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)

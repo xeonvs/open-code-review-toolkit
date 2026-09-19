@@ -9,6 +9,7 @@ This index routes maintainers to canonical engineering owners without duplicatin
 - [review_signal_ownership.md](review_signal_ownership.md)
 - [test_evidence_matrix.md](test_evidence_matrix.md)
 - [toolkit_strategy.md](toolkit_strategy.md)
+- [m7_federation_contracts.md](m7_federation_contracts.md)
 <!-- engineering-workflow:index:end -->
 
 ## Direction and invariants

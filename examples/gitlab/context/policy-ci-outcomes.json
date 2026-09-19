@@ -1,5 +1,5 @@
 {
-  "schema_version": "ocr.review-context-policy/v3",
+  "schema_version": "ocr.review-context-policy/v4",
   "budgets": {
     "max_records": 16,
     "max_chars": 12000,
@@ -20,6 +20,5 @@
         "path_prefixes": ["pyproject.toml", "src/"]
       }
     ]
-  },
-  "references": []
+  }
 }

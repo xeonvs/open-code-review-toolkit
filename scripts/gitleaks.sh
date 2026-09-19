@@ -2,19 +2,33 @@
 set -eu
 
 usage() {
-  echo "usage: scripts/gitleaks.sh [--version | <base-ref> [<head-ref>]]" >&2
+  echo "usage: scripts/gitleaks.sh [--version | --staged | --tree | <base-ref> [<head-ref>]]" >&2
   exit 2
 }
 
 [ "$#" -le 2 ] || usage
 
-GITLEAKS_VERSION=8.24.3
+GITLEAKS_VERSION=8.30.1
 readonly GITLEAKS_VERSION
 
 if [ "${1:-}" = --version ]; then
   [ "$#" -eq 1 ] || usage
   printf '%s\n' "$GITLEAKS_VERSION"
   exit 0
+fi
+
+if [ "${1:-}" = --staged ] || [ "${1:-}" = --tree ]; then
+  [ "$#" -eq 1 ] || usage
+  installed_version=$(gitleaks version)
+  [ "$installed_version" = "$GITLEAKS_VERSION" ] || {
+    echo "pinned gitleaks version is required" >&2
+    exit 2
+  }
+  script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  if [ "$1" = --staged ]; then
+    exec python3 "$script_dir/public_content.py" --staged
+  fi
+  exec python3 "$script_dir/public_content.py"
 fi
 
 repository_root=$(git rev-parse --show-toplevel)

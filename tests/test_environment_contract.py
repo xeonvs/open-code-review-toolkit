@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from ocr_toolkit import configure, mcp_config, preflight
 from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.redaction import SENSITIVE_ENV_NAMES
-from ocr_toolkit.context.adapters import parse_adapter_config
+from ocr_toolkit.context.dlp import resolve_dlp_enabled
 from ocr_toolkit.evidence.review_context import parse_review_context_mode
 from ocr_toolkit.ocr_result import max_result_bytes
 from ocr_toolkit.posting import settings
@@ -40,9 +41,10 @@ RUNTIME_DEFAULTS = {
     "OCR_TELEMETRY_EXPORTER": "Empty string",
     "OCR_TELEMETRY_OTLP_ENDPOINT": "Unset",
     "OCR_REVIEW_CONTEXT_MODE": "off",
-    "OCR_REVIEW_CONTEXT_ADAPTERS_JSON": "Empty list",
-    "OCR_MCP_SERVERS_JSON": "Empty object",
-    "OCR_MCP_REPLACE": "false",
+    "OCR_REVIEW_CONTEXT_ADAPTERS_JSON": "Removed; setting it is an error",
+    "OCR_MCP_SERVERS_JSON": "Empty version 2 registry",
+    "OCR_MCP_REPLACE": "Removed; setting it is an error",
+    "OCR_DLP_ENABLED": "true",
     "OCR_POST_MODE": "draft",
     "OCR_STRICT_POSTING": "false",
     "OCR_POST_EMOJI": "true",
@@ -84,9 +86,8 @@ EXAMPLE_DEFAULTS = {
 }
 
 DYNAMIC_INPUTS = {
-    "Names declared by adapter `env_from`",
-    "Names declared by adapter `headers_from`",
     "Names declared by MCP `env_from`",
+    "Names declared by MCP `token_from`",
     "Names declared by MCP `headers_from`",
 }
 
@@ -272,9 +273,8 @@ def test_runtime_defaults_match_the_documented_contract(monkeypatch: pytest.Monk
         assert resolve_review_language() == "English"
         assert preflight._models_url() == "https://llm.example.invalid/v1/models"
         assert parse_review_context_mode(None) == "off"
-        assert parse_adapter_config(None) == ()
+        assert resolve_dlp_enabled(os.environ) is True
         assert mcp_config.parse_mcp_servers() == []
-        assert mcp_config._replace_configured_servers() is False
         assert settings.post_mode() == "draft"
         assert settings.strict_posting() is False
         assert settings.post_emoji() is True

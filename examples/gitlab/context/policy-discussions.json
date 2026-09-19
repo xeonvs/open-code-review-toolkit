@@ -1,5 +1,5 @@
 {
-  "schema_version": "ocr.review-context-policy/v2",
+  "schema_version": "ocr.review-context-policy/v4",
   "budgets": {
     "max_records": 24,
     "max_chars": 24000,
@@ -42,6 +42,5 @@
       "max_bytes": 24000,
       "max_lines": 300
     }
-  },
-  "references": []
+  }
 }

@@ -21,7 +21,7 @@ draft feature PR. Stable delivery remains pending after this handoff.
 
 ### Requested Scope
 
-All milestone issues #188–#193 and #203, compatibility issues #201/#202/#204, their
+All milestone issues #188–#193 and #203, compatibility issues #201/#202/#204–#207, their
 dependencies, the full Python/build/dev/Actions dependency stack, and relevant
 engineering-workflow 0.9.6 improvements. Qualify OCR through at least v1.12.2;
 check for newer stable OCR again near final qualification.
@@ -30,17 +30,19 @@ check for newer stable OCR again near final qualification.
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Full plan, signed plan-only push, then local work until final draft | WQ-01, WQ-10 | in_progress |
-| REQ-002 | #189 architecture, mandatory internal evidence MCP, M7/M8 reconciliation | WQ-03 | pending |
-| REQ-003 | #190 registry and bounded multi-service gateway | WQ-04 | pending |
-| REQ-004 | #191 schema/origin/DLP/budget/lifecycle controls | WQ-04, WQ-05 | pending |
-| REQ-005 | #192 safe legacy policy migration and public contracts | WQ-05, WQ-07 | pending |
-| REQ-006 | #193 content-free receipts, actual-use approval, local/GitLab parity | WQ-06 | pending |
-| REQ-007 | #203 stage-aware DLP and source-class accounting | WQ-06 | pending |
-| REQ-008 | #201/#202/#204 grouping fix and latest stable OCR qualification/local update | WQ-02, WQ-08 | pending |
-| REQ-009 | Dependency updates and pre-commit/pre-push privacy gates | WQ-02, WQ-09 | pending |
-| REQ-010 | Independent architecture/security reviews, full acceptance and draft handoff | WQ-03, WQ-09, WQ-10 | pending |
-| REQ-011 | Adopt material workflow 0.9.6 improvements preserving canonical owners | WQ-03 | pending |
+| REQ-001 | Full plan, plan-only push, then local work until final draft | WQ-01, WQ-10 | in_progress |
+| REQ-002 | #189 architecture, mandatory internal evidence MCP, M7/M8 reconciliation | WQ-03 | done |
+| REQ-003 | #190 registry and bounded multi-service gateway | WQ-04 | done |
+| REQ-004 | #191 schema/origin/DLP/budget/lifecycle controls | WQ-04, WQ-05 | done |
+| REQ-005 | #192 safe legacy policy migration and public contracts | WQ-05, WQ-07 | done |
+| REQ-006 | #193 content-free receipts, actual-use approval, local/GitLab parity | WQ-06 | done |
+| REQ-007 | #203 stage-aware DLP and source-class accounting | WQ-06 | done |
+| REQ-008 | #201/#202/#204–#207 latest stable OCR qualification/local update | WQ-02, WQ-08 | done |
+| REQ-009 | Dependency updates and pre-commit/pre-push privacy gates | WQ-02, WQ-09 | done |
+| REQ-010 | Independent architecture/security reviews, full acceptance and draft handoff | WQ-03, WQ-09, WQ-10 | in_progress |
+| REQ-012 | Rolling runtime support of verified OCR versions, two active lines plus one deprecated | WQ-08 | done |
+| REQ-013 | Explicit CI-controlled DLP disable mode with risk warnings and local/GitLab parity | WQ-06, WQ-07 | done |
+| REQ-011 | Adopt material workflow 0.9.6 improvements preserving canonical owners | WQ-03 | done |
 
 ### Explicit Non-Goals
 
@@ -67,7 +69,7 @@ environment handoff. Synthetic peers do not prove model quality.
 
 ### Inputs And Sources
 
-- GitHub milestone v0.11.0; issues #188, #189, #190, #191, #192, #193, #201, #202, #203, #204.
+- GitHub milestone v0.11.0; issues #188, #189, #190, #191, #192, #193, #201, #202, #203, #204, #205, #206 and #207.
 - OCR compatibility runs 34852856760 and 34970171113 and upstream OCR releases/consumed contracts.
 - AGENTS.md, docs/development.md, docs/release.md, project_principles.md,
   m5_context_contracts.md, review-decision-flow.md and public configuration,
@@ -77,9 +79,36 @@ environment handoff. Synthetic peers do not prove model quality.
 
 ### User Decisions And Answers
 
-- Signing-key access is unavailable in this environment. User explicitly permitted
-  skipping signing here; use unsigned feature commits without changing global Git
-  configuration. Protected-main signature requirements remain a later handoff gate.
+- Remote execution was not authorized. The user explicitly objected after root
+  contacted an existing SSH alias to seek a Linux qualification environment.
+  All remote access, including cleanup/readback, is stopped. Continue only in
+  the local workspace and local Docker. Ask before any future environment change.
+  Retained worker evidence reports source/compatibility snapshots transferred to
+  remote scratch, disposable amd64/proot Docker experiments, then scratch removal
+  before the stop. Removal of pulled image tags/named containers was attempted but
+  not verified. No credentials or agent forwarding were transferred. No further
+  remote readback/cleanup is authorized. Include this residual uncertainty in handoff.
+
+- Runtime accepts qualified exact patches within the rolling last three stable
+  major/minor lines: newest two supported, oldest deprecated. For 1.12 this means
+  1.11/1.12 supported, 1.10 warning, below 1.10 rejected. monitoring_floor remains
+  discovery-only; unqualified patches are not silently accepted. Historical
+  evidence remains readable without granting current runtime support.
+- OCR is the primary integration point for SDK selection. SDK v2 is the basis
+  once actual OCR integration qualifies it; upstream sessions independently
+  negotiate any explicitly supported wire revision.
+- Toolkit DLP remains enabled by default. `OCR_DLP_ENABLED=false` explicitly
+  disables inbound/outbound context and publication DLP for that run, emits a
+  prominent private log warning plus bounded Technical-details warning, and makes
+  the run comment-only. Invalid values fail before OCR. The receipt records the
+  effective state. Local Markdown may contain sensitive model output when disabled;
+  documentation must recommend local `--preserve-private-artifacts` diagnosis before
+  this escape hatch and explain that disabling cannot retract data already sent or
+  published. GitLab and local use the same resolved setting and formatter.
+
+- The initial already-pushed plan commit remains unsigned under the user's explicit
+  waiver. Signing keys are now loaded; all later local feature commits must be signed.
+  Do not rewrite the published plan commit.
 
 - Stop at feature draft, not separate release draft or stable publication.
 - Include the entire dependency stack and #203 in current implementation.
@@ -110,16 +139,16 @@ Existing Gitleaks wrapper scans committed history only, not candidate content.
 
 | Item | Work and acceptance | Status |
 | --- | --- | --- |
-| WQ-01 | Materialize/fidelity-check plan, synchronize base, plan-only commit and push | in_progress |
-| WQ-02 | Privacy gates, dependency inventory/updates, forward-only grouping probe and OCR through 1.12.2 | pending |
-| WQ-03 | Freeze architecture/protocol/limits, independent design review, workflow and M7/M8 owners | pending |
-| WQ-04 | Registry v2, SDK transport, schema/DLP admission, bounded gateway/cache/lifecycle | pending |
-| WQ-05 | Integrate mandatory evidence/local/GitLab lifecycle; remove direct/adapter execution; migrate policy | pending |
-| WQ-06 | Versioned federation receipt/actual-use approval and #203 stage-aware source attribution | pending |
-| WQ-07 | Public configuration/migration/security/operations/examples/decision-flow and evidence matrix | pending |
-| WQ-08 | Near-final latest OCR check, adjacent-chain qualification, verified local binary update and pins | pending |
-| WQ-09 | Independent security/architecture review, remediation, full local quality/package/privacy acceptance | pending |
-| WQ-10 | Final signed commits/push, draft feature PR, exact-head CI readback and next-environment handoff | pending |
+| WQ-01 | Materialize/fidelity-check plan, synchronize base, plan-only commit and push | done |
+| WQ-02 | Privacy gates, dependency inventory/updates, forward-only grouping probe and OCR through 1.12.7 | done |
+| WQ-03 | Freeze architecture/protocol/limits, independent design review, workflow and M7/M8 owners | done |
+| WQ-04 | Registry v2, SDK transport, schema/DLP admission, bounded gateway/cache/lifecycle | done |
+| WQ-05 | Integrate mandatory evidence/local/GitLab lifecycle; remove direct/adapter execution; migrate policy | done |
+| WQ-06 | Versioned federation receipt/actual-use approval and #203 stage-aware source attribution | done |
+| WQ-07 | Public configuration/migration/security/operations/examples/decision-flow and evidence matrix | done |
+| WQ-08 | Near-final latest OCR check, adjacent-chain qualification, verified local binary update and pins | done |
+| WQ-09 | Independent security/architecture review, remediation, full local quality/package/privacy acceptance | done |
+| WQ-10 | Final signed commits/push, draft feature PR, exact-head CI readback and next-environment handoff | in_progress |
 
 ### Locked Decisions
 
@@ -191,7 +220,7 @@ receipts; preserve strict readback and existing DLP rejection behavior.
 
 Update one live grouping parser and stub to indices, retaining final path/group
 assertions. Freeze prior evidence epoch without changing bytes; no old live-parser
-fallback. Qualify adjacent OCR releases through at least 1.12.2. Near final review,
+fallback. Qualify adjacent OCR releases through at least 1.12.7. Near final review,
 query stable releases once, pin the observed upper bound and qualify the adjacent
 chain; do not continuously chase releases. Promote only compatible evidence and
 semantically reviewed changes. Verify local platform binary/checksums and keep
@@ -200,6 +229,20 @@ support manifest, fragments and affected qualification.
 
 Update stable compatible Python/build/dev/Actions dependencies, lock and immutable
 SHA pins while preserving Python 3.12–3.14, permissions and publication authority.
+
+#### DLP operator escape hatch
+
+`OCR_DLP_ENABLED` is a strict boolean owned by the public configuration contract;
+unset is enabled. The effective state is resolved once before acquisition and passed
+to context/federation admission, publication projection, receipt and local/GitLab
+reporting. Disabled mode bypasses DLP checks only; schema, byte/item/time/origin,
+cleanup, identity, result and posting transaction gates remain enforced. It never
+changes upstream authorization, resource allowlists, evidence completeness or
+mandatory internal MCP use. Disabled mode is approval-ineligible even when no unsafe
+content is observed. Logs and Technical details disclose only the mode/risk, not
+protected values. Tests must cover false/true/unset/invalid values, input and output
+bypass, retained non-DLP bounds, local Markdown warning, GitLab summary warning,
+receipt hostile readback and approval denial.
 
 ### Verification
 
@@ -216,6 +259,9 @@ SHA pins while preserving Python 3.12–3.14, permissions and publication author
 - #203: full OCR plus filtered discussion finding; private sanitization vs public
   filtering; DLP vs posting omissions; multiple source classes; preservation text;
   no protected content/paths/IDs/URLs/raw errors in public or telemetry output.
+- DLP toggle: default byte-equivalent enforcement, strict invalid-value rejection,
+  disabled inbound/publication behavior with non-DLP gates retained, warning parity,
+  receipt binding and unconditional comment-only approval result.
 - Final scripts/quality.sh check with scoped coverage, dependency audit, lock,
   manifest/evidence, installed wheel/sdist, actual checksum-verified OCR with
   synthetic peers, documentation/example validation and rendered decision-flow.
@@ -226,14 +272,34 @@ SHA pins while preserving Python 3.12–3.14, permissions and publication author
 
 ### Latest Validation Results
 
-Plan materialized; base synchronized to 458d967 and feature branch created.
-Candidate plan, public tree and history passed pinned Gitleaks 8.24.3; plan privacy
-scan passed. Signed commit failed because configured signing key is locked and
-absent from the agent. No commit or push occurred. User was asked to unlock the
-configured key locally; automatic Keychain retrieval also failed.
-No implementation tests run. Clean baseline observed; installed
-engineering-workflow 0.9.6 read. Historical 0.9.5 cache is no longer available;
-use current canonical owners rather than an unavailable cache diff.
+Plan-only commit 4369ca9 was pushed after candidate/tree/history Gitleaks and plan
+privacy checks. Its unsigned state remains under the explicit waiver; keys are now
+loaded for later signed commits. No implementation push has occurred.
+
+OCR v1.12.0 through v1.12.7 passed the adjacent native Darwin arm64 and local
+Docker linux/amd64 matrix with official asset/checksum verification. The manifest,
+GitLab pin and local binary now select v1.12.7; the prior v1.12.6 binary is retained
+in the owner-only local backup. Upstream MCP/LLM protocol sources and Go MCP SDK
+v1.7.0 did not change from v1.12.2 through v1.12.7. Issues #201/#202/#204–#207
+remain open; no separate v1.12.6 or v1.12.7 issue existed at the checkpoints.
+
+Registry v2, SDK-v2-primary federation, independent SDK-v1/v2 peer negotiation,
+mandatory evidence separation, receipt v9, legacy-policy migration, stage-aware DLP
+and the default-on DLP escape hatch are implemented with current public contracts.
+The final feature gate passed with 1761 tests, two skips and 339 subtests, 86.17%
+total coverage and all scoped coverage floors. The compatibility/public-contract
+scope passed 273 tests and 40 subtests, and the opt-in actual OCR/SDK-v1/v2
+federation matrix passed 53 tests against the installed binary. Fresh wheel and
+sdist builds pass Twine validation. Ruff, mypy, Bandit, pip-audit, tree Gitleaks,
+public-content privacy and diff checks are green from their latest applicable
+runs. Independent full-diff architecture/security review found five issues in
+test discovery, HTTPS cleanup accounting, hostile receipt parsing, reserved-name
+admission and isolated-child DLP propagation; all were remediated and the reviewer
+verified the affected 92 tests and 40 subtests clean. No actionable findings remain.
+
+Workflow 0.9.6 improvements were adopted through existing project owners: bounded
+long-running logs, explicit boundary evidence, staged/tree privacy gates and
+post-commit truth. No competing plan/archive lifecycle was introduced.
 
 ### Risks And Recovery
 
@@ -248,9 +314,10 @@ failure and request the bounded additional push rather than claiming completion.
 
 ### Resume Point
 
-WQ-01: user permitted skipping signing in this environment. Rescan updated plan
-and tree, commit only PLANS.md without signing, scan history and push the branch.
-Then begin independent implementation slices; signature reconciliation is handoff.
+WQ-10: inspect and stage the final tree, run candidate-content privacy gates,
+create the signed implementation commit, then perform the one final push, open the
+draft feature PR, read back its exact head/checks and record the next-environment
+handoff. All implementation remains local until that push.
 
 ### Plan Fidelity Check
 
@@ -263,12 +330,13 @@ Then begin independent implementation slices; signature reconciliation is handof
 
 - [x] Planning baseline and implementation-not-started truth are separated.
 - [x] Release delivery remains pending; no external completion is claimed.
-- [x] Base refreshed to 458d967; only the plan is changed, no commit/push exists.
+- [x] Base remains 458d967; only the plan commit is remote and all implementation
+  remains unpushed until the final signed checkpoint.
 - [ ] Retain exact final-head evidence after authorized publication.
 
 ### Closure Gate
 
-- [ ] All current implementation requirements and acceptance checks pass.
+- [x] All current implementation requirements and local acceptance checks pass.
 - [ ] Reviews are resolved and final draft/exact-head CI evidence is recorded.
 - [ ] Handoff preserves outstanding DLP/configured-OCR and stable-delivery work.
 - [ ] No issues/milestone or stable release are falsely closed at feature draft.

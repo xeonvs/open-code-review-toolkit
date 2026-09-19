@@ -70,7 +70,7 @@ def peer(mode: str) -> int:
         finally:
             process.communicate(timeout=10)
             assert process.returncode == 0
-    external = config["mcp_servers"]["synthetic_context"]
+    external = config["mcp_servers"]["ocr_toolkit_federation"]
     process = subprocess.Popen(
         [external["command"], *external["args"]],
         stdin=subprocess.PIPE,
@@ -79,16 +79,35 @@ def peer(mode: str) -> int:
         text=True,
     )
     try:
-        response = rpc(
+        rpc(
             process,
             {
                 "jsonrpc": "2.0",
                 "id": 1,
-                "method": "tools/call",
-                "params": {"name": "synthetic_lookup", "arguments": {}},
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "synthetic-review-peer", "version": "1"},
+                },
             },
         )
-        assert response == {"content": [{"type": "text", "text": "Synthetic context."}]}
+        registry = rpc(process, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        assert "synthetic_context__echo" in {tool["name"] for tool in registry["tools"]}
+        response = rpc(
+            process,
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "synthetic_context__echo",
+                    "arguments": {"text": "Synthetic context."},
+                },
+            },
+        )
+        assert response.get("isError") is not True, response
+        assert response["content"] == [{"type": "text", "text": "Synthetic context."}]
     finally:
         process.communicate(timeout=10)
         assert process.returncode == 0
@@ -120,7 +139,10 @@ def peer(mode: str) -> int:
                 "summary": {"budget_exceeded": mode == "budget"},
                 "tool_calls": {
                     "total": 2,
-                    "by_tool": {"ocr_toolkit_evidence": 1, "synthetic_lookup": 1},
+                    "by_tool": {
+                        "ocr_toolkit_evidence": 1,
+                        "synthetic_context__echo": 1,
+                    },
                 },
             }
         )
@@ -139,14 +161,42 @@ def external_server() -> int:
 
     for line in sys.stdin:
         request = json.loads(line)
-        assert request["method"] == "tools/call"
-        assert request["params"] == {"name": "synthetic_lookup", "arguments": {}}
+        if request["method"] == "notifications/initialized":
+            continue
+        if request["method"] == "server/discover":
+            response = {
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "error": {"code": -32601, "message": "unsupported"},
+            }
+            print(json.dumps(response), flush=True)
+            continue
+        if request["method"] == "initialize":
+            result = {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "synthetic-context", "version": "1"},
+            }
+        elif request["method"] == "tools/list":
+            result = {
+                "tools": [
+                    {
+                        "name": "synthetic_lookup",
+                        "description": "Return synthetic review context.",
+                        "inputSchema": {"type": "object", "additionalProperties": False},
+                    }
+                ]
+            }
+        else:
+            assert request["method"] == "tools/call"
+            assert request["params"] == {"name": "synthetic_lookup", "arguments": {}}
+            result = {"content": [{"type": "text", "text": "Synthetic context."}]}
         print(
             json.dumps(
                 {
                     "jsonrpc": "2.0",
                     "id": request["id"],
-                    "result": {"content": [{"type": "text", "text": "Synthetic context."}]},
+                    "result": result,
                 }
             ),
             flush=True,
@@ -199,12 +249,20 @@ def main(root: Path, cli: Path) -> int:
         "OCR_LLM_URL": "https://provider.example.invalid/v1",
         "OCR_MCP_SERVERS_JSON": json.dumps(
             {
-                "synthetic_context": {
-                    "type": "stdio",
-                    "command": sys.executable,
-                    "args": ["-I", __file__, "--external"],
-                    "tools": ["synthetic_lookup"],
-                }
+                "version": 2,
+                "servers": {
+                    "synthetic_context": {
+                        "transport": {
+                            "type": "stdio",
+                            "command": sys.executable,
+                            "args": [
+                                "-I",
+                                str(Path(__file__).parents[1] / "federation" / "sdk_peer.py"),
+                            ],
+                        },
+                        "tools": {"echo": {"assurance": "advisory"}},
+                    }
+                },
             }
         ),
     }

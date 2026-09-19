@@ -19,9 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from ocr_toolkit import ocr_result, review_runner
-from ocr_toolkit.context.broker import BrokerResult
 from ocr_toolkit.context.ci_outcomes import CIOutcomeSnapshot
-from ocr_toolkit.context.contracts import RecognizerPolicy
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
@@ -91,6 +89,44 @@ def action_counts(
 SUMMARY_ACTION_COUNTS = action_counts()
 
 
+def test_run_resolves_disabled_dlp_once_and_warns_before_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: list[bool] = []
+
+    def run(*_args: object, **kwargs: object) -> int:
+        observed.append(kwargs["dlp_enabled"] is False)
+        return 0
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", run)
+    monkeypatch.setenv("OCR_DLP_ENABLED", "false")
+
+    assert (
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+        == 0
+    )
+    assert observed == [True]
+    warning = capsys.readouterr().err
+    assert "WARNING: OCR DLP IS DISABLED" in warning
+    assert "automatic approval is blocked" in warning
+
+
+def test_invalid_dlp_setting_fails_before_review_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called: list[bool] = []
+    monkeypatch.setattr(
+        review_runner,
+        "_run_evidence_review",
+        lambda *_args, **_kwargs: called.append(True) or 0,
+    )
+    monkeypatch.setenv("OCR_DLP_ENABLED", "invalid-private-value")
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="OCR_DLP_ENABLED must be one of"):
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+    assert called == []
+
+
 def complete_review_payload(*, tool_calls: dict[str, object]) -> dict[str, object]:
     """Return one complete review whose public signal must survive diagnostics."""
 
@@ -152,7 +188,6 @@ def configure_enrichment_test(
     monkeypatch: pytest.MonkeyPatch,
     *,
     provider_acquire: object,
-    external_acquire: object,
     policy_value: dict[str, object] | None = None,
     ci_acquire: object | None = None,
 ) -> EvidenceArtifacts:
@@ -163,7 +198,6 @@ def configure_enrichment_test(
     artifacts.directory.mkdir(mode=0o700)
     monkeypatch.setattr(review_runner, "load_protected_policy", lambda *_args, **_kwargs: policy)
     monkeypatch.setattr(review_runner, "acquire_gitlab_context", provider_acquire)
-    monkeypatch.setattr(review_runner, "acquire_external_records", external_acquire)
     if ci_acquire is not None:
         monkeypatch.setattr(review_runner, "acquire_gitlab_ci_outcomes", ci_acquire)
     monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
@@ -185,9 +219,6 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
         tmp_path,
         monkeypatch,
         provider_acquire=lambda *_args, **_kwargs: None,
-        external_acquire=lambda **_kwargs: BrokerResult(
-            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
-        ),
         policy_value=policy,
         ci_acquire=lambda *_args, **_kwargs: snapshot,
     )
@@ -276,11 +307,6 @@ def test_unprotected_enrichment_guard_never_loads_policy_or_acquires_context(
         "acquire_gitlab_context",
         lambda *_args, **_kwargs: calls.append("gitlab") or None,
     )
-    monkeypatch.setattr(
-        review_runner,
-        "acquire_external_records",
-        lambda *_args, **_kwargs: calls.append("external") or None,
-    )
     monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
 
     assert review_runner._prepare_enrichment(
@@ -308,9 +334,6 @@ def test_optional_ci_record_rejection_does_not_degrade_required_context(
         tmp_path,
         monkeypatch,
         provider_acquire=lambda *_args, **_kwargs: None,
-        external_acquire=lambda **_kwargs: BrokerResult(
-            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
-        ),
         policy_value=policy,
         ci_acquire=lambda *_args, **_kwargs: snapshot,
     )
@@ -336,31 +359,6 @@ def test_default_termination_signal_is_translated_for_cleanup() -> None:
             handler(signal.SIGTERM, None)
     finally:
         review_runner._restore_termination_handlers(previous)
-
-
-def test_reference_candidate_dedup_preserves_independent_resource_classes() -> None:
-    """The same explicit value may select distinct protected issue/document sources."""
-
-    references = tuple(
-        SimpleNamespace(
-            adapter="knowledge",
-            tenant="engineering",
-            resource_class=resource_class,
-            recognizer=RecognizerPolicy(type="explicit"),
-        )
-        for resource_class in ("issue", "document")
-    )
-    policy = SimpleNamespace(references=references)
-
-    selections = review_runner._select_reference_candidates(  # type: ignore[arg-type]
-        policy,
-        ["[[context:issue:shared]] [[context:document:shared]]"],
-    )
-
-    assert [selection.policy.resource_class for selection in selections] == [
-        "issue",
-        "document",
-    ]
 
 
 def test_enrichment_composes_one_provider_snapshot_without_remediation_reference_discovery(
@@ -405,24 +403,16 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
         remediation_threads=SimpleNamespace(state="complete", records=(remediation,)),
     )
     calls = 0
-    selected: list[str] = []
 
     def acquire(*_args: object, **_kwargs: object) -> SimpleNamespace:
         nonlocal calls
         calls += 1
         return snapshot
 
-    def external(**kwargs: object) -> BrokerResult:
-        selections = kwargs["selections"]
-        assert isinstance(selections, list)
-        selected.extend(selection.candidate.value for selection in selections)
-        return BrokerResult((), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False)
-
     artifacts = configure_enrichment_test(
         tmp_path,
         monkeypatch,
         provider_acquire=acquire,
-        external_acquire=external,
     )
 
     context_config, receipt = review_runner._prepare_enrichment(
@@ -432,10 +422,10 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
     )
 
     assert calls == 1
-    assert selected == ["DEMO-7"]
     assert context_config is not None and receipt is not None
     assert receipt.mutable_admitted is True
-    assert receipt.required_degraded is False
+    assert receipt.required_degraded is True
+    assert receipt.completeness["legacy:references"] == "unavailable"
     restored = ContextStore.read(
         artifacts.context_store,
         expected_run_id=context_config.run_id,
@@ -477,9 +467,6 @@ def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
         tmp_path,
         monkeypatch,
         provider_acquire=lambda *_args, **_kwargs: snapshot,
-        external_acquire=lambda **_kwargs: BrokerResult(
-            (), {}, {"invalid": 0, "limit": 0, "unavailable": 0}, False
-        ),
     )
 
     _context_config, receipt = review_runner._prepare_enrichment(
@@ -492,58 +479,7 @@ def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
     assert receipt.required_degraded is True
     assert receipt.mutable_admitted is False
     assert receipt.completeness["forge:gitlab_discussions"] == "partial"
-    assert receipt.degradation_counts == {"invalid": 1, "limit": 0, "unavailable": 0}
-
-
-def test_mixed_context_states_produce_exact_closed_degradation_counts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Project mixed source failures into exact closed degradation counts."""
-
-    identity = enriched_identity()
-    snapshot = SimpleNamespace(
-        discussions=SimpleNamespace(
-            state="mutated",
-            records=(),
-            omitted=0,
-            dlp_rejected=0,
-        ),
-        remediation_threads=SimpleNamespace(
-            state="partial",
-            records=(),
-            omitted=2,
-            dlp_rejected=1,
-        ),
-    )
-    external = BrokerResult(
-        (),
-        {"reference:tracker:engineering:issue": "unavailable"},
-        {"invalid": 2, "limit": 3, "unavailable": 1},
-        False,
-    )
-    artifacts = configure_enrichment_test(
-        tmp_path,
-        monkeypatch,
-        provider_acquire=lambda *_args, **_kwargs: snapshot,
-        external_acquire=lambda **_kwargs: external,
-    )
-
-    context_config, receipt = review_runner._prepare_enrichment(
-        identity,
-        artifacts,
-        SimpleNamespace(read_blob=lambda *_args: b""),  # type: ignore[arg-type]
-    )
-
-    assert context_config is not None and receipt is not None
-    assert receipt.completeness == {
-        "forge:gitlab_discussions": "mutated",
-        "forge:gitlab_remediation_threads": "partial",
-        "reference:tracker:engineering:issue": "unavailable",
-    }
-    assert receipt.degradation_counts == {"invalid": 4, "limit": 4, "unavailable": 1}
-    assert receipt.required_degraded is True
-    assert receipt.mutable_admitted is False
-    assert "dlp_rejected" not in artifacts.context_store.read_text(encoding="utf-8")
+    assert receipt.degradation_counts == {"invalid": 1, "limit": 0, "unavailable": 1}
 
 
 def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does_not() -> None:
@@ -775,7 +711,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 8,
+        "schema_version": 9,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -792,9 +728,11 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
             "required_degraded": False,
             "mutable_admitted": False,
+            "legacy_policy": False,
             "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
+            "federation": None,
             "capabilities": [
                 {
                     "server": "ocr_toolkit_evidence",
@@ -810,6 +748,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             "calls": 2,
             "actions": {"state": "verified", **counts},
         },
+        "dlp": {"enabled": True},
         "publication": {"state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
@@ -1763,7 +1702,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 8,
+        "schema_version": 9,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -1780,9 +1719,11 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
             "required_degraded": False,
             "mutable_admitted": False,
+            "legacy_policy": False,
             "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
+            "federation": None,
             "capabilities": [
                 {
                     "server": "ocr_toolkit_evidence",
@@ -1798,6 +1739,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             "calls": 1,
             "actions": {"state": "verified", **SUMMARY_ACTION_COUNTS},
         },
+        "dlp": {"enabled": True},
         "publication": {"state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
@@ -3349,8 +3291,8 @@ def test_ocr_result_rejects_provider_owned_toolkit_receipt(tmp_path: Path) -> No
         review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
-def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -> None:
-    """Aggregate only known positive tool calls under their owning servers."""
+def test_ocr_result_receipt_ignores_unconfigured_tool_names(tmp_path: Path) -> None:
+    """Aggregate only known positive tool calls under their owning server."""
 
     result = tmp_path / "result.json"
     result.write_text(
@@ -3373,10 +3315,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
     )
     composition = MCPComposition(
         payload={},
-        capabilities=(
-            MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),
-            MCPCapability("documentation", ("search_docs", "get_docs")),
-        ),
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, builtin=True),),
         external_servers=(),
         secret_values=(),
     )
@@ -3386,10 +3325,7 @@ def test_ocr_result_receipt_attributes_independent_mcp_servers(tmp_path: Path) -
         composition,
         DEFAULT_IDENTITY,
         evidence_action_counts=action_counts(list=1),
-    ) == {
-        "documentation": 5,
-        "ocr_toolkit_evidence": 2,
-    }
+    ) == {"ocr_toolkit_evidence": 2}
 
 
 @pytest.mark.parametrize(

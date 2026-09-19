@@ -29,7 +29,30 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-EXPECTED_OCR_VERSION = "1.11.9"
+RECOMMENDED_OCR_VERSION = "1.12.7"
+SUPPORTED_OCR_VERSIONS = (
+    "1.11.0",
+    "1.11.1",
+    "1.11.2",
+    "1.11.3",
+    "1.11.4",
+    "1.11.5",
+    "1.11.6",
+    "1.11.7",
+    "1.11.8",
+    "1.11.9",
+    "1.12.0",
+    "1.12.1",
+    "1.12.2",
+    "1.12.3",
+    "1.12.4",
+    "1.12.5",
+    "1.12.6",
+    "1.12.7",
+)
+DEPRECATED_OCR_VERSIONS = ("1.10.0", "1.10.1", "1.10.2")
+# Retain the public constant as the recommended pin, not as the runtime acceptance policy.
+EXPECTED_OCR_VERSION = RECOMMENDED_OCR_VERSION
 
 
 class PreflightError(Exception):
@@ -205,12 +228,26 @@ def validate_ocr_binary() -> None:
         raise PreflightError(
             f"ocr --version exited {completed.returncode}: {redact_sensitive(output)}"
         )
-    if not re.search(rf"(?<![0-9.])v?{re.escape(EXPECTED_OCR_VERSION)}(?![0-9.])", output):
+    reported = set(re.findall(r"(?<![0-9.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![0-9.])", output))
+    if len(reported) != 1:
         raise PreflightError(
-            f"Unsupported Open Code Review version; expected {EXPECTED_OCR_VERSION}, "
+            "Unsupported Open Code Review version; expected one qualified stable version, "
             f"got {redact_sensitive(output)!r}"
         )
-    print(f"Open Code Review binary validated: {EXPECTED_OCR_VERSION}")
+    version = reported.pop()
+    if version in DEPRECATED_OCR_VERSIONS:
+        print(
+            f"WARNING: Open Code Review {version} is deprecated; upgrade to "
+            f"{RECOMMENDED_OCR_VERSION}. Support for the oldest compatibility line moves "
+            "forward as new stable lines are qualified.",
+            file=sys.stderr,
+        )
+    elif version not in SUPPORTED_OCR_VERSIONS:
+        raise PreflightError(
+            f"Unsupported or unqualified Open Code Review version {version}; "
+            f"recommended {RECOMMENDED_OCR_VERSION}"
+        )
+    print(f"Open Code Review binary validated: {version}")
 
 
 def _models_url() -> str:

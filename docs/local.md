@@ -22,15 +22,16 @@ Local mode is explicit. It may run in a CI test job, but inherited CI identity d
 not select a forge provider, acquire change-request data or authorize publication.
 `preflight --local` checks the OCR binary and configured LLM, not forge access.
 Set `OCR_REVIEW_CONTEXT_MODE` to `off` or leave it unset; other context modes and
-any `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` value are rejected before input acquisition.
+legacy adapter configuration are rejected before input acquisition.
 Local mode has no discussion, command, suppression or approval channel.
 
 The mandatory repository-evidence MCP remains enabled. Registry validation and
 the toolkit's self-query do not substitute for the review's completed evidence
 summary call: the result's claimed usage must reconcile with the real action
-record. Operator-configured external MCP entries remain optional and cannot
-replace mandatory evidence. Their capabilities and trust boundaries are described
-in [MCP composition](configuration.md#mcp-composition-and-trust-boundary).
+record. Operator-configured registry-v2 upstreams remain optional and cannot
+replace mandatory evidence. Local permits reviewed HTTPS and explicit stdio
+transports; their trust boundaries are described in
+[governed MCP federation](configuration.md#governed-mcp-federation-and-trust-boundary).
 
 ## Output and failures
 
@@ -51,7 +52,8 @@ pathname symlink, then the temporary and final entries are created through that
 pinned directory. A same-user replacement of a parent path cannot redirect
 report delivery.
 
-Successful execution still requires result validation, DLP and cleanup. The
+Successful execution still requires result validation and cleanup. DLP is enabled
+by default. The
 admitted JSON has no fabricated forge receipt. Filtered findings stay absent from
 the console and safe JSON; omissions and original coverage remain explicit.
 Legacy results without coverage counts remain unknown, not a fabricated complete
@@ -63,16 +65,26 @@ configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
 
-`--local` cannot be combined with legacy `--preserve-private-artifacts`, because
-that diagnostic path intentionally bypasses ordinary result finalization. The
-legacy option without `--local` retains its existing sensitive-artifact semantics.
+Before disabling DLP to diagnose a suspected false positive, run the local review
+with `--preserve-private-artifacts`. It retains owner-only private inputs and
+decisions without creating a posting-eligible receipt. Inspect the material only
+on the trusted host, keep it out of commits and shared artifacts, and remove it
+after diagnosis.
+
+`OCR_DLP_ENABLED=false` is a strict per-run escape hatch. It disables
+context/federation and publication DLP, emits a prominent Markdown and console
+warning, and makes the result approval-ineligible. Local Markdown may then
+contain sensitive repository, service, model, or credential-adjacent data. The
+same setting in GitLab can publish such data, and re-enabling DLP cannot retract
+anything already sent or written. Invalid non-boolean values fail before OCR;
+non-DLP schema, size, origin, evidence, cleanup and output-safety gates remain.
 
 ## Private debug bundle
 
 Add `--debug-dir PATH` to retain diagnostics from the same review execution.
 The directory must be fresh, must not traverse symlinks, and must not contain
 the normal result, stderr or report destinations. It is created with mode `0700`;
-its files use `0600`. This option requires `--local` and rejects legacy private
+its files use `0600`. This option requires `--local` and is separate from private
 artifact retention. It does not bypass validation, DLP or ordinary session cleanup.
 Its parent directory is pinned before the bundle is created, and every later
 write is descriptor-relative; replacing a visible ancestor path cannot redirect
@@ -134,6 +146,11 @@ environment. Keep the example's stable toolkit pin unchanged until release.
   raw/safe separation, truncation and cleanup. Never publish raw private files.
 - Progress: compare enabled/disabled outcomes and artifact contents. Only bounded
   toolkit phases and heartbeats should be added to stderr.
+- Federation: qualify each registry-v2 upstream through the toolkit gateway.
+  Local may use explicit HTTPS or stdio; GitLab uses HTTPS only. Verify SDK v1/v2
+  peers and negotiated wire revisions independently, bounded cleanup, and
+  content-free receipt accounting. The mandatory internal evidence MCP remains
+  present and cannot be replaced by the registry.
 - Reasoning: test unset, explicit `none` and the intended nonempty effort for
   each selected provider/model/protocol. Record correct wire shape, explicit
   provider acceptance/rejection and documented or server-observable application.

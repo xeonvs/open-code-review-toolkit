@@ -15,6 +15,7 @@ from ocr_toolkit.context.contracts import (
     ACCOUNT_CLASSES,
     POLICY_SCHEMA_V1,
     POLICY_SCHEMA_V2,
+    POLICY_SCHEMA_V4,
     POLICY_SCHEMAS,
     PROJECTION_FIELDS,
     REFERENCE_RESOURCE_CLASSES,
@@ -454,12 +455,12 @@ def parse_policy(raw: bytes) -> ContextPolicy:
         or any(not isinstance(value, Mapping) for value in references_value)
     ):
         raise ContextContractError("context policy references are invalid")
+    if schema_version == POLICY_SCHEMA_V4 and "references" in root:
+        raise ContextContractError("current context policy does not support legacy references")
     references = tuple(_reference(value) for value in references_value)
     identities = [(item.adapter, item.tenant, item.resource_class) for item in references]
     if len(identities) != len(set(identities)):
         raise ContextContractError("context policy references collide")
-    if discussion is None and remediation is None and ci_outcomes is None and not references:
-        raise ContextContractError("context policy must select at least one source")
     canonical = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")

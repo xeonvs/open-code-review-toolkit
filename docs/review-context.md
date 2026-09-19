@@ -1,216 +1,166 @@
 # Bounded review context
 
-Open Code Review Toolkit can enrich one validated forge review with bounded merge-request metadata, discussions, verified remediation history, protected same-revision CI outcomes, and records resolved by operator-managed adapters. GitLab is the current provider implementation; acquisition normalizes into provider-neutral broker views before storage. Enrichment is a single pre-OCR phase. OCR remains the only review engine, and its model loop can read only committed local handles through the toolkit's existing built-in MCP process.
+Review context is selected by `OCR_REVIEW_CONTEXT_MODE`: `off`, `metadata`, or
+`enriched`. OCR remains the only review/model loop. Repository evidence always
+uses the mandatory internal MCP; operator configuration cannot replace or remove
+it. Optional external tools use the separate governed federation described in
+[configuration](configuration.md#governed-mcp-federation-and-trust-boundary).
 
 ## Modes and lifecycle
 
-`OCR_REVIEW_CONTEXT_MODE` is a closed selector:
+`off` retains only the validated review identities needed for execution and
+publication. `metadata` adds bounded merge-request title, description, labels,
+and source branch. `enriched` additionally reads the protected-target policy and
+can acquire generic GitLab discussions, verified remediation threads, and exact
+same-revision CI outcomes before OCR starts.
 
-- Empty or `off` validates immutable review and posting identities but does not normalize or persist mutable merge-request text.
-- `metadata` additionally admits bounded title, description, labels, and source-branch text.
-- `enriched` requires a validated GitLab merge-request environment and a valid protected-target policy. It includes the same metadata projection plus selected stable GitLab discussions, verified toolkit-owned remediation threads, protected same-revision CI outcomes, and policy-recognized external records. Missing or invalid policy stops the review before OCR.
+All selected text is untrusted. Acquisition, model projection, publication, and
+retention are separate stages with separate limits and DLP decisions. Context
+cannot add tools, authorize credentials, change review policy, suppress findings,
+issue lifecycle commands, or grant approval. The private context store exposes
+only committed records through fixed `context_list` and `context_get` tools on
+the mandatory internal MCP; neither tool has network, subprocess, arbitrary URL,
+arbitrary identifier, search, traversal, or write authority.
 
-`OCR_GITLAB_TARGET_PROTECTION_MODE` is a separate closed selector. Unset `required` rejects an unprotected target before OCR. Exact `unprotected` is an explicit opt-in, but constrains only a target GitLab actually reports unprotected. Such a run allows context `off` or bounded untrusted `metadata`; rejects `enriched`, any adapter setting, discussion/remediation/CI policy acquisition, and direct or inherited external MCP; preserves only the built-in immutable evidence MCP; and omits accepted decisions plus structured project guidance. Required repository Rules come from the exact target SHA as untrusted model guidance and cannot enable a tool, acquisition, suppression, posting permission, or approval. A protected target keeps the normal lifecycle under either valid operator setting.
+## Protected-target policy v4
 
-The protected lifecycle is fixed: capture the protected-target SHA; load policy from that immutable object; acquire and authorize records; normalize, DLP-check, and atomically commit the private context store; run one OCR review in an isolated home; serve only local handles; remove session, adapter, and context artifacts; then validate/project the complete OCR result and attach receipt v8 through one inode-checked atomic replacement. A constrained unprotected run skips protected-policy acquisition and the context store entirely. Receipt v8 binds the exact source SHA, target/policy SHA, and actual protection state; unprotected is structurally approval-ineligible. A cleanup or publication-validation failure blocks ordinary result publication.
+The toolkit reads only `.opencodereview/review-context-policy.json` from the
+captured target-policy commit. New policy documents use
+`ocr.review-context-policy/v4`. V4 retains the bounded aggregate budgets,
+`forge_discussions`, `remediation_threads`, and `ci_outcomes` selectors from the
+established contracts. It does not accept `references`: external acquisition is
+now governed by operator registry v2 rather than policy-selected executable
+adapters.
 
-## Protected-target policy
+Discussion selectors define account classes, resolved/outdated selection, age,
+item and text limits, required/optional behavior, and closed projections. A
+verified remediation bundle begins only at a toolkit-owned root whose author and
+marker/fingerprint match the live review identity; its ordered replies remain
+historical evidence, never proof that current code is fixed. Any admitted
+remediation record makes the review comment-only.
 
-The only policy path is `.opencodereview/review-context-policy.json`. The toolkit reads it as a bounded regular Git blob from the captured protected-target policy SHA. A source-branch or working-tree copy has no authority. Missing, symlink, submodule, oversized, invalid UTF-8, duplicate-key, unknown-field, unknown-version, or impossible-projection input fails closed.
+CI outcomes select exact job names and truthful path prefixes. The GitLab edge
+reads bounded pipeline/job metadata twice for the exact reviewed SHA. It never
+downloads logs or artifacts. A unique current passing job can challenge a narrow
+runtime claim for a declared path, but it cannot suppress a finding, establish a
+clean review, change severity/lifecycle, or authorize approval.
 
-The following complete v2 policy selects generic GitLab discussions, verified toolkit remediation threads, and issue keys with protected prefix `DEMO`:
+Start optional selectors with `required: false`. A stable complete snapshot with
+zero selected records is complete. When `required: true`, unavailable, mutated,
+DLP-rejected, or bounded-partial acquisition is required degradation and makes the
+run comment-only; it still does not fabricate evidence.
 
-```json
-{
-  "schema_version": "ocr.review-context-policy/v2",
-  "budgets": {
-    "max_records": 32,
-    "max_chars": 48000,
-    "max_bytes": 96000,
-    "max_lines": 1200,
-    "timeout_ms": 15000
-  },
-  "forge_discussions": {
-    "required": false,
-    "account_classes": ["automation", "user"],
-    "include_resolved": false,
-    "include_outdated": false,
-    "max_age_seconds": 2592000,
-    "max_threads": 20,
-    "max_replies_per_thread": 10,
-    "max_items": 100,
-    "budgets": {
-      "max_chars": 12000,
-      "max_bytes": 24000,
-      "max_lines": 300
-    },
-    "projections": {
-      "retrieve": ["descriptor", "digest", "expiry", "state", "text", "version"],
-      "model": ["descriptor", "state", "text"],
-      "publish": ["descriptor", "state"],
-      "retain": ["digest", "expiry", "state", "version"]
-    }
-  },
-  "remediation_threads": {
-    "required": false,
-    "account_classes": ["automation", "system", "user"],
-    "include_resolved": false,
-    "include_outdated": false,
-    "max_age_seconds": 2592000,
-    "max_threads": 20,
-    "max_replies_per_thread": 10,
-    "max_items": 100,
-    "budgets": {
-      "max_chars": 12000,
-      "max_bytes": 24000,
-      "max_lines": 300
-    }
-  },
-  "references": [
-    {
-      "adapter": "tracker",
-      "tenant": "engineering",
-      "resource_class": "issue",
-      "recognizer": {"type": "issue_key", "prefix": "DEMO"},
-      "required": true,
-      "max_records": 8,
-      "max_age_seconds": 31536000,
-      "budgets": {
-        "max_chars": 4000,
-        "max_bytes": 8000,
-        "max_lines": 100
-      },
-      "projections": {
-        "retrieve": ["descriptor", "digest", "expiry", "state", "text", "version"],
-        "model": ["descriptor", "state", "text"],
-        "publish": ["descriptor", "state"],
-        "retain": ["digest", "expiry", "state", "version"]
-      }
-    }
-  ]
-}
-```
+Complete private-safe examples are in
+[`examples/gitlab/context/`](../examples/gitlab/context/).
 
-The top-level aggregate budget limits independent record, character, UTF-8 byte, physical-line, and wall-time dimensions. Each source has its own text, age, item, and provider-specific limits. Hitting one limit does not silently relabel the source complete.
+## Legacy policy v1-v3 migration
 
-Policy v3 adds an optional `ci_outcomes` selector. Each `checks` entry contains one exact GitLab job name and a sorted unique list of protected repository-relative `path_prefixes`. `required` defaults to `false`; `max_age_seconds` defaults to `86400` and accepts 60 through 604800. The protected policy supplies scope, while the authenticated forge API supplies only the exact-head outcome. Repository-authored status text, job logs, artifacts, URLs, runner/user identities, raw IDs, and variables are never inputs.
+Policy v1, v2, and v3 remain parse-only compatibility inputs. Their safe native
+selectors continue to work: v1 discussions, v2 remediation threads, v3 CI
+outcomes, plus their established budgets, rules and guidance. The toolkit emits
+one private migration warning and at most one bounded Technical-details warning
+for an accepted legacy policy.
 
-Discussion account classes are the closed set `user`, `automation`, `system`, and `toolkit_bot`. GitLab classifies accounts before storage and replaces display identity with a run-local pseudonym. Remediation reply classes cannot include `toolkit_bot`; the separately verified root owns the toolkit-bot role. Name, username, email, avatar/profile URL, and raw provider IDs are never model fields.
+Legacy `references` are never executed. No command, endpoint, adapter protocol,
+credential, candidate identifier, or legacy result is passed to OCR or converted
+implicitly into registry v2.
 
-### Choosing a discussion policy
+- Optional legacy references are marked unavailable and skipped. Other safe
+  selectors can still produce a review, subject to their normal gates.
+- Any required legacy reference makes the context required-degraded and the run
+  comment-only.
+- A policy whose only selected work is legacy references follows the same rule:
+  optional references produce no external records; required references degrade
+  the run. It never restores legacy execution.
 
-The runtime always reads the fixed protected-target path `.opencodereview/review-context-policy.json`; the filenames under `examples/gitlab/context/` are templates to copy to that path, not alternative runtime paths.
+Migrate by moving reviewed external services into the operator-owned
+`OCR_MCP_SERVERS_JSON` registry v2 and then removing `references` while advancing
+the protected policy to v4. Registry tools are model-directed federation tools;
+they are not a field-for-field replacement for the old pre-OCR adapter records.
+Reassess schemas, origins, assurance and credentials rather than copying an old
+adapter definition.
 
-| Review need | Start from | Keep these selectors | Adapter configuration |
-| --- | --- | --- | --- |
-| Ordinary MR conversation only | `policy-discussions.json` | `forge_discussions`; remove `remediation_threads` | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
-| Earlier OCR finding plus human remediation replies only | `policy-discussions.json` | `remediation_threads`; remove `forge_discussions` | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
-| Both ordinary conversation and remediation history | `policy-discussions.json` | Keep both selectors | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
-| Discussions plus authorized issue/document records | `policy-adapters.json` | Keep the needed discussion selectors and references | Supply one matching reviewed adapter allowlist |
-| Same-revision CI execution context | `policy-ci-outcomes.json` | `ci_outcomes` with exact check names and truthful path prefixes | `OCR_REVIEW_CONTEXT_ADAPTERS_JSON=[]` |
+`OCR_REVIEW_CONTEXT_ADAPTERS_JSON`, adapter request/response frames, executable
+adapter examples, `OCR_MCP_REPLACE`, and legacy direct-passthrough registry shapes
+are removed. Their presence fails closed with migration guidance.
 
-Use policy v1 unchanged only for generic discussions/references. Choose v2 for `remediation_threads`. Choose v3 whenever `ci_outcomes` is selected; v3 may also contain v2 selectors and references.
+## Handles and completeness
 
-CI outcome scope is deliberately narrow. A required `passed` record proves only that the named job completed successfully for the exact reviewed head and that protected policy declares the finding path inside its prefixes. `failed`, `skipped`, `canceled`, `unknown`, advisory, stale, incomplete, or unknown-scope state cannot prove execution success or absence. Even a required pass may challenge a falsifiable unconditional runtime claim, but it cannot suppress a finding, establish a clean review, change severity/lifecycle, or authorize approval.
+The private `ocr.context-store/v2` is independent from repository evidence. It is
+written atomically with owner-only permissions and read back as hostile input
+before OCR. Only a normalized, bounded, DLP-admitted record receives a random
+run-bound `ctx1_` handle. The mapping binds the run, policy digest, source,
+projection, version/digest and expiry without encoding an upstream identifier.
 
-Start each discussion source with `required: false`. Set it to `true` only when the review must treat an unavailable, mutated, DLP-rejected, or bounded-partial source as a blocking loss of required evidence. `required` does not mean that at least one matching thread must exist: a stable complete snapshot with zero selected threads is still complete. `include_resolved` and `include_outdated` should remain false unless historical or stale anchors are intentionally relevant. Keep `account_classes` to the smallest set needed; `remediation_threads.account_classes` applies to replies and cannot include `toolkit_bot`.
+`context_list` accepts only closed filters, a bounded page size and an opaque
+cursor. `context_get` accepts one previously listed handle and returns only its
+model projection. Invalid, expired, wrong-run, wrong-policy, missing or forged
+handles fail before record access. Context calls never satisfy the independent
+mandatory evidence-summary requirement.
 
-Generic `forge_discussions` can include non-toolkit conversations and its policy-controlled model projection. `remediation_threads` includes only roots verified against the live bot ID and toolkit marker/fingerprint, then returns the root and ordered replies through a fixed non-configurable model projection. A verified remediation root is excluded from generic discussions even when both selectors are enabled.
+Completeness is per selected source. Optional non-DLP degradation is visible and
+cannot support an absence claim. Required degradation, selected-source DLP
+rejection, or malformed state cannot be hidden by successful records from another
+source.
 
-Safely admitted generic discussions do not independently disable automatic approval. Any admitted remediation thread does, because its text is historical review evidence rather than proof that current code is fixed. Any DLP rejection blocks approval regardless of `required`; optional non-DLP degradation stays visible but cannot prove absence. The public enriched mode recipes set `OCR_AUTO_APPROVE=false` while operators qualify these distinctions.
+## DLP, publication and source accounting
 
-References bind one operator-configured adapter, tenant alias, `issue` or `document` resource class, required/optional semantics, bounds, projections, and one toolkit-authored recognizer:
+With the default `OCR_DLP_ENABLED=true`, selected context and federation content
+cross DLP before model egress, and every renderable result crosses publication
+DLP. Private retention is checked separately. Publication filtering does not
+rewrite OCR coverage: a complete OCR manifest remains complete while omitted
+public fields and findings are reported as publication omissions.
 
-- `{"type":"issue_key","prefix":"DEMO"}` recognizes keys such as `DEMO-42` with the exact protected prefix.
-- `{"type":"https_url","origin":"https://docs.example.invalid","path_prefix":"/published/"}` recognizes only HTTPS URLs at that exact origin and path prefix.
-- `{"type":"explicit"}` recognizes `[[context:issue:rollout-record]]` or `[[context:document:architecture-note]]` for the matching resource class.
+Forbidden values are registered with a closed source class at acquisition:
+`forge_discussions`, `remediation_threads`, `ci_outcomes`, `external_context`,
+`operator_secret`, or `other`. Each rejected item counts each matching class at
+most once. Classes may overlap, so source-class counts do not need to sum to the
+total omitted-item count. The toolkit never retains rejected text merely to infer
+its class later.
 
-Candidates are extracted only from admitted merge-request metadata and admitted discussion bodies. Recognition grants no access; every candidate still crosses adapter authorization. Configurable regular expressions, repository-wide search, arbitrary URLs, and arbitrary identifiers are not supported.
+Previous review comments are preserved with the actual incomplete publication
+reason. Posting counters describe admitted findings only; DLP omissions are shown
+separately. The `ocr.publication-dlp-signal/v3` marker and receipt v9 carry only
+closed counts and state, never protected content, paths, identifiers, URLs, or raw
+errors.
 
-Projection fields are sorted unique lists. `model`, `publish`, and `retain` must each be subsets of `retrieve`. Retention is limited to `state`, `count`, `digest`, `version`, and `expiry`; it cannot retain text, upstream identifiers, URLs, commands, transport data, or personal display data. Retrieval, model egress, publication, and retention are deliberately separate decisions.
+`OCR_DLP_ENABLED=false` is a strict operator escape hatch. It disables context,
+federation and publication DLP for that run, adds a prominent local/GitLab warning,
+and always blocks automatic approval. Sensitive data may leave through service
+egress, local Markdown, or GitLab publication, and enabling DLP later cannot
+retract it. Use local `--preserve-private-artifacts` diagnosis before considering
+this setting; non-DLP schema, size, origin, identity, cleanup, evidence and posting
+transaction gates remain enforced.
 
-Policy `ocr.review-context-policy/v1` remains accepted for existing protected configurations and supports aggregate budgets, `forge_discussions`, and references. Policy `ocr.review-context-policy/v2` adds optional `remediation_threads`. Policy `ocr.review-context-policy/v3` adds optional protected `ci_outcomes`; v1/v2 reject that selector instead of interpreting it with weaker semantics. New CI examples use v3 while existing discussion/remediation examples remain valid v2. This compatibility is for reviewed policy documents, not persisted runtime state: reviews and stores are ephemeral, and the private store accepts only `ocr.context-store/v2`. Adapter frames and receipt v8 likewise require their exact schema. Discriminators prevent an old or different field set from inheriting current authorization or approval meaning; there is no store or receipt migration path.
+## Receipt and cleanup
 
-## Operator adapter allowlist
+Receipt v9 binds review identities, context mode and per-source state, legacy
+policy state, DLP mode, stage-aware publication accounting, mandatory evidence,
+governed federation reconciliation, and cleanup. It is content-free. Receipt
+v1-v8 cannot authorize current posting or approval; ephemeral results have no
+migration path.
 
-`OCR_REVIEW_CONTEXT_ADAPTERS_JSON` is an environment-only JSON array. Protected policy may select and narrow an entry, but it cannot create a command, endpoint, tenant, resource class, credential, or field permission.
+`OCR_GITLAB_TARGET_PROTECTION_MODE` defaults to `required`. Exact `unprotected`
+permits only the bounded comment-only contract described above; missing target
+Rules, enriched context, or federation still fails closed before OCR.
+The static unprotected-target limitation does not change result completeness or status.
 
-A stdio entry has exact common fields plus an absolute command, bounded arguments, and names of environment variables to copy:
+A federation receipt records configured aliases and closed attempt/completion/
+denial/failure/timeout/DLP/oversize/cache/single-flight counts. OCR attempts are
+reconciled independently. Used advisory tools, known failed or denied calls, and
+accounting mismatch are comment-only; missing/corrupt/unfinalized receipts or
+uncertain cleanup block normal publication. Unused services and successful
+`review_read` use are not independent approval blockers.
 
-```json
-[
-  {
-    "name": "tracker",
-    "type": "stdio",
-    "tenants": ["engineering"],
-    "resource_classes": ["issue"],
-    "command": "/opt/ocr-context-proxy/bin/ocr-context-proxy",
-    "args": ["--stdio"],
-    "env_from": ["TRACKER_CONTEXT_TOKEN"]
-  }
-]
-```
+Ordinary runs remove OCR sessions, the context store, gateway sockets, caches,
+and owned child processes before final admission. Unknown cleanup blocks
+publication. Local diagnostic retention is owner-only, produces no posting-
+eligible receipt, and must never be uploaded as a public artifact.
 
-The toolkit uses no shell or setup hook. It starts the exact executable with a clean allowlisted environment and an isolated owner-only working directory/home, exchanges one bounded JSONL request and response, enforces one deadline across request delivery, response acquisition, and process exit, terminates the process group on failure, and retains only private bounded redacted stderr while the run is active.
+## Deployment boundary
 
-A remote entry uses one absolute HTTPS endpoint and maps HTTP header names to environment variable names:
-
-```json
-[
-  {
-    "name": "tracker",
-    "type": "remote",
-    "tenants": ["engineering"],
-    "resource_classes": ["issue"],
-    "url": "https://context-proxy.example.invalid/v1/authorize-and-resolve",
-    "headers_from": {"Authorization": "TRACKER_CONTEXT_AUTHORIZATION"}
-  }
-]
-```
-
-Remote transport verifies TLS, disables ambient proxies and redirects, rejects credentials in URLs and literal secret headers, validates status and content type, streams within a byte bound, and applies the aggregate deadline. Both transports implement the same toolkit-owned protocol. Do not point this setting at an arbitrary MCP or vendor API; place any issue tracker, wiki/document service, or read-only MCP bridge behind a proxy that implements the fixed protocol and enforces object authorization.
-
-## Fixed adapter protocol
-
-The only operation is `authorize_and_resolve`. A request has exact schema `ocr.context-adapter-request/v1` and fields `operation`, `request_id`, `run_id`, `adapter`, `tenant`, `resource_class`, `candidate`, `requested_fields`, and `limits` (`max_chars`, `max_bytes`, `max_lines`, `max_age_seconds`, `deadline_ms`).
-
-An admitted response has exact schema `ocr.context-adapter-response/v1`, matching `request_id` and `run_id`, `status: "admitted"`, `canonical_object`, immutable `version`, `expiry`, and a `record` whose keys exactly equal `requested_fields`. A non-admitted response contains only the matching identities, `status: "unavailable"`, and `reason: "unavailable"`. Missing, denied, foreign-tenant, and unauthorized objects deliberately share that result.
-
-Unknown fields/statuses, mismatched identities, changed version/expiry, partial or multiple frames, invalid UTF-8, excess bytes, timeout, redirect, or transport failure make the record unavailable and mint no handle. The adapter's own schema, description, endpoint, command, headers, diagnostics, and upstream identifiers never enter the model context or receipt.
-
-## GitLab context, handles, and completeness
-
-The GitLab owner reads the exact validated project and merge request with bounded pagination. It does not fetch another page after the protected thread bound is filled; a provider-declared next page becomes a visible omission. It reads the ordered snapshot twice and admits records only when the identity and digest match. Reordering, edits, changed pages, invalid identity/classification, unsupported notes, or limit exhaustion remains visible as `mutated`, `partial`, or `unavailable`; it is never treated as proof that no record exists.
-
-A remediation bundle begins only at a toolkit-owned root whose author ID equals the live authenticated bot and whose body contains a valid toolkit marker and finding fingerprint. That root and its selected human/automation/system replies become one opaque record. Recognized slash or live-username mention commands are lifecycle control and are excluded from model text. A verified root selected as remediation is not duplicated in generic discussions, and none of its replies participates in external-reference discovery. Remediation text can locate a claim for re-checking against current code and tests; it cannot change severity, prove a fix, suppress or resolve a finding, issue a command, or authorize approval.
-
-For CI outcomes, the GitLab edge queries bounded project pipelines by the exact reviewed SHA and bounded jobs by pipeline, includes retried jobs so duplicate exact names cannot masquerade as a unique result, and reads the normalized snapshot twice. Different-revision data fails closed; mutation, pagination loss, duplicate retries, stale completion, missing selected checks, malformed provider fields, and ambiguous equally recent results remain partial, mutated, or unavailable. A record exposes only the protected check name/path prefixes, `reviewed_head`, closed status, required/advisory classification, current/same-revision-pipeline provenance, and completion time. The common broker/store does not import GitLab.
-
-The private `ocr.context-store/v2` is independent from the repository evidence store and its budgets. It is atomically written owner-only and hostile-read before OCR. Only a fully normalized and DLP-checked committed record receives a `ctx1_` handle containing 32 random bytes encoded as unpadded base64url. The private mapping binds run, policy digest, adapter, tenant, canonical object, resource class, projections, version/digest, and expiry. It is not an encoded upstream ID.
-
-In `off` and `metadata`, the built-in MCP exposes the fixed evidence tools `ocr_toolkit_evidence`, `ocr_toolkit_evidence_search`, and `ocr_toolkit_evidence_coverage`. In `enriched`, it additionally exposes exactly `context_list` and `context_get`:
-
-- `context_list` accepts only optional `resource_class`, admitted `source`, `page_size` from 1 through 20, and an opaque cursor. Resource classes are `issue`, `document`, `remediation_thread`, and `ci_outcome`. It returns safe descriptors, minted handles, expiry, mutability, per-source completeness, and a next cursor.
-- `context_get` accepts exactly one listed `ctx1_` handle and returns only the record's protected `model` projection. A remediation record contains one DLP-checked root, safe anchor state, ordered pseudonymized replies, closed completeness, and reply/resolved/outdated counts. A CI record contains only closed same-revision status/provenance plus protected declared scope. Neither contains a raw provider identity or object.
-
-Both tools read the already committed local store. They have no network, subprocess, search, arbitrary URL/ID, traversal, or write path. Invalid, expired, wrong-run, wrong-policy, missing, or non-minted handles fail before record access. OCR must still record at least one `ocr_toolkit_evidence(action=summary)` call; context calls do not satisfy that requirement.
-
-## Publication, receipt, approval, and cleanup
-
-After OCR exits, the toolkit applies separate publication-sink and private-retention projections against forbidden/non-publishable context, configured secrets, closed PII patterns, controls, Markdown destinations, and Unicode/HTML/Markdown laundering forms. Publication sinks are exactly the result values the posting owner can render: finding fields, warnings, outcome message, displayed tool names, and manifest failure path/reason fields. Other OCR metadata remains private but is independently scanned and sanitized before persistence; it cannot make safe publication sinks partial merely because an opaque SHA, UUID, item identity, or bare build number resembles a phone number. The conservative detector can still classify a separator-bearing technical identifier as phone-like. Ordinary receipts intentionally expose only closed aggregate counts; an explicit local preservation run adds a private value-free path/subtype/size/hash decision sidecar so the operator can diagnose that false-positive class against the separately retained raw result without weakening the filter or disclosing the value. The checks compare whole values and normalized contiguous excerpts of at least 24 characters; a work-bound uncertainty filters or sanitizes the affected unit. This does not claim detection of shorter arbitrary excerpts or semantic paraphrases, and it cannot reverse data already sent to the model.
-
-An unsafe result is neither retained raw nor discarded wholesale. In the same inode-checked atomic transformation used to attach the receipt, unsafe publication content produces a safe `completed_with_errors` projection with independently passed finding/warning fields, fixed tool-use counters, original closed coverage counts, and closed DLP reason/retained/omitted counts. Unsafe `content` removes its finding; an unsafe optional finding field is removed without discarding safe finding content. Horizontal tab is permitted only in `existing_code` and `suggestion_code`, where the unchanged value still passes every secret, PII, forbidden-value, laundering, and budget detector before it is retained. When every publication sink is safe and only private result metadata fails retention DLP, the unsafe private fields are replaced with static non-sensitive values while the original valid status, manifest, warnings, and findings remain. Unsafe values and their locations are never retained. Receipt v8 calls this `private-sanitized` only when a pure canonical publication/approval projection is byte-equivalent before and after sanitization; normal approval evaluation then applies. Any changed, malformed, or incomparable projection is `publication-filtered`, preserves the previous review, emits only closed counts, and cannot automatically approve. Its public projection is incomplete, but posting uses the validated original coverage kind/counts so complete OCR coverage is not relabelled as partial and filtered warnings cannot synthesize failed items.
-
-The summary contains distinct private-sanitization and publication-filtering details with an exact `ocr.publication-dlp-signal/v2` HTML marker containing only low-cardinality counts. The posting command emits the same JSON as an `OCR toolkit telemetry event` log line so CI log collectors can alert without a new runtime network/exporter path. OCR remains authoritative for provider/token/request telemetry; the toolkit does not add an OTLP client, arbitrary telemetry endpoint, raw value/path, or mandatory external export. The explicit local `ocr-ci review --preserve-private-artifacts` diagnostic retains owner-only raw session/context state, adds a value-free `ocr.private-dlp-decisions/v1` path/reason/detector/size/hash attribution sidecar, and deliberately emits no posting receipt. It is local evidence for investigating conservative false positives, not a CI or publication artifact; the validated GitLab MR profile rejects it.
-
-Receipt v8 stores only closed source/target/policy identities, actual `protected|unprotected` target state, context mode, per-source completeness and degradation counts, admitted-mutable state, fixed evidence/context tool-use counts, a closed failed-tool diagnostic state and optional aggregate, publication-DLP result, and cleanup result. It does not store context text, failed-tool detail or paths, provider IDs, URLs, commands, arguments, headers, adapter results, personal display data, or transport diagnostics. Receipt v1-v7 is rejected; ephemeral results have no migration path. Only a fully validated unprotected receipt adds the static italic comment-only limitation; that line does not change result completeness or status. A protected target allowed by the permissive operator setting has no limitation line.
-
-Every existing manifest, coverage, warning, omission, finding, source-SHA, author, provider, and self-approval gate remains. Degraded selected metadata, a DLP-rejected selected source, required-source degradation, and any admitted remediation record make the run ineligible. DLP-clean generic discussions and adapter records do not independently block approval; optional non-DLP degradation remains visible and cannot prove absence. A complete enriched run without admitted remediation is not blocked solely by the selected mode. Direct operator MCP is a separate privileged boundary and remains comment-only.
-
-OCR runs under a fresh owner-only isolated `HOME` containing only validated toolkit-generated configuration. Context acquisition is complete before that process starts; adapter/provider network paths are not exposed through its model tools. Ordinary runs remove OCR session/configuration, context store, adapter scratch data, and any stale private DLP decision sidecar after success, failure, or interruption. Termination is deferred across cleanup and atomic result projection so a completed raw result cannot replace the validated partial-result/receipt boundary. A local operator may explicitly retain these owner-only artifacts and the value-free DLP attribution sidecar for diagnosis, but that run has no receipt and cannot cross the posting boundary; validated GitLab MR execution rejects the exception before OCR starts.
-
-## Deployment boundary and non-claims
-
-Use dedicated least-privilege service identities and an AI-readable corpus. The proxy must enforce tenant, object, operation, and field authorization for every request; successful authentication or an allowlisted hostname is insufficient. The toolkit cannot make a lying adapter truthful, constrain a broader upstream credential, protect same-owner artifacts from host compromise, reverse model egress, detect arbitrary semantic paraphrase, or make model judgment deterministic.
-
-The complete files under [`examples/gitlab/context/`](../examples/gitlab/context/) are safe starting points with placeholder hosts and credential names. Direct external MCP and brokered adapters are different trust boundaries: direct MCP exposes provider-owned tool schemas and model-selected arguments, while adapters acquire records before OCR and expose only toolkit-minted local handles.
+Use dedicated least-privilege identities. Upstream services remain responsible
+for tenant and object authorization; a valid registry and successful TLS do not
+make a broader credential safe. The toolkit cannot make a lying service truthful,
+protect same-owner memory after host compromise, reverse model or service egress,
+detect arbitrary semantic paraphrase, or make model judgment deterministic.

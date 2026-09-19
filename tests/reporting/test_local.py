@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import io
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -93,6 +94,17 @@ def test_all_findings_ignore_posting_environment(monkeypatch: pytest.MonkeyPatch
     second = io.StringIO()
     write_local_report(report, second)
     assert second.getvalue() == output
+
+
+def test_local_summary_prominently_reports_disabled_dlp() -> None:
+    facts = replace(execution_facts(), publication={"state": "disabled"})
+    report = report_from_result(
+        {"status": "success", "comments": [], "warnings": []}, execution=facts
+    )
+    summary = local_summary(report)
+    assert "DLP admission: **disabled**" in summary
+    assert "sensitive context or model output" in summary
+    assert "automatic approval is blocked" in summary
 
 
 def test_model_content_cannot_escape_literal_fences_or_control_terminal() -> None:

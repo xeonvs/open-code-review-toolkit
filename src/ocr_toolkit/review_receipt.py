@@ -18,6 +18,7 @@ from ocr_toolkit.reporting.dlp import publication_dlp_state as publication_dlp_s
 from ocr_toolkit.reporting.dlp import (
     publication_outcome_for_summary as publication_outcome_for_summary,
 )
+from ocr_toolkit.reporting.federation import valid_reconciliation
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
 UNPROTECTED_APPROVAL_REASON = (
@@ -122,12 +123,13 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    if toolkit_metadata.get("schema_version") != 8 or set(toolkit_metadata) != {
+    if toolkit_metadata.get("schema_version") != 9 or set(toolkit_metadata) != {
         "schema_version",
         "review",
         "context",
         "mcp",
         "evidence",
+        "dlp",
         "publication",
         "tool_execution",
         "cleanup",
@@ -165,8 +167,11 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         "degradation_counts",
         "required_degraded",
         "mutable_admitted",
+        "legacy_policy",
         "tool_usage",
     }:
+        return invalid
+    if type(context.get("legacy_policy")) is not bool:
         return invalid
     mode = context.get("mode")
     state = context.get("state")
@@ -227,7 +232,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
 
     mcp = toolkit_metadata.get("mcp")
-    if not isinstance(mcp, dict) or set(mcp) != {"capabilities", "usage"}:
+    if not isinstance(mcp, dict) or set(mcp) != {"capabilities", "usage", "federation"}:
         return invalid
     capabilities = mcp.get("capabilities")
     usage = mcp.get("usage")
@@ -289,6 +294,34 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     ):
         return invalid
 
+    federation = mcp.get("federation")
+    if external:
+        if not valid_reconciliation(federation):
+            return invalid
+        expected = {
+            tool: cap["server"]
+            for cap in capabilities
+            if cap["transport"] != "builtin"
+            for tool in cap["tools"]
+        }
+        if set(federation["receipt"]["tools"]) != set(expected):
+            return invalid
+        for tool, server in expected.items():
+            if federation["receipt"]["tools"][tool]["server"] != server:
+                return invalid
+        if any(
+            sum(
+                count
+                for alias, count in federation["ocr_attempts"].items()
+                if expected[alias] == server
+            )
+            != usage.get(server, 0)
+            for server in set(expected.values())
+        ):
+            return invalid
+    elif federation is not None:
+        return invalid
+
     evidence = toolkit_metadata.get("evidence")
     if not isinstance(evidence, dict) or set(evidence) != {
         "mandatory",
@@ -314,6 +347,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         or not _valid_evidence_actions(evidence_actions, evidence_calls, mandatory=mandatory)
     ):
         return invalid
+    dlp = toolkit_metadata.get("dlp")
+    if not isinstance(dlp, dict) or set(dlp) != {"enabled"} or type(dlp.get("enabled")) is not bool:
+        return invalid
     publication = toolkit_metadata.get("publication")
     tool_execution = toolkit_metadata.get("tool_execution")
     cleanup = toolkit_metadata.get("cleanup")
@@ -337,10 +373,20 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         or cleanup != {"result": "passed"}
     ):
         return invalid
+    if not dlp["enabled"]:
+        if publication_state != "disabled":
+            return invalid
+        dlp_reason = "DLP was disabled by OCR_DLP_ENABLED; the review is comment-only"
+    elif publication_state == "disabled":
+        return invalid
+    else:
+        dlp_reason = ""
     if review.get("target_protection") == "unprotected":
         if mode not in {"off", "metadata"} or external:
             return invalid
         return UNPROTECTED_APPROVAL_REASON
+    if dlp_reason:
+        return dlp_reason
     if publication_state == "publication-filtered":
         return "publication DLP filtered the complete review result"
     if failure_state in {"invalid", "conflicting"}:
@@ -351,8 +397,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return "the selected review context was degraded"
     if mutable_admitted:
         return "mutable review context was admitted"
-    if external:
-        return "external MCP was configured for a comment-only review"
+    if external and federation["state"] == "degraded":
+        return "external MCP use was advisory, incomplete or accounting-mismatched"
     return ""
 
 
@@ -365,7 +411,7 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
 def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
     """Parse the exact immutable identity section without granting approval authority."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 8:
+    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 9:
         return None
     review = toolkit_metadata.get("review")
     if (

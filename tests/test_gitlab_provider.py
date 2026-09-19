@@ -991,7 +991,6 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "GITLAB_API_TOKEN": "synthetic-token",
         "OCR_REVIEW_CONTEXT_MODE": "metadata",
         "HOME": str(home),
-        "OCR_MCP_REPLACE": "true",
         "OCR_LLM_URL": "https://llm.example.invalid/v1",
         "OCR_LLM_TOKEN": "synthetic-runtime-token",
         "OCR_LLM_MODEL": "synthetic-model",
@@ -1029,7 +1028,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 8,
+        "schema_version": 9,
         "review": {
             "source_sha": head,
             "policy_sha": policy,
@@ -1046,9 +1045,11 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
             "required_degraded": False,
             "mutable_admitted": False,
+            "legacy_policy": False,
             "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
+            "federation": None,
             "capabilities": [
                 {
                     "server": "ocr_toolkit_evidence",
@@ -1085,6 +1086,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
                 },
             },
         },
+        "dlp": {"enabled": True},
         "publication": {"state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},

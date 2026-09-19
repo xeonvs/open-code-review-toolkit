@@ -215,8 +215,8 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
 
     for phrase in (
         "Source-to-signal matrix",
-        "receipt v8",
-        "action-receipt-v3 attempted/completed accounting",
+        "receipt v9",
+        "action-receipt-v3 accounting",
         "Group labels are model-produced",
         "sorted changed paths",
         "no exporter of its own",
@@ -229,7 +229,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
         assert phrase in audit
     assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
     assert "M6 Profiles and quality measurement | Established / conditional" in roadmap
-    assert "Current receipt v8 adds immutable target/protection identity" in roadmap
+    assert "Receipt v9 adds federation and stage-aware DLP accounting" in roadmap
 
 
 def test_community_conduct_policy_has_a_private_enforcement_route() -> None:
@@ -320,7 +320,7 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         "not a local-mode exception",
         "not an automatic-approval feature",
         "publication owns review-signal delivery",
-        "receipt v8",
+        "receipt v9",
         "OCR_REVIEW_PROGRESS",
         "Blocking pipe or unavailable",
         "Review continues unchanged",
@@ -503,18 +503,18 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v8" in configuration
-    assert "Receipt v1-v7" in configuration
-    assert "Receipt v1-v7" in operations
+    assert "receipt v9" in configuration
+    assert "Receipt v1-v8" in configuration
+    assert "Receipt v1-v8" in operations
     assert "complete `metadata` context" in operations.lower()
-    assert "Every configured direct external MCP" in configuration
+    assert "mandatory internal evidence MCP is unreplaceable" in configuration
     assert "required context degradation" in operations
     assert "admitted remediation context" in operations
-    assert "absolute HTTPS `url`" in configuration
-    assert "sole stdio exception" in configuration
+    assert 'GitLab accepts only `{type:"https",url:...}`' in configuration
+    assert 'Local review also accepts `{type:"stdio"' in configuration
 
 
-def test_builtin_search_coverage_and_receipt_v8_boundaries_are_public() -> None:
+def test_builtin_search_coverage_and_receipt_v9_boundaries_are_public() -> None:
     """Document efficient routing without exposing search or coverage arguments."""
 
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -535,7 +535,7 @@ def test_builtin_search_coverage_and_receipt_v8_boundaries_are_public() -> None:
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
         "action receipt v3",
-        "Receipt v8",
+        "Receipt v9",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
@@ -548,6 +548,7 @@ def test_builtin_search_coverage_and_receipt_v8_boundaries_are_public() -> None:
 def test_production_bot_modes_and_current_contract_are_public() -> None:
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
     bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
+    normalized_bounded = " ".join(bounded.split())
 
     for phrase in (
         "## Production bot configuration",
@@ -555,8 +556,7 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         "Identity only",
         "Metadata",
         "Enriched discussions",
-        "Enriched adapters",
-        "Direct MCP",
+        "Governed MCP federation",
         "live `GET /user`",
         "@mr.bot resolve",
         "Retry UI/API",
@@ -565,22 +565,21 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         assert phrase in gitlab
     assert "Migration from" not in gitlab
     assert "service-side tenant/object/field/operation authorization" in gitlab
-    assert "#choosing-a-discussion-policy" in gitlab
+    assert "#protected-target-policy-v4" in gitlab
     for phrase in (
-        "### Choosing a discussion policy",
-        "Ordinary MR conversation only",
-        "Earlier OCR finding plus human remediation replies only",
-        "Both ordinary conversation and remediation history",
-        "Discussions plus authorized issue/document records",
+        "## Protected-target policy v4",
+        "forge_discussions",
+        "remediation_threads",
+        "CI outcomes select exact job names",
+        "external acquisition is now governed by operator registry v2",
         "required: false",
-        "zero selected threads is still complete",
+        "zero selected records is complete",
     ):
-        assert phrase in bounded
+        assert phrase in normalized_bounded
 
     mode_root = GITLAB_EXAMPLES / "modes"
     expected_modes = {
         "direct-mcp.gitlab-ci.yml",
-        "enriched-adapters.gitlab-ci.yml",
         "enriched-discussions.gitlab-ci.yml",
         "identity-only.gitlab-ci.yml",
         "metadata.gitlab-ci.yml",
@@ -614,14 +613,14 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         assert "OCR_GITLAB_TARGET_PROTECTION_MODE" in document
         assert "required" in document
         assert "unprotected" in document
-        assert "receipt v8" in document
+        assert "receipt v9" in document
     for phrase in (
         "Explicit empty strings",
         "Context `off` and bounded untrusted `metadata`",
-        "any configured `OCR_REVIEW_CONTEXT_ADAPTERS_JSON` value",
-        "direct external MCP",
+        "legacy adapter configuration",
+        "governed federation",
         "Structured target guidance and accepted decisions are omitted",
-        "approval executor and GitLab approval endpoint are not reached",
+        "No target-derived input can enable tools",
     ):
         assert phrase in configuration
     limitation = (
@@ -815,7 +814,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "automatic-safe" in workflow
     assert "human-review-required" in policy
     assert "never writes directly to `main`" in policy
-    assert "Go MCP SDK v1.6.1" in policy
+    assert "Go MCP SDK v1.7.0" in policy
     assert "`2025-11-25`" in policy
     assert "initialized notification" in policy
     assert "absolute Python executable in isolated mode" in policy
