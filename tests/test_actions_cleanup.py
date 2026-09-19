@@ -125,13 +125,25 @@ def test_log_plan_preserves_release_logs_longer_and_bounds_retries() -> None:
             "status": "in_progress",
             "created_at": "2026-06-01T00:00:00Z",
         },
+        {
+            "id": 24,
+            "name": "TestPyPI preview",
+            "status": "completed",
+            "created_at": "2026-07-27T00:00:00Z",
+        },
+        {
+            "id": 25,
+            "name": "TestPyPI development build",
+            "status": "completed",
+            "created_at": "2026-07-20T00:00:00Z",
+        },
     ]
 
     plan = module.plan_log_cleanup(runs, now, include_all_old=True)
     scheduled_plan = module.plan_log_cleanup(runs, now)
 
-    assert [candidate.object_id for candidate in plan] == [20, 22]
-    assert [candidate.object_id for candidate in scheduled_plan] == [20]
+    assert [candidate.object_id for candidate in plan] == [20, 22, 24, 25]
+    assert [candidate.object_id for candidate in scheduled_plan] == [20, 24, 25]
     assert all(candidate.kind == "log" and candidate.size_bytes == 0 for candidate in plan)
     assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/20/logs")
 
@@ -176,13 +188,31 @@ def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None
             "status": "completed",
             "created_at": "2026-07-23T00:00:00Z",
         },
+        {
+            "id": 36,
+            "name": "TestPyPI preview",
+            "status": "completed",
+            "created_at": "2026-08-17T00:00:00Z",
+        },
+        {
+            "id": 37,
+            "name": "CI",
+            "status": "completed",
+            "created_at": "2026-08-10T00:00:00Z",
+        },
+        {
+            "id": 38,
+            "name": "Release",
+            "status": "completed",
+            "created_at": "2026-07-25T00:00:00Z",
+        },
     ]
 
     plan = module.plan_run_cleanup(runs, now)
 
-    assert [candidate.object_id for candidate in plan] == [31, 32, 33, 35]
+    assert [candidate.object_id for candidate in plan] == [30, 31, 32, 33, 35]
     assert all(candidate.kind == "run" for candidate in plan)
-    assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/31")
+    assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/30")
 
 
 def test_recent_run_listing_shards_more_than_ten_aggregate_pages_by_utc_day() -> None:

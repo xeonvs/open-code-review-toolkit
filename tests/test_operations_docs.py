@@ -857,9 +857,9 @@ def test_actions_storage_maintenance_bounds_completed_run_metadata() -> None:
     assert "trap-caching: false" in codeql
     assert "CODEQL_OVERLAY_DATABASE_MODE: none" in codeql
     assert "separately controlled v4 overlay-database mode are disabled" in development
-    assert "TestPyPI preview runs after 14 days" in development
-    assert "TestPyPI development and ordinary completed runs after 30 days" in development
-    assert "stable Release runs after 60 days" in development
+    assert "TestPyPI preview logs and runs after seven days" in development
+    assert "ordinary and TestPyPI development logs and completed runs after 14 days" in development
+    assert "stable Release logs and completed runs after 30 days" in development
     assert "Active and newer runs remain untouched" in development
     assert "fail-closed ten-page limit per day" in development
 
