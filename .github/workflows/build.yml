@@ -29,9 +29,18 @@ jobs:
       - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
       - run: uv run python -m build --no-isolation
       - run: uv run twine check dist/*
-      - run: python -m venv /tmp/wheel-smoke && /tmp/wheel-smoke/bin/pip install --no-deps dist/*.whl && /tmp/wheel-smoke/bin/ocr-ci --help
+      - run: uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file /tmp/runtime-requirements.txt
+      - run: |
+          python -m venv /tmp/wheel-smoke
+          /tmp/wheel-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
+          python scripts/install_local_artifact.py \
+            --python /tmp/wheel-smoke/bin/python \
+            --artifact "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" \
+            --requirements /tmp/wheel-smoke-requirements.txt
+          /tmp/wheel-smoke/bin/ocr-ci --help
       - run: |
           python -m venv /tmp/sdist-smoke
+          /tmp/sdist-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/sdist-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \

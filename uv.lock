@@ -1064,6 +1064,7 @@ name = "open-code-review-toolkit"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
+    { name = "certifi" },
     { name = "httpx2" },
     { name = "jsonschema" },
     { name = "mcp" },
@@ -1089,6 +1090,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.10.0,<5" },
+    { name = "certifi", specifier = ">=2026.7.22,<2027" },
     { name = "httpx2", specifier = ">=2.13.0,<3" },
     { name = "jsonschema", specifier = ">=4.26.0,<5" },
     { name = "mcp", specifier = ">=2.2.0,<3" },

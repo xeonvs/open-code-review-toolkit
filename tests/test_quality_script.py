@@ -42,10 +42,10 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
         "uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85" in workflow
     )
     assert workflow.count("coverage: true") == 1
-    assert workflow.count("coverage: false") == 4
+    assert workflow.count("coverage: false") == 3
     assert "if: ${{ matrix.coverage }}" in workflow
     assert "if: ${{ !matrix.coverage }}" in workflow
-    assert workflow.count("uv run pytest -q") == 1
+    assert workflow.count("uv run pytest -q") == 2
     for command in coverage_commands:
         assert command in script
         assert workflow.count(f"uv run {command}") == 1

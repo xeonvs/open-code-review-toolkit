@@ -169,6 +169,7 @@ def tls_peer(
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(cert, key)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -181,6 +182,9 @@ def tls_peer(
     def trusted_transport(**kwargs: Any) -> httpx2.AsyncHTTPTransport:
         # Change only the test CA; HTTP, TLS verification and the bounded adapter stay real.
         assert kwargs["trust_env"] is False
+        production_context = kwargs.pop("verify")
+        assert isinstance(production_context, ssl.SSLContext)
+        assert production_context.minimum_version == ssl.TLSVersion.TLSv1_2
         return original_transport(verify=ssl.create_default_context(cafile=str(cert)), **kwargs)
 
     if trust_certificate:

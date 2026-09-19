@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import signal
+import ssl
 import time
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager, suppress
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import anyio
+import certifi
 import httpx2
 import mcp_types as types
 from mcp.client.streamable_http import streamable_http_client
@@ -269,7 +271,10 @@ class BoundedHTTP(httpx2.AsyncBaseTransport):
     def __init__(self, endpoint: str, budget: WireBudget) -> None:
         self.endpoint = httpx2.URL(endpoint)
         self.budget = budget
+        tls_context = ssl.create_default_context(cafile=certifi.where())
+        tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
         self.inner = httpx2.AsyncHTTPTransport(
+            verify=tls_context,
             trust_env=False,
             retries=0,
             limits=httpx2.Limits(max_connections=4, max_keepalive_connections=4),

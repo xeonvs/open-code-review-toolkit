@@ -292,6 +292,7 @@ def main(root: Path, cli: Path) -> int:
         )
         launcher.chmod(0o700)
         scenario = mode + ("-debug" if debug else "") + ("-progress" if progress else "")
+        print(f"installed-local-review: start {scenario}", file=sys.stderr, flush=True)
         result = root / f"{scenario}.json"
         stderr = root / f"{scenario}.stderr"
         debug_directory = root / f"{scenario}-bundle"
@@ -393,6 +394,7 @@ def main(root: Path, cli: Path) -> int:
             assert all(item.stat().st_mode & 0o777 == 0o600 for item in debug_directory.iterdir())
         assert not (repository / ".review-context" / "evidence.json").exists()
         assert not (repository / ".review-context" / "evidence-actions.json").exists()
+        print(f"installed-local-review: complete {scenario}", file=sys.stderr, flush=True)
     print(
         json.dumps(
             {
