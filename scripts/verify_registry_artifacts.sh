@@ -5,6 +5,12 @@ registry=${1:?registry is required}
 version=${2:?version is required}
 hashes=${3:?hash file is required}
 workflow=${4:?expected publisher workflow is required}
+runtime_requirements=${5:?hash-locked runtime requirements are required}
+
+test -f "${runtime_requirements}" || {
+  echo "runtime requirements not found: ${runtime_requirements}" >&2
+  exit 2
+}
 
 case "${workflow}" in
   testpypi.yml|release.yml) ;;
@@ -124,9 +130,11 @@ while IFS="${tab}" read -r provenance_url filename; do
 done < "${provenance_downloads}"
 
 python -m venv "${wheel_environment}"
+"${wheel_environment}/bin/pip" install --require-hashes --requirement "${runtime_requirements}"
 "${wheel_environment}/bin/pip" install --no-deps "${destination}"/*.whl
 "${wheel_environment}/bin/ocr-ci" --help
 python -m venv "${sdist_environment}"
+"${sdist_environment}/bin/pip" install --require-hashes --requirement "${runtime_requirements}"
 python scripts/install_local_artifact.py \
   --python "${sdist_environment}/bin/python" \
   --artifact "$(find "${destination}" -maxdepth 1 -name '*.tar.gz' -print -quit)" \

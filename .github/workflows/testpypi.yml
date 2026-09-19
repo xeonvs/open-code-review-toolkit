@@ -50,16 +50,16 @@ jobs:
           uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
           uv run python -m build --no-isolation
           uv run twine check dist/*
-          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file /tmp/runtime-requirements.txt
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
           python -m venv /tmp/wheel-smoke
-          /tmp/wheel-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
+          /tmp/wheel-smoke/bin/pip install --require-hashes --requirement runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/wheel-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" \
             --requirements /tmp/wheel-smoke-requirements.txt
           /tmp/wheel-smoke/bin/ocr-ci --help
           python -m venv /tmp/sdist-smoke
-          /tmp/sdist-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
+          /tmp/sdist-smoke/bin/pip install --require-hashes --requirement runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/sdist-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
@@ -106,6 +106,7 @@ jobs:
           path: |
             dist
             artifact-hashes.json
+            runtime-requirements.txt
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -151,4 +152,6 @@ jobs:
       - name: Verify provenance and install immutable published artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json testpypi.yml
+        run: >-
+          ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}"
+          artifact-hashes.json testpypi.yml runtime-requirements.txt

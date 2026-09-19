@@ -6,6 +6,50 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## Active Work
 
+## Registry artifact dependency verification repair
+
+Status: complete; corrective PR handoff authorized
+Plan Origin: execution-discovered
+Release classification: release-required
+Target stable version: 0.11.0
+
+### Goal
+
+Repair the immutable registry verifier so published wheel and sdist smoke tests
+install the hash-locked runtime dependency set before invoking `ocr-ci`. This
+restores the TestPyPI development gate and the identical stable PyPI/TestPyPI
+verification boundary without changing runtime behavior or release scope.
+
+### Evidence And Scope
+
+- Main workflow `35442945566` built and published `0.11.0.dev97`, verified its
+  bytes and provenance, then failed both artifact smokes because the verifier
+  installed distributions with `--no-deps` into empty environments.
+- The build-stage smoke already exports and installs the locked runtime closure;
+  only the post-publication verifier omitted that input.
+- Add one explicit verifier argument for a generated hash-locked requirements
+  file, pass it from development and stable workflows, and lock the contract in
+  workflow/verifier tests. No dependency, federation, DLP, receipt or release
+  authorization semantics change.
+
+### Acceptance And Closure
+
+- Focused verifier/workflow tests and `git diff --check` pass.
+- Full repository quality and hosted exact-head checks pass before protected merge.
+- The feature branch is pushed only after the local commit is complete; the fix PR
+  uses protected merge and a subsequent main development workflow must complete.
+- Archive this short corrective plan into the v0.11.0 release history and remove it
+  from active work in the release-preparation commit.
+
+### Completion Evidence
+
+The verifier now requires a checked-in-workflow-generated, hash-locked runtime
+requirements artifact and installs it into both fresh registry smoke environments
+before installing the immutable wheel or sdist without dependency resolution. The
+development and stable workflows transfer that exact requirements file alongside
+the reviewed distributions; focused workflow/verifier tests pass. Hosted exact-head
+checks and the repaired main development publication remain the protected PR gates.
+
 ## v0.11.0 governed MCP federation and feature draft
 
 Status: complete; release handoff authorized
