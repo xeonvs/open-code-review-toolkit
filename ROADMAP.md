@@ -47,11 +47,11 @@ flowchart LR
 
 ## Ordering notes
 
-- The active 0.11.0 draft implements M7 governed federation, policy-v4 migration,
-  receipt-v9 accounting, stage-aware DLP and the explicit default-on DLP control.
-  It does not reopen established milestones or activate conditional second-forge,
-  model-profile, routing or evidence-pack work. Draft readiness, configured-model
-  qualification and stable delivery remain separate states in `PLANS.md`.
+- The repository-complete 0.11.0 release candidate implements M7 governed
+  federation, policy-v4 migration, receipt-v9 accounting, stage-aware DLP and the
+  explicit default-on DLP control. It does not reopen established milestones or
+  activate conditional second-forge, model-profile, routing or evidence-pack work.
+  Stable publication and external reconciliation remain separate release states.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
