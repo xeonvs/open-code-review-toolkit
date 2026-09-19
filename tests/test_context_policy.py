@@ -333,7 +333,7 @@ def test_policy_parser_rejects_unknown_impossible_or_configurable_grammar(mutati
 
 def test_legacy_policy_requires_one_selected_source() -> None:
     value = policy_value()
-    value["forge_discussions"] = None
+    value.pop("forge_discussions")
     value["references"] = []
 
     with pytest.raises(ContextContractError, match="select at least one source"):
