@@ -12,25 +12,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: test-${{ matrix.os }}-py${{ matrix.python }}
-    continue-on-error: ${{ matrix.advisory }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-latest, python: "3.12", coverage: false, advisory: false }
-          - { os: ubuntu-latest, python: "3.13", coverage: false, advisory: false }
-          - { os: ubuntu-latest, python: "3.14", coverage: true, advisory: false }
-          - { os: macos-latest, python: "3.12", coverage: false, advisory: true }
-          - { os: macos-latest, python: "3.14", coverage: false, advisory: true }
-    runs-on: ${{ matrix.os }}
+  test-python312:
+    name: test-ubuntu-latest-py3.12
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.0"
+          enable-cache: true
+          save-cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --python 3.12
+      - name: Test
+        run: uv run pytest -q
+
+  test-after-python312:
+    needs: test-python312
+    name: test-${{ matrix.os }}-py${{ matrix.python }}
+    continue-on-error: ${{ matrix.advisory }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.13", coverage: false, advisory: false }
+          - { os: ubuntu-latest, python: "3.14", coverage: true, advisory: false }
+          - { os: macos-latest, python: "3.12", coverage: false, advisory: true }
+          - { os: macos-latest, python: "3.14", coverage: false, advisory: true }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.0"
           enable-cache: true
@@ -38,7 +64,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: uv sync --frozen
+      - run: uv sync --frozen --python "${{ matrix.python }}"
       - name: Test
         if: ${{ !matrix.coverage }}
         run: uv run pytest -q
@@ -59,7 +85,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.0"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

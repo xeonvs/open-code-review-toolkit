@@ -26,13 +26,13 @@ ARTIFACT_RETENTION_DAYS = 7
 ORDINARY_LOG_RETENTION_DAYS = 14
 RELEASE_LOG_RETENTION_DAYS = 30
 LOG_RETRY_WINDOW_DAYS = 14
-TESTPYPI_RUN_RETENTION_DAYS = 14
-ORDINARY_RUN_RETENTION_DAYS = 30
-RELEASE_RUN_RETENTION_DAYS = 60
+TESTPYPI_PREVIEW_RETENTION_DAYS = 7
+ORDINARY_RUN_RETENTION_DAYS = 14
+RELEASE_RUN_RETENTION_DAYS = 30
 RUN_LIST_GRACE_DAYS = 14
 MAIN_REF = "refs/heads/main"
-RELEASE_WORKFLOWS = {"Release", "TestPyPI development build"}
-TESTPYPI_WORKFLOWS = {"TestPyPI development build", "TestPyPI preview"}
+RELEASE_WORKFLOWS = {"Release"}
+TESTPYPI_PREVIEW_WORKFLOWS = {"TestPyPI preview"}
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -219,9 +219,12 @@ def plan_log_cleanup(
         if run.get("status") != "completed":
             continue
         name = _bounded_name(run.get("name"), "run.name")
-        retention_days = (
-            RELEASE_LOG_RETENTION_DAYS if name in RELEASE_WORKFLOWS else ORDINARY_LOG_RETENTION_DAYS
-        )
+        if name in TESTPYPI_PREVIEW_WORKFLOWS:
+            retention_days = TESTPYPI_PREVIEW_RETENTION_DAYS
+        elif name in RELEASE_WORKFLOWS:
+            retention_days = RELEASE_LOG_RETENTION_DAYS
+        else:
+            retention_days = ORDINARY_LOG_RETENTION_DAYS
         created_at = _timestamp(run.get("created_at"), "run.created_at")
         age = now_utc - created_at
         if age < timedelta(days=retention_days):
@@ -253,12 +256,8 @@ def plan_run_cleanup(runs: list[dict[str, Any]], now: datetime) -> list[CleanupC
         name = _bounded_name(run.get("name"), "run.name")
         if name == "Release":
             retention_days = RELEASE_RUN_RETENTION_DAYS
-        elif name in TESTPYPI_WORKFLOWS:
-            retention_days = (
-                max(TESTPYPI_RUN_RETENTION_DAYS, RELEASE_LOG_RETENTION_DAYS)
-                if name in RELEASE_WORKFLOWS
-                else TESTPYPI_RUN_RETENTION_DAYS
-            )
+        elif name in TESTPYPI_PREVIEW_WORKFLOWS:
+            retention_days = TESTPYPI_PREVIEW_RETENTION_DAYS
         else:
             retention_days = ORDINARY_RUN_RETENTION_DAYS
         created_at = _timestamp(run.get("created_at"), "run.created_at")

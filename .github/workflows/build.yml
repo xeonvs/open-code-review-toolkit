@@ -22,16 +22,25 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.0"
       - run: uv sync --frozen
       - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
       - run: uv run python -m build --no-isolation
       - run: uv run twine check dist/*
-      - run: python -m venv /tmp/wheel-smoke && /tmp/wheel-smoke/bin/pip install --no-deps dist/*.whl && /tmp/wheel-smoke/bin/ocr-ci --help
+      - run: uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file /tmp/runtime-requirements.txt
+      - run: |
+          python -m venv /tmp/wheel-smoke
+          /tmp/wheel-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
+          python scripts/install_local_artifact.py \
+            --python /tmp/wheel-smoke/bin/python \
+            --artifact "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" \
+            --requirements /tmp/wheel-smoke-requirements.txt
+          /tmp/wheel-smoke/bin/ocr-ci --help
       - run: |
           python -m venv /tmp/sdist-smoke
+          /tmp/sdist-smoke/bin/pip install --require-hashes --requirement /tmp/runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/sdist-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \

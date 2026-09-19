@@ -1,184 +1,187 @@
 # Security and trust model
 
-The toolkit bridges repository/forge content, OCR and its LLM/MCP providers, CI/operator configuration and secrets, context-adapter services, and provider APIs. No input becomes safe merely because a trusted pipeline acquired it. This document distinguishes current controls, qualification limits, and residual risks explicitly.
+The toolkit bridges repository and forge content, OCR and its LLM provider,
+operator configuration, governed MCP upstreams, CI secrets, and publication APIs.
+No input becomes safe merely because a trusted pipeline acquired it.
 
 ## Threat model
 
-### Assets
+Protected assets include immutable review identities, coverage and finding
+integrity, private evidence/context/result/session data, registry and receipts,
+forge/LLM/MCP credentials, external-object confidentiality, and publication and
+approval state.
 
-Current assets include immutable base, source, reviewed-head, protected-target, and release identities; review integrity and coverage; private evidence/context stores, OCR results and transient session material; configuration and receipts; CI, forge, LLM, registry, MCP, and adapter credentials; external-object confidentiality/integrity; provider-declared account classes; immutable context/DLP policy; opaque run-bound handles; projection/completeness state; published packages and provider state.
+A contributor can control repository content, merge-request metadata and
+discussion text, including tool-like instructions and crafted references. An MCP
+upstream controls its descriptions, schemas and responses. An operator controls
+the reviewed registry, credentials and protected-target policy. A compromised
+runner or same-user process remains a host-level threat outside the toolkit's
+process-isolation guarantees.
 
-### Actors and attacker capabilities
+The main trust transitions are:
 
-A merge-request contributor can choose repository paths, blobs, title, description, labels, source branch, discussion bodies, crafted references, and text resembling reviewer/tool instructions. Repository content, externally controlled issue/page text, OCR/LLM/MCP output, adapter/provider responses, inherited process state, and persisted artifacts are untrusted even when the toolkit produced an earlier copy. The model assumes mutable discussions, edits/reordering, automation or service-account impersonation, cross-tenant identifiers, replay, and timing races.
+1. Immutable Git objects and provider identities cross closed bounded parsers.
+2. Optional metadata and protected-policy discussions/remediation/CI outcomes
+   cross normalization, stage-specific DLP and owner-only storage.
+3. Repository evidence enters the mandatory internal MCP. Operator registry v2
+   cannot remove, replace, rename or shadow that server.
+4. Optional external tools cross the toolkit-owned federation gateway. OCR sees
+   only frozen `server__tool` aliases through a fixed private relay; upstream
+   credentials never enter OCR configuration or arguments.
+5. OCR output crosses result validation, publication projection, stage-aware DLP,
+   cleanup, receipt v9 and the provider posting transaction.
 
-An operator controls CI configuration, direct MCP servers, adapter commands/endpoints, setup, credentials, and the protected-target policy after ordinary protected-branch review. An adapter service controls its authorization implementation and response truth; a direct MCP server additionally controls model-facing tool descriptions, schemas, and responses. A compromised runner or same-owner process is stronger than an ordinary contributor and remains a host-level residual risk.
+## Governed federation boundary
 
-### Trust transitions
+`OCR_MCP_SERVERS_JSON` accepts only a closed version-2 registry. Unknown fields,
+legacy passthrough shapes, ambiguous aliases, missing environment-backed secrets,
+unsupported schemas, missing allowlisted tools and collisions fail before model
+execution. GitLab permits HTTPS upstreams only. Local review may also use an
+absolute operator-selected stdio executable with bounded arguments and an
+allowlisted environment; there is no shell or setup hook.
 
-1. Repository paths and immutable Git blobs enter bounded collection and parsing.
-2. Provider MR identity always enters closed validation. The operator's exact `required|unprotected` selector and GitLab's actual target-protection response are separate inputs. Optional bounded metadata enters normalization in `metadata` or `enriched`; privileged target-derived guidance, decisions, and enriched-context policy come only from the captured protected-target SHA. In constrained unprotected mode, only exact-target Rules remain, as untrusted model guidance without policy authority.
-3. In `enriched`, the GitLab owner acquires a repeated bounded discussion snapshot. Deterministic recognizers emit syntax-only candidates; the broker combines protected policy with the operator adapter allowlist, and the adapter authorizes one tenant/object/field request before admission.
-4. Normalized retrieval/model/publication/retention projections cross independent DLP decisions and an owner-only atomic context store. A handle is minted only for a committed record and binds run, policy, adapter, tenant, object digest, version, projection, and expiry.
-5. Typed repository evidence crosses into the compact bootstrap and mandatory read-only evidence MCP. During enriched OCR, only the same built-in process's fixed `context_list`/`context_get` can read committed local handles; adapter/provider network paths are absent from the model loop.
-6. Persisted evidence, context, results, OCR configuration, private pre-execution status, and receipts re-enter hostile parsing. OCR runs in a fresh isolated home; session, configuration, adapter, and context data crosses deterministic cleanup before a result becomes publishable.
-7. In the direct-MCP GitLab profile, operator-configured external MCP is remote HTTPS only; developer-local execution may pass explicit stdio command/setup configuration. Server-authored descriptions and schemas cross into plan and main model context; model-generated arguments cross to allowed tools; textual responses cross back to the model and OCR session. This path is separate from M5 adapters.
-8. The complete successful OCR result crosses independent publication DLP, deterministic GitLab publication, suppression, and receipt-v8 later-action policy. Receipt v8 binds exact source/target identity and actual protection state. Additive failed-tool diagnostics can limit a later action but cannot suppress a valid review publication; dynamic detail is console-only. An unprotected receipt can add only the static limitation and is structurally barred from the approval executor. On non-zero OCR exit with a valid bounded `ocr.llm-retry-report/v1`, only a closed provider-neutral reason may cross into a toolkit-authored failure note; one separate local line may contain closed protocol detail, a shared HTTP status, and bounded aggregate counts from the same strict parser. Raw result fields and stderr remain private, normal findings are ignored, and approval is unreachable. Missing or invalid retry diagnostics use the pre-existing generic failure boundary. See the [review decision flow](review-decision-flow.md) for the complete branch ordering.
-9. A release candidate crosses protected-base authorization, publication, provenance, and live readback.
+The gateway discovers and freezes the inventory before OCR, validates the
+admitted JSON Schema profile, URL-shaped argument origins, arguments, response
+kinds, and all byte/item/depth/time/call/run bounds. Outbound arguments and
+inbound descriptions, schemas and results cross DLP when enabled. HTTPS disables
+redirects, cookies and ambient proxy trust; stdio uses toolkit-owned bounded
+framing and child-process cleanup. Returned links remain inert. Sampling, roots,
+elicitation, OAuth, server-directed headers, generic link retrieval, writes and
+resource/media projection are unsupported.
 
-### Local delivery and diagnostic observations
+The official Python MCP SDK v2 is the primary integration boundary, while the
+wire protocol is negotiated independently for OCR and each upstream. Explicitly
+qualified SDK v1/v2 peers are supported; SDK major is not a protocol revision.
+Unsupported revisions or capabilities fail explicitly.
 
-Explicit local execution ignores inherited forge identity and has no provider
-acquisition or mutation channel. It still requires the common immutable Git,
-mandatory MCP, result admission, DLP and cleanup checks. Shared reporting consumes
-admitted review facts; a local Markdown file is not a forge publication receipt.
-Fresh private report publication rejects existing targets and output collisions.
+Upstream services still own tenant/object/field authorization. A tool allowlist,
+TLS connection, schema validation, origin allowlist, or `review_read` assurance
+does not make an overprivileged credential safe or a lying service truthful. Use
+dedicated least-privilege service identities and data suitable for model egress
+and OCR-session retention.
 
-The optional debug bundle is a distinct sensitive retention surface. Raw OCR
-result/stderr may contain rejected content; owner-only permissions are not
-redaction. Bounded descriptor-pinned captures and value-free observations of
-actual DLP decisions do not authorize egress or prove host integrity. No session,
-environment dump or full configuration is copied. A journal's completion flag
-describes observation completion, not review success. Same-user host compromise,
-host failure and operator disclosure of raw artifacts remain residual risks.
-See [local debug semantics](local.md#private-debug-bundle) for bounds and failures.
+The content-free `ocr.federation/v1` receipt records only closed per-alias counts
+and cleanup state. Receipt v9 reconciles OCR attempts independently with gateway
+attempts and terminal outcomes. Used advisory tools, known denied/failed calls,
+or accounting mismatch make the run comment-only. Missing, malformed,
+unfinalized or cleanup-uncertain federation evidence blocks normal publication.
+Unused services and successful `review_read` use do not independently block
+approval. Commands, URLs, arguments, results, credentials, paths, identifiers and
+raw errors never enter the receipt.
 
-Progress emits a closed bounded toolkit phase vocabulary without reading raw
-results or stderr. Reasoning configuration validates protocol shape and conflicts;
-it does not establish model capability or that a gateway applied an accepted value.
+## Review context and legacy migration
 
-### Security objectives
+The public [bounded review-context contract](review-context.md) defines the
+current policy, store, handle, receipt, and cleanup behavior in detail.
 
-- Repository and provider-controlled content remains data. It cannot promote itself into policy, tools, permissions, suppression, posting, approval, or release authority.
-- Every security-relevant claim remains bound to immutable identity, provenance, trust class, scope, and semantic applicability.
-- Bounds apply while data is acquired and emitted; malformed or exhausted domains degrade visibly without suppressing unrelated evidence.
-- Persisted state is accepted only through closed schemas whose related snapshots, indexes, deltas, and receipts agree atomically.
-- Model-selected tool arguments receive deterministic authorization and validation in application or server code; names, prompts, and schemas are not resource authorization.
-- Direct MCP credentials, tools, and content remain least-privilege and acceptable for both model egress and OCR-session retention.
-- Adapter credentials and services enforce tenant/object/operation/field authorization independently; reference syntax and authentication alone never authorize a resource.
-- Context policy cannot come from the source branch, context budgets cannot evict repository evidence, and model-facing context cannot add a network, arbitrary ID/URL, search, traversal, or write path.
-- Publication and retention are independent from retrieval/model egress. Cleanup uncertainty blocks publication. DLP selects exact posting sinks separately from private OCR metadata. Unsafe sinks produce an explicit safe partial result; unsafe private-only keys/values are removed or replaced before retention without discarding a still-valid manifest or safe findings. Both paths atomically destroy the rejected value/location and expose only closed counts. Publication filtering preserves prior review state, matches repeated fingerprints one-for-one, and blocks approval; private-only sanitization may continue through all existing approval gates only after exact canonical equivalence.
-- Classified provider failure reporting consumes only validated retry class, phase, terminal outcome, HTTP status, and schema counters. Provider/model identity, URL, response body, error code or message, request ID, path, warning text, token, and stderr cannot enter the static note or closed numeric line or become a receipt, DLP, telemetry, severity, finding, or approval signal. A status-derived label describes protocol state only; it cannot assert the provider's billing or admission cause.
-- GitLab lifecycle decisions consume only a strict `opened|merged|closed` state after exact numeric project/MR identity and reviewed SHA validation. A terminal state before admission cannot reach evidence or OCR; every terminal-status path that could return advisory success first revalidates the live state, including note-error paths. `merged` is irreversible; `closed` remains nonzero under strict posting so a required gate cannot be reused after reopening. Terminal control metadata is accepted only in its reserved marker preamble, never from hostile later body text. A terminal transition after admission cannot authorize approval or bypass result validation, DLP, limits, or the posting transaction. Unknown, malformed, unavailable, or mismatched provider data fails closed before a publication mutation.
-- OCR semantic-group labels, path-derived group keys, file membership, and round diagnostics are untrusted private data. They may be DLP-sanitized in the owner-only result but cannot enter findings, GitLab text, receipt v8, fingerprints, severity, lifecycle commands, toolkit telemetry, or approval. Receipt extensions fail closed.
-- Provider mutations bind reviewed identity where supported; ambiguous inline creates use one author-bound readback without retry, and unresolved ambiguity preserves prior state.
-- Secrets remain outside repository-controlled context, public notes, fixtures, and release artifacts.
+The context selector is closed to `off|metadata|enriched`. Current protected
+policy v4 supports bounded GitLab discussions, verified remediation threads and
+same-revision CI outcomes. The private context store exposes only committed local
+handles through fixed internal `context_list` and `context_get`; neither tool has
+network, subprocess, arbitrary URL/identifier, search, traversal or write access.
 
-### Current generic external-MCP boundary (M3 established)
+Policy v1-v3 remains parse-only for migration. Safe selectors and budgets still
+apply, but legacy `references` never execute. Optional references are skipped;
+required references, including references-only policies, create required
+degradation and make the run comment-only. The removed adapter environment,
+command/HTTPS proxy protocol, `OCR_MCP_REPLACE`, and direct OCR passthrough cannot
+be restored by legacy configuration.
 
-BL-011 used the production `ocr-ci review` path, official checksum-verified OCR 1.9.5, a disposable synthetic Git repository, owner-only isolated homes, a local OpenAI-compatible peer, and a real stdio MCP protocol peer. The qualification observed, rather than inferred from mocks:
+An admitted remediation thread remains historical evidence and blocks automatic
+approval. A CI pass is scoped context, never suppression or approval authority.
+Source policy cannot grant tools or credentials. An actually unprotected target
+allows only `off|metadata`, mandatory immutable evidence and exact-target Rules as
+untrusted guidance; enriched context and external federation are rejected.
+`OCR_GITLAB_TARGET_PROTECTION_MODE=unprotected` is the sole explicit operator
+opt-in; the required default and malformed values fail closed before OCR.
+An actually unprotected target cannot reach the approval executor.
 
-- toolkit configuration allowed only `tenant_read` and `tenant_fail`; the peer also advertised `hidden_write` and reserved `file_read`, but neither appeared as an external model tool, while toolkit reserved names and cross-server collisions failed before OCR;
-- a synthetic cross-tenant identifier generated by the model was forwarded unchanged to the allowed tool: the allowlist authorized only the tool name, not its arguments or object;
-- hostile server-authored description and schema markers entered the plan prompt and main tool definitions;
-- the same external tools appeared in plan and main phases; OCR has no toolkit-controlled phase-specific external policy;
-- a bounded high-volume text result was returned completely to the next model request, with no toolkit-configurable response byte/character boundary;
-- OCR's mode-0600 session JSONL retained prompts, responses, external arguments, tool results, and both `plan_task` and `main_task` records;
-- an MCP `isError` result remained model-visible and review continued; an unavailable optional server emitted a warning, review continued with mandatory evidence, and the receipt omitted the unavailable server;
-- `_ocr_toolkit.mcp_usage` counted one mandatory evidence call and two known external calls, but contained no arguments, results, completeness, content-safety, or model-correctness proof.
+## DLP and publication
 
-These observations establish the current safe-use envelope, not the safety of arbitrary direct providers. Generic external MCP is privileged operator-configured composition, not author-triggered reference resolution. Each direct server must independently authorize tenant, canonical object, fields, and operation for every request. Use only reviewed narrow read-only tools, dedicated least-privilege credentials, bounded responses, and content permissible to send to the LLM and retain in OCR sessions. Do not expose generic search, arbitrary URL/ID fetch, traversal, writes, or broad service credentials to merge-request-selected references. Every direct tool must be safe in both OCR phases.
+`OCR_DLP_ENABLED` is a strict boolean that defaults to `true`. The effective value
+is resolved once before acquisition and is shared by local and GitLab execution.
+With DLP enabled, context and federation ingress/egress plus publication sinks
+cross the shared detector. Private retention is checked separately.
 
-Server command, endpoint, setup, schemas, descriptions, arguments, and responses cross separate executable or untrusted boundaries. GitLab-MR external entries are remote HTTPS only and reject stdio/setup fields; local-profile `setup` remains operator-owned shell configuration executed in the analyzed repository. Existing OCR MCP configuration is hostile persisted input and is revalidated against the active profile. Raw endpoint, setup, and credential values are not safe diagnostic material. Toolkit diagnostics avoid them, but OCR may emit operator-owned transport details; keep those values non-sensitive and retain OCR stderr privately. Managed OAuth authenticates a client but does not authorize an object and remains conditional.
+A parsed false value bypasses those DLP checks for one run, emits a prominent warning in
+private logs and bounded Technical details, and always blocks automatic approval.
+Schema, byte/item/time/origin, identity, evidence, cleanup and posting-transaction
+gates remain active. Disabling DLP can expose sensitive data to an upstream MCP,
+the model, local Markdown, or GitLab. Re-enabling it cannot retract prior egress
+or publication. Operators should diagnose locally with
+`--preserve-private-artifacts` before using this escape hatch and must keep those
+owner-only artifacts off shared storage.
 
-Receipt v8 records the bounded configured capability inventory and positive calls attributed from known tool names. For the fixed evidence MCP only, owner-only atomic action receipt v3 records authenticated attempts separately from completed `summary`, `list`, `get`, `search`, and `coverage` actions. MCP-received attempt totals cannot exceed OCR's three authoritative built-in evidence-tool totals; requests rejected during OCR argument parsing never reach MCP and their count-only residual is added to `unattributed`. Only completed actions establish successful evidence use, and malformed MCP-dispatched primary actions are likewise unattributed. Absence, malformed content, races, or mismatch fails normal review finalization before publication, and failed attempts cannot satisfy the mandatory summary or authorize approval. The receipt contains no arguments, IDs, paths, queries, scopes, results, or provider content. Its publication state is exactly `passed`, `private-sanitized`, or `publication-filtered`; only a byte-equivalent canonical publication/approval projection permits private sanitization to continue through the existing approval gates. Every direct external MCP makes a protected-target review comment-only, independent of use, and is rejected for an actually unprotected target; server-authored tool annotations are not used to upgrade that policy. The receipt is operational attribution, not security evidence for resource authorization, completeness, response safety, actual semantic use, or model output. Security severity still depends on demonstrated reachability and impact: prompt-like or Markdown text is not code execution without a privileged action path, and same-owner artifact tampering is not an ordinary-contributor escalation without a lower-privilege writer.
+Publication accounting keeps OCR coverage, DLP projection and provider posting
+separate. DLP omission cannot relabel complete OCR coverage as partial. Previous
+comments are preserved with the actual incomplete-stage reason. Posting counters
+cover admitted findings; DLP omissions are separate.
 
-## Preserved current safety properties
+Forbidden values carry one or more closed source classes registered before
+rejection: `forge_discussions`, `remediation_threads`, `ci_outcomes`,
+`external_context`, `operator_secret`, or `other`. Each rejected item counts each
+matching class once. Counts may overlap and need not sum to total omitted items.
+Rejected text is not retained or reprocessed later to infer attribution.
+`ocr.publication-dlp-signal/v3`, Technical details and receipt v9 expose only
+bounded states and counts.
 
-Failed-tool `arguments` are opaque private diagnostic input. The toolkit validates
-their string type and bounded size, omits them from normalized diagnostics, and
-removes the diagnostic envelope before publication DLP. This prevents private-only
-arguments from creating false publication degradation without weakening DLP on
-public findings, warnings, or suggestions. The original OCR stderr may contain
-raw arguments and must remain a private artifact; `OCR_RAW_LOGGING` remains removed
-from toolkit-owned OCR child environments.
+## Preserved controls
 
-- Repository reads are bounded, rooted, symlink-aware, immutable-object reads that exclude common dependency/build trees and never execute repository content.
-- Review context uses a closed `off|metadata|enriched` selector. `off` retains only validated source/protected-target/author identities; `metadata` admits bounded MR fields; `enriched` requires the immutable protected policy and admits only stable bounded discussion, CI-outcome, and adapter projections. Source policy, unknown fields/classes, raw display identities, arbitrary URLs/IDs, tokens, and ambient environment values cannot expand it.
-- Target protection uses a separate closed selector. Unset means exact `required`; explicit empty or unknown values fail closed. Exact `unprotected` changes behavior only when GitLab reports the actual target unprotected. That run permits `off|metadata`, built-in immutable evidence, and required exact-target Rules as untrusted guidance, while rejecting enriched acquisition, any adapter setting, direct or inherited external MCP, accepted decisions, and structured target guidance before OCR.
-- Protected CI outcome context is acquired only from authenticated GitLab project APIs, bound to the exact reviewed SHA, normalized twice, and scoped by exact check names/path prefixes from protected policy v3. Logs, artifacts, URLs, raw IDs, users, runners, variables, provider payloads, and repository-authored status text never enter the model/store/receipt. Passing CI is contextual execution evidence only; it cannot suppress findings, prove unrelated absence, alter severity/lifecycle, or authorize approval.
-- Generated Markdown neutralizes controls and GitLab quick actions. Actionable suggestions require exact reviewed-head proof; unverifiable replacements retain prose only.
-- Result and provider reads have byte limits; notes enforce character and UTF-8 byte limits. Position-bearing inline creates reserve independent unguessable markers, classify closed outcomes, and perform at most one complete author-bound reconciliation read with no retry.
-- Publication DLP admits ordinary horizontal tab only in `existing_code` and `suggestion_code`. The unchanged code value is retained only after it passes the existing size, secret, PII, forbidden-value, and laundering checks; tabs elsewhere and vertical tab, form feed, NUL, bidi/format controls, and other unsupported controls remain blocking.
-- LLM provider URLs are normalized by one forge-neutral owner shared by configuration and preflight; only credential-free absolute HTTPS roots or protocol-compatible terminal endpoints are accepted. Explicit protocol remains authoritative, and ambiguous auxiliary URL derivation fails closed.
-- Automatic approval binds the exact synchronized reviewed head, target SHA/protection state, and MR author from receipt v8, skips self-approval, and never removes an existing approval. An unprotected target cannot reach the approval executor. Partial, warning, non-v8, publication-filtered, omitted, degraded metadata, DLP-rejected selected-source, required context degradation, admitted remediation-context, or direct external-MCP runs are ineligible.
-- Built-in evidence search operates only on the already DLP-admitted store. Queries are bounded literal NFKC/case-folded tokens; regex, wildcards, operators, controls, bidi/format characters, broad empty search, and query/result echo are rejected. Results expose only existing stable IDs and closed record metadata. Coverage can authorize a negative claim only for one exact complete base/head scope with zero records and no truncation. Private action receipt v3 retains only closed attempted/completed counters; receipt v8 requires complete OCR/MCP attempt accounting and a completed mandatory summary before automatic approval.
-- Human replies are ownership boundaries. Merge-request source SHA, protected-target policy SHA, and merge-result SHA remain distinct.
-- The evidence engine stores recursively redacted typed facts/deltas in owner-only files and serves a closed bounded network-independent MCP. Absence supports a negative claim only for applicable complete scope.
-- OCR rules, decisions, and guidance come only from captured target blobs; source changes cannot create policy. On a protected target they retain their existing bounded contracts. On an unprotected target only Rules are admitted, solely as untrusted guidance; decisions and structured guidance are omitted. None can authorize a privileged capability.
-- External finding images are disabled by default and, when enabled, use closed normalized display metadata only.
-- Finding fingerprints, independent write markers, complete pre-run snapshots, and explicit immutable current-run identities constrain repeated runs. Rollback deletes only recorded IDs absent from the baseline; secrets and credential-shaped values are redacted before operational output.
+- Repository reads use immutable objects, fixed roots and bounds, reject unsafe
+  symlinks/submodules, and never execute repository content.
+- Unknown, malformed, unavailable, or mismatched provider data fails closed
+  before a publication mutation. On a validated provider failure, one separate local line may contain closed protocol detail and bounded aggregate counters;
+  raw response text, identifiers, URLs, paths and stderr remain private and cannot
+  become a receipt, DLP, telemetry, severity, finding, or approval signal.
+- Result and provider reads are byte-bounded; Markdown neutralizes controls and
+  GitLab quick actions. Suggestions require exact reviewed-head source proof.
+- Publication DLP admits horizontal tab only in `existing_code` and
+  `suggestion_code`; unsupported controls remain blocking everywhere else.
+- The mandatory evidence MCP requires reconciled attempted/completed action
+  accounting and a completed summary. Federation cannot satisfy or replace it.
+- Built-in evidence search reads only the already DLP-admitted store and exposes
+  stable IDs plus closed metadata. Arguments, queries, scopes, IDs and results
+  remain private.
+- OCR runs under a fresh owner-only home. Gateway sessions, sockets, caches,
+  context stores and owned child processes must clean up before final admission.
+- Automatic approval binds exact source, target protection and author identity,
+  skips self-approval, never removes an existing approval, and accepts only exact
+  receipt v9 with enabled DLP and every existing eligibility gate satisfied.
+- Provider lifecycle state is revalidated before publication. A terminal MR keeps
+  admitted findings and DLP semantics but cannot approve.
+- Ambiguous inline creates use one author-bound readback without retry. Rollback deletes only recorded IDs absent from the baseline; marker text cannot claim
+  ownership of another note.
+- Secrets and raw transport diagnostics remain outside public notes, fixtures,
+  receipts and release artifacts.
 
-The evidence engine reads exact base/head Git objects without checkout, refuses symlinks and submodules, and separates collection, normalization, owner-only atomic persistence, hostile readback, and bounded MCP projection. Snapshot indexes must agree with admitted records; deltas are recursively re-redacted and re-bounded before IDs or responses are derived; colliding facts retain source paths; normalized mapping-key collisions fail instead of dropping a value.
+## Deployment guidance and residual risks
 
-Repository-owned OCR rules, accepted decisions, and root or nested `AGENTS.md`/`CLAUDE.md` guidance come only from immutable target blobs at the captured protected-target SHA while code deltas retain the forge diff base. Guidance changed on either side is excluded; source/head content never becomes policy evidence; applicable guidance is selected before blob reads and domain-isolated admission. Structured policy values are bounded before storage, after redaction, and on hostile load. Schema-v4 binds policy provenance to the policy snapshot and applicability to atomic base/head changed paths; older schemas retain explicit historical semantics. The bootstrap contains only bounded refs, counts, coverage, summaries, paths, diagnostics, and MCP instructions; full text remains untrusted evidence in the private store.
+Use a dedicated bot, protected/masked secrets, least-privilege upstream identities,
+and exact pinned OCR/toolkit artifacts. Begin comment-only and enable approval only
+after qualifying the selected context and federation behavior. Keep OCR telemetry
+off unless its high-cardinality path/group/session data and exporter retention are
+accepted.
 
-Ansible Galaxy requirements use the same immutable-object boundary. Relative includes resolve only to YAML blobs inside the authenticated tree; absolute, home-relative, escaping, symlink, and submodule targets fail. Independent depth, file, edge, item, and diagnostic limits keep degradation visible and bounded.
+Pin the exact recommended Open Code Review release and checksum from the
+[qualification manifest](../compatibility/ocr-support.json); do not treat an
+unlisted patch as compatible merely because its minor line is supported.
 
-## M5 bounded enrichment boundary
+The toolkit cannot reverse model or service egress, detect every semantic
+paraphrase, make model judgment deterministic, protect data after same-user host
+compromise, or prove an upstream's internal authorization. Local stdio process
+groups are lifecycle ownership, not a sandbox against a malicious executable or
+compromised host.
 
-The v0.7.0 implementation extended the v0.6.3 selector/approval foundation with protected policy, stable GitLab discussions, deterministic recognizers, provider-neutral adapters, a separate context store, opaque handles, fixed context tools, publication DLP, isolated OCR sessions, and receipt v4. Receipt v8 now supersedes that result/posting contract without changing the established M5 acquisition boundary. The public [bounded review-context contract](review-context.md), engineering [M5 checkpoint](engineering/m5_context_contracts.md), and [test-evidence matrix](engineering/test_evidence_matrix.md) distinguish deterministic production-owner evidence from the final real-OCR and stable-release gates.
+Optional remote finding images add a separate disclosure boundary. External finding images are disabled by default. Enabling them does not send finding prose,
+repository paths, project identifiers, or arbitrary OCR metadata in the image URL,
+but viewer and network metadata can reach the image service. Keep text badges when
+a third-party image request is unacceptable. GitLab rules, Code
+Owners, protected branches and eligible approver policy remain authoritative.
 
-### Data flow and trust transitions
+Bandit scans runtime source at medium-or-higher severity and confidence. A narrow
+`# nosec B108` temporary-path suppression requires adjacent containment rationale.
 
-1. A forge adapter acquires bounded discussion snapshots and reference-bearing text before OCR.
-2. An immutable policy read only from the captured protected-target SHA decides admitted fields, provider-declared author classes, origins, tenant/resource classes, projections, budgets, and retention. An explicitly selected `enriched` run fails preflight when that policy is missing or invalid; `off` and `metadata` do not read it.
-3. A deterministic recognizer emits a candidate; reference presence is never authorization.
-4. An adapter performs object-level authorization and bounded version-aware retrieval.
-5. Allowed projections are normalized, DLP-filtered, and atomically stored in a run-local context store.
-6. Only successful storage mints an opaque unguessable run-bound handle binding adapter, tenant, canonical object, projection, version/ETag or digest, policy version, expiry, and run without exposing the upstream identifier.
-7. During OCR, the model may list/read only minted handles through fixed toolkit-authored closed-schema `context_list` and `context_get` tools in the existing toolkit MCP process. No upstream search, arbitrary ID/URL, external schema, redirect, traversal, write, or external network access exists in the model loop.
-8. After OCR, deterministic publication validation/DLP and retention are decided independently.
+The controls align with [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [MCP security best practices](https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices), [OAuth resource indicators](https://www.rfc-editor.org/rfc/rfc8707), [OAuth best current practice](https://www.rfc-editor.org/rfc/rfc9700), and [OWASP API BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/). References inform the design; they do not prove the implementation.
 
-Policy v2 adds optional toolkit-owned remediation threads without changing these transitions. GitLab title, description, generic discussion bodies, remediation roots and replies, and adapter/reference text all cross normalization, closed bounds, and DLP before private-store or bootstrap admission. One remediation thread is admitted only as a verified root-to-replies relation from the same stable provider snapshot; it is not reconstructed from matching prose, paths, timestamps, or provider identifiers.
-
-### Control ownership
-
-- Forge adapters own discussion snapshots and provider-declared account classes.
-- The protected-policy loader owns admission and independent retrieval, model-egress, publication, and retention decisions.
-- Recognizers own syntax only; adapters own resource authorization and bounded acquisition; the context store owns atomic records and handle binding.
-- The existing toolkit MCP owns fixed context projections; OCR owns the model loop and session persistence; toolkit review/post owners enforce cleanup, approval ineligibility, and publication validation.
-
-### Controls and abuse cases
-
-- **BOLA/confused deputy and credential mismatch:** authorize exact tenant, object, operation, and fields in adapter/application code; use dedicated AI-readable corpora and least-privilege credentials. Host allowlisting and successful authentication are insufficient.
-- **Prompt and indirect injection/data poisoning:** keep external text non-authoritative; use fixed toolkit schemas; prevent content from changing tools, policy, permissions, lifecycle commands, suppression, posting, or approval.
-- **SSRF/traversal/broad agency:** recognizers cannot fetch; the broker accepts only minted handles; generic search, URL fetch, redirects, recursion, and writes are absent.
-- **Oversize/denial of wallet/selective omission:** enforce acquisition-time character, UTF-8 byte, record, thread, age, count, time, and aggregate budgets independent of repository evidence; expose partial, mutated, unavailable, and omitted states.
-- **Identity spoofing and privacy:** represent authors by provider-declared class plus run-local pseudonym; omit name, email, avatar, and profile URL. Unknown classification fails closed.
-- **TOCTOU/replay/cache poisoning:** bind snapshots and handles to version/ETag or digest, policy version, run, and expiry; use atomic store commits and uniform unavailable outcomes.
-- **PII/secret bypass and output laundering:** make retrieval, model egress, publication sinks, and private retention separate decisions. Minimize before model egress; publication DLP cannot undo prior disclosure. Scan decoded source and rendered forms so HTML comments/entities/tags, Markdown inline/reference/autolink destinations, controls, and Unicode formatting cannot hide exact protected values. Sink uncertainty yields a safe partial result; private-only uncertainty yields an atomically sanitized valid result or falls back to that partial form. Expose only low-cardinality receipt/summary/log signals in ordinary runs. The explicit local-only diagnostic switch retains owner-only raw private state, emits no receipt, and is rejected by the validated GitLab MR profile.
-- **Upstream session and telemetry privacy:** OCR can retain readable reasoning, signed/encrypted provider-native replay payloads, tool arguments/results, sorted changed paths, model-produced group labels, and round counters in its owner-only session. Telemetry may also carry repository-derived high-cardinality grouping values. OCR telemetry is disabled by default, and the toolkit removes the isolated session home before publication. Enabling an exporter authorizes it to receive the fields OCR emits; content-logging disablement is not a promise that every identifier disappears. The toolkit neither ingests nor duplicates these values.
-- **OCR advisory spoofing:** raw OCR output cannot supply `_ocr_toolkit_advisory`. The toolkit adds only the exact numeric `ocr.toolkit-advisory/v1` shape after publication DLP; posting requires a valid receipt v8 and rejects duplicate, extended, unknown, or malformed forms. The advisory cannot change warnings, coverage, DLP, telemetry, findings, or approval.
-- **Local executable and subprocess confused deputy:** accept the OCR executable only through absolute search-path entries and reject resolution inside the reviewed repository. Stdio adapter deadlines cover request delivery as well as response/exit, use a clean environment and isolated directory, and terminate the process group on uncertainty.
-- **Marker and retry spoofing:** recognize ownership, run-summary, and setup identities only in the exact toolkit preamble. Repository/provider text containing marker lookalikes has no authority. Duplicate findings consume visible prior occurrences one-for-one; successful setup retries replace only previous toolkit setup-pending notes.
-- **Approval/suppression manipulation:** every admitted remediation thread blocks automatic approval; partial, required-degraded, or DLP-rejected context cannot prove absence or restore eligibility. Safe MR metadata, generic discussions, and adapter records do not themselves block an otherwise eligible receipt. Remediation text cannot change severity, prove a fix, suppress or resolve a finding, issue a lifecycle command, or authorize approval. Existing suppression, exact slash/mention commands, fingerprints, and discussion ownership remain separate deterministic consumers.
-- **Persistent-session leakage:** run OCR under an isolated owner-only home and clean session artifacts deterministically. Containment/cleanup failure blocks publication. The explicit local diagnostic exception preserves owner-only paths and produces no posting-eligible receipt; the authoritative GitLab MR profile rejects it before OCR execution.
-- **Local receipt confusion:** local Git state cannot establish an actual GitLab target-protection fact. Local review finalization therefore enforces result, action, and DLP contracts without emitting receipt v8; the compatible receipt-less posting path cannot authorize approval or receipt-derived status. Any present invalid receipt still fails closed.
-- **Second-review-engine drift:** OCR remains the sole review engine. If contextual adjudication needs a separate model phase, depend on a native structured OCR API rather than merge two toolkit-driven reviews.
-
-### Deployment assumptions and residual risks
-
-Operators must maintain a dedicated AI-readable corpus and credentials whose service identity cannot read broader material than policy permits. Provider account classifications may be incomplete; unknowns remain unavailable. Model inference after egress cannot be reversed. OCR version/capability dependencies must be exact and fail closed. Even with bounds and DLP, admitted untrusted text can influence model judgment; deterministic publication checks contain authority but do not make model reasoning deterministic. A host-level compromise can read same-owner artifacts. These residuals remain visible in deployment guidance and qualification claims.
-
-## Deployment guidance
-
-Use a dedicated bot and least-privilege forge token. Protect/mask credentials; do not expose secrets to untrusted forks. Begin with manual execution for trusted contributors and enable posting/approval only after accepting this threat model. `OCR_AUTO_APPROVE=false` keeps the bot comment-only; forge approval rules and protected branches remain authoritative.
-
-Keep `OCR_GITLAB_TARGET_PROTECTION_MODE=required` unless the project explicitly accepts the reduced repository-policy authority of an unprotected target. GitLab Code Owners and code-owner approval rules remain separate merge policy and are not OCR prerequisites. For first setup, merge Rules and target-owned configuration before enabling OCR in a later merge request. On the protected-target path, the supported one-MR alternative stops before model execution with setup-pending status until those Rules exist on the target; an actually unprotected target with missing target Rules uses the generic fail-closed path. Treat both notes as no-review states, and never infer model execution from a green advisory pipeline.
-
-Pin the exact recommended Open Code Review release from the [compatibility manifest](../compatibility/ocr-support.json) and verify its checksum. Pin Python and Actions dependencies. Follow the M3 direct-MCP safe-use envelope above and the exact public [configuration](configuration.md) and [bounded-context](review-context.md) contracts.
-
-Optional remote finding images add a third-party rendering boundary. External finding images are disabled by default. Finding badges are presentation-only; keep text mode when a third-party image request is unacceptable. Enabling Shields.io does not send finding prose, repository paths, project identifiers, or arbitrary OCR metadata in the image URL, but ordinary viewer, proxy, and network metadata can reach that service. Toolkit-owned Git ignores process/global/system/repository/object-store overrides and replacement refs. Existing OCR configuration is hostile persisted input and is descriptor-read, regular-file and single-link checked, byte-bounded, JSON-object validated, and atomically replaced with owner-only permissions before/after update.
-
-The OCR compatibility policy requires double-source asset digest verification, bounded downloads, executed contract probes, and protected PR/release gates; automation never promotes ambiguous releases or writes directly to `main`. Remote MCP is HTTPS-only, forbids userinfo/fragments, and keeps secret headers environment-backed.
-
-Release authorization executes from protected-base code predating the candidate. GitHub reads use a closed endpoint allowlist, HTTPS-only redirect policy, redirect-safe authentication, bounded transfer, atomic replacement, and exact receipt schemas. Bandit scans runtime source at medium-or-higher severity/confidence; narrow `# nosec B108` temporary-path suppressions require adjacent containment rationale.
-
-## Standards and guidance
-
-The M3 direct boundary and M5 broker controls align with [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) and [MCP security best practices](https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices); OAuth resource indicators and best current practice in [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707), [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700), and [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728); [OWASP GenAI LLM risks](https://genai.owasp.org/llm-top-10/) and [Agentic risks](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/); [OWASP API BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/); and [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html). These references inform controls but do not themselves prove the implementation.
-
-## Repository security posture
-
-Protected `main` requires pull requests, signed commits, a current branch, resolved review threads, and required CI/security/build checks. One maintainer cannot provide independent human approval for maintainer-authored changes; automated review does not replace a second human. OpenSSF findings are posture signals, not vulnerabilities by themselves. The reporting process is in [SECURITY.md](../SECURITY.md).
+Repository contribution and vulnerability reporting requirements are in
+[SECURITY.md](../SECURITY.md).

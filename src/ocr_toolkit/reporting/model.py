@@ -45,6 +45,8 @@ class ExecutionFacts:
     evidence: dict[str, Any]
     publication: dict[str, Any]
     advisory: OcrToolkitAdvisory | None = None
+    federation: dict[str, Any] | None = None
+    legacy_policy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +85,10 @@ def report_from_result(
         raise OcrResultContractError("report DLP admission facts are unavailable")
     outcome = admitted_outcome_for_summary(parse_result_outcome(result), execution.publication)
     mcp_summary = format_verified_mcp_usage(
-        mcp_usage=execution.mcp_usage, evidence=execution.evidence
+        mcp_usage=execution.mcp_usage,
+        evidence=execution.evidence,
+        federation=execution.federation,
+        legacy_policy=execution.legacy_policy,
     )
     completed = validated_completed_actions(execution.evidence)
     if outcome.requires_evidence_mcp and (

@@ -1,0 +1,281 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "e0dfa5a953256bfe413ea60e611cc54d6e07615098cc6b42ae69802aa8d65161",
+      "size": 57907456
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "1fc3eed59fd6eb0571beecffc48d00dd84f033944c99e70974c3fd910878b049",
+      "size": 54928978
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "37b92a9403921c335e88aaa63f298d2107215465e797f5299fc3158a1ac861fd",
+      "size": 56164514
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "b7cbb74347adb2c7319cff6d53ad51ba8e1be3d2109e32bf8ac4107aa3da36ed",
+      "size": 52887714
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "1a79895197693e2f7bdf65547292923ce7355db2dc38e848c228d3a311240577",
+      "size": 57627136
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "ae20d83d373475161da2b63c501c93c2d1d2e017d68d6ddad01af6b13b7b4cec",
+      "size": 53582336
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "640566b9024bb97f7a0e0f53e7cc9c1a83b469d5bdffa6fc645cdeded948879c",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.12.2",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".hxx",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 18
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-16T00:34:22Z",
+  "release_changes": "## 🚀 Features\n\n- feat(allowlist): protect per-environment .env files (#1279)\n- feat(allowlist): exclude secret paths from review (#1262)\n\n## 🐛 Bug Fixes\n\n- fix: recover tool-call JSON with trailing content and back off repeated failures (#1278)\n- fix(tool): prevent path traversal bypass and normalize paths in code_search and code_comment (#1089)\n- fix(preview): collapse provider-directory rows and keep changeset order (#1242)\n\n## 📖 Documentation\n\n- docs: use subtask instead of file/file-group in user-facing docs (#1277)\n- docs(readme): add monthly Trendshift badge and improve layout (#1267)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.12.2...v1.12.3",
+  "release_notes_sha256": "3fe6685c44bb741d55d5c0037d0a05a623047c7fa3fc2b0faea8d597e4f96b9c",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.12.3",
+  "tested_baseline_version": "1.11.9",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.12.3"
+}

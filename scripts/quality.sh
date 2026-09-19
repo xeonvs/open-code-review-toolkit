@@ -70,6 +70,7 @@ case "$mode" in
     set -- uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
     ;;
   check)
+    run_logged_command "python scripts/public_content.py --privacy-only"
     for command in "ruff format --check ." "ruff check ." "mypy src/ocr_toolkit" "bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium"; do
       run_logged_command "$command"
     done

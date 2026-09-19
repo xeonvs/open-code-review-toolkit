@@ -68,10 +68,41 @@ def receipt_v8(
     ]
     if external:
         capabilities.append(
-            {"server": "documentation", "transport": "remote", "tools": ["docs_read"]}
+            {
+                "server": "documentation",
+                "transport": "remote",
+                "tools": ["documentation__docs_read"],
+            }
         )
+    federation = None
+    if external:
+        federation = {
+            "receipt": {
+                "schema": "ocr.federation/v1",
+                "run_id": "c" * 32,
+                "state": "finalized",
+                "cleanup": "clean",
+                "tools": {
+                    "documentation__docs_read": {
+                        "server": "documentation",
+                        "assurance": "review_read",
+                        "attempted": 0,
+                        "completed": 0,
+                        "denied": 0,
+                        "failed": 0,
+                        "timed_out": 0,
+                        "dlp_rejected": 0,
+                        "oversized": 0,
+                        "cache_hits": 0,
+                        "single_flight": 0,
+                    }
+                },
+            },
+            "ocr_attempts": {"documentation__docs_read": 0},
+            "state": "complete",
+        }
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -88,9 +119,11 @@ def receipt_v8(
             "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
             "required_degraded": False,
             "mutable_admitted": False,
+            "legacy_policy": False,
             "tool_usage": {"context_get": 0, "context_list": 0},
         },
         "mcp": {
+            "federation": federation,
             "capabilities": capabilities,
             "usage": {"ocr_toolkit_evidence": 1},
         },
@@ -117,6 +150,7 @@ def receipt_v8(
                 },
             },
         },
+        "dlp": {"enabled": True},
         "publication": {"state": "passed"},
         "tool_execution": {"state": "verified", "failed": failed_tools},
         "cleanup": {"result": "passed"},
@@ -134,6 +168,25 @@ def test_unprotected_receipt_is_valid_but_structurally_comment_only() -> None:
     assert decision.result.reason == (
         "the GitLab target branch was unprotected; limited reviews are comment-only"
     )
+
+
+def test_disabled_dlp_receipt_is_valid_and_blocks_automatic_approval() -> None:
+    receipt = receipt_v8()
+    receipt["dlp"] = {"enabled": False}
+    receipt["publication"] = {"state": "disabled"}
+
+    assert approval.toolkit_receipt_is_valid(receipt)
+    decision = approval.evaluate_approval_policy(
+        settings.BooleanSetting(True), complete_outcome(), [], [], 0, receipt
+    )
+    assert decision.eligible is False
+    assert decision.result.reason == (
+        "DLP was disabled by OCR_DLP_ENABLED; the review is comment-only"
+    )
+
+    inconsistent = receipt_v8(target_protection="unprotected")
+    inconsistent["publication"] = {"state": "disabled"}
+    assert not approval.toolkit_receipt_is_valid(inconsistent)
 
 
 def test_unprotected_receipt_never_reaches_approval_mutation_path() -> None:
@@ -239,6 +292,7 @@ def enriched_receipt(*, mutable: bool = False, required_degraded: bool = False) 
         },
         "required_degraded": required_degraded,
         "mutable_admitted": mutable,
+        "legacy_policy": False,
         "tool_usage": {"context_get": 0, "context_list": 0},
     }
     receipt["mcp"]["capabilities"][0]["tools"] = [
@@ -500,10 +554,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         )
 
         self.assertTrue(complete_metadata.eligible)
-        self.assertFalse(external.eligible)
-        self.assertEqual(
-            external.result.reason, "external MCP was configured for a comment-only review"
-        )
+        self.assertTrue(external.eligible)
 
     def test_enriched_zero_record_can_approve_but_mutable_or_required_degradation_cannot(
         self,
@@ -556,7 +607,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertFalse(decision.eligible)
         self.assertEqual(
             decision.result.reason,
-            "external MCP was configured for a comment-only review",
+            "the review-time approval receipt is missing or invalid",
         )
 
     def test_every_pre_v8_receipt_is_rejected(self) -> None:
@@ -578,7 +629,7 @@ class ApprovalPolicyTests(unittest.TestCase):
                 )
 
     def test_missing_or_malformed_v8_receipt_fails_closed(self) -> None:
-        cases: list[Any] = [None, {"schema_version": 8}]
+        cases: list[Any] = [None, {"schema_version": 9}]
         for mutate in (
             lambda value: value["context"].update({"state": "complete"}),
             lambda value: value["review"].update({"source_sha": "invalid"}),

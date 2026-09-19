@@ -9,6 +9,7 @@ This page routes readers to the canonical document for each topic. It does not r
 - [development.md](development.md)
 - [engineering/README.md](engineering/README.md)
 - [gitlab.md](gitlab.md)
+- [local.md](local.md)
 - [operations.md](operations.md)
 - [review-decision-flow.md](review-decision-flow.md)
 - [release.md](release.md)

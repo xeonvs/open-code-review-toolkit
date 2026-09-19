@@ -180,6 +180,10 @@ def test_workflow_automates_one_idempotent_development_build_per_main_run() -> N
     assert "needs.publish.result == 'skipped'" in workflow
     assert "quality.sh check" not in workflow
     assert "pip-audit" not in workflow
+    assert "uv export --frozen --no-dev --no-emit-project" in workflow
+    assert workflow.count("pip install --require-hashes --requirement") == 2
+    assert workflow.count("scripts/install_local_artifact.py") == 2
+    assert "pip install --no-deps dist/*.whl" not in workflow
 
 
 def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
@@ -271,8 +275,10 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     assert "paths:" not in pull_request_block
     assert "timeout-minutes: 15" in workflow
     assert "python -m build --no-isolation" in workflow
-    assert workflow.count("pip install --no-deps") == 1
-    assert "scripts/install_local_artifact.py" in workflow
+    assert "uv export --frozen --no-dev --no-emit-project" in workflow
+    assert workflow.count("pip install --require-hashes --requirement") == 2
+    assert workflow.count("scripts/install_local_artifact.py") == 2
+    assert "pip install --no-deps dist/*.whl" not in workflow
 
 
 def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
@@ -282,11 +288,18 @@ def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
 
     assert "  push:" not in workflow
     assert "continue-on-error: ${{ matrix.advisory }}" in workflow
-    assert workflow.count("advisory: false") == 3
+    assert "test-python312:" in workflow
+    assert "name: test-ubuntu-latest-py3.12" in workflow
+    assert "needs: test-python312" in workflow
+    assert 'UV_PYTHON: "3.12"' in workflow
+    assert "UV_PYTHON: ${{ matrix.python }}" in workflow
+    assert "uv sync --frozen --python 3.12" in workflow
+    assert 'uv sync --frozen --python "${{ matrix.python }}"' in workflow
+    assert workflow.count("advisory: false") == 2
     assert workflow.count("advisory: true") == 2
-    assert workflow.count("os: ubuntu-latest") == 3
+    assert workflow.count("os: ubuntu-latest") == 2
     assert workflow.count("os: macos-latest") == 2
-    assert workflow.count('python: "3.12"') == 2
+    assert workflow.count('python: "3.12"') == 1
     assert workflow.count('python: "3.13"') == 1
     assert workflow.count('python: "3.14"') == 2
     for unsupported in ("3.10", "3.11", "3.15"):

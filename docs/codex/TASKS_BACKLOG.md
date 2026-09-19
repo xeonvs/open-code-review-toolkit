@@ -18,12 +18,12 @@ private failure arguments add no telemetry exporter or model-profile capability.
 | M2 milestone closure | Completed | Stable 0.5.0 delivery and external readback establish M2; BL-010 remains a conditional M7 extension. |
 | M3 generic external-MCP qualification (BL-011) | Completed and removed | Checksum-verified OCR 1.9.5, the production `ocr-ci review` path, a local model peer, and a real stdio MCP peer establish the documented direct-composition safe-use envelope and its claim limits. |
 | M3 provider examples (BL-013) | Removed | Direct provider examples over model-selected unrestricted arguments are not the target architecture; valid synthetic adapter qualification moves behind the BL-023 broker boundary. |
-| Same-session external-MCP annotation enforcement (#103) | Removed / not planned | This repeated the removed direct-provider path: generic direct MCP remains privileged operator configuration, while future external records stay behind the BL-023 broker. A server-authored annotation is not semantic non-mutation proof. |
+| Same-session external-MCP annotation enforcement (#103) | Removed / not planned | M7 removed the direct-provider path. Server annotations remain untrusted metadata; operator-owned registry assurance and gateway controls own the current decision. |
 | M4 accepted decisions (BL-014) | Completed and removed | Structured target-only decisions preserve deterministic identity, safe applicability, staleness, and bounded projections without suppression authority. |
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
 | M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
 | OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
-| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established M5 parsers, handles, schemas, and hostile adapter responses in its candidate inventory. |
+| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established context and federation parsers, handles, schemas, and hostile upstream responses in its candidate inventory. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion, snapshot, and protected same-revision CI-outcome capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
@@ -49,7 +49,7 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 ## M6 Profiles and quality measurement
 
-Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified MCP-server and count-only evidence-action use, and carries deterministic publication-DLP state in receipt v8, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint. The 0.8.5 development line adds at most one bounded toolkit-authored CI failure diagnostic from closed retry-report enums and counts, not provider telemetry or an export path. M6 audits whether result-derived lifecycle signals need provider-neutral export/alert routing instead of duplicating OCR telemetry.
+Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budget, provider-level review duration, request, and tool-call telemetry. The toolkit exposes only validated provider-neutral token buckets, distinguishes OCR-wide tool totals from verified internal evidence and content-free federation accounting, and carries deterministic stage-aware publication-DLP state in receipt v9, a parseable GitLab summary marker, and a structured local log event; it adds no exporter or endpoint.
 
 ### BL-016: Evaluate explicit run-level model profiles
 
@@ -80,13 +80,13 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Validation:** Offline replay, adversarial boundaries, fallback tests, and quality thresholds.
 - **Release classification expectation:** `release-required`.
 
-## M7 Later and conditional work
+## M8 Later and conditional work
 
 ### BL-010: Add evidence packs from demonstrated use cases
 
 - **Status:** conditional
 - **Priority:** medium
-- **Roadmap theme:** M7 Later and conditional work
+- **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Established evidence, snapshot/delta, scoped-completeness, static-plugin, and built-in MCP contracts.
 - **Activation trigger:** A real repository need identifies a missing ecosystem/framework and supplies safe synthetic fixtures and deterministic semantics.
 - **Goal:** Extend coverage without accumulating shallow detectors.
@@ -101,11 +101,11 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 
 - **Status:** parked
 - **Priority:** medium
-- **Roadmap theme:** M7 Later and conditional work
+- **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
 - **Activation trigger:** Not met: named targets, bounded CI resources, corpus ownership, and backend criteria across Python 3.12-3.14 are not agreed.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
-- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus M5 policy parsers, recognizers, handle codec, broker schema, CI-outcome adapter/store readback, and hostile adapter responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
+- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus policy parsers, handle codec, CI-outcome/store readback, federation admission and hostile upstream responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
 - **Exclusions:** Unbounded CI, production data, blanket fuzzing, or a runtime dependency.
 - **Validation:** Reproducible smoke campaign and minimized-corpus replay.
@@ -115,7 +115,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 
 - **Status:** parked
 - **Priority:** low
-- **Roadmap theme:** M7 Later and conditional work
+- **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Established MCP/evidence schemas. M5 owns only `.opencodereview/review-context-policy.json`; it neither activates nor depends on this general framework.
 - **Activation trigger:** Environment-only configuration is a demonstrated constraint and one coherent schema can cover affected non-secret settings.
 - **Goal:** Improve maintainability without weakening precedence, validation, or secret handling.
@@ -129,7 +129,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 
 - **Status:** conditional
 - **Priority:** low
-- **Roadmap theme:** M7 Later and conditional work
+- **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
 - **Upstream overlap:** OCR reusable GitHub Action checkpoint ranges and Action/plugin capabilities cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.

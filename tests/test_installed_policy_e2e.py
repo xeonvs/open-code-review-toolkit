@@ -18,7 +18,13 @@ HELPER = PROJECT_ROOT / "tests" / "installed_policy_e2e.py"
 ARTIFACT_VERSION = "0.0.dev0"
 
 
-def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    timeout: int = 120,
+) -> str:
     """Run one bounded integration command and return its standard output."""
 
     completed = subprocess.run(
@@ -28,7 +34,7 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
         check=False,
         text=True,
         capture_output=True,
-        timeout=120,
+        timeout=timeout,
     )
     assert completed.returncode == 0, (
         f"command failed ({completed.returncode}): {command!r}\n"
@@ -125,7 +131,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         python = binary_directory / ("python.exe" if os.name == "nt" else "python")
         cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
         _run(
-            [uv_binary, "pip", "install", "--python", str(python), "--no-deps", str(artifact)],
+            [uv_binary, "pip", "install", "--python", str(python), str(artifact)],
             cwd=root,
         )
         _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)
@@ -221,6 +227,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             ],
             cwd=root,
             env=protocol_environment,
+            timeout=300,
         )
         assert json.loads(local_output) == {
             "verified": True,

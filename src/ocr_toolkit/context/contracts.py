@@ -7,8 +7,9 @@ from dataclasses import dataclass
 POLICY_SCHEMA_V1 = "ocr.review-context-policy/v1"
 POLICY_SCHEMA_V2 = "ocr.review-context-policy/v2"
 POLICY_SCHEMA_V3 = "ocr.review-context-policy/v3"
-POLICY_SCHEMAS = frozenset({POLICY_SCHEMA_V1, POLICY_SCHEMA_V2, POLICY_SCHEMA_V3})
-POLICY_SCHEMA = POLICY_SCHEMA_V3
+POLICY_SCHEMA_V4 = "ocr.review-context-policy/v4"
+POLICY_SCHEMAS = frozenset({POLICY_SCHEMA_V1, POLICY_SCHEMA_V2, POLICY_SCHEMA_V3, POLICY_SCHEMA_V4})
+POLICY_SCHEMA = POLICY_SCHEMA_V4
 STORE_SCHEMA = "ocr.context-store/v2"
 REQUEST_SCHEMA = "ocr.context-adapter-request/v1"
 RESPONSE_SCHEMA = "ocr.context-adapter-response/v1"

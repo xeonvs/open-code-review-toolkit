@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 
+from ocr_toolkit.context.dlp import dlp_mode
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.evidence.mcp import serve
 
@@ -14,15 +15,17 @@ def main() -> int:
     parser.add_argument("--context-store", type=Path)
     parser.add_argument("--context-run-id", default="")
     parser.add_argument("--context-policy-digest", default="")
+    parser.add_argument("--dlp-enabled", choices=("true", "false"), default="true")
     arguments = parser.parse_args()
     artifacts = repository_artifacts()
-    return serve(
-        artifacts.store,
-        action_receipt_path=artifacts.action_receipt,
-        context_path=arguments.context_store,
-        context_run_id=arguments.context_run_id,
-        context_policy_digest=arguments.context_policy_digest,
-    )
+    with dlp_mode(arguments.dlp_enabled == "true"):
+        return serve(
+            artifacts.store,
+            action_receipt_path=artifacts.action_receipt,
+            context_path=arguments.context_store,
+            context_run_id=arguments.context_run_id,
+            context_policy_digest=arguments.context_policy_digest,
+        )
 
 
 if __name__ == "__main__":

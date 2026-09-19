@@ -331,6 +331,15 @@ def test_policy_parser_rejects_unknown_impossible_or_configurable_grammar(mutati
         parse_policy(encoded_policy(value))
 
 
+def test_legacy_policy_requires_one_selected_source() -> None:
+    value = policy_value()
+    value.pop("forge_discussions")
+    value["references"] = []
+
+    with pytest.raises(ContextContractError, match="select at least one source"):
+        parse_policy(encoded_policy(value))
+
+
 def test_policy_parser_rejects_duplicates_utf8_and_size() -> None:
     with pytest.raises(ContextContractError, match="duplicate"):
         parse_policy(b'{"schema_version":"ocr.review-context-policy/v1","schema_version":"x"}')

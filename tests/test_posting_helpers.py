@@ -1514,7 +1514,7 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             },
             "_ocr_toolkit": {
-                "schema_version": 8,
+                "schema_version": 9,
                 "review": {
                     "source_sha": "a" * 40,
                     "policy_sha": "b" * 40,
@@ -1531,9 +1531,11 @@ class PostingIdentityTests(unittest.TestCase):
                     "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
                     "required_degraded": False,
                     "mutable_admitted": False,
+                    "legacy_policy": False,
                     "tool_usage": {"context_get": 0, "context_list": 0},
                 },
                 "mcp": {
+                    "federation": None,
                     "capabilities": [
                         {
                             "server": "ocr_toolkit_evidence",
@@ -1553,6 +1555,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "calls": 0,
                     "actions": {"state": "unavailable"},
                 },
+                "dlp": {"enabled": True},
                 "publication": {"state": "passed"},
                 "tool_execution": {"state": "absent", "failed": None},
                 "cleanup": {"result": "passed"},
@@ -3156,10 +3159,10 @@ class PostingSummaryTests(unittest.TestCase):
         )
 
         self.assertIn("<summary>Publication filtering signal</summary>", summary)
-        self.assertIn("Published safe subset: 2 finding(s)", summary)
+        self.assertIn("DLP-admitted subset: 2 finding(s)", summary)
         marker = summary.split("<!-- ocr-toolkit-signal ", 1)[1].split(" -->", 1)[0]
         self.assertEqual(json.loads(marker), signal)
-        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v2")
+        self.assertEqual(signal["schema_version"], "ocr.publication-dlp-signal/v3")
 
         private_only = {
             "state": "private-sanitized",
@@ -3472,7 +3475,11 @@ class PostingSummaryTests(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            "- reconciled MCP attempts: 2 server(s) (`documentation`: 1, `ocr_toolkit_evidence`: 2)",
+            "- reconciled MCP attempts: 2 server(s) (`documentation`: 1, "
+            "`ocr_toolkit_evidence`: 2)\n"
+            "- Federation v1: complete; documentation__read[review_read;ocr_attempts=1;"
+            "attempted=1,cache_hits=0,completed=1,denied=0,dlp_rejected=0,failed=0,"
+            "oversized=0,single_flight=0,timed_out=0]",
         )
         self.assertNotIn("file_read", summary)
 
@@ -5776,7 +5783,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 8)
+            self.assertEqual(metadata["schema_version"], 9)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

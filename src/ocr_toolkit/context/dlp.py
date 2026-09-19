@@ -5,6 +5,9 @@ from __future__ import annotations
 import html
 import re
 import unicodedata
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from ocr_toolkit.common.redaction import redact_env_secret_values, redact_sensitive
@@ -27,6 +30,10 @@ MARKDOWN_FORMAT_RE = re.compile(r"[`*_~]")
 DISPLAY_WHITESPACE_RE = re.compile(r"\s+")
 MIN_EXACT_EXCERPT_CHARS = 24
 MAX_EXCERPT_SEARCH_COST = 50_000_000
+DLP_ENV_NAME = "OCR_DLP_ENABLED"
+TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+_DLP_ENABLED: ContextVar[bool] = ContextVar("ocr_dlp_enabled", default=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +44,31 @@ class DLPResult:
     text: str | None
     reason: str
     detector: str | None = None
+    source_classes: tuple[str, ...] = ()
+
+
+def resolve_dlp_enabled(environment: Mapping[str, str]) -> bool:
+    """Resolve the public DLP switch once without exposing its raw value."""
+
+    raw = environment.get(DLP_ENV_NAME, "").strip().lower()
+    if not raw:
+        return True
+    if raw in TRUE_VALUES:
+        return True
+    if raw in FALSE_VALUES:
+        return False
+    raise ValueError(f"{DLP_ENV_NAME} must be one of true/false, 1/0, yes/no, or on/off")
+
+
+@contextmanager
+def dlp_mode(enabled: bool) -> Iterator[None]:
+    """Apply one already-resolved DLP mode to synchronous review boundaries."""
+
+    token = _DLP_ENABLED.set(enabled)
+    try:
+        yield
+    finally:
+        _DLP_ENABLED.reset(token)
 
 
 def _html_decode(value: str) -> str:
@@ -98,62 +130,84 @@ def _source_normalize(value: str) -> str:
     return DISPLAY_WHITESPACE_RE.sub(" ", normalized).strip()
 
 
+FORBIDDEN_SOURCE_CLASSES = frozenset(
+    {
+        "forge_discussions",
+        "remediation_threads",
+        "ci_outcomes",
+        "external_context",
+        "operator_secret",
+        "other",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ForbiddenValue:
+    """Attribute a private value when its owning source registers it."""
+
+    value: str
+    source_class: str
+
+    def __post_init__(self) -> None:
+        if self.source_class not in FORBIDDEN_SOURCE_CLASSES:
+            raise ValueError("unknown forbidden source class")
+
+
 @dataclass(frozen=True, slots=True)
 class ForbiddenMatcher:
-    """Compile non-publishable values once for bounded result-string checks."""
+    """Compile protected values and their closed provenance once."""
 
     exact: tuple[str, ...]
+    sources: tuple[frozenset[str], ...] = ()
 
     @classmethod
-    def compile(cls, values: tuple[str, ...]) -> ForbiddenMatcher:
-        exact: list[str] = []
-        seen: set[str] = set()
-        for value in values:
+    def compile(cls, values: tuple[str | ForbiddenValue, ...]) -> ForbiddenMatcher:
+        registered: dict[str, set[str]] = {}
+        for item in values:
+            value = item.value if isinstance(item, ForbiddenValue) else item
+            source = item.source_class if isinstance(item, ForbiddenValue) else "other"
             candidate = normalize_text(value, allow_horizontal_tabs=True)
             if not candidate:
                 continue
             for representation in (_display_normalize(candidate), _source_normalize(candidate)):
-                if representation and representation not in seen:
-                    seen.add(representation)
-                    exact.append(representation)
-        return cls(tuple(exact))
+                if representation:
+                    registered.setdefault(representation, set()).add(source)
+        return cls(tuple(registered), tuple(frozenset(v) for v in registered.values()))
 
-    def match_reason(self, value: str) -> str | None:
-        """Return a closed exact-match or work-bound failure reason."""
+    def match_details(self, value: str) -> tuple[str | None, tuple[str, ...]]:
+        """Return rejection and aggregate classes without retaining rejected content."""
 
+        matched: set[str] = set()
         for normalized in {_display_normalize(value), _source_normalize(value)}:
-            if any(candidate == normalized for candidate in self.exact):
-                return "forbidden"
             comparison_cost = max(1, len(normalized)) * sum(
                 max(1, len(candidate)) for candidate in self.exact
             )
             if comparison_cost > MAX_EXCERPT_SEARCH_COST:
-                # Bound every containment direction, not only the sliding-window phase.
-                return "limit"
-            if any(candidate in normalized for candidate in self.exact):
-                return "forbidden"
-            if len(normalized) < MIN_EXACT_EXCERPT_CHARS:
-                continue
-            candidates = tuple(
-                candidate for candidate in self.exact if len(candidate) >= MIN_EXACT_EXCERPT_CHARS
+                return "limit", ()
+            long_indices = tuple(
+                i
+                for i, candidate in enumerate(self.exact)
+                if len(candidate) >= MIN_EXACT_EXCERPT_CHARS
             )
-            if any(normalized in candidate for candidate in candidates):
-                return "forbidden"
-            windows = len(normalized) - MIN_EXACT_EXCERPT_CHARS + 1
-            if windows * sum(len(candidate) for candidate in candidates) > MAX_EXCERPT_SEARCH_COST:
-                # The publication owner cannot prove non-disclosure inside its hard work bound.
-                return "limit"
-            if any(
-                normalized[index : index + MIN_EXACT_EXCERPT_CHARS] in candidate
-                for index in range(windows)
-                for candidate in candidates
-            ):
-                return "forbidden"
-        return None
+            windows = max(0, len(normalized) - MIN_EXACT_EXCERPT_CHARS + 1)
+            if windows * sum(len(self.exact[i]) for i in long_indices) > MAX_EXCERPT_SEARCH_COST:
+                return "limit", ()
+            for i, candidate in enumerate(self.exact):
+                found = candidate == normalized or candidate in normalized
+                if not found and windows and len(candidate) >= MIN_EXACT_EXCERPT_CHARS:
+                    found = normalized in candidate or any(
+                        normalized[j : j + MIN_EXACT_EXCERPT_CHARS] in candidate
+                        for j in range(windows)
+                    )
+                if found:
+                    matched.update(self.sources[i] if self.sources else {"other"})
+        return ("forbidden", tuple(sorted(matched))) if matched else (None, ())
+
+    def match_reason(self, value: str) -> str | None:
+        return self.match_details(value)[0]
 
     def matches(self, value: str) -> bool:
-        """Return whether exact disclosure or work uncertainty blocks the value."""
-
         return self.match_reason(value) is not None
 
 
@@ -178,9 +232,10 @@ def check_text(
     *,
     budgets: TextBudgets,
     publication: bool = False,
-    forbidden: tuple[str, ...] = (),
+    forbidden: tuple[str | ForbiddenValue, ...] = (),
     forbidden_matcher: ForbiddenMatcher | None = None,
     allow_horizontal_tabs: bool = False,
+    enabled: bool | None = None,
 ) -> DLPResult:
     """Apply independent units, redaction, PII, and optional publication checks."""
 
@@ -201,6 +256,8 @@ def check_text(
             else "lines"
         )
         return DLPResult(False, None, "limit", detector)
+    if not (_DLP_ENABLED.get() if enabled is None else enabled):
+        return DLPResult(True, normalized, "disabled")
     redacted = redact_env_secret_values(redact_sensitive(normalized))
     if redacted != normalized:
         return DLPResult(False, None, "secret", "normalized")
@@ -220,8 +277,9 @@ def check_text(
         if _contains_phone(candidate):
             return DLPResult(False, None, "pii", f"phone:{representation}")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
-    if matcher_reason := matcher.match_reason(normalized):
-        return DLPResult(False, None, matcher_reason, "forbidden_matcher")
+    matcher_reason, source_classes = matcher.match_details(normalized)
+    if matcher_reason:
+        return DLPResult(False, None, matcher_reason, "forbidden_matcher", source_classes)
     if publication:
         laundering = (
             "markdown_destination"

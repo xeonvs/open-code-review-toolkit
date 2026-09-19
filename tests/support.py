@@ -135,13 +135,13 @@ def review_receipt_v8(
         {
             "server": server,
             "transport": "remote",
-            "tools": [f"{server}_read"],
+            "tools": [f"{server}__read"],
         }
         for server in usage
         if server != "ocr_toolkit_evidence"
     )
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -162,9 +162,48 @@ def review_receipt_v8(
             "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
             "required_degraded": False,
             "mutable_admitted": False,
+            "legacy_policy": False,
             "tool_usage": context_tool_usage,
         },
-        "mcp": {"capabilities": capabilities, "usage": usage},
+        "mcp": {
+            "capabilities": capabilities,
+            "usage": usage,
+            "federation": (
+                {
+                    "receipt": {
+                        "schema": "ocr.federation/v1",
+                        "run_id": "c" * 32,
+                        "state": "finalized",
+                        "cleanup": "clean",
+                        "tools": {
+                            f"{server}__read": {
+                                "server": server,
+                                "assurance": "review_read",
+                                "attempted": count,
+                                "completed": count,
+                                "denied": 0,
+                                "failed": 0,
+                                "timed_out": 0,
+                                "dlp_rejected": 0,
+                                "oversized": 0,
+                                "cache_hits": 0,
+                                "single_flight": 0,
+                            }
+                            for server, count in usage.items()
+                            if server != "ocr_toolkit_evidence"
+                        },
+                    },
+                    "ocr_attempts": {
+                        f"{server}__read": count
+                        for server, count in usage.items()
+                        if server != "ocr_toolkit_evidence"
+                    },
+                    "state": "complete",
+                }
+                if any(server != "ocr_toolkit_evidence" for server in usage)
+                else None
+            ),
+        },
         "evidence": {
             "mandatory": mandatory,
             "used": sum(completed.values()) > 0,
@@ -175,6 +214,7 @@ def review_receipt_v8(
                 "completed": completed,
             },
         },
+        "dlp": {"enabled": True},
         "publication": {"state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},

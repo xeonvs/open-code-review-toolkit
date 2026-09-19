@@ -80,19 +80,23 @@ flowchart TD
     initial_state -- Invalid --> preflight_error
     initial_state -- Merged or closed --> terminal_note[Upsert expected terminal status;<br/>no evidence, OCR, findings, or approval]
     initial_state -- Open or local --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
-    acquire --> acquire_ok{Evidence, context, and MCP<br/>composition valid?}
+    acquire --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
+    registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
     acquire_ok -- Yes --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
     preview --> preview_ok{Preview accepted?}
     preview_ok -- No --> preview_error[OCR not started; bounded failure path]
-    preview_ok -- Yes --> review[Run OCR against exact from/to refs]
+    preview_ok -- Yes --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay]
     review --> exit{OCR exit code}
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>closed failure note may be posted]
     exit -- Zero --> finalize[Enter result finalization]
-    finalize --> core{Result, manifest, identity, cleanup,<br/>and toolkit action receipt valid?}
+    finalize --> core{Result, manifest, identity, cleanup,<br/>action receipt and federation receipt valid?}
     core -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
     core -- Yes --> diag[Classify additive failed-tool diagnostics]
-    diag --> dlp[Apply publication sinks and private-field DLP]
+    diag --> dlp_mode{OCR_DLP_ENABLED?}
+    dlp_mode -- true --> dlp[Apply stage-aware publication<br/>and private-field DLP]
+    dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
+    disabled --> publishable
     dlp --> dlp_state{DLP state}
     dlp_state -- passed --> publishable[Complete publishable projection]
     dlp_state -- private-sanitized --> publishable
@@ -109,7 +113,7 @@ flowchart TD
     runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
     integrity_error -- Explicit local --> local_failure
     local_output -- No --> local_handoff[Private JSON handoff only]
-    mode -- GitLab MR --> receipt[Attach exact receipt v8]
+    mode -- GitLab MR --> receipt[Attach exact receipt v9]
     receipt --> post{Posting input valid at readback?}
     post -- No --> posting_error[Publication-policy error;<br/>findings transaction not started]
     post -- Yes --> live_state{Exact MR identity and<br/>lifecycle still valid?}
@@ -133,8 +137,8 @@ flowchart TD
     class warning warning;
     class local auxiliary;
     class preflight_error,preview_error,runtime_error,integrity_error,posting_error error;
-    class start,acquire,preview,review,finalize,diag,dlp,publishable,partial,receipt,transaction,terminal_result auxiliary;
-    class input,initial_state,acquire_ok,preview_ok,exit,core,dlp_state,mode,post,live_state,transaction_ok,published decision;
+    class start,acquire,registry,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction,terminal_result auxiliary;
+    class input,initial_state,acquire_ok,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
@@ -181,7 +185,7 @@ flowchart TD
 Valid detail records are bounded, credential-redacted, and control-safe before they reach the
 local stderr or CI job log. Dynamic detail text, paths, and per-tool failure maps never enter the
 finalized result, receipt, merge-request comments, publication-DLP telemetry, or later-action
-inputs. Receipt v8 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
+inputs. Receipt v9 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
 `failed` integer for `verified`; the toolkit action receipt v3 remains authoritative for evidence
 attempts and completions.
 
@@ -204,7 +208,7 @@ evaluates the already-published result independently.
 flowchart TD
     handoff[Finalized result handoff] --> receipt{Toolkit receipt present?}
     receipt -- No --> direct[Compatible receipt-less posting path]
-    receipt -- Yes --> exact{Exact current receipt v8 valid?}
+    receipt -- Yes --> exact{Exact current receipt v9 valid?}
     exact -- No --> schema_error[Publication-policy error]
     exact -- Yes --> projection{Publication projection}
     direct --> publish[Publish findings and summary]
@@ -232,8 +236,9 @@ flowchart TD
 ```
 
 The current GitLab later action is an optional receipt-bound approval write. It is only one
-consumer of the finalized state. Unprotected targets, incomplete coverage, publication filtering,
-non-zero or uncertain tool diagnostics, context blockers, external MCP, identity movement, and
+consumer of the finalized state. Unprotected targets, disabled DLP, incomplete coverage,
+publication filtering, non-zero or uncertain tool diagnostics, context blockers, used advisory
+federation tools or uncertain federation accounting, identity movement, and
 other documented gates can make that action unavailable without turning a successfully published
 review into a failure. GitLab approval rules, Code Owners, protected-branch policy, and mergeability
 remain external merge-policy authorities.

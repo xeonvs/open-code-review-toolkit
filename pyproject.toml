@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.31.0", "hatch-vcs>=0.5.0"]
+requires = ["hatchling>=1.32.0", "hatch-vcs>=0.5.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -23,7 +23,13 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+  "mcp>=2.2.0,<3",
+  "jsonschema>=4.26.0,<5",
+  "httpx2>=2.13.0,<3",
+  "anyio>=4.10.0,<5",
+  "certifi>=2026.7.22,<2027",
+]
 
 [project.urls]
 Homepage = "https://github.com/xeonvs/open-code-review-toolkit"
@@ -38,16 +44,18 @@ ocr-ci = "ocr_toolkit.cli:main"
 [dependency-groups]
 dev = [
   "bandit==1.9.4",
-  "build>=1.5.0",
-  "coverage[toml]>=7.15.2",
+  "build>=1.6.1",
+  "coverage[toml]>=7.16.1",
   "hatch-vcs>=0.5.0",
-  "mypy>=2.3.0",
+  "mypy>=2.3.1",
   "pip-audit>=2.10.1",
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
-  "ruff>=0.16.0",
-  "towncrier>=25.8.0",
+  "ruff>=0.16.7",
+  "setuptools-scm==10.2.3",
+  "towncrier>=26.9.0",
   "twine>=7.0.0",
+  "types-jsonschema>=4.26.0.20260518",
 ]
 
 [tool.hatch.version]

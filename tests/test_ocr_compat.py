@@ -29,8 +29,8 @@ def load_script() -> ModuleType:
     return module
 
 
-def current_contracts(module: ModuleType) -> dict[str, Any]:
-    """Extend a frozen fixture with the current, version-neutral consumed controls."""
+def current_contracts(module: ModuleType, version: str = "1.12.1") -> dict[str, Any]:
+    """Extend a frozen fixture with the live contract selected for one version."""
 
     contracts = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
         "contracts"
@@ -44,12 +44,30 @@ def current_contracts(module: ModuleType) -> dict[str, Any]:
     }
     contracts["language_rule_probe"].update(
         {
-            "extensions": sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES),
-            "selected": len(module.CURRENT_LANGUAGE_RULES),
-            "default_excluded_paths": list(module.CURRENT_DEFAULT_EXCLUDED_PATHS),
+            "extensions": sorted(
+                Path(path).suffix for path in module._language_rules_for_version(version)
+            ),
+            "selected": len(module._language_rules_for_version(version)),
+            "default_excluded_paths": list(module._default_excluded_paths_for_version(version)),
         }
     )
+    contracts["provider_directory_preview_probe"] = {
+        "result": "passed",
+        "tracked_provider_directory": (
+            "reported"
+            if module._version(version) >= module.PROVIDER_DIRECTORY_PREVIEW_CUTOFF
+            else "omitted"
+        ),
+    }
     return contracts
+
+
+def set_manifest_recommendation(module: ModuleType, manifest: dict[str, Any], version: str) -> None:
+    """Move a synthetic manifest and its independent runtime window together."""
+
+    manifest["recommended_version"] = version
+    manifest["monitoring_floor"] = version
+    manifest["runtime_support"] = module._rolling_runtime_support(version)
 
 
 def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
@@ -68,8 +86,18 @@ def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     assert module._language_negative_paths_for_version("1.11.7") == (
         "rtl/include.svh",
         "policies/authz.rego",
+        "types/interface.pyi",
     )
-    assert module._language_negative_paths_for_version("1.11.8") == ("rtl/include.svh",)
+    assert module._language_negative_paths_for_version("1.11.8") == (
+        "rtl/include.svh",
+        "types/interface.pyi",
+    )
+    assert module._language_rules_for_version("1.12.0")["types/interface.pyi"] == "default"
+    assert module._language_negative_paths_for_version("1.12.0") == ("rtl/include.svh",)
+    assert (
+        module._language_rules_for_version("1.12.1")["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
+    )
+    assert module._language_negative_paths_for_version("1.12.1") == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -86,8 +114,7 @@ def manifest_before_1_11_3(module: ModuleType) -> dict[str, Any]:
     """Return the committed support chain as it stood before 1.11.3 promotion."""
 
     manifest = module.load_json(MANIFEST)
-    manifest["recommended_version"] = "1.11.2"
-    manifest["monitoring_floor"] = "1.11.2"
+    set_manifest_recommendation(module, manifest, "1.11.2")
     manifest["releases"] = [
         item for item in manifest["releases"] if module._version(item["version"]) < (1, 11, 3)
     ]
@@ -98,8 +125,7 @@ def manifest_before_1_11_7(module: ModuleType) -> dict[str, Any]:
     """Return the committed support chain immediately before this promotion."""
 
     manifest = module.load_json(MANIFEST)
-    manifest["recommended_version"] = "1.11.6"
-    manifest["monitoring_floor"] = "1.11.6"
+    set_manifest_recommendation(module, manifest, "1.11.6")
     manifest["releases"] = [
         item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 6)
     ]
@@ -112,8 +138,15 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
 
     module.validate_manifest(manifest, PROJECT_ROOT)
 
-    assert manifest["recommended_version"] == "1.11.9"
-    assert manifest["monitoring_floor"] == "1.11.9"
+    assert manifest["schema_version"] == 2
+    assert manifest["recommended_version"] == "1.12.7"
+    assert manifest["monitoring_floor"] == "1.12.7"
+    assert manifest["runtime_support"] == {
+        "deprecated_lines": ["1.10"],
+        "qualified_patches_only": True,
+        "rejected_before": "1.10.0",
+        "supported_lines": ["1.11", "1.12"],
+    }
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
         ("1.8.0", "tested"),
@@ -151,7 +184,39 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.11.7", "tested"),
         ("1.11.8", "tested"),
         ("1.11.9", "tested"),
+        ("1.12.0", "tested"),
+        ("1.12.1", "tested"),
+        ("1.12.2", "tested"),
+        ("1.12.3", "tested"),
+        ("1.12.4", "tested"),
+        ("1.12.5", "tested"),
+        ("1.12.6", "tested"),
+        ("1.12.7", "tested"),
     ]
+
+    assert module.qualified_runtime_versions(manifest) == (
+        [
+            "1.11.0",
+            "1.11.1",
+            "1.11.2",
+            "1.11.3",
+            "1.11.4",
+            "1.11.5",
+            "1.11.6",
+            "1.11.7",
+            "1.11.8",
+            "1.11.9",
+            "1.12.0",
+            "1.12.1",
+            "1.12.2",
+            "1.12.3",
+            "1.12.4",
+            "1.12.5",
+            "1.12.6",
+            "1.12.7",
+        ],
+        ["1.10.0", "1.10.1", "1.10.2"],
+    )
 
 
 def test_language_probe_generation_and_validation_share_canonical_order() -> None:
@@ -161,10 +226,43 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     contracts = current_contracts(module)
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES)
-    module._validate_current_contracts(contracts)
+    module._validate_current_contracts(contracts, "1.12.1")
     extensions.reverse()
     with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_current_contracts(contracts)
+        module._validate_current_contracts(contracts, "1.12.1")
+
+
+@pytest.mark.parametrize(
+    ("version", "selected", "preview_state"),
+    [("1.12.0", 18, "omitted"), ("1.12.1", 18, "reported")],
+)
+def test_current_contract_selects_live_language_and_preview_epoch(
+    version: str, selected: int, preview_state: str
+) -> None:
+    module = load_script()
+    contracts = current_contracts(module, version)
+
+    module._validate_current_contracts(contracts, version)
+    assert contracts["language_rule_probe"]["selected"] == selected
+    assert (
+        contracts["provider_directory_preview_probe"]["tracked_provider_directory"] == preview_state
+    )
+
+
+def test_pytest_prefix_exclusion_epoch_preserves_older_evidence() -> None:
+    module = load_script()
+
+    assert module._default_excluded_paths_for_version("1.12.6") == (
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+    )
+    assert module._default_excluded_paths_for_version("1.12.7") == (
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+    )
+    module._validate_current_contracts(current_contracts(module, "1.12.6"), "1.12.6")
+    module._validate_current_contracts(current_contracts(module, "1.12.7"), "1.12.7")
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
@@ -194,6 +292,24 @@ def test_manifest_rejects_floor_above_recommended() -> None:
     manifest["monitoring_floor"] = "2.0.0"
 
     with pytest.raises(module.CompatibilityError, match="monitoring_floor"):
+        module.validate_manifest(manifest, PROJECT_ROOT)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("supported_lines", ["1.10", "1.12"]),
+        ("deprecated_lines", ["1.9"]),
+        ("rejected_before", "1.9.0"),
+        ("qualified_patches_only", False),
+    ],
+)
+def test_manifest_rejects_runtime_window_drift(field: str, value: object) -> None:
+    module = load_script()
+    manifest = module.load_json(MANIFEST)
+    manifest["runtime_support"][field] = value
+
+    with pytest.raises(module.CompatibilityError, match="runtime_support"):
         module.validate_manifest(manifest, PROJECT_ROOT)
 
 
@@ -1444,7 +1560,7 @@ def test_reasoning_gateway_records_capture_overflow() -> None:
 
 
 def test_grouping_inventory_strictly_parses_current_shape() -> None:
-    """Live qualification accepts status-first data and rejects legacy wire grammar."""
+    """Live qualification accepts indexed data and rejects both older wire grammars."""
 
     module = load_script()
 
@@ -1457,8 +1573,9 @@ def test_grouping_inventory_strictly_parses_current_shape() -> None:
                 "content": (
                     "Group the following changed files:\n\n"
                     f"{inventory}\n\n"
-                    "Respond with a JSON array:\n"
-                    '[{"label": "theme", "files": ["path"]}]'
+                    'Respond with a JSON array, where "files" holds the integer indices '
+                    "shown in brackets beside each file:\n"
+                    '[{"label": "theme", "files": [0]}]'
                 ),
             }
         ]
@@ -1470,15 +1587,15 @@ def test_grouping_inventory_strictly_parses_current_shape() -> None:
     )
     result = module.parse_grouping_inventory(
         messages(
-            "ADDED   src/space (unicode) λ.py (+10/-0)\n"
-            "DELETED   win\\deleted.hbs (+0/-5)\n"
-            "RENAMED   renamed.mustache (+0/-0)"
+            "[0] ADDED   src/space (unicode) λ.py (+10/-0)\n"
+            "[1] DELETED   win\\deleted.hbs (+0/-5)\n"
+            "[2] RENAMED   renamed.mustache (+0/-0)"
         )
     )
     assert result == [
-        module.GroupingInventoryEntry("ADDED", "src/space (unicode) λ.py", 10, 0),
-        module.GroupingInventoryEntry("DELETED", "win\\deleted.hbs", 0, 5),
-        module.GroupingInventoryEntry("RENAMED", "renamed.mustache", 0, 0),
+        module.GroupingInventoryEntry(0, "ADDED", "src/space (unicode) λ.py", 10, 0),
+        module.GroupingInventoryEntry(1, "DELETED", "win\\deleted.hbs", 0, 5),
+        module.GroupingInventoryEntry(2, "RENAMED", "renamed.mustache", 0, 0),
     ]
     with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
         module.parse_grouping_inventory(old_inventory)
@@ -1513,13 +1630,16 @@ def test_schema_three_candidate_remains_chain_aware() -> None:
     "inventory",
     [
         "MODIFIED   one.py (+1/-1)\none.py (MODIFIED, +1/-1)",
-        "MODIFIED  one.py (+1/-1)",
-        "BINARY   image.bin (+0/-0)",
-        "UNKNOWN   one.py (+1/-1)",
-        "MODIFIED   one.py (+01/-1)",
-        "MODIFIED   one.py (+1000000001/-0)",
-        "MODIFIED   one.py (+1/-1)\nMODIFIED   one.py (+1/-1)",
-        "MODIFIED   one.py (+1/-1) trailing",
+        "[0] MODIFIED  one.py (+1/-1)",
+        "[0] BINARY   image.bin (+0/-0)",
+        "[0] UNKNOWN   one.py (+1/-1)",
+        "[00] MODIFIED   one.py (+1/-1)",
+        "[0] MODIFIED   one.py (+01/-1)",
+        "[0] MODIFIED   one.py (+1000000001/-0)",
+        "[1] MODIFIED   one.py (+1/-1)",
+        "[0] MODIFIED   one.py (+1/-1)\n[2] MODIFIED   two.py (+1/-1)",
+        "[0] MODIFIED   one.py (+1/-1)\n[1] MODIFIED   one.py (+1/-1)",
+        "[0] MODIFIED   one.py (+1/-1) trailing",
     ],
 )
 def test_grouping_inventory_rejects_mixed_duplicate_and_malformed_values(
@@ -1533,7 +1653,8 @@ def test_grouping_inventory_rejects_mixed_duplicate_and_malformed_values(
             "role": "user",
             "content": (
                 "Group the following changed files:\n\n"
-                f"{inventory}\n\nRespond with a JSON array:\n[]"
+                f'{inventory}\n\nRespond with a JSON array, where "files" holds the '
+                "integer indices shown in brackets beside each file:\n[]"
             ),
         }
     ]
@@ -1550,7 +1671,9 @@ def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> 
         "role": "user",
         "content": (
             "Group the following changed files:\n\n"
-            "MODIFIED   one.py (+1/-1)\n\nRespond with a JSON array:\n[]"
+            "[0] MODIFIED   one.py (+1/-1)\n\n"
+            'Respond with a JSON array, where "files" holds the integer indices '
+            "shown in brackets beside each file:\n[]"
         ),
     }
 
@@ -1559,7 +1682,7 @@ def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> 
     with pytest.raises(module.CompatibilityError, match="exactly one"):
         module.parse_grouping_inventory([valid, valid])
     oversized = "\n".join(
-        f"MODIFIED   file-{index}.py (+1/-1)"
+        f"[{index}] MODIFIED   file-{index}.py (+1/-1)"
         for index in range(module.MAX_GROUPING_INVENTORY_ENTRIES + 1)
     )
     with pytest.raises(module.CompatibilityError, match="invalid entry count"):
@@ -1569,7 +1692,8 @@ def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> 
                     "role": "user",
                     "content": (
                         "Group the following changed files:\n\n"
-                        f"{oversized}\n\nRespond with a JSON array:\n[]"
+                        f'{oversized}\n\nRespond with a JSON array, where "files" holds the '
+                        "integer indices shown in brackets beside each file:\n[]"
                     ),
                 }
             ],
@@ -1600,13 +1724,13 @@ def test_grouping_inventory_rejects_reorder_status_and_churn_drift(
 
     module = load_script()
     expected = [
-        module.GroupingInventoryEntry("MODIFIED", "first.py", 1, 1),
-        module.GroupingInventoryEntry("MODIFIED", "second.py", 1, 1),
+        module.GroupingInventoryEntry(0, "MODIFIED", "first.py", 1, 1),
+        module.GroupingInventoryEntry(1, "MODIFIED", "second.py", 1, 1),
     ]
 
     with pytest.raises(module.CompatibilityError, match="unexpected status/churn"):
         module._require_exact_grouping_inventory(
-            [module.GroupingInventoryEntry(*entry) for entry in observed],
+            [module.GroupingInventoryEntry(index, *entry) for index, entry in enumerate(observed)],
             expected,
         )
 
@@ -1869,8 +1993,7 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         )
     manifest_path = root / "compatibility" / "ocr-support.json"
     synthetic_manifest = module.load_json(MANIFEST)
-    synthetic_manifest["monitoring_floor"] = "1.8.6"
-    synthetic_manifest["recommended_version"] = "1.8.6"
+    set_manifest_recommendation(module, synthetic_manifest, "1.8.6")
     synthetic_manifest["releases"] = [
         item
         for item in synthetic_manifest["releases"]
@@ -1878,7 +2001,16 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
     ]
     manifest_path.write_bytes(module.canonical_json(synthetic_manifest))
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
-    preflight.write_text('EXPECTED_OCR_VERSION = "1.8.6"\n', encoding="utf-8")
+    old_supported, old_deprecated = module.qualified_runtime_versions(synthetic_manifest)
+    preflight.write_text(
+        module._render_python_constant("RECOMMENDED_OCR_VERSION", "1.8.6")
+        + "\n"
+        + module._render_python_constant("SUPPORTED_OCR_VERSIONS", tuple(old_supported))
+        + "\n"
+        + module._render_python_constant("DEPRECATED_OCR_VERSIONS", tuple(old_deprecated))
+        + "\n",
+        encoding="utf-8",
+    )
     example = root / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
     example.write_text(
         'OCR_VERSION: "v1.8.6"\n'
@@ -1960,7 +2092,9 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert updated["recommended_version"] == "1.8.8"
     assert updated["monitoring_floor"] == "1.8.8"
-    assert 'EXPECTED_OCR_VERSION = "1.8.8"' in preflight.read_text(encoding="utf-8")
+    updated_preflight = preflight.read_text(encoding="utf-8")
+    assert 'RECOMMENDED_OCR_VERSION = "1.8.8"' in updated_preflight
+    assert '    "1.8.8",' in updated_preflight
     release_188 = next(item for item in updated["releases"] if item["version"] == "1.8.8")
     assert release_188["capabilities"] == [
         "llm_result_identity",
@@ -1984,7 +2118,7 @@ def promotion_manifest(tmp_path: Path) -> Path:
 
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    manifest["recommended_version"] = manifest["monitoring_floor"] = "1.11.3"
+    set_manifest_recommendation(module, manifest, "1.11.3")
     manifest["releases"] = [
         item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 3)
     ]
@@ -2025,7 +2159,13 @@ def test_historical_evidence_is_independent_of_live_contract_defaults(
 
 
 @pytest.mark.parametrize(
-    "missing_probe", ["comment_arguments_probe", "reasoning_effort_probe", "language_rule_probe"]
+    "missing_probe",
+    [
+        "comment_arguments_probe",
+        "reasoning_effort_probe",
+        "language_rule_probe",
+        "provider_directory_preview_probe",
+    ],
 )
 def test_current_promotion_rejects_missing_contract_before_writing(
     promotion_manifest: Path,
@@ -2039,7 +2179,7 @@ def test_current_promotion_rejects_missing_contract_before_writing(
     evidence["tag"] = "v1.12.0"
     evidence["comparison_version"] = "1.11.3"
     evidence["tested_baseline_version"] = "1.11.3"
-    evidence["contracts"] = current_contracts(module)
+    evidence["contracts"] = current_contracts(module, "1.12.0")
     evidence["contracts"].pop(missing_probe)
     before = promotion_manifest.read_bytes()
     with pytest.raises(module.CompatibilityError, match=missing_probe):
@@ -2058,7 +2198,7 @@ def test_recent_historical_evidence_is_independent_of_live_inventory(
 ) -> None:
     module = load_script()
     manifest = module.load_json(MANIFEST)
-    manifest["recommended_version"] = manifest["monitoring_floor"] = "1.11.5"
+    set_manifest_recommendation(module, manifest, "1.11.5")
     manifest["releases"] = [
         item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 5)
     ]
@@ -2084,22 +2224,38 @@ def test_ocr_1117_uses_frozen_contract_independent_of_live_rego_inventory(
 
 
 @pytest.mark.parametrize("version", ["1.11.8", "1.11.9"])
-def test_current_ocr_evidence_requires_rego_probe_before_promotion(version: str) -> None:
+def test_rego_epoch_is_frozen_without_reinterpreting_evidence(version: str) -> None:
     module = load_script()
-    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
-    evidence["version"] = version
-    evidence["contracts"] = current_contracts(module)
+    evidence_path = PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json"
+    before = evidence_path.read_bytes()
+    evidence = module.load_json(evidence_path)
 
     module._validate_evidence_contracts(version, evidence)
     language = evidence["contracts"]["language_rule_probe"]
     language["extensions"].remove(".rego")
     language["selected"] -= 1
 
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
         module._validate_evidence_contracts(version, evidence)
+    assert evidence_path.read_bytes() == before
 
 
-def test_ocr_1117_to_1119_chain_crosses_frozen_and_current_epochs_before_writes(
+def test_ocr_1120_uses_live_contract_after_frozen_evidence_cutoff() -> None:
+    module = load_script()
+    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.9.json")
+    evidence["version"] = "1.12.0"
+    evidence["contracts"] = current_contracts(module, "1.12.0")
+
+    module._validate_evidence_contracts("1.12.0", evidence)
+    language = evidence["contracts"]["language_rule_probe"]
+    language["extensions"].remove(".rego")
+    language["selected"] -= 1
+
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module._validate_evidence_contracts("1.12.0", evidence)
+
+
+def test_ocr_1117_to_1119_chain_crosses_frozen_epochs_before_writes(
     tmp_path: Path,
 ) -> None:
     module = load_script()
@@ -2131,7 +2287,7 @@ def test_ocr_1117_to_1119_chain_crosses_frozen_and_current_epochs_before_writes(
     language["selected"] = len(extensions)
     before = manifest_path.read_bytes()
 
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
         module.prepare_update(
             manifest_path=manifest_path,
             evidence=evidence,
@@ -2167,7 +2323,7 @@ def test_prepare_update_requires_human_review_for_minor_transition(
         )
 
 
-@pytest.mark.parametrize("version", ["1.12.0", "2.0.0"])
+@pytest.mark.parametrize("version", ["1.13.0", "2.0.0"])
 def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: str) -> None:
     """Legacy evidence cannot prove a chain across a semantic-version boundary."""
 
@@ -2193,11 +2349,11 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.13.0",
+        "version": "1.14.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.11.1",
-        "tested_baseline_version": "1.11.1",
+        "comparison_version": "1.12.6",
+        "tested_baseline_version": "1.12.6",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
@@ -2205,7 +2361,7 @@ def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
             manifest_path=MANIFEST,
             evidence=evidence,
             fragment_number=73,
-            human_conclusions={"1.13.0": "Synthetic reviewed conclusion."},
+            human_conclusions={"1.14.0": "Synthetic reviewed conclusion."},
             root=PROJECT_ROOT,
         )
 

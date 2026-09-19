@@ -232,7 +232,7 @@ def test_terminal_finding_result_checks_lifecycle_after_diff_read_and_keeps_limi
     assert order[:3] == ["diff-read", "lifecycle-read", "write"]
     published = "\n".join(notes)
     assert "Open Code Review omitted comments" in published
-    assert "1 omitted" in published
+    assert "remaining 1 comment(s)" in published
     assert "Merge request lifecycle at publication: `closed`" in published
 
 
