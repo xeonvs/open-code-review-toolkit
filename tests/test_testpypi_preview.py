@@ -175,6 +175,7 @@ def test_workflow_automates_one_idempotent_development_build_per_main_run() -> N
     assert "${GITHUB_RUN_NUMBER}" in workflow
     assert "development-version" in workflow
     assert workflow.count("testpypi-development-distributions") == 3
+    assert "runtime-requirements.txt" in workflow
     assert "overwrite: true" in workflow
     assert "needs.build.outputs.publish == 'true'" in workflow
     assert "needs.publish.result == 'skipped'" in workflow
@@ -195,6 +196,7 @@ def test_workflow_bounds_and_verifies_every_testpypi_download() -> None:
     assert workflow.count("--proto '=https' --proto-redir '=https'") == 1
     assert "verify_registry_artifacts.sh testpypi" in workflow
     assert "artifact-hashes.json testpypi.yml" in workflow
+    assert "testpypi.yml runtime-requirements.txt" in workflow
     assert "python -m build --no-isolation" in workflow
 
 
@@ -228,6 +230,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "attestations: true" in workflow
     assert workflow.count("verify_registry_artifacts.sh") == 2
     assert workflow.count("artifact-hashes.json release.yml") == 2
+    assert workflow.count("release.yml runtime-requirements.txt") == 2
     assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
@@ -243,6 +246,9 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "--max-filesize 1048576" in verifier
     assert "--proto '=https' --proto-redir '=https'" in verifier
     assert "sha256sum --check --strict" in verifier
+    assert (
+        verifier.count('pip" install --require-hashes --requirement "${runtime_requirements}"') == 2
+    )
     assert "verify_registry_provenance.py" in verifier
     assert '--workflow "${workflow}"' in verifier
     assert "application/vnd.pypi.integrity.v1+json" in verifier

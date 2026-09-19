@@ -243,6 +243,10 @@ jobs:
           uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
           uv run python -m build --no-isolation
       - run: uv run twine check dist/*
+      - name: Export hash-locked runtime dependencies
+        run: >-
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt
+          --output-file runtime-requirements.txt
       - name: Verify exact artifact version
         env:
           VERSION: ${{ steps.validate.outputs.version }}
@@ -313,6 +317,7 @@ jobs:
             dist/
             artifact-hashes.json
             SHA256SUMS
+            runtime-requirements.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -365,7 +370,9 @@ jobs:
       - name: Verify and smoke exact TestPyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}" artifact-hashes.json release.yml
+        run: >-
+          ./scripts/verify_registry_artifacts.sh testpypi "${VERSION}"
+          artifact-hashes.json release.yml runtime-requirements.txt
 
   publish-pypi:
     name: publish-pypi
@@ -415,7 +422,9 @@ jobs:
       - name: Verify and smoke exact PyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: ./scripts/verify_registry_artifacts.sh pypi "${VERSION}" artifact-hashes.json release.yml
+        run: >-
+          ./scripts/verify_registry_artifacts.sh pypi "${VERSION}"
+          artifact-hashes.json release.yml runtime-requirements.txt
 
   github-release:
     name: publish-github-release

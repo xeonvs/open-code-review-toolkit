@@ -369,6 +369,7 @@ def test_release_workflow_builds_reads_back_and_recovers_the_receipt() -> None:
     assert "verify_registry_provenance.py" in (
         ROOT / "scripts" / "verify_registry_artifacts.sh"
     ).read_text(encoding="utf-8")
+    assert "runtime-requirements.txt" in workflow
     assert "python scripts/release_receipt.py" in workflow
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
