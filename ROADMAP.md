@@ -51,7 +51,8 @@ flowchart LR
   federation, policy-v4 migration, receipt-v9 accounting, stage-aware DLP and the
   explicit default-on DLP control. It does not reopen established milestones or
   activate conditional second-forge, model-profile, routing or evidence-pack work.
-  Stable publication and external reconciliation remain separate release states.
+  Stable publication and external reconciliation completed on 2026-09-19 through
+  the protected release and no-release closure lifecycles.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
