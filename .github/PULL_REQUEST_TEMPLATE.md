@@ -2,8 +2,8 @@
 
 ## Validation
 
-- [ ] `scripts/quality.sh check`
-- [ ] User-visible change has a Towncrier fragment
+- [ ] Applicable validation from `docs/development.md` completed; list commands and results below (`scripts/quality.sh check` for implementation/release work, affected existing contracts and semantic review for documentation-only work)
+- [ ] User-visible change has a Towncrier fragment, or this is classified `no-release` with the reason below
 - [ ] Examples and fixtures are synthetic
 - [ ] No credentials, private hosts, paths, or provider payloads are included
 
