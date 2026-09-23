@@ -275,15 +275,47 @@ jobs:
               encoding="utf-8",
           )
           PY
+      - name: Load protected v0.11.1 PyPI recovery policy
+        if: github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: release-recovery-policy
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind recovery to protected main and original release
+        if: github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1'
+        env:
+          ORIGINAL_MERGE: ${{ needs.authorize.outputs.commit }}
+        run: |
+          test "${GITHUB_REF}" = refs/heads/main
+          test "${ORIGINAL_MERGE}" = 08da246bddb358353c11376824f6171633ca10af
+          test "$(git -C release-recovery-policy rev-parse HEAD)" = "${GITHUB_SHA}"
+          git -C release-recovery-policy merge-base --is-ancestor "${ORIGINAL_MERGE}" "${GITHUB_SHA}"
       - id: registry
         name: Classify existing registry state
         env:
           VERSION: ${{ steps.validate.outputs.version }}
+          RECOVERY: ${{ github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1' }}
         run: |
           classify() {
             registry=$1
             url=$2
             output=$3
+            if [ "${registry}" = pypi ] && [ "${RECOVERY}" = true ]; then
+              curl --fail --location --silent --show-error \
+                --retry 3 --retry-delay 2 --retry-connrefused \
+                --connect-timeout 10 --max-time 120 --max-filesize 10485760 \
+                --proto '=https' --proto-redir '=https' \
+                https://pypi.org/pypi/open-code-review-toolkit/0.11.1/json \
+                --output "${output}"
+              python release-recovery-policy/scripts/testpypi_preview.py \
+                pypi-release-json-manifest --version "${VERSION}" \
+                --index-json "${output}" --hashes-json artifact-hashes.json \
+                --artifact-host files.pythonhosted.org > /tmp/pypi-recovery-manifest.json
+              echo 'pypi-state=already-published' >> "${GITHUB_OUTPUT}"
+              return
+            fi
             if ! status=$(curl --location --silent --show-error \
               --retry 3 --retry-delay 2 --retry-connrefused \
               --connect-timeout 10 --max-time 120 --max-filesize 10485760 \
@@ -417,6 +449,23 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.commit }}
           persist-credentials: false
+      - name: Load protected v0.11.1 PyPI recovery verifier
+        if: github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: release-recovery-policy
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind recovery to protected main and original release
+        if: github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1'
+        env:
+          ORIGINAL_MERGE: ${{ needs.build.outputs.commit }}
+        run: |
+          test "${GITHUB_REF}" = refs/heads/main
+          test "${ORIGINAL_MERGE}" = 08da246bddb358353c11376824f6171633ca10af
+          test "$(git -C release-recovery-policy rev-parse HEAD)" = "${GITHUB_SHA}"
+          git -C release-recovery-policy merge-base --is-ancestor "${ORIGINAL_MERGE}" "${GITHUB_SHA}"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: reviewed-release-distributions
@@ -427,9 +476,16 @@ jobs:
       - name: Verify and smoke exact PyPI artifacts
         env:
           VERSION: ${{ needs.build.outputs.version }}
-        run: >-
-          ./scripts/verify_registry_artifacts.sh pypi "${VERSION}"
-          artifact-hashes.json release.yml runtime-requirements.txt
+          RECOVERY: ${{ github.event_name == 'workflow_dispatch' && inputs.version == '0.11.1' }}
+        run: |
+          if [ "${RECOVERY}" = true ]; then
+            OCR_PYPI_JSON_RECOVERY=1 \
+              ./release-recovery-policy/scripts/verify_registry_artifacts.sh \
+              pypi "${VERSION}" artifact-hashes.json release.yml runtime-requirements.txt
+          else
+            ./scripts/verify_registry_artifacts.sh \
+              pypi "${VERSION}" artifact-hashes.json release.yml runtime-requirements.txt
+          fi
 
   github-release:
     name: publish-github-release
