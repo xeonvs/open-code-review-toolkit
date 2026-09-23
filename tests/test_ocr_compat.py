@@ -152,8 +152,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.12.7"
-    assert manifest["monitoring_floor"] == "1.12.7"
+    assert manifest["recommended_version"] == "1.12.9"
+    assert manifest["monitoring_floor"] == "1.12.9"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.10"],
         "qualified_patches_only": True,
@@ -205,6 +205,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.12.5", "tested"),
         ("1.12.6", "tested"),
         ("1.12.7", "tested"),
+        ("1.12.8", "tested"),
+        ("1.12.9", "tested"),
     ]
 
     assert module.qualified_runtime_versions(manifest) == (
@@ -227,6 +229,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.12.5",
             "1.12.6",
             "1.12.7",
+            "1.12.8",
+            "1.12.9",
         ],
         ["1.10.0", "1.10.1", "1.10.2"],
     )
@@ -2333,7 +2337,14 @@ def test_current_promotion_rejects_missing_contract_before_writing(
 
     module = load_script()
     promotion_manifest = tmp_path / "ocr-support.json"
-    promotion_manifest.write_bytes(MANIFEST.read_bytes())
+    previous_manifest = module.load_json(MANIFEST)
+    set_manifest_recommendation(module, previous_manifest, "1.12.7")
+    previous_manifest["releases"] = [
+        item
+        for item in previous_manifest["releases"]
+        if module._version(item["version"]) <= (1, 12, 7)
+    ]
+    promotion_manifest.write_text(json.dumps(previous_manifest), encoding="utf-8")
     evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.12.7.json")
     evidence["version"] = "1.12.8"
     evidence["tag"] = "v1.12.8"
