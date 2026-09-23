@@ -70,6 +70,23 @@ open_code_review:
       --proto '=https' --proto-redir '=https'
       "${OCR_TOOLKIT_CHECKSUMS_URL}"
       --output /tmp/open-code-review-toolkit-SHA256SUMS
+    - >-
+      curl --fail --location --silent --show-error
+      --retry 3 --retry-delay 2 --retry-connrefused
+      --connect-timeout 10 --max-time 120
+      --max-filesize 1048576
+      --proto '=https' --proto-redir '=https'
+      "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/runtime-requirements.txt"
+      --output /tmp/runtime-requirements.txt
+    - export toolkit_requirements_sha256="$(awk '$2 == "runtime-requirements.txt" { print $1 }' /tmp/open-code-review-toolkit-SHA256SUMS)"
+    - echo "${toolkit_requirements_sha256}" | grep -Eq '^[0-9a-f]{64}$'
+    - echo "${toolkit_requirements_sha256}  /tmp/runtime-requirements.txt" | sha256sum --check --strict
+    - >-
+      pip install --isolated --disable-pip-version-check
+      --require-hashes --only-binary=:all:
+      --retries 3 --timeout 10
+      --index-url https://pypi.org/simple
+      --requirement /tmp/runtime-requirements.txt
     - export OCR_TOOLKIT_WHEEL="open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl"
     - export OCR_TOOLKIT_WHEEL_SHA256="$(awk -v file="${OCR_TOOLKIT_WHEEL}" '$2 == file { print $1 }' /tmp/open-code-review-toolkit-SHA256SUMS)"
     - echo "${OCR_TOOLKIT_WHEEL_SHA256}" | grep -Eq '^[0-9a-f]{64}$'
@@ -82,6 +99,7 @@ open_code_review:
       --dest /tmp --requirement /tmp/ocr-toolkit-requirement.txt
     - echo "${OCR_TOOLKIT_WHEEL_SHA256}  /tmp/${OCR_TOOLKIT_WHEEL}" | sha256sum --check --strict
     - pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"
+    - pip check
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"

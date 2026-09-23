@@ -15,6 +15,7 @@ import pytest
 from tests.support import PROJECT_ROOT
 
 HELPER = PROJECT_ROOT / "tests" / "installed_policy_e2e.py"
+RUNTIME_SMOKE = PROJECT_ROOT / "scripts" / "installed_runtime_smoke.py"
 ARTIFACT_VERSION = "0.0.dev0"
 
 
@@ -44,7 +45,7 @@ def _run(
 
 
 @pytest.fixture(scope="module")
-def installed_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+def installed_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path, Path]:
     """Build a direct wheel and a wheel rebuilt from the local source distribution."""
 
     root = tmp_path_factory.mktemp("installed-policy-artifacts")
@@ -54,6 +55,23 @@ def installed_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path,
     direct.mkdir()
     source.mkdir()
     rebuilt.mkdir()
+    runtime_requirements = root / "runtime-requirements.txt"
+    uv_binary = shutil.which("uv")
+    assert uv_binary is not None
+    _run(
+        [
+            uv_binary,
+            "export",
+            "--frozen",
+            "--no-default-groups",
+            "--no-emit-project",
+            "--format",
+            "requirements-txt",
+            "--output-file",
+            str(runtime_requirements),
+        ],
+        cwd=PROJECT_ROOT,
+    )
     environment = dict(os.environ)
     environment.update(
         {
@@ -107,11 +125,49 @@ def installed_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path,
         cwd=source_root,
         env=environment,
     )
-    return next(direct.glob("*.whl")), next(rebuilt.glob("*.whl"))
+    return next(direct.glob("*.whl")), next(rebuilt.glob("*.whl")), runtime_requirements
+
+
+def test_installation_without_runtime_lock_fails_functional_mcp_probe(
+    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    """The historical wheel-only recipe must fail in a clean interpreter."""
+
+    uv_binary = shutil.which("uv")
+    assert uv_binary is not None
+    environment = tmp_path / "missing-dependencies"
+    _run(
+        [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
+        cwd=tmp_path,
+    )
+    python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _run(
+        [
+            uv_binary,
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "--no-deps",
+            str(installed_artifacts[0]),
+        ],
+        cwd=tmp_path,
+    )
+    probe = subprocess.run(
+        [str(python), "-I", str(PROJECT_ROOT / "scripts" / "installed_runtime_smoke.py")],
+        cwd=tmp_path,
+        env={"HOME": str(tmp_path), "PATH": ""},
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert probe.returncode != 0
+    assert "No module named 'mcp'" in probe.stderr
 
 
 def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
-    installed_artifacts: tuple[Path, Path], tmp_path: Path
+    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
 ) -> None:
     """Prove both package paths under hostile imports, private state, and stdio MCP."""
 
@@ -119,7 +175,9 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
     uv_binary = shutil.which("uv")
     assert git_binary is not None
     assert uv_binary is not None
-    for label, artifact in zip(("wheel", "sdist"), installed_artifacts, strict=True):
+    artifacts = installed_artifacts[:2]
+    runtime_requirements = installed_artifacts[2]
+    for label, artifact in zip(("wheel", "sdist"), artifacts, strict=True):
         root = tmp_path / label
         root.mkdir(mode=0o700)
         environment = root / "venv"
@@ -131,7 +189,24 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
         python = binary_directory / ("python.exe" if os.name == "nt" else "python")
         cli = binary_directory / ("ocr-ci.exe" if os.name == "nt" else "ocr-ci")
         _run(
-            [uv_binary, "pip", "install", "--python", str(python), str(artifact)],
+            [
+                uv_binary,
+                "pip",
+                "install",
+                "--python",
+                str(python),
+                "--require-hashes",
+                "--only-binary",
+                ":all:",
+                "--index-url",
+                "https://pypi.org/simple",
+                "--requirement",
+                str(runtime_requirements),
+            ],
+            cwd=root,
+        )
+        _run(
+            [uv_binary, "pip", "install", "--python", str(python), "--no-deps", str(artifact)],
             cwd=root,
         )
         _run([uv_binary, "pip", "check", "--python", str(python)], cwd=root)
@@ -236,3 +311,45 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             "debug_parity": True,
             "progress_parity": True,
         }
+
+
+def test_installed_runtime_smoke_fails_without_runtime_dependencies(
+    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    """Prove the functional smoke detects a wheel installed without its runtime lock."""
+
+    uv_binary = shutil.which("uv")
+    assert uv_binary is not None
+    root = tmp_path / "missing-runtime-dependencies"
+    root.mkdir(mode=0o700)
+    environment = root / "venv"
+    _run(
+        [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
+        cwd=root,
+    )
+    binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
+    python = binary_directory / ("python.exe" if os.name == "nt" else "python")
+    _run(
+        [
+            uv_binary,
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "--no-deps",
+            str(installed_artifacts[0]),
+        ],
+        cwd=root,
+    )
+    completed = subprocess.run(
+        [str(python), "-I", str(RUNTIME_SMOKE)],
+        cwd=root,
+        env={"HOME": str(root), "PATH": str(binary_directory)},
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert completed.returncode != 0
+    assert "No module named 'mcp'" in completed.stderr
+    assert "installed_runtime_smoke" not in completed.stdout

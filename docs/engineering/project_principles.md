@@ -26,30 +26,37 @@ Model-selected tool arguments must pass deterministic authorization and validati
 
 Treat analyzed repository content, inherited process state, subprocess output, and working-directory imports as untrusted. Do not import or execute code from the analyzed repository; inspect immutable objects and bounded text instead. Bounded diagnostic Git and toolkit subprocesses remain permitted when they preserve the same isolation boundary.
 
+<!-- ew:invariant id="boundary.bounded-data-lifecycle" -->
 ### Bounded data lifecycle
 
 Enforce byte, code-point, line, record, and time limits while data is consumed or produced, with the unit named in the contract and exercised at its boundary. A post-hoc check cannot make an unbounded capture bounded. Bounded, redacted read-only diagnostics remain valid; the prohibited mechanism is unbounded acquisition or unsafe adoption of its result.
 
+<!-- ew:invariant id="boundary.persisted-atomic-state" -->
 ### Persisted and atomic state
 
 Treat persisted evidence, configuration, security receipts, and release receipts as hostile on every load, including artifacts created by the toolkit. Revalidate exact closed schemas at every object level, apply bounds and recursive redaction again, and accept related snapshots, indexes, deltas, diagnostics, receipts, and report fields atomically.
 
+<!-- ew:invariant id="boundary.immutable-git-identity" -->
 ### Immutable Git identity
 
 Bind Git plumbing to the validated repository and immutable refs. Isolate object identity from process, global, system, repository, object-store, and replacement-ref controls; parse path-bearing records through NUL-delimited plumbing and transfer raw descriptor ownership exactly once. Read-only Git diagnosis remains valid when it uses the same isolated boundary.
 
+<!-- ew:invariant id="boundary.external-format-parsing" -->
 ### External format parsing
 
 Define semantic grammar, normalization, optional-field handling, and bounded degradation before implementing a parser. Equivalent key order, indentation, scalar or mapping forms, markers, URLs, digests, and status variants must not acquire accidental semantics from one canonical fixture spelling.
 
+<!-- ew:invariant id="boundary.network-acquisition" -->
 ### Network acquisition
 
 Bounded HTTP reads are diagnostic evidence until a closed endpoint allowlist, redirect-safe authentication, transfer result, allowed status, and private same-directory atomic replacement all succeed. Read-only probes are permitted; a size limit alone does not authorize a response as trusted state.
 
+<!-- ew:invariant id="boundary.provider-mutation-identity" -->
 ### Provider mutation identity
 
 A destructive provider mutation is automated only when the mutation request itself binds the validated immutable identity. Preflight and post-write reads may diagnose state but cannot close a mutation-time race. If the provider offers no guard, existing state is preserved for explicit provider-owned policy or operator action.
 
+<!-- ew:invariant id="boundary.integration-proof" -->
 ### Test doubles and integration proof
 
 A test double may replace an external collaborator only beyond the production boundary being verified. It must not replace the adapter, parser, transport, persistence owner, Git plumbing, subprocess launcher, protocol client, or other boundary whose behavior the test claims to prove. Wiring tests with a mocked boundary owner remain useful unit evidence, but they are never integration evidence for that boundary.
@@ -58,14 +65,39 @@ Each integration claim maps to a test that enters through the production caller,
 
 Executable integration claims additionally require clean built artifacts, restricted environments, hostile working-directory shadow packages, private permissions, and the real protocol client where practical. Unit mocks establish local behavior but not installation, import, process, transport, persistence, or protocol correctness.
 
+<!-- ew:invariant id="boundary.public-source-disclosure" -->
 ### Public source and disclosure
 
 Tracked public source, fixtures, examples, diagnostics intended for publication, and release artifacts contain only private-safe names, placeholder hosts, controlled repositories, and non-secret payloads. Public examples describe real operating behavior and are not labelled as test data. TestPyPI is public disclosure. Local secret scanning covers unpublished feature history before its first push; private audit inputs and artifacts remain outside tracked content.
 
+<!-- ew:invariant id="boundary.outcome-consistency" -->
 ### Outcome consistency
 
 Mandatory evidence and usage metadata are composed once and applied across skipped, clean, warning, error, and finding outcomes. Independent outcome branches must not redefine whether the same run is complete, partial, clean, or failed.
 
+## Workflow Execution
+
+<!-- ew:invariant id="workflow.efficient-execution" -->
+### Efficient execution
+
+Prioritize correctness, safety, explicit requirements, and verified completion before reducing calls, output, or polling. Resolve discoverable uncertainty from the plan, repository, canonical documentation, and environment; surface only material assumptions. Begin substantial work with bounded reconnaissance, then inspect the exact sources needed for a change, including an existing example for an unfamiliar schema or configuration form. Keep the work surgical and preserve current decisions, constraints, evidence, blockers, and remaining steps in the appropriate durable owner when they will matter after a handoff or context loss. Use repository-native checks and avoid redundant work after the scoped result is proven.
+
+<!-- ew:invariant id="workflow.evidence-driven-completion" -->
+### Evidence-driven completion
+
+Use the task's named checks as the acceptance contract. A green check requires a successful process exit and every required output assertion. Multi-step shell checks stop at the first failure and do not end with an unconditional success marker; use task-specific variables rather than shell special parameters. On failure, inspect evidence and change the hypothesis before correcting the narrowest supported cause; after two equivalent failures, choose a materially different explanation or method. Distinguish a check that was run from whether its evidence still applies: rerun affected checks when inputs materially change, then stop once the required final state is proven.
+
+<!-- ew:invariant id="workflow.review-before-commit" -->
+### Review before commit
+
+Before staging or committing each complete logical slice, perform a bounded semantic review against scope, requirements, ownership, trust boundaries, tests, and unrelated-diff risk. Correct findings and rerun affected checks. Review the aggregate final diff before staging or delivery so interactions among slices, generated artifacts, and status documentation are covered; automated green does not replace either review boundary.
+
+<!-- ew:invariant id="workflow.completion-driven-wait" -->
+### Completion-driven wait
+
+For a long-running command, preserve its full result outside the waiter before execution and use the completion-driven, bounded-output contract in `docs/development.md`. A completion requires exit status and required output evidence. Use native terminal evidence when sufficient; retain a private log or durable result when output volume or recovery requires it. Avoid periodic empty polls when the environment can wait for process completion, and clean up task-owned processes.
+
+<!-- ew:invariant id="workflow.documentation-ownership" -->
 ## Documentation Ownership
 
 - `README.md` owns the concise public introduction and quick start.

@@ -29,7 +29,7 @@ def load_script() -> ModuleType:
     return module
 
 
-def current_contracts(module: ModuleType, version: str = "1.12.1") -> dict[str, Any]:
+def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, Any]:
     """Extend a frozen fixture with the live contract selected for one version."""
 
     contracts = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
@@ -87,17 +87,30 @@ def test_live_language_probe_paths_follow_candidate_epoch() -> None:
         "rtl/include.svh",
         "policies/authz.rego",
         "types/interface.pyi",
+        "src/Program.fsi",
+        "scripts/check.fsx",
     )
     assert module._language_negative_paths_for_version("1.11.8") == (
         "rtl/include.svh",
         "types/interface.pyi",
+        "src/Program.fsi",
+        "scripts/check.fsx",
     )
     assert module._language_rules_for_version("1.12.0")["types/interface.pyi"] == "default"
-    assert module._language_negative_paths_for_version("1.12.0") == ("rtl/include.svh",)
+    assert module._language_negative_paths_for_version("1.12.0") == (
+        "rtl/include.svh",
+        "src/Program.fsi",
+        "scripts/check.fsx",
+    )
     assert (
         module._language_rules_for_version("1.12.1")["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     )
-    assert module._language_negative_paths_for_version("1.12.1") == ("rtl/include.svh",)
+    assert module._language_negative_paths_for_version("1.12.1") == (
+        "rtl/include.svh",
+        "src/Program.fsi",
+        "scripts/check.fsx",
+    )
+    assert module._language_negative_paths_for_version("1.12.8") == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -226,15 +239,15 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     contracts = current_contracts(module)
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES)
-    module._validate_current_contracts(contracts, "1.12.1")
+    module._validate_current_contracts(contracts, "1.12.8")
     extensions.reverse()
     with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_current_contracts(contracts, "1.12.1")
+        module._validate_current_contracts(contracts, "1.12.8")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.12.0", 18, "omitted"), ("1.12.1", 18, "reported")],
+    [("1.12.8", 21, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -249,7 +262,7 @@ def test_current_contract_selects_live_language_and_preview_epoch(
     )
 
 
-def test_pytest_prefix_exclusion_epoch_preserves_older_evidence() -> None:
+def test_fsharp_and_default_exclusion_epoch_preserves_older_evidence() -> None:
     module = load_script()
 
     assert module._default_excluded_paths_for_version("1.12.6") == (
@@ -261,8 +274,19 @@ def test_pytest_prefix_exclusion_epoch_preserves_older_evidence() -> None:
         "test/parser.ml",
         "src/test_helpers.py",
     )
-    module._validate_current_contracts(current_contracts(module, "1.12.6"), "1.12.6")
-    module._validate_current_contracts(current_contracts(module, "1.12.7"), "1.12.7")
+    assert module._default_excluded_paths_for_version("1.12.8") == (
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+        "src/WidgetTest.fs",
+        "node_modules/example/index.ts",
+        "dist/generated.js",
+    )
+    assert not set(module.FSHARP_RULE_PATHS) & set(module._language_rules_for_version("1.12.7"))
+    assert {
+        module._language_rules_for_version("1.12.8")[path] for path in module.FSHARP_RULE_PATHS
+    } == {"**/*.{fs,fsi,fsx}"}
+    module._validate_current_contracts(current_contracts(module, "1.12.8"), "1.12.8")
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
@@ -1147,6 +1171,140 @@ def test_qualify_cli_retains_closed_status_when_private_probe_fails(
     assert private_detail not in status_output.read_text(encoding="utf-8")
     assert private_detail in captured.err
     assert not output.exists()
+
+
+def test_qualification_stage_closes_unexpected_exception() -> None:
+    """Unexpected probe failures retain only their closed stage and error class."""
+
+    module = load_script()
+
+    def fail() -> None:
+        raise RuntimeError("token=secret path=/private/workspace")
+
+    with pytest.raises(module.QualificationStageError) as captured:
+        module._qualification_stage("contracts", "contract-probe-failed", fail)
+
+    assert captured.value.phase == "contracts"
+    assert captured.value.reason == "unexpected-error"
+    assert str(captured.value) == "unexpected RuntimeError"
+
+
+def test_dependency_setup_failure_records_closed_status_without_runtime(
+    tmp_path: Path,
+) -> None:
+    """A failed uv sync still produces issue-ready evidence using stdlib Python."""
+
+    module = load_script()
+    output = tmp_path / "status.json"
+    assert (
+        module.main(
+            [
+                "record-setup-failure",
+                "--tag",
+                "v1.12.9",
+                "--comparison-version",
+                "1.12.8",
+                "--tested-baseline-version",
+                "1.12.7",
+                "--status-output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    status = module.validate_qualification_status(json.loads(output.read_text()))
+    assert status["phase"] == "environment"
+    assert status["reason"] == "dependency-setup-failed"
+    assert status["result"] == "failed"
+
+
+def test_qualify_cli_retains_closed_status_for_unexpected_exception(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The outer qualifier guard retains status without leaking exception detail."""
+
+    module = load_script()
+    status_output = tmp_path / "status.json"
+    private_detail = "token=secret path=/private/workspace"
+
+    def fail_qualification(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise RuntimeError(private_detail)
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.12.8")),
+        patched_attr(module, "qualify_release", fail_qualification),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.12.8",
+                "--comparison-version",
+                "1.12.7",
+                "--tested-baseline-version",
+                "1.12.7",
+                "--output",
+                str(tmp_path / "evidence.json"),
+                "--status-output",
+                str(status_output),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    status = json.loads(status_output.read_text(encoding="utf-8"))
+    assert result == 1
+    assert status["phase"] == "metadata"
+    assert status["reason"] == "unexpected-error"
+    assert private_detail not in status_output.read_text(encoding="utf-8")
+    assert private_detail not in captured.err
+    assert "unexpected RuntimeError" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_qualify_cli_redacts_unexpected_status_writer_exception(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unexpected status-writer failure reports only its exception class."""
+
+    module = load_script()
+    private_detail = "token=secret path=/private/status.json"
+
+    def fail_qualification(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise RuntimeError("qualification stopped")
+
+    def fail_status_write(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError(private_detail)
+
+    with (
+        patched_attr(module, "_request_json", lambda _url: release("1.12.8")),
+        patched_attr(module, "qualify_release", fail_qualification),
+        patched_attr(module, "write_atomic_bytes", fail_status_write),
+    ):
+        result = module.main(
+            [
+                "--manifest",
+                str(MANIFEST),
+                "qualify",
+                "--tag",
+                "v1.12.8",
+                "--comparison-version",
+                "1.12.7",
+                "--tested-baseline-version",
+                "1.12.7",
+                "--output",
+                str(tmp_path / "evidence.json"),
+                "--status-output",
+                str(tmp_path / "status.json"),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert private_detail not in captured.err
+    assert "status write failed: unexpected RuntimeError" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_qualify_cli_retains_status_when_manifest_validation_fails(tmp_path: Path) -> None:
@@ -2168,18 +2326,21 @@ def test_historical_evidence_is_independent_of_live_contract_defaults(
     ],
 )
 def test_current_promotion_rejects_missing_contract_before_writing(
-    promotion_manifest: Path,
+    tmp_path: Path,
     missing_probe: str,
 ) -> None:
     """A compatible label alone cannot promote a candidate missing consumed proof."""
 
     module = load_script()
-    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.4.json")
-    evidence["version"] = "1.12.0"
-    evidence["tag"] = "v1.12.0"
-    evidence["comparison_version"] = "1.11.3"
-    evidence["tested_baseline_version"] = "1.11.3"
-    evidence["contracts"] = current_contracts(module, "1.12.0")
+    promotion_manifest = tmp_path / "ocr-support.json"
+    promotion_manifest.write_bytes(MANIFEST.read_bytes())
+    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.12.7.json")
+    evidence["version"] = "1.12.8"
+    evidence["tag"] = "v1.12.8"
+    evidence["classification"] = "human-review-required"
+    evidence["comparison_version"] = "1.12.7"
+    evidence["tested_baseline_version"] = "1.12.7"
+    evidence["contracts"] = current_contracts(module, "1.12.8")
     evidence["contracts"].pop(missing_probe)
     before = promotion_manifest.read_bytes()
     with pytest.raises(module.CompatibilityError, match=missing_probe):
@@ -2187,7 +2348,7 @@ def test_current_promotion_rejects_missing_contract_before_writing(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=176,
-            human_conclusions={"1.12.0": "Reviewed candidate."},
+            human_conclusions={"1.12.8": "Reviewed candidate."},
             root=PROJECT_ROOT,
         )
     assert promotion_manifest.read_bytes() == before
@@ -2240,19 +2401,25 @@ def test_rego_epoch_is_frozen_without_reinterpreting_evidence(version: str) -> N
     assert evidence_path.read_bytes() == before
 
 
-def test_ocr_1120_uses_live_contract_after_frozen_evidence_cutoff() -> None:
+@pytest.mark.parametrize("version", ["1.12.0", "1.12.1", "1.12.7"])
+def test_ocr_1120_to_1127_epochs_are_frozen_without_reinterpreting_evidence(
+    version: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     module = load_script()
-    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.9.json")
-    evidence["version"] = "1.12.0"
-    evidence["contracts"] = current_contracts(module, "1.12.0")
+    evidence_path = PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json"
+    before = evidence_path.read_bytes()
+    evidence = module.load_json(evidence_path)
 
-    module._validate_evidence_contracts("1.12.0", evidence)
+    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
+    monkeypatch.setattr(module, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
+    module._validate_evidence_contracts(version, evidence)
     language = evidence["contracts"]["language_rule_probe"]
     language["extensions"].remove(".rego")
     language["selected"] -= 1
 
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_evidence_contracts("1.12.0", evidence)
+    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
+        module._validate_evidence_contracts(version, evidence)
+    assert evidence_path.read_bytes() == before
 
 
 def test_ocr_1117_to_1119_chain_crosses_frozen_epochs_before_writes(

@@ -1,0 +1,37 @@
+schema_version: 2
+skill_name: engineering-workflow
+skill_version: "0.9.8"
+applied_at: "2026-09-23"
+mode: upgrade_target_workflow
+source_repo: "https://github.com/xeonvs/codex-engineering-workflow"
+source_ref: "0.9.8"
+source_commit: "9a28224af9efc329ed420ddcbd25b1f0aa354565"
+managed_paths:
+  - docs/codex/ENGINEERING_WORKFLOW_STATE.yaml
+shared_paths:
+  - AGENTS.md
+  - PLANS.md
+  - docs/README.md
+  - docs/codex/README.md
+  - docs/engineering/README.md
+  - docs/engineering/project_principles.md
+  - docs/codex/TASKS_BACKLOG.md
+  - docs/codex/AGENT_EXECUTION_PITFALLS.md
+  - .codex/config.toml
+  - .codex/agents/utility.toml
+  - .codex/agents/explorer.toml
+  - .codex/agents/reviewer.toml
+protected_paths:
+  - docs/development.md
+  - docs/release.md
+  - docs/engineering/execution_history/releases.md
+plan_archive_path: docs/engineering/execution_history
+plan_archive_indexes:
+  - docs/engineering/execution_history/README.md
+  - docs/engineering/README.md
+  - docs/README.md
+active_plan: PLANS.md
+runtime_agent_config_managed: true
+instruction_contract_version: 3
+planning_contract_version: 2
+orchestration_contract_version: 3

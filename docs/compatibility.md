@@ -18,9 +18,10 @@ the current built-in language/test-exclusion inventory.
 
 The **OCR compatibility** workflow discovers stable upstream releases newer than
 the manifest monitoring floor. Its daily trigger is scheduled for `07:15 UTC`,
-after the observed upstream release window; GitHub may delay or omit scheduled
-delivery, so exact-tag manual dispatch remains the single-candidate recovery
-path. A manual `through_tag` instead qualifies the complete contiguous unseen
+after the observed upstream release window. From 2026-10-01 UTC, scheduled
+runs pause before discovery indefinitely; manual dispatch remains available.
+Exact-tag manual dispatch is the single-candidate recovery path. A manual
+`through_tag` instead qualifies the complete contiguous unseen
 chain only through that exact stable release, preventing a scoped maintenance
 run from absorbing a newer upstream release. The two inputs are mutually
 exclusive. Drafts, prereleases, non-semantic tags, missing ceilings, unexpected

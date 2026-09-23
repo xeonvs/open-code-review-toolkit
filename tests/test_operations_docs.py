@@ -328,8 +328,9 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         assert phrase in flow
     assert "review-decision-flow.md" in strategy
     assert "docs/review-decision-flow.md" in root_instructions
-    assert (
-        "the review decision flow for execution or publication branch changes" in root_instructions
+    assert 'id="review-flow"' in root_instructions
+    assert 'owners="docs/review-decision-flow.md|docs/engineering/project_principles.md"' in (
+        root_instructions
     )
 
 
@@ -746,8 +747,14 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert '- cron: "15 7 * * *"' in workflow
     assert '- cron: "41 5 * * *"' not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "20261001" in workflow
+    assert 'matrix={"include":[]}' in workflow
+    assert "steps.pause.outputs.paused != 'true'" in workflow
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
+    assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow
+    assert "|| ! uv sync --frozen --no-default-groups --python 3.14" in workflow
+    assert "record-setup-failure" in workflow
     assert '--through-tag "${THROUGH_TAG}"' in workflow
     assert "contents: read" in workflow
     assert "issues: write" in workflow
@@ -770,6 +777,16 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "git push --force-with-lease" in workflow
     assert workflow.count("upsert-issue") == 1
     assert "continue-on-error: true" in workflow
+    qualify_job = workflow.split("  qualify:\n", 1)[1].split("  aggregate:\n", 1)[0]
+    dependency_sync = "uv sync --frozen --no-default-groups --python 3.14"
+    assert "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4" in qualify_job
+    assert dependency_sync in qualify_job
+    assert qualify_job.index("name: Qualify candidate") < qualify_job.index(dependency_sync)
+    assert qualify_job.index(dependency_sync) < qualify_job.index(
+        "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify"
+    )
+    assert "PYTHONPATH=src .venv/bin/python scripts/ocr_compat.py qualify" in qualify_job
+    assert "PYTHONPATH=src python scripts/ocr_compat.py upsert-issue" in qualify_job
     assert "--status-output /tmp/ocr-compat/status.json" in workflow
     assert "QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}" in workflow
     assert 'case "${QUALIFICATION_OUTCOME}" in' in workflow

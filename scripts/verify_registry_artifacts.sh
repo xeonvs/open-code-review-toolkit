@@ -130,13 +130,25 @@ while IFS="${tab}" read -r provenance_url filename; do
 done < "${provenance_downloads}"
 
 python -m venv "${wheel_environment}"
-"${wheel_environment}/bin/pip" install --require-hashes --requirement "${runtime_requirements}"
+"${wheel_environment}/bin/pip" install --isolated --disable-pip-version-check \
+  --require-hashes --only-binary=:all: --retries 3 --timeout 10 \
+  --index-url https://pypi.org/simple \
+  --requirement "${runtime_requirements}"
 "${wheel_environment}/bin/pip" install --no-deps "${destination}"/*.whl
+"${wheel_environment}/bin/pip" check
 "${wheel_environment}/bin/ocr-ci" --help
+(cd /tmp && env -u PYTHONPATH "${wheel_environment}/bin/python" -I \
+  "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/scripts/installed_runtime_smoke.py")
 python -m venv "${sdist_environment}"
-"${sdist_environment}/bin/pip" install --require-hashes --requirement "${runtime_requirements}"
+"${sdist_environment}/bin/pip" install --isolated --disable-pip-version-check \
+  --require-hashes --only-binary=:all: --retries 3 --timeout 10 \
+  --index-url https://pypi.org/simple \
+  --requirement "${runtime_requirements}"
 python scripts/install_local_artifact.py \
   --python "${sdist_environment}/bin/python" \
   --artifact "$(find "${destination}" -maxdepth 1 -name '*.tar.gz' -print -quit)" \
   --requirements "/tmp/${registry}-sdist-${version}-requirements.txt"
+"${sdist_environment}/bin/pip" check
 "${sdist_environment}/bin/ocr-ci" --help
+(cd /tmp && env -u PYTHONPATH "${sdist_environment}/bin/python" -I \
+  "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/scripts/installed_runtime_smoke.py")

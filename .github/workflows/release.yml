@@ -245,7 +245,7 @@ jobs:
       - run: uv run twine check dist/*
       - name: Export hash-locked runtime dependencies
         run: >-
-          uv export --frozen --no-dev --no-emit-project --format requirements-txt
+          uv export --frozen --no-default-groups --no-emit-project --format requirements-txt
           --output-file runtime-requirements.txt
       - name: Verify exact artifact version
         env:
@@ -267,8 +267,11 @@ jobs:
           Path("artifact-hashes.json").write_text(
               json.dumps(hashes, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
+          installation_hashes = {**hashes, "runtime-requirements.txt": hashlib.sha256(
+              Path("runtime-requirements.txt").read_bytes()
+          ).hexdigest()}
           Path("SHA256SUMS").write_text(
-              "".join(f"{digest}  {name}\n" for name, digest in sorted(hashes.items())),
+              "".join(f"{digest}  {name}\n" for name, digest in sorted(installation_hashes.items())),
               encoding="utf-8",
           )
           PY
@@ -309,7 +312,9 @@ jobs:
           classify pypi https://pypi.org/simple/open-code-review-toolkit/ /tmp/pypi-index.json
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/*
+          subject-path: |
+            dist/*
+            runtime-requirements.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reviewed-release-distributions
@@ -507,7 +512,7 @@ jobs:
             }
           }
           python scripts/release_notes.py --version "${VERSION}" --output /tmp/release-notes.md
-          for artifact in dist/*; do
+          for artifact in dist/* runtime-requirements.txt; do
             gh attestation verify "${artifact}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
@@ -557,6 +562,7 @@ jobs:
                 --run-attempt "${GITHUB_RUN_ATTEMPT}" \
                 --authorized-at "${AUTHORIZED_AT}" \
                 --hashes artifact-hashes.json \
+                --runtime-requirements runtime-requirements.txt \
                 --output release-receipt.json
               ;;
             1)
@@ -572,11 +578,12 @@ jobs:
                 --tree "${EXPECTED_TREE}" \
                 --authorized-at "${AUTHORIZED_AT}" \
                 --hashes artifact-hashes.json \
+                --runtime-requirements runtime-requirements.txt \
                 --validate-existing release-receipt.json
               ;;
             *) echo "duplicate GitHub Release receipt asset" >&2; exit 1 ;;
           esac
-          for asset in dist/* artifact-hashes.json SHA256SUMS release-receipt.json; do
+          for asset in dist/* runtime-requirements.txt artifact-hashes.json SHA256SUMS release-receipt.json; do
             name=$(basename "${asset}")
             asset_count=$(jq --arg name "${name}" '[.assets[] | select(.name == $name)] | length' \
               /tmp/github-release-upload-assets.json)
@@ -605,24 +612,25 @@ jobs:
             --asset-name "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
             --asset-name "open_code_review_toolkit-${VERSION}.tar.gz" \
             --asset-name artifact-hashes.json --asset-name SHA256SUMS \
-            --asset-name release-receipt.json --output /tmp/github-release.json
+            --asset-name runtime-requirements.txt --asset-name release-receipt.json --output /tmp/github-release.json
           release_dir=/tmp/github-release-assets
           mkdir -p "${release_dir}"
           for name in \
             "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
             "open_code_review_toolkit-${VERSION}.tar.gz" \
-            artifact-hashes.json SHA256SUMS release-receipt.json; do
+            runtime-requirements.txt artifact-hashes.json SHA256SUMS release-receipt.json; do
             bounded_release_download "${name}" "${release_dir}/${name}" 10485760
           done
           expected=$(printf '%s\n' \
             "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
             "open_code_review_toolkit-${VERSION}.tar.gz" \
-            artifact-hashes.json SHA256SUMS release-receipt.json | sort)
+            runtime-requirements.txt artifact-hashes.json SHA256SUMS release-receipt.json | sort)
           actual=$(find "${release_dir}" -type f -maxdepth 1 -exec basename {} \; | sort)
           test "${actual}" = "${expected}"
           (cd "${release_dir}" && sha256sum --check --strict SHA256SUMS)
           cmp artifact-hashes.json "${release_dir}/artifact-hashes.json"
           cmp SHA256SUMS "${release_dir}/SHA256SUMS"
+          cmp runtime-requirements.txt "${release_dir}/runtime-requirements.txt"
           if [ -f release-receipt.json ]; then
             cmp release-receipt.json "${release_dir}/release-receipt.json"
           else
@@ -637,6 +645,7 @@ jobs:
               --tree "${EXPECTED_TREE}" \
               --authorized-at "${AUTHORIZED_AT}" \
               --hashes artifact-hashes.json \
+              --runtime-requirements runtime-requirements.txt \
               --validate-existing "${release_dir}/release-receipt.json"
           fi
           export GITHUB_API_VERSION=2026-03-10
@@ -657,7 +666,7 @@ jobs:
           expected_assets=$(printf '%s\n' \
             "open_code_review_toolkit-${VERSION}-py3-none-any.whl" \
             "open_code_review_toolkit-${VERSION}.tar.gz" \
-            artifact-hashes.json SHA256SUMS release-receipt.json | sort)
+            runtime-requirements.txt artifact-hashes.json SHA256SUMS release-receipt.json | sort)
           actual_assets=$(jq -r '.assets[].name' /tmp/immutable-release.json | sort)
           test "${actual_assets}" = "${expected_assets}"
           receipt_sha=$(sha256sum "${release_dir}/release-receipt.json" | awk '{print $1}')

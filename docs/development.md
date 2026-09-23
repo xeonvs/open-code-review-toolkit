@@ -19,7 +19,7 @@ For routine agent and contributor checks, run focused tests for each logical cha
 Runtime code must remain compatible with the Python range and runtime dependencies declared in `pyproject.toml`; `uv.lock` owns the resolved dependency set. Tests must use synthetic data; public examples must use safe placeholder hosts and credentials while describing the real operating behavior rather than labelling the feature itself as synthetic. User-visible changes require a fragment in `changelog.d/`.
 Repository-only qualification tools and evidence live under `scripts/` and `compatibility/`; they are excluded from both published distributions. Validate the manifest with `PYTHONPATH=src python scripts/ocr_compat.py validate`.
 
-For package, executable-integration, or release-machinery changes, install the wheel and sdist into separate temporary virtual environments, run `pip check`, and exercise the changed installed runtime entry point outside the checkout with repository paths removed from `PYTHONPATH`. `ocr-ci --help` proves console entry-point availability only; it does not prove dependency completeness or runtime execution. The official recipe and registry-smoke remediation is tracked in [#214](https://github.com/xeonvs/open-code-review-toolkit/issues/214). Ordinary runtime changes rely on the pull request's single `Build artifacts` owner instead of rebuilding packages inside both CI jobs. Repeat deterministic builds locally only when reproducibility or release machinery is in scope. Before every commit, stage the intended files and run `scripts/gitleaks.sh --staged` to scan the exact candidate index for secrets and concrete local paths. Before every push, run `scripts/gitleaks.sh --tree` and the history gate below. The tree mode includes tracked and non-ignored untracked files without following symlinks; neither mode replaces the history scan. Failed or incomplete scanning blocks the commit or push. Generic secret scanning uses Gitleaks; dependency auditing uses `pip-audit`. Install the exact Gitleaks version printed by `scripts/gitleaks.sh --version`, then run `scripts/gitleaks.sh` before pushing and `scripts/quality.sh check` for the Python quality matrix. The wrapper fails closed when the scanner version or base ref is unavailable, scans the complete first-parent feature history, and is also the single source for the hosted security job's version pin. TestPyPI and stable-release workflows do not duplicate that dedicated security job.
+For package, executable-integration, or release-machinery changes, install the wheel and sdist into separate temporary virtual environments, run `pip check`, and exercise the changed installed runtime entry point outside the checkout with repository paths removed from `PYTHONPATH`. `ocr-ci --help` proves console entry-point availability only; it does not prove dependency completeness or runtime execution. The official recipe and registry smoke share the hash-locked binary runtime installation and installed MCP/schema checks; dependency metadata changes must preserve that clean-install contract. Ordinary runtime changes rely on the pull request's single `Build artifacts` owner instead of rebuilding packages inside both CI jobs. Repeat deterministic builds locally only when reproducibility or release machinery is in scope. Before every commit, stage the intended files and run `scripts/gitleaks.sh --staged` to scan the exact candidate index for secrets and concrete local paths. Before every push, run `scripts/gitleaks.sh --tree` and the history gate below. The tree mode includes tracked and non-ignored untracked files without following symlinks; neither mode replaces the history scan. Failed or incomplete scanning blocks the commit or push. Generic secret scanning uses Gitleaks; dependency auditing uses `pip-audit`. Install the exact Gitleaks version printed by `scripts/gitleaks.sh --version`, then run `scripts/gitleaks.sh` before pushing and `scripts/quality.sh check` for the Python quality matrix. The wrapper fails closed when the scanner version or base ref is unavailable, scans the complete first-parent feature history, and is also the single source for the hosted security job's version pin. TestPyPI and stable-release workflows do not duplicate that dedicated security job.
 
 `tests/test_installed_policy_e2e.py` builds both the direct wheel path and the sdist-to-wheel path, installs each into a clean environment, and exercises target decisions and nested guidance through the real stdio MCP. It runs with a hostile repository shadow package, restricted `PATH`, owner-only artifacts, and the installed console entry point; keep package-boundary changes inside that test rather than replacing it with editable-install mocks.
 
@@ -57,15 +57,21 @@ contract evidence before writing any pin or evidence file.
 
 When a consumed upstream contract changes, first freeze the last unaffected
 evidence epoch exactly, then advance the cutoff. The same version-selected
-validator must be used by manifest readback and `prepare-update`; a candidate
-and the live runner; a candidate cannot bypass a newly required probe merely
-because an older release remains readable. OCR 1.11.6 and 1.11.7 share the frozen
-pre-Rego contract. OCR 1.11.8 and later use the current contract, whose language
-probe includes `policies/authz.rego` and exact built-in pattern `**/*.rego`.
+validator must be used by manifest readback, `prepare-update`, and the live
+runner; a candidate cannot bypass a newly required probe merely because an
+older release remains readable. Evidence through OCR 1.12.7 is frozen in its
+original epoch. From OCR 1.12.8, the current contract adds F# signature/script
+selection and its built-in Rules pattern, plus expanded dependency and build-output
+exclusions. The Rego and other previously consumed language contracts remain
+required.
 
 Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
-never use an unbounded discovery run for a release-scoped task.
+never use an unbounded discovery run for a release-scoped task. Scheduled
+qualification is indefinitely paused from 2026-10-01 UTC; the scheduled trigger
+may still record a skipped discovery run, but it does not discover or qualify
+new releases. Manual dispatch remains available. Resuming automatic qualification
+requires a reviewed workflow change.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn
@@ -73,6 +79,7 @@ unconsumed upstream wording/features into mandatory checks. Prove preservation
 with real no-LLM OCR runs and adversarial verifier tests. Separate those proofs
 from model-quality qualification in a configured external environment.
 
+<!-- ew:invariant id="development.status-reconciliation" -->
 ## Planning and documentation lifecycle
 
 `PLANS.md` contains active or blocked repository work. For a small change without runtime or trust-boundary impact, a short entry with scope, release classification, validation, and completion or resume state is sufficient; omit inapplicable fields. Multi-step implementation, release work, and trust-boundary changes need the relevant decisions, service boundaries, trust inputs, ordered work, validation, and recovery state. Read-only work needs no entry. Reuse current context and update only changed plan facts.
@@ -115,6 +122,7 @@ Keep the wait bounded and diagnosable:
 
 Use periodic polling only when no completion notification or persistent waiter exists, when the process can require interactive input, or when intermediate state can change an authorized operational decision. In that fallback, choose an interval proportionate to expected duration, suppress unchanged observations, and increase the interval for stable work. Delete preserved private artifacts only after the relevant evidence has been extracted and verified. This discipline reduces redundant model turns and context growth; it does not waive required monitoring, validation evidence, timeouts, cleanup, or the cost of analyzing the eventual result, and it makes no exact subscription-billing claim.
 
+<!-- ew:invariant id="development.boundary-validation" -->
 ## Local validation
 
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
