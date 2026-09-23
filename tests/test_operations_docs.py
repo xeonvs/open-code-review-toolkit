@@ -749,7 +749,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "workflow_dispatch:" in workflow
     assert "20261001" in workflow
     assert 'matrix={"include":[]}' in workflow
-    assert "steps.pause.outputs.paused != 'true'" in workflow
+    assert "steps.schedule_gate.outputs.skip != 'true'" in workflow
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
     assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow
@@ -823,7 +823,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         "do not install OCR 1.9.10 as an intermediate step",
     ):
         assert contract in policy
-    assert "daily trigger is scheduled for `07:15 UTC`" in policy
+    assert "Exact-tag manual dispatch is the" in policy
     assert "feature-bearing patch notes" in policy
     assert "--search" not in workflow
     assert "git push origin main" not in workflow
