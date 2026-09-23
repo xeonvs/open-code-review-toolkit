@@ -67,11 +67,7 @@ required.
 
 Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
-never use an unbounded discovery run for a release-scoped task. Scheduled
-qualification is indefinitely paused from 2026-10-01 UTC; the scheduled trigger
-may still record a skipped discovery run, but it does not discover or qualify
-new releases. Manual dispatch remains available. Resuming automatic qualification
-requires a reviewed workflow change.
+never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn

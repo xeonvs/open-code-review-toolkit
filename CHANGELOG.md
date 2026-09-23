@@ -1,3 +1,19 @@
+## 0.11.1 - 2026-09-23
+
+### 🐛 Bug Fixes
+
+- Install the verified runtime dependency lock before the toolkit wheel in the GitLab example, and verify dependency consistency plus real installed MCP behavior in packaging CI. Publish the lock as an attested release asset bound to release receipt v2, including recovery and immutable readback checks. ([#214](https://github.com/xeonvs/open-code-review-toolkit/issues/214))
+
+### 🛠 Maintenance
+
+- Install the frozen runtime dependency set before OCR qualification and retain a closed status on unexpected probe errors. ([#214](https://github.com/xeonvs/open-code-review-toolkit/issues/214))
+- Target checksum-verified Open Code Review 1.12.9 after qualifying 1.12.8 through 1.12.9. ([#217](https://github.com/xeonvs/open-code-review-toolkit/issues/217))
+
+### 🧩 Rules
+
+- The recommended OCR 1.12.9 now reviews F# source, signature, and script files with built-in F# Rules. OCR also excludes F# files matching `*Test.fs` and more dependency and generated-output paths by default; review coverage follows those upstream selections. ([#218](https://github.com/xeonvs/open-code-review-toolkit/issues/218))
+
+
 ## 0.11.0 - 2026-09-19
 
 ### 🚀 Features

@@ -28,27 +28,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      count: ${{ steps.matrix.outputs.count || steps.pause.outputs.count }}
-      matrix: ${{ steps.matrix.outputs.matrix || steps.pause.outputs.matrix }}
+      count: ${{ steps.matrix.outputs.count || steps.schedule_gate.outputs.count }}
+      matrix: ${{ steps.matrix.outputs.matrix || steps.schedule_gate.outputs.matrix }}
     steps:
-      - id: pause
-        name: Pause scheduled qualifications from 2026-10-01 UTC
+      - id: schedule_gate
+        name: Check schedule date gate
         run: |
           if [ "${GITHUB_EVENT_NAME}" = schedule ] && [ "$(date -u +%Y%m%d)" -ge 20261001 ]; then
-            echo "paused=true" >>"${GITHUB_OUTPUT}"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
             echo "count=0" >>"${GITHUB_OUTPUT}"
             echo 'matrix={"include":[]}' >>"${GITHUB_OUTPUT}"
-            echo 'Scheduled OCR qualification is paused indefinitely from 2026-10-01 UTC; manual dispatch remains available.' >>"${GITHUB_STEP_SUMMARY}"
           fi
-      - if: steps.pause.outputs.paused != 'true'
+      - if: steps.schedule_gate.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - if: steps.pause.outputs.paused != 'true'
+      - if: steps.schedule_gate.outputs.skip != 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      - if: steps.pause.outputs.paused != 'true'
+      - if: steps.schedule_gate.outputs.skip != 'true'
         name: Validate manual selection
         env:
           REQUESTED_TAG: ${{ inputs.tag }}
@@ -58,11 +57,11 @@ jobs:
             echo "tag and through_tag are mutually exclusive" >&2
             exit 1
           fi
-      - if: steps.pause.outputs.paused != 'true'
+      - if: steps.schedule_gate.outputs.skip != 'true'
         name: Validate support manifest
         run: PYTHONPATH=src python scripts/ocr_compat.py validate
       - name: Discover unseen stable releases
-        if: steps.pause.outputs.paused != 'true' && inputs.tag == ''
+        if: steps.schedule_gate.outputs.skip != 'true' && inputs.tag == ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           THROUGH_TAG: ${{ inputs.through_tag }}
@@ -75,7 +74,7 @@ jobs:
             "${args[@]}" \
             --output /tmp/ocr-releases.json
       - name: Use requested stable release
-        if: steps.pause.outputs.paused != 'true' && inputs.tag != ''
+        if: steps.schedule_gate.outputs.skip != 'true' && inputs.tag != ''
         env:
           REQUESTED_TAG: ${{ inputs.tag }}
         run: |
@@ -94,7 +93,7 @@ jobs:
               encoding="utf-8",
           )
           PY
-      - if: steps.pause.outputs.paused != 'true'
+      - if: steps.schedule_gate.outputs.skip != 'true'
         id: matrix
         name: Build bounded qualification matrix
         run: |
