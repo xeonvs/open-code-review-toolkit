@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.11.1 — hash-locked installation and OCR 1.12.9
 
-Status: pending stable delivery and external reconciliation
+Status: completed stable delivery; external reconciliation verified
 - **Release classification:** release-required
 - **Target stable version:** 0.11.1; `.next-version` advances to 0.12.0
 - **Tracked issues:** #214, #217, #218 in milestone v0.11.1
@@ -14,6 +14,7 @@ Status: pending stable delivery and external reconciliation
 - **OCR promotion branch:** `codex/ocr-1.12.9-qualification`; PR #219 merged as `65effb236e5032fd67725cd55439870b00522ba2`
 - **Release branch:** `release/v0.11.1`
 - **Repository completion date:** 2026-09-23
+- **External reconciliation date:** 2026-09-23
 
 ### Repository-complete release checkpoint
 
@@ -34,11 +35,43 @@ external readback. Stable registries, provenance, annotated tag, immutable
 GitHub Release and receipt, issue receipts, milestone closure, and external
 reconciliation remain post-merge gates.
 
+### External delivery and reconciliation
+
+Release PR #220 merged as `08da246bddb358353c11376824f6171633ca10af`
+from reviewed head `67fb7f33bc4c807b0fed10fe4871917ef7b0160c` and
+protected base `65effb236e5032fd67725cd55439870b00522ba2`. PyPI's
+Simple Index lagged its published v0.11.1 wheel and sdist; protected recovery
+PR #221 merged as `b5b37990d22865c80d4ac08d26752fbce907b6fb`. The
+[recovery release run](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/35847937266)
+succeeded on attempt 4 after the PyPI sdist Integrity API recovered. Its
+TestPyPI and PyPI jobs verified exact reviewed hashes, registry provenance,
+and installed wheel/sdist behavior on Python 3.12, 3.13, and 3.14. The
+protected-main development [run](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/35847911521)
+also succeeded.
+
+At external readback, PyPI's Simple Index still omitted v0.11.1 despite the
+published files and successful verification. Resolver-based PyPI installs may
+lag until that index propagates; the official GitHub Release installation
+assets are available now.
+
+The annotated `v0.11.1` tag targets the original release merge. The
+[GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.11.1)
+is published and immutable with exactly the wheel, sdist,
+`runtime-requirements.txt`, `SHA256SUMS`, `artifact-hashes.json`, and
+`release-receipt.json`. CI read back all six assets. The receipt asset has
+SHA-256 `2506ed101ae1086e09092c5c1d2cd40a1809fff61095213413e40a1b70948719`;
+its [issue receipt](https://github.com/xeonvs/open-code-review-toolkit/issues/214#issuecomment-5793294881)
+was posted by the release workflow. Issues #214, #217, and #218 are closed,
+and milestone v0.11.1 is closed with zero open issues. The documentation-only
+closure branch `codex/v0.11.1-external-reconciliation` was cut from synchronized
+main at `b5b37990d22865c80d4ac08d26752fbce907b6fb` and records the external
+facts without changing the published release.
+
 ### Archived release plan
 
 #### v0.11.1 complete delivery
 
-Status: repository-complete; stable delivery pending
+Status: repository-complete; stable delivery verified in the external checkpoint above
 Plan Origin: plan_mode_approved
 Release classification: release-required
 Target stable version: 0.11.1
@@ -93,8 +126,8 @@ publication; never replace already-published versions or immutable assets.
    35831251267.
 5. Done: inspect compatible evidence from hosted run 35831453766 and adjacent
    source; merge protected OCR promotion PR #219 for issues #217 and #218;
-   prepare this draft release PR. Stable publication and external reconciliation
-   remain post-merge gates.
+   prepare and merge release PR #220. Stable publication and external
+   reconciliation are recorded above.
 
 ##### Validation and efficiency
 
@@ -113,14 +146,14 @@ not silently accept v1 receipts for a v2 release. Recover only exact reviewed
 artifacts; conflicting published hashes stop delivery. New upstream behavior
 requires human source review, not a weaker qualification gate.
 
-##### Current state and resume
+##### Final state
 
 Feature implementation and OCR promotion are merged into current main as
 0b589f0 and 65effb2; both protected heads passed CI and development publication.
 The hosted 1.12.8–1.12.9 chain is compatible with human review and the F# Rules
-coverage change is recorded. The next gate is exact-head review of this release
-PR, then stable workflow publication, issue/milestone closure, and the no-release
-external reconciliation PR. User authorized ready/merge/publication after gates.
+coverage change is recorded. Release PR #220, exact artifact publication,
+provenance and installed-artifact checks, immutable Release readback, issue and
+milestone closure, and external reconciliation are complete.
 
 ### Archived engineering-workflow migration plan
 
