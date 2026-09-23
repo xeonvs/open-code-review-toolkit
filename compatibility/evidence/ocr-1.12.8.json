@@ -1,0 +1,288 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "d935b6c2a0ccafdf28a263b342ddeea812f4a6a8255c79aa2f80f76ebb850119",
+      "size": 57985632
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "38fda3f7316accbb803e357dd85d77e8667307fa80730a390b366870838f3707",
+      "size": 54995394
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "6ad405ae67bed160cea1ad24dd2d65d27030e64466371a2ec20b86a0adfeb744",
+      "size": 56234146
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "08d58764a1ec81e34bb499d7959b969184dc7b26b248b838639222e0710d9def",
+      "size": 52953250
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "150812b67201e5a5fffc4acdd05a468b0737a10606ae109f0ba08541c1bc4a18",
+      "size": 57700864
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "1c345d2b584c3d59ee969544b00c947ec5e4b1e450da4a51811297a33772497b",
+      "size": 53652992
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "c1c437dc786726e1e42c769e18fb441c2e41b6d8ce6d57bd9b758ec2e8c556bb",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.12.7",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+        "src/WidgetTest.fs",
+        "node_modules/example/index.ts",
+        "dist/generated.js"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".fs",
+        ".fsi",
+        ".fsx",
+        ".hxx",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 21
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-21T12:46:24Z",
+  "release_changes": "## 🚀 Features\n\n- feat(rules): add F# review support (#1448)\n\n## 🐛 Bug Fixes\n\n- fix(config): exclude dependency and build-output directories by default (#1499)\n- fix(viewer): keep vertical mouse-wheel working over scroll regions (#1515)\n- fix(action): honor an explicit llm_protocol instead of forcing openai or anthropic (#1192)\n- fix(diff): parse git's quoted pathnames instead of dropping the file (#1498)\n- fix(scan): keep NUL-delimited pathnames from git ls-files intact (#1497)\n- fix(viewer): shorten the session id cell on the session list (#1488)\n- fix(viewer): responsive, accessibility and contrast polish across the four screens (#1426)\n- fix(tool): keep non-ASCII paths literal in code_search results (#1425)\n\n## 📖 Documentation\n\n- docs(assurance): correct API key storage claims (#1449)\n- docs(extensions): new translations for vscode ext (#1381)\n- docs(review): synchronize exclude & secret patterns (#1491)\n\n## Other Changes\n\n- perf(viewer): paginate large review result lists (#1460)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.12.7...v1.12.8",
+  "release_notes_sha256": "67c74e0573a6d0ebc01fa18df9066c14702c865a07e664d790c62f573fcdaee2",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.12.8",
+  "tested_baseline_version": "1.12.7",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.12.8"
+}

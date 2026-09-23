@@ -256,14 +256,26 @@ default `**/test_*.py` exclusion; qualification proves the exact pytest-style
 path is excluded while neighboring `contest_*.py` and `test_*.go` controls remain
 reviewable.
 
+### OCR 1.12.8–1.12.9 — toolkit 0.11.1 target
+
+Toolkit 0.11.1 recommends exact OCR 1.12.9. Bounded hosted run
+[35831453766](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/35831453766)
+qualified the adjacent 1.12.8–1.12.9 chain with verified upstream assets and
+deterministic Linux probes. OCR 1.12.8 adds built-in F# Rules for `.fs`, `.fsi`,
+and `.fsx`; its default selection excludes paths matching `*Test.fs` and more
+dependency and generated-output paths. The qualification probes cover those
+selection contracts. OCR 1.12.9 retains the toolkit-consumed invocation,
+selection, result, and manifest contracts. Source review and hosted probes do
+not establish configured provider/model finding quality.
+
 Runtime support is rolling and exact-patch-only. Qualified 1.11.x and 1.12.x
 entries are supported, qualified 1.10.x entries are accepted with a deprecation
 warning, and earlier or unqualified patches fail preflight. Historical evidence
 remains readable without widening current execution support. The manifest's
-`monitoring_floor: 1.12.7` means release discovery starts above that tag; it is
+`monitoring_floor: 1.12.9` means release discovery starts above that tag; it is
 not a minimum accepted runtime and cannot silently admit an unseen patch.
 
-The public GitLab example pins `v1.12.7` and its Linux amd64 SHA-256. Deployments
+The public GitLab example pins `v1.12.9` and its Linux amd64 SHA-256. Deployments
 must still verify the exact platform asset against the matching manifest entry.
 The compatibility chain establishes deterministic toolkit boundaries, not
 configured provider/model quality or stable toolkit delivery.

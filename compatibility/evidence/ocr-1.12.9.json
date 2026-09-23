@@ -1,0 +1,288 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "3b57d01a3253fb7b9793ca50474a1f9471ddaf1c25520fd81869efa071f94d95",
+      "size": 58003696
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "93a4fad7b65dd6e953d7e33d72a26b5a1799e06576cada294cf3458a346c4640",
+      "size": 55030082
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "9105c7081b8362a1cb0167f1ddfd1437e147a0e3c9a5af89c03c8859a5b0f0e8",
+      "size": 56254626
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "e384ffb33af54e1f0d486312938a30f1dba29c02222b55793ec34b085b56d2b3",
+      "size": 53018786
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "ae6f4785fea34a5cfef93ad22d8e7fb8032bbd12c45f2cbcc98cbe1b38cceff1",
+      "size": 57718272
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "63c30da3695a7693f6eed38ee7e977b2e4b79664f26790c6e6841c83e07533ba",
+      "size": 53668352
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "2253bd9efe95b38165ac957c5f2d26f6fc99085a8428db6a4b269e002964ce55",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.12.8",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+        "src/WidgetTest.fs",
+        "node_modules/example/index.ts",
+        "dist/generated.js"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".fs",
+        ".fsi",
+        ".fsx",
+        ".hxx",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 21
+    },
+    "numeric_cli_probe": {
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-09-22T11:17:44Z",
+  "release_changes": "## 🐛 Bug Fixes\n\n- fix(session): preserve findings across file renames (#1529)\n- fix(config): preserve unknown JSON fields during config updates (#1508)\n- fix(review): keep git stderr out of --commit background (#1467)\n- fix(ci): pin workflow action references to full commit SHAs (#856)\n- fix(viewer): wrap long session metadata on mobile (#1458)\n\n## 📖 Documentation\n\n- docs(agents): add guideline to comment sparingly and explain why (#1534)\n\n## Other Changes\n\n- security: validate credential commands and expand .gitattributes binary markers (#1291)\n- Fix/gitlab multiline comments and suggestions (#1000)\n- test: stabilize token boundary fixtures (#1015)\n- test(diff): guard quoted-path parsing through a real git subprocess (#1516)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.12.8...v1.12.9",
+  "release_notes_sha256": "ebda61f25f499fcb06739cf0a9d879787c113893126291716b54febf86cecab2",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.12.9",
+  "tested_baseline_version": "1.12.7",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.12.9"
+}

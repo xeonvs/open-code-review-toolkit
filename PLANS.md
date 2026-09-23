@@ -3,7 +3,7 @@
 <!-- engineering-workflow:upgrade-plan:start -->
 ## Active Plan: Engineering Workflow Upgrade 0.9.8
 
-Status: active
+Status: ready_for_closure
 Owner: root
 Last Updated: 2026-09-23
 plan_schema_version: 2
@@ -28,7 +28,7 @@ direct_execution
 | REQ-001 | Full migration plan is the first target write. | engineering-workflow contract | WQ-01 | Plan schema validates. | done |
 | REQ-002 | Workflow owners, instruction graph, archive indexes, and manifest reach 0.9.8 while preserving protected prose. | migration report | WQ-02 | Instruction and plan checks pass; marker-only protected changes are reviewed. | done |
 | REQ-003 | Runtime agent configuration follows the explicit selection. | user invocation | WQ-03 | Config and generated profiles parse and name available GPT-6 models. | done |
-| REQ-004 | Deliver the migration through the protected v0.11.1 feature PR. | user request | WQ-04 | Exact-head CI and reviewed merge complete. | in_progress |
+| REQ-004 | Deliver the migration through the protected v0.11.1 feature PR. | user request | WQ-04 | Exact-head CI and reviewed merge complete. | done |
 
 ### Explicit Non-Goals
 
@@ -58,7 +58,7 @@ direct_execution
 - [x] WQ-01 — Materialize this full plan for REQ-001 as the first write. `done`
 - [x] WQ-02 — Apply and validate canonical workflow/manifest changes for REQ-002. `done`
 - [x] WQ-03 — Preserve or structurally merge runtime configuration for REQ-003. `done`
-- [ ] WQ-04 — Deliver the reviewed migration with the v0.11.1 feature PR for REQ-004. `in_progress`
+- [x] WQ-04 — Deliver the reviewed migration with the v0.11.1 feature PR for REQ-004. `done`
 
 ### Locked Decisions
 
@@ -73,7 +73,7 @@ direct_execution
 
 ### Latest Validation Results
 
-- 2026-09-23: instruction contract v3 and archive/plan checks pass; all new TOML profiles parse. Repository public-content gate passed in the first full quality run; the full Python suite had one obsolete wording assertion, which was corrected and its owning module passed. The migration upgrader's broad privacy scan returned a hard block on pre-existing source/fixture categories; the user authorized a one-time manual migration. Publication secret gates remain required.
+- 2026-09-23: instruction contract v3 and archive/plan checks pass; all new TOML profiles parse. Repository public-content and Gitleaks gates passed. Protected PR #216 passed exact-head CI and merged as 0b589f0; its development TestPyPI workflow 35831251267 succeeded. The migration upgrader's broad privacy scan returned a hard block on pre-existing source/fixture categories; the user authorized a one-time manual migration. Publication secret gates remain required.
 
 ### Risks And Recovery
 
@@ -81,7 +81,7 @@ direct_execution
 
 ### Resume Point
 
-- Complete WQ-04 by reviewing the aggregate diff, passing applicable gates, and merging the exact-head protected feature PR. Continue v0.11.1 delivery from the release plan below.
+- Migration requirements are complete. Preserve this plan until the v0.11.1 release PR reconciles the active plan into execution history; continue at the first unfinished release work item below.
 
 ### Plan Fidelity Check
 
@@ -89,12 +89,12 @@ direct_execution
 
 ### Reconciliation Check
 
-- [ ] Requirements, queue, validation, working tree, manifest, and statuses agree; completed text has no stale next-work state.
+- [x] Requirements, queue, validation, working tree, manifest, and statuses agree; completed text has no stale next-work state.
 
 ### Closure Gate
 
-- [ ] Every requirement and queue item is terminal, validation is current, and no promoted backlog or index state is stale.
-- [ ] Resume Point contains no unfinished in-scope work and compact closure can be applied atomically.
+- [x] Every migration requirement and queue item is terminal, validation is current, and no promoted backlog or index state is stale.
+- [x] Resume Point contains no unfinished migration work; closure will accompany release-plan reconciliation.
 
 ### Post-Close Delivery
 
@@ -148,8 +148,10 @@ activation as the first slice of the same protected feature PR.
 
 ### Inputs and boundaries
 
-Issue #214 and milestone v0.11.1; failed qualification runs 35609962907 and
-35728150883; docs/release.md and docs/development.md own lifecycle/validation.
+Issues #214, #217, and #218 in milestone v0.11.1; failed historical qualification
+runs 35609962907 and 35728150883; successful bounded run 35831453766 owns
+adjacent v1.12.8–v1.12.9 evidence. docs/release.md and docs/development.md own
+lifecycle/validation.
 Trust inputs: registry and GitHub metadata, downloaded assets, hashes, installed
 package metadata, OCR binary behavior and receipt recovery state. Preserve
 closed schemas, bounded acquisition, exact reviewed commits and fail-closed
@@ -164,10 +166,13 @@ publication; never replace already-published versions or immutable assets.
    pause starts 2026-10-01 UTC while manual dispatch remains available.
 3. Done locally: official recipe and real installed-artifact helper/probes,
    including a negative clean-install control.
-4. Root: finish aggregate review and applicable local gates;
-   signed commits, staged/tree/history Gitleaks, draft feature PR and CI.
-5. Root: merge, verify dev CI, bounded hosted qualification and promotion PR;
-   prepare/merge draft release PR, monitor CI publication, reconcile closure.
+4. Done: aggregate review, signed feature commit, Gitleaks, draft PR #216,
+   exact-head CI, protected merge 0b589f0, and successful development workflow
+   35831251267.
+5. Current: inspect compatible evidence from hosted run 35831453766 and
+   adjacent source; prepare and merge a protected OCR promotion PR for issues
+   #217 and #218. Then prepare/merge draft release PR, monitor CI publication,
+   and reconcile closure.
 
 ### Validation and efficiency
 
@@ -188,11 +193,11 @@ requires human source review, not a weaker qualification gate.
 
 ### Current state and resume
 
-Implementation is in the working tree on a branch from current main. Focused
-qualification, release, installation-contract and documentation tests passed;
-the clean negative install passed. Full quality reached the suite with 1780
-passes and one obsolete workflow-order assertion, corrected and checked in its
-owning module. Instruction contract v3 and plan/archive checks pass. Next safe
-action: finish final scoped review/lint, Gitleaks and signed feature commit,
-then push one feature branch and open its draft PR. User has authorized
+Feature implementation is merged into current main as 0b589f0; all protected
+feature checks passed and development publication succeeded. Hosted OCR evidence
+for 1.12.8 and 1.12.9 is compatible with a human-review-required chain; adjacent
+source review found consumed F# Rules/selection and exclusion changes, with no
+additional toolkit adaptation indicated. Next safe action: on the new branch
+from main, promote the exact reviewed evidence and pins, include the Rules
+changelog, then review/test and open its protected draft PR. User has authorized
 ready/merge/publication after gates; no separate draft approval pause.
