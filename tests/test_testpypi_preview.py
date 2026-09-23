@@ -181,8 +181,8 @@ def test_workflow_automates_one_idempotent_development_build_per_main_run() -> N
     assert "needs.publish.result == 'skipped'" in workflow
     assert "quality.sh check" not in workflow
     assert "pip-audit" not in workflow
-    assert "uv export --frozen --no-dev --no-emit-project" in workflow
-    assert workflow.count("pip install --require-hashes --requirement") == 2
+    assert "uv export --frozen --no-default-groups --no-emit-project" in workflow
+    assert workflow.count("--require-hashes --only-binary=:all:") == 2
     assert workflow.count("scripts/install_local_artifact.py") == 2
     assert "pip install --no-deps dist/*.whl" not in workflow
 
@@ -246,9 +246,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "--max-filesize 1048576" in verifier
     assert "--proto '=https' --proto-redir '=https'" in verifier
     assert "sha256sum --check --strict" in verifier
-    assert (
-        verifier.count('pip" install --require-hashes --requirement "${runtime_requirements}"') == 2
-    )
+    assert verifier.count("--require-hashes --only-binary=:all:") == 2
     assert "verify_registry_provenance.py" in verifier
     assert '--workflow "${workflow}"' in verifier
     assert "application/vnd.pypi.integrity.v1+json" in verifier
@@ -281,8 +279,8 @@ def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
     assert "paths:" not in pull_request_block
     assert "timeout-minutes: 15" in workflow
     assert "python -m build --no-isolation" in workflow
-    assert "uv export --frozen --no-dev --no-emit-project" in workflow
-    assert workflow.count("pip install --require-hashes --requirement") == 2
+    assert "uv export --frozen --no-default-groups --no-emit-project" in workflow
+    assert workflow.count("--require-hashes --only-binary=:all:") == 2
     assert workflow.count("scripts/install_local_artifact.py") == 2
     assert "pip install --no-deps dist/*.whl" not in workflow
 

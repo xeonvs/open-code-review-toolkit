@@ -55,6 +55,7 @@ def build_receipt(**overrides: Any) -> dict[str, Any]:
             "open_code_review_toolkit-0.4.7.tar.gz": "e" * 64,
             "open_code_review_toolkit-0.4.7-py3-none-any.whl": "f" * 64,
         },
+        "auxiliary_assets": {"runtime-requirements.txt": "a" * 64},
         "python_minors": ["3.12", "3.13", "3.14"],
     }
     values.update(overrides)
@@ -64,7 +65,7 @@ def build_receipt(**overrides: Any) -> dict[str, Any]:
 def test_receipt_is_canonical_and_records_only_completed_pre_release_gates() -> None:
     payload = build_receipt()
 
-    assert payload["schema_version"] == "ocr-toolkit.release-receipt/v1"
+    assert payload["schema_version"] == "ocr-toolkit.release-receipt/v2"
     assert payload["issues"] == [70, 71]
     assert payload["reviewed"] == {
         "base": "a" * 40,
@@ -128,6 +129,7 @@ def test_existing_receipt_recovery_ignores_new_run_but_rejects_delivery_drift() 
             "open_code_review_toolkit-0.4.7.tar.gz": "e" * 64,
             "open_code_review_toolkit-0.4.7-py3-none-any.whl": "f" * 64,
         },
+        auxiliary_assets={"runtime-requirements.txt": "a" * 64},
         python_minors=["3.12", "3.13", "3.14"],
     )
 
@@ -148,6 +150,7 @@ def test_existing_receipt_recovery_ignores_new_run_but_rejects_delivery_drift() 
                 "open_code_review_toolkit-0.4.7.tar.gz": "e" * 64,
                 "open_code_review_toolkit-0.4.7-py3-none-any.whl": "f" * 64,
             },
+            auxiliary_assets={"runtime-requirements.txt": "a" * 64},
             python_minors=["3.12", "3.13", "3.14"],
         )
 
@@ -167,6 +170,7 @@ def test_existing_receipt_rejects_unknown_top_level_and_workflow_fields() -> Non
             "open_code_review_toolkit-0.4.7.tar.gz": "e" * 64,
             "open_code_review_toolkit-0.4.7-py3-none-any.whl": "f" * 64,
         },
+        "auxiliary_assets": {"runtime-requirements.txt": "a" * 64},
         "python_minors": ["3.12", "3.13", "3.14"],
     }
     payload = build_receipt()
@@ -724,3 +728,78 @@ def test_release_asset_upload_uses_bytes_from_the_validated_descriptor(
     )
 
     assert uploaded_body == original
+
+
+@pytest.mark.parametrize(
+    "assets",
+    [
+        {},
+        {"other.txt": "a" * 64},
+        {"runtime-requirements.txt": "bad"},
+        {"runtime-requirements.txt": None},
+    ],
+)
+def test_receipt_rejects_missing_or_invalid_auxiliary_asset(assets):
+    with pytest.raises(receipt.ReceiptError, match="auxiliary"):
+        build_receipt(auxiliary_assets=assets)
+
+
+@pytest.mark.parametrize("change", ["digest", "schema", "missing"])
+def test_receipt_recovery_binds_runtime_lock_and_schema(change):
+    payload = build_receipt()
+    expected = dict(
+        version=payload["version"],
+        tag=payload["tag"],
+        release_pr=payload["release_pr"],
+        issues=payload["issues"],
+        **payload["reviewed"],
+        authorized_at=payload["authorized_at"],
+        artifacts=payload["artifacts"],
+        auxiliary_assets=dict(payload["auxiliary_assets"]),
+        python_minors=list(payload["python_smoke"]),
+    )
+    if change == "digest":
+        payload["auxiliary_assets"]["runtime-requirements.txt"] = "b" * 64
+    elif change == "schema":
+        payload["schema_version"] = "ocr-toolkit.release-receipt/v1"
+    else:
+        del payload["auxiliary_assets"]
+    with pytest.raises(receipt.ReceiptError):
+        receipt.validate_receipt(payload, **expected)
+
+
+def test_release_hash_manifest_separates_registry_and_installation_assets(tmp_path, monkeypatch):
+    """Execute the build step so auxiliary bytes cannot enter the registry map."""
+    import hashlib
+    import textwrap
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "dist").mkdir()
+    files = {
+        "package.whl": b"synthetic wheel",
+        "package.tar.gz": b"synthetic sdist",
+    }
+    for name, content in files.items():
+        (tmp_path / "dist" / name).write_bytes(content)
+    (tmp_path / "runtime-requirements.txt").write_bytes(b"synthetic lock\n")
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    step = workflow.split("- name: Record reviewed artifact hashes", 1)[1].split(
+        "      - id: registry", 1
+    )[0]
+    program = textwrap.dedent(step.split("python - <<'PY'\n", 1)[1].rsplit("          PY", 1)[0])
+    exec(compile(program, "release-hash-step", "exec"), {})
+    registry = json.loads((tmp_path / "artifact-hashes.json").read_text())
+    assert registry == {
+        name: hashlib.sha256(content).hexdigest() for name, content in files.items()
+    }
+    checksums = dict(
+        line.split("  ", 1)[::-1] for line in (tmp_path / "SHA256SUMS").read_text().splitlines()
+    )
+    assert checksums == {
+        **registry,
+        "runtime-requirements.txt": hashlib.sha256(b"synthetic lock\n").hexdigest(),
+    }
+    assert "subject-path: |\n            dist/*\n            runtime-requirements.txt" in workflow
+    assert "for artifact in dist/* runtime-requirements.txt; do" in workflow
+    assert "--asset-name runtime-requirements.txt" in workflow
+    assert 'cmp runtime-requirements.txt "${release_dir}/runtime-requirements.txt"' in workflow

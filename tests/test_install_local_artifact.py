@@ -9,6 +9,8 @@ from pathlib import Path
 from types import ModuleType
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "install_local_artifact.py"
+REGISTRY_VERIFIER = Path(__file__).parents[1] / "scripts" / "verify_registry_artifacts.sh"
+INSTALLED_SMOKE = Path(__file__).parents[1] / "scripts" / "installed_runtime_smoke.py"
 
 
 def load_script() -> ModuleType:
@@ -65,3 +67,25 @@ def test_writes_exact_hash_locked_requirement(monkeypatch, tmp_path: Path) -> No
             True,
         )
     ]
+
+
+def test_registry_verifier_uses_locked_binary_dependencies_and_runtime_smoke() -> None:
+    verifier = REGISTRY_VERIFIER.read_text(encoding="utf-8")
+
+    assert verifier.count("--require-hashes --only-binary=:all:") == 2
+    assert verifier.count("--index-url https://pypi.org/simple") == 2
+    assert verifier.count('bin/pip" check') == 2
+    assert verifier.count("scripts/installed_runtime_smoke.py") == 2
+    assert verifier.count("env -u PYTHONPATH") == 2
+    assert verifier.count('bin/python" -I') == 2
+
+
+def test_installed_runtime_smoke_is_self_contained() -> None:
+    smoke = INSTALLED_SMOKE.read_text(encoding="utf-8")
+
+    assert "tests." not in smoke
+    assert "from ocr_toolkit.federation import admission" in smoke
+    assert '"--peer"' in smoke
+    assert "asyncio.timeout(30)" in smoke
+    assert "client.list_tools()" in smoke
+    assert 'client.call_tool("synthetic__schema_probe"' in smoke

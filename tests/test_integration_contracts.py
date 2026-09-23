@@ -187,6 +187,14 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
         'open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"' in workflow
     )
     assert 'pip install --no-deps "/tmp/${OCR_TOOLKIT_WHEEL}"' in workflow
+    assert "releases/download/v${OCR_TOOLKIT_VERSION}/runtime-requirements.txt" in workflow
+    assert "awk '$2 == \"runtime-requirements.txt\" { print $1 }'" in workflow
+    assert "${toolkit_requirements_sha256}  /tmp/runtime-requirements.txt" in workflow
+    assert "pip install --isolated --disable-pip-version-check" in workflow
+    assert "--require-hashes --only-binary=:all:" in workflow
+    assert "--index-url https://pypi.org/simple" in workflow
+    assert "sha256sum --check --strict" in workflow
+    assert "pip check" in workflow
     assert not re.search(r"releases/download/v\d+\.\d+\.\d+/SHA256SUMS", workflow)
     assert not re.search(r"pip install --no-deps /tmp/open_code_review_toolkit-\d", workflow)
     assert ".opencodereview/accepted-decisions.md" in configuration

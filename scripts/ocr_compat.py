@@ -148,14 +148,32 @@ CURRENT_LANGUAGE_RULES = {
     "scripts/setup.kts": "**/*.{kt,kts}",
     "policies/authz.rego": "**/*.rego",
     "types/interface.pyi": "**/*.{py,pyi,ipynb}",
+    "src/Program.fs": "**/*.{fs,fsi,fsx}",
+    "src/Program.fsi": "**/*.{fs,fsi,fsx}",
+    "scripts/check.fsx": "**/*.{fs,fsi,fsx}",
 }
-CURRENT_DEFAULT_EXCLUDED_PATHS = ("src/test/kotlin/scripts/Example.kts", "test/parser.ml")
+CURRENT_DEFAULT_EXCLUDED_PATHS = (
+    "src/test/kotlin/scripts/Example.kts",
+    "test/parser.ml",
+    "src/test_helpers.py",
+    "src/WidgetTest.fs",
+    "node_modules/example/index.ts",
+    "dist/generated.js",
+)
 PYI_SELECTION_CUTOFF = (1, 12, 0)
 PYI_PYTHON_RULE_CUTOFF = (1, 12, 1)
 PROVIDER_DIRECTORY_PREVIEW_CUTOFF = (1, 12, 1)
 PYTEST_PREFIX_EXCLUSION_CUTOFF = (1, 12, 7)
 PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
 PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
+FSHARP_RULE_CUTOFF = (1, 12, 8)
+FSHARP_RULE_PATHS = ("src/Program.fs", "src/Program.fsi", "scripts/check.fsx")
+EXPANDED_DEFAULT_EXCLUSION_CUTOFF = (1, 12, 8)
+EXPANDED_DEFAULT_EXCLUDED_PATHS = (
+    "src/WidgetTest.fs",
+    "node_modules/example/index.ts",
+    "dist/generated.js",
+)
 
 REQUIRED_ASSETS = {
     "opencodereview-darwin-amd64",
@@ -174,8 +192,9 @@ KNOWN_OPTIONAL_CAPABILITIES = {
     "semantic_grouping",
 }
 QUALIFICATION_STATUS_SCHEMA = "ocr-toolkit.compatibility-status/v1"
-QUALIFICATION_PHASES = {"metadata", "artifact", "contracts", "evidence", "complete"}
+QUALIFICATION_PHASES = {"environment", "metadata", "artifact", "contracts", "evidence", "complete"}
 QUALIFICATION_REASONS = {
+    "dependency-setup-failed",
     "metadata-invalid",
     "metadata-request-failed",
     "artifact-verification-failed",
@@ -183,14 +202,21 @@ QUALIFICATION_REASONS = {
     "evidence-write-failed",
     "issue-body-write-failed",
     "status-write-failed",
+    "unexpected-error",
     "compatible",
 }
 QUALIFICATION_FAILURE_REASONS = {
-    "metadata": frozenset({"metadata-invalid", "metadata-request-failed"}),
-    "artifact": frozenset({"artifact-verification-failed"}),
-    "contracts": frozenset({"contract-probe-failed"}),
+    "environment": frozenset({"dependency-setup-failed"}),
+    "metadata": frozenset({"metadata-invalid", "metadata-request-failed", "unexpected-error"}),
+    "artifact": frozenset({"artifact-verification-failed", "unexpected-error"}),
+    "contracts": frozenset({"contract-probe-failed", "unexpected-error"}),
     "evidence": frozenset(
-        {"evidence-write-failed", "issue-body-write-failed", "status-write-failed"}
+        {
+            "evidence-write-failed",
+            "issue-body-write-failed",
+            "status-write-failed",
+            "unexpected-error",
+        }
     ),
 }
 T = TypeVar("T")
@@ -454,6 +480,9 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
         rules.pop("types/interface.pyi")
     elif _version(version) < PYI_PYTHON_RULE_CUTOFF:
         rules["types/interface.pyi"] = "default"
+    if _version(version) < FSHARP_RULE_CUTOFF:
+        for path in FSHARP_RULE_PATHS:
+            rules.pop(path)
     return rules
 
 
@@ -465,15 +494,26 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
         paths.append("policies/authz.rego")
     if _version(version) < PYI_SELECTION_CUTOFF:
         paths.append("types/interface.pyi")
+    if _version(version) < FSHARP_RULE_CUTOFF:
+        paths.extend(("src/Program.fsi", "scripts/check.fsx"))
     return tuple(paths)
 
 
 def _default_excluded_paths_for_version(version: str) -> tuple[str, ...]:
     """Return the exact built-in test exclusions owned by one OCR epoch."""
 
-    paths = list(CURRENT_DEFAULT_EXCLUDED_PATHS)
-    if _version(version) >= PYTEST_PREFIX_EXCLUSION_CUTOFF:
-        paths.append(PYTEST_PREFIX_EXCLUDED_PATH)
+    paths = [
+        path
+        for path in CURRENT_DEFAULT_EXCLUDED_PATHS
+        if (
+            path != PYTEST_PREFIX_EXCLUDED_PATH
+            or _version(version) >= PYTEST_PREFIX_EXCLUSION_CUTOFF
+        )
+        and (
+            path not in EXPANDED_DEFAULT_EXCLUDED_PATHS
+            or _version(version) >= EXPANDED_DEFAULT_EXCLUSION_CUTOFF
+        )
+    ]
     return tuple(paths)
 
 
@@ -2941,6 +2981,10 @@ def _qualification_stage(phase: str, reason: str, function: Callable[[], T]) -> 
         raise
     except CompatibilityError as exc:
         raise QualificationStageError(str(exc), phase=phase, reason=reason) from exc
+    except Exception as exc:
+        raise QualificationStageError(
+            f"unexpected {type(exc).__name__}", phase=phase, reason="unexpected-error"
+        ) from exc
 
 
 def qualify_release(
@@ -3598,6 +3642,11 @@ def main(argv: list[str] | None = None) -> int:
     qualify.add_argument("--output", type=Path, required=True)
     qualify.add_argument("--issue-body", type=Path)
     qualify.add_argument("--status-output", type=Path)
+    setup_failure = subparsers.add_parser("record-setup-failure")
+    setup_failure.add_argument("--tag", required=True)
+    setup_failure.add_argument("--comparison-version", required=True)
+    setup_failure.add_argument("--tested-baseline-version", required=True)
+    setup_failure.add_argument("--status-output", type=Path, required=True)
     assess = subparsers.add_parser("assess-chain")
     assess.add_argument("--evidence", type=Path, action="append", required=True)
     assess.add_argument("--output", type=Path, required=True)
@@ -3618,6 +3667,22 @@ def main(argv: list[str] | None = None) -> int:
     upsert_issue.add_argument("--output-number", type=Path, required=True)
     args = parser.parse_args(argv)
     manifest: dict[str, Any] | None = None
+
+    if args.command == "record-setup-failure":
+        status = qualification_status(
+            tag=args.tag,
+            comparison_version=args.comparison_version,
+            tested_baseline_version=args.tested_baseline_version,
+            result="failed",
+            phase="environment",
+            reason="dependency-setup-failed",
+        )
+        write_atomic_bytes(
+            args.status_output,
+            canonical_json(status),
+            label="compatibility status",
+        )
+        return 0
 
     def finish_issue_upsert(
         *, evidence: dict[str, Any] | None = None, status: dict[str, Any] | None = None
@@ -3737,10 +3802,17 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(f"qualified OCR {evidence['version']}: {evidence['classification']}")
         return 0
-    except CompatibilityError as exc:
+    except Exception as exc:
+        if args.command != "qualify" and not isinstance(exc, CompatibilityError):
+            raise
         if args.command == "qualify" and args.status_output is not None:
             phase = exc.phase if isinstance(exc, QualificationStageError) else "metadata"
-            reason = exc.reason if isinstance(exc, QualificationStageError) else "metadata-invalid"
+            if isinstance(exc, QualificationStageError):
+                reason = exc.reason
+            elif isinstance(exc, CompatibilityError):
+                reason = "metadata-invalid"
+            else:
+                reason = "unexpected-error"
             manifest_version = (
                 str(manifest["recommended_version"])
                 if isinstance(manifest, dict) and "recommended_version" in manifest
@@ -3760,9 +3832,17 @@ def main(argv: list[str] | None = None) -> int:
                     canonical_json(status),
                     label="compatibility status",
                 )
-            except (CompatibilityError, OSError) as status_exc:
-                print(f"OCR compatibility status write failed: {status_exc}", file=sys.stderr)
-        print(f"OCR compatibility qualification failed: {exc}", file=sys.stderr)
+            except Exception as status_exc:
+                status_detail = (
+                    str(status_exc)
+                    if isinstance(status_exc, CompatibilityError)
+                    else f"unexpected {type(status_exc).__name__}"
+                )
+                print(f"OCR compatibility status write failed: {status_detail}", file=sys.stderr)
+        detail = (
+            str(exc) if isinstance(exc, CompatibilityError) else f"unexpected {type(exc).__name__}"
+        )
+        print(f"OCR compatibility qualification failed: {detail}", file=sys.stderr)
         return 1
 
 

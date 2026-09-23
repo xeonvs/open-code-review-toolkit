@@ -9,6 +9,7 @@ Towncrier renders `🚀 Features`, `🐛 Bug Fixes`, `🛠 Maintenance`, `🔧 R
 
 After publication, a factual classification or wording correction is `no-release`: correct `CHANGELOG.md` through the protected pull-request path and, when GitHub permits editing release metadata, make the existing Release body byte-identical to the corrected section. Do not create a version for the correction or mutate the annotated tag, distributions, hashes, attestations, provenance, or immutable receipt. If Release metadata is no longer editable, preserve immutability and record the canonical correction only in the repository rather than replacing the Release or its assets.
 
+<!-- ew:invariant id="release.delivery-lifecycle" -->
 ## Release-required changes
 
 A change is release-required when it removes or incompatibly changes a public CLI, environment variable, generated schema, reviewer command, or documented integration behavior, or when the user explicitly requests stable publication. Select the target version before implementation closure and keep one delivery objective across implementation, publication, and external reconciliation. Keep its complete repository plan active until the release PR archives the final repository state. Other user-visible fixes and features must still be classified explicitly; they are not automatically entitled to a stable release after every merge.
@@ -22,8 +23,8 @@ The delivery sequence is:
 3. verify the deterministic `.devN` wheel and sdist on TestPyPI;
 4. prepare and merge a protected signed `release/vX.Y.Z` pull request;
 5. monitor stable TestPyPI and PyPI publication, annotated tag, provenance, attestations, and immutable GitHub Release;
-6. independently compare artifact hashes and smoke-install every supported Python boundary;
-7. independently read the immutable `release-receipt.json` and close the tracked issues and milestone;
+6. require the release CI jobs to independently compare artifact hashes and smoke-install every supported Python boundary;
+7. require CI readback of the immutable `release-receipt.json`, then close the tracked issues and milestone;
 8. reconcile the current archived plan and exact external receipts through one protected `no-release` closure pull request without changing the published release.
 
 The release pull request is the final repository mutation before stable publication. It owns repository-side preparation: stable and next version markers, deterministic source epoch, tracked release authorization metadata, generated Towncrier changelog, release notes, and reconciliation of the execution plan, history index, roadmap, backlog, strategy, and README where applicable. It archives the repository-complete plan with external delivery pending, leaves `.release-reconciled-version` at the previously reconciled stable version, and returns `PLANS.md` to its template state. It must not claim that registry files, provenance, tag, immutable Release, receipt, or installs already exist. After those facts exist and are independently read back, one documentation-only closure pull request replaces the current release's pending status with exact receipts and advances `.release-reconciled-version` to `.release-version`; it must not alter product/package source, release metadata, tag, stable distributions, hashes, attestations, provenance, or immutable receipt. CI requires the current archive section to be pending while the markers differ and completed when they match. The protected-main merge may run the normal TestPyPI development workflow described below; verify its workflow outcome, but do not treat that development build as another stable release or repeat stable artifact readback.
@@ -37,7 +38,7 @@ Authorization then binds the squash merge to the exact reviewed release-head
 tree, its exact protected base parent, and the live `main` ruleset's required
 checks. It publishes or exact-hash-verifies the stable artifacts, verifies
 registry and GitHub provenance plus supported-Python installs, and creates
-`ocr-toolkit.release-receipt/v1` before publishing the GitHub Release. The
+`ocr-toolkit.release-receipt/v2` before publishing the GitHub Release. The
 receipt deliberately marks Release asset self-readback as pending; the workflow
 then downloads the complete asset set, publishes the draft, requires GitHub's
 immutable state, and only afterward records idempotent issue receipts and closes
@@ -49,10 +50,11 @@ and exact resume action.
 
 ## Development builds
 
-Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. Source tests, coverage, security, CodeQL, dependency review, and the package smoke gate already bind the protected pull-request tree, so this main-push workflow does not repeat them. It owns the new boundary instead: TestPyPI Trusted Publishing, attestations, exact `testpypi.yml` PEP 740 publisher and subject verification, bounded HTTPS readback, and smoke-installation of the exact development wheel and sdist with `--no-deps`.
+Every non-release push to protected `main` runs the **TestPyPI development build** workflow. The immutable workflow run number produces `<next-version>.devN` (for example `0.3.0.devN` after the 0.2.0 release); rerunning the same run reuses the version and succeeds only when the already-published filenames and SHA-256 values match the reviewed artifacts. Source tests, coverage, security, CodeQL, dependency review, and the package smoke gate already bind the protected pull-request tree, so this main-push workflow does not repeat them. It owns the new boundary instead: TestPyPI Trusted Publishing, attestations, exact `testpypi.yml` PEP 740 publisher and subject verification, bounded HTTPS readback, and smoke-installation of the exact development wheel and sdist with `--no-deps` after installing the reviewed hash-locked binary runtime dependencies. Each environment runs `pip check` and real installed MCP/schema probes.
 
 Development builds never create tags or GitHub Releases and never publish to production PyPI. TestPyPI is public disclosure, so only reviewed pull requests may reach `main`.
 
+<!-- ew:invariant id="release.protected-authorization" -->
 ## Stable release
 
 Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-version`, `.release-source-date-epoch`, package metadata, documentation, checksum-pinned examples, and the Towncrier changelog. Reconcile the active plan and release history as described below. The pull request title must be exactly `Release vX.Y.Z`. Required CI, security, CodeQL, Dependency Review, and build checks must pass before squash merge. Because TestPyPI is public disclosure, the protected feature/release review includes the privacy and license gate before either publication path.
@@ -65,8 +67,12 @@ Squash-merging that exact repository-owned release PR is the only human publicat
 4. publishes or exact-hash-verifies the same bytes on TestPyPI through OIDC;
 5. publishes or exact-hash-verifies the same bytes on PyPI through OIDC;
 6. verifies every supported Python minor, registry provenance, and GitHub artifact attestations;
-7. creates an annotated `vX.Y.Z` tag and GitHub Release with wheel, sdist, `SHA256SUMS`, `artifact-hashes.json`, `release-receipt.json`, and the matching `CHANGELOG.md` section;
+7. creates an annotated `vX.Y.Z` tag and GitHub Release with wheel, sdist, `runtime-requirements.txt`, `SHA256SUMS`, `artifact-hashes.json`, `release-receipt.json`, and the matching `CHANGELOG.md` section;
 8. reads back the complete asset set and immutable Release before closing the tracked issues.
+
+The runtime lock is exported once from the reviewed `uv.lock` without default dependency groups. The same workflow artifact supplies it to registry verification before the GitHub Release exists. `artifact-hashes.json` remains the exact wheel/sdist map; receipt v2 records the lock separately under `auxiliary_assets`. `SHA256SUMS`, GitHub attestations, draft recovery and immutable asset readback include the lock. Recovery rejects a missing or conflicting auxiliary digest in the receipt, a changed or extra asset, and a missing asset in a published Release; an incomplete draft may receive its missing exact asset and does not accept a v1 receipt for a v2 release. Historical published v1 receipts remain immutable and are handled by their original release workflow revision.
+
+The official installation first verifies the runtime lock against the release checksum manifest, installs it with `--require-hashes --only-binary=:all:`, installs the verified toolkit wheel with `--no-deps`, and runs `pip check`. Binary-only dependencies avoid an implicit source-build dependency graph. CI verifies the selected wheels on supported Python/platform targets and exercises installed federation imports and a local MCP/schema exchange outside the checkout. Help output alone does not establish a working runtime.
 
 Registry reruns are fail-closed. An absent release may be published and an exact existing artifact set may be accepted; partial sets, extra files, unexpected hosts, or digest mismatches stop the workflow. No registry API token or long-lived release PAT is stored in GitHub.
 
@@ -79,8 +85,9 @@ Registry reruns are fail-closed. An absent release may be published and an exact
 - The `main` ruleset requires pull requests, linear history, signed commits, resolved conversations, required merge checks, and blocks deletion and force pushes.
 - Public security features include secret scanning and push protection, private vulnerability reporting, Dependabot, CodeQL, Dependency Review, OpenSSF Scorecard, and immutable releases.
 
-After publication, independently compare TestPyPI, PyPI, the GitHub workflow artifact, and GitHub Release assets by SHA-256; verify registry/GitHub provenance, the annotated tag target, immutable Release, and `release-receipt.json`; then smoke-install published artifacts on every Python minor derived from the canonical `requires-python` range.
+Release CI owns independent SHA-256 comparison of TestPyPI, PyPI, the GitHub workflow artifact and GitHub Release assets, provenance and tag verification, immutable receipt readback, and installed-artifact smoke on every Python minor derived from `requires-python`. After publication, the release operator checks successful jobs bound to the authorized commit, the expected asset inventory and issue/milestone closure through the provider API. Do not repeat successful CI artifact downloads or installations locally; investigate missing or failed evidence at its owning job.
 
+<!-- ew:invariant id="release.external-reconciliation" -->
 ## External reconciliation and plan archiving
 
 The immutable receipt carries the release PR, reviewed base/head/merge/tree, original workflow run and attempt, tracked issue set, distribution hashes, registry/provenance verification states, annotated-tag target, and supported-Python matrix. Independent external readback confirms facts that the receipt cannot assert about itself, especially Release asset equality and immutable state. Issue comments retain the receipt asset hash and are the durable post-merge closure surface.

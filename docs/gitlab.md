@@ -6,7 +6,7 @@ GitLab is the toolkit's first forge provider. The provider layer owns GitLab API
 
 Install `open-code-review-toolkit` from PyPI and install Open Code Review separately. Use the exact recommended OCR version and asset checksum from the [compatibility manifest](../compatibility/ocr-support.json); the toolkit package never downloads OCR.
 
-Start with the [complete checksum-pinned pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml), then choose one configuration from the [GitLab mode matrix](../examples/gitlab/README.md). The pipeline keeps the repository's lint/test stage ahead of AI review, installs the toolkit wheel with hash verification, runs preflight and configuration, performs one production `ocr-ci review`, and makes `ocr-ci post` the sole GitLab write boundary. The rules pack adds Jinja, conventional Ansible-role templates, and Twig to the recommended OCR file selection; project exclusions still win.
+Start with the [complete checksum-pinned pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml), then choose one configuration from the [GitLab mode matrix](../examples/gitlab/README.md). The pipeline keeps the repository's lint/test stage ahead of AI review, verifies the release runtime lock and toolkit wheel, installs hash-locked binary dependencies followed by the wheel, checks dependency consistency, runs preflight and configuration, performs one production `ocr-ci review`, and makes `ocr-ci post` the sole GitLab write boundary. The rules pack adds Jinja, conventional Ansible-role templates, and Twig to the recommended OCR file selection; project exclusions still win.
 
 ## Required configuration
 

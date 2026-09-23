@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import tomllib
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "ocr-toolkit.release-receipt/v1"
+SCHEMA = "ocr-toolkit.release-receipt/v2"
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)+$")
@@ -64,6 +65,7 @@ def build_receipt(
     run_attempt: int,
     authorized_at: str,
     artifacts: dict[str, str],
+    auxiliary_assets: dict[str, str],
     python_minors: list[str],
 ) -> dict[str, Any]:
     """Return one canonical receipt after all pre-Release gates succeeded."""
@@ -94,6 +96,11 @@ def build_receipt(
         not HASH_RE.fullmatch(digest) for digest in artifacts.values()
     ):
         raise ReceiptError("artifact hashes are invalid")
+    if set(auxiliary_assets) != {"runtime-requirements.txt"} or any(
+        not isinstance(digest, str) or not HASH_RE.fullmatch(digest)
+        for digest in auxiliary_assets.values()
+    ):
+        raise ReceiptError("auxiliary asset hashes are invalid")
     parsed_python: list[int] = []
     for value in python_minors:
         match = re.fullmatch(r"3\.(\d+)", value)
@@ -119,6 +126,7 @@ def build_receipt(
         # immutable GitHub timestamp keeps receipt creation deterministic on recovery.
         "authorized_at": authorized_at,
         "artifacts": artifacts,
+        "auxiliary_assets": auxiliary_assets,
         "registries": {
             "testpypi": {"artifacts": "verified", "provenance": "verified"},
             "pypi": {"artifacts": "verified", "provenance": "verified"},
@@ -145,6 +153,7 @@ def validate_receipt(
     tree: str,
     authorized_at: str,
     artifacts: dict[str, str],
+    auxiliary_assets: dict[str, str],
     python_minors: list[str],
 ) -> None:
     """Validate an immutable prior-run receipt against current recovery evidence."""
@@ -162,6 +171,7 @@ def validate_receipt(
         run_attempt=1,
         authorized_at=authorized_at,
         artifacts=artifacts,
+        auxiliary_assets=auxiliary_assets,
         python_minors=python_minors,
     )
     if set(payload) != set(expected):
@@ -174,6 +184,7 @@ def validate_receipt(
         "issues",
         "reviewed",
         "artifacts",
+        "auxiliary_assets",
         "registries",
         "github",
         "python_smoke",
@@ -215,6 +226,7 @@ def main() -> int:
     parser.add_argument("--run-attempt", type=int)
     parser.add_argument("--authorized-at", required=True)
     parser.add_argument("--hashes", required=True, type=Path)
+    parser.add_argument("--runtime-requirements", required=True, type=Path)
     parser.add_argument("--pyproject", default=Path("pyproject.toml"), type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -232,6 +244,11 @@ def main() -> int:
         "tree": args.tree,
         "authorized_at": args.authorized_at,
         "artifacts": load_hashes(args.hashes),
+        "auxiliary_assets": {
+            "runtime-requirements.txt": hashlib.sha256(
+                args.runtime_requirements.read_bytes()
+            ).hexdigest()
+        },
         "python_minors": supported_python_minors(pyproject),
     }
     if args.validate_existing is not None:

@@ -50,21 +50,23 @@ jobs:
           uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
           uv run python -m build --no-isolation
           uv run twine check dist/*
-          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
+          uv export --frozen --no-default-groups --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
           python -m venv /tmp/wheel-smoke
-          /tmp/wheel-smoke/bin/pip install --require-hashes --requirement runtime-requirements.txt
+          /tmp/wheel-smoke/bin/pip install --isolated --disable-pip-version-check --require-hashes --only-binary=:all: --index-url https://pypi.org/simple --retries 3 --timeout 10 --requirement runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/wheel-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" \
             --requirements /tmp/wheel-smoke-requirements.txt
-          /tmp/wheel-smoke/bin/ocr-ci --help
+          /tmp/wheel-smoke/bin/python -m pip check
+          (cd /tmp && env -u PYTHONPATH /tmp/wheel-smoke/bin/python -I "${GITHUB_WORKSPACE}/scripts/installed_runtime_smoke.py")
           python -m venv /tmp/sdist-smoke
-          /tmp/sdist-smoke/bin/pip install --require-hashes --requirement runtime-requirements.txt
+          /tmp/sdist-smoke/bin/pip install --isolated --disable-pip-version-check --require-hashes --only-binary=:all: --index-url https://pypi.org/simple --retries 3 --timeout 10 --requirement runtime-requirements.txt
           python scripts/install_local_artifact.py \
             --python /tmp/sdist-smoke/bin/python \
             --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
             --requirements /tmp/sdist-smoke-requirements.txt
-          /tmp/sdist-smoke/bin/ocr-ci --help
+          /tmp/sdist-smoke/bin/python -m pip check
+          (cd /tmp && env -u PYTHONPATH /tmp/sdist-smoke/bin/python -I "${GITHUB_WORKSPACE}/scripts/installed_runtime_smoke.py")
           python - <<'PY'
           import hashlib
           import json

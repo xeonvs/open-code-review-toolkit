@@ -1,6 +1,8 @@
 # Agent Instructions
 
-Use this file as the short repository map and startup workflow for Open Code Review Toolkit maintenance. It points to canonical owners; it does not duplicate their rules.
+instruction_contract_version: 3
+
+Use this file as the short repository map and route table for Open Code Review Toolkit maintenance. It points to canonical owners; it does not duplicate their rules.
 
 ## Repository Map
 
@@ -23,25 +25,30 @@ Use this file as the short repository map and startup workflow for Open Code Rev
 - `docs/configuration.md`, `docs/operations.md`, `docs/gitlab.md`, and `docs/security.md` - public product and operator contracts; `SECURITY.md` owns vulnerability reporting.
 - `docs/engineering/execution_history/README.md` - archived release-plan index and historical receipts.
 
-## Work Startup
+## Task Routes
 
-1. Check `PLANS.md` for overlapping work before repository changes. Use the proportional planning guidance in `docs/development.md`; classify work as `no-release`, `release-required`, or `release-deferred` and record the target stable version when applicable. Read-only questions do not require a plan entry.
-2. Select canonical guidance by scope: engineering invariants for runtime or trust-boundary work, the review decision flow for execution or publication branch changes, development procedures for implementation and validation, release guidance for release lifecycle changes, and the relevant public contract for user-facing behavior. Consult the pitfalls catalogue only when diagnosing a matching failure class.
-3. Preserve the requested scope and define its completion boundary before implementation. Record service boundaries and trust inputs when affected; use the project's planning and closure owners rather than introducing a second lifecycle from a generic skill.
-4. Use targeted tests while iterating and the boundary checklist for every changed parser, I/O, persistence, Git, subprocess, provider, or reporting boundary. Keep fixtures and public material synthetic and private-safe.
-5. Before staging or committing, update the plan and affected status/documentation to post-commit truth, inspect the complete diff, run `git diff --check`, and run the validation owned by the changed subsystem. Use `scripts/quality.sh` for the Python matrix and `scripts/gitleaks.sh` before publishing rewritten or newly committed branch history.
+Read the matching owners and run their applicable guards. The general repository route applies alongside a more specific route; a shared owner or unchanged-state guard needs only one current read or check.
 
-## Execution Discipline
+<!-- ew:route id="repository-change" triggers="**" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:inspect the scoped final diff and applicable repository checks" -->
+| `repository-change` | Every repository change | Project principles and development procedures | Scoped diff review and applicable checks |
 
-- Prioritize correctness and safety, then explicit requirements and verified completion, then the smallest surgical implementation. Efficiency may reduce redundant inspection, output, or polling, but never required work or evidence.
-- Resolve discoverable uncertainty from the plan, repository, canonical documentation, and environment before implementation. Surface only material assumptions or tradeoffs; use the narrowest safe default for minor reversible choices.
-- Touch only lines that implement the active objective or a necessary consequence. Match existing style, avoid unrelated cleanup, and remove only code made obsolete by the current change.
-- Start substantial work with one bounded reconnaissance pass. Search before broad reads, inspect an existing example when using an unfamiliar DSL/schema/configuration form, and keep large inspection behind focused ranges. Expand inspection only when the example leaves a material ambiguity.
-- Treat the task's named checks as the acceptance contract. On failure, inspect evidence and update the hypothesis; after two equivalent failures under the same approach, switch to a materially different explanation or method rather than patching another symptom.
-- Treat a check as green only when its process exits successfully and every required output assertion holds. Multi-step shell checks must stop at the first failed step and must not end with an unconditional success marker; use task-specific variable names rather than zsh special parameters such as `path` or `status`.
-- Stop when the scoped result and its required checks are complete. Do not add victory-lap harnesses, optional refactors, or redundant successful checks. For long-running commands, persist the full result outside the waiter before execution and use the completion-driven, bounded-output contract in `docs/development.md`; do not wake the model for periodic empty polls when the environment can wait for process completion.
+<!-- ew:route id="planning" triggers="PLANS.md|docs/codex/TASKS_BACKLOG.md|plan closure|release classification" owners="docs/development.md|docs/release.md|skill://engineering-workflow/references/planning_and_backlog.md" guards="manual_review:reconcile the active plan classification status and exact resume point" -->
+| `planning` | Active plan, backlog, classification, or closure | Development and release owners with installed planning reference | Plan and status reconciliation |
 
-## Closure
+<!-- ew:route id="review-flow" triggers="docs/review-decision-flow.md|review execution|publication branch" owners="docs/review-decision-flow.md|docs/engineering/project_principles.md" guards="manual_review:compare changed execution branches with the decision flow" -->
+| `review-flow` | Review execution or publication branch | Review decision flow and project principles | Branch and diagram comparison |
 
-- Follow `docs/release.md` for every `release-required` or deferred lifecycle. Readiness, merge, development publication, stable delivery, external reconciliation, and issue closure are distinct states.
-- Reconcile promised external outcomes from live registry/provider state rather than repository prose alone.
+<!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
+| `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
+
+<!-- ew:route id="workflow-instructions" triggers="AGENTS.md|docs/engineering/project_principles.md|docs/codex/AGENT_EXECUTION_PITFALLS.md" owners="skill://engineering-workflow/references/instruction_lifecycle.md|docs/engineering/project_principles.md" guards="lint:instruction-contract" -->
+| `workflow-instructions` | Instruction owner, route, or incident change | Installed instruction lifecycle and project principles | `lint:instruction-contract` |
+
+<!-- ew:route id="release-lifecycle" triggers="docs/release.md|.github/workflows/release.yml|release-required change|release-deferred change|stable publication|release authorization|stable delivery|release closure" owners="docs/release.md" guards="release_gate:.github/workflows/release.yml|manual_review:reconcile current archive and external receipts" -->
+| `release-lifecycle` | Release authorization, stable delivery, or closure | Release guide | Protected release gate and external receipt review |
+
+<!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|test:scripts/quality.sh check" -->
+| `development-validation` | Status or changed-boundary validation | Development guide | Status review and Python quality matrix |
+
+<!-- ew:route id="trust-boundary" triggers="src/ocr_toolkit/**|tests/**|public fixtures|release artifacts" owners="docs/engineering/project_principles.md" guards="test:scripts/quality.sh check|lint:scripts/gitleaks.sh|manual_review:verify clean built artifacts and real external boundary evidence" -->
+| `trust-boundary` | Runtime, test, or public-source trust boundary | Project principles | Behavioral tests, secret scan, and installed integration review |

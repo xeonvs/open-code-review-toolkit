@@ -154,6 +154,21 @@ The M5 negative suite is an attacker matrix, not merely a replay of observed rev
 | Explicit unprotected target remains constrained and comment-only | `providers.gitlab.acquire_review_snapshot` -> `review_runner` constrained preparation -> receipt-v8 validation -> posting/approval workflow | secure default remains protected-only; explicit unprotected mode accepts only actual unprotected state with `off` or bounded `metadata`, immutable repository evidence, and exact-target Rules; enriched context, adapters, protected policy, external MCP, accepted decisions, structured guidance, and approval mutation remain unreachable | real local HTTPS protection-state matrix, real immutable Git Rules reads, privileged-context/external-MCP rejection ordering, omitted target-policy records, hostile receipt fields, all outcome renderings, and unreachable approval-executor regressions across provider, evidence, runner, posting, and approval tests | controlled GitLab and OCR peers prove deterministic toolkit controls, receipt provenance, and call ordering; they do not establish branch governance, live GitLab merge policy, or semantic finding quality | proven for constrained toolkit path; operational protection remains external |
 | Exact OCR 1.11.2 compatibility contract | compatibility gateway -> hosted Linux binary -> human-reviewed evidence promotion | prior result/manifest/budget/provider contracts remain compatible; `.mjs`/`.cjs` select JavaScript Rules, `.cxx`/`.hxx` select C++ Rules, and `.svh` remains excluded | hosted run 33508349494; checksum-pinned `compatibility/evidence/ocr-1.11.2.json`; independent checksum-verified Darwin arm64 no-LLM qualification | deterministic gateways and rule checks prove consumed structural and selection contracts, not provider-backed review quality | proven for exact qualified OCR contract |
 
+## Installed release dependency boundary
+
+The official installation consumes a verified runtime lock before the toolkit wheel.
+`test_installed_policy_e2e.py` exercises that sequence in empty wheel/sdist environments,
+including configuration, preflight and a real local MCP/schema exchange through
+`scripts/installed_runtime_smoke.py`. The negative control omits runtime dependencies
+and must fail the functional probe. Registry CI uses the same probe after `pip check`;
+help output is not an installation gate. This proves installed runtime wiring, not a
+live upstream provider or model's review quality.
+
+`test_release_receipt.py` exercises runtime-lock checksum generation and receipt-v2
+auxiliary digests while retaining exactly two registry distributions. Live CI owns
+provenance, draft recovery and immutable asset readback; local schema tests do not
+establish publication.
+
 ## Complete suite module audit
 
 Every top-level test module is classified below. A module can contain more than one evidence class; the strongest class applies only to the named boundary, never to all tests in that file.
