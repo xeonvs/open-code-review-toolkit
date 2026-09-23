@@ -32,6 +32,18 @@ case "${registry}" in
     ;;
 esac
 
+preview_script=scripts/testpypi_preview.py
+manifest_command=artifact-manifest
+if [ "${OCR_PYPI_JSON_RECOVERY:-}" = 1 ]; then
+  test "${registry}" = pypi && test "${version}" = 0.11.1 || {
+    echo "PyPI JSON recovery is limited to v0.11.1" >&2
+    exit 2
+  }
+  preview_script=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/testpypi_preview.py
+  manifest_command=pypi-release-json-manifest
+  index_url=https://pypi.org/pypi/open-code-review-toolkit/0.11.1/json
+fi
+
 index=/tmp/${registry}-index.json
 manifest=/tmp/${registry}-artifact-manifest.json
 downloads=/tmp/${registry}-artifact-downloads.tsv
@@ -48,7 +60,7 @@ for attempt in 1 2 3 4 5; do
     --proto '=https' --proto-redir '=https' \
     --header 'Accept: application/vnd.pypi.simple.v1+json' \
     "${index_url}" --output "${index}"; then
-    if python scripts/testpypi_preview.py artifact-manifest \
+    if python "${preview_script}" "${manifest_command}" \
       --version "${version}" \
       --index-json "${index}" \
       --hashes-json "${hashes}" \
@@ -61,7 +73,7 @@ for attempt in 1 2 3 4 5; do
   sleep 15
 done
 
-python scripts/testpypi_preview.py artifact-manifest \
+python "${preview_script}" "${manifest_command}" \
   --version "${version}" \
   --index-json "${index}" \
   --hashes-json "${hashes}" \

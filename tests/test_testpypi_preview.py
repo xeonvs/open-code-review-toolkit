@@ -74,6 +74,43 @@ def test_missing_release_requires_publish() -> None:
     assert preview.classify_index({"files": []}, "0.1.0a3", hashes) == "publish"
 
 
+def test_pypi_version_json_recovery_requires_exact_reviewed_release() -> None:
+    version = "0.11.1"
+    hashes = expected_hashes(version)
+    urls = [
+        {
+            "filename": filename,
+            "packagetype": "bdist_wheel" if kind == "wheel" else "sdist",
+            "digests": {"sha256": hashes[filename]},
+            "url": f"https://files.pythonhosted.org/packages/synthetic/{filename}",
+            "yanked": False,
+        }
+        for filename, kind in preview.expected_filenames(version).items()
+    ]
+    release = {"info": {"name": preview.PACKAGE, "version": version}, "urls": urls}
+    manifest = preview.pypi_release_json_manifest(release, version, hashes)
+    assert {item["filename"] for item in manifest} == set(hashes)
+    assert all(item["provenance"].startswith("https://pypi.org/integrity/") for item in manifest)
+
+    for mutation in (
+        lambda data: data["urls"].pop(),
+        lambda data: data["urls"][0].update(yanked=True),
+        lambda data: data["urls"][0]["digests"].update(sha256="c" * 64),
+        lambda data: data["urls"][0].update(url="https://example.org/file.whl"),
+        lambda data: data["urls"][0].update(packagetype="sdist"),
+        lambda data: data["urls"].append(dict(data["urls"][0])),
+        lambda data: data["info"].update(version="0.11.0"),
+    ):
+        import copy
+
+        changed = copy.deepcopy(release)
+        mutation(changed)
+        with pytest.raises(preview.PreviewError):
+            preview.pypi_release_json_manifest(changed, version, hashes)
+    with pytest.raises(preview.PreviewError):
+        preview.pypi_release_json_manifest(release, "0.11.2", hashes)
+
+
 def test_matching_release_is_idempotent() -> None:
     hashes = expected_hashes("0.1.0a3")
     assert preview.classify_index(payload(hashes), "0.1.0a3", hashes) == "already-published"
@@ -228,9 +265,9 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "SETUPTOOLS_SCM_PRETEND_VERSION" in workflow
     assert "SOURCE_DATE_EPOCH" in workflow
     assert "attestations: true" in workflow
-    assert workflow.count("verify_registry_artifacts.sh") == 2
-    assert workflow.count("artifact-hashes.json release.yml") == 2
-    assert workflow.count("release.yml runtime-requirements.txt") == 2
+    assert workflow.count("verify_registry_artifacts.sh") == 3
+    assert workflow.count("artifact-hashes.json release.yml") == 3
+    assert workflow.count("release.yml runtime-requirements.txt") == 3
     assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
