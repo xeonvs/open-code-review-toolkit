@@ -131,6 +131,8 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
 
 CURRENT_LANGUAGE_RULES = {
     "views/page.pug": "**/*.pug",
+    "views/page.jinja2": "**/*.{jinja2,j2}",
+    "views/component.j2": "**/*.{jinja2,j2}",
     "rtl/module.v": "**/*.{v,sv,vh}",
     "rtl/include.vh": "**/*.{v,sv,vh}",
     "rtl/module.sv": "**/*.{v,sv,vh}",
@@ -166,6 +168,8 @@ PROVIDER_DIRECTORY_PREVIEW_CUTOFF = (1, 12, 1)
 PYTEST_PREFIX_EXCLUSION_CUTOFF = (1, 12, 7)
 PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
 PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
+JINJA_RULE_CUTOFF = (1, 12, 11)
+JINJA_RULE_PATHS = ("views/page.jinja2", "views/component.j2")
 FSHARP_RULE_CUTOFF = (1, 12, 8)
 FSHARP_RULE_PATHS = ("src/Program.fs", "src/Program.fsi", "scripts/check.fsx")
 EXPANDED_DEFAULT_EXCLUSION_CUTOFF = (1, 12, 8)
@@ -483,6 +487,9 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
     if _version(version) < FSHARP_RULE_CUTOFF:
         for path in FSHARP_RULE_PATHS:
             rules.pop(path)
+    if _version(version) < JINJA_RULE_CUTOFF:
+        for path in JINJA_RULE_PATHS:
+            rules.pop(path)
     return rules
 
 
@@ -496,6 +503,8 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
         paths.append("types/interface.pyi")
     if _version(version) < FSHARP_RULE_CUTOFF:
         paths.extend(("src/Program.fsi", "scripts/check.fsx"))
+    if _version(version) < JINJA_RULE_CUTOFF:
+        paths.extend(JINJA_RULE_PATHS)
     return tuple(paths)
 
 

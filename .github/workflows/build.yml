@@ -22,13 +22,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.0"
-      - run: uv sync --frozen
-      - run: uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
-      - run: uv run python -m build --no-isolation
-      - run: uv run twine check dist/*
+      - run: uv sync --locked
+      - run: uv run --no-sync python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
+      - run: uv run --no-sync python -m build --no-isolation
+      - run: uv run --no-sync twine check dist/*
       - run: uv export --frozen --no-default-groups --no-emit-project --format requirements-txt --output-file /tmp/runtime-requirements.txt
       - run: |
           python -m venv /tmp/wheel-smoke

@@ -200,9 +200,10 @@ jobs:
           ref: ${{ needs.authorize.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.0"
+      - run: uv sync --locked
       - id: validate
         name: Validate the authorized release merge
         env:
@@ -222,7 +223,7 @@ jobs:
           SOURCE_DATE_EPOCH=$(tr -d '\n' < .release-source-date-epoch)
           test "${RELEASE_BRANCH}" = "release/v${VERSION}"
           test "${RELEASE_TITLE}" = "Release v${VERSION}"
-          CANONICAL_VERSION=$(uv run python -c "from packaging.version import Version; print(Version('${VERSION}'))")
+          CANONICAL_VERSION=$(uv run --no-sync python -c "from packaging.version import Version; print(Version('${VERSION}'))")
           test "${CANONICAL_VERSION}" = "${VERSION}"
           case "${VERSION}" in *+*) echo "local versions cannot be published" >&2; exit 1;; esac
           case "${SOURCE_DATE_EPOCH}" in *[!0-9]*|'') echo "invalid SOURCE_DATE_EPOCH" >&2; exit 1;; esac
@@ -232,17 +233,16 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "source-date-epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
-      - run: uv sync --frozen
       - run: ./scripts/quality.sh check
-      - run: uv run pip-audit --skip-editable
+      - run: uv run --no-sync pip-audit --skip-editable
       - name: Build deterministic release artifacts
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.validate.outputs.version }}
           SOURCE_DATE_EPOCH: ${{ steps.validate.outputs.source-date-epoch }}
         run: |
-          uv run python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
-          uv run python -m build --no-isolation
-      - run: uv run twine check dist/*
+          uv run --no-sync python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)"
+          uv run --no-sync python -m build --no-isolation
+      - run: uv run --no-sync twine check dist/*
       - name: Export hash-locked runtime dependencies
         run: >-
           uv export --frozen --no-default-groups --no-emit-project --format requirements-txt
@@ -251,7 +251,7 @@ jobs:
         env:
           VERSION: ${{ steps.validate.outputs.version }}
         run: |
-          uv run python -c "import pathlib; names=[p.name for p in pathlib.Path('dist').iterdir()]; expected=set(__import__('scripts.testpypi_preview', fromlist=['expected_filenames']).expected_filenames('${VERSION}')); assert set(names) == expected, names"
+          uv run --no-sync python -c "import pathlib; names=[p.name for p in pathlib.Path('dist').iterdir()]; expected=set(__import__('scripts.testpypi_preview', fromlist=['expected_filenames']).expected_filenames('${VERSION}')); assert set(names) == expected, names"
       - name: Record reviewed artifact hashes
         run: |
           python - <<'PY'

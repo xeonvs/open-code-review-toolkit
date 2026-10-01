@@ -89,18 +89,21 @@ def test_live_language_probe_paths_follow_candidate_epoch() -> None:
         "types/interface.pyi",
         "src/Program.fsi",
         "scripts/check.fsx",
+        *module.JINJA_RULE_PATHS,
     )
     assert module._language_negative_paths_for_version("1.11.8") == (
         "rtl/include.svh",
         "types/interface.pyi",
         "src/Program.fsi",
         "scripts/check.fsx",
+        *module.JINJA_RULE_PATHS,
     )
     assert module._language_rules_for_version("1.12.0")["types/interface.pyi"] == "default"
     assert module._language_negative_paths_for_version("1.12.0") == (
         "rtl/include.svh",
         "src/Program.fsi",
         "scripts/check.fsx",
+        *module.JINJA_RULE_PATHS,
     )
     assert (
         module._language_rules_for_version("1.12.1")["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
@@ -109,8 +112,12 @@ def test_live_language_probe_paths_follow_candidate_epoch() -> None:
         "rtl/include.svh",
         "src/Program.fsi",
         "scripts/check.fsx",
+        *module.JINJA_RULE_PATHS,
     )
-    assert module._language_negative_paths_for_version("1.12.8") == ("rtl/include.svh",)
+    assert module._language_negative_paths_for_version("1.12.8") == (
+        "rtl/include.svh",
+        *module.JINJA_RULE_PATHS,
+    )
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -152,8 +159,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.12.9"
-    assert manifest["monitoring_floor"] == "1.12.9"
+    assert manifest["recommended_version"] == "1.12.11"
+    assert manifest["monitoring_floor"] == "1.12.11"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.10"],
         "qualified_patches_only": True,
@@ -207,6 +214,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.12.7", "tested"),
         ("1.12.8", "tested"),
         ("1.12.9", "tested"),
+        ("1.12.10", "tested"),
+        ("1.12.11", "tested"),
     ]
 
     assert module.qualified_runtime_versions(manifest) == (
@@ -231,6 +240,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.12.7",
             "1.12.8",
             "1.12.9",
+            "1.12.10",
+            "1.12.11",
         ],
         ["1.10.0", "1.10.1", "1.10.2"],
     )
@@ -242,7 +253,9 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     module = load_script()
     contracts = current_contracts(module)
     extensions = contracts["language_rule_probe"]["extensions"]
-    assert extensions == sorted(Path(path).suffix for path in module.CURRENT_LANGUAGE_RULES)
+    assert extensions == sorted(
+        Path(path).suffix for path in module._language_rules_for_version("1.12.8")
+    )
     module._validate_current_contracts(contracts, "1.12.8")
     extensions.reverse()
     with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
@@ -251,7 +264,7 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.12.8", 21, "reported")],
+    [("1.12.8", 21, "reported"), ("1.12.11", 23, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -291,6 +304,26 @@ def test_fsharp_and_default_exclusion_epoch_preserves_older_evidence() -> None:
         module._language_rules_for_version("1.12.8")[path] for path in module.FSHARP_RULE_PATHS
     } == {"**/*.{fs,fsi,fsx}"}
     module._validate_current_contracts(current_contracts(module, "1.12.8"), "1.12.8")
+
+
+@pytest.mark.parametrize("extension", [".j2", ".jinja2"])
+def test_jinja_contract_requires_both_selection_and_rule_evidence(extension: str) -> None:
+    module = load_script()
+    previous = current_contracts(module, "1.12.10")
+    module._validate_current_contracts(previous, "1.12.10")
+    assert set(module.JINJA_RULE_PATHS).issubset(
+        module._language_negative_paths_for_version("1.12.10")
+    )
+    assert not set(module.JINJA_RULE_PATHS) & set(
+        module._language_negative_paths_for_version("1.12.11")
+    )
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module._validate_current_contracts(previous, "1.12.11")
+    current = current_contracts(module, "1.12.11")
+    module._validate_current_contracts(current, "1.12.11")
+    current["language_rule_probe"]["extensions"].remove(extension)
+    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
+        module._validate_current_contracts(current, "1.12.11")
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:

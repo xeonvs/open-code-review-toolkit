@@ -94,7 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 **({"debug_dir": Path(args.debug_dir)} if args.debug_dir is not None else {}),
             )
         except review_runner.ReviewRunnerError as exc:
-            print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
+            if not isinstance(exc, review_runner.ReviewRejected):
+                print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
             return 2
     if args.command == "post":
         return posting_main([args.result, args.stderr])

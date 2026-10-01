@@ -91,7 +91,10 @@ flowchart TD
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>closed failure note may be posted]
     exit -- Zero --> finalize[Enter result finalization]
     finalize --> core{Result, manifest, identity, cleanup,<br/>action receipt and federation receipt valid?}
-    core -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
+    core -- No --> rejection_diag[Emit bounded rejection facts;<br/>zero vs unavailable; fixed reason code]
+    rejection_diag --> retain_rejected{Authorized local private retention?}
+    retain_rejected -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
+    retain_rejected -- Yes --> retained_rejected[Owner-only bounded diagnostic envelope;<br/>no receipt, successful report or posting authority]
     core -- Yes --> diag[Classify additive failed-tool diagnostics]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
     dlp_mode -- true --> dlp[Apply stage-aware publication<br/>and private-field DLP]
@@ -115,6 +118,7 @@ flowchart TD
     local_output -- No --> local_handoff[Private JSON handoff only]
     mode -- GitLab MR --> receipt[Attach exact receipt v9]
     receipt --> post{Posting input valid at readback?}
+    retained_rejected --> posting_error
     post -- No --> posting_error[Publication-policy error;<br/>findings transaction not started]
     post -- Yes --> live_state{Exact MR identity and<br/>lifecycle still valid?}
     live_state -- Invalid or mismatched --> posting_error
@@ -143,7 +147,7 @@ flowchart TD
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
 contradictory manifest, stale identity, failed cleanup, or missing/mismatched toolkit action
-receipt blocks finalization. By contrast, OCR's additive failed-tool envelope is diagnostic: it
+receipt blocks finalization. Mandatory evidence rejection emits safe facts before cleanup; authorized local diagnostic retention preserves a bounded private envelope, while its marker blocks even receipt-less posting. Failed diagnostic retention never replaces the original rejection. By contrast, OCR's additive failed-tool envelope is diagnostic: it
 cannot replace an otherwise valid manifest, findings, summary, or posting transaction.
 
 ## Additive failed-tool diagnostic states

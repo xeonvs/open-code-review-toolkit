@@ -23,6 +23,7 @@ from ocr_toolkit.context.ci_outcomes import CIOutcomeSnapshot
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
+from ocr_toolkit.evidence.actions import record_action
 from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifacts
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
@@ -683,7 +684,7 @@ def test_evidence_mcp_self_query_does_not_satisfy_model_usage(tmp_path: Path) ->
         secret_values=(),
     )
 
-    with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
+    with pytest.raises(review_runner.ReviewRunnerError, match="required evidence use"):
         review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
@@ -758,7 +759,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         json.dumps({"status": "success", "tool_calls": {"total": 1, "by_tool": {"file_read": 1}}}),
         encoding="utf-8",
     )
-    with pytest.raises(review_runner.ReviewRunnerError, match="did not call"):
+    with pytest.raises(review_runner.ReviewRunnerError, match="required evidence use"):
         review_runner._record_ocr_result_mcp_usage(result, composition, DEFAULT_IDENTITY)
 
 
@@ -1533,7 +1534,9 @@ def test_mcp_received_attempts_cannot_exceed_ocr_preparse_totals(tmp_path: Path)
         secret_values=(),
     )
 
-    with pytest.raises(review_runner.ReviewRunnerError, match="does not match OCR tool usage"):
+    with pytest.raises(
+        review_runner.ReviewRunnerError, match="evidence-action-attribution-invalid"
+    ):
         review_runner._record_ocr_result_mcp_usage(
             result,
             composition,
@@ -3020,7 +3023,7 @@ def test_context_tool_calls_never_satisfy_mandatory_evidence_summary(tmp_path: P
         bootstrap_hints={},
     )
 
-    with pytest.raises(review_runner.ReviewRunnerError, match="mandatory"):
+    with pytest.raises(review_runner.ReviewRunnerError, match="required evidence use"):
         review_runner._record_ocr_result_mcp_usage(
             result,
             composition,
@@ -4138,6 +4141,7 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
         (False, 0, "protected"),
         (False, 1, "local"),
         (True, 0, "local"),
+        (True, 1, "local"),
         (False, 0, "unprotected"),
     ],
 )
@@ -4197,6 +4201,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         events.append(("ocr", result, stderr, args))
         status = "complete" if ocr_exit_code == 0 else "failed"
         result.write_text(json.dumps({"status": status}), encoding="utf-8")
+        if ocr_exit_code == 0:
+            record_action(artifacts.action_receipt, "summary")
+            record_action(artifacts.action_receipt, "summary", completed=True)
         return ocr_exit_code
 
     def preview(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
@@ -4221,6 +4228,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             assert state.local is False and state.progress is not None
         else:
             assert "state" not in kwargs
+        assert _args[4]["completed"]["summary"] == 1
         finalized.append(kwargs)
         events.append("ocr-usage")
         return {"ocr_toolkit_evidence": 1}, False, {"state": "passed"}
@@ -4375,16 +4383,35 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     assert events[8][0] == "ocr"  # type: ignore[index]
     assert events[8][3] == events[7][1][2:-1]  # type: ignore[index]
     if preserve_private_artifacts:
-        assert "ocr-usage" not in events
+        assert ("ocr-usage" in events) is (ocr_exit_code == 0)
+        if ocr_exit_code == 0:
+            assert finalized[0]["private_diagnostics"] is True
         assert artifacts.store.exists()
         assert artifacts.bootstrap.exists()
-        sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
-        assert sidecar == {
-            "schema_version": "ocr.private-dlp-decisions/v1",
-            "truncated": False,
-            "omitted_decisions": 0,
-            "decisions": [],
-        }
+        if ocr_exit_code == 0:
+            sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
+            assert sidecar == {
+                "schema_version": "ocr.private-dlp-decisions/v1",
+                "truncated": False,
+                "omitted_decisions": 0,
+                "decisions": [],
+            }
+        else:
+            retained = ocr_result.load_ocr_result(tmp_path / "result.json")
+            assert (
+                retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "execution-failed"
+            )
+            assert retained["result"]["status"] == "failed"
+            assert ocr_result.TOOLKIT_RESULT_KEY not in retained
+            monkeypatch.setattr(workflow, "post_review_note_bounded", lambda *_args: {"id": 1})
+            monkeypatch.setattr(workflow, "finalize_posting", lambda *_args: True)
+            monkeypatch.setattr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda *_args: pytest.fail("private result must not inspect previous comments"),
+            )
+            assert workflow.post_results(gitlab_config(), retained) == 0
+            assert "not publication-eligible" in capsys.readouterr().err
         session_homes[0].rmdir()
     else:
         if ocr_exit_code == 0:

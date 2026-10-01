@@ -54,9 +54,12 @@ flowchart LR
   Stable publication and external reconciliation completed on 2026-09-19 through
   the protected release and no-release closure lifecycles.
 
-- The v0.11.1 release candidate repairs hash-locked runtime installation and
-  qualifies OCR through 1.12.9. This preserves established M7 behavior; stable
-  delivery and external reconciliation remain separate release gates.
+- The v0.11.1 release repairs hash-locked runtime installation and qualifies
+  OCR through 1.12.9. Stable delivery and external reconciliation completed.
+
+- The v0.11.2 work preserves established M7 while repairing dependency-update
+  consistency and rejected-review diagnostics, and qualifying the latest OCR.
+  Its stable delivery follows the protected release and reconciliation gates.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.

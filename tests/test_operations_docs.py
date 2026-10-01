@@ -721,7 +721,7 @@ def test_protected_pr_and_scheduled_checks_do_not_repeat_on_main_push() -> None:
     assert "schedule:" in codeql
     assert "  push:\n    branches: [main]" in testpypi
     assert "./scripts/quality.sh check" in release
-    assert "uv run pip-audit --skip-editable" in release
+    assert "uv run --no-sync pip-audit --skip-editable" in release
 
 
 def test_threat_model_covers_remote_finding_image_boundary() -> None:
@@ -753,7 +753,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
     assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow
-    assert "|| ! uv sync --frozen --no-default-groups --python 3.14" in workflow
+    assert "|| ! uv sync --locked --no-default-groups --python 3.14" in workflow
     assert "record-setup-failure" in workflow
     assert '--through-tag "${THROUGH_TAG}"' in workflow
     assert "contents: read" in workflow
@@ -778,8 +778,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert workflow.count("upsert-issue") == 1
     assert "continue-on-error: true" in workflow
     qualify_job = workflow.split("  qualify:\n", 1)[1].split("  aggregate:\n", 1)[0]
-    dependency_sync = "uv sync --frozen --no-default-groups --python 3.14"
-    assert "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4" in qualify_job
+    dependency_sync = "uv sync --locked --no-default-groups --python 3.14"
+    assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}(?:\s|$)", qualify_job)
     assert dependency_sync in qualify_job
     assert qualify_job.index("name: Qualify candidate") < qualify_job.index(dependency_sync)
     assert qualify_job.index(dependency_sync) < qualify_job.index(

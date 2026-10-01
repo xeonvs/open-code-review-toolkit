@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.12.9",
-  "recommended_version": "1.12.9",
+  "monitoring_floor": "1.12.11",
+  "recommended_version": "1.12.11",
   "releases": [
     {
       "assets": [
@@ -2353,6 +2353,112 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.9",
       "status": "tested",
       "version": "1.12.9"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "5b12511b579ff4a9c8092b043e8238fda00e61308b7e232f826a0ed8935a3025",
+          "size": 58053872
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "20d5231eecc814cef11364d97391eb26a0e741ae08b3269f505d686e0690c9e2",
+          "size": 55080690
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "4bde31b8af8a9e1136dc3416011c2ac351ef77b5039081e38da76e532b4bee02",
+          "size": 56303778
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "384840fcba0afe7e048502ba2d3df464620a1180356eb6c8232c9f47f70ea24d",
+          "size": 53018786
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "d86c6d056542f43f95760a8fbf78bfaf42949c555d485467b48ffcf527186afd",
+          "size": 57771520
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "1820f78daf2871ba62a80cf8cf03f72cacb5a050cfc38bdce163c7efb77af8ee",
+          "size": 53714944
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "23a2934e5584d0c8d01869df61acfd308a13da3075bee9f0ca7c7eaa974f067e",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.12.10.json",
+      "evidence_sha256": "3e0a8e6aba729b8543382b5cea38e81fbaf6c2d1410b2e272b0a2b7f1b788bd3",
+      "human_conclusion": "Compatible after checksum-verified hosted Linux qualification in run 36723483714 and adjacent upstream source review. Removed OCR_CONFIG_PATH belongs to read-only upstream commands and is not set by toolkit execution. Endpoint trimming, tool-call token accounting and opaque metadata replay preserve the consumed configured CLI and result contracts under the deterministic budget and comment probes. Session CLI, built-in file_find, provider catalogs and upstream posting changes do not alter toolkit evidence MCP or posting. Model-backed finding quality is not claimed.",
+      "published_at": "2026-09-28T07:47:36Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.10",
+      "status": "tested",
+      "version": "1.12.10"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "561d59dc929d48f6329df2f653949bd90296fc44d447a29189f2c1199e5ec535",
+          "size": 58057984
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "5580b7b2dfec9343dc34951eb185a1e7ee552061f68b06dca7de0b171e8cd204",
+          "size": 55080706
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "ae202b88fa03e16926512487bf1051d37ccb3f9690bdd74b889d11ea4dd8099b",
+          "size": 56307874
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "4db2d5c81c75a0bcbf2dd5d584cee92cfb0774989f7687891752a96c4ebd2b99",
+          "size": 53018786
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "2bb9ec31b58cea4e8e289c31b41d621ae4d3f55d941b79f14ef3c297fd7f1f5f",
+          "size": 57775616
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "e2249699367527f35017e9a7ca3e448047697bf1f755d88b356d3f70f59f9995",
+          "size": 53719040
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "b5ace83cd9830d3c1bea6c8ac0fa2bfeace52191c069b8be46b3bc1a976f596e",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.12.11.json",
+      "evidence_sha256": "449b1968e378115a877daba5ebf2d0292e5cde060c8e22e5e19388491e1af39e",
+      "human_conclusion": "Compatible after checksum-verified local Linux amd64 qualification in Docker with Git 2.47.3 and Darwin arm64 production-equivalent probes. Jinja .jinja2 and .j2 now enter the built-in file-selection and Jinja Rules contract; both are explicitly selected and checked by the updated deterministic suite. Prior configuration, budget, telemetry and result contracts remain valid. IDEA merge-parent, viewer pagination, provider catalog generation and Windows development build changes are outside toolkit execution. Model-backed finding quality is not claimed.",
+      "published_at": "2026-09-29T14:47:20Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.11",
+      "status": "tested",
+      "version": "1.12.11"
     }
   ],
   "runtime_support": {

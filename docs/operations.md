@@ -156,6 +156,11 @@ Suppression checks both the recorded inline position and compatible fingerprints
 
 ## OCR diagnostics
 
+When required evidence use is not confirmed, the review is rejected before publication or automatic approval. The console emits `Review rejected:` with the stable reason `evidence-use-unconfirmed`, an explicitly reported zero or `unavailable`, and validated outcome/manifest coverage counts where present. A positive primary count with unconfirmed completed summary attribution uses `evidence-action-attribution-invalid`. Malformed telemetry remains a separate integrity error. These facts do not establish whether the model omitted a call or OCR omitted attribution; successful MCP preflight establishes readiness and never supplies model-use evidence.
+
+Safe rejection facts appear before result cleanup in local and CI execution. Successful failure-note delivery or an advisory green job does not mean the review was accepted. Authorized `--preserve-private-artifacts` runs still enforce the evidence gate: bounded rejected JSON is retained in an owner-only private diagnostic envelope, with no successful receipt, report, or approval authority. Retention failure keeps the original rejection and removes the unsafe handoff. All retained diagnostic results carry `_ocr_toolkit_private_diagnostic`; posting refuses this marker even when no provider receipt is present. GitLab MR execution continues to reject private retention. Inspect retained material only locally and do not upload it as a public CI artifact.
+
+
 OCR's optional failed-tool `arguments` are validated only for type and bounds and
 discarded before normalized diagnostics and publication DLP. Private arguments
 alone do not change the GitLab summary or DLP counters. Malformed diagnostics

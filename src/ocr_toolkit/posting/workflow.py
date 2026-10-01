@@ -18,6 +18,7 @@ from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_ac
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     OcrResultMalformed,
     OcrResultMissing,
@@ -665,6 +666,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
         print_posting_failure_banner()
         return 1
+
+    if TOOLKIT_PRIVATE_DIAGNOSTIC_KEY in result:
+        return invalid_ocr_schema_exit(
+            config, "private diagnostic result is not publication-eligible"
+        )
 
     toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
     if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
