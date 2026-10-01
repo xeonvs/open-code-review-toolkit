@@ -90,8 +90,16 @@ before handoff or commit. Completed stable plans are indexed in
 
 - Main is clean and synchronized at the reconciled v0.11.1 commit. Latest stable
   upstream at reconnaissance is OCR 1.12.11; local active OCR is 1.12.7.
-- The configured signing key is not currently loaded in the signing agent.
-  Plan-only signed commit/push must wait for the configured key to be available.
+- The signing key is loaded. Signed plan-only commit `5e368d2` was pushed after
+  staged, tree and feature-history Gitleaks gates passed.
 - Milestone v0.11.2 exists (number 17); all four scoped issues are assigned.
   Feature branch `codex/v0.11.2` is created; plan-only diff passes whitespace check.
-- Next action: unblock signing and publish the plan-only commit before implementation.
+- Dependency/CI slice implemented: uv updater, locked setup/no-sync consumers,
+  update-safe action pins, setuptools-scm 10.3.4, PyJWT 2.15.1 and urllib3 2.8.0.
+  Focused workflow tests: 51 passed. Current pip-audit: no known vulnerabilities.
+  Python 3.12 runtime resolver selects PyJWT 2.15.1 and rejects forced 2.14.0.
+- OCR is installed locally at 1.12.11 with verified Darwin identity and successful
+  real probes; obsolete confirmed backup removed. Docker is available after user
+  startup. Reuse valid 1.12.10 evidence; strengthen only 1.12.11 Jinja coverage.
+- Next action: finish rejection diagnostics and OCR evidence, review each logical
+  slice, complete aggregate quality/review, then push the ready feature PR.

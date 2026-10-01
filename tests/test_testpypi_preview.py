@@ -301,7 +301,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert "pip install --no-deps --index-url" not in verifier
     assert '"open-code-review-toolkit==${VERSION}"' not in workflow
     assert "./scripts/quality.sh check" in workflow
-    assert "uv run pip-audit --skip-editable" in workflow
+    assert "uv run --no-sync pip-audit --skip-editable" in workflow
 
 
 def test_distribution_build_is_a_bounded_pull_request_gate() -> None:
@@ -334,8 +334,8 @@ def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
     assert "needs: test-python312" in workflow
     assert 'UV_PYTHON: "3.12"' in workflow
     assert "UV_PYTHON: ${{ matrix.python }}" in workflow
-    assert "uv sync --frozen --python 3.12" in workflow
-    assert 'uv sync --frozen --python "${{ matrix.python }}"' in workflow
+    assert "uv sync --locked --python 3.12" in workflow
+    assert 'uv sync --locked --python "${{ matrix.python }}"' in workflow
     assert workflow.count("advisory: false") == 2
     assert workflow.count("advisory: true") == 2
     assert workflow.count("os: ubuntu-latest") == 2
