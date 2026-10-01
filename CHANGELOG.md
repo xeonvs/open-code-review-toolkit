@@ -1,3 +1,19 @@
+## 0.11.2 - 2026-10-01
+
+### 🐛 Bug Fixes
+
+- `ocr-ci review` now reports bounded mandatory-evidence rejection facts with distinct zero, unavailable, and action-attribution reasons before cleanup. Authorized `--preserve-private-artifacts` retains rejected results only as owner-only diagnostics; all retained diagnostic results are refused by posting, including the receipt-less path. Advisory CI success and failure-note delivery do not imply review acceptance. ([#227](https://github.com/xeonvs/open-code-review-toolkit/issues/227))
+- Keep dependency updates consistent with the committed uv lockfile, reject stale graphs before CI work, and accept reviewed full-SHA action updates without stale test constants. Raise the runtime PyJWT security floor and refresh vulnerable runtime and tooling dependencies. ([#228](https://github.com/xeonvs/open-code-review-toolkit/issues/228))
+
+### 🛠 Maintenance
+
+- Recommend checksum-verified Open Code Review 1.12.11 after qualifying the adjacent 1.12.10–1.12.11 releases. ([#224](https://github.com/xeonvs/open-code-review-toolkit/issues/224))
+
+### 🧩 Rules
+
+- The recommended OCR release now selects Jinja `.jinja2` and `.j2` templates and includes their built-in review rule. Compatibility evidence verifies both file selection and the rule pattern. ([#224](https://github.com/xeonvs/open-code-review-toolkit/issues/224))
+
+
 ## 0.11.1 - 2026-09-23
 
 ### 🐛 Bug Fixes

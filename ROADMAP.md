@@ -57,8 +57,8 @@ flowchart LR
 - The v0.11.1 release repairs hash-locked runtime installation and qualifies
   OCR through 1.12.9. Stable delivery and external reconciliation completed.
 
-- The v0.11.2 work preserves established M7 while repairing dependency-update
-  consistency and rejected-review diagnostics, and qualifying the latest OCR.
+- The v0.11.2 release candidate preserves established M7 while repairing dependency-update
+  consistency and rejected-review diagnostics, and qualifying OCR 1.12.11.
   Its stable delivery follows the protected release and reconciliation gates.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
