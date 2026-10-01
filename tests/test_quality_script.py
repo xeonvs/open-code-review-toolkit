@@ -39,16 +39,17 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     assert "--cov-fail-under=85" in script
     assert script.count("coverage report --include=") == 4
     assert (
-        "uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85" in workflow
+        "uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85"
+        in workflow
     )
     assert workflow.count("coverage: true") == 1
     assert workflow.count("coverage: false") == 3
     assert "if: ${{ matrix.coverage }}" in workflow
     assert "if: ${{ !matrix.coverage }}" in workflow
-    assert workflow.count("uv run pytest -q") == 2
+    assert workflow.count("uv run --no-sync pytest -q") == 2
     for command in coverage_commands:
         assert command in script
-        assert workflow.count(f"uv run {command}") == 1
+        assert workflow.count(f"uv run --no-sync {command}") == 1
 
 
 def test_ci_quality_job_does_not_duplicate_the_package_gate() -> None:

@@ -89,6 +89,7 @@ from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
@@ -143,7 +144,7 @@ from ocr_toolkit.reporting.model import (
     failed_report,
     report_from_result,
 )
-from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
@@ -210,7 +211,35 @@ MAX_TOOL_FAILURE_LOG_FIELD_CHARS = 500
 
 
 class ReviewRunnerError(Exception):
-    """The local OCR review process could not be started safely."""
+    """OCR execution or result admission failed safely."""
+
+
+class ReviewRejected(ReviewRunnerError):
+    """Carry closed admission facts without guessing the execution cause."""
+
+    def __init__(self, reason: str, outcome: ReviewOutcome, calls: int | None) -> None:
+        self.reason = reason
+        self.calls = calls
+        self.outcome = outcome
+        reported = "unavailable" if calls is None else str(calls)
+        detail = (
+            "required evidence use was not confirmed by OCR result telemetry"
+            if reason == "evidence-use-unconfirmed"
+            else "mandatory evidence summary action attribution was not confirmed"
+            if outcome.requires_evidence_mcp
+            else "evidence action attribution was not confirmed"
+        )
+        super().__init__(
+            f"{detail} (reported calls: {reported}; reason={reason}). "
+            "Result not accepted for publication or automatic approval."
+        )
+
+    def diagnostic(self) -> str:
+        """Render only parser-validated outcome and coverage counters."""
+        coverage = self.outcome.coverage_summary
+        return f"Review rejected: {self} outcome={self.outcome.kind}" + (
+            f"; {coverage}" if coverage else ""
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,6 +509,8 @@ def _review_receipt(
         raise ReviewRunnerError(f"OCR result has an unsupported outcome contract: {exc}") from exc
 
     tool_calls = payload.get("tool_calls")
+    if tool_calls is None and outcome.requires_evidence_mcp:
+        raise ReviewRejected("evidence-use-unconfirmed", outcome, None)
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
     total_calls = tool_calls.get("total") if isinstance(tool_calls, dict) else None
     if tool_calls is None and outcome.kind == "failed":
@@ -516,7 +547,11 @@ def _review_receipt(
             if (
                 not isinstance(count, int)
                 or isinstance(count, bool)
-                or not 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                or not (
+                    0 <= count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                    if tool == TOOL_NAME
+                    else 0 < count <= MAX_TOOLKIT_MCP_USAGE_COUNT
+                )
             ):
                 raise ReviewRunnerError("OCR result has an invalid known MCP usage count")
             owner = owners[tool]
@@ -538,7 +573,8 @@ def _review_receipt(
     }
     evidence_calls = sum(evidence_by_tool.values())
     if outcome.requires_evidence_mcp and not evidence_by_tool[TOOL_NAME]:
-        raise ReviewRunnerError(f"OCR review did not call the mandatory {TOOL_NAME} tool")
+        reported = 0 if total_calls == 0 else by_tool.get(TOOL_NAME)
+        raise ReviewRejected("evidence-use-unconfirmed", outcome, reported)
     try:
         action_attribution = verified_evidence_actions(
             evidence_by_tool,
@@ -546,7 +582,9 @@ def _review_receipt(
             mandatory=outcome.requires_evidence_mcp,
         )
     except ValueError as exc:
-        raise ReviewRunnerError(str(exc)) from exc
+        raise ReviewRejected(
+            "evidence-action-attribution-invalid", outcome, evidence_by_tool[TOOL_NAME]
+        ) from exc
     completed = action_attribution.get("completed")
     failure_state = (
         "absent"
@@ -1497,6 +1535,7 @@ def _finalize_ocr_result(
     toolkit_advisory: OcrToolkitAdvisory | None = None,
     report_consumer: Callable[[ReviewReport], None] | None = None,
     state: ReviewRunState | None = None,
+    private_diagnostics: bool = False,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1509,7 +1548,7 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
-        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY):
+        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY, TOOLKIT_PRIVATE_DIAGNOSTIC_KEY):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
@@ -1566,7 +1605,7 @@ def _finalize_ocr_result(
         finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
-        if report_consumer is not None:
+        if report_consumer is not None and not private_diagnostics:
             evidence = metadata.get("evidence")
             if not isinstance(evidence, dict):
                 raise ReviewRunnerError("verified evidence facts are unavailable")
@@ -1585,17 +1624,48 @@ def _finalize_ocr_result(
                 )
             except OcrResultContractError as exc:
                 raise ReviewRunnerError("admitted review report is inconsistent") from exc
+        if private_diagnostics:
+            return {**payload, TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": "private-retention"}}
         return finalized
 
     try:
         transform_ocr_result(result_path, finalize)
     except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge) as exc:
+        if private_diagnostics:
+            try:
+                result_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         raise ReviewRunnerError("OCR result is not valid bounded JSON") from exc
-    except ReviewRunnerError:
-        try:
-            result_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+    except ReviewRunnerError as exc:
+        if isinstance(exc, ReviewRejected):
+            print(exc.diagnostic(), file=sys.stderr)
+        retained = False
+        if private_diagnostics:
+            reason = exc.reason if isinstance(exc, ReviewRejected) else "result-validation-failed"
+            try:
+                transform_ocr_result(
+                    result_path,
+                    lambda payload: {
+                        TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": reason},
+                        "result": payload,
+                    },
+                )
+                retained = True
+                print(
+                    "OCR rejected result retained as private diagnostics; not posting-eligible.",
+                    file=sys.stderr,
+                )
+            except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError):
+                print(
+                    "OCR private diagnostic retention failed; original rejection preserved.",
+                    file=sys.stderr,
+                )
+        if not retained:
+            try:
+                result_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         raise
     _print_tool_failure_diagnostics(failure_telemetry)
     if state is not None:
@@ -2916,7 +2986,7 @@ def _run_evidence_review(
                     cleanup_error = OSError("federation cleanup could not be verified")
             if state.progress is not None:
                 state.progress.phase("cleanup")
-            if exit_code == 0 and not preserve_authorized:
+            if exit_code == 0:
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
             if not preserve_authorized:
                 try:
@@ -2932,7 +3002,7 @@ def _run_evidence_review(
                 os.environ.pop("HOME", None)
             else:
                 os.environ["HOME"] = previous_home
-            if cleanup_error is None and exit_code == 0 and not preserve_authorized:
+            if cleanup_error is None and exit_code == 0:
                 state.enter("result-validation")
                 forbidden: tuple[str | ForbiddenValue, ...] = tuple(
                     ForbiddenValue(v, "operator_secret") for v in composition.secret_values
@@ -2954,14 +3024,17 @@ def _run_evidence_review(
                         forbidden=forbidden,
                         dlp_enabled=dlp_enabled,
                         toolkit_advisory=background_qualification.advisory,
+                        **({"private_diagnostics": True} if preserve_authorized else {}),
                         **({"report_consumer": state.admit_report} if state.local else {}),
                         **({"state": state} if state.local or state.progress is not None else {}),
                     )
                 except ReviewRunnerError:
-                    try:
-                        result_path.unlink(missing_ok=True)
-                    except OSError:
-                        pass
+                    # Authorized diagnostic retention is owned by finalization.
+                    if not preserve_authorized:
+                        try:
+                            result_path.unlink(missing_ok=True)
+                        except OSError:
+                            pass
                     raise
             if cleanup_error is None and exit_code == 0 and preserve_authorized:
                 forbidden = tuple(

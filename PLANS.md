@@ -103,3 +103,9 @@ before handoff or commit. Completed stable plans are indexed in
   startup. Reuse valid 1.12.10 evidence; strengthen only 1.12.11 Jinja coverage.
 - Next action: finish rejection diagnostics and OCR evidence, review each logical
   slice, complete aggregate quality/review, then push the ready feature PR.
+- Rejection diagnostics are implemented and self-reviewed: explicit zero versus
+  unavailable telemetry, stable typed reasons, bounded private retention, real
+  action receipt acquisition for preserved runs, and posting/report exclusion.
+  Focused runtime/CLI/documentation validation: 250 passed; scoped mypy/Ruff green.
+  Independent dependency review found stale quality-workflow assertions; corrected
+  and all seven focused wrapper tests passed. Independent rejection review pending.
