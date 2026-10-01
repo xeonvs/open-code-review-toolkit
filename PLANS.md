@@ -109,3 +109,13 @@ before handoff or commit. Completed stable plans are indexed in
   Focused runtime/CLI/documentation validation: 250 passed; scoped mypy/Ruff green.
   Independent dependency review found stale quality-workflow assertions; corrected
   and all seven focused wrapper tests passed. Independent rejection review pending.
+- OCR promotion complete: reused successful hosted 1.12.10 evidence; latest
+  1.12.11 passed the required real Linux amd64 suite with Jinja selection/Rules.
+  Darwin probes passed independently. Current manifest validation and 142 focused
+  compatibility tests passed. Latest stable recheck remains 1.12.11.
+  The discarded old container attempts failed due Git 2.39.5 below OCR's minimum;
+  successful disposable Debian 13 container used Git 2.47.3 and was removed.
+- Rejection review identified explicit JSON null telemetry; corrected to remain
+  malformed rather than unavailable, with 37 focused rejection tests passing.
+  A sibling preserved-result path on nonzero OCR exit is being marked private
+  before retention to close the same receipt-less publication risk.

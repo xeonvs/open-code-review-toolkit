@@ -1,17 +1,19 @@
 # Development
 
-Install [uv](https://docs.astral.sh/uv/) and use the committed lockfile:
+Install [uv](https://docs.astral.sh/uv/) and validate the committed manifest/lockfile before using its environment. CI uses `uv sync --locked`; subsequent commands use `uv run --no-sync` to prevent implicit resolution. Dependabot uses the uv ecosystem as the sole Python update owner. The runtime PyJWT lower bound protects resolver-based consumer installs as well as the release lock.
+
+For local setup and checks:
 
 ```console
-uv sync --frozen
-uv run ruff format .
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy src/ocr_toolkit
-uv run bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
-uv run pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
-uv run python -m build
-uv run twine check dist/*
+uv sync --locked
+uv run --no-sync ruff format .
+uv run --no-sync ruff format --check .
+uv run --no-sync ruff check .
+uv run --no-sync mypy src/ocr_toolkit
+uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
+uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
+uv run --no-sync python -m build
+uv run --no-sync twine check dist/*
 ```
 
 For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests still run the complete suite on all five supported OS/Python combinations. The three Linux jobs are release-blocking, with Ubuntu on the newest supported Python as the sole coverage owner. The two macOS endpoint jobs are best-effort compatibility diagnostics: they continue to run and remain visible for follow-up, but a platform-only failure does not block a Linux-priority release. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
@@ -63,7 +65,9 @@ older release remains readable. Evidence through OCR 1.12.7 is frozen in its
 original epoch. From OCR 1.12.8, the current contract adds F# signature/script
 selection and its built-in Rules pattern, plus expanded dependency and build-output
 exclusions. The Rego and other previously consumed language contracts remain
-required.
+required. From OCR 1.12.11, Jinja `.jinja2` and `.j2` selection and the
+built-in Jinja Rules pattern are required; the same live fixture keeps these paths
+as explicit negative controls for earlier candidates. Historical evidence is unchanged.
 
 Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
