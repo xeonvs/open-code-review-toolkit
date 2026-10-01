@@ -269,14 +269,28 @@ not establish configured provider/model finding quality.
 Runtime support is rolling and exact-patch-only. Qualified 1.11.x and 1.12.x
 entries are supported, qualified 1.10.x entries are accepted with a deprecation
 warning, and earlier or unqualified patches fail preflight. Historical evidence
-remains readable without widening current execution support. The manifest's
-`monitoring_floor: 1.12.9` means release discovery starts above that tag; it is
+remains readable without widening current execution support. For toolkit 0.11.1, the manifest's
+`monitoring_floor: 1.12.9` made release discovery start above that tag; it is
 not a minimum accepted runtime and cannot silently admit an unseen patch.
 
-The public GitLab example pins `v1.12.9` and its Linux amd64 SHA-256. Deployments
+The toolkit 0.11.1 GitLab example pinned `v1.12.9` and its Linux amd64 SHA-256. Deployments
 must still verify the exact platform asset against the matching manifest entry.
 The compatibility chain establishes deterministic toolkit boundaries, not
 configured provider/model quality or stable toolkit delivery.
+
+### OCR 1.12.10–1.12.11 — toolkit 0.11.2 target
+
+The current manifest recommends OCR 1.12.11 and advances discovery above that
+qualified tag. The GitLab example pins its exact Linux amd64 checksum. Qualified
+runtime lines and the deprecation window remain unchanged.
+
+The adjacent 1.12.10 evidence reuses successful hosted qualification. OCR 1.12.11
+passed deterministic Linux amd64 qualification and independent Darwin arm64
+probes. Its consumed change adds Jinja `.jinja2` and `.j2` file selection and the
+built-in Rules pattern; qualification checks both. Earlier evidence remains
+unchanged. OCR 1.12.10's removal of `OCR_CONFIG_PATH` does not change the toolkit
+integration, which does not set it. These checks establish deterministic toolkit
+contracts rather than configured provider/model finding quality.
 
 ## Promotion and rollback
 

@@ -84,6 +84,7 @@ def test_rejected_result_preserves_only_authorized_private_diagnostics(
 @pytest.mark.parametrize(
     "telemetry",
     [
+        None,
         [],
         {"total": 0, "by_tool": []},
         {"total": 0, "by_tool": {"ocr_toolkit_evidence": False}},
@@ -271,3 +272,19 @@ def test_valid_summary_receipt_allows_private_review_without_admitting_report(
     assert retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "private-retention"
     assert ocr_result.TOOLKIT_RESULT_KEY not in retained
     assert not reports
+
+
+@pytest.mark.parametrize("raw", ["{broken", "[]", '{"message":"' + "x" * 200 + '"}'])
+def test_failed_execution_retention_removes_unbounded_or_malformed_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    raw: str,
+) -> None:
+    """Unsafe retained execution data cannot become an unmarked posting handoff."""
+    result = tmp_path / "result.json"
+    result.write_text(raw)
+    monkeypatch.setenv("OCR_MAX_RESULT_BYTES", "128")
+    assert not review_runner._retain_private_diagnostic_result(result, reason="execution-failed")
+    assert not result.exists()
+    assert "retention failed; original failure preserved" in capsys.readouterr().err

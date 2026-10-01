@@ -509,6 +509,8 @@ def _review_receipt(
         raise ReviewRunnerError(f"OCR result has an unsupported outcome contract: {exc}") from exc
 
     tool_calls = payload.get("tool_calls")
+    if tool_calls is None and "tool_calls" in payload:
+        raise ReviewRunnerError("OCR result has malformed MCP usage telemetry")
     if tool_calls is None and outcome.requires_evidence_mcp:
         raise ReviewRejected("evidence-use-unconfirmed", outcome, None)
     by_tool = tool_calls.get("by_tool") if isinstance(tool_calls, dict) else None
@@ -1523,6 +1525,34 @@ def _publication_projection(
     return projected, publication, True
 
 
+def _retain_private_diagnostic_result(result_path: Path, *, reason: str) -> bool:
+    """Mark bounded rejected execution data without granting publication authority."""
+
+    try:
+        transform_ocr_result(
+            result_path,
+            lambda payload: {
+                TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": reason},
+                "result": payload,
+            },
+        )
+    except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError):
+        print(
+            "OCR private diagnostic retention failed; original failure preserved.",
+            file=sys.stderr,
+        )
+        try:
+            result_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    print(
+        "OCR rejected result retained as private diagnostics; not posting-eligible.",
+        file=sys.stderr,
+    )
+    return True
+
+
 def _finalize_ocr_result(
     result_path: Path,
     composition: mcp_config.MCPComposition,
@@ -1643,24 +1673,7 @@ def _finalize_ocr_result(
         retained = False
         if private_diagnostics:
             reason = exc.reason if isinstance(exc, ReviewRejected) else "result-validation-failed"
-            try:
-                transform_ocr_result(
-                    result_path,
-                    lambda payload: {
-                        TOOLKIT_PRIVATE_DIAGNOSTIC_KEY: {"reason": reason},
-                        "result": payload,
-                    },
-                )
-                retained = True
-                print(
-                    "OCR rejected result retained as private diagnostics; not posting-eligible.",
-                    file=sys.stderr,
-                )
-            except (OcrResultMalformed, OcrResultMissing, OcrResultTooLarge, OSError):
-                print(
-                    "OCR private diagnostic retention failed; original rejection preserved.",
-                    file=sys.stderr,
-                )
+            retained = _retain_private_diagnostic_result(result_path, reason=reason)
         if not retained:
             try:
                 result_path.unlink(missing_ok=True)
@@ -3036,6 +3049,8 @@ def _run_evidence_review(
                         except OSError:
                             pass
                     raise
+            if cleanup_error is None and exit_code != 0 and preserve_authorized:
+                _retain_private_diagnostic_result(result_path, reason="execution-failed")
             if cleanup_error is None and exit_code == 0 and preserve_authorized:
                 forbidden = tuple(
                     ForbiddenValue(v, "operator_secret") for v in composition.secret_values
@@ -3064,7 +3079,7 @@ def _run_evidence_review(
         raise ReviewRunnerError("OCR private session cleanup failed") from cleanup_error
     if preserve_authorized:
         print(
-            "OCR private diagnostics retained; result is not posting-eligible "
+            "OCR private session artifacts retained; no posting-eligible result handoff "
             f"session_home={session_home} artifact_directory={artifacts.directory}",
             file=sys.stderr,
         )

@@ -4141,6 +4141,7 @@ def test_preview_gate_clears_stale_handoff_artifacts_before_preflight(
         (False, 0, "protected"),
         (False, 1, "local"),
         (True, 0, "local"),
+        (True, 1, "local"),
         (False, 0, "unprotected"),
     ],
 )
@@ -4387,13 +4388,30 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             assert finalized[0]["private_diagnostics"] is True
         assert artifacts.store.exists()
         assert artifacts.bootstrap.exists()
-        sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
-        assert sidecar == {
-            "schema_version": "ocr.private-dlp-decisions/v1",
-            "truncated": False,
-            "omitted_decisions": 0,
-            "decisions": [],
-        }
+        if ocr_exit_code == 0:
+            sidecar = json.loads(artifacts.dlp_decisions.read_text(encoding="utf-8"))
+            assert sidecar == {
+                "schema_version": "ocr.private-dlp-decisions/v1",
+                "truncated": False,
+                "omitted_decisions": 0,
+                "decisions": [],
+            }
+        else:
+            retained = ocr_result.load_ocr_result(tmp_path / "result.json")
+            assert (
+                retained[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY]["reason"] == "execution-failed"
+            )
+            assert retained["result"]["status"] == "failed"
+            assert ocr_result.TOOLKIT_RESULT_KEY not in retained
+            monkeypatch.setattr(workflow, "post_review_note_bounded", lambda *_args: {"id": 1})
+            monkeypatch.setattr(workflow, "finalize_posting", lambda *_args: True)
+            monkeypatch.setattr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda *_args: pytest.fail("private result must not inspect previous comments"),
+            )
+            assert workflow.post_results(gitlab_config(), retained) == 0
+            assert "not publication-eligible" in capsys.readouterr().err
         session_homes[0].rmdir()
     else:
         if ocr_exit_code == 0:

@@ -88,34 +88,33 @@ before handoff or commit. Completed stable plans are indexed in
 
 #### Current checkpoint
 
-- Main is clean and synchronized at the reconciled v0.11.1 commit. Latest stable
-  upstream at reconnaissance is OCR 1.12.11; local active OCR is 1.12.7.
-- The signing key is loaded. Signed plan-only commit `5e368d2` was pushed after
-  staged, tree and feature-history Gitleaks gates passed.
-- Milestone v0.11.2 exists (number 17); all four scoped issues are assigned.
-  Feature branch `codex/v0.11.2` is created; plan-only diff passes whitespace check.
-- Dependency/CI slice implemented: uv updater, locked setup/no-sync consumers,
-  update-safe action pins, setuptools-scm 10.3.4, PyJWT 2.15.1 and urllib3 2.8.0.
-  Focused workflow tests: 51 passed. Current pip-audit: no known vulnerabilities.
-  Python 3.12 runtime resolver selects PyJWT 2.15.1 and rejects forced 2.14.0.
-- OCR is installed locally at 1.12.11 with verified Darwin identity and successful
-  real probes; obsolete confirmed backup removed. Docker is available after user
-  startup. Reuse valid 1.12.10 evidence; strengthen only 1.12.11 Jinja coverage.
-- Next action: finish rejection diagnostics and OCR evidence, review each logical
-  slice, complete aggregate quality/review, then push the ready feature PR.
-- Rejection diagnostics are implemented and self-reviewed: explicit zero versus
-  unavailable telemetry, stable typed reasons, bounded private retention, real
-  action receipt acquisition for preserved runs, and posting/report exclusion.
-  Focused runtime/CLI/documentation validation: 250 passed; scoped mypy/Ruff green.
-  Independent dependency review found stale quality-workflow assertions; corrected
-  and all seven focused wrapper tests passed. Independent rejection review pending.
-- OCR promotion complete: reused successful hosted 1.12.10 evidence; latest
-  1.12.11 passed the required real Linux amd64 suite with Jinja selection/Rules.
-  Darwin probes passed independently. Current manifest validation and 142 focused
-  compatibility tests passed. Latest stable recheck remains 1.12.11.
-  The discarded old container attempts failed due Git 2.39.5 below OCR's minimum;
-  successful disposable Debian 13 container used Git 2.47.3 and was removed.
-- Rejection review identified explicit JSON null telemetry; corrected to remain
-  malformed rather than unavailable, with 37 focused rejection tests passing.
-  A sibling preserved-result path on nonzero OCR exit is being marked private
-  before retention to close the same receipt-less publication risk.
+- Milestone v0.11.2 (17) contains #223, #224, #227, #228. Feature branch is
+  `codex/v0.11.2`; signed plan-only commit `5e368d2` was pushed after all secret
+  gates. Implementation commits remain local until the ready feature PR.
+- Dependency/CI implementation and independent review complete. PyJWT 2.15.1,
+  urllib3 2.8.0 and setuptools-scm 10.3.4 are locked; runtime floor protects
+  resolver installs. Current audit is clean; Python 3.12 resolver chooses the
+  fixed PyJWT and rejects forced 2.14.0. Workflow tests: 51 passed; corrected
+  quality-wrapper assertions: seven passed.
+- Rejection implementation and independent review complete. Explicit null remains
+  malformed; missing telemetry and explicit zero are distinct typed rejections.
+  Retained successful/private and rejected/nonzero results cannot enter posting
+  or successful reports. Unsafe retention preserves original failure and removes
+  raw handoff. Safe logs distinguish retained session artifacts from result data.
+  Focused runtime/CLI/docs: 250 passed; later boundary additions: 12 orchestration
+  and 40 rejection tests passed. Scoped mypy/Ruff passed.
+- OCR 1.12.11 is installed and recommended, with verified Linux/Darwin identity
+  and required real-boundary qualification including Jinja selection/Rules.
+  Reused valid hosted 1.12.10 evidence; 142 compatibility tests and current
+  manifest validation passed. Latest stable recheck remains 1.12.11. Confirmed
+  old executable/backup and task binary downloads removed; historical evidence
+  preserved. Disposable container removed. Its earlier attempts failed because
+  Git 2.39.5 was below OCR's floor; successful container used Git 2.47.3.
+- Aggregate review corrected stale pin documentation and covered dependency,
+  diagnosis, retention, posting and qualification interactions. No remaining
+  actionable blocker. Full quality passed: 1830 tests, two skips, 339 subtests,
+  86% combined coverage and all boundary floors; Ruff, mypy and Bandit passed.
+  Final affected focused checks passed (250 tests).
+- Next action: commit the final reviewed corrections, secret-scan and push the
+  ready feature PR; wait for required exact-head CI, then continue protected
+  publication and external reconciliation.
