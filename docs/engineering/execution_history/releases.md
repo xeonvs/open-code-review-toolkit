@@ -6,13 +6,14 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.11.2 — dependency consistency, rejection diagnostics and OCR 1.12.11
 
-Status: repository-complete; external delivery pending
+Status: completed stable delivery; external reconciliation verified
 - **Release classification:** release-required
 - **Target stable version:** 0.11.2; next development line 0.12.0
 - **Tracked issues:** #223, #224, #227, #228 in milestone v0.11.2
 - **Feature PR:** [#229](https://github.com/xeonvs/open-code-review-toolkit/pull/229)
 - **Release branch:** `release/v0.11.2`
 - **Repository completion date:** 2026-10-01
+- **External reconciliation date:** 2026-10-01
 
 ### Archived release plan
 
@@ -116,13 +117,43 @@ regressions, Ruff checks and the dependency audit cover this final scope; the
 final release head must pass the complete hosted checks before merge. These
 Dependabot PRs are superseded only after the release PR merges.
 
-Release PR preparation sets 0.11.2 and the exact four-issue authorization set,
-keeps next development 0.12.0, updates the toolkit example, renders Towncrier,
-and archives this repository-complete plan. External registry publication,
-provenance, annotated tag, immutable Release/assets and receipt readback,
-issue/milestone closure and external reconciliation remain pending. Release CI
-owns those gates; successful checks will be reconciled through one protected
-no-release closure PR without local repetition of artifact verification.
+At release PR preparation, version 0.11.2 and the exact four-issue authorization
+set were recorded, next development stayed 0.12.0, the toolkit example and
+Towncrier were updated, and this repository-complete plan was archived with
+external delivery pending. The external gates below subsequently completed.
+
+### External delivery and reconciliation
+
+Release PR [#232](https://github.com/xeonvs/open-code-review-toolkit/pull/232)
+merged as `d56eea9fc800ca089f93fb747cb267a38fa86199` from reviewed head
+`b1bae464db3590f811d469d96d71bac38cd549dc` and protected base
+`91fe5e9cba0e1aa038040aed0e93a7944685db36`. All three Linux gates and
+required security, CodeQL, dependency and build checks passed on that head.
+The final lock updates from Dependabot PRs #230 and #231 are included; both
+PRs were closed as superseded after the protected release merge.
+
+[Release workflow 36844264028](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/36844264028)
+completed successfully on attempt 1. It verified reproducible builds, current
+dependency audit, TestPyPI and PyPI publication and provenance, and installed
+wheel/sdist runtime behavior on Python 3.12, 3.13 and 3.14. Operator readback
+used provider metadata and the successful owning jobs without repeating local
+artifact downloads or installations.
+
+The annotated `v0.11.2` tag targets the release merge. The
+[GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.11.2)
+is published and immutable with exactly the wheel, sdist,
+`runtime-requirements.txt`, `SHA256SUMS`, `artifact-hashes.json` and
+`release-receipt.json`. CI verified the complete asset set and immutable readback.
+The receipt asset has SHA-256
+`c0d40ede54e44bc567ac743a33f94b36333d6585e9299a827a96eeddf341fe02`;
+its [issue receipt](https://github.com/xeonvs/open-code-review-toolkit/issues/223#issuecomment-5928999856)
+was posted by the release workflow. Issues #223, #224, #227 and #228 are closed;
+milestone v0.11.2 is closed with zero open issues.
+
+The documentation-only closure branch `codex/v0.11.2-external-reconciliation`
+was created from synchronized main at the release merge above. It advances
+`.release-reconciled-version` to 0.11.2 and records these external receipts while
+preserving the published artifacts, release metadata and next development line.
 
 <a id="plan-toolkit-0-11-1"></a>
 
