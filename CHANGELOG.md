@@ -7,6 +7,7 @@
 
 ### 🛠 Maintenance
 
+- Refresh the locked HTTP transport stack to httpx2/httpcore2 2.13.1 and Ruff to 0.16.9. ([#230](https://github.com/xeonvs/open-code-review-toolkit/pull/230), [#231](https://github.com/xeonvs/open-code-review-toolkit/pull/231))
 - Recommend checksum-verified Open Code Review 1.12.11 after qualifying the adjacent 1.12.10–1.12.11 releases. ([#224](https://github.com/xeonvs/open-code-review-toolkit/issues/224))
 
 ### 🧩 Rules

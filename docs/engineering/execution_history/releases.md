@@ -109,6 +109,13 @@ focused regression checks and aggregate review passed. Verified latest OCR
 1.12.11 Linux/Darwin probes passed, including Jinja, with preserved historical
 evidence and obsolete local binaries removed.
 
+After feature merge, the owner explicitly included new Dependabot PRs #230 and
+#231 in this release. The release branch incorporates their coherent lock-only
+updates: Ruff 0.16.9 and httpx2/httpcore2 2.13.1. Focused transport/process
+regressions, Ruff checks and the dependency audit cover this final scope; the
+final release head must pass the complete hosted checks before merge. These
+Dependabot PRs are superseded only after the release PR merges.
+
 Release PR preparation sets 0.11.2 and the exact four-issue authorization set,
 keeps next development 0.12.0, updates the toolkit example, renders Towncrier,
 and archives this repository-complete plan. External registry publication,
