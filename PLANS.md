@@ -115,6 +115,9 @@ before handoff or commit. Completed stable plans are indexed in
   actionable blocker. Full quality passed: 1830 tests, two skips, 339 subtests,
   86% combined coverage and all boundary floors; Ruff, mypy and Bandit passed.
   Final affected focused checks passed (250 tests).
-- Next action: commit the final reviewed corrections, secret-scan and push the
-  ready feature PR; wait for required exact-head CI, then continue protected
-  publication and external reconciliation.
+- Feature PR #229 is open. Build/install, audit, security, quality and CodeQL
+  passed. Python 3.12 rejected the late-added compatibility paragraph because it
+  named a removed public configuration variable. Removed that stale literal
+  without weakening the configuration guard; affected document tests rerun.
+- Next action: push the scoped documentation correction after secret gates,
+  await exact-head feature CI, then protected publication and reconciliation.

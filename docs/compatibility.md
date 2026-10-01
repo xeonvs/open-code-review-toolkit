@@ -288,8 +288,8 @@ The adjacent 1.12.10 evidence reuses successful hosted qualification. OCR 1.12.1
 passed deterministic Linux amd64 qualification and independent Darwin arm64
 probes. Its consumed change adds Jinja `.jinja2` and `.j2` file selection and the
 built-in Rules pattern; qualification checks both. Earlier evidence remains
-unchanged. OCR 1.12.10's removal of `OCR_CONFIG_PATH` does not change the toolkit
-integration, which does not set it. These checks establish deterministic toolkit
+unchanged. OCR 1.12.10's removal of its legacy configuration-path environment
+override does not change the toolkit integration, which does not set it. These checks establish deterministic toolkit
 contracts rather than configured provider/model finding quality.
 
 ## Promotion and rollback
