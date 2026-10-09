@@ -1,3 +1,14 @@
+## 0.11.3 - 2026-10-09
+
+### 🐛 Bug Fixes
+
+- Require human compatibility review for provider/model and LLM timeout or deadline release-note signals, even when deterministic OCR probes pass. Such candidates no longer authorize an automatic compatibility patch without a reviewed conclusion. ([#235](https://github.com/xeonvs/open-code-review-toolkit/issues/235))
+
+### 🛠 Maintenance
+
+- Target checksum-verified Open Code Review 1.12.13 after qualifying 1.12.12 through 1.12.13. ([#235](https://github.com/xeonvs/open-code-review-toolkit/issues/235))
+
+
 ## 0.11.2 - 2026-10-01
 
 ### 🐛 Bug Fixes
