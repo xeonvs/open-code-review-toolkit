@@ -10,6 +10,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.11.3` | [OCR 1.12.13 and reviewed qualification signals](releases.md#plan-toolkit-0-11-3) | Adjacent 1.12.12–1.12.13 qualification, conservative provider/model/deadline review routing, and preserved timeout outcomes; external delivery pending. |
 | `v0.11.2` | [Dependency consistency, rejection diagnostics and OCR 1.12.11](releases.md#plan-toolkit-0-11-2) | Protected feature merge, fixed runtime dependency floor, private rejection diagnostics and latest OCR qualification; verified stable delivery and external reconciliation. |
 | `v0.11.1` | [Hash-locked installation and OCR 1.12.9](releases.md#plan-toolkit-0-11-1) | Runtime lock and receipt v2, official clean installation, qualification recovery and OCR 1.12.8–1.12.9, workflow 0.9.8 migration, protected feature/promotion merges, stable delivery, and external reconciliation. |
 | `v0.11.0` | [Governed MCP federation and OCR 1.12.7](releases.md#plan-toolkit-0-11-0) | Registry-v2 gateway and bounded safety, policy-v4 migration, receipt-v9 and stage-aware DLP, local/GitLab parity, OCR 1.12.0–1.12.7 qualification, protected feature/corrective merges, verified development artifacts, stable delivery, and external reconciliation. |
