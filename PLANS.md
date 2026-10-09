@@ -61,6 +61,24 @@ before handoff or commit. Completed stable plans are indexed in
 
 Baseline main `171056645ae0d02200b3474458773de0a102e18f` is clean and
 synchronized. Recommended and local OCR are 1.12.11. No open issue or PR at
-activation. Resume: finish plan-only signed push, create milestone, dispatch
-bounded qualification. Apply Pareto: reuse evidence, narrow changed-boundary
+activation. Signed plan-only commit `e13e81b` was pushed. Milestone v0.11.3 is
+18; canonical qualification issues are #234 and #235. Hosted run 37899087743
+passed both complete candidates. Independent review found overly permissive
+release-note classification; the narrow classifier fix routes provider/model and
+timeout/deadline signals to human review. Both evidence projections were
+reclassified without changing hosted probe observations, then promoted with
+explicit source conclusions. This CI classification fix has its own Bug Fix
+fragment alongside OCR Maintenance.
+Evidence and reviewed source conclusions were promoted with the existing tool.
+Local checksum-verified Darwin replacement completed and the old executable
+was removed atomically. Four timeout-reason cases and seven classification cases
+cover the changed contracts. Current-pin test expectations were corrected;
+frozen fixtures and historical evidence remain unchanged. Focused tests passed 172 cases, format/lint and manifest validation passed.
+The single full local quality run passed privacy, Ruff, mypy and Bandit and
+1833 tests plus 339 subtests, with 2 skips and 86.17% coverage. Its only failure
+was the already-corrected current-pin assertion imported before that fix; the
+updated compatibility suite passed in the focused rerun. Completed all four
+coverage floors separately (86/82/85/86) from the unchanged runtime coverage.
+Final-head CI will rerun the full current suite; no duplicate local full run.
+Resume: resolve classification review, commit ready feature and create draft PR. Apply Pareto: reuse evidence, narrow changed-boundary
 checks and one full quality run; never weaken required gates.

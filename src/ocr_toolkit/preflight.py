@@ -29,7 +29,7 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-RECOMMENDED_OCR_VERSION = "1.12.11"
+RECOMMENDED_OCR_VERSION = "1.12.13"
 SUPPORTED_OCR_VERSIONS = (
     "1.11.0",
     "1.11.1",
@@ -53,6 +53,8 @@ SUPPORTED_OCR_VERSIONS = (
     "1.12.9",
     "1.12.10",
     "1.12.11",
+    "1.12.12",
+    "1.12.13",
 )
 DEPRECATED_OCR_VERSIONS = (
     "1.10.0",

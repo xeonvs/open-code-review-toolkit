@@ -67,7 +67,7 @@ SAFE_NOTES_RE = re.compile(
     r"\b(fix|bug|documentation|docs|test|chore|refactor|performance)\b", re.I
 )
 MATERIAL_NOTES_RE = re.compile(
-    r"\b(breaking|remove[ds]?|deprecat|security|vulnerab|protocol|schema|format|cli|flag|config|provider|gitlab|features?)\b"
+    r"\b(breaking|remove[ds]?|deprecat|security|vulnerab|protocol|schema|format|cli|flag|config|providers?|gitlab|features?|llm|openrouter|models?|timeouts?|deadlines?)\b"
     r"|^[ \t]*-[ \t]*feat(?:\([^\r\n)]{1,80}\))?:",
     re.I | re.M,
 )

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.12.11",
-  "recommended_version": "1.12.11",
+  "monitoring_floor": "1.12.13",
+  "recommended_version": "1.12.13",
   "releases": [
     {
       "assets": [
@@ -2459,6 +2459,112 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.11",
       "status": "tested",
       "version": "1.12.11"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "a9023c8286fd00c032919d9b675aa09d2600be948bfc0d9ae8b37fc75c183cc5",
+          "size": 58062080
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "4448bb750e2d818b9b6d68c997df64191ad22bbdfc1617afb00d0f4c38f95296",
+          "size": 55080706
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "3e34d6250d27d3a75b3979752d2816a8723f0070e89662b5b953ce2c9473b233",
+          "size": 56307874
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "dc79922857f5e444f7d2754d077a7c4278f457bc393f61a907f90893b1a95f06",
+          "size": 53018786
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "c34033f9da77e65aebddd64e37e671b4dd773ad4868e4f73922d13766ee6bb82",
+          "size": 57776128
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d848ac9db1fa3f9deca6375ba525e817615160425df4c7ace078ee5d9b8cbe05",
+          "size": 53719552
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "0f007611d5ba52ffe53561d33b5756cba8e7ffadf9931c1913199767375bee6d",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.12.12.json",
+      "evidence_sha256": "54ce8f9285adfe268b13437d94ab6b6436a0d3f3ab395889a6fa80fc87ef68ee",
+      "human_conclusion": "Hosted full qualification passed. Reclassified provider/model release signals with the corrected classifier without changing any binary probe observations. Source review confirms builtin provider lists are suggestions while custom constraints remain; toolkit uses isolated explicit llm config and its own model preflight. No runtime or Rules adaptation required.",
+      "published_at": "2026-10-05T06:57:25Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.12",
+      "status": "tested",
+      "version": "1.12.12"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "f49f9db4d111ecc9f1fa412001323cd5531f31fc4ce94d499259f077ccf7be98",
+          "size": 58062096
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "d973dd5926f1ac5e22e91e56780873a86a8d79cae504ae488ee03e6f7a1e80ee",
+          "size": 55080706
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "d3d69e374bd1b8c02c1269d5b9c02437632812932f92423d4468bba717c8c328",
+          "size": 56316066
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "e4a9fdf35408a7fec2a5b80c4357073b808ab50c1c2260adb6be7b492a230c4f",
+          "size": 53018786
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "520b135f1e15e129643678c2f6ce1daff9e5299250b59aa849a19ad723e716a4",
+          "size": 57778176
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "9afb9872d16d2e4153b6f831daa9e4c054fdfb64f880fe32c94286d9a48e6758",
+          "size": 53721088
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "74a3914e645baa3c53fcfa04d6c8453c50db10033838a9c7a00765e6c6d9c2f0",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.12.13.json",
+      "evidence_sha256": "359d980fe733f903b896b3a6bf12e4556c7a7754816c06b3956d0c65b237bec8",
+      "human_conclusion": "Hosted full qualification passed. Reclassified timeout/deadline release signals with the corrected classifier without changing binary probe observations. Source review and focused tests preserve structured timeout and partial/failed outcomes; diagnostic reasons grant no publication or approval authority. Scan paths and README changes are unconsumed. MCP SDK and Rules unchanged.",
+      "published_at": "2026-10-08T12:05:52Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.13",
+      "status": "tested",
+      "version": "1.12.13"
     }
   ],
   "runtime_support": {

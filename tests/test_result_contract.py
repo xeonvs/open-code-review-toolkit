@@ -125,6 +125,35 @@ def test_manifest_run_failure_forces_failed_outcome() -> None:
 
 
 @pytest.mark.parametrize(
+    "reason",
+    [
+        "LLM request timed out; configure OCR_LLM_TIMEOUT or provider timeout_sec",
+        "file review exhausted its task deadline (--timeout)",
+    ],
+)
+@pytest.mark.parametrize("status", ["partial", "failed"])
+def test_timeout_diagnostics_preserve_structured_outcome(reason: str, status: str) -> None:
+    """OCR timeout prose cannot turn incomplete coverage into clean or budgeted work."""
+
+    result = manifest_result(
+        status,
+        selected=["a", "b"],
+        completed=["a"] if status == "partial" else [],
+        failed=[("b", "timeout")] if status == "partial" else [("a", "timeout"), ("b", "timeout")],
+    )
+    for item in result["manifest"]["coverage"]["failed"]:
+        item["reason"] = reason
+
+    outcome = parse_result_outcome(result)
+
+    assert outcome.kind == status
+    assert not outcome.budget_exceeded
+    assert all(item.classification == "timeout" for item in outcome.failed_items)
+    assert all(item.reason == reason for item in outcome.failed_items)
+    assert reason not in outcome.coverage_summary
+
+
+@pytest.mark.parametrize(
     ("mutate", "message"),
     [
         (
