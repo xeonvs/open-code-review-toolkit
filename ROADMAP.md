@@ -61,9 +61,9 @@ flowchart LR
   consistency and rejected-review diagnostics, and qualifying OCR 1.12.11.
   Stable delivery and external reconciliation completed on 2026-10-01.
 
-- The v0.11.3 release candidate recommends OCR 1.12.13 and requires reviewed
+- The v0.11.3 release recommends OCR 1.12.13 and requires reviewed
   provider/model and timeout/deadline compatibility signals. M7 remains established.
-  Stable delivery and external reconciliation follow the protected release gates.
+  Stable delivery and external reconciliation completed on 2026-10-09.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.

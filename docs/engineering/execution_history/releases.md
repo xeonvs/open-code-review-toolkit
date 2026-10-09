@@ -6,13 +6,14 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.11.3 — OCR 1.12.13 and reviewed qualification signals
 
-Status: repository-complete; external delivery pending
+Status: completed stable delivery; external reconciliation verified
 - **Release classification:** release-required
 - **Target stable version:** 0.11.3; next development line 0.12.0
 - **Tracked issues:** #234, #235 in milestone v0.11.3
 - **Feature PR:** [#236](https://github.com/xeonvs/open-code-review-toolkit/pull/236)
 - **Release branch:** `release/v0.11.3`
 - **Repository completion date:** 2026-10-09
+- **External reconciliation date:** 2026-10-09
 
 ### Archived release plan
 
@@ -113,12 +114,43 @@ not configured model finding quality.
 
 [Development TestPyPI run 37901318100](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/37901318100)
 completed successfully, including provenance and installed-artifact verification.
-Release preparation sets 0.11.3, a deterministic source epoch, and the exact
-two-issue authorization set. It keeps development 0.12.0 and reconciliation
-0.11.2, updates the public toolkit example, renders Towncrier, and archives
-repository-complete work. Stable registries, provenance, annotated tag,
-immutable six-asset Release/receipt and issue/milestone closure remain pending;
-Release CI owns those gates before documentation-only external reconciliation.
+At release PR preparation, version 0.11.3, a deterministic source epoch and the
+exact two-issue authorization set were recorded. Development remained 0.12.0
+and reconciliation remained 0.11.2. The public toolkit example and Towncrier
+changelog were updated, and repository-complete work was archived with stable
+delivery pending. Release CI owned those external gates.
+
+### External delivery and reconciliation
+
+[Release PR #237](https://github.com/xeonvs/open-code-review-toolkit/pull/237)
+merged as `93092084066cfe2546aa414b231bd2a919e3a541` from reviewed head
+`1715d030499e47596fa18620682ef5d2d014441c` and protected base
+`0200a29bf4dfecabc366336ed06a989cbb016092`. Required final-head checks and
+all three Linux Python gates passed.
+
+[Release run 37903048793, attempt 1](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/37903048793)
+completed successfully for that merge, including authorization, quality/security
+checks, deterministic builds and attestations, TestPyPI and PyPI publication,
+provenance and installed-runtime verification on Python 3.12, 3.13 and 3.14,
+and GitHub Release publication.
+
+Provider readback confirmed the annotated tag `v0.11.3` targets the release
+merge above. The [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.11.3)
+is published and immutable, with exactly six assets: wheel, sdist,
+`runtime-requirements.txt`, `SHA256SUMS`, `artifact-hashes.json` and
+`release-receipt.json`. The receipt asset SHA-256 is
+`0c5a2384f711915dc2803115ded5ef97b1b5d2fa876b66fe38a3eb76e9704a3c`.
+The [workflow closure comment](https://github.com/xeonvs/open-code-review-toolkit/issues/234#issuecomment-6077176177)
+records the same verified receipt hash. Release CI owns the successful asset
+equality, registry and installation checks; no duplicate local downloads or
+installed-artifact checks were performed.
+
+Issues #234 and #235 are closed after receipt readback. Milestone v0.11.3
+(number 18) is closed with zero open issues. The documentation-only closure
+branch `codex/v0.11.3-external-reconciliation` started from clean synchronized
+main at `93092084066cfe2546aa414b231bd2a919e3a541`. It advances reconciliation
+to 0.11.3 and records these external facts while preserving published source,
+version authorization, artifacts and development line 0.12.0.
 
 <a id="plan-toolkit-0-11-2"></a>
 
