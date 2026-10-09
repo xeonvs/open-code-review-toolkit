@@ -159,8 +159,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.12.11"
-    assert manifest["monitoring_floor"] == "1.12.11"
+    assert manifest["recommended_version"] == "1.12.13"
+    assert manifest["monitoring_floor"] == "1.12.13"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.10"],
         "qualified_patches_only": True,
@@ -216,6 +216,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.12.9", "tested"),
         ("1.12.10", "tested"),
         ("1.12.11", "tested"),
+        ("1.12.12", "tested"),
+        ("1.12.13", "tested"),
     ]
 
     assert module.qualified_runtime_versions(manifest) == (
@@ -242,6 +244,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.12.9",
             "1.12.10",
             "1.12.11",
+            "1.12.12",
+            "1.12.13",
         ],
         ["1.10.0", "1.10.1", "1.10.2"],
     )
@@ -712,6 +716,32 @@ def test_qualification_matrix_rejects_duplicate_releases() -> None:
 
     with pytest.raises(module.CompatibilityError, match="duplicate version"):
         module.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
+
+
+@pytest.mark.parametrize(
+    "notes",
+    [
+        "fix(llm): allow unlisted OpenRouter model overrides",
+        "fix: correct OpenRouter routing",
+        "fix: change model overrides",
+        "fix: change providers selection",
+        "fix(llm): clarify independent timeouts and deadline diagnostics",
+        "fix: distinguish request timeout diagnostics",
+        "fix: distinguish task deadline diagnostics",
+    ],
+)
+def test_execution_signals_require_review_even_when_probes_pass(notes: str) -> None:
+    """A passing harness cannot authorize unreviewed provider or deadline changes."""
+
+    classification, reasons = load_script().classify_candidate(
+        comparison_version="1.12.11",
+        version="1.12.12",
+        release_notes=notes,
+        contracts_passed=True,
+    )
+
+    assert classification == "human-review-required"
+    assert any("material" in reason for reason in reasons)
 
 
 def test_automatic_safe_policy_is_conservative() -> None:

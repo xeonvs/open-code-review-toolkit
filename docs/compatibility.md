@@ -280,7 +280,7 @@ configured provider/model quality or stable toolkit delivery.
 
 ### OCR 1.12.10–1.12.11 — toolkit 0.11.2 target
 
-The current manifest recommends OCR 1.12.11 and advances discovery above that
+Toolkit 0.11.2 recommends OCR 1.12.11 and advances discovery above that
 qualified tag. The GitLab example pins its exact Linux amd64 checksum. Qualified
 runtime lines and the deprecation window remain unchanged.
 
@@ -291,6 +291,32 @@ built-in Rules pattern; qualification checks both. Earlier evidence remains
 unchanged. OCR 1.12.10's removal of its legacy configuration-path environment
 override does not change the toolkit integration, which does not set it. These checks establish deterministic toolkit
 contracts rather than configured provider/model finding quality.
+
+### OCR 1.12.12–1.12.13 — toolkit 0.11.3 target
+
+The manifest recommends OCR 1.12.13 after the bounded hosted
+[qualification chain](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/37899087743)
+passed for both adjacent patches. Source review found provider/model and timeout
+signals that the earlier classifier missed. The corrected classifier marks both
+candidates `human-review-required`; their hosted probe observations are unchanged
+and the manifest records explicit reviewed conclusions. These signals now block
+automatic patch preparation until reviewed. Verified assets, required runtime contracts,
+MCP, language selection and Rules remain compatible; the rolling support window
+and historical evidence are unchanged.
+
+OCR 1.12.12 allows unlisted per-run models for built-in providers, with a warning,
+while preserving custom-provider constraints. The toolkit supplies an isolated
+explicit `llm` configuration and retains its own model preflight, so this does
+not relax toolkit configuration or model admission.
+
+OCR 1.12.13 distinguishes request timeouts from task deadlines in diagnostic
+reasons; both retain the structured `timeout` failure class. The toolkit preserves
+these reasons as data, keeps partial/failed coverage semantics, and never treats
+the prose as publication or approval authority. Focused regression cases verify
+that neither reason implies clean or aggregate-budget completion. Scan-path
+normalization and the README badge change are outside toolkit review execution.
+No CI behavior, MCP SDK, public API or Rules adaptation is required. Hosted
+qualification establishes deterministic contracts, not configured model quality.
 
 ## Promotion and rollback
 
