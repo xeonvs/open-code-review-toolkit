@@ -130,7 +130,13 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
 - New-SDK targeted OCR tracker integration passed (1 test); 49 affected
   documentation/example contracts passed. Final aggregate independent review
   found only the stale validation sentence corrected above; no runtime or
-  trust-boundary finding remains. The single full quality run is in progress.
+  trust-boundary finding remains. The single full quality run passed privacy,
+  Ruff, mypy and Bandit, and1875tests+341subtests with2skips and86.18% coverage,
+  but its installed-policy test exposed bootstrap budget regression. The context
+  worker is removing duplicated prose without increasing2300chars or weakening
+  installed assertions; rerun only affected context/installed tests afterward.
+- All four remaining coverage floors passed from the same collected full-run
+  data for unchanged boundary modules:86/82/85/86. No full suite rerun.
 - The feature retains the published example pair toolkit0.11.3/OCR1.12.13;
   release preparation will advance both pins/checksum together to0.11.4/1.13.2.
   This avoids installing an older toolkit that rejects a newly recommended OCR.
