@@ -2719,7 +2719,7 @@
       ],
       "evidence": "compatibility/evidence/ocr-1.13.2.json",
       "evidence_sha256": "e6e49ace7e96c9a7e0556b339ebf8d307034d6f21737e58acf113bda85428de7",
-      "human_conclusion": "Compatible after one local Linux amd64 Docker qualification. PowerShell, Nushell, shader and OpenTofu file selection and built-in Rules patterns pass with shared epoch validation. Existing review, provider, numeric, telemetry and MCP boundaries remain compatible. Scan path normalization is unconsumed.",
+      "human_conclusion": "Compatible after one local Linux amd64 Docker qualification. PowerShell, Nushell, shader and OpenTofu file selection and built-in Rules patterns pass with shared epoch validation. Existing review, provider, numeric, telemetry and MCP boundaries remain compatible. A separate real toolkit local review verifies optional native ChatGPT authentication with OCR 1.13.2, reconciled mandatory evidence use and DLP admission; default API and GitLab paths remain unchanged. Scan path normalization is unconsumed.",
       "published_at": "2026-10-20T03:17:00Z",
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.2",
       "status": "tested",

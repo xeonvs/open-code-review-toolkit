@@ -6,13 +6,17 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## Active Work
 
-### v0.11.4 — OCR 1.13.0–1.13.2, external-tool context and optional local auth
+### v0.12.0 — OCR 1.13.0–1.13.2, external-tool context and optional local auth
 
 - **Goal:** qualify the adjacent OCR chain, improve MR-to-tool discoverability,
   add optional local native ChatGPT auth alongside custom API providers, and
   complete protected stable publication and external reconciliation.
 - **Plan Origin:** `plan_mode_approved`; **Status:** active.
-- **Release classification:** release-required; stable 0.11.4; next development 0.12.0.
+- **Release classification:** release-required; stable 0.12.0; next development 0.13.0.
+  User explicitly changed the former patch target to a minor release after
+  approving the new optional authentication/configuration contract. Keep existing
+  draft feature PR244 and its historical branch name; use release/v0.12.0 for
+  protected stable preparation. Version markers advance during release prep.
 - **Baseline:** clean synchronized main `d8354305c9dba42865205d13cc2ace45654e4e4e`;
   stable/reconciled 0.11.3, recommended/local OCR 1.12.13; no open issues or PRs.
 - **Sources:** approved conversation plan; development/release guides; project
@@ -65,7 +69,7 @@ before handoff or commit. Completed stable plans are indexed in
 - REQ-012: triage current GitHub code-scanning alerts with a delegated agent;
   integrate bounded confirmed fixes appropriate for this patch, with focused
   regression/review. Do not suppress or dismiss alerts to obtain green status.
-- REQ-013: include native OCR ChatGPT-plan authentication in this v0.11.4 draft
+- REQ-013: include native OCR ChatGPT-plan authentication in this v0.12.0 draft
   and then perform real toolkit self-review. User approved implementation followed
   by native browser login that the user authorizes. Add a simplified branch of
   existing local preflight, not a separate OAuth/login framework. Keep GitLab and
@@ -87,7 +91,7 @@ before handoff or commit. Completed stable plans are indexed in
 | WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | done |
 | WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | done |
 | WQ-04b | REQ-012 | Delegated code-scanning triage, approved bounded fixes and focused verification | done |
-| WQ-04c | REQ-013 | Local-only native ChatGPT provider, simplified preflight, persistent-store isolation, native login and real self-review | in_progress |
+| WQ-04c | REQ-013 | Local-only native ChatGPT provider, simplified preflight, persistent-store isolation, native login and real self-review | done |
 | WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | done |
 | WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | in_progress |
 | WQ-07 | REQ-008 | Release metadata/epoch/Towncrier/notes/archive, draft release PR, checks, protected merge | pending |
@@ -113,7 +117,8 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
 - Long commands keep private bounded logs, process identities and terminal exit
   status. Clean only owned resources. No duplicate published-artifact installs.
 - Latest validation: plan staged/tree/history Gitleaks passed; signed plan commit
-  `a5c2cf6` pushed. Milestone v0.11.4 is number 19. Docker local socket available;
+  `a5c2cf6` pushed. Milestone19 was created as v0.11.4 and is retargeted to
+  user-selected v0.12.0. Docker local socket available;
   configured signing key present. Completed qualification is recorded below.
 - Engineering audit: installed/distributed/source skill 0.10.0 agree; mandatory
   instruction contract v3 valid. Historical target version stamp alone does not
@@ -153,7 +158,7 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
 - All four remaining coverage floors passed from the same collected full-run
   data for unchanged boundary modules:86/82/85/86. No full suite rerun.
 - The feature retains the published example pair toolkit0.11.3/OCR1.12.13;
-  release preparation will advance both pins/checksum together to0.11.4/1.13.2.
+  release preparation will advance both pins/checksum together to0.12.0/1.13.2.
   This avoids installing an older toolkit that rejects a newly recommended OCR.
 - Bootstrap correction completed: representative MR+policy+guidance renders
   2298chars without truncation, with protected pointer and authority limits.
@@ -213,8 +218,17 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   Blank selectors reject, and tagged OCR source proves model overrides retain
   native provider routing. Independent implementation/public-contract review
   cleared the new auth scope; repository-wide format, public privacy and Bandit
-  gates pass. Native login and actual model self-review have not yet run.
-- Resume Point: WQ-06 — await required checks and all three Linux gates on
-  PR244 head88c6a369 while WQ-04c is implemented and verified locally. Preserve
-  existing jobs; do not merge until added auth scope, real self-review and final
-  review pass, then push completed auth changes and require final-head CI.
+  gates pass. Signed local commit `dfa9074` contains the auth slice and public
+  contracts; it is not pushed. Native browser login completed successfully;
+  structural local preflight and native model catalog passed without exposing
+  account data. Real toolkit local review of the complete immutable feature
+  range completed with native `gpt-6.1-sol`, high reasoning and one bounded OCR
+  round. Every selected item completed, no findings were emitted, mandatory
+  evidence actions reconciled and DLP passed. Private diagnostic artifacts remain
+  local; no GitLab acquisition/publication, API fallback or copied credentials.
+  The subsequent delta changes only documentation, target version and the
+  human-reviewed qualification conclusion; do not repeat the model review.
+- Resume Point: WQ-06 — review and check the final documentation/retargeting
+  delta, sign the logical documentation commit, run staged/tree/history Gitleaks,
+  push completed changes to PR244 and require final-head CI. Original
+  head88c6a369 Linux gates passed; native review cleared auth head dfa9074.

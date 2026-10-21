@@ -32,9 +32,13 @@ OpenAI-compatible or Anthropic endpoints. `OCR_LLM_AUTH_MODE=api-key` is the
 default for both local and GitLab execution; the existing endpoint, token,
 protocol and model configuration continues to apply.
 
+### Native ChatGPT setup
+
 With the native-auth version listed in the [compatibility policy](compatibility.md),
 local review can instead use OCR's optional native ChatGPT-plan authentication.
 This option requires POSIX ownership and permission checks (Linux or macOS).
+Install the toolkit and checksum-verified OCR as described in the
+[installation guide](../README.md#install). OCR remains a separate executable.
 Authorize OCR from your normal user session:
 
 ```console
@@ -44,9 +48,17 @@ ocr llm models
 
 Complete OCR's browser authorization, including any requested plan consent.
 Available models and account eligibility are determined by OCR and OpenAI.
+If OCR retains the account but reports that plan usage is disabled, request
+consent for that same registration with
+`ocr auth login --provider chatgpt --enable-plan`; this does not require a new
+account or host registration.
 Then select the mode in an environment without API-only configuration:
 
 ```console
+unset OCR_LLM_URL OCR_LLM_TOKEN OCR_LLM_PROTOCOL OCR_LLM_AUTH_HEADER \
+  OCR_LLM_EXTRA_HEADERS OCR_LLM_EXTRA_BODY OCR_LLM_MODELS_URL \
+  OCR_LLM_ALLOWED_MODELS OCR_LLM_VALIDATE_MODEL OCR_LLM_MAX_COMPLETION_TOKENS \
+  OCR_ANTHROPIC_DISABLE_THINKING OCR_USE_ANTHROPIC OCR_LLM_MODEL OCR_LLM_REASONING_EFFORT
 export OCR_LLM_AUTH_MODE=chatgpt
 # Optional: set OCR_LLM_MODEL to an exact model available to this account.
 ocr-ci preflight --local
@@ -61,6 +73,15 @@ combined with ChatGPT mode. Optional reasoning configuration uses the native
 Responses shape; only `reasoning`, `text` and `prompt_cache_key` body overlays
 are accepted. Provider selection cannot be overridden through review arguments.
 
+`OCR_LLM_MODEL` is optional in this mode: unset uses OCR's native default.
+Use `ocr llm models` to discover account-specific choices before selecting a
+model. `OCR_LLM_REASONING_EFFORT` is also optional and uses the same explicit
+values described in [configuration](configuration.md#provider-endpoint-and-completion-cap-contract);
+the selected model must support the requested effort. The toolkit does not
+silently substitute another model or effort after a provider rejection.
+
+### What connects and what persists
+
 Ordinary preflight and review never start login. OCR reuses its persistent
 `~/.opencodereview/auth/chatgpt` account/host store and owns refresh and locking.
 The toolkit links only that validated private directory into its temporary
@@ -74,6 +95,37 @@ opening the auth store and continues to use API providers. Failed ChatGPT auth
 does not switch providers or fall back to API billing. To return to an API
 provider locally, unset `OCR_LLM_AUTH_MODE` or set it to `api-key`, then supply
 the usual API configuration.
+
+OCR sends the admitted review inputs to OpenAI through its native ChatGPT
+provider and the public Responses API, using the operator-authorized account.
+Local execution describes Git input and report delivery; it does not mean
+offline inference. OpenAI determines subscription eligibility, available models
+and usage limits. The toolkit does not import ChatGPT conversations or use a
+Codex credential cache. It keeps the same mandatory evidence, validation and
+DLP pipeline; a subscription does not bypass repository/service egress rules.
+See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.2/pages/src/content/docs/en/chatgpt-preview.md)
+and [OpenAI's token-sharing overview](https://developers.openai.com/siwc/token-sharing-open-source).
+
+```mermaid
+flowchart LR
+    login[Operator completes native OCR browser login] --> store[Persistent private OCR auth store]
+    store --> binding[Local toolkit session links only native auth directory]
+    binding --> inference[OCR uses ChatGPT provider and owns refresh]
+    inference --> result[Shared evidence, validation and DLP; private local report]
+```
+
+### Authentication troubleshooting
+
+| Observation | Operator action |
+| --- | --- |
+| Explicit local mode required | Use `preflight --local` and `review --local`, or configure an API provider for GitLab. |
+| API settings conflict | Clear the API-only settings shown above; do not combine a custom endpoint or token with ChatGPT mode. |
+| Native registration missing or unsafe | Run native login in the normal user session and keep its store operator-owned and private. Do not copy token files into the repository or weaken checks. |
+| Account retained but plan usage disabled | Run `ocr auth login --provider chatgpt --enable-plan` for the retained registration and complete consent. |
+| Model, grant, expiry or quota rejected | Follow OCR's native diagnostic; use the account's model catalog or restore account access/limits. There is no automatic API fallback. |
+| Preflight passes but review fails | Preflight proves structural readiness only. Inspect the normal private stderr or an authorized debug bundle; a failed or rejected review is not a successful report. |
+
+### Evidence and external tools
 
 The mandatory repository-evidence MCP remains enabled. Registry validation and
 the toolkit's self-query do not substitute for the review's completed evidence

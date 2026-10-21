@@ -318,9 +318,9 @@ normalization and the README badge change are outside toolkit review execution.
 No CI behavior, MCP SDK, public API or Rules adaptation is required. Hosted
 qualification establishes deterministic contracts, not configured model quality.
 
-### OCR 1.13.0–1.13.2 — toolkit 0.11.4 target
+### OCR 1.13.0–1.13.2 — toolkit 0.12.0 target
 
-Toolkit 0.11.4 recommends OCR 1.13.2 after one local Linux amd64 Docker
+Toolkit 0.12.0 recommends OCR 1.13.2 after one local Linux amd64 Docker
 qualification of each adjacent candidate, with verified upstream assets and the
 reviewed locked runtime graph. All three candidates require human review;
 the manifest records their source conclusions. Qualified 1.12.x and 1.13.x
