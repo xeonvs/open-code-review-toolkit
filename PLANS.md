@@ -6,10 +6,11 @@ before handoff or commit. Completed stable plans are indexed in
 
 ## Active Work
 
-### v0.11.4 — OCR 1.13.0–1.13.2 and external-tool context
+### v0.11.4 — OCR 1.13.0–1.13.2, external-tool context and optional local auth
 
 - **Goal:** qualify the adjacent OCR chain, improve MR-to-tool discoverability,
-  and complete protected stable publication and external reconciliation.
+  add optional local native ChatGPT auth alongside custom API providers, and
+  complete protected stable publication and external reconciliation.
 - **Plan Origin:** `plan_mode_approved`; **Status:** active.
 - **Release classification:** release-required; stable 0.11.4; next development 0.12.0.
 - **Baseline:** clean synchronized main `d8354305c9dba42865205d13cc2ace45654e4e4e`;
@@ -61,6 +62,19 @@ before handoff or commit. Completed stable plans are indexed in
   current stable compatible updates and advisories; integrate agreed compatible
   updates with a coherent lockfile before the single full quality run. Escalate
   a major/contract-changing choice rather than silently expanding compatibility.
+- REQ-012: triage current GitHub code-scanning alerts with a delegated agent;
+  integrate bounded confirmed fixes appropriate for this patch, with focused
+  regression/review. Do not suppress or dismiss alerts to obtain green status.
+- REQ-013: include native OCR ChatGPT-plan authentication in this v0.11.4 draft
+  and then perform real toolkit self-review. User approved implementation followed
+  by native browser login that the user authorizes. Add a simplified branch of
+  existing local preflight, not a separate OAuth/login framework. Keep GitLab and
+  local paths strictly separated; GitLab rejects the mode before auth-store
+  access. Keep normal API defaults unchanged, no silent API billing fallback.
+  ChatGPT is an explicit optional authentication mode; standalone local review
+  continues to accept the configured custom API provider by default.
+  Reuse OCR's persistent account/host store without copying tokens or registering
+  new hosts on each isolated session; ordinary preflight/review never logs in.
 
 #### Ordered work queue and verification
 
@@ -72,6 +86,8 @@ before handoff or commit. Completed stable plans are indexed in
 | WQ-03a | REQ-009–010 | Latest engineering-workflow report; backlog/diagrams/status/user-doc audit and necessary reviewed corrections | done |
 | WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | done |
 | WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | done |
+| WQ-04b | REQ-012 | Delegated code-scanning triage, approved bounded fixes and focused verification | done |
+| WQ-04c | REQ-013 | Local-only native ChatGPT provider, simplified preflight, persistent-store isolation, native login and real self-review | in_progress |
 | WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | done |
 | WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | in_progress |
 | WQ-07 | REQ-008 | Release metadata/epoch/Towncrier/notes/archive, draft release PR, checks, protected merge | pending |
@@ -148,6 +164,23 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
 - Independent aggregate review and final correction review are complete; no
   concrete finding remains. All earlier feature commits are signed and logical;
   final tree/history secret scan and completed feature push follow next.
+- Final tree/history Gitleaks passed; signed feature head
+  `88c6a369080c251651b5c53fce65ac276a981732` pushed. Draft feature PR
+  [#244](https://github.com/xeonvs/open-code-review-toolkit/pull/244) is awaiting
+  its exact-head hosted checks. Subsequent user-requested scanning fixes may
+  require one additional completed implementation push and final-head CI.
+- Scanning triage: five open main-branch alerts are Scorecard, no CodeQL source
+  findings. Alert16 maps oldcertifi trust to HTTPSMCP transport and is already
+  addressed by36c11e7/fixed2026.10.19 floor+lock; normal main-push Scorecard will
+  verify it after merge. Alerts1/8/13/21 concern governance/history/fuzzing, not
+  a confirmed patchable source defect. No dismissal, suppression or permissions
+  change; no additional source patch or qualification run is needed.
+- User approved optional local ChatGPT support in this release and simplified
+  preflight, while retaining default/custom API local and GitLab execution.
+  Issue #245 tracks the addition. `context_0114` implements its cohesive local
+  auth/config boundary; `review_0114` independently checks the design; root owns
+  public documentation, native browser login and real review. Auth-store contents
+  have not been read or exported; no login or real model request yet.
 - Delegation: `ocr_0114_harness` owns qualification scripts/tests and its narrow
   development subsection; `context_0114` owns bootstrap/context docs/tests and
   targeted integration; `workflow_0114` owns report-first instruction audit.
@@ -163,5 +196,25 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   issue/milestone closure and protected external reconciliation. Feature merge or
   local green alone is not completion.
 - Post-close delivery: none; publication and reconciliation remain in scope.
-- Resume Point: WQ-06 — sign the final bounded-bootstrap correction, scan the
-  final tree/history, push the completed feature and create its draft PR.
+- PR244 head88c6a369 passed required checks and all three Linux Python gates.
+  This validates the original completed feature scope; the added authentication
+  changes still require their own final-head CI before merge.
+- Explicit skill refresh: trusted updater confirms installed engineering-workflow
+  0.10.0 byte-identical to the latest stable source/distribution; no install or
+  target migration is needed. Newly installed tgrep-search 1.1.0 was reread;
+  current-filesystem scoped searches remain appropriate while source is edited.
+- Independent auth design review requires rejecting an explicitly blank auth
+  selector and proving model overrides cannot change native provider routing.
+- Auth implementation: 46 new focused tests include a production review caller
+  with real Git, config, private HOME, linked synthetic store, preview/review
+  subprocess and cleanup. Controlled OCR auth failure preserves native atomic
+  refresh; 221 affected review/debug/artifact tests pass. Worker Ruff and scoped
+  mypy pass; public environment contracts 6 pass and operator contracts 32 pass.
+  Blank selectors reject, and tagged OCR source proves model overrides retain
+  native provider routing. Independent implementation/public-contract review
+  cleared the new auth scope; repository-wide format, public privacy and Bandit
+  gates pass. Native login and actual model self-review have not yet run.
+- Resume Point: WQ-06 — await required checks and all three Linux gates on
+  PR244 head88c6a369 while WQ-04c is implemented and verified locally. Preserve
+  existing jobs; do not merge until added auth scope, real self-review and final
+  review pass, then push completed auth changes and require final-head CI.

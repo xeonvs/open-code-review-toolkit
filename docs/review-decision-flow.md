@@ -72,10 +72,22 @@ flowchart TD
 
 ## End-to-end control flow
 
+Local execution preserves the configured API provider by default. Optional
+`OCR_LLM_AUTH_MODE=chatgpt` selects native OCR authentication only with explicit
+`--local`; the GitLab path rejects it before native-store access. Its preflight
+checks structural readiness, while OCR owns grant/expiry validation on use.
+Neither preflight nor review initiates login or falls back to another provider.
+
 ```mermaid
 flowchart TD
-    start[CI or local review request] --> input{Configuration, immutable refs,<br/>target state, and paths valid?}
-    input -- No --> preflight_error[Review blocked before OCR]
+    start[CI or local review request] --> auth{Explicit local ChatGPT mode?}
+    auth -- No --> api[Use configured API provider]
+    auth -- Yes --> local_auth{Local profile, qualified binary,<br/>native store and config valid?}
+    local_auth -- No --> preflight_error[Review blocked before OCR]
+    local_auth -- Yes --> native_auth[Isolate runtime config; link only native auth;<br/>OCR owns grant checks and refresh]
+    api --> input{Configuration, immutable refs,<br/>target state, and paths valid?}
+    native_auth --> input
+    input -- No --> preflight_error
     input -- Yes --> initial_state{GitLab MR identity and<br/>lifecycle valid?}
     initial_state -- Invalid --> preflight_error
     initial_state -- Merged or closed --> terminal_note[Upsert expected terminal status;<br/>no evidence, OCR, findings, or approval]
@@ -141,8 +153,8 @@ flowchart TD
     class warning warning;
     class local auxiliary;
     class preflight_error,preview_error,runtime_error,integrity_error,posting_error error;
-    class start,acquire,registry,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction,terminal_result auxiliary;
-    class input,initial_state,acquire_ok,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
+    class start,api,native_auth,acquire,registry,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction,terminal_result auxiliary;
+    class auth,local_auth,input,initial_state,acquire_ok,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,

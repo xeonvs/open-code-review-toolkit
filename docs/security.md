@@ -144,6 +144,10 @@ bounded states and counts.
   remain private.
 - OCR runs under a fresh owner-only home. Gateway sessions, sockets, caches,
   context stores and owned child processes must clean up before final admission.
+  Optional local ChatGPT authentication exposes only OCR's validated native
+  private auth directory through a link in that home. Persistent host/account
+  state, refresh and locking stay OCR-owned; credentials are not copied into
+  toolkit artifacts. GitLab rejects this option before auth-store access.
 - Automatic approval binds exact source, target protection and author identity,
   skips self-approval, never removes an existing approval, and accepts only exact
   receipt v9 with enabled DLP and every existing eligibility gate satisfied.
@@ -171,6 +175,14 @@ paraphrase, make model judgment deterministic, protect data after same-user host
 compromise, or prove an upstream's internal authorization. Local stdio process
 groups are lifecycle ownership, not a sandbox against a malicious executable or
 compromised host.
+
+Local ChatGPT authentication is optional; custom API providers remain the
+default locally and in GitLab. Native browser login and plan consent authorize
+OCR's access under the selected account. Structural preflight does not prove
+consent, eligibility, expiry or quota, and an auth failure cannot enable API
+billing fallback. The native auth directory remains sensitive persistent state;
+keep it private on the trusted host. Filesystem checks do not defend against
+same-user host compromise or a malicious native executable.
 
 Optional remote finding images add a separate disclosure boundary. External finding images are disabled by default. Enabling them does not send finding prose,
 repository paths, project identifiers, or arbitrary OCR metadata in the image URL,

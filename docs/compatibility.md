@@ -334,8 +334,11 @@ incomplete. OCR 1.13.2 adds PowerShell, Nushell, shader and OpenTofu selection
 and built-in Rules, including exact extension/pattern checks. Earlier candidates
 retain the previously allowed PowerShell script with the default rule.
 
-The toolkit retains isolated explicit provider configuration; upstream ChatGPT
-authentication and ACP are not adopted. Deleted-file diff lookup remains bound
+The toolkit retains isolated explicit provider configuration. Optional native
+ChatGPT authentication is separately enabled only for local review with OCR
+1.13.2; the default local and GitLab API paths remain unchanged. See
+[local authentication](local.md#llm-authentication). ACP is not adopted.
+Deleted-file diff lookup remains bound
 to the reviewed path. Scan-only prompt overflow, token-budget state and path
 changes do not alter the toolkit's consumed `review` path.
 

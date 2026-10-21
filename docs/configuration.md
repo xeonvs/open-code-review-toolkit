@@ -17,9 +17,10 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
-| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
-| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
+| `OCR_LLM_AUTH_MODE` | Operator / configure, preflight and review | No | `api-key` | Closed selector: `api-key` preserves custom API providers in local and GitLab execution; `chatgpt` selects native OCR authentication only with explicit local execution. Only absence selects the default; an explicitly blank value is invalid. |
+| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for API review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. Rejected in ChatGPT mode. |
+| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for API review | None | LLM credential; never written into generated context or receipts. Rejected in ChatGPT mode. |
+| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for API review; optional for ChatGPT | None | Exact model identifier passed to OCR and optional API model validation. In ChatGPT mode, unset lets OCR select its native default. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
 | `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
@@ -54,7 +55,19 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fails configuration with an explicit request to set `OCR_LLM_PROTOCOL=anthropic`, preventing a stale false value from silently selecting the default OpenAI protocol.
 
-`OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used only for the isolated OCR home and binary lookup; `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+`OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used for the isolated OCR home and binary lookup; optional local ChatGPT mode also uses the original HOME to validate and link only OCR's native private auth directory. `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+
+### Optional local ChatGPT authentication
+
+`OCR_LLM_AUTH_MODE=chatgpt` is an optional alternative to API configuration for
+`preflight --local` and `review --local`, using the native-auth version qualified
+in the [compatibility policy](compatibility.md).
+GitLab and standalone `configure` reject this mode before native auth-store
+access. The default local API path is unchanged. Follow the
+[native OCR login and repeated-use instructions](local.md#llm-authentication).
+The toolkit does not implement OAuth, run login automatically, copy tokens or
+fall back to API billing. Its simplified preflight validates structural
+readiness; OCR owns actual grant, account, expiry and quota validation.
 
 ### Provider endpoint and completion-cap contract
 

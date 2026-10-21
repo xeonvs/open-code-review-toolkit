@@ -25,6 +25,56 @@ Set `OCR_REVIEW_CONTEXT_MODE` to `off` or leave it unset; other context modes an
 legacy adapter configuration are rejected before input acquisition.
 Local mode has no discussion, command, suppression or approval channel.
 
+## LLM authentication
+
+Local review uses the configured API provider by default, including custom
+OpenAI-compatible or Anthropic endpoints. `OCR_LLM_AUTH_MODE=api-key` is the
+default for both local and GitLab execution; the existing endpoint, token,
+protocol and model configuration continues to apply.
+
+With the native-auth version listed in the [compatibility policy](compatibility.md),
+local review can instead use OCR's optional native ChatGPT-plan authentication.
+This option requires POSIX ownership and permission checks (Linux or macOS).
+Authorize OCR from your normal user session:
+
+```console
+ocr auth login --provider chatgpt
+ocr llm models
+```
+
+Complete OCR's browser authorization, including any requested plan consent.
+Available models and account eligibility are determined by OCR and OpenAI.
+Then select the mode in an environment without API-only configuration:
+
+```console
+export OCR_LLM_AUTH_MODE=chatgpt
+# Optional: set OCR_LLM_MODEL to an exact model available to this account.
+ocr-ci preflight --local
+ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+```
+
+The existing local preflight checks the qualified binary and the native store's
+filesystem safety. It does not make a model request or prove consent, token
+freshness, account eligibility or quota; OCR checks these on actual use. API URL,
+token, protocol, header, model-validation and completion-cap settings cannot be
+combined with ChatGPT mode. Optional reasoning configuration uses the native
+Responses shape; only `reasoning`, `text` and `prompt_cache_key` body overlays
+are accepted. Provider selection cannot be overridden through review arguments.
+
+Ordinary preflight and review never start login. OCR reuses its persistent
+`~/.opencodereview/auth/chatgpt` account/host store and owns refresh and locking.
+The toolkit links only that validated private directory into its temporary
+runtime HOME; it does not copy credentials or inherit the operator's OCR config.
+Session cleanup removes the private link and runtime config, preserving native
+registration and refresh state for the next run. Do not use OCR's
+`--new-account` option for routine repeated reviews.
+
+ChatGPT mode requires explicit `--local`. GitLab execution rejects it before
+opening the auth store and continues to use API providers. Failed ChatGPT auth
+does not switch providers or fall back to API billing. To return to an API
+provider locally, unset `OCR_LLM_AUTH_MODE` or set it to `api-key`, then supply
+the usual API configuration.
+
 The mandatory repository-evidence MCP remains enabled. Registry validation and
 the toolkit's self-query do not substitute for the review's completed evidence
 summary call: the result's claimed usage must reconcile with the real action

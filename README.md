@@ -70,6 +70,8 @@ pipeline as CI. It publishes every admitted finding to a fresh private Markdown
 file and the console, without GitLab acquisition, suppression, approval or a
 fabricated publication receipt. See [local review](docs/local.md) for ranges,
 failure behavior and optional private `--debug-dir` bundles.
+Local reviews keep custom API providers as the default and can optionally use
+[OCR's native ChatGPT authentication](docs/local.md#llm-authentication).
 
 Optional [reasoning and progress controls](docs/configuration.md#provider-endpoint-and-completion-cap-contract)
 do not change review rounds or budgets. Reasoning is unset by default; explicit

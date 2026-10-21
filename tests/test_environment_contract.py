@@ -20,6 +20,7 @@ from tests.support import PROJECT_ROOT
 STABLE_TOOLKIT_VERSION = (PROJECT_ROOT / ".release-version").read_text(encoding="utf-8").strip()
 
 RUNTIME_DEFAULTS = {
+    "OCR_LLM_AUTH_MODE": "api-key",
     "OCR_LLM_URL": "None",
     "OCR_LLM_TOKEN": "None",
     "OCR_LLM_MODEL": "None",

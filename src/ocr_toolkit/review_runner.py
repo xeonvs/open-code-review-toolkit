@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from io import BufferedWriter
 from pathlib import Path
 
-from ocr_toolkit import configure, mcp_config
+from ocr_toolkit import configure, local_chatgpt, mcp_config, preflight
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
 from ocr_toolkit.context.broker import (
@@ -421,19 +421,25 @@ class EnrichmentReceipt:
     legacy_policy: bool = False
 
 
-def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
+def _write_isolated_runtime_config(
+    *, debug: DebugBundle | None = None, local: bool = False
+) -> None:
     """Rebuild only validated runtime settings inside the fresh OCR home."""
 
-    updates = configure.build_config_updates()
+    updates = configure.build_config_updates(**({"local": True} if local else {}))
     update_ocr_config(updates)
     if debug is not None:
-        body = updates.get("llm.extra_body")
+        native = updates.get("providers.chatgpt")
+        native = native if isinstance(native, dict) else None
+        protocol = "openai-responses" if native is not None else updates["llm.protocol"]
+        body = native.get("extra_body") if native is not None else updates.get("llm.extra_body")
+        model = native.get("model", "") if native is not None else updates["llm.model"]
         reasoning = body.get("reasoning") if isinstance(body, dict) else None
         effort = (
             reasoning.get("effort")
-            if updates["llm.protocol"] == "openai-responses" and isinstance(reasoning, dict)
+            if protocol == "openai-responses" and isinstance(reasoning, dict)
             else body.get("reasoning_effort")
-            if updates["llm.protocol"] == "openai" and isinstance(body, dict)
+            if protocol == "openai" and isinstance(body, dict)
             else None
         )
         debug.phase(
@@ -444,13 +450,11 @@ def _write_isolated_runtime_config(*, debug: DebugBundle | None = None) -> None:
                 "context_mode": "off",
                 "output_format": "json",
                 "audience": "agent",
-                "llm_protocol": updates["llm.protocol"],
+                "llm_protocol": protocol,
                 "review_effort": updates["effort"],
                 "language": updates["language"],
-                "llm_model_sha256": hashlib.sha256(
-                    updates["llm.model"].encode("utf-8")
-                ).hexdigest(),
-                "extra_body_present": "llm.extra_body" in updates,
+                "llm_model_sha256": hashlib.sha256(model.encode("utf-8")).hexdigest(),
+                "extra_body_present": body is not None,
                 "extra_headers_present": "llm.extra_headers" in updates,
                 "telemetry_enabled": updates["telemetry.enabled"],
                 "content_logging": updates["telemetry.content_logging"],
@@ -2632,6 +2636,19 @@ def run_evidence_review(
     report_destination: Path | None = None
     try:
         try:
+            mode = local_chatgpt.auth_mode(os.environ, local=local)
+            if mode == "chatgpt":
+                local_chatgpt.provider_entry(os.environ)
+                if any(
+                    argument == "--provider" or argument.startswith("--provider=")
+                    for argument in ocr_args
+                ):
+                    raise local_chatgpt.LocalChatGPTError(
+                        "--provider cannot override explicit ChatGPT authentication"
+                    )
+        except local_chatgpt.LocalChatGPTError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
+        try:
             dlp_enabled = resolve_dlp_enabled(os.environ)
         except ValueError as exc:
             raise ReviewRunnerError(str(exc)) from exc
@@ -2805,6 +2822,17 @@ def _run_evidence_review(
 ) -> int:
     """Prepare private evidence and run OCR through the composed MCP context."""
 
+    native_store = None
+    native_binary = None
+    try:
+        if local_chatgpt.auth_mode(os.environ, local=state.local) == "chatgpt":
+            local_chatgpt.provider_entry(os.environ)
+            native_binary = _resolve_ocr_binary()
+            version = preflight.validate_ocr_binary(executable=native_binary, announce=False)
+            local_chatgpt.require_supported_version(version)
+            native_store = local_chatgpt.native_store(os.environ)
+    except (local_chatgpt.LocalChatGPTError, preflight.PreflightError) as exc:
+        raise ReviewRunnerError(str(exc)) from exc
     artifacts = repository_artifacts()
     try:
         prepare_artifact_directory(artifacts)
@@ -2843,8 +2871,14 @@ def _run_evidence_review(
         try:
             state.enter("configuration")
             _write_isolated_runtime_config(
-                **({"debug": state.debug} if state.debug is not None else {})
+                **({"debug": state.debug} if state.debug is not None else {}),
+                **({"local": True} if native_store is not None else {}),
             )
+            if native_store is not None:
+                try:
+                    local_chatgpt.link_native_store(native_store, session_home)
+                except local_chatgpt.LocalChatGPTError as exc:
+                    raise ReviewRunnerError(str(exc)) from exc
             state.enter("identity")
             identity, effective_ocr_args = _prepare_policy_context(
                 refs, ocr_args, artifacts, **({"local": True} if state.local else {})
@@ -2975,7 +3009,7 @@ def _run_evidence_review(
             str(artifacts.bootstrap),
         ]
         state.enter("preview")
-        ocr_binary = _resolve_ocr_binary()
+        ocr_binary = native_binary or _resolve_ocr_binary()
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
