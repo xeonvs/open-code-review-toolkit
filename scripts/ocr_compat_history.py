@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, NoReturn
 
-HISTORICAL_CUTOFF = (1, 12, 8)
+HISTORICAL_CUTOFF = (1, 13, 0)
 REGO_CONTRACT_CUTOFF = (1, 11, 8)
 
 ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {
@@ -328,6 +328,94 @@ ARCHIVED_1_12_7_CONTRACTS: dict[str, object] = {
 }
 
 
+ARCHIVED_1_12_8_CONTRACTS: dict[str, object] = {
+    **ARCHIVED_1_12_7_CONTRACTS,
+    "language_rule_probe": {
+        "default_excluded_paths": [
+            "src/test/kotlin/scripts/Example.kts",
+            "test/parser.ml",
+            "src/test_helpers.py",
+            "src/WidgetTest.fs",
+            "node_modules/example/index.ts",
+            "dist/generated.js",
+        ],
+        "excluded_extensions": [".svh"],
+        "extensions": [
+            ".cjs",
+            ".cxx",
+            ".fs",
+            ".fsi",
+            ".fsx",
+            ".hxx",
+            ".kts",
+            ".mjs",
+            ".ml",
+            ".mli",
+            ".mm",
+            ".pug",
+            ".pyi",
+            ".re",
+            ".rego",
+            ".rei",
+            ".sv",
+            ".v",
+            ".vh",
+            ".vhd",
+            ".vhdl",
+        ],
+        "m_routing": "matlab_and_objective_c",
+        "result": "passed",
+        "rule_source": "system_builtin",
+        "selected": 21,
+    },
+}
+
+
+ARCHIVED_1_12_11_CONTRACTS: dict[str, object] = {
+    **ARCHIVED_1_12_8_CONTRACTS,
+    "language_rule_probe": {
+        "default_excluded_paths": [
+            "src/test/kotlin/scripts/Example.kts",
+            "test/parser.ml",
+            "src/test_helpers.py",
+            "src/WidgetTest.fs",
+            "node_modules/example/index.ts",
+            "dist/generated.js",
+        ],
+        "excluded_extensions": [".svh"],
+        "extensions": [
+            ".cjs",
+            ".cxx",
+            ".fs",
+            ".fsi",
+            ".fsx",
+            ".hxx",
+            ".j2",
+            ".jinja2",
+            ".kts",
+            ".mjs",
+            ".ml",
+            ".mli",
+            ".mm",
+            ".pug",
+            ".pyi",
+            ".re",
+            ".rego",
+            ".rei",
+            ".sv",
+            ".v",
+            ".vh",
+            ".vhd",
+            ".vhdl",
+        ],
+        "m_routing": "matlab_and_objective_c",
+        "result": "passed",
+        "rule_source": "system_builtin",
+        "selected": 23,
+    },
+}
+
+
 def language_extensions(version_tuple: tuple[int, int, int]) -> list[str]:
     """Return the language inventory recorded in the historical evidence epochs."""
 
@@ -347,6 +435,14 @@ def validate_contracts(
 
     if version_tuple >= HISTORICAL_CUTOFF:
         fail("current evidence cannot use historical validation")
+    if version_tuple >= (1, 12, 11):
+        if evidence.get("contracts") != ARCHIVED_1_12_11_CONTRACTS:
+            fail(f"historical qualification contract disagrees for {version}")
+        return
+    if version_tuple >= (1, 12, 8):
+        if evidence.get("contracts") != ARCHIVED_1_12_8_CONTRACTS:
+            fail(f"historical qualification contract disagrees for {version}")
+        return
     if version_tuple >= (1, 12, 7):
         if evidence.get("contracts") != ARCHIVED_1_12_7_CONTRACTS:
             fail(f"historical qualification contract disagrees for {version}")

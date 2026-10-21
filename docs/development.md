@@ -53,7 +53,11 @@ behavior.
 `scripts/ocr_compat_history.py` owns frozen validation of evidence from before the
 forward-only suite boundary. It never launches OCR and must not depend on current
 numeric defaults, language inventories or live fixtures. Preserve historical
-evidence bytes. Generic promotion tests use a frozen baseline; only current-pin
+evidence bytes. Frozen epochs are readback-only: fresh `qualify` and
+`probe-local` requests below the live suite boundary fail before asset downloads
+or binary execution. Runtime support and validation of existing evidence remain
+owned by the compatibility manifest and the frozen validators. Generic promotion
+tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required
 contract evidence before writing any pin or evidence file.
 
@@ -62,12 +66,23 @@ evidence epoch exactly, then advance the cutoff. The same version-selected
 validator must be used by manifest readback, `prepare-update`, and the live
 runner; a candidate cannot bypass a newly required probe merely because an
 older release remains readable. Evidence through OCR 1.12.7 is frozen in its
-original epoch. From OCR 1.12.8, the current contract adds F# signature/script
+original epoch. The OCR 1.12.8 epoch adds F# signature/script
 selection and its built-in Rules pattern, plus expanded dependency and build-output
 exclusions. The Rego and other previously consumed language contracts remain
 required. From OCR 1.12.11, Jinja `.jinja2` and `.j2` selection and the
 built-in Jinja Rules pattern are required; the same live fixture keeps these paths
-as explicit negative controls for earlier candidates. Historical evidence is unchanged.
+as explicit negative controls for earlier candidates. Historical evidence through
+OCR 1.12.13 is frozen unchanged. From OCR 1.13.0,
+the existing numeric max-tools probe also records grace-round completion and
+limit-warning observations, with a bounded no-`task_done` negative control. OCR
+1.13.0 retains the incomplete grace verdict; from OCR 1.13.1, grace `task_done`
+must complete coverage while preserving `review_limit_reached`. The negative
+control must remain incomplete. From OCR 1.13.2, PowerShell, Nushell, shader and
+OpenTofu selection and built-in Rules patterns are required. Earlier candidates
+keep `.ps1` selected with the default rule and the other new paths as unsupported
+negative controls. All candidates execute the same probes; only the shared
+evidence validator selects the required epoch. Scan-only prompt-overflow and
+token-budget changes do not extend the toolkit's consumed `review` contract.
 
 Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;

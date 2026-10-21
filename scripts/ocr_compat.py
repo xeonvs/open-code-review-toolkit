@@ -153,6 +153,15 @@ CURRENT_LANGUAGE_RULES = {
     "src/Program.fs": "**/*.{fs,fsi,fsx}",
     "src/Program.fsi": "**/*.{fs,fsi,fsx}",
     "scripts/check.fsx": "**/*.{fs,fsi,fsx}",
+    "scripts/setup.ps1": "**/*.{ps1,psm1,psd1}",
+    "scripts/module.psm1": "**/*.{ps1,psm1,psd1}",
+    "scripts/module.psd1": "**/*.{ps1,psm1,psd1}",
+    "scripts/setup.nu": "**/*.nu",
+    "shaders/main.glsl": "**/*.{glsl,hlsl,wgsl,metal}",
+    "shaders/main.hlsl": "**/*.{glsl,hlsl,wgsl,metal}",
+    "shaders/main.wgsl": "**/*.{glsl,hlsl,wgsl,metal}",
+    "shaders/main.metal": "**/*.{glsl,hlsl,wgsl,metal}",
+    "infra/main.tofu": "**/*.{tf,tofu,hcl,tfvars}",
 }
 CURRENT_DEFAULT_EXCLUDED_PATHS = (
     "src/test/kotlin/scripts/Example.kts",
@@ -168,6 +177,20 @@ PROVIDER_DIRECTORY_PREVIEW_CUTOFF = (1, 12, 1)
 PYTEST_PREFIX_EXCLUSION_CUTOFF = (1, 12, 7)
 PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
 PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
+GRACE_PROBE_CUTOFF = (1, 13, 0)
+GRACE_COMPLETION_CUTOFF = (1, 13, 1)
+LANGUAGE_1_13_2_CUTOFF = (1, 13, 2)
+POWERSHELL_SCRIPT_PATH = "scripts/setup.ps1"
+LANGUAGE_1_13_2_PATHS = (
+    "scripts/module.psm1",
+    "scripts/module.psd1",
+    "scripts/setup.nu",
+    "shaders/main.glsl",
+    "shaders/main.hlsl",
+    "shaders/main.wgsl",
+    "shaders/main.metal",
+    "infra/main.tofu",
+)
 JINJA_RULE_CUTOFF = (1, 12, 11)
 JINJA_RULE_PATHS = ("views/page.jinja2", "views/component.j2")
 FSHARP_RULE_CUTOFF = (1, 12, 8)
@@ -353,6 +376,19 @@ def load_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _numeric_contract_for_version(version: str) -> dict[str, object]:
+    """Select required grace verdicts without changing frozen numeric defaults."""
+
+    contract = dict(CURRENT_NUMERIC_CLI_CONTRACT)
+    if _version(version) >= GRACE_PROBE_CUTOFF:
+        fixed = _version(version) >= GRACE_COMPLETION_CUTOFF
+        contract["grace_rounds"] = {
+            "task_done": {"completed": fixed, "limit_warning": fixed},
+            "no_task_done": {"completed": False, "limit_warning": fixed},
+        }
+    return contract
+
+
 def _validate_current_contracts(value: object, version: str) -> None:
     """Require the live consumed contract epoch selected for one candidate version."""
 
@@ -372,7 +408,7 @@ def _validate_current_contracts(value: object, version: str) -> None:
         "reported" if _version(version) >= PROVIDER_DIRECTORY_PREVIEW_CUTOFF else "omitted"
     )
     expected = {
-        "numeric_cli_probe": CURRENT_NUMERIC_CLI_CONTRACT,
+        "numeric_cli_probe": _numeric_contract_for_version(version),
         "review_budget_probe": {
             "budget": 30_000,
             "completed": 2,
@@ -490,6 +526,10 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
     if _version(version) < JINJA_RULE_CUTOFF:
         for path in JINJA_RULE_PATHS:
             rules.pop(path)
+    if _version(version) < LANGUAGE_1_13_2_CUTOFF:
+        rules[POWERSHELL_SCRIPT_PATH] = "default"
+        for path in LANGUAGE_1_13_2_PATHS:
+            rules.pop(path)
     return rules
 
 
@@ -505,6 +545,8 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
         paths.extend(("src/Program.fsi", "scripts/check.fsx"))
     if _version(version) < JINJA_RULE_CUTOFF:
         paths.extend(JINJA_RULE_PATHS)
+    if _version(version) < LANGUAGE_1_13_2_CUTOFF:
+        paths.extend(LANGUAGE_1_13_2_PATHS)
     return tuple(paths)
 
 
@@ -1188,7 +1230,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             contents = type(self)._message_contents(messages)
             if any(PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
                 type(self).recheck_instruction_requests += 1
-            if type(self).main_mode == "exhaust-tools":
+            if type(self).main_mode in {"exhaust-tools", "exhaust-tools-incomplete"}:
                 if "file_read" in tool_names:
                     function = {
                         "name": "file_read",
@@ -1200,7 +1242,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                     stage = "main"
                 else:
                     function = {"name": "task_done", "arguments": "{}"}
-                    call_id = "call-grace-done"
+                    call_id = "call-grace-verdict"
                     stage = "grace"
             else:
                 prior_comment = any(
@@ -1255,6 +1297,9 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
                 ],
             }
             finish_reason = "tool_calls"
+            if stage == "grace" and type(self).main_mode == "exhaust-tools-incomplete":
+                message = {"role": "assistant", "content": "No completion verdict."}
+                finish_reason = "stop"
         type(self).request_stages.append(stage)
         usage_tokens = (
             type(self).grouping_tokens_per_request
@@ -1302,7 +1347,7 @@ def _stub_gateway(
         _fail("stub gateway token usage must be at least two")
     if grouping_mode not in {"singletons", "combined"}:
         _fail("stub gateway grouping mode is invalid")
-    if main_mode not in {"findings", "exhaust-tools"}:
+    if main_mode not in {"findings", "exhaust-tools", "exhaust-tools-incomplete"}:
         _fail("stub gateway main mode is invalid")
     _StubHandler.request_count = 0
     _StubHandler.tokens_per_request = tokens_per_request
@@ -1655,11 +1700,13 @@ def _effective_max_tools_probe(
     *,
     value: int,
     expected_diagnostic: re.Pattern[str] | None,
-) -> int:
+    grace_task_done: bool = True,
+) -> tuple[int, dict[str, object]]:
     """Count real OCR main-loop rounds through a deterministic local protocol peer."""
 
-    env = _isolated_probe_environment(directory / f"effective-max-tools-{value}")
-    with _stub_gateway(main_mode="exhaust-tools") as gateway_url:
+    mode = "exhaust-tools" if grace_task_done else "exhaust-tools-incomplete"
+    env = _isolated_probe_environment(directory / f"effective-max-tools-{value}-{mode}")
+    with _stub_gateway(main_mode=mode) as gateway_url:
         env.update(
             {
                 "OCR_LLM_URL": gateway_url,
@@ -1728,7 +1775,51 @@ def _effective_max_tools_probe(
         or tool_calls.get("total") != observed
     ):
         _fail("effective max-tools probe returned an inconsistent tool-loop result")
-    return observed
+    from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+
+    try:
+        outcome = parse_result_outcome(payload)
+    except OcrResultContractError as exc:
+        raise CompatibilityError("effective max-tools probe emitted invalid coverage") from exc
+    completed_task = outcome.kind == "clean"
+    if (
+        not outcome.manifest_present
+        or outcome.selected_count != 1
+        or outcome.reused_count != 0
+        or outcome.waived_count != 0
+        or outcome.completed_count != int(completed_task)
+        or outcome.failed_count != int(not completed_task)
+        or completed.returncode != (0 if completed_task else 1)
+        or (
+            not completed_task
+            and (
+                outcome.kind != "failed"
+                or len(outcome.failed_items) != 1
+                or outcome.failed_items[0].classification != "budget"
+            )
+        )
+        or (completed_task and outcome.budget_exceeded)
+        or (completed_task and not grace_task_done)
+    ):
+        _fail("effective max-tools probe returned inconsistent grace coverage")
+    warnings = payload.get("warnings", [])
+    if not isinstance(warnings, list) or any(not isinstance(item, dict) for item in warnings):
+        _fail("effective max-tools probe returned invalid warnings")
+    limit_warnings = [item for item in warnings if item.get("type") == "review_limit_reached"]
+    if len(limit_warnings) > 1:
+        _fail("effective max-tools probe repeated its limit warning")
+    if limit_warnings:
+        verdict = (
+            "the grace round completed the task"
+            if completed_task
+            else "the grace round did not complete the task"
+        )
+        message = limit_warnings[0].get("message")
+        if not isinstance(message, str) or verdict not in message:
+            _fail("effective max-tools probe returned an inconsistent limit warning")
+    if completed_task and any(item.get("type") == "subtask_error" for item in warnings):
+        _fail("effective max-tools probe reported a completed task as failed")
+    return observed, {"completed": completed_task, "limit_warning": bool(limit_warnings)}
 
 
 def _numeric_cli_probe(
@@ -1776,7 +1867,7 @@ def _numeric_cli_probe(
         binary, repo, base, head, directory, flag="--max-tools", value=minimum
     )
     _accepted_numeric_preview(minimum_preview, flag="--max-tools")
-    template_default = _effective_max_tools_probe(
+    template_default, grace_completion = _effective_max_tools_probe(
         binary,
         repo,
         base,
@@ -1792,7 +1883,7 @@ def _numeric_cli_probe(
         binary, repo, base, head, directory, flag="--max-tools", value=representative
     )
     _accepted_numeric_preview(representative_preview, flag="--max-tools")
-    effective_representative = _effective_max_tools_probe(
+    effective_representative, representative_grace = _effective_max_tools_probe(
         binary,
         repo,
         base,
@@ -1803,6 +1894,20 @@ def _numeric_cli_probe(
     )
     if effective_representative != representative:
         _fail("candidate max-tools representative value was not applied exactly")
+    if representative_grace != grace_completion:
+        _fail("candidate max-tools grace verdict changed with the numeric boundary")
+    incomplete_rounds, grace_incomplete = _effective_max_tools_probe(
+        binary,
+        repo,
+        base,
+        head,
+        directory,
+        value=minimum,
+        expected_diagnostic=None,
+        grace_task_done=False,
+    )
+    if incomplete_rounds != template_default:
+        _fail("candidate max-tools non-completion changed the effective round limit")
 
     budget_cases: dict[str, subprocess.CompletedProcess[str]] = {
         "omitted": _run_numeric_preview_case(
@@ -1829,6 +1934,7 @@ def _numeric_cli_probe(
     ):
         _fail("candidate max-tokens-budget negative boundary did not fail closed")
     return {
+        "grace_rounds": {"task_done": grace_completion, "no_task_done": grace_incomplete},
         "max_tokens_budget": {
             "cases": {
                 "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
@@ -2699,9 +2805,21 @@ def _comment_arguments_probe(binary: Path, directory: Path) -> dict[str, object]
     }
 
 
+def _require_live_qualification_version(version: str) -> None:
+    """Keep frozen readback epochs outside the forward-only executable suite."""
+
+    if _version(version) < history.HISTORICAL_CUTOFF:
+        floor = ".".join(str(part) for part in history.HISTORICAL_CUTOFF)
+        _fail(
+            f"OCR {version} belongs to a frozen readback-only qualification epoch; "
+            f"fresh qualification requires OCR {floor} or newer"
+        )
+
+
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
     """Run deterministic CLI and JSON-consumer probes against one OCR binary."""
 
+    _require_live_qualification_version(version)
     binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
     git_env = _isolated_probe_environment(directory / "git-home")
     repo, base, head = _synthetic_repo(directory, git_env)
@@ -3010,6 +3128,7 @@ def qualify_release(
         tag = release.get("tag_name")
         if not isinstance(tag, str) or VERSION_RE.fullmatch(tag) is None:
             _fail("candidate tag is not a stable semantic version")
+        _require_live_qualification_version(tag.removeprefix("v"))
         if os.environ.get("RUNNER_OS") != "Linux":
             _fail(
                 "candidate execution requires a Linux runner; checksum validation is cross-platform"
@@ -3755,7 +3874,7 @@ def main(argv: list[str] | None = None) -> int:
             return finish_issue_upsert(evidence=load_json(args.evidence))
         if args.command == "probe-local":
             version = args.version.removeprefix("v")
-            _version(version)
+            _require_live_qualification_version(version)
             binary = args.binary.resolve(strict=True)
             if not binary.is_file():
                 _fail("local OCR binary must be a regular file")
