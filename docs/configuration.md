@@ -142,7 +142,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_VERSION`** | Example pipeline | Yes | `v` + manifest `recommended_version` | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
+| **`OCR_VERSION`** | Example pipeline | Yes | Qualified OCR pin for the example's toolkit release | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
 | **`OCR_SHA256`** | Example pipeline | Yes | Manifest SHA-256 for `opencodereview-linux-amd64` | Exact digest pinned alongside `OCR_VERSION` in the pipeline; must belong to the same release entry. |
 | **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.11.3` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
@@ -150,6 +150,10 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
 | `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | OCR uses template default `100`; `1-49` reports normalization to `50` but remains effectively `100`, and only a value above `100` raises the cap. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
+
+Toolkit and OCR example pins advance together during release preparation. Use
+the manifest from the selected toolkit release; a newer development branch's
+recommendation may not be accepted by an older installed toolkit.
 
 During Draft qualification, install the toolkit artifact built from the reviewed
 commit. The example's toolkit-version pin becomes usable after the later stable

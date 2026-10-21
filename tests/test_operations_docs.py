@@ -95,7 +95,7 @@ def test_current_operator_guidance_uses_manifest_without_ocr_release_literals() 
         assert not re.search(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
         assert not re.search(r"open-code-review/releases/tag/v\d+\.\d+\.\d+", content)
     configuration = CONFIGURATION.read_text(encoding="utf-8")
-    assert "`v` + manifest `recommended_version`" in configuration
+    assert "Qualified OCR pin for the example's toolkit release" in configuration
     assert "not resolved dynamically" in configuration
     assert "Manifest SHA-256 for `opencodereview-linux-amd64`" in configuration
     assert not re.search(r"\b[a-f0-9]{64}\b", configuration)

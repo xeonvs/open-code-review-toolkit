@@ -29,18 +29,8 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-RECOMMENDED_OCR_VERSION = "1.12.13"
+RECOMMENDED_OCR_VERSION = "1.13.2"
 SUPPORTED_OCR_VERSIONS = (
-    "1.11.0",
-    "1.11.1",
-    "1.11.2",
-    "1.11.3",
-    "1.11.4",
-    "1.11.5",
-    "1.11.6",
-    "1.11.7",
-    "1.11.8",
-    "1.11.9",
     "1.12.0",
     "1.12.1",
     "1.12.2",
@@ -55,11 +45,21 @@ SUPPORTED_OCR_VERSIONS = (
     "1.12.11",
     "1.12.12",
     "1.12.13",
+    "1.13.0",
+    "1.13.1",
+    "1.13.2",
 )
 DEPRECATED_OCR_VERSIONS = (
-    "1.10.0",
-    "1.10.1",
-    "1.10.2",
+    "1.11.0",
+    "1.11.1",
+    "1.11.2",
+    "1.11.3",
+    "1.11.4",
+    "1.11.5",
+    "1.11.6",
+    "1.11.7",
+    "1.11.8",
+    "1.11.9",
 )
 # Retain the public constant as the recommended pin, not as the runtime acceptance policy.
 EXPECTED_OCR_VERSION = RECOMMENDED_OCR_VERSION

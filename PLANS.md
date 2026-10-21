@@ -71,7 +71,7 @@ before handoff or commit. Completed stable plans are indexed in
 | WQ-03 | REQ-005–006 | Bootstrap navigation, bounded clipping and operator documentation | done |
 | WQ-03a | REQ-009–010 | Latest engineering-workflow report; backlog/diagrams/status/user-doc audit and necessary reviewed corrections | done |
 | WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | done |
-| WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | in_progress |
+| WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | done |
 | WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | in_progress |
 | WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | pending |
 | WQ-07 | REQ-008 | Release metadata/epoch/Towncrier/notes/archive, draft release PR, checks, protected merge | pending |
@@ -98,7 +98,7 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   status. Clean only owned resources. No duplicate published-artifact installs.
 - Latest validation: plan staged/tree/history Gitleaks passed; signed plan commit
   `a5c2cf6` pushed. Milestone v0.11.4 is number 19. Docker local socket available;
-  configured signing key present. No binary qualification yet.
+  configured signing key present. Completed qualification is recorded below.
 - Engineering audit: installed/distributed/source skill 0.10.0 agree; mandatory
   instruction contract v3 valid. Historical target version stamp alone does not
   warrant generic migration. tgrep-search skill 1.0.3 current; working tgrep
@@ -122,7 +122,18 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   (1 test, controlled model peer). Context focused suite:62 passed,1 opt-in skip.
   Promoted current-pin/environment suites:181 passed; generic rejection fixtures
   now use frozen baseline rather than the moving current manifest.
-- Full local quality has not started; dependency inventory/update precedes it.
+- Dependency implementation: certifi floor and lock updated to2026.10.19;
+  selected compatible SDK2.3/HTTPX2.16/dev updates and reviewed Action SHA pins,
+  CI uv0.13.4 with explicit supported Python selections. Locked sync/check and
+  72 focused workflow/release/transport tests passed; audit100packages found
+  no vulnerabilities or skipped inputs. Dependency/security issue #243 tracked.
+- New-SDK targeted OCR tracker integration passed (1 test); 49 affected
+  documentation/example contracts passed. Final aggregate independent review
+  found only the stale validation sentence corrected above; no runtime or
+  trust-boundary finding remains. The single full quality run is in progress.
+- The feature retains the published example pair toolkit0.11.3/OCR1.12.13;
+  release preparation will advance both pins/checksum together to0.11.4/1.13.2.
+  This avoids installing an older toolkit that rejects a newly recommended OCR.
 - Delegation: `ocr_0114_harness` owns qualification scripts/tests and its narrow
   development subsection; `context_0114` owns bootstrap/context docs/tests and
   targeted integration; `workflow_0114` owns report-first instruction audit.

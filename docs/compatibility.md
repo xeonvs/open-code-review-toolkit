@@ -1,14 +1,14 @@
 # Open Code Review compatibility
 
-The versioned support contract lives in [`compatibility/ocr-support.json`](../compatibility/ocr-support.json). Schema v2 records the recommended OCR version, every tested or observed release, exact upstream asset digests, normalized evidence hashes, and a rolling runtime window. The newest two qualified major/minor lines are supported (`1.11` and `1.12`); the preceding line (`1.10`) is deprecated and emits a warning. Versions before `1.10.0` and patches absent from the qualified manifest are rejected. `monitoring_floor` controls release discovery only and never grants runtime support. The toolkit package never downloads OCR; deployments keep using an explicitly pinned, checksum-verified binary.
+The versioned support contract lives in [`compatibility/ocr-support.json`](../compatibility/ocr-support.json). Schema v2 records the recommended OCR version, every tested or observed release, exact upstream asset digests, normalized evidence hashes, and a rolling runtime window. The newest two qualified major/minor lines are supported; the preceding line is deprecated and emits a warning. Earlier lines and patches absent from the qualified manifest are rejected. `monitoring_floor` controls release discovery only and never grants runtime support. The toolkit package never downloads OCR; deployments keep using an explicitly pinned, checksum-verified binary.
 
 ## Qualification lanes
 
 Live qualification runs one forward-only probe implementation and validates its
 observations against the consumed review contract owned by the candidate epoch.
-Historical candidates before the suite boundary use frozen expectations from
-`scripts/ocr_compat_history.py`; the same frozen data also protects historical
-evidence readback and never supplies executable code. Generic promotion tests
+Historical evidence before the suite boundary uses frozen expectations from
+`scripts/ocr_compat_history.py`. Fresh qualification of a frozen epoch is refused
+before downloads or binary execution; frozen readback never supplies executable code. Generic promotion tests
 use a frozen baseline. See
 [qualification maintenance](development.md#maintaining-ocr-qualification).
 Historical readback is not promotion authority: every newly promoted candidate
@@ -266,7 +266,7 @@ selection contracts. OCR 1.12.9 retains the toolkit-consumed invocation,
 selection, result, and manifest contracts. Source review and hosted probes do
 not establish configured provider/model finding quality.
 
-Runtime support is rolling and exact-patch-only. Qualified 1.11.x and 1.12.x
+At toolkit 0.11.1, runtime support was rolling and exact-patch-only. Qualified 1.11.x and 1.12.x
 entries are supported, qualified 1.10.x entries are accepted with a deprecation
 warning, and earlier or unqualified patches fail preflight. Historical evidence
 remains readable without widening current execution support. For toolkit 0.11.1, the manifest's
@@ -294,7 +294,7 @@ contracts rather than configured provider/model finding quality.
 
 ### OCR 1.12.12–1.12.13 — toolkit 0.11.3 target
 
-The manifest recommends OCR 1.12.13 after the bounded hosted
+Toolkit 0.11.3 recommended OCR 1.12.13 after the bounded hosted
 [qualification chain](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/37899087743)
 passed for both adjacent patches. Source review found provider/model and timeout
 signals that the earlier classifier missed. The corrected classifier marks both
@@ -317,6 +317,33 @@ that neither reason implies clean or aggregate-budget completion. Scan-path
 normalization and the README badge change are outside toolkit review execution.
 No CI behavior, MCP SDK, public API or Rules adaptation is required. Hosted
 qualification establishes deterministic contracts, not configured model quality.
+
+### OCR 1.13.0–1.13.2 — toolkit 0.11.4 target
+
+Toolkit 0.11.4 recommends OCR 1.13.2 after one local Linux amd64 Docker
+qualification of each adjacent candidate, with verified upstream assets and the
+reviewed locked runtime graph. All three candidates require human review;
+the manifest records their source conclusions. Qualified 1.12.x and 1.13.x
+patches are supported, 1.11.x patches warn, and older or unqualified patches fail
+preflight. Historical evidence remains unchanged.
+
+The shared max-tools probe observes the incomplete grace verdict in 1.13.0.
+From 1.13.1, a successful grace-round `task_done` completes coverage and retains
+the `review_limit_reached` warning; a no-`task_done` negative control stays
+incomplete. OCR 1.13.2 adds PowerShell, Nushell, shader and OpenTofu selection
+and built-in Rules, including exact extension/pattern checks. Earlier candidates
+retain the previously allowed PowerShell script with the default rule.
+
+The toolkit retains isolated explicit provider configuration; upstream ChatGPT
+authentication and ACP are not adopted. Deleted-file diff lookup remains bound
+to the reviewed path. Scan-only prompt overflow, token-budget state and path
+changes do not alter the toolkit's consumed `review` path.
+
+A separate checksum-verified OCR 1.13.2 test reads synthetic MR intent through
+the production internal evidence MCP before using the real federation gateway
+to read a controlled tracker. Its deterministic model peer derives the lookup
+argument from returned MR data. This proves availability and routing, not natural
+model selection, private deployment behavior or configured model finding quality.
 
 ## Promotion and rollback
 

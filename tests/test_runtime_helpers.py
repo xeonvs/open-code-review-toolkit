@@ -579,19 +579,24 @@ class PreflightTests(unittest.TestCase):
             preflight.validate_ocr_binary()
 
     def test_validate_ocr_binary_rejects_unsupported_version(self) -> None:
-        completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.7.10\n", stderr=""
-        )
-        with (
-            patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
-            patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
-            self.assertRaises(preflight.PreflightError),
-        ):
-            preflight.validate_ocr_binary()
+        for version in ("1.7.10", "1.10.2"):
+            with self.subTest(version=version):
+                completed = subprocess.CompletedProcess(
+                    args=["ocr", "--version"], returncode=0, stdout=f"ocr {version}\n", stderr=""
+                )
+                with (
+                    patched_attr(preflight.shutil, "which", lambda _name: "/usr/bin/ocr"),
+                    patched_attr(preflight.subprocess, "run", lambda *_args, **_kwargs: completed),
+                    self.assertRaises(preflight.PreflightError),
+                ):
+                    preflight.validate_ocr_binary()
 
     def test_validate_ocr_binary_warns_for_exact_deprecated_patch(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ocr", "--version"], returncode=0, stdout="ocr 1.10.2\n", stderr=""
+            args=["ocr", "--version"],
+            returncode=0,
+            stdout=f"ocr {preflight.DEPRECATED_OCR_VERSIONS[-1]}\n",
+            stderr="",
         )
         stderr = io.StringIO()
         with (

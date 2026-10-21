@@ -74,8 +74,8 @@ GITLAB_DEFAULTS = {
 }
 
 EXAMPLE_DEFAULTS = {
-    # Executable pin equality is checked against the manifest in integration contracts.
-    "OCR_VERSION": "`v` + manifest `recommended_version`",
+    # Integration contracts check the selected qualified pair and release transition.
+    "OCR_VERSION": "Qualified OCR pin for the example's toolkit release",
     "OCR_SHA256": "Manifest SHA-256 for `opencodereview-linux-amd64`",
     "OCR_TOOLKIT_VERSION": STABLE_TOOLKIT_VERSION,
     "OCR_TOOLKIT_CHECKSUMS_URL": "Release URL derived from `OCR_TOOLKIT_VERSION`",

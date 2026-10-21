@@ -165,13 +165,13 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.12.13"
-    assert manifest["monitoring_floor"] == "1.12.13"
+    assert manifest["recommended_version"] == "1.13.2"
+    assert manifest["monitoring_floor"] == "1.13.2"
     assert manifest["runtime_support"] == {
-        "deprecated_lines": ["1.10"],
+        "deprecated_lines": ["1.11"],
         "qualified_patches_only": True,
-        "rejected_before": "1.10.0",
-        "supported_lines": ["1.11", "1.12"],
+        "rejected_before": "1.11.0",
+        "supported_lines": ["1.12", "1.13"],
     }
     assert [(item["version"], item["status"]) for item in manifest["releases"]] == [
         ("1.7.17", "tested"),
@@ -224,20 +224,13 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.12.11", "tested"),
         ("1.12.12", "tested"),
         ("1.12.13", "tested"),
+        ("1.13.0", "tested"),
+        ("1.13.1", "tested"),
+        ("1.13.2", "tested"),
     ]
 
     assert module.qualified_runtime_versions(manifest) == (
         [
-            "1.11.0",
-            "1.11.1",
-            "1.11.2",
-            "1.11.3",
-            "1.11.4",
-            "1.11.5",
-            "1.11.6",
-            "1.11.7",
-            "1.11.8",
-            "1.11.9",
             "1.12.0",
             "1.12.1",
             "1.12.2",
@@ -252,8 +245,11 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.12.11",
             "1.12.12",
             "1.12.13",
+            "1.13.0",
+            "1.13.1",
+            "1.13.2",
         ],
-        ["1.10.0", "1.10.1", "1.10.2"],
+        [f"1.11.{patch}" for patch in range(10)],
     )
 
 
@@ -2574,8 +2570,10 @@ def test_prepare_update_requires_human_review_for_minor_transition(
         )
 
 
-@pytest.mark.parametrize("version", ["1.13.0", "2.0.0"])
-def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: str) -> None:
+@pytest.mark.parametrize("version", ["1.12.0", "2.0.0"])
+def test_prepare_update_rejects_schema_one_minor_or_major_transition(
+    version: str, promotion_manifest: Path
+) -> None:
     """Legacy evidence cannot prove a chain across a semantic-version boundary."""
 
     module = load_script()
@@ -2588,7 +2586,7 @@ def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: st
 
     with pytest.raises(module.CompatibilityError, match="chain-aware evidence schema 2"):
         module.prepare_update(
-            manifest_path=MANIFEST,
+            manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=73,
             human_conclusions={version: "Synthetic reviewed conclusion."},
@@ -2596,23 +2594,23 @@ def test_prepare_update_rejects_schema_one_minor_or_major_transition(version: st
         )
 
 
-def test_prepare_update_rejects_nonadjacent_minor_transition() -> None:
+def test_prepare_update_rejects_nonadjacent_minor_transition(promotion_manifest: Path) -> None:
     module = load_script()
     evidence = {
         "schema_version": 2,
-        "version": "1.14.0",
+        "version": "1.13.0",
         "result": "compatible",
         "classification": "human-review-required",
-        "comparison_version": "1.12.6",
-        "tested_baseline_version": "1.12.6",
+        "comparison_version": "1.11.3",
+        "tested_baseline_version": "1.11.3",
     }
 
     with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
         module.prepare_update(
-            manifest_path=MANIFEST,
+            manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=73,
-            human_conclusions={"1.14.0": "Synthetic reviewed conclusion."},
+            human_conclusions={"1.13.0": "Synthetic reviewed conclusion."},
             root=PROJECT_ROOT,
         )
 
