@@ -65,6 +65,13 @@ flowchart LR
   provider/model and timeout/deadline compatibility signals. M7 remains established.
   Stable delivery and external reconciliation completed on 2026-10-09.
 
+- The v0.12.0 release candidate adds optional native ChatGPT authentication for
+  explicit local review while retaining default/custom API providers and strict
+  GitLab separation. It qualifies OCR1.13.0–1.13.2, preserves MR-context navigation
+  for optional governed tools, and refreshes compatible dependency/security pins.
+  M7 remains established. Repository preparation is complete; protected stable
+  publication and external reconciliation are pending.
+
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M8 and do not reopen M2.

@@ -57,7 +57,7 @@ The no-release qualification used official OCR 1.9.5 with SHA-256 `459d3986e59fe
 
 ## M7 governed federation and stage-aware DLP evidence
 
-The v0.11.4 targeted qualification uses checksum-verified OCR 1.13.2, a
+The v0.12.0 targeted qualification uses checksum-verified OCR 1.13.2, a
 synthetic MR record and a controlled model peer: actual internal evidence MCP
 `summary` and direct `get` return the intent; the peer derives the tracker
 argument from that returned data; the production federation relay/gateway sends

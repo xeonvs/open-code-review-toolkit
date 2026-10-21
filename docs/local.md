@@ -37,6 +37,8 @@ protocol and model configuration continues to apply.
 With the native-auth version listed in the [compatibility policy](compatibility.md),
 local review can instead use OCR's optional native ChatGPT-plan authentication.
 This option requires POSIX ownership and permission checks (Linux or macOS).
+Use it on a trusted personal host; do not mount personal ChatGPT credentials in
+shared CI. GitLab and shared automation should use API authentication.
 Install the toolkit and checksum-verified OCR as described in the
 [installation guide](../README.md#install). OCR remains a separate executable.
 Authorize OCR from your normal user session:
@@ -84,6 +86,8 @@ silently substitute another model or effort after a provider rejection.
 
 Ordinary preflight and review never start login. OCR reuses its persistent
 `~/.opencodereview/auth/chatgpt` account/host store and owns refresh and locking.
+The active native OCR registration selects the account; manage account switching
+and sign-out through OCR, rather than editing or copying its authentication files.
 The toolkit links only that validated private directory into its temporary
 runtime HOME; it does not copy credentials or inherit the operator's OCR config.
 Session cleanup removes the private link and runtime config, preserving native
