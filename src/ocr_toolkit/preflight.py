@@ -15,6 +15,13 @@ import urllib.request
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
+from ocr_toolkit.local_chatgpt import (
+    LocalChatGPTError,
+    auth_mode,
+    native_store,
+    provider_entry,
+    require_supported_version,
+)
 from ocr_toolkit.provider_config import (
     HEADER_NAME_RE,
     ProviderConfigError,
@@ -29,18 +36,8 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "open-code-review-ci-preflight/1.0",
 }
-RECOMMENDED_OCR_VERSION = "1.12.13"
+RECOMMENDED_OCR_VERSION = "1.13.2"
 SUPPORTED_OCR_VERSIONS = (
-    "1.11.0",
-    "1.11.1",
-    "1.11.2",
-    "1.11.3",
-    "1.11.4",
-    "1.11.5",
-    "1.11.6",
-    "1.11.7",
-    "1.11.8",
-    "1.11.9",
     "1.12.0",
     "1.12.1",
     "1.12.2",
@@ -55,11 +52,21 @@ SUPPORTED_OCR_VERSIONS = (
     "1.12.11",
     "1.12.12",
     "1.12.13",
+    "1.13.0",
+    "1.13.1",
+    "1.13.2",
 )
 DEPRECATED_OCR_VERSIONS = (
-    "1.10.0",
-    "1.10.1",
-    "1.10.2",
+    "1.11.0",
+    "1.11.1",
+    "1.11.2",
+    "1.11.3",
+    "1.11.4",
+    "1.11.5",
+    "1.11.6",
+    "1.11.7",
+    "1.11.8",
+    "1.11.9",
 )
 # Retain the public constant as the recommended pin, not as the runtime acceptance policy.
 EXPECTED_OCR_VERSION = RECOMMENDED_OCR_VERSION
@@ -213,10 +220,10 @@ def validate_gitlab_access() -> None:
     _request_json(f"{api_root}/projects/{project_id_encoded}/merge_requests/{mr_iid}", headers)
 
 
-def validate_ocr_binary() -> None:
+def validate_ocr_binary(*, executable: str | None = None, announce: bool = True) -> str:
     """Verify that the external OCR binary has the supported release."""
 
-    executable = shutil.which("ocr")
+    executable = executable or shutil.which("ocr")
     if executable is None:
         raise PreflightError(
             "Open Code Review binary 'ocr' was not found on PATH; install it separately"
@@ -257,7 +264,9 @@ def validate_ocr_binary() -> None:
             f"Unsupported or unqualified Open Code Review version {version}; "
             f"recommended {RECOMMENDED_OCR_VERSION}"
         )
-    print(f"Open Code Review binary validated: {version}")
+    if announce:
+        print(f"Open Code Review binary validated: {version}")
+    return version
 
 
 def _models_url() -> str:
@@ -383,16 +392,28 @@ def main(*, local: bool = False) -> int:
     """Run all fail-fast checks."""
 
     try:
+        mode = auth_mode(os.environ, local=local)
         if local:
             try:
                 validate_local_context(os.environ)
             except ValueError as exc:
                 raise PreflightError(str(exc)) from exc
-        validate_ocr_binary()
+        if mode == "chatgpt":
+            provider_entry(os.environ)
+        version = validate_ocr_binary()
+        if mode == "chatgpt":
+            require_supported_version(version)
+            native_store(os.environ)
+            print(
+                "Local ChatGPT preflight: native auth store metadata validated; "
+                "OCR checks account, plan permission, and expiry on actual use. "
+                "No sign-in or model request was made."
+            )
+            return 0
         if not local:
             validate_gitlab_access()
         validate_llm_model()
-    except PreflightError as exc:
+    except (PreflightError, LocalChatGPTError) as exc:
         print(f"OCR preflight failed: {redact_sensitive(str(exc))}", file=sys.stderr)
         return 1
     return 0

@@ -11,9 +11,9 @@ This page routes readers to the canonical document for each topic. It does not r
 - [gitlab.md](gitlab.md)
 - [local.md](local.md)
 - [operations.md](operations.md)
-- [review-decision-flow.md](review-decision-flow.md)
 - [release.md](release.md)
 - [review-context.md](review-context.md)
+- [review-decision-flow.md](review-decision-flow.md)
 - [security.md](security.md)
 <!-- engineering-workflow:index:end -->
 

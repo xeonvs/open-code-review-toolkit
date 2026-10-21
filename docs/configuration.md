@@ -17,9 +17,10 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. |
-| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for review | None | LLM credential; never written into generated context or receipts. |
-| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for review | None | Exact model identifier passed to OCR and optional model validation. |
+| `OCR_LLM_AUTH_MODE` | Operator / configure, preflight and review | No | `api-key` | Closed selector: `api-key` preserves custom API providers in local and GitLab execution; `chatgpt` selects native OCR authentication only with explicit local execution. Only absence selects the default; an explicitly blank value is invalid. |
+| **`OCR_LLM_URL`** | Operator / configure and preflight | Yes for API review | None | Absolute credential-free HTTPS API root or compatible terminal inference endpoint; normalized through the shared provider owner. Rejected in ChatGPT mode. |
+| **`OCR_LLM_TOKEN`** | Operator secret / `ocr-ci configure` | Yes for API review | None | LLM credential; never written into generated context or receipts. Rejected in ChatGPT mode. |
+| **`OCR_LLM_MODEL`** | Operator / configure and preflight | Yes for API review; optional for ChatGPT | None | Exact model identifier passed to OCR and optional API model validation. In ChatGPT mode, unset lets OCR select its native default. |
 | `OCR_LLM_PROTOCOL` | Operator / `ocr-ci configure` | No | `openai` | Closed protocol: `openai`, `openai-responses`, or `anthropic`. |
 | `OCR_LLM_AUTH_HEADER` | Operator / configure and preflight | No | `Authorization` | Valid HTTP header name used for the bearer credential. |
 | `OCR_LLM_EXTRA_HEADERS` | Operator / configure and preflight | No | Empty object | JSON object of additional string headers; cannot duplicate the auth header. |
@@ -54,7 +55,19 @@ These are the complete supported toolkit-owned runtime inputs. `Required` is sco
 
 Since 0.8.0, `OCR_USE_ANTHROPIC` is not a compatibility alias. Any presence fails configuration with an explicit request to set `OCR_LLM_PROTOCOL=anthropic`, preventing a stale false value from silently selecting the default OpenAI protocol.
 
-`OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used only for the isolated OCR home and binary lookup; `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+`OCR_LLM_AUTH_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are redaction sentinels, not supported toolkit configuration. They stay in secret filtering so inherited process values cannot leak. `HOME` and `PATH` are process inputs used for the isolated OCR home and binary lookup; optional local ChatGPT mode also uses the original HOME to validate and link only OCR's native private auth directory. `LANG`, `LC_ALL`, and `TMPDIR` are child-process mechanics set by the toolkit rather than public configuration.
+
+### Optional local ChatGPT authentication
+
+`OCR_LLM_AUTH_MODE=chatgpt` is an optional alternative to API configuration for
+`preflight --local` and `review --local`, using the native-auth version qualified
+in the [compatibility policy](compatibility.md).
+GitLab and standalone `configure` reject this mode before native auth-store
+access. The default local API path is unchanged. Follow the
+[native OCR login and repeated-use instructions](local.md#llm-authentication).
+The toolkit does not implement OAuth, run login automatically, copy tokens or
+fall back to API billing. Its simplified preflight validates structural
+readiness; OCR owns actual grant, account, expiry and quota validation.
 
 ### Provider endpoint and completion-cap contract
 
@@ -142,7 +155,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 
 | Variable | Source / owner | Required | Exact default | Behavior |
 | --- | --- | --- | --- | --- |
-| **`OCR_VERSION`** | Example pipeline | Yes | `v` + manifest `recommended_version` | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
+| **`OCR_VERSION`** | Example pipeline | Yes | Qualified OCR pin for the example's toolkit release | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
 | **`OCR_SHA256`** | Example pipeline | Yes | Manifest SHA-256 for `opencodereview-linux-amd64` | Exact digest pinned alongside `OCR_VERSION` in the pipeline; must belong to the same release entry. |
 | **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.11.3` | Exact toolkit wheel release installed by the current published example. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
@@ -150,6 +163,10 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |
 | `OCR_MAX_TOOLS` | Example pipeline / OCR CLI | No | `0` | OCR uses template default `100`; `1-49` reports normalization to `50` but remains effectively `100`, and only a value above `100` raises the cap. |
 | `OCR_MAX_TOKENS_BUDGET` | Example pipeline / OCR CLI | No | `0` | Non-negative aggregate OCR token ceiling; `0` is unlimited. |
+
+Toolkit and OCR example pins advance together during release preparation. Use
+the manifest from the selected toolkit release; a newer development branch's
+recommendation may not be accepted by an older installed toolkit.
 
 During Draft qualification, install the toolkit artifact built from the reviewed
 commit. The example's toolkit-version pin becomes usable after the later stable
@@ -169,6 +186,13 @@ only credential names dynamically referenced by current registry v2.
 ## Governed MCP federation and trust boundary
 
 The toolkit always installs the fixed `ocr_toolkit_evidence` server and requires successful evidence use independently of federation. Operator configuration cannot remove, replace, rename, or shadow it. External upstreams are not passed through to OCR. The toolkit starts one bounded federation gateway, discovers and freezes each explicit allowlist, and exposes only `server__tool` aliases through a fixed private relay. The gateway owns schema and argument validation, URL origins, outbound and inbound DLP, byte/item/time/call budgets, cache accounting, and cleanup.
+
+The compact bootstrap preserves a count-only external capability summary under
+clipping and points to actual MCP definitions for the complete tool inventory.
+With selected MR metadata, it also supplies an opaque direct record pointer and
+guides OCR to read available intent before considering useful allowlisted tools.
+References in MR text remain untrusted data; they do not authorize tools or cause
+automatic acquisition. Configured tools may remain unused.
 
 `OCR_MCP_SERVERS_JSON` accepts only the closed version-2 registry. Server and tool names use ASCII letters, digits, underscore or hyphen, begin with a letter, and cannot contain `__`; aliases cannot collide with toolkit tools. Each tool policy defaults to `assurance: "advisory"`; use explicit `review_read` only after the operator has established that the tool is a bounded read whose successful use may remain approval-eligible. This assurance is operator policy, not a server annotation.
 
@@ -290,7 +314,7 @@ The GitLab `rules.json` example uses additive `include` entries for `.j2`, `.jin
 
 Evidence-store schema v4 retains v1-v3 readback and adds a distinct immutable policy snapshot without relabelling the forge diff base. Current structured decisions and guidance bind to the policy SHA while applicability remains bound to the unchanged base-to-head changed paths. Schema v3 keeps its historical base-bound policy semantics, schema v2 text-only records retain explicit legacy provenance, and schema v1 remains readable with unknown completeness. Framework plugins publish `framework.declaration`, `framework.resolution`, `framework.configuration`, and `template.inventory` scopes. Supported malformed or omitted manifests, source-item limits, configuration/template output limits, unsafe template object types, local Go replacements, and isolated provider failures all prevent a false completeness claim. Only `complete` coverage permits a missing positive fact to support an absence claim; absent, `partial`, `runtime-dependent`, and `unavailable` coverage mean unknown. Schema-v1 stores remain readable but are explicitly treated as having unknown completeness. The Ansible adopter recognizes static, plugin-based, and executable inventory sources without execution and models the recursive role `defaults/main/` and `vars/main/` loader surface verified for ansible-core 2.17 through the current 2.x loader contract. Unsupported later loader behavior or bounded read/parser failures degrade coverage rather than becoming false completeness.
 
-In `metadata` mode, GitLab MR acquisition normalizes only title, description, labels, optional source branch, and the reviewed source SHA into `review.merge_request_context/v1`. Values are complete-field bounded, NFC-normalized, control-stripped, redacted, source-head-bound invocation data. Raw values never enter bootstrap, argv, environment, diagnostics, or receipts; bootstrap lists only field statuses and toolkit-authored comparison guidance. In `off` mode none of those mutable text fields reaches normalization or persistence. OCR may treat matching intent as evidence against an assumption-dependent concern, contradictory intent as mismatch evidence, and missing intent as unknown. The source-branch hint is weaker than an explicit description and cannot establish rollout intent by itself. Metadata cannot authorize tools, policy, suppression, posting, or approval. In `enriched`, references are extracted only from admitted metadata and admitted discussion bodies; adapters authorize them before local handle minting. There is no generic URL, identifier, search, or provider-tool path in the model loop.
+In `metadata` mode, GitLab MR acquisition normalizes only title, description, labels, optional source branch, and the reviewed source SHA into `review.merge_request_context/v1`. Values are complete-field bounded, NFC-normalized, control-stripped, redacted, source-head-bound invocation data. Raw values never enter bootstrap, argv, environment, diagnostics, or receipts; bootstrap supplies an opaque record ID for direct `action=get` without `action=list`, field statuses, and toolkit-authored comparison guidance. In `off` mode none of those mutable text fields reaches normalization or persistence. OCR may treat matching intent as evidence against an assumption-dependent concern, contradictory intent as mismatch evidence, and missing intent as unknown. The source-branch hint is weaker than an explicit description and cannot establish rollout intent by itself. Metadata cannot authorize tools, policy, suppression, posting, or approval. In `enriched`, native context is acquired before OCR under protected policy; optional external reads remain model-directed through the separate governed federation. There is no arbitrary URL-fetch path or automatic reference acquisition in the model loop.
 
 For a validated GitLab merge-request profile, the review step writes exact closed receipt v9 only after cleanup and the inode-checked atomic publication transformation. It binds source/policy/target identities, actual target protection, author, context and legacy-policy state, DLP mode, per-source completeness, mandatory evidence, content-free federation reconciliation, stage-aware publication accounting and cleanup. Receipt v1-v8 cannot authorize current posting or approval. A present incomplete or invalid receipt is rejected before prior review state or findings are read; only a genuinely absent receipt selects the compatible receipt-less path. The receipt never stores queries, scopes, rejected text or locations, provider/context text, upstream IDs, URLs, commands, arguments, headers, credentials, tool inputs/results, or repository contents.
 

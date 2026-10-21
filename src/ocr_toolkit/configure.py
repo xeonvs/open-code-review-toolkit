@@ -9,6 +9,7 @@ from typing import Any
 from ocr_toolkit.common.language import resolve_review_language
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, update_ocr_config
+from ocr_toolkit.local_chatgpt import LocalChatGPTError, auth_mode, provider_entry
 from ocr_toolkit.provider_config import (
     ProviderConfigError,
     provider_config_from_environment,
@@ -39,37 +40,42 @@ def review_effort() -> str:
     return value
 
 
-def build_config_updates() -> dict[str, Any]:
+def build_config_updates(*, local: bool = False) -> dict[str, Any]:
     """Build OCR config updates from already-normalized CI environment."""
 
     review_language = resolve_review_language()
-    try:
-        provider = provider_config_from_environment()
-        llm_url = provider.require_inference_url()
-        llm_token = provider.require_token()
-        llm_model = provider.require_model()
-    except ProviderConfigError as exc:
-        raise OCRRuntimeConfigError(str(exc)) from exc
-    request_controls = provider.request_controls
-
     updates: dict[str, Any] = {
         "effort": review_effort(),
         "language": review_language,
-        "llm.url": llm_url,
-        "llm.auth_token": llm_token,
-        "llm.model": llm_model,
-        "llm.protocol": request_controls.protocol,
-        "llm.use_anthropic": request_controls.protocol == "anthropic",
-        "llm.auth_header": request_controls.auth_header,
         "telemetry.enabled": _bool_env("OCR_TELEMETRY_ENABLED"),
         "telemetry.content_logging": _bool_env("OCR_TELEMETRY_CONTENT_LOGGING"),
     }
-
-    if request_controls.extra_headers:
-        updates["llm.extra_headers"] = request_controls.extra_headers
-
-    if request_controls.extra_body is not None:
-        updates["llm.extra_body"] = request_controls.extra_body
+    try:
+        if auth_mode(os.environ, local=local) == "chatgpt":
+            updates.update({"provider": "chatgpt", "providers.chatgpt": provider_entry(os.environ)})
+        else:
+            provider = provider_config_from_environment()
+            request_controls = provider.request_controls
+            updates.update(
+                {
+                    # Native provider selection has precedence over llm.* in OCR.
+                    # An earlier direct OCR login/configuration cannot select it
+                    # implicitly when the toolkit's API mode is in force.
+                    "provider": "",
+                    "llm.url": provider.require_inference_url(),
+                    "llm.auth_token": provider.require_token(),
+                    "llm.model": provider.require_model(),
+                    "llm.protocol": request_controls.protocol,
+                    "llm.use_anthropic": request_controls.protocol == "anthropic",
+                    "llm.auth_header": request_controls.auth_header,
+                }
+            )
+            if request_controls.extra_headers:
+                updates["llm.extra_headers"] = request_controls.extra_headers
+            if request_controls.extra_body is not None:
+                updates["llm.extra_body"] = request_controls.extra_body
+    except (ProviderConfigError, LocalChatGPTError) as exc:
+        raise OCRRuntimeConfigError(str(exc)) from exc
 
     if _bool_env("OCR_TELEMETRY_ENABLED"):
         updates["telemetry.exporter"] = _env("OCR_TELEMETRY_EXPORTER")

@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.12.13",
-  "recommended_version": "1.12.13",
+  "monitoring_floor": "1.13.2",
+  "recommended_version": "1.13.2",
   "releases": [
     {
       "assets": [
@@ -2565,17 +2565,176 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.12.13",
       "status": "tested",
       "version": "1.12.13"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "9bc7717b680cb1620adbf449446f51fcae74537efbf00442a235e7e62099527d",
+          "size": 58237648
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ccc1f3c14395313332451cb1c6a7c91616a9f36058412ac502eada7394d3c5ec",
+          "size": 55249410
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "879d6eda27d136473f7af680ed5009516baf6236d8a0e5f5f14f3e6dececdd1f",
+          "size": 56479906
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "2d66c71eeea08730e1394cc39884b9644d301288443d644a02c2adebb0425b93",
+          "size": 53149858
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "595aafc7f072f1aaf531823121341886687aae9cd45a60323383c9db635d19d9",
+          "size": 57952256
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "070ecd268ce87c210f317102a597f9833a13d71de9afd28b52024e9f33358617",
+          "size": 53876224
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "bcdd7307d396ea20de2fdcf2db9a76b31daa5f33197719cad03c79e43008f7fb",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.0.json",
+      "evidence_sha256": "4847e0a1b59d300b9f2d03655ec4223e05b2384c2c2fd7e41412cb125669362a",
+      "human_conclusion": "Compatible after one local Linux amd64 Docker qualification and adjacent source review. Explicit isolated llm configuration keeps existing provider and credential selection; new ChatGPT auth and ACP are not adopted. Deleted-file diff lookup preserves reviewed path identity. Scan-only prompt overflow changes are unconsumed. New live grace evidence records the previous incomplete verdict; historical evidence remains immutable.",
+      "published_at": "2026-10-13T10:09:09Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.0",
+      "status": "tested",
+      "version": "1.13.0"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "e6542cf650c395d817a8e9d9e3fdcf15f3bad87a19e1e4d7a1fccbfddbba8050",
+          "size": 58241744
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "0813c8d41309e00018c28c94a6979280dfb53fae805cc927df0f530941d378b5",
+          "size": 55249426
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "3a8248b959177814fc38a1a6bb87742985103e839bfe4582d97ae30d969dd913",
+          "size": 56488098
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "9a847ffd8afc1b427dc7597c5804ea89d2173250d7ff4bdc58fd55cc315df35b",
+          "size": 53149858
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "a9a2b2148bd983be42b8f8fc1cd433e9100b620014408481495bf86cd64ea3ec",
+          "size": 57958912
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "0a4b06de9bab4b3944bd8b5a5a798740ad425fc6e08a2c7b1958ab5c0974578e",
+          "size": 53882368
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "0df2ece87aa8753826007a07dd5edb58617eb09847cacdde306d5cfc0dbc63aa",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.1.json",
+      "evidence_sha256": "c307a9a754a39c8a5d57c95f3a6ef1a02b31d21d464ee2e801ebf958c5f21f6e",
+      "human_conclusion": "Compatible after one local Linux amd64 Docker qualification. Shared grace-round task_done now completes coverage and retains review_limit_reached; a no-task_done negative control remains incomplete. Existing budget, schema, telemetry and numeric boundaries pass. Provider keys containing dots do not change toolkit explicit llm configuration; scan-only token-budget changes are unconsumed.",
+      "published_at": "2026-10-17T01:36:45Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.1",
+      "status": "tested",
+      "version": "1.13.1"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "68c275e99761309a602edfc0b1275f52c7bd2100473ad219c6344aa8c353cd1a",
+          "size": 58274544
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "097911c7181cb2ede7c6ae1eb0e706458b1ad89e06ae8a0591d783b221dce5e5",
+          "size": 55282482
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "c3c24f35bcc6544de7939c82559187f0aa2cc905c2e07eb24ef55239e7c1bc1a",
+          "size": 56524962
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "bd288b1f875b6cc737bf131400f82f77e9dba5432164dc362da2a9e762bc9274",
+          "size": 53215394
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "6b932a7ec7aa91cbb7725ebb8f082504e82824b2616cff42aaaf62a6fec5fe6b",
+          "size": 57991680
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "5eb7a574791784c89491dffca28c1eb2f8d7c6ca9d1a0582f73d6b0d436a95bf",
+          "size": 53914112
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "162188b690589925808ea406837078f23d05159853d120270d55524a6869febe",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.2.json",
+      "evidence_sha256": "e6e49ace7e96c9a7e0556b339ebf8d307034d6f21737e58acf113bda85428de7",
+      "human_conclusion": "Compatible after one local Linux amd64 Docker qualification. PowerShell, Nushell, shader and OpenTofu file selection and built-in Rules patterns pass with shared epoch validation. Existing review, provider, numeric, telemetry and MCP boundaries remain compatible. A separate real toolkit local review verifies optional native ChatGPT authentication with OCR 1.13.2, reconciled mandatory evidence use and DLP admission; default API and GitLab paths remain unchanged. Scan path normalization is unconsumed.",
+      "published_at": "2026-10-20T03:17:00Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.2",
+      "status": "tested",
+      "version": "1.13.2"
     }
   ],
   "runtime_support": {
     "deprecated_lines": [
-      "1.10"
+      "1.11"
     ],
     "qualified_patches_only": true,
-    "rejected_before": "1.10.0",
+    "rejected_before": "1.11.0",
     "supported_lines": [
-      "1.11",
-      "1.12"
+      "1.12",
+      "1.13"
     ]
   },
   "schema_version": 2,

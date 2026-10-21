@@ -3,14 +3,14 @@
 This index routes maintainers to canonical engineering owners without duplicating their rules.
 
 <!-- engineering-workflow:index:start -->
-- [execution_history/README.md](execution_history/README.md)
 - [evidence_migration_matrix.md](evidence_migration_matrix.md)
+- [execution_history/README.md](execution_history/README.md)
 - [m5_context_contracts.md](m5_context_contracts.md)
+- [m7_federation_contracts.md](m7_federation_contracts.md)
 - [project_principles.md](project_principles.md)
 - [review_signal_ownership.md](review_signal_ownership.md)
 - [test_evidence_matrix.md](test_evidence_matrix.md)
 - [toolkit_strategy.md](toolkit_strategy.md)
-- [m7_federation_contracts.md](m7_federation_contracts.md)
 <!-- engineering-workflow:index:end -->
 
 ## Direction and invariants
@@ -22,7 +22,8 @@ This index routes maintainers to canonical engineering owners without duplicatin
 
 ## Current contracts and evidence
 
-- [Bounded review-context contracts](m5_context_contracts.md) — current M5 context, DLP, provider, store, and approval boundaries.
+- [Bounded review-context contracts](m5_context_contracts.md) — historical M5 context foundation and its M7 supersession boundary.
+- [Governed federation contracts](m7_federation_contracts.md) — current registry-v2 gateway, protocol, DLP, accounting, and approval boundaries.
 - [Evidence migration matrix](evidence_migration_matrix.md) — historical evidence-contract replacements and parity requirements.
 - [Test evidence matrix](test_evidence_matrix.md) — coverage ownership for evidence domains and installed behavior.
 

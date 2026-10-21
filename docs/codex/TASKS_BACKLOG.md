@@ -15,7 +15,7 @@ private failure arguments add no telemetry exporter or model-profile capability.
 | --- | --- | --- |
 | M2 evidence gaps (BL-008) | Completed and removed | Demonstrated framework resolution, component ownership, scoped completeness, and first-class MCP delta projection ship through shared evidence contracts. |
 | M2 framework selection (BL-009) | Completed and removed | Bounded static Jinja2, Go web, Symfony/Twig, and React/Next providers ship with synthetic cross-provider validation and no second MCP. |
-| M2 milestone closure | Completed | Stable 0.5.0 delivery and external readback establish M2; BL-010 remains a conditional M7 extension. |
+| M2 milestone closure | Completed | Stable 0.5.0 delivery and external readback establish M2; BL-010 remains a conditional M8 extension. |
 | M3 generic external-MCP qualification (BL-011) | Completed and removed | Checksum-verified OCR 1.9.5, the production `ocr-ci review` path, a local model peer, and a real stdio MCP peer establish the documented direct-composition safe-use envelope and its claim limits. |
 | M3 provider examples (BL-013) | Removed | Direct provider examples over model-selected unrestricted arguments are not the target architecture; valid synthetic adapter qualification moves behind the BL-023 broker boundary. |
 | Same-session external-MCP annotation enforcement (#103) | Removed / not planned | M7 removed the direct-provider path. Server annotations remain untrusted metadata; operator-owned registry assurance and gateway controls own the current decision. |
@@ -37,12 +37,12 @@ M3 is established. BL-011 is complete and recorded above rather than retained as
 
 - **Status:** conditional
 - **Priority:** low
-- **Roadmap theme:** M3 External MCP hardening
-- **Dependencies:** Established native remote Streamable HTTP and stdio proxy fallback. The completed BL-011 safe-use envelope applies to any direct provider composition.
-- **Activation trigger:** A supported provider requires authorization-code OAuth rather than static environment-backed headers, and a reviewed stdio proxy is insufficient for pilot operations.
+- **Roadmap theme:** M8 Later and conditional work — federation authentication
+- **Dependencies:** Established M7 registry-v2 federation gateway and its bounded HTTPS transport. Authentication must preserve gateway admission and upstream tenant/object authorization; the historical BL-011 direct-composition envelope is not a current fallback.
+- **Activation trigger:** A reviewed HTTPS upstream requires authorization-code OAuth rather than static environment-backed headers, and the existing gateway authentication contract is insufficient for pilot operations.
 - **Goal:** Add a provider-neutral authentication lifecycle without placing long-lived OAuth material in repository content or OCR config; object authorization remains server-owned and separate.
 - **Scoped deliverables:** Define authorization-code plus PKCE, browser callback ownership, refresh/revocation, secure token persistence, tenant/resource binding, dynamic-client-registration policy, sanitized audit events, and provider conformance fixtures before selecting an implementation boundary.
-- **Acceptance criteria:** Tokens never enter argv, repository files, generated context, or logs; refresh/revocation and tenant changes fail closed; synthetic static-header and browser-OAuth fixtures preserve native HTTP and stdio fallback.
+- **Acceptance criteria:** Tokens never enter argv, repository files, generated context, or logs; refresh/revocation and tenant changes fail closed; synthetic static-header and browser-OAuth fixtures preserve registry-v2 gateway admission, bounded HTTPS transport, and upstream resource authorization without direct OCR passthrough.
 - **Exclusions:** Resource authorization by token presence, automatic reference discovery, writes, generic web access, or treating a permanent token as OAuth lifecycle support.
 - **Validation:** Threat-model review plus synthetic authorization, PKCE, callback, refresh, revocation, tenant mismatch, persistence-permission, redaction, and OCR integration cases.
 - **Release classification expectation:** `release-required` once public authorization behavior is selected.
@@ -133,7 +133,7 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Dependencies:** Stable provider-neutral core contracts and a funded non-GitLab use case. GitLab-first M5 does not depend on it.
 - **Activation trigger:** A named forge has an owner, synthetic fixtures, and explicit parity requirements for CI orchestration, positioning, deduplication, discussion ownership, and safe publication.
 - **Upstream overlap:** OCR reusable GitHub Action checkpoint ranges and Action/plugin capabilities cover only upstream execution surfaces. They do not provide toolkit forge acquisition, discussion, publication, or lifecycle parity, so the trigger and acceptance criteria remain unmet.
-- **Local-provider distinction:** The 0.10.0 Draft shares pure reporting and supplies immutable local input plus Markdown delivery. It adds no forge authentication, discussion commands, threads, suppression or approval; it is not completion or activation of this second-forge item.
+- **Local-provider distinction:** The local provider introduced in 0.10.0 shares pure reporting and supplies immutable local input plus Markdown delivery. It adds no forge authentication, discussion commands, threads, suppression or approval; it is not completion or activation of this second-forge item.
 - **Goal:** Add one coherent host adapter without leaking forge semantics into evidence or core result handling.
 - **Scoped deliverables:** The capability matrix covers authentication, diff positions, drafts, discussion acquisition, protected same-revision CI outcomes, provider-declared account classification, thread/reply structure, edit/version identity, anchors, resolved/stale state, pagination/snapshot mutation, ambiguous writes, permissions, and idempotency.
 - **Acceptance criteria:** Core remains provider-neutral, GitLab behavior does not regress, unsupported host capabilities fail or degrade explicitly rather than emulate unsafe parity, and the new host meets the approved lifecycle and security matrix.

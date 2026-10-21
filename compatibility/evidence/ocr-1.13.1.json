@@ -1,0 +1,301 @@
+{
+  "assets": [
+    {
+      "name": "opencodereview-darwin-amd64",
+      "sha256": "e6542cf650c395d817a8e9d9e3fdcf15f3bad87a19e1e4d7a1fccbfddbba8050",
+      "size": 58241744
+    },
+    {
+      "name": "opencodereview-darwin-arm64",
+      "sha256": "0813c8d41309e00018c28c94a6979280dfb53fae805cc927df0f530941d378b5",
+      "size": 55249426
+    },
+    {
+      "name": "opencodereview-linux-amd64",
+      "sha256": "3a8248b959177814fc38a1a6bb87742985103e839bfe4582d97ae30d969dd913",
+      "size": 56488098
+    },
+    {
+      "name": "opencodereview-linux-arm64",
+      "sha256": "9a847ffd8afc1b427dc7597c5804ea89d2173250d7ff4bdc58fd55cc315df35b",
+      "size": 53149858
+    },
+    {
+      "name": "opencodereview-windows-amd64.exe",
+      "sha256": "a9a2b2148bd983be42b8f8fc1cd433e9100b620014408481495bf86cd64ea3ec",
+      "size": 57958912
+    },
+    {
+      "name": "opencodereview-windows-arm64.exe",
+      "sha256": "0a4b06de9bab4b3944bd8b5a5a798740ad425fc6e08a2c7b1958ab5c0974578e",
+      "size": 53882368
+    },
+    {
+      "name": "sha256sum.txt",
+      "sha256": "0df2ece87aa8753826007a07dd5edb58617eb09847cacdde306d5cfc0dbc63aa",
+      "size": 572
+    }
+  ],
+  "classification": "human-review-required",
+  "classification_reasons": [
+    "release notes contain a material or ambiguous compatibility signal"
+  ],
+  "comparison_version": "1.13.0",
+  "contracts": {
+    "comment_arguments_probe": {
+      "comments_per_batch": 2,
+      "failure_arguments_preserved": true,
+      "intact_cases": [
+        "array",
+        "serialized",
+        "repaired"
+      ],
+      "repair_warning": true,
+      "result": "passed",
+      "suspect_batch_rejected": true
+    },
+    "comment_thinking_probe": {
+      "additive_field_preserved": true,
+      "posting_exposes_thinking": false,
+      "result": "passed"
+    },
+    "completion_cap_probe": {
+      "explicit": 4096,
+      "inherited": 16384,
+      "result": "passed",
+      "wire_field": "max_completion_tokens"
+    },
+    "language_rule_probe": {
+      "default_excluded_paths": [
+        "src/test/kotlin/scripts/Example.kts",
+        "test/parser.ml",
+        "src/test_helpers.py",
+        "src/WidgetTest.fs",
+        "node_modules/example/index.ts",
+        "dist/generated.js"
+      ],
+      "excluded_extensions": [
+        ".svh"
+      ],
+      "extensions": [
+        ".cjs",
+        ".cxx",
+        ".fs",
+        ".fsi",
+        ".fsx",
+        ".hxx",
+        ".j2",
+        ".jinja2",
+        ".kts",
+        ".mjs",
+        ".ml",
+        ".mli",
+        ".mm",
+        ".ps1",
+        ".pug",
+        ".pyi",
+        ".re",
+        ".rego",
+        ".rei",
+        ".sv",
+        ".v",
+        ".vh",
+        ".vhd",
+        ".vhdl"
+      ],
+      "m_routing": "matlab_and_objective_c",
+      "result": "passed",
+      "rule_source": "system_builtin",
+      "selected": 24
+    },
+    "numeric_cli_probe": {
+      "grace_rounds": {
+        "no_task_done": {
+          "completed": false,
+          "limit_warning": true
+        },
+        "task_done": {
+          "completed": true,
+          "limit_warning": true
+        }
+      },
+      "max_tokens_budget": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 1,
+            "input": 1,
+            "outcome": "accepted"
+          },
+          "omitted": {
+            "effective": "unlimited",
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 30000,
+            "input": 30000,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": "unlimited",
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-cli"
+      },
+      "max_tools": {
+        "cases": {
+          "invalid_below": {
+            "effective": null,
+            "input": -1,
+            "outcome": "rejected"
+          },
+          "minimum": {
+            "effective": 100,
+            "input": 50,
+            "outcome": "accepted"
+          },
+          "minimum_minus_one": {
+            "effective": 100,
+            "input": 49,
+            "outcome": "normalized",
+            "reported_normalization": 50
+          },
+          "omitted": {
+            "effective": 100,
+            "input": null,
+            "outcome": "accepted"
+          },
+          "representative": {
+            "effective": 101,
+            "input": 101,
+            "outcome": "accepted"
+          },
+          "sentinel": {
+            "effective": 100,
+            "input": 0,
+            "outcome": "accepted"
+          }
+        },
+        "maximum": null,
+        "owner": "ocr-template-or-higher-cli",
+        "reported_minimum": 50
+      },
+      "result": "passed"
+    },
+    "optional_capabilities": [
+      "llm_result_identity",
+      "per_run_model_override",
+      "per_run_provider_override",
+      "review_effort",
+      "semantic_grouping"
+    ],
+    "preview_probe": {
+      "format": "json",
+      "path": "example.py",
+      "result": "passed",
+      "session_store_created": false
+    },
+    "provider_directory_preview_probe": {
+      "result": "passed",
+      "tracked_provider_directory": "reported"
+    },
+    "reasoning_effort_probe": {
+      "efforts": [
+        "unset",
+        "none",
+        "high"
+      ],
+      "protocols": [
+        "openai",
+        "openai-responses"
+      ],
+      "provider_acceptance": "not-tested",
+      "responses_siblings_preserved": true,
+      "result": "passed"
+    },
+    "required_review_flags": [
+      "--audience",
+      "--background-file",
+      "--effort",
+      "--format",
+      "--from",
+      "--max-tokens-budget",
+      "--max-tools",
+      "--preview",
+      "--rule",
+      "--to"
+    ],
+    "result_contract_probe": {
+      "additive_fields_allowed": true,
+      "comment_fields": [
+        "category",
+        "content",
+        "end_line",
+        "existing_code",
+        "path",
+        "severity",
+        "start_line",
+        "thinking"
+      ],
+      "manifest_schema": "ocr.run-manifest/v1",
+      "normalized_outcome": "clean",
+      "result": "passed"
+    },
+    "review_budget_probe": {
+      "budget": 30000,
+      "completed": 2,
+      "failed_budget": 1,
+      "grouping_requests": 0,
+      "grouping_strategy": "per_file",
+      "partial_findings_preserved": true,
+      "result": "passed",
+      "selected": 3
+    },
+    "semantic_grouping_probe": {
+      "default_effort": "medium",
+      "files": 4,
+      "filter_requests": 1,
+      "grouping_completion_cap": 16384,
+      "grouping_requests": 1,
+      "main_requests": 3,
+      "prior_finding_semantics": "filter_survivors_as_confirmed",
+      "recheck_instruction_requests": 3,
+      "result": "passed",
+      "review_rounds": 2
+    },
+    "small_change_grouping_probe": {
+      "grouping_requests": 0,
+      "high_churn": "per_file",
+      "low_churn": "bundle_all",
+      "result": "passed",
+      "single_file": "per_file",
+      "threshold_files": 4
+    },
+    "target_rule_selection_probe": {
+      "format": "json",
+      "from_to_unchanged": true,
+      "path": "synthetic-template.ocrfixture",
+      "result": "passed",
+      "source_exclusion": "unsupported_ext",
+      "target_selected": true
+    },
+    "version_probe": "passed"
+  },
+  "published_at": "2026-10-17T01:36:45Z",
+  "release_changes": "## 🐛 Bug Fixes\n\n- fix(config): fix bad config for providers or keys that cotains dots (self-defined) (#1661)\n- fix(scan): surface llmloop token-budget stop on the run-level state (#1745)\n- fix(frontend): update vulnerable development dependencies (#1751)\n- fix(llmloop): count a grace-round task_done as completion (#1678)\n- fix(vscode): update vulnerable development dependencies (#1746)\n\n## Other Changes\n\n- chore(deps): bump google.golang.org/grpc to v1.83.2 (#1205)\n\n**Full Changelog**: https://github.com/alibaba/open-code-review/compare/v1.13.0...v1.13.1",
+  "release_notes_sha256": "24b2841fe0b6fa5e890e39280b88ee05994bde549b783023a0305cb9b9702d65",
+  "result": "compatible",
+  "schema_version": 3,
+  "tag": "v1.13.1",
+  "tested_baseline_version": "1.12.13",
+  "upstream_repository": "alibaba/open-code-review",
+  "version": "1.13.1"
+}
