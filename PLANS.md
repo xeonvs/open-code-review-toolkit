@@ -72,8 +72,8 @@ before handoff or commit. Completed stable plans are indexed in
 | WQ-03a | REQ-009–010 | Latest engineering-workflow report; backlog/diagrams/status/user-doc audit and necessary reviewed corrections | done |
 | WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | done |
 | WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | done |
-| WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | in_progress |
-| WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | pending |
+| WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | done |
+| WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | in_progress |
 | WQ-07 | REQ-008 | Release metadata/epoch/Towncrier/notes/archive, draft release PR, checks, protected merge | pending |
 | WQ-08 | REQ-008 | Registry/provenance/install jobs and immutable six-asset Release/receipt API readback, workflow issue closure and milestone closure | pending |
 | WQ-09 | REQ-008 | One documentation-only reconciliation PR, dev verification, clean synchronized main | pending |
@@ -132,14 +132,22 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   found only the stale validation sentence corrected above; no runtime or
   trust-boundary finding remains. The single full quality run passed privacy,
   Ruff, mypy and Bandit, and1875tests+341subtests with2skips and86.18% coverage,
-  but its installed-policy test exposed bootstrap budget regression. The context
-  worker is removing duplicated prose without increasing2300chars or weakening
-  installed assertions; rerun only affected context/installed tests afterward.
+  but its installed-policy test exposed bootstrap budget regression. The bounded
+  correction and affected test results are recorded below.
 - All four remaining coverage floors passed from the same collected full-run
   data for unchanged boundary modules:86/82/85/86. No full suite rerun.
 - The feature retains the published example pair toolkit0.11.3/OCR1.12.13;
   release preparation will advance both pins/checksum together to0.11.4/1.13.2.
   This avoids installing an older toolkit that rejects a newly recommended OCR.
+- Bootstrap correction completed: representative MR+policy+guidance renders
+  2298chars without truncation, with protected pointer and authority limits.
+  24 affected context and real installed wheel/sdist tests passed (exit0);
+  formatting/lint and final delta review are clean. The full local wrapper was
+  run once and its one failure is now resolved by affected-boundary checks;
+  final-head CI will prove the entire current tree. No duplicate full local run.
+- Independent aggregate review and final correction review are complete; no
+  concrete finding remains. All earlier feature commits are signed and logical;
+  final tree/history secret scan and completed feature push follow next.
 - Delegation: `ocr_0114_harness` owns qualification scripts/tests and its narrow
   development subsection; `context_0114` owns bootstrap/context docs/tests and
   targeted integration; `workflow_0114` owns report-first instruction audit.
@@ -155,5 +163,5 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   issue/milestone closure and protected external reconciliation. Feature merge or
   local green alone is not completion.
 - Post-close delivery: none; publication and reconciliation remain in scope.
-- Resume Point: WQ-04a/WQ-05 — integrate reviewed logical changes and compatible
-  dependency updates, then run the single full quality gate and aggregate review.
+- Resume Point: WQ-06 — sign the final bounded-bootstrap correction, scan the
+  final tree/history, push the completed feature and create its draft PR.
