@@ -67,7 +67,7 @@ flowchart LR
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
-- M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M7 and do not reopen M2.
+- M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M8 and do not reopen M2.
 - M4 is established through independently verified v0.6.0 artifacts and later protected-target identity improvements. M5 consumes but does not reopen its policy boundary.
 - M5's foundation remains established for GitLab discussions, remediation, CI outcomes and local handles. M7 policy v4 removes new references; v1-v3 references remain parse-only migration input and never execute.
 - The completed M6 BL-017 audit maps the versioned toolkit receipt, privacy-safe normalized token buckets, reconciled MCP/evidence/federation counts, and OCR grouping/round telemetry to their existing owners and concludes `no-new-layer`. Receipt v9 adds federation and stage-aware DLP accounting without creating telemetry.

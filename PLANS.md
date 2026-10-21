@@ -49,14 +49,23 @@ before handoff or commit. Completed stable plans are indexed in
   draft feature PR → protected merge → verified TestPyPI development → separate
   draft release PR → protected merge → stable publication/readback → milestone
   closure → one no-release documentation closure PR → clean synchronized main.
+- REQ-009: verify current engineering-toolkit installation and repository
+  instructions through the latest skill's report-first path; apply necessary
+  reviewed instruction/documentation improvements without replacing local release
+  ownership. Use tgrep appropriately, delegate independent tasks, split logical
+  commits, review each before commit and review the aggregate final diff.
+- REQ-010: review all backlog, diagrams, milestone/status owners and user
+  documentation for consistency with implementation and this release; correct
+  substantive findings while preserving historical receipts and established M7.
 
 #### Ordered work queue and verification
 
 | Queue | Requirements | Work and acceptance | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-008 | Milestone, signed plan commit, staged/tree/history Gitleaks and plan-only push | in_progress |
-| WQ-02 | REQ-001–003 | Source review, epoch/probe changes and focused adversarial tests | pending |
-| WQ-03 | REQ-005–006 | Bootstrap navigation, bounded clipping and operator documentation | pending |
+| WQ-01 | REQ-008 | Milestone, signed plan commit, staged/tree/history Gitleaks and plan-only push | done |
+| WQ-02 | REQ-001–003 | Source review, epoch/probe changes and focused adversarial tests | in_progress |
+| WQ-03 | REQ-005–006 | Bootstrap navigation, bounded clipping and operator documentation | in_progress |
+| WQ-03a | REQ-009–010 | Latest engineering-workflow report; backlog/diagrams/status/user-doc audit and necessary reviewed corrections | done |
 | WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | pending |
 | WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | pending |
 | WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | pending |
@@ -82,9 +91,27 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   report a local blocker rather than switching environments.
 - Long commands keep private bounded logs, process identities and terminal exit
   status. Clean only owned resources. No duplicate published-artifact installs.
-- Latest validation: planning inspection only; Docker local socket available;
-  configured signing key present. No implementation or qualification yet.
-- Milestone/issues/PRs and validation receipts will be updated at their owning stage.
+- Latest validation: plan staged/tree/history Gitleaks passed; signed plan commit
+  `a5c2cf6` pushed. Milestone v0.11.4 is number 19. Docker local socket available;
+  configured signing key present. No binary qualification yet.
+- Engineering audit: installed/distributed/source skill 0.10.0 agree; mandatory
+  instruction contract v3 valid. Historical target version stamp alone does not
+  warrant generic migration. tgrep-search skill 1.0.3 current; working tgrep
+  1.2.3 used for narrow non-indexed searches, rg for current-file fallback.
+- Documentation audit: corrected conditional extension/authentication ownership
+  to M8, removed obsolete direct-passthrough/OAuth fallback and draft wording,
+  refreshed two managed indexes and the M7 contract map. Architecture/status
+  diagrams otherwise match code; M7 stays established. Navigation and instruction
+  checks passed; independent scoped review found no doc/context issue.
+- Harness focused validation: 175 tests, formatting/lint and manifest readback
+  pass. Independent review exposed frozen-epoch fresh execution ambiguity;
+  explicit early rejection now preserves readback-only history without selecting
+  old behavioral probes. Binary qualification of 1.13.0 passed in local Docker;
+  remaining candidates are running in the same owned container.
+- Delegation: `ocr_0114_harness` owns qualification scripts/tests and its narrow
+  development subsection; `context_0114` owns bootstrap/context docs/tests and
+  targeted integration; `workflow_0114` owns report-first instruction audit.
+  Root owns shared plan/state, source integration, qualification and delivery.
 
 #### Fidelity, closure and resume
 
@@ -96,5 +123,5 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   issue/milestone closure and protected external reconciliation. Feature merge or
   local green alone is not completion.
 - Post-close delivery: none; publication and reconciliation remain in scope.
-- Resume Point: WQ-01 — create milestone, scan and sign the plan-only commit,
-  then push it. Implementation begins only afterward.
+- Resume Point: WQ-02/WQ-03 — integrate independent harness/context slices;
+  root prepares Docker and bounded upstream source review while workers execute.
