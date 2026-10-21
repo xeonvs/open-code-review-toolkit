@@ -1,3 +1,35 @@
+## 0.12.0 - 2026-10-21
+
+### 🚀 Features
+
+- Allow standalone local reviews to opt into OCR's native ChatGPT-plan authentication while preserving custom API providers as the default. Reuse OCR's private persistent login state through an isolated runtime home, reject ChatGPT mode in GitLab, and check local structural readiness without automatic login or API billing fallback. ([#245](https://github.com/xeonvs/open-code-review-toolkit/issues/245))
+
+### 🐛 Bug Fixes
+
+- Keep direct navigation to admitted merge-request intent and external-tool availability visible in the compact evidence bootstrap, including when detailed context is clipped. External tools remain optional and governed by the existing registry, DLP and approval controls. ([#239](https://github.com/xeonvs/open-code-review-toolkit/issues/239))
+
+### 🛠 Maintenance
+
+- Target checksum-verified Open Code Review 1.13.2 after qualifying 1.13.0 through 1.13.2. ([#242](https://github.com/xeonvs/open-code-review-toolkit/issues/242))
+- Refresh compatible MCP SDK 2.x, HTTPX2, development-tool and pinned GitHub Action versions while preserving locked installation, mandatory evidence, governed federation and release authorization boundaries. ([#243](https://github.com/xeonvs/open-code-review-toolkit/issues/243))
+
+### 🧩 Rules
+
+- The recommended OCR adds built-in review selection and Rules for PowerShell (`.ps1`, `.psm1`, `.psd1`), Nushell (`.nu`), shaders (`.glsl`, `.hlsl`, `.wgsl`, `.metal`) and OpenTofu (`.tofu`). Qualification verifies the exact extension and built-in pattern contracts. ([#242](https://github.com/xeonvs/open-code-review-toolkit/issues/242))
+
+### Security
+
+- Raise the certifi minimum to 2026.10.19 and update the locked trust store to remove compromised CA trust. Update CI to uv 0.13.4 and PyPI publishing action 1.14.3 for their security fixes. Rebuild existing installed environments to receive the corrected trust store; supported Python versions remain unchanged. ([#243](https://github.com/xeonvs/open-code-review-toolkit/issues/243))
+
+### Deprecations
+
+- Qualified OCR 1.11.x versions now emit a deprecation warning as the rolling window advances to supported 1.12.x and 1.13.x lines. Upgrade to the recommended qualified OCR 1.13.2. ([#242](https://github.com/xeonvs/open-code-review-toolkit/issues/242))
+
+### Removals
+
+- OCR 1.10.x is no longer accepted by preflight under the documented rolling support policy. Replace older pins with a checksum-verified qualified patch from the current support window; OCR 1.13.2 is recommended. ([#242](https://github.com/xeonvs/open-code-review-toolkit/issues/242))
+
+
 ## 0.11.3 - 2026-10-09
 
 ### 🐛 Bug Fixes
