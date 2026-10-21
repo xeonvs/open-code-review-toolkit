@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.12.0 — OCR 1.13.2, external-tool context and optional local ChatGPT auth
 
-Status: repository complete; external delivery pending
+Status: completed stable delivery; external reconciliation verified
 - **Release classification:** release-required
 - **Target stable version:** 0.12.0; next development line 0.13.0
 - **Tracked issues:** #239, #240, #241, #242, #243, #245 in milestone v0.12.0
@@ -14,6 +14,7 @@ Status: repository complete; external delivery pending
 - **Feature merge:** `8e760ae7e0b16ab7cb8bc37d060f035a55533a72`
 - **Release branch:** `release/v0.12.0`
 - **Repository preparation date:** 2026-10-21
+- **External reconciliation date:** 2026-10-21
 
 ### Archived release plan — handoff snapshot
 
@@ -295,12 +296,42 @@ patch target. Final-head protected CI remains mandatory.
 
 ### External delivery and reconciliation
 
-Pending protected release PR review/merge, stable TestPyPI/PyPI publication,
-provenance and supported-Python verification, annotated tag, immutable six-asset
-GitHub Release and receipt readback. The release workflow alone closes tracked
-issues after receipt verification; milestone closure and one documentation-only
-reconciliation PR follow. No published artifacts have been downloaded or installed
-locally, and this snapshot claims no stable publication.
+[Release PR #246](https://github.com/xeonvs/open-code-review-toolkit/pull/246)
+passed final-head checks, including all three required Linux Python gates and
+both advisory macOS jobs, and merged as
+`597a994d9bdfc33ca07f03cb396c810584f15e67` from reviewed head
+`3cb2376eaae387360bf05a5b13d7fd59e5e91587` and protected base
+`8e760ae7e0b16ab7cb8bc37d060f035a55533a72`.
+
+[Release run 39626741288, attempt 2](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39626741288)
+completed successfully, including authorization, quality/security, deterministic
+builds and attestations, TestPyPI/PyPI publication, provenance and installed-runtime
+verification on Python 3.12, 3.13 and 3.14, and GitHub Release publication.
+The first attempt accepted the PyPI publication and verified distribution hashes,
+then PyPI's provenance API returned HTTP 503. The failed-jobs recovery retained
+the same authorized release identity and completed the remaining external gates.
+
+Provider API readback confirmed annotated tag `v0.12.0`, tag object
+`81c27c59c91a5c2a863fb62a017bfc232d428c57`, targets the release merge above.
+The [GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.12.0)
+(ID 419747281) is published and immutable, with exactly six assets: wheel, sdist,
+`runtime-requirements.txt`, `SHA256SUMS`, `artifact-hashes.json` and
+`release-receipt.json`. The receipt asset SHA-256 is
+`c53fce68957e0686490778d20fdaa2114f697543243fae10bda6dc9f00887496`.
+The workflow-owned issue receipt records the same digest. Successful CI owns
+artifact equality, registry provenance, installed-runtime and receipt readback
+checks; no published artifacts were downloaded or installed again locally.
+
+Issues #239, #240, #241, #242, #243 and #245 are closed by the release workflow
+after receipt readback. Milestone v0.12.0 (number 19) is closed with zero open issues.
+The source dependency vulnerability alert is resolved; remaining Scorecard alerts
+represent governance/history rather than a source fix in this release.
+
+Documentation-only closure branch `codex/close-v0.12.0` starts at the protected
+release merge above. It advances reconciliation to 0.12.0 and updates the current
+archive/index/roadmap while preserving the handoff snapshot, published artifacts,
+release authorization and development line 0.13.0. Its protected merge and normal
+development publication are the final repository completion gates.
 
 <a id="plan-toolkit-0-11-3"></a>
 
