@@ -57,17 +57,22 @@ before handoff or commit. Completed stable plans are indexed in
 - REQ-010: review all backlog, diagrams, milestone/status owners and user
   documentation for consistency with implementation and this release; correct
   substantive findings while preserving historical receipts and established M7.
+- REQ-011: check Python/runtime/development dependencies and CI tool pins for
+  current stable compatible updates and advisories; integrate agreed compatible
+  updates with a coherent lockfile before the single full quality run. Escalate
+  a major/contract-changing choice rather than silently expanding compatibility.
 
 #### Ordered work queue and verification
 
 | Queue | Requirements | Work and acceptance | Status |
 | --- | --- | --- | --- |
 | WQ-01 | REQ-008 | Milestone, signed plan commit, staged/tree/history Gitleaks and plan-only push | done |
-| WQ-02 | REQ-001–003 | Source review, epoch/probe changes and focused adversarial tests | in_progress |
-| WQ-03 | REQ-005–006 | Bootstrap navigation, bounded clipping and operator documentation | in_progress |
+| WQ-02 | REQ-001–003 | Source review, epoch/probe changes and focused adversarial tests | done |
+| WQ-03 | REQ-005–006 | Bootstrap navigation, bounded clipping and operator documentation | done |
 | WQ-03a | REQ-009–010 | Latest engineering-workflow report; backlog/diagrams/status/user-doc audit and necessary reviewed corrections | done |
-| WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | pending |
-| WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | pending |
+| WQ-04 | REQ-003–004 | Local Docker qualification, issues, promotion and verified local OCR replacement | done |
+| WQ-04a | REQ-011 | Compatible dependency/tool updates, coherent lockfile and advisory review | in_progress |
+| WQ-05 | REQ-005–007 | One targeted real MCP/gateway/model-peer integration with synthetic MR context; aggregate review and full quality | in_progress |
 | WQ-06 | REQ-007–008 | Signed completed feature, draft PR, exact-head required checks and all Linux gates, merge and dev publication | pending |
 | WQ-07 | REQ-008 | Release metadata/epoch/Towncrier/notes/archive, draft release PR, checks, protected merge | pending |
 | WQ-08 | REQ-008 | Registry/provenance/install jobs and immutable six-asset Release/receipt API readback, workflow issue closure and milestone closure | pending |
@@ -106,8 +111,18 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
 - Harness focused validation: 175 tests, formatting/lint and manifest readback
   pass. Independent review exposed frozen-epoch fresh execution ambiguity;
   explicit early rejection now preserves readback-only history without selecting
-  old behavioral probes. Binary qualification of 1.13.0 passed in local Docker;
-  remaining candidates are running in the same owned container.
+  old behavioral probes. All three binary candidates passed once in local Docker;
+  image identity and terminal exit 0 recorded in ignored qualification logs.
+- Issues #239 (context), #240–#242 (local qualifications) belong to milestone19.
+  Cumulative reviewed promotion recommends1.13.2 and advances the support window.
+  Darwin arm64 digest `097911c7181cb2ede7c6ae1eb0e706458b1ad89e06ae8a0591d783b221dce5e5`
+  verified against upstream checksums and promoted manifest; confirmed1.12.13
+  executable replaced atomically, temporary native executable removed.
+- Targeted real OCR/evidence MCP/federation tracker integration passed once
+  (1 test, controlled model peer). Context focused suite:62 passed,1 opt-in skip.
+  Promoted current-pin/environment suites:181 passed; generic rejection fixtures
+  now use frozen baseline rather than the moving current manifest.
+- Full local quality has not started; dependency inventory/update precedes it.
 - Delegation: `ocr_0114_harness` owns qualification scripts/tests and its narrow
   development subsection; `context_0114` owns bootstrap/context docs/tests and
   targeted integration; `workflow_0114` owns report-first instruction audit.
@@ -123,5 +138,5 @@ tools distinct. Linux Python 3.12 gates the parallel remaining CI matrix.
   issue/milestone closure and protected external reconciliation. Feature merge or
   local green alone is not completion.
 - Post-close delivery: none; publication and reconciliation remain in scope.
-- Resume Point: WQ-02/WQ-03 — integrate independent harness/context slices;
-  root prepares Docker and bounded upstream source review while workers execute.
+- Resume Point: WQ-04a/WQ-05 — integrate reviewed logical changes and compatible
+  dependency updates, then run the single full quality gate and aggregate review.

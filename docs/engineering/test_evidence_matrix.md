@@ -57,6 +57,14 @@ The no-release qualification used official OCR 1.9.5 with SHA-256 `459d3986e59fe
 
 ## M7 governed federation and stage-aware DLP evidence
 
+The v0.11.4 targeted qualification uses checksum-verified OCR 1.13.2, a
+synthetic MR record and a controlled model peer: actual internal evidence MCP
+`summary` and direct `get` return the intent; the peer derives the tracker
+argument from that returned data; the production federation relay/gateway sends
+the request to a controlled tracker. The test asserts the evidence action receipt,
+exact serialized argument and completed federation accounting. It proves context
+availability and routing, not natural model choice or private service behavior.
+
 | Requirement or boundary | Production owner and entry point | Required observable result | Evidence | Double boundary and claim limit | State |
 | --- | --- | --- | --- | --- | --- |
 | Registry v2 and mandatory internal evidence | `federation.registry.parse_registry`; `mcp_config.compose_mcp_servers` | closed registry, reserved-name/collision rejection, environment-backed credentials, and an unreplaceable independent evidence MCP | `test_mcp_config_v2.py`, admission tests, exact config round-trip/redaction tests, and installed wheel/sdist review | parser/config tests prove toolkit authority; they do not prove an upstream service's authorization | proven |

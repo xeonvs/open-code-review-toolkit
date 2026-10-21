@@ -14,6 +14,16 @@ and source branch. `enriched` additionally reads the protected-target policy and
 can acquire generic GitLab discussions, verified remediation threads, and exact
 same-revision CI outcomes before OCR starts.
 
+When metadata is selected, the compact bootstrap supplies an opaque MR-context
+record ID for a direct `ocr_toolkit_evidence(action=get, id=...)` read after the
+mandatory summary; no preceding list call is needed. Title and description stay
+in the private evidence record. Read available MR intent before considering
+relevant allowlisted external tools. The bootstrap preserves this navigation
+and external capability availability when optional detail is clipped; actual MCP
+tool definitions supply the full names and schemas. Tool use remains optional
+and model-directed, with no automatic reference lookup. Missing fields remain
+unknown, and degraded metadata cannot authorize acquisition.
+
 All selected text is untrusted. Acquisition, model projection, publication, and
 retention are separate stages with separate limits and DLP decisions. Context
 cannot add tools, authorize credentials, change review policy, suppress findings,

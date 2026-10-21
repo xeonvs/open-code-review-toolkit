@@ -86,7 +86,7 @@ flowchart TD
     acquire_ok -- Yes --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
     preview --> preview_ok{Preview accepted?}
     preview_ok -- No --> preview_error[OCR not started; bounded failure path]
-    preview_ok -- Yes --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay]
+    preview_ok -- Yes --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
     review --> exit{OCR exit code}
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>closed failure note may be posted]
     exit -- Zero --> finalize[Enter result finalization]
