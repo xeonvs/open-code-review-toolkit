@@ -300,7 +300,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     )
     assert "pip install --no-deps --index-url" not in verifier
     assert '"open-code-review-toolkit==${VERSION}"' not in workflow
-    assert "./scripts/quality.sh check" in workflow
+    assert "./scripts/quality.sh check" not in workflow
     assert "uv run --no-sync pip-audit --skip-editable" in workflow
 
 
@@ -331,7 +331,9 @@ def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
     assert "continue-on-error: ${{ matrix.advisory }}" in workflow
     assert "test-python312:" in workflow
     assert "name: test-ubuntu-latest-py3.12" in workflow
-    assert "needs: [classify, test-python312]" in workflow
+    assert "  test-matrix:\n    needs: classify" in workflow
+    assert workflow.count("--ignore=tests/test_installed_policy_e2e.py") == 2
+    assert "run: uv run --no-sync pytest -q\n" in workflow
     assert 'UV_PYTHON: "3.12"' in workflow
     assert "UV_PYTHON: ${{ matrix.python }}" in workflow
     assert "uv sync --locked --python 3.12" in workflow

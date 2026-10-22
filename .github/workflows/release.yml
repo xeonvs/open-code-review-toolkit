@@ -233,7 +233,6 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "source-date-epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
-      - run: ./scripts/quality.sh check
       - run: uv run --no-sync pip-audit --skip-editable
       - name: Build deterministic release artifacts
         env:

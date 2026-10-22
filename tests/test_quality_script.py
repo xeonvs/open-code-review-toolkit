@@ -39,7 +39,7 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     assert "--cov-fail-under=85" in script
     assert script.count("coverage report --include=") == 4
     assert (
-        "uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85"
+        "uv run --no-sync pytest --ignore=tests/test_installed_policy_e2e.py --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85"
         in workflow
     )
     assert workflow.count("coverage: true") == 1

@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      docs_only: ${{ steps.paths.outputs.docs_only }}
+      development_only: ${{ steps.paths.outputs.development_only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,13 +28,13 @@ jobs:
           BASE: ${{ github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
-          python scripts/docs_only.py --base "$BASE" --head "$HEAD"
+          python scripts/docs_only.py --base "$BASE" --head "$HEAD" --development
 
   build:
     name: verify-and-build-development
     needs: classify
     if: >-
-      needs.classify.outputs.docs_only != 'true' &&
+      needs.classify.outputs.development_only != 'true' &&
       !(startsWith(github.event.head_commit.message, 'Release v') &&
       contains(github.event.head_commit.message, '(#'))
     runs-on: ubuntu-latest
