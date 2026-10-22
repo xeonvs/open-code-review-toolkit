@@ -1,3 +1,20 @@
+## 0.12.1 - 2026-10-22
+
+### 🐛 Bug Fixes
+
+- Technical decimal, IPv4/CIDR, contextual date, and release-version literals no longer disappear as phone-like values from review findings or external-context admission; real contact values remain protected. ([#248](https://github.com/xeonvs/open-code-review-toolkit/issues/248))
+- `ocr-ci review` now reports a changed Git submodule pointer as an unsupported preview-stage outcome before model execution, while preserving the previous review and avoiding claims that ordinary files were reviewed in that run. ([#249](https://github.com/xeonvs/open-code-review-toolkit/issues/249))
+- Review diagnostics now distinguish stale merge-request revisions and unclassified OCR preview failures from completed reviews. Versioned receipts separate public finding or code-field omissions, private result cleanup, and external MCP admission outcomes without exposing rejected content. ([#250](https://github.com/xeonvs/open-code-review-toolkit/issues/250))
+- Publication and external-context DLP now accept proven unexpanded `{{ identifier }}` credential references and quoted empty YAML values without accepting literal or compound credential assignments. ([#251](https://github.com/xeonvs/open-code-review-toolkit/issues/251))
+- Review-context registration no longer treats fixed remediation state labels as protected human text, so unrelated findings containing those labels remain publishable. ([#252](https://github.com/xeonvs/open-code-review-toolkit/issues/252))
+- Optional finding code with generic, regex, or markup syntax can now be published when it matches the exact reviewed source and passes the existing replacement and output checks; unsupported code and mandatory prose retain conservative filtering. ([#253](https://github.com/xeonvs/open-code-review-toolkit/issues/253))
+
+### 🛠 Maintenance
+
+- Documentation-only pull requests now skip redundant Python, build, Bandit, and dependency-audit work only when a classifier from the trusted base proves the exact changed paths; all other changes keep full checks. Protected-main documentation pushes skip an unnecessary TestPyPI development build. ([#257](https://github.com/xeonvs/open-code-review-toolkit/issues/257))
+- Recommend checksum-verified Open Code Review 1.13.3 after compatibility qualification, including MCP tool pagination and empty code-comment handling. ([#258](https://github.com/xeonvs/open-code-review-toolkit/issues/258))
+
+
 ## 0.12.0 - 2026-10-21
 
 ### 🚀 Features
