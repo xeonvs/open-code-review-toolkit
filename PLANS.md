@@ -34,6 +34,7 @@ Edit the private `xeonvs/ocr-toolkit-site` landing page, latest-release block, v
 | REQ-005 | Astra High pre-commit review, Codex Security, Gitleaks, first-user QA | WQ-04, WQ-05 | done |
 | REQ-006 | Clean history and worktrees; no temporary QA or private material in commits; return toolkit checkout to current main | WQ-04, WQ-06 | in_progress |
 | REQ-007 | Clear, consistent agent instructions and affected project documentation | WQ-04, WQ-06 | in_progress |
+| REQ-008 | Free Cloudflare Pages address without the personal subdomain, former Worker deletion, site SEO guidance and live crawl files | WQ-06, WQ-07 | in_progress |
 
 ### Explicit Non-Goals
 
@@ -53,6 +54,7 @@ No custom domain, site account, form, analytics, raw operational report, private
 - The existing Astro site, synthetic promo visuals, approved cat source animation and separate sound are source material; only optimized derivatives enter the site repository.
 - `AGENTS.md`, `docs/development.md`, `docs/release.md`, and the installed engineering-workflow planning reference own repository process and closure.
 - The owner supplied the LinkedIn URL for the published film and approved the rounded shares and revised visual example in this conversation.
+- The live `https://open-code-review-toolkit.pages.dev/` response, Cloudflare Pages deployment readback, and merged site PR #2 are the current domain and crawl evidence.
 
 ### User Decisions And Answers
 
@@ -71,34 +73,36 @@ Toolkit `main` had a stable v0.12.0 Release and protected release workflow. The 
 | WQ-03 | REQ-004 | Cloudflare secrets and owner-provided site-only dispatch secret verified | `done` |
 | WQ-04 | REQ-005, REQ-006, REQ-007 | Separate Astra High review, completed Codex Security diff scans, Gitleaks, documentation audit | `done` |
 | WQ-05 | REQ-001, REQ-003, REQ-005 | Desktop/mobile inspection and two sequential four-persona QA rounds | `done` |
-| WQ-06 | REQ-002, REQ-004, REQ-006, REQ-007 | Merge checked PRs, verify Workers.dev deployment and release-refresh path, synchronize toolkit checkout with current main, close plan | `in_progress` |
+| WQ-06 | REQ-002, REQ-004, REQ-006, REQ-007 | Toolkit PR #254 and site PRs #1/#2 merged; Pages merge deploy and narrowed-token dispatch passed; review and merge the added toolkit link, then close | `in_progress` |
+| WQ-07 | REQ-008 | New Pages URL, canonical, sitemap, robots and social image verified live; site SEO route added; former Worker deleted and its address returns 404; archive handoff remains | `in_progress` |
 
 ### Locked Decisions
 
-Use Cloudflare Workers Static Assets on Workers.dev first. The site fetches latest release content during the build and deploys only the current `main` commit after verification. The first Worker needs a Cloudflare token with creation permission; narrow it to the existing Worker after publication. The owner-provided GitHub token belongs only in the toolkit Actions secret. QA screenshots remain outside both repositories.
+The initial Workers Static Assets publication served as a checked launch. The preferred free address is now `https://open-code-review-toolkit.pages.dev/` through Pages Direct Upload. At the owner's request, the former Worker was deleted after Pages verification. The site fetches latest release content during the build and deploys only the current `main` commit after verification. The GitHub Actions Cloudflare token now has Pages Write and Account Settings Read, without Workers Editor. The owner-provided GitHub dispatch token belongs only in the toolkit Actions secret. QA screenshots remain outside both repositories.
 
 ### Verification
 
-Run toolkit `scripts/quality.sh check`, Gitleaks, scoped diff and instruction/document checks; site `npm run check`, `npm run test`, strict latest-tag build, Wrangler dry run, public-path and secret scans; inspect desktop and 375 px/mobile rendering; run two sequential sets of four first-user personas. Require a separate Astra High pre-commit review, Codex Security diff scans, GitHub PR checks, and live Workers.dev readback. Test automatic merge deployment and validate release dispatch wiring without issuing a new product release.
+Run toolkit `scripts/quality.sh check`, Gitleaks, scoped diff and instruction/document checks; site `npm run check`, `npm run test`, strict latest-tag build, generated-output audit, public-path and secret scans; inspect desktop and 375 px/mobile rendering; run two sequential sets of four first-user personas. Require a separate Astra High pre-commit review, Codex Security diff scans, GitHub PR checks, and live Pages readback. Test automatic merge deployment and validate release dispatch wiring without issuing a new product release.
 
 ### Latest Validation Results
 
 - 2026-10-22: Site Astro check, three release-parser tests, strict v0.12.0 build, Wrangler dry run, staged public-content scan and Gitleaks passed. Toolkit full quality matrix and staged Gitleaks passed. YAML syntax and diff whitespace checks passed. `actionlint` was unavailable on the last local pass after a network timeout; GitHub Actions execution is the live workflow gate.
 - 2026-10-22: Four first-user browser personas ran in sequence, fixes were applied, then four fresh personas repeated the path. The 375 px and 320 px layouts had no horizontal overflow. On-site command copy took two actions for three personas; actual review still requires local setup. Headless automation did not establish video playback progress.
 - 2026-10-22: Astra High reviewed both diffs, found two notification edge cases that were fixed, and reported no remaining actionable findings. Both Codex Security diff scans completed with full changed-surface coverage and zero findings.
-- 2026-10-22: Both GitHub PRs are open. Site checks passed on its current documentation head; the toolkit follow-up's matrix is running. The temporary site deploy variable has been removed in the site branch before publication.
+- 2026-10-22: Toolkit PR #254 and site PRs #1/#2 merged. Site PR #2 had green build and secrets checks; the guarded merge-triggered Pages deployment and a subsequent v0.12.0 workflow dispatch both passed. Live Pages returns the v0.12.0 page, canonical, robots.txt, sitemap.xml, social image and media; an unknown path returns 404. At the owner's request, the former Worker was deleted after a brief 301 migration; its old address now returns 404. Cloudflare readback confirms the Pages deployment and narrowed token permissions.
+- 2026-10-22: A separate SEO agent compared GitLab MR review, local review and upstream OCR search intent, then added technical metadata and an explicit search-discovery route in the site agent instructions. Astra High precommit review reported no findings; the site Codex Security diff scan sealed with zero findings on executable/publication changes. Later instruction-only edits were independently reviewed. Search-engine ranking and indexing remain external outcomes.
 - 2026-10-22: Reachable history in both repositories passed Gitleaks; historical path and text searches found no task QA artifacts or private report path. Agent instruction contract, documentation navigation, and plan-lifecycle checks passed. The broader repo audit still labels the explicit archive successor link as an orphan despite the lifecycle and navigation checks accepting it; four prompt-risk heuristics are ordinary token references, not instruction overrides.
 
 ### Risks And Recovery
 
 - GitHub Free cannot enforce branch protection on the private site repository. The deploy workflow rechecks the current main tip and reruns gates; maintainers must still avoid direct pushes.
-- A missing latest release or tag mismatch must stop production build. If publication fails, keep the prior Worker version, inspect the failed GitHub job, and retry only from current reviewed main. Cloudflare rollback or a verified prior build is available after the first deployment.
+- A missing latest release or tag mismatch must stop production build. If publication fails, inspect the failed GitHub job and retry only from current reviewed main. Cloudflare Pages rollback or a verified prior build is available; the former Worker is not a recovery route.
 - GitHub dispatch token scope is externally configured. If release notification fails, inspect its fixed workflow and site dispatch receipt; rotate or revoke the dedicated token. Do not use the broader local GitHub login token as an Actions secret.
 - Do not revise historical archive records mechanically to silence a lifecycle checker; inspect their ownership and migration contract before any such change.
 
 ### Resume Point
 
-WQ-06: commit and push this reviewed documentation correction, wait for toolkit PR checks, then merge it without a new stable version. Merge the newly checked site PR to trigger Cloudflare deployment. Verify the live site, synchronize the local toolkit checkout to current `main`, then reconcile plan closure. The owner already approved first publication after these checks.
+WQ-06/WQ-07: review the added public README link and this plan update, merge the no-release documentation PR, then reconcile both final plans against live evidence, archive them through the installed lifecycle tool, and return both local checkouts to current `main`.
 
 ### Plan Fidelity Check
 
@@ -109,7 +113,7 @@ WQ-06: commit and push this reviewed documentation correction, wait for toolkit 
 ### Reconciliation Check
 
 - [x] Current implementation, review, and secret state match the queue above.
-- [ ] Reconcile final GitHub checks, merged SHAs, Cloudflare URL, and live readback.
+- [x] Reconcile final GitHub checks, merged SHAs, Cloudflare URL, and live readback.
 
 ### Closure Gate
 
@@ -119,8 +123,8 @@ WQ-06: commit and push this reviewed documentation correction, wait for toolkit 
 
 ### Post-Close Delivery
 
-Provide the verified Workers.dev URL, merged PRs, security and QA summary, and remaining factual limitations. No private report path or raw telemetry enters public delivery material.
+Provide the verified Pages URL, merged PRs, security and QA summary, and remaining factual indexing limitation. No private report path or raw telemetry enters public delivery material.
 
 ### Handoff Notes
 
-Continue only from WQ-06 and current GitHub check state. Both reviewed branches are open; deployment is not active yet. The site workflow removes the temporary variable and retains checked merge/dispatch triggers. Report actual live results rather than inferred success.
+Continue only from WQ-06/WQ-07 closure. Toolkit and site publication PRs are merged, the Pages deployment and narrowed-token dispatch passed, and the former Worker is deleted. The site workflow retains checked merge/dispatch triggers. The added public toolkit README link still needs its reviewed PR; then archive both plans.
