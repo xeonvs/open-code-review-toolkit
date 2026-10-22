@@ -72,10 +72,10 @@ flowchart LR
   M7 remains established. Protected stable publication and external
   reconciliation completed on 2026-10-21.
 
-- The v0.12.1 release candidate repairs bounded DLP, gitlink and review-outcome
-  behavior, qualifies OCR 1.13.3, and keeps documentation-only CI classification
-  on a trusted base. Feature validation and the development artifact readback are
-  complete; protected stable publication and external reconciliation are pending.
+- The v0.12.1 release repairs bounded DLP, gitlink and review-outcome behavior,
+  qualifies OCR 1.13.3, and keeps documentation-only CI classification on a
+  trusted base. Protected stable publication, external readback, and live site
+  refresh completed on 2026-10-22.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
