@@ -31,12 +31,21 @@ COUNTERS = (
     "cache_hits",
     "single_flight",
 )
+DLP_GATE_REASONS = ("forbidden", "invalid_text", "limit", "pii", "secret")
+DLP_CALL_GATES = ("arguments", "result")
+DLP_BOUNDARIES = frozenset(("schema", *DLP_CALL_GATES))
 
 
 class FederationError(ValueError):
     """Expose only one closed, content-free failure code."""
 
-    def __init__(self, code: str = "federation_failed") -> None:
+    def __init__(
+        self,
+        code: str = "federation_failed",
+        *,
+        boundary: str | None = None,
+        detector: str | None = None,
+    ) -> None:
         allowed = {
             "registry_invalid",
             "secret_missing",
@@ -56,6 +65,10 @@ class FederationError(ValueError):
             "tool_failed",
         }
         self.code = code if code in allowed else "federation_failed"
+        self.boundary = boundary if boundary in DLP_BOUNDARIES else None
+        self.detector = detector if detector in DLP_GATE_REASONS else None
+        if self.detector is None:
+            self.boundary = None
         super().__init__(self.code)
 
 

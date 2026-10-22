@@ -30,8 +30,8 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 | REQ-002 | #248 distinguishes technical numbers from phone PII | WQ-03 | done |
 | REQ-003 | #251 distinguishes proven pure credential references and empty YAML values from literals | WQ-03 | done |
 | REQ-004 | #253 publishes proven, safely rendered optional code syntax | WQ-04 | done |
-| REQ-005 | #249 gives an explicit truthful gitlink outcome | WQ-05 | pending |
-| REQ-006 | #250 reports stage-specific outcomes and disjoint DLP accounting | WQ-05, WQ-06 | pending |
+| REQ-005 | #249 gives an explicit truthful gitlink outcome | WQ-05 | done |
+| REQ-006 | #250 reports stage-specific outcomes and disjoint DLP accounting | WQ-05, WQ-06 | done |
 | REQ-007 | Documentation-only changes avoid unnecessary code/build work without bypassing required checks | WQ-07 | done |
 | REQ-008 | Feature commits, review, security scan, one local OCR review and protected merge are verified | WQ-01, WQ-08, WQ-09 | pending |
 | REQ-009 | v0.12.1 stable artifacts, immutable receipt, tracked issues and milestone are verified | WQ-10, WQ-11 | pending |
@@ -73,10 +73,10 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | WQ-02 | REQ-001 | Producer registry and production enrichment tests for protected versus structural values | done |
 | WQ-03 | REQ-002, REQ-003 | Narrow numeric/reference classifiers, whole-unit controls and ingress/publication tests | done |
 | WQ-04 | REQ-004 | Reviewed-source proof before projection and both-sink rendering tests | done |
-| WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | in_progress |
-| WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | pending |
+| WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | done |
+| WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | done |
 | WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | done |
-| WQ-08 | REQ-008 | Towncrier/docs, focused and full gates, aggregate changed-range review, staged/history secret scans | pending |
+| WQ-08 | REQ-008 | Towncrier/docs, focused and full gates, aggregate changed-range review, staged/history secret scans | in_progress |
 | WQ-09 | REQ-008 | Codex Security scan, one local OCR review, finding fixes, final push and checked feature merge | pending |
 | WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | pending |
 | WQ-11 | REQ-009 | Verify stable CI, registry hashes/provenance/installs, tag, immutable Release, issue receipts/milestone | pending |
@@ -98,6 +98,7 @@ Run focused production-boundary regression suites per issue, including immutable
 - 2026-10-22: #248/#251 narrow syntax classifiers pass 85 focused DLP, publication, ingress and federation tests, including mixed PII/secret/forbidden controls. Broader quality matrix remains pending.
 - 2026-10-22: Documentation-only classifier and required-check-preserving CI branches pass 18 focused classifier/workflow tests. Workflow changes themselves remain on the full validation path.
 - 2026-10-22: #253 source-bound optional-code proof passes 8 helper tests and 6 publication/renderer tests; opaque DLP retains independent mixed secret, PII, HTML-comment, destination and control checks. Broader quality matrix remains pending.
+- 2026-10-22: #249 immutable mode-160000 add/update/delete were qualified against installed OCR 1.13.2 and close before model launch with a typed status; #250 versioned pre-execution, federation, publication and posting contracts have focused stage/race/legacy tests. Full pytest completed with 2019 passed, five skipped and one stale CI-matrix assertion, which was corrected and retested; final quality gate remains pending.
 
 ### Risks And Recovery
 
@@ -109,7 +110,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Resume Point
 
-WQ-05: integrate immutable gitlink preview evidence and typed stale/preview handoff, then verify protected posting. Continue versioned diagnostic contracts in WQ-06.
+WQ-08: reconcile public contract documents and Towncrier fragments, run the full quality and secret gates, review the complete changed range, then perform Codex Security and one local OCR review before the final feature push.
 
 ### Plan Fidelity Check
 

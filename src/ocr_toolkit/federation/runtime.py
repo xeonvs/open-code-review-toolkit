@@ -69,7 +69,7 @@ class RunningGateway:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._main_task: asyncio.Task[Any] | None = None
         self._stop: asyncio.Event | None = None
-        self._error: str | None = None
+        self._error: FederationError | None = None
         self._receipt: dict[str, Any] | None = None
         self._gateway: Gateway | None = None
         self._closed = False
@@ -97,7 +97,7 @@ class RunningGateway:
             self._thread.join(20)
             if not self._thread.is_alive():
                 shutil.rmtree(self._directory)
-            raise FederationError(self._error)
+            raise self._error
 
     @property
     def secret_values(self) -> tuple[str, ...]:
@@ -121,7 +121,7 @@ class RunningGateway:
             asyncio.run(self._serve(registry, selected, forbidden, run_id))
         except BaseException:
             if self._error is None:
-                self._error = "cleanup_failed"
+                self._error = FederationError("cleanup_failed")
         finally:
             self._ready.set()
 
@@ -157,11 +157,11 @@ class RunningGateway:
             try:
                 await asyncio.wait_for(self._stop.wait(), RUN_SECONDS)
             except TimeoutError:
-                self._error = "timed_out"
+                self._error = FederationError("timed_out")
         except FederationError as error:
-            self._error = error.code
+            self._error = error
         except BaseException:
-            self._error = "gateway_unavailable"
+            self._error = FederationError("gateway_unavailable")
         finally:
             if listener is not None:
                 listener.close()
@@ -170,12 +170,12 @@ class RunningGateway:
             try:
                 await stack.aclose()
             except BaseException:
-                self._error = "cleanup_failed"
+                self._error = FederationError("cleanup_failed")
             if self._error is None:
                 try:
                     self._receipt = gateway.receipt()
                 except FederationError:
-                    self._error = "cleanup_failed"
+                    self._error = FederationError("cleanup_failed")
             self._ready.set()
 
     def _request_stop(self, *, cancel: bool = False) -> None:

@@ -335,7 +335,7 @@ def format_mcp_usage_summary(toolkit_metadata: Any) -> str:
 def publication_dlp_signal(
     publication: Any, *, carried_forward_comments: int = 0
 ) -> dict[str, Any] | None:
-    """Return one low-cardinality signal from an exact v8 DLP receipt."""
+    """Return one low-cardinality signal from an exact publication receipt."""
 
     state = publication_dlp_state(publication)
     if (
@@ -346,18 +346,30 @@ def publication_dlp_signal(
         or (state in {"disabled", "private-sanitized"} and carried_forward_comments != 0)
     ):
         return None
+    versioned = publication.get("schema") == "ocr.publication/v2"
     signal: dict[str, Any] = {
-        "schema_version": "ocr.publication-dlp-signal/v3",
+        "schema_version": (
+            "ocr.publication-dlp-signal/v4" if versioned else "ocr.publication-dlp-signal/v3"
+        ),
         "state": state,
     }
     if state == "disabled":
         return signal
-    signal["reason_counts"] = dict(publication["reason_counts"])
+    if versioned:
+        signal["private_sanitization"] = {
+            "fields": publication["private_sanitization"]["fields"],
+            "reason_counts": dict(publication["private_sanitization"]["reason_counts"]),
+        }
+    else:
+        signal["reason_counts"] = dict(publication["reason_counts"])
     if "source_attribution" in publication:
         signal["source_attribution"] = publication["source_attribution"]
     if state == "private-sanitized":
-        signal["sanitized_fields"] = publication["sanitized_fields"]
+        if not versioned:
+            signal["sanitized_fields"] = publication["sanitized_fields"]
     else:
+        if versioned:
+            signal["reason_counts"] = dict(publication["reason_counts"])
         signal.update(
             {
                 "retained": dict(publication["retained"]),
@@ -399,7 +411,7 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
                 "<summary>Private result sanitization signal</summary>",
                 "",
                 (
-                    f"Redacted {signal['sanitized_fields']} non-rendered result field(s). "
+                    f"Redacted {signal['private_sanitization']['fields'] if signal['schema_version'].endswith('/v4') else signal['sanitized_fields']} non-rendered result field(s). "
                     "The canonical published and approval-relevant review is unchanged."
                 ),
                 "",
@@ -426,7 +438,11 @@ def format_publication_dlp_details(signal: dict[str, Any] | None) -> str:
                 f"DLP-admitted subset: {retained['comments']} finding(s) and "
                 f"{retained['warnings']} warning(s). Omitted before posting: {omitted['comments']} "
                 f"finding(s), {omitted['warnings']} warning(s), and {omitted['fields']} "
-                "result field(s)."
+                + (
+                    "public field(s)."
+                    if signal["schema_version"].endswith("/v4")
+                    else "aggregate omitted-or-sanitized result field(s); historical field attribution unavailable."
+                )
             ),
             (f"{carried} matching finding(s) remain in the previous OCR review. {completeness}"),
             "",

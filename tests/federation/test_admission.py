@@ -62,3 +62,11 @@ def test_deep_and_oversized_arguments_fail_before_validation_work() -> None:
         arguments(value, ToolPolicy("echo", "synthetic__echo"), validator, MATCHER)
     with pytest.raises(FederationError, match="oversized"):
         arguments({"text": "x" * 32768}, ToolPolicy("echo", "synthetic__echo"), validator, MATCHER)
+
+
+def test_schema_dlp_rejection_has_closed_boundary_without_tool_attempt() -> None:
+    with pytest.raises(FederationError, match="dlp_rejected") as captured:
+        compile_schema({"type": "object", "description": "person@example.test"}, MATCHER)
+    assert captured.value.boundary == "schema"
+    assert captured.value.detector == "pii"
+    assert "person@example.test" not in str(captured.value)

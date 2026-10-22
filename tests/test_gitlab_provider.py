@@ -360,6 +360,17 @@ def test_gitlab_snapshot_rejects_identity_failures_through_real_https(
         gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
 
 
+def test_stale_snapshot_uses_typed_identity_bound_error(tmp_path: Path) -> None:
+    with _https_gitlab(tmp_path, "mismatch") as api_root:
+        with pytest.raises(gitlab.GitLabMergeRequestStale) as raised:
+            gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert raised.value.project_id == "7"
+    assert raised.value.merge_request_iid == "9"
+    assert SOURCE_SHA not in str(raised.value)
+    assert _GitLabHandler.requests == [("/api/v4/projects/7/merge_requests/9", "synthetic-token")]
+
+
 @pytest.mark.parametrize("state", ["merged", "closed"])
 def test_terminal_snapshot_is_identity_bound_before_skipping_target_reads(
     tmp_path: Path, state: str
@@ -1028,7 +1039,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 9,
+        "schema_version": 10,
         "review": {
             "source_sha": head,
             "policy_sha": policy,
@@ -1087,7 +1098,7 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
             },
         },
         "dlp": {"enabled": True},
-        "publication": {"state": "passed"},
+        "publication": {"schema": "ocr.publication/v2", "state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }

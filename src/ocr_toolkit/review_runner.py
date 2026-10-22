@@ -62,6 +62,7 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_text,
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.gitlinks import changed_gitlinks
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
@@ -109,8 +110,12 @@ from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
     GITLAB_MERGE_REQUEST_TERMINAL,
+    GITLINK_PREVIEW_UNSUPPORTED,
+    OCR_PREVIEW_STAGE,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
+    UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
     write_pre_execution_status,
@@ -122,6 +127,7 @@ from ocr_toolkit.provider_failure import (
     render_provider_diagnostics,
 )
 from ocr_toolkit.providers.gitlab import (
+    GitLabMergeRequestStale,
     GitLabMergeRequestTerminal,
     GitLabProviderError,
     acquire_review_snapshot,
@@ -289,6 +295,14 @@ class BackgroundQualificationRejected(ReviewRunnerError):
         self.actual = actual
         self.limit = limit
         self.unit = unit
+
+
+class BackgroundPreviewUnclassified(ReviewRunnerError):
+    """One bounded, unqualified pre-model preview diagnostic outcome."""
+
+    def __init__(self, diagnostic_count: int) -> None:
+        super().__init__("OCR background preview diagnostics could not be qualified")
+        self.diagnostic_count = max(1, min(diagnostic_count, 1024))
 
 
 def _install_termination_handlers() -> dict[int, object]:
@@ -1398,7 +1412,7 @@ def _publication_projection(
     code_proof: Callable[[dict[str, object]], OpaqueCodeProof] | None = None,
     debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return a DLP-safe result plus one exact v8 publication state."""
+    """Return a DLP-safe result plus one disjoint v2 publication state."""
 
     failures = _tool_failure_telemetry(payload.get("tool_calls"))
     if not dlp_enabled:
@@ -1408,7 +1422,7 @@ def _publication_projection(
             projected["tool_calls"] = _closed_tool_calls(
                 payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
             )
-        return projected, {"state": "disabled"}, False
+        return projected, {"schema": "ocr.publication/v2", "state": "disabled"}, False
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
@@ -1477,7 +1491,11 @@ def _publication_projection(
             payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
         )
     if not sink_reasons and not private_reasons and redacted_fields == 0:
-        return sanitized if failures.present else payload, {"state": "passed"}, False
+        return (
+            sanitized if failures.present else payload,
+            {"schema": "ocr.publication/v2", "state": "passed"},
+            False,
+        )
 
     try:
         original_projection = _canonical_result_projection(payload, failures=failures)
@@ -1521,27 +1539,36 @@ def _publication_projection(
     else:
         reasons = sink_reasons + private_reasons
         if not reasons:
-            return sanitized, {"state": "passed"}, False
+            return sanitized, {"schema": "ocr.publication/v2", "state": "passed"}, False
         return (
             sanitized,
             {
+                "schema": "ocr.publication/v2",
                 "state": "private-sanitized",
-                "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
-                "sanitized_fields": redacted_fields,
+                "private_sanitization": {
+                    "fields": redacted_fields,
+                    "reason_counts": {
+                        reason: private_reasons.get(reason, 0) for reason in DLP_REASONS
+                    },
+                },
                 "source_attribution": attribution,
             },
             False,
         )
-    reasons = sink_reasons + private_reasons
     publication: dict[str, object] = {
+        "schema": "ocr.publication/v2",
         "state": "publication-filtered",
         "source_attribution": attribution,
-        "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
+        "reason_counts": {reason: sink_reasons.get(reason, 0) for reason in DLP_REASONS},
+        "private_sanitization": {
+            "fields": redacted_fields,
+            "reason_counts": {reason: private_reasons.get(reason, 0) for reason in DLP_REASONS},
+        },
         "retained": {"comments": len(comments), "warnings": len(warnings)},
         "omitted": {
             "comments": omitted_comments,
             "warnings": omitted_warnings,
-            "fields": omitted_fields + redacted_fields,
+            "fields": omitted_fields,
         },
         "original": {
             "outcome": outcome.kind,
@@ -1899,7 +1926,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     try:
         text = stderr.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
-        raise ReviewRunnerError("OCR background preview returned invalid diagnostics") from exc
+        raise BackgroundPreviewUnclassified(1) from exc
     lines = [line for line in text.splitlines(keepends=True) if line.strip()]
     soft_matches = [
         match for line in lines if (match := BACKGROUND_SOFT_WARNING_RE.fullmatch(line)) is not None
@@ -1915,12 +1942,12 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
             or len(soft_matches) > 1
             or len(max_tools_matches) > 1
         ):
-            raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
+            raise BackgroundPreviewUnclassified(len(lines))
         advisory: OcrToolkitAdvisory | None = None
         if soft_matches:
             actual, limit = (int(value) for value in soft_matches[0].groups())
             if not 0 < limit < actual:
-                raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+                raise BackgroundPreviewUnclassified(len(lines))
             advisory = background_recommended_advisory(
                 actual=actual,
                 recommended=limit,
@@ -1929,7 +1956,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
         if max_tools_matches:
             requested, minimum, normalized = (int(value) for value in max_tools_matches[0].groups())
             if not 0 < requested < minimum or normalized != minimum:
-                raise ReviewRunnerError("OCR background preview returned invalid tool limits")
+                raise BackgroundPreviewUnclassified(len(lines))
             operator_notices = (
                 "Installed OCR reported "
                 f"--max-tools {requested} below its CLI minimum and a normalization target "
@@ -1943,7 +1970,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     if hard_character is not None:
         actual, limit = (int(value) for value in hard_character.groups())
         if not 0 < limit < actual:
-            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+            raise BackgroundPreviewUnclassified(len(lines))
         raise BackgroundQualificationRejected(
             reason=BACKGROUND_CHARACTER_LIMIT_REASON,
             actual=actual,
@@ -1953,14 +1980,14 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     if hard_file is not None:
         actual, limit = (int(value) for value in hard_file.groups())
         if not 0 < limit < actual:
-            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+            raise BackgroundPreviewUnclassified(len(lines))
         raise BackgroundQualificationRejected(
             reason=BACKGROUND_FILE_SIZE_LIMIT_REASON,
             actual=actual,
             limit=limit,
             unit="bytes",
         )
-    raise ReviewRunnerError("OCR background preview failed without a supported diagnostic")
+    raise BackgroundPreviewUnclassified(len(lines))
 
 
 def _qualify_review_background(
@@ -2019,10 +2046,30 @@ def _run_background_qualified_review(
     artifacts: EvidenceArtifacts,
     refs: ReviewRefs,
     identity: ReviewIdentity,
+    gitlink_detected: bool = False,
     state: ReviewRunState | None = None,
 ) -> tuple[int, BackgroundQualification]:
     """Run the model review only after installed OCR accepts its background."""
 
+    if gitlink_detected:
+        write_pre_execution_status(
+            artifacts.pre_execution_status,
+            PreExecutionStatus(
+                schema_version=STATUS_SCHEMA,
+                reason=GITLINK_PREVIEW_UNSUPPORTED,
+                diff_base_sha=refs.base,
+                source_sha=refs.head,
+                policy_sha=identity.policy_sha,
+                stage=OCR_PREVIEW_STAGE,
+            ),
+        )
+        if state is not None:
+            state.observe("preview", "failed")
+        print(
+            "OCR preview qualification: changed gitlink is unsupported; model review did not run",
+            file=sys.stderr,
+        )
+        return 2, BackgroundQualification()
     try:
         qualification = _qualify_review_background(
             production_args,
@@ -2041,6 +2088,7 @@ def _run_background_qualified_review(
                     diff_base_sha=refs.base,
                     source_sha=refs.head,
                     policy_sha=identity.policy_sha,
+                    stage=OCR_PREVIEW_STAGE,
                     actual=exc.actual,
                     limit=exc.limit,
                     unit=exc.unit,
@@ -2054,6 +2102,26 @@ def _run_background_qualified_review(
             "OCR background qualification: rejected by installed OCR "
             f"actual={exc.actual} limit={exc.limit} unit={exc.unit}; "
             "model review did not run",
+            file=sys.stderr,
+        )
+        return 2, BackgroundQualification()
+    except BackgroundPreviewUnclassified as exc:
+        if state is not None:
+            state.observe("preview", "failed")
+        write_pre_execution_status(
+            artifacts.pre_execution_status,
+            PreExecutionStatus(
+                schema_version=STATUS_SCHEMA,
+                reason=UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+                diff_base_sha=refs.base,
+                source_sha=refs.head,
+                policy_sha=identity.policy_sha,
+                stage=OCR_PREVIEW_STAGE,
+                diagnostic_count=exc.diagnostic_count,
+            ),
+        )
+        print(
+            "OCR preview qualification: diagnostics unclassified; model review did not run",
             file=sys.stderr,
         )
         return 2, BackgroundQualification()
@@ -2203,6 +2271,21 @@ def _prepare_policy_context(
                 expected_head=refs.head,
                 include_metadata=context_mode in {"metadata", "enriched"},
             )
+        except GitLabMergeRequestStale as exc:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=REVIEWED_REVISION_NO_LONGER_CURRENT,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=None,
+                    provider="gitlab",
+                    project_id=exc.project_id,
+                    change_id=exc.merge_request_iid,
+                ),
+            )
+            raise ReviewRunnerError("reviewed merge request revision is no longer current") from exc
         except GitLabMergeRequestTerminal as exc:
             lifecycle = exc.lifecycle
             write_pre_execution_status(
@@ -3074,6 +3157,12 @@ def _run_evidence_review(
         ]
         state.enter("preview")
         ocr_binary = native_binary or _resolve_ocr_binary()
+        try:
+            gitlink_detected = bool(
+                changed_gitlinks(GitRepositoryReader(Path.cwd()), refs.base, refs.head)
+            )
+        except RepositoryEvidenceError as exc:
+            raise ReviewRunnerError("changed gitlink evidence could not be qualified") from exc
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
@@ -3083,6 +3172,7 @@ def _run_evidence_review(
             artifacts=artifacts,
             refs=refs,
             identity=identity,
+            gitlink_detected=gitlink_detected,
             **({"state": state} if state.local or state.progress is not None else {}),
         )
     finally:

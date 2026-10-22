@@ -56,6 +56,15 @@ class GitLabMergeRequestTerminal(GitLabProviderError):
         self.lifecycle = lifecycle
 
 
+class GitLabMergeRequestStale(GitLabProviderError):
+    """The current MR head differs from the revision this run was assigned."""
+
+    def __init__(self, project_id: str, merge_request_iid: str) -> None:
+        super().__init__("GitLab merge-request head does not match the reviewed head")
+        self.project_id = project_id
+        self.merge_request_iid = merge_request_iid
+
+
 @dataclass(frozen=True, slots=True)
 class GitLabReviewSnapshot:
     """Bind one reviewed source head to the current target commit and protection state."""
@@ -270,7 +279,7 @@ def parse_merge_request_lifecycle(
     if str(merge_request_iid) != expected_merge_request_iid:
         raise GitLabProviderError("GitLab returned a different merge request")
     if source_sha != expected_head:
-        raise GitLabProviderError("GitLab merge-request head does not match the reviewed head")
+        raise GitLabMergeRequestStale(expected_project_id, expected_merge_request_iid)
     if state not in {"opened", "merged", "closed"}:
         raise GitLabProviderError("GitLab returned an invalid merge-request lifecycle state")
     return GitLabMergeRequestLifecycle(

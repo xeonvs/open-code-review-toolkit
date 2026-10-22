@@ -590,10 +590,18 @@ def test_federation_ingress_admits_technical_numbers_but_rejects_mixed_pii() -> 
     from ocr_toolkit.federation.admission import check_dlp
 
     matcher = ForbiddenMatcher.compile(())
-    check_dlp({"summary": "Listen on 127.0.0.1."}, matcher)
-    check_dlp({"summary": "Use 192.0.2.128/25.", "count": 123456789012345}, matcher)
+    check_dlp({"summary": "Listen on 127.0.0.1."}, matcher, boundary="result")
+    check_dlp(
+        {"summary": "Use 192.0.2.128/25.", "count": 123456789012345},
+        matcher,
+        boundary="result",
+    )
     with pytest.raises(FederationError, match="dlp_rejected"):
-        check_dlp({"summary": "Use 192.0.2.128/25; call +420.123.456.789"}, matcher)
+        check_dlp(
+            {"summary": "Use 192.0.2.128/25; call +420.123.456.789"},
+            matcher,
+            boundary="result",
+        )
 
 
 @pytest.mark.parametrize("value", ["List<Entry>", "(?P<entry>[a-z]+)", "<Widget enabled />"])

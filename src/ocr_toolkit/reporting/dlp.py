@@ -22,23 +22,52 @@ def format_dlp_admission(publication: Any) -> str:
         )
     if state == "passed":
         return "- DLP admission: passed"
+    versioned = isinstance(publication, dict) and publication.get("schema") == "ocr.publication/v2"
+    public_reasons = (
+        publication["reason_counts"]
+        if state == "publication-filtered"
+        else publication["private_sanitization"]["reason_counts"]
+        if versioned
+        else publication["reason_counts"]
+    )
     reasons = ", ".join(
-        f"{reason}: {count}"
-        for reason, count in sorted(publication["reason_counts"].items())
-        if count > 0
+        f"{reason}: {count}" for reason, count in sorted(public_reasons.items()) if count > 0
     )
     if state == "private-sanitized":
+        fields = (
+            publication["private_sanitization"]["fields"]
+            if versioned
+            else publication["sanitized_fields"]
+        )
         return (
-            f"- DLP admission: private fields sanitized ({publication['sanitized_fields']}); "
+            f"- DLP admission: private fields sanitized ({fields}); "
             f"admitted findings unchanged; reasons: {reasons}"
         )
     retained, omitted = publication["retained"], publication["omitted"]
-    return (
+    field_description = (
+        f"{omitted['fields']} field(s) before posting"
+        if versioned
+        else f"{omitted['fields']} aggregate omitted-or-sanitized field(s)"
+    )
+    line = (
         f"- DLP admission: filtered; retained {retained['comments']} finding(s), "
         f"{retained['warnings']} warning(s); omitted {omitted['comments']} finding(s), "
-        f"{omitted['warnings']} warning(s), {omitted['fields']} field(s) before posting; reasons: {reasons}"
+        f"{omitted['warnings']} warning(s), {field_description}; reasons: {reasons}"
         + format_forbidden_sources(publication)
     )
+    if versioned:
+        private = publication["private_sanitization"]
+        line += f"; private-only sanitization: {private['fields']} field(s)"
+        private_reasons = ", ".join(
+            f"{reason}: {count}"
+            for reason, count in sorted(private["reason_counts"].items())
+            if count > 0
+        )
+        if private_reasons:
+            line += f"; private reasons: {private_reasons}"
+    else:
+        line += "; historical field attribution unavailable"
+    return line
 
 
 def publication_dlp_state(value: Any) -> str | None:
@@ -59,6 +88,7 @@ def admission_dlp_state(value: Any) -> str | None:
 def _dlp_state(value: Any, *, allow_unknown_coverage: bool) -> str | None:
     """Validate closed DLP facts with an explicit coverage-knowledge boundary."""
 
+    versioned = isinstance(value, dict) and value.get("schema") == "ocr.publication/v2"
     if isinstance(value, dict) and "source_attribution" in value:
         attribution = value["source_attribution"]
         if (
@@ -74,12 +104,72 @@ def _dlp_state(value: Any, *, allow_unknown_coverage: bool) -> str | None:
             or value.get("state") not in {"private-sanitized", "publication-filtered"}
         ):
             return None
-        counts = value.get("reason_counts")
+        private_value = value.get("private_sanitization")
+        private_counts = (
+            private_value.get("reason_counts") if isinstance(private_value, dict) else None
+        )
+        counts = (
+            value.get("reason_counts")
+            if not versioned
+            else (
+                private_counts
+                if value.get("state") == "private-sanitized"
+                else value.get("reason_counts")
+            )
+        )
         if not isinstance(counts, dict) or type(counts.get("forbidden")) is not int:
             return None
-        if any(v > counts["forbidden"] for v in attribution["counts"].values()):
+        private_counts = private_counts if versioned and isinstance(private_counts, dict) else {}
+        private_forbidden = (
+            private_counts.get("forbidden", 0)
+            if value.get("state") == "publication-filtered"
+            else 0
+        )
+        if type(private_forbidden) is not int:
+            return None
+        forbidden_total = counts["forbidden"] + private_forbidden
+        if any(v > forbidden_total for v in attribution["counts"].values()):
             return None
         value = {key: item for key, item in value.items() if key != "source_attribution"}
+    if versioned:
+        if value == {"schema": "ocr.publication/v2", "state": "disabled"}:
+            return "disabled"
+        if value == {"schema": "ocr.publication/v2", "state": "passed"}:
+            return "passed"
+        private = value.get("private_sanitization") if isinstance(value, dict) else None
+        if (
+            not isinstance(private, dict)
+            or set(private) != {"fields", "reason_counts"}
+            or type(private["fields"]) is not int
+            or not 0 <= private["fields"] <= MAX_TOOLKIT_MCP_USAGE_COUNT
+            or not _valid_dlp_reason_counts(private["reason_counts"])
+            or (private["fields"] == 0) != (not any(private["reason_counts"].values()))
+        ):
+            return None
+        if value.get("state") == "private-sanitized":
+            return (
+                "private-sanitized"
+                if set(value) == {"schema", "state", "private_sanitization"}
+                and private["fields"] > 0
+                else None
+            )
+        if value.get("state") != "publication-filtered":
+            return None
+        if set(value) != {
+            "schema",
+            "state",
+            "reason_counts",
+            "retained",
+            "omitted",
+            "original",
+            "private_sanitization",
+        }:
+            return None
+        value = {
+            key: item
+            for key, item in value.items()
+            if key not in {"schema", "private_sanitization"}
+        }
     if value == {"state": "disabled"}:
         return "disabled"
     if value == {"state": "passed"}:

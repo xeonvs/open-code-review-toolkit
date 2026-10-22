@@ -274,7 +274,7 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
         allowed_tools=frozenset({"ocr_toolkit_evidence"}),
     )
     assert projected is payload
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert filtered is False
     restored = ContextStore.read(
         artifacts.context_store,
@@ -597,6 +597,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         SUMMARY_ACTION_COUNTS,
     )
     metadata["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
+    metadata["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
     eligible = approval.evaluate_approval_policy(
         settings.BooleanSetting(True),
         parse_result_outcome(payload),
@@ -630,6 +631,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             SUMMARY_ACTION_COUNTS,
         )
         blocked["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
+        blocked["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
         decision = approval.evaluate_approval_policy(
             settings.BooleanSetting(True),
             parse_result_outcome(payload),
@@ -754,7 +756,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 9,
+        "schema_version": 10,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -792,7 +794,7 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
             "actions": {"state": "verified", **counts},
         },
         "dlp": {"enabled": True},
-        "publication": {"state": "passed"},
+        "publication": {"schema": "ocr.publication/v2", "state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }
@@ -1005,7 +1007,7 @@ def test_additive_failure_diagnostics_cannot_discard_a_valid_review_signal(
 
     persisted = json.loads(result.read_text(encoding="utf-8"))
     assert filtered is False
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert persisted["status"] == "complete"
     assert persisted["comments"] == payload["comments"]
     assert persisted["manifest"] == payload["manifest"]
@@ -1064,7 +1066,7 @@ def test_valid_failure_details_are_console_only_and_keep_the_review_postable(
     persisted = json.loads(result.read_text(encoding="utf-8"))
     serialized = result.read_text(encoding="utf-8")
     assert filtered is False
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert persisted["comments"] == payload["comments"]
     assert persisted["tool_calls"] == {
         "total": 2,
@@ -1747,7 +1749,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 9,
+        "schema_version": 10,
         "review": {
             "source_sha": "a" * 40,
             "policy_sha": "b" * 40,
@@ -1785,7 +1787,7 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
             "actions": {"state": "verified", **SUMMARY_ACTION_COUNTS},
         },
         "dlp": {"enabled": True},
-        "publication": {"state": "passed"},
+        "publication": {"schema": "ocr.publication/v2", "state": "passed"},
         "tool_execution": {"state": "absent", "failed": None},
         "cleanup": {"result": "passed"},
     }
@@ -1805,7 +1807,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         safe_payload, forbidden=forbidden, allowed_tools=frozenset()
     )
     assert projected is safe_payload
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
 
     excerpt_payload: dict[str, object] = {
@@ -1888,7 +1890,7 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     )
 
     assert projected is safe_payload
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
     decisions = review_runner._private_dlp_decisions(safe_payload, forbidden=())
     assert decisions["decisions"] == []
@@ -2122,7 +2124,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
         "recommended": 2_000,
         "unit": "characters",
     }
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
     outcome = parse_result_outcome(persisted)
     eligibility = approval.evaluate_approval_policy(
@@ -2242,7 +2244,7 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
     )
 
     assert projected is payload
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
 
     payload["locations"] = [
@@ -2258,7 +2260,7 @@ def test_publication_dlp_ignores_private_non_rendered_identifiers_but_filters_si
     )
     assert blocked is False
     assert publication["state"] == "private-sanitized"
-    assert publication["sanitized_fields"] == 2
+    assert publication["private_sanitization"]["fields"] == 2
     assert projected["status"] == "complete"
     assert projected["locations"] == [{"private_diagnostic": "ocr-redacted-000001"}]
     assert projected["comments"] == payload["comments"]
@@ -2440,7 +2442,7 @@ def test_provider_private_result_fields_are_removed_without_blocking_publication
     )
 
     assert blocked is False
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert approval.publication_dlp_state(publication) == "passed"
     assert review_runner._canonical_result_projection(projected) == baseline
     assert projected["usage"] == payload["usage"]
@@ -2512,9 +2514,9 @@ def test_finalized_result_drops_provider_private_fields_before_receipt_binding(
     metadata = persisted[ocr_result.TOOLKIT_RESULT_KEY]
     assert usage == {"ocr_toolkit_evidence": 1}
     assert blocked is False
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert approval.toolkit_receipt_is_valid(metadata)
-    assert metadata["publication"] == {"state": "passed"}
+    assert metadata["publication"] == {"schema": "ocr.publication/v2", "state": "passed"}
     assert persisted["comments"] == [
         {"path": "src/safe.py", "content": "Keep the validated branch."}
     ]
@@ -2769,7 +2771,7 @@ def test_closed_tool_names_do_not_create_dlp_or_approval_false_positives() -> No
     )
 
     assert projected is payload
-    assert publication == {"state": "passed"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "passed"}
     assert blocked is False
 
 
@@ -2945,7 +2947,7 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     assert usage == {"ocr_toolkit_evidence": 1}
     assert blocked is False
     assert publication["state"] == "private-sanitized"
-    assert publication["sanitized_fields"] == 1
+    assert publication["private_sanitization"]["fields"] == 1
     assert persisted["status"] == "complete"
     assert persisted["manifest"]["terminal_state"] == "complete"
     assert persisted["comments"][0]["content"].startswith("Guard the empty")
@@ -4148,8 +4150,11 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
         "project_id": None,
         "provider": None,
         "reason": "ocr_background_character_limit",
-        "schema_version": "ocr.pre-execution-status/v3",
+        "schema_version": "ocr.pre-execution-status/v4",
         "source_sha": "b" * 40,
+        "stage": "ocr_preview",
+        "model_execution": "not_started",
+        "diagnostic_count": None,
         "terminal_state": None,
         "unit": "characters",
     }
@@ -4273,7 +4278,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         assert _args[4]["completed"]["summary"] == 1
         finalized.append(kwargs)
         events.append("ocr-usage")
-        return {"ocr_toolkit_evidence": 1}, False, {"state": "passed"}
+        return (
+            {"ocr_toolkit_evidence": 1},
+            False,
+            {"schema": "ocr.publication/v2", "state": "passed"},
+        )
 
     def write_bootstrap(path: Path, content: str) -> None:
         events.append(("bootstrap", path, content))
@@ -4302,6 +4311,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "_immutable_review_refs",
             lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
         ),
+        patched_attr(review_runner, "changed_gitlinks", lambda *_args: ()),
         patched_attr(review_runner, "_write_isolated_runtime_config", lambda: None),
         patched_attr(
             review_runner,
