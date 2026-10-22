@@ -3,6 +3,7 @@
 import importlib.util
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,81 @@ def test_empty_or_invalid_range_is_not_exempt(
     assert not docs_only.docs_only(head, head)
     assert not docs_only.docs_only("HEAD", head)
     assert not docs_only.docs_only("0" * 40, head)
+    assert not docs_only.development_only(head, head)
+    assert not docs_only.development_only("HEAD", head)
+    assert not docs_only.development_only("0" * 40, head)
+
+
+@pytest.mark.parametrize(
+    ("changed", "expected"),
+    [
+        ({".github/workflows/ci.yml": "changed"}, True),
+        ({".github/workflows/release.yml": "changed"}, True),
+        ({".github/workflows/site-release-notify.yml": "changed"}, True),
+        ({".github/workflows/testpypi.yml": "changed"}, True),
+        ({"scripts/docs_only.py": "changed", "tests/test_ci.py": "test"}, True),
+        ({"docs/development.md": "guide", "tests/test_ci.py": "test"}, True),
+        ({".release-reconciled-version": "0.12.1"}, False),
+        ({".github/workflows/security.yml": "changed"}, False),
+        ({"scripts/quality.sh": "changed"}, False),
+        ({"pyproject.toml": "changed"}, False),
+        ({"src/ocr_toolkit/app.py": "changed"}, False),
+        ({"tests/data.json": "changed"}, False),
+        ({"tests/test_ci.py": "test", "src/ocr_toolkit/app.py": "changed"}, False),
+    ],
+)
+def test_internal_main_push_range_skips_development_artifacts_only_for_closed_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed: dict[str, str], expected: bool
+) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    _git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "initial").write_text("initial")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "initial")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    for name, content in changed.items():
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "change")
+    monkeypatch.chdir(tmp_path)
+    assert docs_only.development_only(base, _git(tmp_path, "rev-parse", "HEAD")) is expected
+
+
+def test_development_classifier_emits_exact_workflow_output(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    _git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "initial").write_text("initial")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "initial")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    target = tmp_path / ".github/workflows/ci.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text("internal check")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "internal")
+    output = tmp_path / "github-output"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--base",
+            base,
+            "--head",
+            _git(tmp_path, "rev-parse", "HEAD"),
+            "--development",
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "GITHUB_OUTPUT": str(output)},
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert completed.stdout == "development_only=true\n"
+    assert output.read_text() == completed.stdout
 
 
 def test_multi_commit_push_includes_earlier_code_change(
@@ -90,6 +166,7 @@ def test_multi_commit_push_includes_earlier_code_change(
     monkeypatch.chdir(tmp_path)
     assert docs_only.docs_only(penultimate, head)
     assert not docs_only.docs_only(before, head)
+    assert not docs_only.development_only(before, head)
 
 
 def test_unavailable_git_range_uses_full_checks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,6 +175,7 @@ def test_unavailable_git_range_uses_full_checks(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(docs_only.subprocess, "run", unavailable)
     assert not docs_only.docs_only("a" * 40, "b" * 40)
+    assert not docs_only.development_only("a" * 40, "b" * 40)
 
 
 def test_documentation_rename_is_not_exempt(
@@ -114,6 +192,7 @@ def test_documentation_rename_is_not_exempt(
     _git(tmp_path, "commit", "-qm", "rename")
     monkeypatch.chdir(tmp_path)
     assert not docs_only.docs_only(base, _git(tmp_path, "rev-parse", "HEAD"))
+    assert not docs_only.development_only(base, _git(tmp_path, "rev-parse", "HEAD"))
 
 
 def test_required_job_names_and_full_fallback() -> None:
@@ -135,7 +214,8 @@ def test_required_job_names_and_full_fallback() -> None:
         assert "result=docs_only=false" in classifier
         assert 'echo "$result" >> "$GITHUB_OUTPUT"' in classifier
     preview = (ROOT / ".github/workflows/testpypi.yml").read_text()
-    assert "needs.classify.outputs.docs_only != 'true'" in preview
+    assert "needs.classify.outputs.development_only != 'true'" in preview
+    assert 'python scripts/docs_only.py --base "$BASE" --head "$HEAD" --development' in preview
     assert "github.event.before" in preview
     assert 'BASE=$(git rev-parse "${HEAD}^")' not in preview
     assert yaml.safe_load(preview)["jobs"]["classify"]["timeout-minutes"] == 5
