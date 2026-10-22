@@ -9,6 +9,8 @@
 
 Open Code Review Toolkit is an unofficial review control and integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review), with GitLab CI and standalone local providers. It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, local Markdown reports, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
+[Explore the toolkit site](https://open-code-review-toolkit.pages.dev/) for a quick overview, demo video, and latest release notes.
+
 > [!NOTE]
 > The project is under active development; the public API, CLI, environment contract, and generated schemas may evolve before 1.0.
 
