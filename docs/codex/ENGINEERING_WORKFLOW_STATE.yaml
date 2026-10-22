@@ -30,7 +30,7 @@ plan_archive_indexes:
   - docs/engineering/execution_history/README.md
   - docs/engineering/README.md
   - docs/README.md
-active_plan: PLANS.md
+active_plan: null
 runtime_agent_config_managed: true
 instruction_contract_version: 3
 planning_contract_version: 2
