@@ -1,0 +1,101 @@
+name: Notify toolkit site of stable release
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: toolkit-site-release-notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    name: notify-site-after-immutable-release
+    if: >-
+      github.repository == 'xeonvs/open-code-review-toolkit' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # workflow_run has privileged credentials. Never check out or execute the
+      # release run's head; inspect only GitHub-owned metadata and immutable data.
+      - name: Verify release run and latest immutable receipt
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${SOURCE_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${SOURCE_WORKFLOW_ID}" =~ ^[1-9][0-9]*$ ]]
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/release.yml" \
+            > "${RUNNER_TEMP}/release-workflow.json"
+          jq -e --argjson id "${SOURCE_WORKFLOW_ID}" \
+            '.id == $id and .path == ".github/workflows/release.yml" and .state == "active"' \
+            "${RUNNER_TEMP}/release-workflow.json" >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/attempts/${SOURCE_RUN_ATTEMPT}/jobs?per_page=100" \
+            > "${RUNNER_TEMP}/release-jobs.json"
+          jq -e '
+            (.total_count | type == "number" and . > 0 and . <= 100) and
+            (.jobs | type) == "array" and (.jobs | length) == .total_count and
+            ([.jobs[] | select(.name == "publish-github-release")] | length == 1)
+          ' "${RUNNER_TEMP}/release-jobs.json" >/dev/null
+          publish_conclusion=$(jq -r '[.jobs[] | select(.name == "publish-github-release")][0].conclusion' \
+            "${RUNNER_TEMP}/release-jobs.json")
+          if [[ "${publish_conclusion}" == skipped ]]; then
+            echo 'No GitHub Release was published by this run.'
+            exit 0
+          fi
+          test "${publish_conclusion}" = success
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/latest" \
+            > "${RUNNER_TEMP}/latest-release.json"
+          jq -e '
+            .immutable == true and .draft == false and .prerelease == false and
+            (.published_at | type == "string" and length > 0) and
+            (.tag_name | type == "string" and test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) and
+            ([.assets[] | select(.name == "release-receipt.json" and .state == "uploaded" and
+              (.size | type == "number" and . > 0 and . <= 1048576))] | length == 1)
+          ' "${RUNNER_TEMP}/latest-release.json" >/dev/null
+          tag=$(jq -r .tag_name "${RUNNER_TEMP}/latest-release.json")
+          receipt_asset_id=$(jq -r \
+            '.assets[] | select(.name == "release-receipt.json") | .id' \
+            "${RUNNER_TEMP}/latest-release.json")
+          [[ "${receipt_asset_id}" =~ ^[1-9][0-9]*$ ]]
+          gh api -H 'Accept: application/octet-stream' \
+            "repos/${GITHUB_REPOSITORY}/releases/assets/${receipt_asset_id}" \
+            > "${RUNNER_TEMP}/release-receipt.json"
+          jq -e --arg tag "${tag}" '
+            .schema_version == "ocr-toolkit.release-receipt/v2" and
+            .tag == $tag and .version == ($tag | ltrimstr("v")) and
+            (.workflow.run_id | type == "number" and . > 0) and
+            (.workflow.run_attempt | type == "number" and . > 0)
+          ' "${RUNNER_TEMP}/release-receipt.json" >/dev/null
+
+          echo "release_tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Request site refresh
+        if: steps.release.outputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.OCR_SITE_DISPATCH_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GH_TOKEN}"
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api --method POST \
+            repos/xeonvs/ocr-toolkit-site/actions/workflows/deploy.yml/dispatches \
+            -f ref=main -f "inputs[release_tag]=${RELEASE_TAG}"
