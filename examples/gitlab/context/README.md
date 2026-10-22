@@ -13,6 +13,6 @@ the governed registry-v2 example in
 old adapter commands or endpoints into a policy. See
 [Bounded review context](../../../docs/review-context.md) for migration behavior.
 
-For ordinary conversations only, remove `remediation_threads` from `policy-discussions.json`. For verified OCR-rooted remediation history only, remove `forge_discussions`. Keep both for both sources; the toolkit prevents a verified remediation root from appearing twice. See [Choosing a discussion policy](../../../docs/review-context.md#choosing-a-discussion-policy) before changing `required`, account classes, resolved/outdated selection, or approval posture.
+For ordinary conversations only, remove `remediation_threads` from `policy-discussions.json`. For verified OCR-rooted remediation history only, remove `forge_discussions`. Keep both for both sources; the toolkit prevents a verified remediation root from appearing twice. See [Protected-target policy v4](../../../docs/review-context.md#protected-target-policy-v4) before changing `required`, account classes, resolved/outdated selection, or approval posture.
 
 CI outcomes are execution context, not clean-review or approval authority. Keep `required: false` unless losing the selected provider snapshot must block approval, and list only stable job names whose declared prefixes accurately describe what the job executes. The toolkit never downloads logs or artifacts.

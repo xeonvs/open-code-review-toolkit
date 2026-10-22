@@ -15,8 +15,8 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Sources Of Truth
 
 - `PLANS.md` - active or blocked repository work and its release classification.
-- `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` - durable direction and outcome state.
-- `docs/engineering/project_principles.md` - cross-cutting engineering invariants and ownership boundaries; `docs/engineering/m5_context_contracts.md` owns the current context and evidence contracts.
+- `docs/engineering/toolkit_strategy.md` and `ROADMAP.md` - durable direction, evidence architecture, and outcome state.
+- `docs/engineering/project_principles.md` - cross-cutting invariants; `docs/review-context.md` owns current context behavior and `docs/engineering/governed_federation_contracts.md` owns federation. The M5 foundation is archived in `docs/engineering/execution_history/review_context_design_checkpoint.md`.
 - `docs/review-decision-flow.md` - canonical detailed Mermaid map for review, diagnostics, receipts, DLP, publication, and later-action decisions; keep it synchronized with runtime and public contracts.
 - `docs/development.md` - implementation workflow, boundary checklists, local validation, and [OCR qualification maintenance](docs/development.md#maintaining-ocr-qualification).
 - `docs/release.md` - release classification, authorization, publication, and archival lifecycle.
@@ -41,8 +41,14 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
 | `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
 
+<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify canonical private output paths terminal exit status delivered report and admitted findings" -->
+| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Physical private paths, terminal status, report and findings |
+
 <!-- ew:route id="workflow-instructions" triggers="AGENTS.md|docs/engineering/project_principles.md|docs/codex/AGENT_EXECUTION_PITFALLS.md" owners="skill://engineering-workflow/references/instruction_lifecycle.md|docs/engineering/project_principles.md" guards="lint:instruction-contract" -->
 | `workflow-instructions` | Instruction owner, route, or incident change | Installed instruction lifecycle and project principles | `lint:instruction-contract` |
+
+<!-- ew:route id="agent-configuration" triggers=".codex/config.toml|.codex/agents/**|docs/codex/ENGINEERING_WORKFLOW_STATE.yaml" owners="skill://engineering-workflow/references/agent_orchestration.md|skill://engineering-workflow/references/instruction_lifecycle.md" guards="lint:instruction-contract|manual_review:inspect agent configuration and instruction semantics against the installed owners" -->
+| `agent-configuration` | Agent settings, role instructions, or workflow state | Installed agent orchestration and instruction lifecycle | Contract lint and semantic configuration review |
 
 <!-- ew:route id="release-lifecycle" triggers="docs/release.md|.github/workflows/release.yml|release-required change|release-deferred change|stable publication|release authorization|stable delivery|release closure" owners="docs/release.md" guards="release_gate:.github/workflows/release.yml|manual_review:reconcile current archive and external receipts" -->
 | `release-lifecycle` | Release authorization, stable delivery, or closure | Release guide | Protected release gate and external receipt review |

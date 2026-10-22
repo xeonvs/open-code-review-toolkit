@@ -50,11 +50,11 @@ def test_disabled_publication_dlp_preserves_result_and_emits_closed_state() -> N
         dlp_enabled=False,
     )
     assert projected is payload
-    assert publication == {"state": "disabled"}
+    assert publication == {"schema": "ocr.publication/v2", "state": "disabled"}
     assert filtered is False
     signal = publication_dlp_signal(publication)
     assert signal == {
-        "schema_version": "ocr.publication-dlp-signal/v3",
+        "schema_version": "ocr.publication-dlp-signal/v4",
         "state": "disabled",
     }
     details = format_publication_dlp_details(signal)

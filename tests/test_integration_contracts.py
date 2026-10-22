@@ -282,7 +282,7 @@ def test_public_accepted_decisions_recipe_matches_runtime_parser() -> None:
     assert all(decision.applicability == "applicable" for decision in parsed.decisions)
 
 
-def test_public_docs_describe_the_current_m5_and_m7_boundaries() -> None:
+def test_public_docs_describe_current_context_and_federation_boundaries() -> None:
     bounded = (PROJECT_ROOT / "docs" / "review-context.md").read_text(encoding="utf-8")
     normalized_bounded = " ".join(bounded.split())
     configuration = (PROJECT_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
@@ -300,19 +300,19 @@ def test_public_docs_describe_the_current_m5_and_m7_boundaries() -> None:
         "ocr.context-store/v2",
         "context_list",
         "context_get",
-        "receipt v9",
+        "receipt v10",
         "no migration path",
         "semantic paraphrase",
     ):
         assert contract in normalized_bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v9" in document
+        assert "receipt v10" in document
         assert "review-context.md" in document
     for document in (configuration, operations, security):
         assert "OCR_DLP_ENABLED" in document
         assert "cannot retract" in document
     assert "M5's foundation is established in v0.7.0" in strategy
-    assert "Toolkit 0.9.0 advances the current result boundary to receipt v8" in strategy
+    assert "Toolkit 0.9.0 advanced the then-current result boundary to receipt v8" in strategy
     assert "It is not protected-policy equivalence" in strategy
     assert "M5 Bounded review-context enrichment<br/>established" in roadmap
     assert "Toolkit 0.9.0 adds receipt-v8 source/target/protection binding" in roadmap

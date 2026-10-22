@@ -11,11 +11,18 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-STATUS_SCHEMA = "ocr.pre-execution-status/v3"
+STATUS_SCHEMA = "ocr.pre-execution-status/v4"
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
 GITLAB_MERGE_REQUEST_TERMINAL = "gitlab_merge_request_terminal"
+REVIEWED_REVISION_NO_LONGER_CURRENT = "reviewed_revision_no_longer_current"
 BACKGROUND_CHARACTER_LIMIT_REASON = "ocr_background_character_limit"
 BACKGROUND_FILE_SIZE_LIMIT_REASON = "ocr_background_file_size_limit"
+UNCLASSIFIED_PREVIEW_DIAGNOSTICS = "unclassified_preview_diagnostics"
+GITLINK_PREVIEW_UNSUPPORTED = "gitlink_preview_unsupported"
+EVIDENCE_PREFLIGHT_STAGE = "evidence_preflight"
+OCR_PREVIEW_STAGE = "ocr_preview"
+MODEL_NOT_STARTED = "not_started"
+MAX_DIAGNOSTIC_COUNT = 1_024
 BACKGROUND_REASONS = {
     BACKGROUND_CHARACTER_LIMIT_REASON: "characters",
     BACKGROUND_FILE_SIZE_LIMIT_REASON: "bytes",
@@ -37,6 +44,9 @@ class PreExecutionStatus:
     diff_base_sha: str
     source_sha: str
     policy_sha: str | None
+    stage: str = EVIDENCE_PREFLIGHT_STAGE
+    model_execution: str = MODEL_NOT_STARTED
+    diagnostic_count: int | None = None
     actual: int | None = None
     limit: int | None = None
     unit: str | None = None
@@ -55,21 +65,73 @@ def _validate(status: PreExecutionStatus) -> None:
         not _sha(value) for value in (status.diff_base_sha, status.source_sha)
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.model_execution != MODEL_NOT_STARTED:
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS:
+        if (
+            status.stage != OCR_PREVIEW_STAGE
+            or not isinstance(status.policy_sha, str)
+            or not _sha(status.policy_sha)
+            or any(value is not None for value in (status.actual, status.limit, status.unit))
+            or any(
+                value is not None
+                for value in (
+                    status.provider,
+                    status.project_id,
+                    status.change_id,
+                    status.terminal_state,
+                )
+            )
+            or not isinstance(status.diagnostic_count, int)
+            or isinstance(status.diagnostic_count, bool)
+            or not 1 <= status.diagnostic_count <= MAX_DIAGNOSTIC_COUNT
+        ):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
+    if status.reason == GITLINK_PREVIEW_UNSUPPORTED:
+        if (
+            status.stage != OCR_PREVIEW_STAGE
+            or not isinstance(status.policy_sha, str)
+            or not _sha(status.policy_sha)
+            or any(
+                value is not None
+                for value in (
+                    status.diagnostic_count,
+                    status.actual,
+                    status.limit,
+                    status.unit,
+                    status.provider,
+                    status.project_id,
+                    status.change_id,
+                    status.terminal_state,
+                )
+            )
+        ):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
+    if status.diagnostic_count is not None:
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason == REVIEWED_REVISION_NO_LONGER_CURRENT:
+        if (
+            status.stage != EVIDENCE_PREFLIGHT_STAGE
+            or status.policy_sha is not None
+            or any(
+                value is not None
+                for value in (status.actual, status.limit, status.unit, status.terminal_state)
+            )
+            or status.provider != "gitlab"
+            or not _valid_provider_ids(status.project_id, status.change_id)
+        ):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
     if status.reason == GITLAB_MERGE_REQUEST_TERMINAL:
         if (
-            status.policy_sha is not None
+            status.stage != EVIDENCE_PREFLIGHT_STAGE
+            or status.policy_sha is not None
             or any(value is not None for value in (status.actual, status.limit, status.unit))
             or status.provider != "gitlab"
             or status.terminal_state not in {"merged", "closed"}
-            or any(
-                not isinstance(value, str)
-                or not value.isascii()
-                or not value.isdecimal()
-                or not 1 <= len(value) <= 32
-                or int(value) <= 0
-                or str(int(value)) != value
-                for value in (status.project_id, status.change_id)
-            )
+            or not _valid_provider_ids(status.project_id, status.change_id)
         ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         return
@@ -88,12 +150,15 @@ def _validate(status: PreExecutionStatus) -> None:
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.reason == PROTECTED_TARGET_RULE_PATH_PENDING:
-        if any(value is not None for value in (status.actual, status.limit, status.unit)):
+        if status.stage != EVIDENCE_PREFLIGHT_STAGE or any(
+            value is not None for value in (status.actual, status.limit, status.unit)
+        ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         return
     expected_unit = BACKGROUND_REASONS.get(status.reason)
     if (
         expected_unit is None
+        or status.stage != OCR_PREVIEW_STAGE
         or status.unit != expected_unit
         or not isinstance(status.actual, int)
         or isinstance(status.actual, bool)
@@ -102,6 +167,18 @@ def _validate(status: PreExecutionStatus) -> None:
         or not 0 < status.limit < status.actual
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
+
+
+def _valid_provider_ids(*values: str | None) -> bool:
+    return all(
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdecimal()
+        and 1 <= len(value) <= 32
+        and int(value) > 0
+        and str(int(value)) == value
+        for value in values
+    )
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -238,6 +315,9 @@ def read_pre_execution_status(
             "diff_base_sha",
             "source_sha",
             "policy_sha",
+            "stage",
+            "model_execution",
+            "diagnostic_count",
             "actual",
             "limit",
             "unit",
@@ -249,7 +329,14 @@ def read_pre_execution_status(
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         if any(
             not isinstance(value.get(key), str)
-            for key in ("schema_version", "reason", "diff_base_sha", "source_sha")
+            for key in (
+                "schema_version",
+                "reason",
+                "diff_base_sha",
+                "source_sha",
+                "stage",
+                "model_execution",
+            )
         ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         status = PreExecutionStatus(**value)

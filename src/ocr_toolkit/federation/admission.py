@@ -100,7 +100,13 @@ def strings(value: object, *, depth: int = 16, nodes: int = 1024) -> Iterator[st
             raise FederationError("protocol_invalid")
 
 
-def check_dlp(value: object, matcher: ForbiddenMatcher, *, dlp_enabled: bool = True) -> None:
+def check_dlp(
+    value: object,
+    matcher: ForbiddenMatcher,
+    *,
+    boundary: str,
+    dlp_enabled: bool = True,
+) -> None:
     """Reject a complete JSON value if any string discloses protected content."""
     chars = 0
     for text in strings(value):
@@ -113,7 +119,11 @@ def check_dlp(value: object, matcher: ForbiddenMatcher, *, dlp_enabled: bool = T
             text, budgets=_TEXT_BUDGETS, forbidden_matcher=matcher, allow_horizontal_tabs=True
         )
         if not checked.admitted:
-            raise FederationError("oversized" if checked.reason == "limit" else "dlp_rejected")
+            raise FederationError(
+                "oversized" if checked.reason == "limit" else "dlp_rejected",
+                boundary=boundary,
+                detector=checked.reason,
+            )
 
 
 def compile_schema(
@@ -156,7 +166,7 @@ def compile_schema(
                 if multiplied > 64:
                     raise FederationError("schema_invalid")
                 pending.extend((child, multiplied) for child in branches)
-        check_dlp(schema, matcher, dlp_enabled=dlp_enabled)
+        check_dlp(schema, matcher, boundary="schema", dlp_enabled=dlp_enabled)
         Draft202012Validator.check_schema(schema)
         return Draft202012Validator(schema, registry=SchemaRegistry())
     except FederationError:
@@ -190,7 +200,7 @@ def arguments(
                 raise FederationError("origin_denied") from None
             if candidate not in policy.resource_origins:
                 raise FederationError("origin_denied")
-    check_dlp(value, matcher, dlp_enabled=dlp_enabled)
+    check_dlp(value, matcher, boundary="arguments", dlp_enabled=dlp_enabled)
     return value, canonical
 
 
@@ -211,7 +221,7 @@ def result(
     content = [types.TextContent(type="text", text=block.text) for block in value.content]
     structured = value.structured_content
     candidate = {"content": [block.text for block in content], "structured": structured}
-    check_dlp(candidate, matcher, dlp_enabled=dlp_enabled)
+    check_dlp(candidate, matcher, boundary="result", dlp_enabled=dlp_enabled)
     if len(encode(candidate)) > RESPONSE_BYTES:
         raise FederationError("oversized")
     if validator is not None and (

@@ -99,9 +99,11 @@ def main() -> int:
         receipt = running.close()
     counts = receipt["tools"]["synthetic__schema_probe"]
     if (
-        receipt.get("schema") != "ocr.federation/v1"
+        receipt.get("schema") != "ocr.federation/v2"
         or counts["attempted"] != 1
         or counts["completed"] != 1
+        or set(counts["dlp_gates"]) != {"arguments", "result"}
+        or any(sum(gate.values()) for gate in counts["dlp_gates"].values())
     ):
         raise RuntimeError("installed gateway produced an unexpected receipt")
     print(json.dumps({"installed_runtime_smoke": "ok"}, sort_keys=True))

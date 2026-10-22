@@ -103,7 +103,10 @@ from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
     BACKGROUND_REASONS,
     GITLAB_MERGE_REQUEST_TERMINAL,
+    GITLINK_PREVIEW_UNSUPPORTED,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEWED_REVISION_NO_LONGER_CURRENT,
+    UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
     read_pre_execution_status,
@@ -1543,6 +1546,48 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
 
     if status.reason == GITLAB_MERGE_REQUEST_TERMINAL:
         return post_terminal_merge_request_status(config, status)
+    if status.reason == REVIEWED_REVISION_NO_LONGER_CURRENT:
+        # The old pipeline no longer owns the live MR head. Keep the actionable
+        # explanation in its job without mutating newer review notes.
+        print(
+            "Review not started: the merge request changed before revision validation. "
+            "Run a pipeline for the current revision; previous review preserved.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        lifecycle = current_merge_request_lifecycle(config, status.source_sha)
+    except GitLabProviderError:
+        print(
+            "Pre-execution status cannot be bound to the current merge request revision; "
+            "previous review preserved.",
+            file=sys.stderr,
+        )
+        return 1
+    if lifecycle.state != "opened":
+        print("Merge request is no longer open; previous review preserved.", file=sys.stderr)
+        return 1
+    if status.reason in {GITLINK_PREVIEW_UNSUPPORTED, UNCLASSIFIED_PREVIEW_DIAGNOSTICS}:
+        transaction = PostingTransaction()
+        if status.reason == GITLINK_PREVIEW_UNSUPPORTED:
+            heading = "**Open Code Review preview could not cover a changed gitlink**"
+            body = (
+                "Review not started: a changed Git submodule pointer cannot be safely covered "
+                "by the installed OCR preview. Ordinary files were not reviewed in this run. "
+                "Previous review comments were preserved."
+            )
+        else:
+            heading = "**Open Code Review preview diagnostics could not be qualified**"
+            body = (
+                "Review not started: OCR preview diagnostics were unclassified. "
+                "No model review was started. Check the job's closed preview status "
+                "and installed OCR compatibility. "
+                "Previous review comments were preserved."
+            )
+        response = post_review_note_bounded(config, heading, body, transaction)
+        if response is None or not finalize_posting(config, transaction):
+            return posting_failure_exit(config, None, transaction)
+        return 1 if strict_posting() else 0
     if status.reason in BACKGROUND_REASONS:
         transaction = PostingTransaction()
         heading = (

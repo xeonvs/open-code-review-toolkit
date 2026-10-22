@@ -25,6 +25,8 @@ from .contracts import (
     CONCURRENCY,
     COUNTERS,
     DELIVERY_BYTES,
+    DLP_CALL_GATES,
+    DLP_GATE_REASONS,
     MAX_CALLS,
     METADATA_BYTES,
     FederationError,
@@ -79,6 +81,7 @@ class Gateway:
                 "server": spec.name,
                 "assurance": tool.assurance,
                 **dict.fromkeys(COUNTERS, 0),
+                "dlp_gates": {gate: dict.fromkeys(DLP_GATE_REASONS, 0) for gate in DLP_CALL_GATES},
             }
             for spec in registry.servers
             for tool in spec.tools
@@ -153,7 +156,9 @@ class Gateway:
                     else None
                 )
                 description = tool.description or ""
-                admission.check_dlp(description, self.matcher, dlp_enabled=self.dlp_enabled)
+                admission.check_dlp(
+                    description, self.matcher, boundary="schema", dlp_enabled=self.dlp_enabled
+                )
                 definition = types.Tool(
                     name=policy.alias, description=description, input_schema=tool.input_schema
                 )
@@ -212,9 +217,10 @@ class Gateway:
         finally:
             self.dispatches.pop(key, None)
 
-    def _terminal(self, alias: str, reason: str) -> None:
+    def _terminal(self, alias: str, error: FederationError) -> None:
         """Record one outcome and optional diagnostic subset without retaining content."""
         counts = self.counts[alias]
+        reason = error.code
         if reason in {
             "arguments_invalid",
             "origin_denied",
@@ -230,6 +236,8 @@ class Gateway:
         counts[outcome] += 1
         if reason in {"dlp_rejected", "oversized"}:
             counts[reason] += 1
+        if error.boundary in DLP_CALL_GATES and error.detector in DLP_GATE_REASONS:
+            counts["dlp_gates"][error.boundary][error.detector] += 1
 
     async def call_tool(
         self, _context: Any, params: types.CallToolRequestParams
@@ -292,12 +300,12 @@ class Gateway:
             counts["completed"] += 1
             return result
         except asyncio.CancelledError:
-            self._terminal(params.name, "tool_failed")
+            self._terminal(params.name, FederationError("tool_failed"))
             raise
         except FederationError as error:
-            self._terminal(params.name, error.code)
+            self._terminal(params.name, error)
         except Exception:
-            self._terminal(params.name, "tool_failed")
+            self._terminal(params.name, FederationError("tool_failed"))
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="federation_unavailable")], is_error=True
         )
@@ -344,8 +352,13 @@ class Gateway:
                 counts[key] for key in ("completed", "denied", "failed", "timed_out")
             ):
                 raise FederationError("cleanup_failed")
+            dlp_gates = counts["dlp_gates"]
+            if sum(sum(gate.values()) for gate in dlp_gates.values()) > (
+                counts["dlp_rejected"] + counts["oversized"]
+            ):
+                raise FederationError("cleanup_failed")
         return {
-            "schema": "ocr.federation/v1",
+            "schema": "ocr.federation/v2",
             "run_id": self.run_id,
             "state": "finalized",
             "cleanup": "clean",

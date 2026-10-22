@@ -44,8 +44,8 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     )
     assert workflow.count("coverage: true") == 1
     assert workflow.count("coverage: false") == 3
-    assert "if: ${{ matrix.coverage }}" in workflow
-    assert "if: ${{ !matrix.coverage }}" in workflow
+    assert "if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}" in workflow
+    assert "if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}" in workflow
     assert workflow.count("uv run --no-sync pytest -q") == 2
     for command in coverage_commands:
         assert command in script

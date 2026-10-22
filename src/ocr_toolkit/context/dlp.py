@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import html
+import ipaddress
 import re
 import unicodedata
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import date
 
-from ocr_toolkit.common.redaction import redact_env_secret_values, redact_sensitive
+from ocr_toolkit.common.redaction import (
+    SENSITIVE_NAMED_KEY_PATTERN,
+    redact_env_secret_values,
+    redact_sensitive,
+)
 from ocr_toolkit.context.contracts import TextBudgets
 
 EMAIL_RE = re.compile(
@@ -18,6 +24,20 @@ EMAIL_RE = re.compile(
     r"@(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}(?![a-z0-9_-])"
 )
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?[1-9][\d .()/-]{7,24}\d)(?!\w)")
+PURE_CREDENTIAL_ASSIGNMENT_RE = re.compile(
+    rf"(?im)^[ \t]*{SENSITIVE_NAMED_KEY_PATTERN}[ \t]*:[ \t]*"
+    r"(?:(?P<quote>['\"])\{\{[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\}\}(?P=quote)|"
+    r"(?P<empty>\"\"|''))[ \t]*$"
+)
+ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
+VERSION_CONTEXT_RE = re.compile(r"(?i)\b(?:version|release|build|pin)[ \t]+(?:v)?$")
+DATE_CONTEXT_RE = re.compile(
+    r"(?i)\b(?:date|dated|on|since|until|before|after|expires)(?:[ \t]+on)?[ \t]+$"
+)
+IP_CONTEXT_RE = re.compile(
+    r"(?i)(?:\b|_)(?:ipv4|ip|cidr|subnet|address|host|loginhost|listen|allow|network)\b"
+)
+PHONE_CONTEXT_RE = re.compile(r"(?i)\b(?:call|phone|tel|contact)[ \t]*$")
 MARKDOWN_DEST_RE = re.compile(
     r"(?:\]\(\s*<?(?:https?://|mailto:)|^\s*\[[^\]\n]+\]:\s*<?(?:https?://|mailto:)|"
     r"<(?:https?://|mailto:))",
@@ -95,9 +115,57 @@ def _contains_phone(value: str) -> bool:
     """Recognize formatted phone-like values without classifying bare identifiers."""
 
     return any(
-        match.group(0).startswith("+") or any(separator in match.group(0) for separator in " .()/-")
+        (
+            match.group(0).startswith("+")
+            or any(separator in match.group(0) for separator in " .()/-")
+        )
+        and not _technical_number(value, match)
         for match in PHONE_RE.finditer(value)
     )
+
+
+def _technical_number(value: str, match: re.Match[str]) -> bool:
+    """Exclude only bounded, parsed technical syntax from phone candidates."""
+
+    candidate = match.group(0)
+    if candidate.startswith("+") or candidate != candidate.strip():
+        return False
+    before, after = value[: match.start()], value[match.end() :]
+    if before.endswith((".", "/", "-")) or re.match(r"(?:[./-]\d)", after):
+        return False
+    if PHONE_CONTEXT_RE.search(before[-24:]):
+        return False
+    try:
+        if "/" in candidate:
+            ipaddress.IPv4Network(candidate, strict=False)
+            return True
+        elif isinstance(ipaddress.ip_address(candidate), ipaddress.IPv4Address):
+            if after.startswith(":"):
+                port = re.match(r":(\d{1,5})\b", after)
+                return bool(port and 1 <= int(port[1]) <= 65535)
+            return bool(IP_CONTEXT_RE.search(before[-96:]))
+    except ValueError:
+        pass
+    if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(before[-32:]):
+        try:
+            date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
+        except ValueError:
+            return False
+        return True
+    if re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", candidate):
+        return bool(VERSION_CONTEXT_RE.search(before[-32:]))
+    if re.fullmatch(r"\d+\.\d+", candidate):
+        return bool(
+            re.search(r"(?i)\bdecimal\([ \t]*['\"]$", before[-32:])
+            and re.match(r"['\"][ \t]*\)", after)
+        )
+    return False
+
+
+def _semantic_secret_text(value: str) -> str:
+    """Remove proven no-value assignments only from generic secret classification."""
+
+    return PURE_CREDENTIAL_ASSIGNMENT_RE.sub("safe_reference_assignment", value)
 
 
 def _display_normalize(value: str) -> str:
@@ -235,6 +303,7 @@ def check_text(
     forbidden: tuple[str | ForbiddenValue, ...] = (),
     forbidden_matcher: ForbiddenMatcher | None = None,
     allow_horizontal_tabs: bool = False,
+    allow_opaque_code: bool = False,
     enabled: bool | None = None,
 ) -> DLPResult:
     """Apply independent units, redaction, PII, and optional publication checks."""
@@ -258,15 +327,26 @@ def check_text(
         return DLPResult(False, None, "limit", detector)
     if not (_DLP_ENABLED.get() if enabled is None else enabled):
         return DLPResult(True, normalized, "disabled")
-    redacted = redact_env_secret_values(redact_sensitive(normalized))
-    if redacted != normalized:
+    # Exact environment values retain priority even when they resemble a reference.
+    if redact_env_secret_values(normalized) != normalized:
+        return DLPResult(False, None, "secret", "normalized")
+    semantic = _semantic_secret_text(normalized)
+    if redact_sensitive(semantic) != semantic:
         return DLPResult(False, None, "secret", "normalized")
     decoded = _html_decode(normalized) if publication else normalized
     displayed = _display_normalize(normalized) if publication else normalized
     source = _source_normalize(normalized) if publication else normalized
-    if publication and redact_env_secret_values(redact_sensitive(displayed)) != displayed:
+    semantic_displayed = _display_normalize(semantic) if publication else semantic
+    semantic_source = _source_normalize(semantic) if publication else semantic
+    if publication and (
+        redact_env_secret_values(displayed) != displayed
+        or redact_sensitive(semantic_displayed) != semantic_displayed
+    ):
         return DLPResult(False, None, "secret", "displayed")
-    if publication and redact_env_secret_values(redact_sensitive(source)) != source:
+    if publication and (
+        redact_env_secret_values(source) != source
+        or redact_sensitive(semantic_source) != semantic_source
+    ):
         return DLPResult(False, None, "secret", "source")
     pii_candidates = (("normalized", normalized),)
     if publication:
@@ -289,7 +369,7 @@ def check_text(
             else "html_comment"
             if HTML_COMMENT_RE.search(decoded)
             else "html_tag"
-            if HTML_TAG_RE.search(decoded)
+            if HTML_TAG_RE.search(decoded) and not (allow_opaque_code and decoded == normalized)
             else "display_control"
             if any(_is_display_control(character) for character in decoded)
             else None

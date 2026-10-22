@@ -123,17 +123,23 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     invalid = INVALID_APPROVAL_RECEIPT_REASON
     if not isinstance(toolkit_metadata, dict):
         return invalid
-    if toolkit_metadata.get("schema_version") != 9 or set(toolkit_metadata) != {
-        "schema_version",
-        "review",
-        "context",
-        "mcp",
-        "evidence",
-        "dlp",
-        "publication",
-        "tool_execution",
-        "cleanup",
-    }:
+    receipt_version = toolkit_metadata.get("schema_version")
+    if (
+        type(receipt_version) is not int
+        or receipt_version not in {9, 10}
+        or set(toolkit_metadata)
+        != {
+            "schema_version",
+            "review",
+            "context",
+            "mcp",
+            "evidence",
+            "dlp",
+            "publication",
+            "tool_execution",
+            "cleanup",
+        }
+    ):
         return invalid
 
     review = toolkit_metadata.get("review")
@@ -298,6 +304,11 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if external:
         if not valid_reconciliation(federation):
             return invalid
+        expected_federation_schema = (
+            "ocr.federation/v2" if receipt_version == 10 else "ocr.federation/v1"
+        )
+        if federation["receipt"]["schema"] != expected_federation_schema:
+            return invalid
         expected = {
             tool: cap["server"]
             for cap in capabilities
@@ -351,6 +362,11 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if not isinstance(dlp, dict) or set(dlp) != {"enabled"} or type(dlp.get("enabled")) is not bool:
         return invalid
     publication = toolkit_metadata.get("publication")
+    if not isinstance(publication, dict) or (
+        (receipt_version == 9 and "schema" in publication)
+        or (receipt_version == 10 and publication.get("schema") != "ocr.publication/v2")
+    ):
+        return invalid
     tool_execution = toolkit_metadata.get("tool_execution")
     cleanup = toolkit_metadata.get("cleanup")
     publication_state = publication_dlp_state(publication)
@@ -411,7 +427,15 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
 def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
     """Parse the exact immutable identity section without granting approval authority."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") != 9:
+    if (
+        not isinstance(toolkit_metadata, dict)
+        or type(toolkit_metadata.get("schema_version")) is not int
+        or toolkit_metadata.get("schema_version")
+        not in {
+            9,
+            10,
+        }
+    ):
         return None
     review = toolkit_metadata.get("review")
     if (

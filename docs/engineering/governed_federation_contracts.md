@@ -1,7 +1,7 @@
 # Governed MCP federation contracts
 
-M7 keeps OCR as the only model/review loop. The toolkit mediates external tool
-use; upstream services remain responsible for tenant/object authorization. This
+Governed federation keeps OCR as the only model/review loop. The toolkit mediates
+external tool use; upstream services remain responsible for tenant/object authorization. This
 contract supersedes M5's external adapter acquisition architecture only. Internal
 repository evidence, immutable forge acquisition and the separate context store
 retain their existing owners and admission rules.
@@ -99,11 +99,17 @@ does not silently cancel the other waiters' shared operation.
 
 ## Receipts and outcomes
 
-`ocr.federation/v1` is a closed content-free finalized receipt bound to run_id.
+`ocr.federation/v2` is a closed content-free finalized receipt bound to run_id.
 It includes cleanup state and a mapping of exported aliases to server, assurance,
 attempted, completed, denied, failed, timed_out, dlp_rejected, oversized, cache_hits
-and single_flight counts. Configured unused aliases have zero counts. No arguments,
-URLs, response content, paths, identifiers or raw errors enter this receipt.
+and single_flight counts. Each alias also records closed argument/result DLP gate
+counts by `forbidden`, `invalid_text`, `limit`, `pii`, and `secret`. Result-gate
+rejection means external context was unavailable to the review; it is not an
+OCR finding or publication omission. Configured unused aliases have zero counts.
+No arguments, URLs, response content, paths, identifiers or raw errors enter
+this receipt. Historical v1 receipts remain readable, but their aggregate
+`dlp_rejected` count cannot identify a gate or reason and must not be
+retrospectively attributed.
 
 Each gateway attempt closes exactly once. OCR attempt counts are independent and
 must match per alias; malformed arguments rejected by OCR before dispatch cause a
@@ -145,7 +151,7 @@ federation ingress/egress DLP plus publication DLP only. Schema, size, time,
 origin, identity, evidence, cleanup and posting-transaction gates remain active.
 
 Disabled mode emits a prominent private warning and bounded Technical-details
-warning, records the effective state in receipt v9, and is always comment-only.
+warning, records the effective state in receipt v10, and is always comment-only.
 It may expose sensitive material through service/model egress, local Markdown or
 GitLab publication, and later re-enablement cannot retract prior disclosure.
 Operators should diagnose locally with `--preserve-private-artifacts` before this

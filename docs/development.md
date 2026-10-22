@@ -27,9 +27,11 @@ For package, executable-integration, or release-machinery changes, install the w
 
 GitHub Actions storage is repository-owned infrastructure. Pull-request CI restores setup-uv caches but does not save branch-specific entries; protected-main publication may refresh shared dependency state. CodeQL TRAP caching and the separately controlled v4 overlay-database mode are disabled, so the small repository receives a full analysis without per-run CodeQL cache writes. Workflow artifacts use a seven-day handoff window. The weekly **Actions storage maintenance** workflow grants `actions: write` only to its cleanup job and deletes all CodeQL caches, non-main or superseded setup-uv caches, superseded Gitleaks caches, artifacts older than seven days, TestPyPI preview logs and runs after seven days, ordinary and TestPyPI development logs and completed runs after 14 days, and stable Release logs and completed runs after 30 days. Deleting a run removes that run's metadata, logs, and check metadata, so a workflow run is never removed before its separately promised log window. Active and newer runs remain untouched. The scheduled collector reads a closed 44-day UTC window in daily shards, retaining a fail-closed ten-page limit per day instead of applying that limit to the aggregate run history. Scheduled log cleanup uses a bounded 14-day retry window so immutable run history does not get scanned and retried forever. Manual dispatch is a dry run unless `execute` is selected; the same plan is available locally with `python scripts/actions_cleanup.py`, requires `--execute` for deletion, and accepts `--include-all-old-logs` for a deliberate one-time historical log cleanup.
 
-For documentation-only or bookkeeping changes that do not alter runtime, packaging, dependencies, or CI behavior, run the existing contracts for the affected documents and review the instructions against representative tasks. The full local Python matrix is not required for that scope. Preserve applicable results for unchanged inputs; rerun affected checks after a material edit or failure. Hosted checks and the pinned pre-push secret gate remain unchanged.
+For documentation-only or bookkeeping changes that do not alter runtime, packaging, dependencies, or CI behavior, run the existing contracts for the affected documents and review the instructions against representative tasks. The full local Python matrix is not required for that scope. Preserve applicable results for unchanged inputs; rerun affected checks after a material edit or failure. The hosted documentation-only classifier accepts only an exact nonempty commit range of explicitly allowed Markdown paths, rejects detected renames and uncertain Git evidence, and lets required Python, build, Bandit, and dependency-audit job names succeed without redundant work. Secrets, dependency review, CodeQL, and the pinned pre-push secret gate still run; any code, workflow, marker, artifact, or unknown path takes the full route.
 
 During an authorized implementation task, run the scoped local tests that use synthetic fixtures and temporary resources, fix failures caused by the change, and rerun affected tests without asking for approval at each step. This does not authorize live provider calls, OCR execution, production access, or publication; follow the user's current constraints for those actions.
+
+For an authorized real local OCR review, follow the [local review output recipe](local.md#standalone-local-review) before launching the model. Use a fresh private directory and its physical `pwd -P` path for JSON, stderr and Markdown; verify the process exit status and delivered report, then inspect the admitted findings. Do not infer success from OCR's intermediate JSON when report publication fails.
 
 ## Maintaining OCR qualification
 
@@ -41,14 +43,17 @@ evidence. Generic fixtures derive the current identity from its runtime owner;
 frozen historical fixtures must not follow the current pin. A version-neutral
 description still needs semantic review when the consumed contract changes.
 
-Optional local ChatGPT authentication has a separate qualified-version gate in
-`local_chatgpt.CHATGPT_OCR_VERSIONS`. During OCR promotion, review native provider
-resolution, auth-store ownership, locking/refresh and supported request controls;
-update this gate with the applicable focused evidence and local/compatibility
-documentation. API-provider qualification alone does not qualify native auth.
+Optional local ChatGPT authentication has a separate native-contract line and
+minimum patch in `local_chatgpt`; exact binary qualification still happens first
+through `preflight.validate_ocr_binary`. During OCR promotion, compare upstream
+changes in native provider resolution, auth-store ownership, locking/refresh and
+supported request controls with the previously reviewed contract. An adjacent
+qualified patch in the same line inherits that contract when none of those
+surfaces changed; it does not need another version entry or a live model call.
+Update the native gate and focused evidence when the consumed contract or version
+line changes. API-provider qualification alone does not qualify native auth.
 Keep personal credentials out of shared CI. Use an operator-authorized local
-native login/review when a changed consumed auth contract requires it; preserve
-applicable prior evidence when that contract is unchanged.
+native login/review when a changed consumed auth contract requires it.
 
 The live suite in `scripts/ocr_compat.py` runs the same forward-only probes for
 every candidate, then validates observations against the contract epoch owned by

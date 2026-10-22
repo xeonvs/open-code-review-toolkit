@@ -7,8 +7,16 @@ then configure the LLM environment described in [configuration.md](configuration
 
 ```console
 ocr-ci preflight --local
-ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
+
+Keep all three output paths in that new private directory. Resolve its physical
+path before launch: on macOS `/tmp` commonly points through a symlink to
+`/private/tmp`, and the report writer rejects a symlinked parent after OCR has
+already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
+an OCR JSON file alone does not establish successful local delivery.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
@@ -107,7 +115,7 @@ offline inference. OpenAI determines subscription eligibility, available models
 and usage limits. The toolkit does not import ChatGPT conversations or use a
 Codex credential cache. It keeps the same mandatory evidence, validation and
 DLP pipeline; a subscription does not bypass repository/service egress rules.
-See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.2/pages/src/content/docs/en/chatgpt-preview.md)
+See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.3/pages/src/content/docs/en/chatgpt-preview.md)
 and [OpenAI's token-sharing overview](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ```mermaid
@@ -127,6 +135,7 @@ flowchart LR
 | Native registration missing or unsafe | Run native login in the normal user session and keep its store operator-owned and private. Do not copy token files into the repository or weaken checks. |
 | Account retained but plan usage disabled | Run `ocr auth login --provider chatgpt --enable-plan` for the retained registration and complete consent. |
 | Model, grant, expiry or quota rejected | Follow OCR's native diagnostic; use the account's model catalog or restore account access/limits. There is no automatic API fallback. |
+| A newly installed OCR binary times out at `/v1/models` | Check the local firewall rule for that exact executable and run `ocr llm models` before a long review. A successful toolkit preflight checks store metadata but does not test network access. |
 | Preflight passes but review fails | Preflight proves structural readiness only. Inspect the normal private stderr or an authorized debug bundle; a failed or rejected review is not a successful report. |
 
 ### Evidence and external tools

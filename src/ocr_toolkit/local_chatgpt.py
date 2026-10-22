@@ -10,7 +10,10 @@ from typing import Any
 
 from ocr_toolkit.provider_config import ProviderConfigError, request_controls_from_environment
 
-CHATGPT_OCR_VERSIONS = frozenset({"1.13.2"})
+# Exact binary versions are qualified by preflight.validate_ocr_binary first.
+# Native auth is an independently reviewed capability within that qualified line.
+CHATGPT_CONTRACT_LINE = (1, 13)
+CHATGPT_MIN_PATCH = 2
 _CONFLICTING_SETTINGS = (
     "OCR_LLM_URL",
     "OCR_LLM_TOKEN",
@@ -77,10 +80,19 @@ def provider_entry(environment: Mapping[str, str]) -> dict[str, Any]:
 
 
 def require_supported_version(version: str) -> None:
-    """Keep native auth limited to the separately qualified OCR release."""
+    """Require the reviewed native-auth contract after exact binary qualification."""
 
-    if version not in CHATGPT_OCR_VERSIONS:
-        raise LocalChatGPTError("ChatGPT authentication requires qualified OCR 1.13.2")
+    parts = version.split(".")
+    if (
+        len(version) > 32
+        or len(parts) != 3
+        or any(not part.isascii() or not part.isdecimal() for part in parts)
+        or tuple(map(int, parts[:2])) != CHATGPT_CONTRACT_LINE
+        or int(parts[2]) < CHATGPT_MIN_PATCH
+    ):
+        raise LocalChatGPTError(
+            "ChatGPT authentication requires qualified OCR 1.13.2 or later in the 1.13 line"
+        )
 
 
 def _directory(path: Path, *, private: bool = False, owned: bool = False) -> None:

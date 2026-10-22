@@ -164,14 +164,16 @@ def test_chatgpt_rejects_caller_provider_override_before_auth_access(
         )
 
 
+@pytest.mark.parametrize("version", ["1.13.2", preflight.RECOMMENDED_OCR_VERSION])
 def test_chatgpt_preflight_is_structural_only_and_never_calls_status_or_models(
     native_home: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    version: str,
 ) -> None:
     monkeypatch.setenv("HOME", str(native_home))
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
-    monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: "1.13.2")
+    monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: version)
     monkeypatch.setattr(preflight, "validate_llm_model", lambda: pytest.fail("API model call"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: pytest.fail("GitLab call"))
     monkeypatch.setattr(local_chatgpt.os, "open", lambda *_a, **_kw: pytest.fail("file bytes read"))
@@ -179,6 +181,16 @@ def test_chatgpt_preflight_is_structural_only_and_never_calls_status_or_models(
     assert (
         "OCR checks account, plan permission, and expiry on actual use" in capsys.readouterr().out
     )
+
+
+@pytest.mark.parametrize("version", ["1.13.1", "1.14.0", "1.13.bad", "1.13." + "9" * 5000])
+def test_chatgpt_native_contract_rejects_other_versions(version: str) -> None:
+    with pytest.raises(local_chatgpt.LocalChatGPTError, match=r"qualified OCR 1\.13\.2"):
+        local_chatgpt.require_supported_version(version)
+
+
+def test_chatgpt_native_contract_inherits_adjacent_patch() -> None:
+    local_chatgpt.require_supported_version("1.13.4")
 
 
 def test_chatgpt_old_binary_rejects_before_native_metadata(monkeypatch: pytest.MonkeyPatch) -> None:

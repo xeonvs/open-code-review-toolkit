@@ -3,10 +3,8 @@
 This index routes maintainers to canonical engineering owners without duplicating their rules.
 
 <!-- engineering-workflow:index:start -->
-- [evidence_migration_matrix.md](evidence_migration_matrix.md)
 - [execution_history/README.md](execution_history/README.md)
-- [m5_context_contracts.md](m5_context_contracts.md)
-- [m7_federation_contracts.md](m7_federation_contracts.md)
+- [governed_federation_contracts.md](governed_federation_contracts.md)
 - [project_principles.md](project_principles.md)
 - [review_signal_ownership.md](review_signal_ownership.md)
 - [test_evidence_matrix.md](test_evidence_matrix.md)
@@ -20,11 +18,11 @@ This index routes maintainers to canonical engineering owners without duplicatin
 - [Review signal ownership](review_signal_ownership.md) — completed BL-017 source-to-signal and telemetry privacy audit.
 - [Roadmap](../../ROADMAP.md) — ordered outcomes and current milestone state.
 
-## Current contracts and evidence
+## Contracts and evidence
 
-- [Bounded review-context contracts](m5_context_contracts.md) — historical M5 context foundation and its M7 supersession boundary.
-- [Governed federation contracts](m7_federation_contracts.md) — current registry-v2 gateway, protocol, DLP, accounting, and approval boundaries.
-- [Evidence migration matrix](evidence_migration_matrix.md) — historical evidence-contract replacements and parity requirements.
+- [Historical review-context design checkpoint](execution_history/review_context_design_checkpoint.md) — M5 foundation and its M7 supersession boundary.
+- [Governed federation contracts](governed_federation_contracts.md) — current registry-v2 gateway, protocol, DLP, accounting, and approval boundaries.
+- [Historical evidence migration matrix](execution_history/evidence_migration_matrix.md) — completed evidence-contract replacement and parity record.
 - [Test evidence matrix](test_evidence_matrix.md) — coverage ownership for evidence domains and installed behavior.
 
 ## Execution state and history

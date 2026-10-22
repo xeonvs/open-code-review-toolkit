@@ -20,6 +20,8 @@ COUNTERS = frozenset(
 )
 TERMINAL = frozenset({"completed", "denied", "failed", "timed_out"})
 DENIAL_DIAGNOSTICS = frozenset({"dlp_rejected", "oversized"})
+DLP_CALL_GATES = frozenset({"arguments", "result"})
+DLP_GATE_REASONS = frozenset({"forbidden", "invalid_text", "limit", "pii", "secret"})
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
 
 
@@ -27,7 +29,8 @@ def valid_receipt(value: Any) -> bool:
     if (
         not isinstance(value, dict)
         or set(value) != {"schema", "run_id", "state", "cleanup", "tools"}
-        or value["schema"] != "ocr.federation/v1"
+        or not isinstance(value["schema"], str)
+        or value["schema"] not in {"ocr.federation/v1", "ocr.federation/v2"}
         or value["state"] != "finalized"
         or value["cleanup"] != "clean"
         or not isinstance(value["run_id"], str)
@@ -37,12 +40,19 @@ def valid_receipt(value: Any) -> bool:
     ):
         return False
     total = 0
+    version = value["schema"]
     for alias, entry in value["tools"].items():
         if (
             not isinstance(alias, str)
             or not NAME.fullmatch(alias)
             or not isinstance(entry, dict)
-            or set(entry) != {"server", "assurance", *COUNTERS}
+            or set(entry)
+            != {
+                "server",
+                "assurance",
+                *COUNTERS,
+                *({"dlp_gates"} if version.endswith("v2") else set()),
+            }
             or not isinstance(entry["server"], str)
             or not NAME.fullmatch(entry["server"])
             or "__" in entry["server"]
@@ -58,6 +68,32 @@ def valid_receipt(value: Any) -> bool:
             or entry["cache_hits"] + entry["single_flight"] > entry["attempted"]
         ):
             return False
+        if version.endswith("v2"):
+            gates = entry["dlp_gates"]
+            if (
+                not isinstance(gates, dict)
+                or set(gates) != DLP_CALL_GATES
+                or any(
+                    not isinstance(counts, dict)
+                    or set(counts) != DLP_GATE_REASONS
+                    or any(
+                        type(count) is not int or not 0 <= count <= 64 for count in counts.values()
+                    )
+                    for counts in gates.values()
+                )
+            ):
+                return False
+            if (
+                sum(
+                    count
+                    for gate in gates.values()
+                    for reason, count in gate.items()
+                    if reason != "limit"
+                )
+                != entry["dlp_rejected"]
+                or sum(gate["limit"] for gate in gates.values()) > entry["oversized"]
+            ):
+                return False
         total += entry["attempted"]
     return total <= 64
 
@@ -104,10 +140,37 @@ def format_federation(value: Any) -> str:
     if not valid_reconciliation(value):
         return ""
     used = []
+    version = value["receipt"]["schema"].rsplit("/", 1)[-1]
     for alias, entry in sorted(value["receipt"]["tools"].items()):
         if entry["attempted"] or value["ocr_attempts"][alias]:
             counts = ",".join(f"{k}={entry[k]}" for k in sorted(COUNTERS))
+            gates = ""
+            if version == "v2":
+                decisions = (
+                    f"{gate}.{reason}={count}"
+                    for gate in sorted(DLP_CALL_GATES)
+                    for reason, count in sorted(entry["dlp_gates"][gate].items())
+                    if count
+                )
+                gate_counts = ",".join(decisions)
+                gates = f";dlp_gates={gate_counts}" if gate_counts else ""
             used.append(
-                f"{alias}[{entry['assurance']};ocr_attempts={value['ocr_attempts'][alias]};{counts}]"
+                f"{alias}[{entry['assurance']};ocr_attempts={value['ocr_attempts'][alias]};"
+                f"{counts}{gates}]"
             )
-    return "- Federation v1: " + value["state"] + "; " + ("; ".join(used) or "unused")
+    line = "- Federation " + version + ": " + value["state"] + "; " + ("; ".join(used) or "unused")
+    if version == "v1" and any(
+        entry["dlp_rejected"] for entry in value["receipt"]["tools"].values()
+    ):
+        line += "; External MCP DLP rejection; exact boundary/reason unavailable"
+    elif version == "v2":
+        result_denials = sum(
+            sum(entry["dlp_gates"]["result"].values())
+            for entry in value["receipt"]["tools"].values()
+        )
+        if result_denials:
+            line += (
+                f"; External context: {result_denials} call attempt(s) denied at response admission "
+                "by DLP; that context was unavailable to this review"
+            )
+    return line

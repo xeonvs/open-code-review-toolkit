@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from ocr_toolkit import review_runner
 from ocr_toolkit.context.contracts import ContextContractError, TextBudgets
 from ocr_toolkit.context.dlp import ForbiddenMatcher, check_text
 from ocr_toolkit.context.policy import POLICY_PATH, load_protected_policy, parse_policy
@@ -478,3 +479,155 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
         )
         == "forbidden"
     )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Converting Decimal('1111222233334444.55') through Number loses precision.",
+        "The IPv4 address 198.51.100.42 is outside the configured subnet.",
+        "The CIDR 192.0.2.128/25 is not covered by 192.0.2.0/26.",
+        "Compare `203.0.113.0/24` with the allowlist.",
+        "login_host: 127.0.0.1",
+        "allow 192.0.2.128/25;",
+        "listen 127.0.0.1:8080",
+        "The rule expires on 2026-10-21.",
+        "Pin release 2026.10.123 rather than the previous release.",
+        'login_password: "{{ service_password }}"',
+        "login_password: ''",
+        'login_password: ""',
+        '- name: Apply database settings\n  example.database.manage:\n    login_password: "{{ service_password }}"',
+    ],
+)
+def test_proven_technical_numbers_and_no_value_assignments_are_admitted(value: str) -> None:
+    budgets = TextBudgets(2000, 8000, 30)
+    assert check_text(value, budgets=budgets).admitted
+    assert check_text(value, budgets=budgets, publication=True).admitted
+
+
+@pytest.mark.parametrize(
+    "value,reason",
+    [
+        ("Call +420 123 456 789", "pii"),
+        ("Call +420.123.456.789", "pii"),
+        ("Call 123.45.67.89", "pii"),
+        ("123.45.67.89", "pii"),
+        ("Use 192.0.2.128/25; call +420.123.456.789", "pii"),
+        ("allow 192.0.2.999/25", "pii"),
+        ("allow 192.0.2.128/33", "pii"),
+        ("listen 127.0.0.1:99999", "pii"),
+        ("expires on 2026-13-21", "pii"),
+        ("Call 2026-10-21", "pii"),
+        ('login_password: "synthetic-secret-value"', "secret"),
+        (
+            "login_password: \"{{ service_password | default('synthetic-secret-value') }}\"",
+            "secret",
+        ),
+        ("login_password: \"{{ 'synthetic-secret-value' }}\"", "secret"),
+        ('login_password: "{{ service_password }}" # extra', "secret"),
+        ('login_password: "{{ service_password }}"\ntoken=synthetic-secret-value', "secret"),
+        ('login_password: "{{ service_password }}"\ncontact@example.invalid', "pii"),
+    ],
+)
+def test_technical_number_and_reference_exceptions_preserve_other_checks(
+    value: str, reason: str
+) -> None:
+    checked = check_text(value, budgets=TextBudgets(2000, 8000, 30), publication=True)
+    assert not checked.admitted
+    assert checked.reason == reason
+
+
+def test_reference_does_not_bypass_exact_secret_or_forbidden_matching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = 'login_password: "{{ service_password }}"'
+    budgets = TextBudgets(2000, 8000, 30)
+    assert check_text(value, budgets=budgets, forbidden=(value,)).reason == "forbidden"
+    monkeypatch.setenv("OPENAI_API_KEY", value)
+    assert check_text(value, budgets=budgets).reason == "secret"
+
+
+def test_no_value_reference_does_not_mask_displayed_environment_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = "opaque" + "-sentinel-123"
+    monkeypatch.setenv("OCR_LLM_TOKEN", sentinel)
+    value = 'login_password: "{{ service_password }}"\n' + sentinel.replace("-", "&#45;")
+    checked = check_text(value, budgets=TextBudgets(2000, 8000, 30), publication=True)
+    assert checked.reason == "secret"
+    assert checked.detector in {"displayed", "source"}
+
+
+def test_publication_retains_technical_code_fields_and_pure_reference() -> None:
+    payload = {
+        "status": "success",
+        "warnings": [],
+        "tool_calls": {"total": 0, "by_tool": {}},
+        "comments": [
+            {
+                "path": "config/access.conf",
+                "content": "The CIDR 192.0.2.128/25 is not covered by 192.0.2.0/26.",
+                "existing_code": "allow 192.0.2.128/25;",
+                "suggestion_code": "allow 192.0.2.0/24;",
+            },
+            {
+                "path": "roles/database/tasks/main.yml",
+                "content": "Keep the existing credential reference.",
+                "existing_code": 'login_password: "{{ service_password }}"',
+            },
+        ],
+    }
+    projected, receipt, filtered = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset()
+    )
+    assert not filtered
+    assert projected["comments"] == payload["comments"]
+    assert receipt["state"] == "passed"
+
+
+def test_federation_ingress_admits_technical_numbers_but_rejects_mixed_pii() -> None:
+    from ocr_toolkit.federation import FederationError
+    from ocr_toolkit.federation.admission import check_dlp
+
+    matcher = ForbiddenMatcher.compile(())
+    check_dlp({"summary": "Listen on 127.0.0.1."}, matcher, boundary="result")
+    check_dlp(
+        {"summary": "Use 192.0.2.128/25.", "count": 123456789012345},
+        matcher,
+        boundary="result",
+    )
+    with pytest.raises(FederationError, match="dlp_rejected"):
+        check_dlp(
+            {"summary": "Use 192.0.2.128/25; call +420.123.456.789"},
+            matcher,
+            boundary="result",
+        )
+
+
+@pytest.mark.parametrize("value", ["List<Entry>", "(?P<entry>[a-z]+)", "<Widget enabled />"])
+def test_opaque_code_relaxes_only_literal_tag_syntax(value: str) -> None:
+    budgets = TextBudgets(2000, 8000, 30)
+    assert check_text(value, budgets=budgets, publication=True).detector == "html_tag"
+    assert check_text(value, budgets=budgets, publication=True, allow_opaque_code=True).admitted
+
+
+@pytest.mark.parametrize(
+    "value,reason",
+    [
+        ("<Widget />\ncontact@example.invalid", "pii"),
+        ("<Widget />\nCall +420 123 456 789", "pii"),
+        ("<Widget />\nlogin_password: 'synthetic-secret-value'", "secret"),
+        ("<Widget />\n<!-- hidden -->", "laundering"),
+        ("&lt;Widget /&gt;", "laundering"),
+        ("<Widget />\n[link](https://example.invalid)", "laundering"),
+        ("<Widget />\n\u202eflow", "invalid_text"),
+    ],
+)
+def test_opaque_code_preserves_whole_unit_checks(value: str, reason: str) -> None:
+    checked = check_text(
+        value,
+        budgets=TextBudgets(2000, 8000, 30),
+        publication=True,
+        allow_opaque_code=True,
+    )
+    assert checked.reason == reason

@@ -62,6 +62,7 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_text,
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
+from ocr_toolkit.evidence.gitlinks import changed_gitlinks
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
@@ -70,6 +71,7 @@ from ocr_toolkit.evidence.mcp import (
     call_tool,
     evidence_summary,
 )
+from ocr_toolkit.evidence.opaque_code import OpaqueCodeProof, prove_opaque_code
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
@@ -108,8 +110,12 @@ from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
     GITLAB_MERGE_REQUEST_TERMINAL,
+    GITLINK_PREVIEW_UNSUPPORTED,
+    OCR_PREVIEW_STAGE,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
+    UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
     write_pre_execution_status,
@@ -121,6 +127,7 @@ from ocr_toolkit.provider_failure import (
     render_provider_diagnostics,
 )
 from ocr_toolkit.providers.gitlab import (
+    GitLabMergeRequestStale,
     GitLabMergeRequestTerminal,
     GitLabProviderError,
     acquire_review_snapshot,
@@ -288,6 +295,14 @@ class BackgroundQualificationRejected(ReviewRunnerError):
         self.actual = actual
         self.limit = limit
         self.unit = unit
+
+
+class BackgroundPreviewUnclassified(ReviewRunnerError):
+    """One bounded, unqualified pre-model preview diagnostic outcome."""
+
+    def __init__(self, diagnostic_count: int) -> None:
+        super().__init__("OCR background preview diagnostics could not be qualified")
+        self.diagnostic_count = max(1, min(diagnostic_count, 1024))
 
 
 def _install_termination_handlers() -> dict[int, object]:
@@ -715,6 +730,7 @@ def _dlp_reasons(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     allow_horizontal_tabs: bool = False,
+    allow_opaque_code: bool = False,
     debug: DebugBundle | None = None,
     path: tuple[object, ...] = (),
     action: str = "detect-sink",
@@ -748,6 +764,7 @@ def _dlp_reasons(
                 publication=True,
                 forbidden_matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                allow_opaque_code=allow_opaque_code,
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
@@ -1075,6 +1092,7 @@ def _safe_publication_comments(
     *,
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
+    opaque_fields: frozenset[tuple[int, str]] = frozenset(),
     debug: DebugBundle | None = None,
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
@@ -1098,6 +1116,7 @@ def _safe_publication_comments(
                 allow_horizontal_tabs=(
                     isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
+                allow_opaque_code=(index, key) in opaque_fields,
                 debug=debug,
                 path=("comments", index, key),
                 action="omit-field",
@@ -1390,9 +1409,10 @@ def _publication_projection(
     forbidden: tuple[str | ForbiddenValue, ...],
     allowed_tools: frozenset[str],
     dlp_enabled: bool = True,
+    code_proof: Callable[[dict[str, object]], OpaqueCodeProof] | None = None,
     debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
-    """Return a DLP-safe result plus one exact v8 publication state."""
+    """Return a DLP-safe result plus one disjoint v2 publication state."""
 
     failures = _tool_failure_telemetry(payload.get("tool_calls"))
     if not dlp_enabled:
@@ -1402,10 +1422,21 @@ def _publication_projection(
             projected["tool_calls"] = _closed_tool_calls(
                 payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
             )
-        return projected, {"state": "disabled"}, False
+        return projected, {"schema": "ocr.publication/v2", "state": "disabled"}, False
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
+    opaque_fields: set[tuple[int, str]] = set()
+    if code_proof is not None and isinstance(payload.get("comments"), list):
+        for index, comment in enumerate(payload["comments"]):
+            if not isinstance(comment, dict):
+                continue
+            proof = code_proof(comment)
+            if proof.existing_verified:
+                opaque_fields.add((index, "existing_code"))
+            if proof.suggestion_verified:
+                opaque_fields.add((index, "suggestion_code"))
+    verified_opaque_fields = frozenset(opaque_fields)
     sink_reasons: Counter[str] = Counter()
     source_units: dict[tuple[object, ...], set[str]] = {}
     source_counts: Counter[str] = Counter()
@@ -1420,6 +1451,11 @@ def _publication_projection(
                 budgets=budgets,
                 matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                allow_opaque_code=(
+                    len(sink_path) == 3
+                    and sink_path[0] == "comments"
+                    and (sink_path[1], sink_path[2]) in verified_opaque_fields
+                ),
                 debug=debug,
                 path=sink_path,
                 source_classes=sources,
@@ -1455,7 +1491,11 @@ def _publication_projection(
             payload.get("tool_calls"), allowed_tools=allowed_tools, failures=failures
         )
     if not sink_reasons and not private_reasons and redacted_fields == 0:
-        return sanitized if failures.present else payload, {"state": "passed"}, False
+        return (
+            sanitized if failures.present else payload,
+            {"schema": "ocr.publication/v2", "state": "passed"},
+            False,
+        )
 
     try:
         original_projection = _canonical_result_projection(payload, failures=failures)
@@ -1472,7 +1512,11 @@ def _publication_projection(
             publication_changed = True
     if publication_changed:
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
-            payload.get("comments"), budgets=budgets, matcher=matcher, debug=debug
+            payload.get("comments"),
+            budgets=budgets,
+            matcher=matcher,
+            opaque_fields=verified_opaque_fields,
+            debug=debug,
         )
         warnings, omitted_warnings = _safe_publication_warnings(
             payload.get("warnings"), budgets=budgets, matcher=matcher, debug=debug
@@ -1495,27 +1539,36 @@ def _publication_projection(
     else:
         reasons = sink_reasons + private_reasons
         if not reasons:
-            return sanitized, {"state": "passed"}, False
+            return sanitized, {"schema": "ocr.publication/v2", "state": "passed"}, False
         return (
             sanitized,
             {
+                "schema": "ocr.publication/v2",
                 "state": "private-sanitized",
-                "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
-                "sanitized_fields": redacted_fields,
+                "private_sanitization": {
+                    "fields": redacted_fields,
+                    "reason_counts": {
+                        reason: private_reasons.get(reason, 0) for reason in DLP_REASONS
+                    },
+                },
                 "source_attribution": attribution,
             },
             False,
         )
-    reasons = sink_reasons + private_reasons
     publication: dict[str, object] = {
+        "schema": "ocr.publication/v2",
         "state": "publication-filtered",
         "source_attribution": attribution,
-        "reason_counts": {reason: reasons.get(reason, 0) for reason in DLP_REASONS},
+        "reason_counts": {reason: sink_reasons.get(reason, 0) for reason in DLP_REASONS},
+        "private_sanitization": {
+            "fields": redacted_fields,
+            "reason_counts": {reason: private_reasons.get(reason, 0) for reason in DLP_REASONS},
+        },
         "retained": {"comments": len(comments), "warnings": len(warnings)},
         "omitted": {
             "comments": omitted_comments,
             "warnings": omitted_warnings,
-            "fields": omitted_fields + redacted_fields,
+            "fields": omitted_fields,
         },
         "original": {
             "outcome": outcome.kind,
@@ -1579,6 +1632,23 @@ def _finalize_ocr_result(
     failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
     report: ReviewReport | None = None
+    source_reader = GitRepositoryReader(Path.cwd())
+    source_cache: dict[str, str | None] = {}
+
+    def read_reviewed_head(path: str) -> str | None:
+        if path not in source_cache:
+            try:
+                blob = source_reader.read_blob(identity.source_sha, path)
+                source_cache[path] = blob.decode("utf-8") if blob is not None else None
+            except (RepositoryEvidenceError, UnicodeDecodeError):
+                source_cache[path] = None
+        return source_cache[path]
+
+    def code_proof(comment: dict[str, object]) -> OpaqueCodeProof:
+        path = comment.get("path")
+        if not isinstance(path, str):
+            return OpaqueCodeProof()
+        return prove_opaque_code(comment, path, read_reviewed_head)
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
@@ -1616,6 +1686,7 @@ def _finalize_ocr_result(
             forbidden=forbidden,
             allowed_tools=allowed_tools,
             dlp_enabled=dlp_enabled,
+            code_proof=code_proof,
             **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
         if state is not None:
@@ -1855,7 +1926,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     try:
         text = stderr.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
-        raise ReviewRunnerError("OCR background preview returned invalid diagnostics") from exc
+        raise BackgroundPreviewUnclassified(1) from exc
     lines = [line for line in text.splitlines(keepends=True) if line.strip()]
     soft_matches = [
         match for line in lines if (match := BACKGROUND_SOFT_WARNING_RE.fullmatch(line)) is not None
@@ -1871,12 +1942,12 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
             or len(soft_matches) > 1
             or len(max_tools_matches) > 1
         ):
-            raise ReviewRunnerError("OCR background preview returned ambiguous diagnostics")
+            raise BackgroundPreviewUnclassified(len(lines))
         advisory: OcrToolkitAdvisory | None = None
         if soft_matches:
             actual, limit = (int(value) for value in soft_matches[0].groups())
             if not 0 < limit < actual:
-                raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+                raise BackgroundPreviewUnclassified(len(lines))
             advisory = background_recommended_advisory(
                 actual=actual,
                 recommended=limit,
@@ -1885,7 +1956,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
         if max_tools_matches:
             requested, minimum, normalized = (int(value) for value in max_tools_matches[0].groups())
             if not 0 < requested < minimum or normalized != minimum:
-                raise ReviewRunnerError("OCR background preview returned invalid tool limits")
+                raise BackgroundPreviewUnclassified(len(lines))
             operator_notices = (
                 "Installed OCR reported "
                 f"--max-tools {requested} below its CLI minimum and a normalization target "
@@ -1899,7 +1970,7 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     if hard_character is not None:
         actual, limit = (int(value) for value in hard_character.groups())
         if not 0 < limit < actual:
-            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+            raise BackgroundPreviewUnclassified(len(lines))
         raise BackgroundQualificationRejected(
             reason=BACKGROUND_CHARACTER_LIMIT_REASON,
             actual=actual,
@@ -1909,14 +1980,14 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
     if hard_file is not None:
         actual, limit = (int(value) for value in hard_file.groups())
         if not 0 < limit < actual:
-            raise ReviewRunnerError("OCR background preview returned invalid thresholds")
+            raise BackgroundPreviewUnclassified(len(lines))
         raise BackgroundQualificationRejected(
             reason=BACKGROUND_FILE_SIZE_LIMIT_REASON,
             actual=actual,
             limit=limit,
             unit="bytes",
         )
-    raise ReviewRunnerError("OCR background preview failed without a supported diagnostic")
+    raise BackgroundPreviewUnclassified(len(lines))
 
 
 def _qualify_review_background(
@@ -1975,10 +2046,30 @@ def _run_background_qualified_review(
     artifacts: EvidenceArtifacts,
     refs: ReviewRefs,
     identity: ReviewIdentity,
+    gitlink_detected: bool = False,
     state: ReviewRunState | None = None,
 ) -> tuple[int, BackgroundQualification]:
     """Run the model review only after installed OCR accepts its background."""
 
+    if gitlink_detected:
+        write_pre_execution_status(
+            artifacts.pre_execution_status,
+            PreExecutionStatus(
+                schema_version=STATUS_SCHEMA,
+                reason=GITLINK_PREVIEW_UNSUPPORTED,
+                diff_base_sha=refs.base,
+                source_sha=refs.head,
+                policy_sha=identity.policy_sha,
+                stage=OCR_PREVIEW_STAGE,
+            ),
+        )
+        if state is not None:
+            state.observe("preview", "failed")
+        print(
+            "OCR preview qualification: changed gitlink is unsupported; model review did not run",
+            file=sys.stderr,
+        )
+        return 2, BackgroundQualification()
     try:
         qualification = _qualify_review_background(
             production_args,
@@ -1997,6 +2088,7 @@ def _run_background_qualified_review(
                     diff_base_sha=refs.base,
                     source_sha=refs.head,
                     policy_sha=identity.policy_sha,
+                    stage=OCR_PREVIEW_STAGE,
                     actual=exc.actual,
                     limit=exc.limit,
                     unit=exc.unit,
@@ -2010,6 +2102,26 @@ def _run_background_qualified_review(
             "OCR background qualification: rejected by installed OCR "
             f"actual={exc.actual} limit={exc.limit} unit={exc.unit}; "
             "model review did not run",
+            file=sys.stderr,
+        )
+        return 2, BackgroundQualification()
+    except BackgroundPreviewUnclassified as exc:
+        if state is not None:
+            state.observe("preview", "failed")
+        write_pre_execution_status(
+            artifacts.pre_execution_status,
+            PreExecutionStatus(
+                schema_version=STATUS_SCHEMA,
+                reason=UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+                diff_base_sha=refs.base,
+                source_sha=refs.head,
+                policy_sha=identity.policy_sha,
+                stage=OCR_PREVIEW_STAGE,
+                diagnostic_count=exc.diagnostic_count,
+            ),
+        )
+        print(
+            "OCR preview qualification: diagnostics unclassified; model review did not run",
             file=sys.stderr,
         )
         return 2, BackgroundQualification()
@@ -2159,6 +2271,21 @@ def _prepare_policy_context(
                 expected_head=refs.head,
                 include_metadata=context_mode in {"metadata", "enriched"},
             )
+        except GitLabMergeRequestStale as exc:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=REVIEWED_REVISION_NO_LONGER_CURRENT,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=None,
+                    provider="gitlab",
+                    project_id=exc.project_id,
+                    change_id=exc.merge_request_iid,
+                ),
+            )
+            raise ReviewRunnerError("reviewed merge request revision is no longer current") from exc
         except GitLabMergeRequestTerminal as exc:
             lifecycle = exc.lifecycle
             write_pre_execution_status(
@@ -2548,14 +2675,34 @@ def _prepare_enrichment(
                         scope.get("path_prefixes") if isinstance(scope, dict) else None
                     ),
                 }
-            stack = [value]
+            stack: list[tuple[object, tuple[str, ...]]] = [(value, ())]
             while stack:
-                nested = stack.pop()
+                nested, path = stack.pop()
                 if isinstance(nested, dict):
-                    stack.extend(nested.values())
+                    stack.extend(
+                        (item, (*path, key if isinstance(key, str) else "<non-string>"))
+                        for key, item in nested.items()
+                    )
                 elif isinstance(nested, list):
-                    stack.extend(nested)
+                    stack.extend((item, path) for item in nested)
                 elif isinstance(nested, str) and nested:
+                    if (
+                        source_class == "remediation_threads"
+                        and field == "remediation_thread"
+                        and (
+                            (
+                                path == ("anchor_state",)
+                                and nested in {"current", "outdated", "unpositioned"}
+                            )
+                            or (path == ("completeness",) and nested in {"complete", "partial"})
+                            or (
+                                path == ("replies", "author_class")
+                                and nested in {"user", "automation"}
+                            )
+                        )
+                    ):
+                        # These fixed broker labels describe structure, not protected source text.
+                        continue
                     forbidden_values.append(nested)
                     forbidden_sources.append(ForbiddenValue(nested, source_class))
     forbidden = (*adapter_secrets, *forbidden_values)
@@ -3010,6 +3157,12 @@ def _run_evidence_review(
         ]
         state.enter("preview")
         ocr_binary = native_binary or _resolve_ocr_binary()
+        try:
+            gitlink_detected = bool(
+                changed_gitlinks(GitRepositoryReader(Path.cwd()), refs.base, refs.head)
+            )
+        except RepositoryEvidenceError as exc:
+            raise ReviewRunnerError("changed gitlink evidence could not be qualified") from exc
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
@@ -3019,6 +3172,7 @@ def _run_evidence_review(
             artifacts=artifacts,
             refs=refs,
             identity=identity,
+            gitlink_detected=gitlink_detected,
             **({"state": state} if state.local or state.progress is not None else {}),
         )
     finally:

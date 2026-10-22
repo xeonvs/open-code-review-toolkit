@@ -12,31 +12,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  classify:
+    name: classify-documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.paths.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          result=docs_only=false
+          trusted_script="$RUNNER_TEMP/docs_only.py"
+          if git show "${BASE}:scripts/docs_only.py" > "$trusted_script"; then
+            if output=$(env -u GITHUB_OUTPUT python "$trusted_script" --base "$BASE" --head "$HEAD"); then
+              case "$output" in
+                docs_only=true|docs_only=false) result="$output" ;;
+              esac
+            fi
+          fi
+          echo "$result" >> "$GITHUB_OUTPUT"
+
   test-python312:
     name: test-ubuntu-latest-py3.12
+    needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           version: "0.13.4"
           enable-cache: true
           save-cache: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           python-version: "3.12"
-      - run: uv sync --locked --python 3.12
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv sync --locked --python 3.12
       - name: Test
+        if: needs.classify.outputs.docs_only != 'true'
         run: uv run --no-sync pytest -q
 
   test-after-python312:
-    needs: test-python312
+    needs: [classify, test-python312]
     name: test-${{ matrix.os }}-py${{ matrix.python }}
     continue-on-error: ${{ matrix.advisory }}
     env:
@@ -53,23 +87,27 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           version: "0.13.4"
           enable-cache: true
           save-cache: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           python-version: ${{ matrix.python }}
-      - run: uv sync --locked --python "${{ matrix.python }}"
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv sync --locked --python "${{ matrix.python }}"
       - name: Test
-        if: ${{ !matrix.coverage }}
+        if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}
         run: uv run --no-sync pytest -q
       - name: Test with boundary coverage gates
-        if: ${{ matrix.coverage }}
+        if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}
         run: |
           uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
           uv run --no-sync coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=80
@@ -79,19 +117,27 @@ jobs:
 
   quality:
     name: quality
+    needs: classify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           version: "0.13.4"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           python-version: "3.14"
-      - run: uv sync --locked
-      - run: uv run --no-sync ruff format --check .
-      - run: uv run --no-sync ruff check .
-      - run: uv run --no-sync mypy src/ocr_toolkit
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv sync --locked
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv run --no-sync ruff format --check .
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv run --no-sync ruff check .
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv run --no-sync mypy src/ocr_toolkit

@@ -55,7 +55,7 @@ The no-release qualification used official OCR 1.9.5 with SHA-256 `459d3986e59fe
 | Failure/degradation and mandatory evidence | OCR optional MCP init/tool error plus toolkit receipt gate | unavailable server and `isError` tool result do not become false successful context evidence; mandatory evidence remains required | tool-error run completed; unavailable-server run warned and completed with one evidence call; receipt omitted unavailable server | local unavailable path proves degradation, not every network/provider failure | proven |
 | Reserved names, collisions, and receipt limits | `mcp_config.parse/compose`; `_mcp_usage_receipt` | reserved server/tool and cross-server collision fail closed; receipt counts known calls only | production parser/composer rejected all three; real result receipt contained evidence=1/external=2 and no arguments/results | parser checks are policy evidence; real receipt proves serialization only, not authorization/completeness/content safety/model correctness | proven with stated limits |
 
-## M7 governed federation and stage-aware DLP evidence
+## Governed federation and stage-aware DLP evidence
 
 The v0.12.0 targeted qualification uses checksum-verified OCR 1.13.2, a
 synthetic MR record and a controlled model peer: actual internal evidence MCP
@@ -69,9 +69,9 @@ availability and routing, not natural model choice or private service behavior.
 | --- | --- | --- | --- | --- | --- |
 | Registry v2 and mandatory internal evidence | `federation.registry.parse_registry`; `mcp_config.compose_mcp_servers` | closed registry, reserved-name/collision rejection, environment-backed credentials, and an unreplaceable independent evidence MCP | `test_mcp_config_v2.py`, admission tests, exact config round-trip/redaction tests, and installed wheel/sdist review | parser/config tests prove toolkit authority; they do not prove an upstream service's authorization | proven |
 | HTTPS/stdio gateway and independently negotiated peers | `federation.transport`, `federation.start_gateway`, private relay | real TLS and child-process sessions cross byte/request/deadline/schema/origin/DLP bounds; SDK-v1/v2 peers and OCR negotiate independently; cleanup uncertainty blocks receipts | `tests/federation/` real TLS/stdio/relay tests, opt-in SDK-v1/v2 matrix, and checksum-verified OCR qualification | controlled peers sit beyond production transports; they prove interoperability and containment, not service truth or model judgment | proven for qualified peers and OCR |
-| Cache, single-flight, cancellation and content-free accounting | `Gateway.call`, run-local cache, `reporting.federation` and receipt v9 | each caller has one reconciled terminal outcome; cancelled waiters do not cancel shared work; only admitted successes cache; hostile receipts fail closed | gateway concurrency/cancellation tests, hostile receipt validators, OCR-attempt reconciliation and approval tests | deterministic peers select timing and outcomes; no performance or availability claim for production upstreams | proven |
+| Cache, single-flight, cancellation and content-free accounting | `Gateway.call`, run-local cache, `reporting.federation` and receipt v10 (compatible v9) | each caller has one reconciled terminal outcome; cancelled waiters do not cancel shared work; only admitted successes cache; hostile receipts fail closed | gateway concurrency/cancellation tests, hostile receipt validators, OCR-attempt reconciliation and approval tests | deterministic peers select timing and outcomes; no performance or availability claim for production upstreams | proven |
 | Default-on and explicitly disabled DLP | shared `context.dlp` mode, context store, federation gateway, publication projection and reporting | one resolved mode crosses parent and isolated evidence child; false bypasses only DLP, emits warnings, records receipt state and blocks approval while structural gates remain | DLP attribution/toggle tests, real stdio context subprocess with opposing ambient environment, local/GitLab formatter and approval regressions | deliberately unsafe sample values prove the escape-hatch path; disabling DLP cannot make external egress safe or retract it | proven for toolkit behavior |
-| Policy migration and actual-use approval | policy v1-v4 parser, legacy degradation, receipt v9 and posting policy | v1-v3 references never execute; required legacy work degrades; unused/review-read federation can remain eligible while advisory use/failure/mismatch is comment-only and cleanup uncertainty blocks | policy, runner, installed-package, receipt, posting and approval suites plus public-contract tests | no legacy vendor service is contacted; live GitLab writes and configured-model quality remain external handoff gates | proven with stated non-claims |
+| Policy migration and actual-use approval | policy v1-v4 parser, legacy degradation, receipt v10 (compatible v9) and posting policy | v1-v3 references never execute; required legacy work degrades; unused/review-read federation can remain eligible while advisory use/failure/mismatch is comment-only and cleanup uncertainty blocks | policy, runner, installed-package, receipt, posting and approval suites plus public-contract tests | no legacy vendor service is contacted; live GitLab writes and configured-model quality remain external handoff gates | proven with stated non-claims |
 
 ## v0.6.3 context, approval, and GitLab write reconciliation evidence
 
@@ -83,7 +83,7 @@ availability and routing, not natural model choice or private service behavior.
 | Create outcome and marker transport | `posting.gitlab.api_write_url_detailed`; inline create callers; `posting.payloads`/`markers` | `posted|invalid_position|definite_failure|ambiguous_create`; endpoint-specific 2xx identity; independent marker survives character/UTF-8 budgets; no blind create retry | `test_posting_helpers.py` local HTTP peer plus hostile response cases | local peer crosses real urllib serialization/read boundary but is not live GitLab | proven |
 | One-shot reconciliation and explicit transaction rollback | `posting.reconciliation`; `PostingTransaction`; `posting.snapshot.rollback_current_run_comments` | complete endpoint pagination; exact marker+author one-match recovery; zero/multiple/foreign/malformed unavailable stay ambiguous; exactly-once draft publish; rollback only explicit IDs absent from baseline | `test_posting_helpers.py` real paginated local HTTP read, workflow state matrices, baseline rollback tests | mocked item sets prove hostile shape/state branches; local peer proves production GET pagination, not GitLab service semantics | proven with no live GitLab write claim |
 
-## M5 threat-to-control evidence matrix
+## Context threat-to-control evidence matrix
 
 The architecture checkpoint assigned every claim to a production owner before implementation. This matrix now promotes only claims exercised through that owner and keeps final real-OCR, external-service, stable-release, and model-judgment limits explicit. Unit mocks cannot prove the broker, adapter, protocol, persistence, subprocess, Git, OCR, or model behavior whose owner they replace.
 
@@ -257,10 +257,11 @@ frequency or durability after host failure.
 The v0.10.0 hosted matrix initially passed 1694 tests per platform and identified
 two stale environment-inventory expectations for the new controls; their exact
 default entries are synchronized without removing the inventory assertions.
-Current real-OCR evidence is committed through
-`compatibility/evidence/ocr-1.11.9.json` from bounded hosted run `34710401633`.
-It preserves the older evidence snapshots, freezes the 1.11.7 pre-Rego epoch,
-and qualifies the current Rego-aware language selection from 1.11.8 onward.
+The v0.10.0 real-OCR evidence reached
+`compatibility/evidence/ocr-1.11.9.json` in bounded hosted run `34710401633`.
+It preserves older snapshots and freezes the 1.11.7 pre-Rego epoch. The current
+recommended candidate is indexed by `compatibility/ocr-support.json`; its exact
+qualification evidence is linked there.
 
 ## Unsafe or nondeterministic external boundaries
 

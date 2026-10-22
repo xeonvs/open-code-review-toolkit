@@ -77,9 +77,12 @@ def test_actual_sdk_relay_cache_dlp_and_closed_receipt() -> None:
     finally:
         receipt = gateway.close()
     counts = receipt["tools"]["synthetic__echo"]
+    assert receipt["schema"] == "ocr.federation/v2"
     assert counts["attempted"] == 3
     assert counts["completed"] == 2
     assert counts["denied"] == counts["dlp_rejected"] == counts["cache_hits"] == 1
+    assert counts["dlp_gates"]["arguments"]["forbidden"] == 1
+    assert sum(counts["dlp_gates"]["result"].values()) == 0
     assert "controlled result" in gateway.forbidden_publication
     assert "controlled protected phrase" not in json.dumps(receipt)
     assert not endpoint.parent.exists()
@@ -117,6 +120,20 @@ def test_missing_tool_fails_before_gateway_is_returned() -> None:
     value["servers"]["synthetic"]["tools"] = {"missing": {}}
     with pytest.raises(FederationError, match="inventory_invalid"):
         start_gateway(parse_registry(json.dumps(value)), environment={}, run_id="a" * 32)
+
+
+def test_schema_rejection_preserves_closed_stage_through_gateway_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ocr_toolkit.federation.gateway import Gateway
+
+    async def reject_schema(self: Gateway, _stack: Any) -> None:
+        raise FederationError("dlp_rejected", boundary="schema", detector="pii")
+
+    monkeypatch.setattr(Gateway, "prepare", reject_schema)
+    with pytest.raises(FederationError, match="dlp_rejected") as captured:
+        start_gateway(parse_registry(json.dumps(registry_value())), environment={}, run_id="a" * 32)
+    assert (captured.value.boundary, captured.value.detector) == ("schema", "pii")
 
 
 def test_stdio_child_receives_only_explicit_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,7 +187,31 @@ def test_upstream_response_admission_is_atomic_and_rejections_are_not_cached() -
     assert counts["completed"] == counts["cache_hits"] == 0
     assert counts["dlp_rejected"] == 2
     assert counts["oversized"] == 1
+    assert counts["dlp_gates"]["result"]["forbidden"] == 2
+    assert sum(counts["dlp_gates"]["arguments"].values()) == 0
     assert not gateway.forbidden_publication
+
+
+def test_result_contact_rejection_is_attributed_without_content_or_double_counting() -> None:
+    value = registry_value()
+    value["servers"]["synthetic"]["tools"] = {"response_probe": {}}
+    gateway = start_gateway(parse_registry(json.dumps(value)), environment={}, run_id="a" * 32)
+
+    async def exercise() -> None:
+        async with relay_client(gateway) as client:
+            for kind in ("contact", "clean"):
+                response = await client.call_tool("synthetic__response_probe", {"kind": kind})
+                assert response.is_error is (kind == "contact")
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        receipt = gateway.close()
+    counts = receipt["tools"]["synthetic__response_probe"]
+    assert counts["attempted"] == 2
+    assert counts["completed"] == counts["denied"] == counts["dlp_rejected"] == 1
+    assert counts["dlp_gates"]["result"]["pii"] == 1
+    assert "person@example.test" not in json.dumps(receipt)
 
 
 def test_cached_return_still_consumes_delivery_budget(monkeypatch: pytest.MonkeyPatch) -> None:

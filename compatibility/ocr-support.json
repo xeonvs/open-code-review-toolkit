@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.2",
-  "recommended_version": "1.13.2",
+  "monitoring_floor": "1.13.3",
+  "recommended_version": "1.13.3",
   "releases": [
     {
       "assets": [
@@ -2724,6 +2724,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.2",
       "status": "tested",
       "version": "1.13.2"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "093d0a402aff9715c31c02903268fb73880f8a9350cc2a5813a939ee186e5545",
+          "size": 58278640
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "fa9b8530c0a35e6106a9ab2e81c21d98ef26d3f31c1f39ad3ef4c2528047c4f4",
+          "size": 55282482
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "843be0e56fdff0a5ca6f86c5866f942d6a372dff1c0ca19e7893d72495abf45c",
+          "size": 56524962
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "d9934312a629438d7517a250c8cb739b96282c8e7d04fc75e5b2e5931807318c",
+          "size": 53215394
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "09bf6d1b8a24859fcc88f7bab1576a290a074f147655b860be4e766b568c3809",
+          "size": 57993728
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d9f5b40f36df5eb1e1c7ba6188a1a68c080bc43742c6043f5d9a8bcdf830f48c",
+          "size": 53916160
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "cad50b879b18ca9882d6c44d5374387f7b5de3da19af9f374431198f94c6b8ec",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.3.json",
+      "evidence_sha256": "69648197a06b75233b7aabdec0da241649c514791b1b01a8ab97da7228da2b89",
+      "human_conclusion": "Hosted Linux amd64 qualification passed the consumed review, preview, MCP, numeric, provider, and result contracts. Source review confirms full MCP tools/list pagination and explicit failure for empty code_comment batches; both preserve toolkit authority and publication parsing. NixPkgs provider-directory detection is upstream selection behavior, while PR policy checkout changes are upstream CI only. No toolkit CI adaptation beyond exact version and checksum pins is required.",
+      "published_at": "2026-10-22T04:38:25Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.3",
+      "status": "tested",
+      "version": "1.13.3"
     }
   ],
   "runtime_support": {

@@ -37,8 +37,13 @@ from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
+    EVIDENCE_PREFLIGHT_STAGE,
+    GITLINK_PREVIEW_UNSUPPORTED,
+    OCR_PREVIEW_STAGE,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
+    UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     write_pre_execution_status,
 )
@@ -2631,6 +2636,13 @@ class PostingWorkflowTests(unittest.TestCase):
                     patched_attr(workflow, "finalize_posting", lambda *_args: True),
                     patched_attr(
                         workflow,
+                        "current_merge_request_lifecycle",
+                        lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                            "1", "2", "b" * 40, "opened"
+                        ),
+                    ),
+                    patched_attr(
+                        workflow,
                         "collect_previous_bot_comment_refs",
                         lambda *_args: previous,
                     ),
@@ -2682,6 +2694,11 @@ class PostingWorkflowTests(unittest.TestCase):
                             diff_base_sha="a" * 40,
                             source_sha="b" * 40,
                             policy_sha="c" * 40,
+                            stage=(
+                                OCR_PREVIEW_STAGE
+                                if reason == BACKGROUND_CHARACTER_LIMIT_REASON
+                                else EVIDENCE_PREFLIGHT_STAGE
+                            ),
                             actual=actual,
                             limit=limit,
                             unit=unit,
@@ -2713,6 +2730,13 @@ class PostingWorkflowTests(unittest.TestCase):
                         ),
                         patched_attr(workflow, "post_review_note_bounded", capture_note),
                         patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                        patched_attr(
+                            workflow,
+                            "current_merge_request_lifecycle",
+                            lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                                "1", "2", "b" * 40, "opened"
+                            ),
+                        ),
                         patched_attr(
                             workflow,
                             "collect_previous_bot_comment_refs",
@@ -2849,6 +2873,7 @@ class PostingWorkflowTests(unittest.TestCase):
                         diff_base_sha="a" * 40,
                         source_sha="b" * 40,
                         policy_sha="c" * 40,
+                        stage=OCR_PREVIEW_STAGE,
                         actual=actual,
                         limit=limit,
                         unit=unit,
@@ -2883,6 +2908,13 @@ class PostingWorkflowTests(unittest.TestCase):
                     ),
                     patched_attr(workflow, "post_review_note_bounded", capture_note),
                     patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                    patched_attr(
+                        workflow,
+                        "current_merge_request_lifecycle",
+                        lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                            "1", "2", "b" * 40, "opened"
+                        ),
+                    ),
                 ):
                     exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
 
@@ -2895,6 +2927,120 @@ class PostingWorkflowTests(unittest.TestCase):
                 self.assertNotIn("private", notes[0][1])
                 self.assertNotIn("secret-value", notes[0][1])
                 self.assertNotIn("background.md", notes[0][1])
+
+    def test_stale_pre_execution_status_remains_job_local(self) -> None:
+        """An old pipeline must not mutate notes on a newer MR revision."""
+
+        status = PreExecutionStatus(
+            schema_version=STATUS_SCHEMA,
+            reason=REVIEWED_REVISION_NO_LONGER_CURRENT,
+            diff_base_sha="a" * 40,
+            source_sha="b" * 40,
+            policy_sha=None,
+            provider="gitlab",
+            project_id="1",
+            change_id="2",
+        )
+        calls: list[str] = []
+        with (
+            patched_attr(
+                workflow,
+                "current_merge_request_lifecycle",
+                lambda *_args: calls.append("lifecycle"),
+            ),
+            patched_attr(
+                workflow,
+                "post_review_note_bounded",
+                lambda *_args: calls.append("post"),
+            ),
+            patched_attr(
+                workflow,
+                "collect_previous_bot_comment_refs",
+                lambda *_args: calls.append("collect"),
+            ),
+            redirect_stderr(io.StringIO()) as stderr,
+        ):
+            exit_code = workflow.post_pre_execution_status(gitlab_config(), status)
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(calls, [])
+        self.assertIn("current revision", stderr.getvalue())
+
+    def test_preview_statuses_publish_only_static_safe_summaries(self) -> None:
+        """Unqualified diagnostics and gitlinks never publish private details."""
+
+        for reason, expected in (
+            (UNCLASSIFIED_PREVIEW_DIAGNOSTICS, "unclassified"),
+            (GITLINK_PREVIEW_UNSUPPORTED, "submodule pointer"),
+        ):
+            with self.subTest(reason=reason):
+                status = PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=reason,
+                    diff_base_sha="a" * 40,
+                    source_sha="b" * 40,
+                    policy_sha="c" * 40,
+                    stage=OCR_PREVIEW_STAGE,
+                    diagnostic_count=(1 if reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS else None),
+                )
+                notes: list[tuple[str, str]] = []
+                with (
+                    patched_attr(
+                        workflow,
+                        "current_merge_request_lifecycle",
+                        lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                            "1", "2", "b" * 40, "opened"
+                        ),
+                    ),
+                    patched_attr(
+                        workflow,
+                        "post_review_note_bounded",
+                        lambda _config, title, body, _transaction: (
+                            notes.append((title, body)) or {"id": 1}
+                        ),
+                    ),
+                    patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                    patched_env(OCR_STRICT_POSTING="false"),
+                ):
+                    exit_code = workflow.post_pre_execution_status(gitlab_config(), status)
+
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(len(notes), 1)
+                self.assertIn(expected, notes[0][0] + notes[0][1])
+                self.assertIn("Previous review comments were preserved", notes[0][1])
+                self.assertNotIn("/private/", notes[0][1])
+
+    def test_preview_status_rejects_closed_or_changed_merge_request_without_mutation(self) -> None:
+        status = PreExecutionStatus(
+            schema_version=STATUS_SCHEMA,
+            reason=UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+            diff_base_sha="a" * 40,
+            source_sha="b" * 40,
+            policy_sha="c" * 40,
+            stage=OCR_PREVIEW_STAGE,
+            diagnostic_count=1,
+        )
+        for state in ("closed", "merged"):
+            with self.subTest(state=state):
+                calls: list[str] = []
+                with (
+                    patched_attr(
+                        workflow,
+                        "current_merge_request_lifecycle",
+                        lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                            "1", "2", "b" * 40, state
+                        ),
+                    ),
+                    patched_attr(
+                        workflow,
+                        "post_review_note_bounded",
+                        lambda *_args: calls.append("post"),
+                    ),
+                    redirect_stderr(io.StringIO()),
+                ):
+                    exit_code = workflow.post_pre_execution_status(gitlab_config(), status)
+                self.assertEqual(exit_code, 1)
+                self.assertEqual(calls, [])
 
 
 class PostingSummaryTests(unittest.TestCase):
@@ -5783,7 +5929,7 @@ class OcrResultLoadingTests(unittest.TestCase):
                 lambda _payload: {"schema_version": 999, "publication": {"state": "passed"}},
             )
 
-            self.assertEqual(metadata["schema_version"], 9)
+            self.assertEqual(metadata["schema_version"], ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION)
             self.assertEqual(transformed["_ocr_toolkit"], metadata)
 
             with self.assertRaisesRegex(ocr_result.OcrResultMalformed, "reserved field"):

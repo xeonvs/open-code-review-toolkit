@@ -39,7 +39,15 @@ def response_probe(kind: str) -> types.CallToolResult:
         return types.CallToolResult(
             content=[types.ImageContent(type="image", data="AA==", mime_type="image/png")]
         )
-    text = "x" * (128 * 1024 + 1) if kind == "oversized" else "controlled protected response"
+    text = (
+        "x" * (128 * 1024 + 1)
+        if kind == "oversized"
+        else "person@example.test"
+        if kind == "contact"
+        else "controlled clean response"
+        if kind == "clean"
+        else "controlled protected response"
+    )
     return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
 
 

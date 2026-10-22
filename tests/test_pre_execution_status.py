@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -11,10 +12,15 @@ import pytest
 from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
+    EVIDENCE_PREFLIGHT_STAGE,
     GITLAB_MERGE_REQUEST_TERMINAL,
     MAX_STATUS_BYTES,
+    MODEL_NOT_STARTED,
+    OCR_PREVIEW_STAGE,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
+    UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
     read_pre_execution_status,
@@ -76,6 +82,9 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
         "diff_base_sha": BASE,
         "source_sha": SOURCE,
         "policy_sha": POLICY,
+        "stage": EVIDENCE_PREFLIGHT_STAGE,
+        "model_execution": MODEL_NOT_STARTED,
+        "diagnostic_count": None,
         "actual": None,
         "limit": None,
         "unit": None,
@@ -87,6 +96,9 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
 
     variants = (
         {**valid, "schema_version": "ocr.pre-execution-status/v1"},
+        {**valid, "stage": "model_review"},
+        {**valid, "model_execution": "unknown"},
+        {**valid, "diagnostic_count": 1},
         {**valid, "reason": "repository supplied display text"},
         {**valid, "path": ".opencodereview/rules.json"},
         {**valid, "policy_sha": True},
@@ -197,6 +209,7 @@ def test_pre_execution_status_round_trips_closed_background_rejection(
         diff_base_sha=BASE,
         source_sha=SOURCE,
         policy_sha=POLICY,
+        stage=OCR_PREVIEW_STAGE,
         actual=actual,
         limit=limit,
         unit=unit,
@@ -215,6 +228,118 @@ def test_pre_execution_status_round_trips_closed_background_rejection(
     serialized = path.read_text(encoding="utf-8")
     assert "background.md" not in serialized
     assert "please provide" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("reason", "stage", "policy_sha", "provider", "project_id", "change_id", "count"),
+    [
+        (
+            REVIEWED_REVISION_NO_LONGER_CURRENT,
+            EVIDENCE_PREFLIGHT_STAGE,
+            None,
+            "gitlab",
+            "17",
+            "23",
+            None,
+        ),
+        (
+            UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+            OCR_PREVIEW_STAGE,
+            POLICY,
+            None,
+            None,
+            None,
+            2,
+        ),
+    ],
+)
+def test_pre_execution_status_round_trips_typed_pre_model_failures(
+    tmp_path: Path,
+    reason: str,
+    stage: str,
+    policy_sha: str | None,
+    provider: str | None,
+    project_id: str | None,
+    change_id: str | None,
+    count: int | None,
+) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=reason,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=policy_sha,
+        stage=stage,
+        model_execution=MODEL_NOT_STARTED,
+        diagnostic_count=count,
+        provider=provider,
+        project_id=project_id,
+        change_id=change_id,
+    )
+    write_pre_execution_status(path, expected)
+    assert (
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+        == expected
+    )
+
+    serialized = path.read_text(encoding="utf-8")
+    assert "private.example.invalid" not in serialized
+    assert '"model_execution":"not_started"' in serialized
+
+
+@pytest.mark.parametrize(
+    ("reason", "mutations"),
+    [
+        (
+            REVIEWED_REVISION_NO_LONGER_CURRENT,
+            [
+                {"stage": OCR_PREVIEW_STAGE},
+                {"policy_sha": POLICY},
+                {"provider": None},
+                {"project_id": "017"},
+                {"terminal_state": "closed"},
+                {"model_execution": "unknown"},
+            ],
+        ),
+        (
+            UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+            [
+                {"stage": EVIDENCE_PREFLIGHT_STAGE},
+                {"diagnostic_count": 0},
+                {"diagnostic_count": 1_025},
+                {"diagnostic_count": True},
+                {"diagnostic_count": None},
+                {"actual": 2},
+                {"provider": "gitlab"},
+            ],
+        ),
+    ],
+)
+def test_pre_execution_status_rejects_invalid_typed_failure_tuple(
+    tmp_path: Path, reason: str, mutations: list[dict[str, object]]
+) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    base = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=reason,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=None if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else POLICY,
+        stage=EVIDENCE_PREFLIGHT_STAGE
+        if reason == REVIEWED_REVISION_NO_LONGER_CURRENT
+        else OCR_PREVIEW_STAGE,
+        diagnostic_count=None if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else 1,
+        provider="gitlab" if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else None,
+        project_id="17" if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else None,
+        change_id="23" if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else None,
+    )
+    for mutation in mutations:
+        payload = {**asdict(base), **mutation}
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        path.chmod(0o600)
+        with pytest.raises(PreExecutionStatusError, match="fields"):
+            read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
 
 
 @pytest.mark.parametrize("terminal_state", ["merged", "closed"])
@@ -269,6 +394,9 @@ def test_pre_execution_status_rejects_hostile_terminal_identity(
         "diff_base_sha": BASE,
         "source_sha": SOURCE,
         "policy_sha": None,
+        "stage": EVIDENCE_PREFLIGHT_STAGE,
+        "model_execution": MODEL_NOT_STARTED,
+        "diagnostic_count": None,
         "actual": None,
         "limit": None,
         "unit": None,
