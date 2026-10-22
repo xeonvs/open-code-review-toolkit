@@ -69,8 +69,8 @@ jobs:
         if: needs.classify.outputs.docs_only != 'true'
         run: uv run --no-sync pytest -q
 
-  test-after-python312:
-    needs: [classify, test-python312]
+  test-matrix:
+    needs: classify
     name: test-${{ matrix.os }}-py${{ matrix.python }}
     continue-on-error: ${{ matrix.advisory }}
     env:
@@ -105,11 +105,11 @@ jobs:
         run: uv sync --locked --python "${{ matrix.python }}"
       - name: Test
         if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}
-        run: uv run --no-sync pytest -q
+        run: uv run --no-sync pytest -q --ignore=tests/test_installed_policy_e2e.py
       - name: Test with boundary coverage gates
         if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}
         run: |
-          uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
+          uv run --no-sync pytest --ignore=tests/test_installed_policy_e2e.py --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
           uv run --no-sync coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=80
           uv run --no-sync coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80
           uv run --no-sync coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp.py,src/ocr_toolkit/posting/approval.py --fail-under=85

@@ -62,7 +62,7 @@ Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-vers
 Squash-merging that exact repository-owned release PR is the only human publication gate. The **Release** workflow then:
 
 1. validates the branch, title, tracked metadata, reviewed head/base, exact required checks, squash-tree equivalence, merge parent, canonical version, and tracked build epoch;
-2. repeats quality, dependency, packaging, and artifact-set checks;
+2. relies on successful required PR quality/build checks bound to the exact reviewed tree, then runs release dependency, packaging, and artifact-set checks;
 3. builds wheel and sdist once, records SHA-256 values, and creates GitHub provenance attestations;
 4. publishes or exact-hash-verifies the same bytes on TestPyPI through OIDC;
 5. publishes or exact-hash-verifies the same bytes on PyPI through OIDC;

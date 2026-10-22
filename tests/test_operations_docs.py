@@ -726,7 +726,7 @@ def test_protected_pr_and_scheduled_checks_do_not_repeat_on_main_push() -> None:
     assert "schedule:" in security
     assert "schedule:" in codeql
     assert "  push:\n    branches: [main]" in testpypi
-    assert "./scripts/quality.sh check" in release
+    assert "./scripts/quality.sh check" not in release
     assert "uv run --no-sync pip-audit --skip-editable" in release
 
 
