@@ -348,6 +348,22 @@ to read a controlled tracker. Its deterministic model peer derives the lookup
 argument from returned MR data. This proves availability and routing, not natural
 model selection, private deployment behavior or configured model finding quality.
 
+### OCR 1.13.3 — toolkit 0.12.1 target
+
+Hosted [qualification run 39773385483](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39773385483)
+verified every upstream asset against its checksum list and passed the consumed
+Linux amd64 preview, review, JSON result, budget, MCP, provider and numeric probes.
+The adjacent source review confirms that OCR now follows all `tools/list` pages
+for built-in and remote MCP discovery and reports an empty `code_comment` batch
+as a tool failure so the model can retry. The toolkit still freezes its own
+allowlists, admits tool use through its gateway, and validates the resulting
+receipt; neither upstream fix grants a new toolkit authority or changes the
+published result format. NixPkgs `pkgs/` provider-directory detection affects
+upstream selection only; the PR checkout policy fix affects upstream CI only.
+There is no toolkit CI adaptation beyond version and checksum pins. The hosted
+probe does not claim configured-model review quality. Native ChatGPT remains
+local-only; final release review uses the checksum-verified Darwin arm64 binary.
+
 ## Promotion and rollback
 
 Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates every machine-readable or executable version/checksum pin. Never edit only one copy. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.

@@ -164,14 +164,16 @@ def test_chatgpt_rejects_caller_provider_override_before_auth_access(
         )
 
 
+@pytest.mark.parametrize("version", ["1.13.2", "1.13.3"])
 def test_chatgpt_preflight_is_structural_only_and_never_calls_status_or_models(
     native_home: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    version: str,
 ) -> None:
     monkeypatch.setenv("HOME", str(native_home))
     monkeypatch.setenv("OCR_LLM_AUTH_MODE", "chatgpt")
-    monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: "1.13.2")
+    monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: version)
     monkeypatch.setattr(preflight, "validate_llm_model", lambda: pytest.fail("API model call"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: pytest.fail("GitLab call"))
     monkeypatch.setattr(local_chatgpt.os, "open", lambda *_a, **_kw: pytest.fail("file bytes read"))

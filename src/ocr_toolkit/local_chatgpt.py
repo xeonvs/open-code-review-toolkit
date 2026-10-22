@@ -10,7 +10,7 @@ from typing import Any
 
 from ocr_toolkit.provider_config import ProviderConfigError, request_controls_from_environment
 
-CHATGPT_OCR_VERSIONS = frozenset({"1.13.2"})
+CHATGPT_OCR_VERSIONS = frozenset({"1.13.2", "1.13.3"})
 _CONFLICTING_SETTINGS = (
     "OCR_LLM_URL",
     "OCR_LLM_TOKEN",
@@ -80,7 +80,7 @@ def require_supported_version(version: str) -> None:
     """Keep native auth limited to the separately qualified OCR release."""
 
     if version not in CHATGPT_OCR_VERSIONS:
-        raise LocalChatGPTError("ChatGPT authentication requires qualified OCR 1.13.2")
+        raise LocalChatGPTError("ChatGPT authentication requires qualified OCR 1.13.2 or 1.13.3")
 
 
 def _directory(path: Path, *, private: bool = False, owned: bool = False) -> None:

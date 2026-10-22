@@ -165,8 +165,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.13.2"
-    assert manifest["monitoring_floor"] == "1.13.2"
+    assert manifest["recommended_version"] == "1.13.3"
+    assert manifest["monitoring_floor"] == "1.13.3"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.11"],
         "qualified_patches_only": True,
@@ -227,6 +227,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.0", "tested"),
         ("1.13.1", "tested"),
         ("1.13.2", "tested"),
+        ("1.13.3", "tested"),
     ]
 
     assert module.qualified_runtime_versions(manifest) == (
@@ -248,6 +249,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.0",
             "1.13.1",
             "1.13.2",
+            "1.13.3",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
