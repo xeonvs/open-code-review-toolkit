@@ -95,9 +95,12 @@ flowchart TD
     acquire --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
-    acquire_ok -- Yes --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
+    acquire_ok -- Yes --> gitlink_check{Changed gitlink?}
+    gitlink_check -- Yes --> gitlink[Closed gitlink status;<br/>model not started; ordinary files not reviewed]
+    gitlink_check -- No --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
     preview --> preview_ok{Preview accepted?}
-    preview_ok -- No --> preview_error[OCR not started; bounded failure path]
+    preview_ok -- Unclassified diagnostics --> preview_unclassified[Closed stage/count status;<br/>model not started]
+    preview_ok -- Other failure --> preview_error[OCR not started; bounded failure path]
     preview_ok -- Yes --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
     review --> exit{OCR exit code}
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>closed failure note may be posted]
@@ -109,7 +112,7 @@ flowchart TD
     retain_rejected -- Yes --> retained_rejected[Owner-only bounded diagnostic envelope;<br/>no receipt, successful report or posting authority]
     core -- Yes --> diag[Classify additive failed-tool diagnostics]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
-    dlp_mode -- true --> dlp[Apply stage-aware publication<br/>and private-field DLP]
+    dlp_mode -- true --> dlp[Apply source-proofed code exception,<br/>publication and private-field DLP]
     dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
     disabled --> publishable
     dlp --> dlp_state{DLP state}
@@ -128,7 +131,7 @@ flowchart TD
     runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
     integrity_error -- Explicit local --> local_failure
     local_output -- No --> local_handoff[Private JSON handoff only]
-    mode -- GitLab MR --> receipt[Attach exact receipt v9]
+    mode -- GitLab MR --> receipt[Attach exact receipt v10]
     receipt --> post{Posting input valid at readback?}
     retained_rejected --> posting_error
     post -- No --> posting_error[Publication-policy error;<br/>findings transaction not started]
@@ -152,10 +155,28 @@ flowchart TD
     class success,local_result,terminal_note success;
     class warning warning;
     class local auxiliary;
-    class preflight_error,preview_error,runtime_error,integrity_error,posting_error error;
+    class preflight_error,preview_error,gitlink,preview_unclassified,runtime_error,integrity_error,posting_error error;
     class start,api,native_auth,acquire,registry,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction,terminal_result auxiliary;
-    class auth,local_auth,input,initial_state,acquire_ok,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
+    class auth,local_auth,input,initial_state,acquire_ok,gitlink_check,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
+
+Recognized stops record an identity-bound `ocr.pre-execution-status/v4` with a closed
+stage and `model_execution=not_started` for recognized stops. A stale merge
+request revision is reported only in the old job's local output; it never
+posts into the newer merge request. A changed gitlink stops preview
+qualification before model review. An unclassified preview diagnostic retains
+only its bounded count, not raw stderr, and can produce a static note only
+after posting revalidates the exact live identity. The same identity check
+guards the gitlink note.
+
+Source-bound `existing_code` and `suggestion_code` may contain HTML-like syntax
+only after exact immutable reviewed-head proof and safe code rendering. Other
+publication text and unproved code retain the ordinary HTML restriction; all
+code still crosses the remaining secret, PII, forbidden-value and control
+checks. Publication `ocr.publication/v2` separates public omitted fields and
+reasons from private-only sanitized fields and reasons. The v4 summary signal
+and receipt v10 expose those closed counts without converting OCR coverage or
+provider posting counts.
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
 contradictory manifest, stale identity, failed cleanup, or missing/mismatched toolkit action
@@ -201,7 +222,7 @@ flowchart TD
 Valid detail records are bounded, credential-redacted, and control-safe before they reach the
 local stderr or CI job log. Dynamic detail text, paths, and per-tool failure maps never enter the
 finalized result, receipt, merge-request comments, publication-DLP telemetry, or later-action
-inputs. Receipt v9 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
+inputs. Receipt v10 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
 `failed` integer for `verified`; the toolkit action receipt v3 remains authoritative for evidence
 attempts and completions.
 
@@ -224,7 +245,7 @@ evaluates the already-published result independently.
 flowchart TD
     handoff[Finalized result handoff] --> receipt{Toolkit receipt present?}
     receipt -- No --> direct[Compatible receipt-less posting path]
-    receipt -- Yes --> exact{Exact current receipt v9 valid?}
+    receipt -- Yes --> exact{Exact v10 or compatible v9 receipt valid?}
     exact -- No --> schema_error[Publication-policy error]
     exact -- Yes --> projection{Publication projection}
     direct --> publish[Publish findings and summary]

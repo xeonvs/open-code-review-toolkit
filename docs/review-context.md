@@ -130,9 +130,11 @@ its class later.
 
 Previous review comments are preserved with the actual incomplete publication
 reason. Posting counters describe admitted findings only; DLP omissions are shown
-separately. The `ocr.publication-dlp-signal/v3` marker and receipt v9 carry only
-closed counts and state, never protected content, paths, identifiers, URLs, or raw
-errors.
+separately. Publication `ocr.publication/v2` separates public omitted fields and
+reasons from private-only sanitized fields and reasons. The
+`ocr.publication-dlp-signal/v4` marker and receipt v10 carry only closed counts
+and state, never protected content, paths, identifiers, URLs, or raw errors.
+Historical v3 aggregates do not establish this public/private split.
 
 `OCR_DLP_ENABLED=false` is a strict operator escape hatch. It disables context,
 federation and publication DLP for that run, adds a prominent local/GitLab warning,
@@ -144,11 +146,11 @@ transaction gates remain enforced.
 
 ## Receipt and cleanup
 
-Receipt v9 binds review identities, context mode and per-source state, legacy
+Receipt v10 binds review identities, context mode and per-source state, legacy
 policy state, DLP mode, stage-aware publication accounting, mandatory evidence,
 governed federation reconciliation, and cleanup. It is content-free. Receipt
-v1-v8 cannot authorize current posting or approval; ephemeral results have no
-migration path.
+v1-v8 cannot authorize current posting or approval. An exact v9 receipt remains
+readable for a compatible older result; ephemeral results have no migration path.
 
 `OCR_GITLAB_TARGET_PROTECTION_MODE` defaults to `required`. Exact `unprotected`
 permits only the bounded comment-only contract described above; missing target

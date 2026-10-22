@@ -331,7 +331,7 @@ def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
     assert "continue-on-error: ${{ matrix.advisory }}" in workflow
     assert "test-python312:" in workflow
     assert "name: test-ubuntu-latest-py3.12" in workflow
-    assert "needs: test-python312" in workflow
+    assert "needs: [classify, test-python312]" in workflow
     assert 'UV_PYTHON: "3.12"' in workflow
     assert "UV_PYTHON: ${{ matrix.python }}" in workflow
     assert "uv sync --locked --python 3.12" in workflow

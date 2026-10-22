@@ -29,7 +29,7 @@ The main trust transitions are:
    only frozen `server__tool` aliases through a fixed private relay; upstream
    credentials never enter OCR configuration or arguments.
 5. OCR output crosses result validation, publication projection, stage-aware DLP,
-   cleanup, receipt v9 and the provider posting transaction.
+   cleanup, receipt v10 and the provider posting transaction.
 
 ## Governed federation boundary
 
@@ -60,11 +60,15 @@ does not make an overprivileged credential safe or a lying service truthful. Use
 dedicated least-privilege service identities and data suitable for model egress
 and OCR-session retention.
 
-The content-free `ocr.federation/v1` receipt records only closed per-alias counts
-and cleanup state. Receipt v9 reconciles OCR attempts independently with gateway
+The content-free `ocr.federation/v2` receipt records closed per-alias counts,
+argument/result DLP gate and reason counts, and cleanup state. Legacy v1
+receipts remain readable but do not identify the rejection boundary or reason.
+Receipt v10 reconciles OCR attempts independently with gateway
 attempts and terminal outcomes. Used advisory tools, known denied/failed calls,
 or accounting mismatch make the run comment-only. Missing, malformed,
 unfinalized or cleanup-uncertain federation evidence blocks normal publication.
+Result-gate DLP denial means the external context was unavailable to the
+review; it is never recast as an OCR finding or public omission.
 Unused services and successful `review_read` use do not independently block
 approval. Commands, URLs, arguments, results, credentials, paths, identifiers and
 raw errors never enter the receipt.
@@ -122,8 +126,10 @@ rejection: `forge_discussions`, `remediation_threads`, `ci_outcomes`,
 `external_context`, `operator_secret`, or `other`. Each rejected item counts each
 matching class once. Counts may overlap and need not sum to total omitted items.
 Rejected text is not retained or reprocessed later to infer attribution.
-`ocr.publication-dlp-signal/v3`, Technical details and receipt v9 expose only
-bounded states and counts.
+`ocr.publication-dlp-signal/v4`, Technical details and receipt v10 expose only
+bounded states and counts. Publication `ocr.publication/v2` separates omitted
+public fields and reasons from private-only sanitized fields and reasons; OCR
+coverage and provider posting counts remain independent.
 
 ## Preserved controls
 
@@ -136,7 +142,10 @@ bounded states and counts.
 - Result and provider reads are byte-bounded; Markdown neutralizes controls and
   GitLab quick actions. Suggestions require exact reviewed-head source proof.
 - Publication DLP admits horizontal tab only in `existing_code` and
-  `suggestion_code`; unsupported controls remain blocking everywhere else.
+  `suggestion_code`. HTML-like syntax in those fields additionally requires
+  exact immutable reviewed-head source proof and safe code rendering. All
+  other sensitive-data checks still run on the original text; unproved code
+  and prose retain the HTML restriction.
 - The mandatory evidence MCP requires reconciled attempted/completed action
   accounting and a completed summary. Federation cannot satisfy or replace it.
 - Built-in evidence search reads only the already DLP-admitted store and exposes
@@ -150,7 +159,8 @@ bounded states and counts.
   toolkit artifacts. GitLab rejects this option before auth-store access.
 - Automatic approval binds exact source, target protection and author identity,
   skips self-approval, never removes an existing approval, and accepts only exact
-  receipt v9 with enabled DLP and every existing eligibility gate satisfied.
+  receipt v10 or exact compatible v9 with enabled DLP and every existing
+  eligibility gate satisfied.
 - Provider lifecycle state is revalidated before publication. A terminal MR keeps
   admitted findings and DLP semantics but cannot approve.
 - Ambiguous inline creates use one author-bound readback without retry. Rollback deletes only recorded IDs absent from the baseline; marker text cannot claim

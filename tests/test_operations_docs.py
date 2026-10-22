@@ -293,7 +293,7 @@ def test_terminal_merge_request_race_contract_is_public_and_fail_closed() -> Non
         "marker-like finding text cannot select, overwrite, or delete",
     ):
         assert phrase in operations
-    assert "ocr.pre-execution-status/v3" in configuration
+    assert "ocr.pre-execution-status/v4" in configuration
     assert "findings, summaries, suppression, discussions, or approval state" in gitlab
     assert "close/reopen timing therefore fails" in gitlab
     assert "Unknown, malformed, unavailable, or mismatched provider data fails closed" in security
@@ -320,7 +320,7 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         "not a local-mode exception",
         "not an automatic-approval feature",
         "publication owns review-signal delivery",
-        "receipt v9",
+        "receipt v10",
         "OCR_REVIEW_PROGRESS",
         "Blocking pipe or unavailable",
         "Review continues unchanged",
@@ -504,7 +504,7 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v9" in configuration
+    assert "receipt v10" in configuration
     assert "Receipt v1-v8" in configuration
     assert "Receipt v1-v8" in operations
     assert "complete `metadata` context" in operations.lower()
@@ -515,7 +515,7 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
     assert 'Local review also accepts `{type:"stdio"' in configuration
 
 
-def test_builtin_search_coverage_and_receipt_v9_boundaries_are_public() -> None:
+def test_builtin_search_coverage_and_receipt_v10_boundaries_are_public() -> None:
     """Document efficient routing without exposing search or coverage arguments."""
 
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -536,7 +536,7 @@ def test_builtin_search_coverage_and_receipt_v9_boundaries_are_public() -> None:
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
         "action receipt v3",
-        "Receipt v9",
+        "Receipt v10",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
@@ -614,7 +614,8 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         assert "OCR_GITLAB_TARGET_PROTECTION_MODE" in document
         assert "required" in document
         assert "unprotected" in document
-        assert "receipt v9" in document
+    for document in (configuration, security, bounded):
+        assert "receipt v10" in document
     for phrase in (
         "Explicit empty strings",
         "Context `off` and bounded untrusted `metadata`",
