@@ -26,7 +26,7 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | #252 protects remediation content without poisoning ordinary text | WQ-02 | pending |
+| REQ-001 | #252 protects remediation content without poisoning ordinary text | WQ-02 | done |
 | REQ-002 | #248 distinguishes technical numbers from phone PII | WQ-03 | pending |
 | REQ-003 | #251 distinguishes proven pure credential references and empty YAML values from literals | WQ-03 | pending |
 | REQ-004 | #253 publishes proven, safely rendered optional code syntax | WQ-04 | pending |
@@ -69,9 +69,9 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 
 | Queue | Requirements | Exit evidence | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-008 | Review this complete plan, commit only plan/state files, set goal, create milestone and feature PR | in_progress |
-| WQ-02 | REQ-001 | Producer registry and production enrichment tests for protected versus structural values | pending |
-| WQ-03 | REQ-002, REQ-003 | Narrow numeric/reference classifiers, whole-unit controls and ingress/publication tests | pending |
+| WQ-01 | REQ-008 | Review this complete plan, commit only plan/state files, set goal, create milestone and feature PR | done |
+| WQ-02 | REQ-001 | Producer registry and production enrichment tests for protected versus structural values | done |
+| WQ-03 | REQ-002, REQ-003 | Narrow numeric/reference classifiers, whole-unit controls and ingress/publication tests | in_progress |
 | WQ-04 | REQ-004 | Reviewed-source proof before projection and both-sink rendering tests | pending |
 | WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | pending |
 | WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | pending |
@@ -93,7 +93,8 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Latest Validation Results
 
-2026-10-22 planning readback: current GitHub main `c313362`, archived site plan via merged #256, v0.12.0 latest stable, six target issues open; no implementation validation yet.
+- 2026-10-22: First plan-only signed commit `b72b295`, draft feature PR #257, active goal and milestone v0.12.1 with all six issues assigned.
+- 2026-10-22: #252 field-aware registration passes production enrichment composition for current/outdated and complete/partial records, with safe prose/code, protected text, omission and operator-secret controls (5 focused tests). Broader quality matrix remains pending.
 
 ### Risks And Recovery
 
@@ -105,7 +106,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Resume Point
 
-WQ-01: inspect and validate this plan and active-plan state, self-review the exact staged diff, then make the plan-only first commit. Next set the goal, create the v0.12.1 milestone, and begin the issue work.
+WQ-03: finish narrow DLP numeric/reference classifiers and tests, then self-review and commit the scoped change. Continue to source-bound code publication, typed preview diagnostics and other queued work.
 
 ### Plan Fidelity Check
 

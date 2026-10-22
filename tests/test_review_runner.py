@@ -20,6 +20,8 @@ import pytest
 
 from ocr_toolkit import ocr_result, review_runner
 from ocr_toolkit.context.ci_outcomes import CIOutcomeSnapshot
+from ocr_toolkit.context.contracts import TextBudgets
+from ocr_toolkit.context.dlp import ForbiddenMatcher, ForbiddenValue
 from ocr_toolkit.context.policy import parse_policy
 from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
@@ -362,8 +364,15 @@ def test_default_termination_signal_is_translated_for_cleanup() -> None:
         review_runner._restore_termination_handlers(previous)
 
 
+@pytest.mark.parametrize(
+    ("anchor_state", "completeness"),
+    tuple(product(("current", "outdated"), ("complete", "partial"))),
+)
 def test_enrichment_composes_one_provider_snapshot_without_remediation_reference_discovery(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    anchor_state: str,
+    completeness: str,
 ) -> None:
     identity = enriched_identity()
     discussion = SimpleNamespace(
@@ -391,11 +400,11 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
     remediation = SimpleNamespace(
         root_author_pseudonym="actor-0123456789abcdef",
         root_body="Finding DEMO-99: validate the command before execution.",
-        anchor_state="current",
+        anchor_state=anchor_state,
         replies=(remediation_reply,),
-        completeness="complete",
+        completeness=completeness,
         resolved_count=0,
-        outdated_count=0,
+        outdated_count=int(anchor_state == "outdated"),
         version="130",
         digest="d" * 64,
     )
@@ -410,10 +419,13 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
         calls += 1
         return snapshot
 
+    policy_value = remediation_policy_value()
+    policy_value["remediation_threads"]["include_outdated"] = True  # type: ignore[index]
     artifacts = configure_enrichment_test(
         tmp_path,
         monkeypatch,
         provider_acquire=acquire,
+        policy_value=policy_value,
     )
 
     context_config, receipt = review_runner._prepare_enrichment(
@@ -438,6 +450,36 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
         "remediation_thread",
     ]
     assert review_runner._remediation_mutable_admitted(restored.records) is True
+    assert not {"current", "outdated", "complete", "partial", "user"} & set(
+        receipt.forbidden_publication
+    )
+    assert remediation.root_body in receipt.forbidden_publication
+    assert remediation_reply.body in receipt.forbidden_publication
+    assert remediation.root_author_pseudonym in receipt.forbidden_publication
+    matcher = ForbiddenMatcher.compile(receipt.forbidden_sources)
+    comments, omitted, fields = review_runner._safe_publication_comments(
+        [
+            {
+                "content": "Validate user input in the current implementation.",
+                "existing_code": "concurrent_requests = 4",
+            },
+            {"content": "Validate generated output.", "existing_code": remediation.root_body},
+            {"content": remediation.root_body},
+        ],
+        budgets=TextBudgets(2_000, 8_000, 30),
+        matcher=matcher,
+    )
+    assert comments == [
+        {
+            "content": "Validate user input in the current implementation.",
+            "existing_code": "concurrent_requests = 4",
+        },
+        {"content": "Validate generated output."},
+    ]
+    assert (omitted, fields) == (1, 2)
+    assert ForbiddenMatcher.compile(
+        (*receipt.forbidden_sources, ForbiddenValue("current", "operator_secret"))
+    ).matches("Validate the current implementation.")
     assert (
         review_runner._remediation_mutable_admitted(
             tuple(record for record in restored.records if record.resource_class == "issue")

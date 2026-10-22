@@ -2548,14 +2548,34 @@ def _prepare_enrichment(
                         scope.get("path_prefixes") if isinstance(scope, dict) else None
                     ),
                 }
-            stack = [value]
+            stack: list[tuple[object, tuple[str, ...]]] = [(value, ())]
             while stack:
-                nested = stack.pop()
+                nested, path = stack.pop()
                 if isinstance(nested, dict):
-                    stack.extend(nested.values())
+                    stack.extend(
+                        (item, (*path, key if isinstance(key, str) else "<non-string>"))
+                        for key, item in nested.items()
+                    )
                 elif isinstance(nested, list):
-                    stack.extend(nested)
+                    stack.extend((item, path) for item in nested)
                 elif isinstance(nested, str) and nested:
+                    if (
+                        source_class == "remediation_threads"
+                        and field == "remediation_thread"
+                        and (
+                            (
+                                path == ("anchor_state",)
+                                and nested in {"current", "outdated", "unpositioned"}
+                            )
+                            or (path == ("completeness",) and nested in {"complete", "partial"})
+                            or (
+                                path == ("replies", "author_class")
+                                and nested in {"user", "automation"}
+                            )
+                        )
+                    ):
+                        # These fixed broker labels describe structure, not protected source text.
+                        continue
                     forbidden_values.append(nested)
                     forbidden_sources.append(ForbiddenValue(nested, source_class))
     forbidden = (*adapter_secrets, *forbidden_values)
