@@ -3,6 +3,7 @@
 `PLANS.md` owns active or blocked repository work. This archive preserves completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version.
 
 <!-- engineering-workflow:index:start -->
+- [2026-10-22-toolkit-site-launch-and-release-notification.md](2026-10-22-toolkit-site-launch-and-release-notification.md)
 - [releases.md](releases.md)
 <!-- engineering-workflow:index:end -->
 
