@@ -4,6 +4,7 @@ This index routes maintainers to canonical engineering owners without duplicatin
 
 <!-- engineering-workflow:index:start -->
 - [evidence_migration_matrix.md](evidence_migration_matrix.md)
+- [execution_history/README.md](execution_history/README.md)
 - [m5_context_contracts.md](m5_context_contracts.md)
 - [m7_federation_contracts.md](m7_federation_contracts.md)
 - [project_principles.md](project_principles.md)
@@ -30,5 +31,4 @@ This index routes maintainers to canonical engineering owners without duplicatin
 
 - [`PLANS.md`](../../PLANS.md) — active or blocked work and resume point.
 - [Maintenance-work index](../codex/README.md) — inactive backlog and incident catalogue.
-- [Execution history](execution_history/README.md) — archived release plans and receipts.
 - [Development guide](../development.md) and [release process](../release.md) — implementation and delivery procedures.

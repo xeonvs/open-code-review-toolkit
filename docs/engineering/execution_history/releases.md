@@ -796,7 +796,7 @@ milestone closure, and external reconciliation are complete.
 Status: completed; delivered through protected feature PR #216
 Owner: root
 Last Updated: 2026-09-23
-plan_schema_version: 2
+`plan_schema_version: 2`
 
 ##### Goal
 
