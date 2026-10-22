@@ -13,7 +13,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
-| `v0.12.1` | [Review diagnostics, DLP and OCR 1.13.3](releases.md#plan-toolkit-0-12-1) | Protected feature merge, complete local OCR and security review, TestPyPI development artifact verification, and repository-complete stable-delivery handoff; external publication and reconciliation pending. |
+| `v0.12.1` | [Review diagnostics, DLP and OCR 1.13.3](releases.md#plan-toolkit-0-12-1) | Protected feature/release merges, local OCR and security review, verified development and stable artifacts, immutable release, issue/milestone closure, live site refresh, and external reconciliation. |
 | `v0.12.0` | [OCR 1.13.2, external-tool context and optional local ChatGPT auth](releases.md#plan-toolkit-0-12-0) | Adjacent local OCR qualification, protected MR-context navigation, optional local native authentication and compatible dependency/security updates; protected stable delivery and external reconciliation verified. |
 | `v0.11.3` | [OCR 1.12.13 and reviewed qualification signals](releases.md#plan-toolkit-0-11-3) | Adjacent 1.12.12–1.12.13 qualification, conservative provider/model/deadline review routing, and preserved timeout outcomes; verified stable delivery and external reconciliation. |
 | `v0.11.2` | [Dependency consistency, rejection diagnostics and OCR 1.12.11](releases.md#plan-toolkit-0-11-2) | Protected feature merge, fixed runtime dependency floor, private rejection diagnostics and latest OCR qualification; verified stable delivery and external reconciliation. |

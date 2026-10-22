@@ -6,7 +6,7 @@ This archive preserves completed execution plans moved out of the active registr
 
 ## Toolkit 0.12.1 — review diagnostics, DLP and OCR 1.13.3
 
-Status: repository complete; external delivery pending
+Status: completed stable delivery; external reconciliation verified
 - **Release classification:** release-required
 - **Target stable version:** 0.12.1; next development line 0.13.0
 - **Tracked issues:** #248, #249, #250, #251, #252, #253, #258 in milestone v0.12.1
@@ -15,17 +15,24 @@ Status: repository complete; external delivery pending
 - **Development artifact run:** [39780895202](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39780895202), `0.13.0.dev118`; published wheel and sdist passed provenance, checksum and installed-runtime readback
 - **Release branch:** `release/v0.12.1`
 - **Repository preparation date:** 2026-10-22
+- **External reconciliation date:** 2026-10-22
+
+### Stable delivery and external reconciliation
+
+Protected release PR [#259](https://github.com/xeonvs/open-code-review-toolkit/pull/259) passed its required checks and merged as signed squash `677e4d2cc28758e0a87456707cf9f030ef9ea9dc` (parent `6ed6ddfbf95690a3e133078ad5bed9f24c2a3372`); its tree `1eebeab6320cebffc83d4f9e6a63f6a03b98983d` equals reviewed head `f4bbe680eb223f185458cb0161486151101bed36`. [Release run 39784597413, attempt 1](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39784597413) succeeded: TestPyPI and PyPI published the exact wheel and sdist with verified registry provenance, GitHub attestations and installed runtime smoke on Python 3.12–3.14. The [immutable v0.12.1 GitHub Release](https://github.com/xeonvs/open-code-review-toolkit/releases/tag/v0.12.1) has the two distributions, `runtime-requirements.txt`, `artifact-hashes.json`, `SHA256SUMS` and `release-receipt.json`; the annotated tag peels to the release merge. The downloaded receipt SHA-256 is `cf20ce74af79ee6287cf2494e663406b1dbb45e781665c822eadbe15af99b1aa`, matching the release asset digest and the Actions-owned comments on issues #248–#253 and #258. All seven issues and milestone v0.12.1 are closed.
+
+The first [site notification attempt](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39786263670) saw stale GitHub job metadata and failed before dispatch; attempt 2 succeeded after the job readback became `completed/success`. [Site deployment 39786441289](https://github.com/xeonvs/ocr-toolkit-site/actions/runs/39786441289) succeeded from site `main` commit `04565b0416f5109aff5686825d5080b2f626e086`; the [live site](https://open-code-review-toolkit.pages.dev/) returned HTTP 200 with a v0.12.1 release link. Follow-up [#261](https://github.com/xeonvs/open-code-review-toolkit/issues/261) tracks bounded retry for this notification race. Separate [#260](https://github.com/xeonvs/open-code-review-toolkit/issues/260) tracks measured heavy-test duplication for later optimization; neither changes the v0.12.1 artifact set.
 
 ### Repository-complete handoff
 
-The feature PR, local quality, Codex Security, final toolkit/OCR review and TestPyPI development build are complete. The protected release PR owns stable markers, authorization metadata, notes and this archive. External TestPyPI/PyPI artifacts, provenance, annotated tag, immutable GitHub Release, issue closure, site refresh and the closure PR remain pending until their own receipts are read back. Resume with the exact protected release PR head and `docs/release.md` gates; do not infer publication from this repository snapshot.
+At the release-PR handoff, the feature PR, local quality, Codex Security, final toolkit/OCR review and TestPyPI development build were complete. The protected release PR owned stable markers, authorization metadata, notes and this archive. External TestPyPI/PyPI artifacts, provenance, annotated tag, immutable GitHub Release, issue closure, site refresh and the closure PR were then pending. The verified delivery facts now appear in the section above.
 
 ### Archived release plan — handoff snapshot
 
 ### Archived Plan: Toolkit v0.12.1 issue fixes and stable delivery
 
 plan_schema_version: 2
-Status: repository complete; external delivery pending
+Status: completed stable delivery; external reconciliation verified
 Last Updated: 2026-10-22
 Release classification: release-required; target stable version v0.12.1.
 
@@ -53,9 +60,9 @@ Implement all six original open issues, the newly requested qualified OCR 1.13.3
 | REQ-006 | #250 reports stage-specific outcomes and disjoint DLP accounting | WQ-05, WQ-06 | done |
 | REQ-007 | Documentation-only changes avoid unnecessary code/build work without bypassing required checks | WQ-07 | done |
 | REQ-008 | Feature commits, review, security scan, one local OCR review and protected merge are verified | WQ-01, WQ-08, WQ-09 | done |
-| REQ-009 | v0.12.1 stable artifacts, immutable receipt, tracked issues and milestone are verified | WQ-10, WQ-11 | pending |
-| REQ-010 | Live site displays v0.12.1 after the real release notification | WQ-12 | pending |
-| REQ-011 | Exact external facts are archived through a protected closure PR | WQ-13 | pending |
+| REQ-009 | v0.12.1 stable artifacts, immutable receipt, tracked issues and milestone are verified | WQ-10, WQ-11 | done |
+| REQ-010 | Live site displays v0.12.1 after the real release notification | WQ-12 | done |
+| REQ-011 | Exact external facts are prepared for the protected closure PR | WQ-13 | done |
 | REQ-012 | Documentation and agent instructions are complete, consistent, deduplicated, and correctly routed | WQ-08 | done |
 | REQ-013 | OCR 1.13.3 is qualified and pinned for the toolkit release | WQ-08, WQ-11 | done |
 
@@ -100,10 +107,10 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | done |
 | WQ-08 | REQ-008, REQ-012 | Towncrier and current contracts, separate documentation/instruction audit commit, focused and full gates, aggregate changed-range review, staged/history secret scans | done |
 | WQ-09 | REQ-008 | Codex Security scan, final local OCR review, finding fixes, final push and checked feature merge | done |
-| WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | in_progress |
-| WQ-11 | REQ-009 | Verify stable CI, registry hashes/provenance/installs, tag, immutable Release, issue receipts/milestone | pending |
-| WQ-12 | REQ-010 | Verify real site dispatch, build and live v0.12.1 content | pending |
-| WQ-13 | REQ-011 | Protected documentation-only external-reconciliation PR and final archive/marker readback | pending |
+| WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | done |
+| WQ-11 | REQ-009 | Verify stable CI, registry hashes/provenance/installs, tag, immutable Release, issue receipts/milestone | done |
+| WQ-12 | REQ-010 | Verify real site dispatch, build and live v0.12.1 content | done |
+| WQ-13 | REQ-011 | Prepare and review the documentation-only reconciliation change set with exact external receipts and marker | done |
 
 #### Locked Decisions
 
@@ -140,7 +147,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 #### Resume Point
 
-WQ-10: merge the exact protected release/v0.12.1 PR after its required checks pass. Then follow WQ-11 through WQ-13 for stable registry, immutable Release, issue and milestone receipts, live site readback, and the protected no-release reconciliation PR.
+External delivery is complete. Merge this exact protected closure PR after its required checks, then read back the marker and archived status on `main`. For later changes, start from current `main` and the active plan registry; #260 and #261 are separate follow-up issues.
 
 #### Plan Fidelity Check
 
@@ -151,13 +158,13 @@ WQ-10: merge the exact protected release/v0.12.1 PR after its required checks pa
 #### Reconciliation Check
 
 - [x] Baseline repository and GitHub issue/site-plan state were read immediately before execution.
-- [ ] Reconcile implementation, final commit range, exact CI and external receipts as they arrive.
+- [x] Reconcile implementation, final commit range, exact CI and external receipts as they arrive.
 
 #### Closure Gate
 
-- [ ] All requirements and queue items are terminal with evidence for the final delivered commits.
-- [ ] Stable artifacts, issue/milestone receipts, site refresh and protected closure PR are independently read back.
-- [ ] Release archive and active-plan reset follow `docs/release.md` without prematurely asserting external publication.
+- [x] All requirements and queue items are terminal with evidence for the final delivered commits.
+- [x] Stable artifacts, issue/milestone receipts and site refresh are independently read back; the closure PR must still pass protected checks before merge.
+- [x] Release archive and active-plan reset follow `docs/release.md` without prematurely asserting external publication.
 
 #### Post-Close Delivery
 
