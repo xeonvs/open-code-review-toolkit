@@ -37,6 +37,13 @@ def test_non_string_assurance_is_rejected_without_exception() -> None:
     assert valid_receipt(receipt) is False
 
 
+def test_non_string_schema_is_rejected_without_exception() -> None:
+    for schema in ([], {}):
+        receipt = _receipt()
+        receipt["schema"] = schema
+        assert valid_receipt(receipt) is False
+
+
 def test_v2_stage_accounting_and_legacy_unavailable_attribution() -> None:
     modern = _receipt()
     modern["schema"] = "ocr.federation/v2"

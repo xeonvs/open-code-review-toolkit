@@ -124,17 +124,22 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if not isinstance(toolkit_metadata, dict):
         return invalid
     receipt_version = toolkit_metadata.get("schema_version")
-    if receipt_version not in {9, 10} or set(toolkit_metadata) != {
-        "schema_version",
-        "review",
-        "context",
-        "mcp",
-        "evidence",
-        "dlp",
-        "publication",
-        "tool_execution",
-        "cleanup",
-    }:
+    if (
+        type(receipt_version) is not int
+        or receipt_version not in {9, 10}
+        or set(toolkit_metadata)
+        != {
+            "schema_version",
+            "review",
+            "context",
+            "mcp",
+            "evidence",
+            "dlp",
+            "publication",
+            "tool_execution",
+            "cleanup",
+        }
+    ):
         return invalid
 
     review = toolkit_metadata.get("review")
@@ -422,10 +427,15 @@ def toolkit_receipt_is_valid(toolkit_metadata: Any) -> bool:
 def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | None:
     """Parse the exact immutable identity section without granting approval authority."""
 
-    if not isinstance(toolkit_metadata, dict) or toolkit_metadata.get("schema_version") not in {
-        9,
-        10,
-    }:
+    if (
+        not isinstance(toolkit_metadata, dict)
+        or type(toolkit_metadata.get("schema_version")) is not int
+        or toolkit_metadata.get("schema_version")
+        not in {
+            9,
+            10,
+        }
+    ):
         return None
     review = toolkit_metadata.get("review")
     if (

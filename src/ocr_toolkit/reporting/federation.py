@@ -29,6 +29,7 @@ def valid_receipt(value: Any) -> bool:
     if (
         not isinstance(value, dict)
         or set(value) != {"schema", "run_id", "state", "cleanup", "tools"}
+        or not isinstance(value["schema"], str)
         or value["schema"] not in {"ocr.federation/v1", "ocr.federation/v2"}
         or value["state"] != "finalized"
         or value["cleanup"] != "clean"

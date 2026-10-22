@@ -22,6 +22,7 @@ from ocr_toolkit.posting import (
 from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.snapshot import BotCommentRefs
 from ocr_toolkit.result_contract import ReviewOutcome
+from ocr_toolkit.review_receipt import receipt_review_identity
 from tests.support import cleared_env, gitlab_config, patched_attr, patched_env
 
 
@@ -168,6 +169,14 @@ def test_unprotected_receipt_is_valid_but_structurally_comment_only() -> None:
     assert decision.result.reason == (
         "the GitLab target branch was unprotected; limited reviews are comment-only"
     )
+
+
+def test_unhashable_receipt_schema_is_rejected_without_exception() -> None:
+    for schema in ([], {}):
+        receipt = receipt_v8()
+        receipt["schema_version"] = schema
+        assert approval.toolkit_receipt_is_valid(receipt) is False
+        assert receipt_review_identity(receipt) is None
 
 
 def test_disabled_dlp_receipt_is_valid_and_blocks_automatic_approval() -> None:
