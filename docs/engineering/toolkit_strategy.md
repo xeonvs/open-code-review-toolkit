@@ -49,7 +49,7 @@ The legacy `context/*` Markdown renderer, its CLI/environment contract, and its 
 
 The built-in evidence MCP is mandatory for ordinary evidence-backed reviews. Optional HTTPS or local stdio upstreams remain behind one toolkit-owned federation gateway; operator registry v2 cannot remove, replace or shadow the built-in server. The compact bootstrap is generated from the same validated capability inventory that is written to OCR.
 
-GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. Receipt v9 separates byte-equivalent private sanitization from publication filtering through one canonical publication/approval projection, reconciles mandatory evidence and content-free federation accounting, records the effective DLP mode, and binds the immutable source, target, and actual target-protection state. OCR coverage, public-projection integrity, published findings, core advisories, reconciled count-only evidence use, privacy-safe normalized token buckets, multi-finding Recommended focus ranking, and collapsed technical details are separate implemented concepts. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
+GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. Receipt v10 separates byte-equivalent private sanitization from publication filtering through one canonical publication/approval projection, reconciles mandatory evidence and content-free federation accounting, records the effective DLP mode, and binds the immutable source, target, and actual target-protection state. OCR coverage, public-projection integrity, published findings, core advisories, reconciled count-only evidence use, privacy-safe normalized token buckets, multi-finding Recommended focus ranking, and collapsed technical details are separate implemented concepts. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
 
 ## Implemented Repository Evidence Engine
 
@@ -128,7 +128,7 @@ GitLab accepts HTTPS upstreams only; local review may also use an explicit
 absolute stdio executable with no shell or setup hook. The official SDK v2 is the
 primary integration boundary, while wire revisions are negotiated independently
 with explicitly supported SDK v1/v2 peers. Upstreams retain tenant/object
-authorization responsibility. Receipt v9 makes used advisory tools, known
+authorization responsibility. Receipt v10 makes used advisory tools, known
 failures/denials and accounting mismatches comment-only; uncertain cleanup or an
 invalid federation receipt blocks normal publication. Unused services and
 successful `review_read` use are not independent approval blockers.
@@ -193,7 +193,7 @@ Contract tests cover the supported release set. Exact-tag manual qualification e
 
 ## Historical and migration-only evidence
 
-The [evidence migration matrix](evidence_migration_matrix.md) records the removal gates and parity evidence for the pre-0.4 `context/*` implementation. It is historical audit material, not a description of current runtime flow or an authority for future backlog scope.
+The [evidence migration matrix](execution_history/evidence_migration_matrix.md) records the removal gates and parity evidence for the pre-0.4 `context/*` implementation. It is historical audit material, not a description of current runtime flow or an authority for future backlog scope.
 
 ## Architectural invariants
 

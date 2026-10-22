@@ -20,7 +20,7 @@ plan_mode_approved
 
 ### Requested Scope
 
-Implement all six open issues, a narrow documentation-only CI gate, one protected feature PR, a protected release PR and stable artifact process, and a final external-reconciliation PR. The first feature commit contains only this plan and its active-plan state. Review each logical commit before making it. Run Codex Security before the final feature push, then one correctly invoked local OCR/toolkit review to completion; fix any findings.
+Implement all six open issues, a narrow documentation-only CI gate, one protected feature PR, a protected release PR and stable artifact process, and a final external-reconciliation PR. Audit all project documentation, agent instructions, and routes; fix findings in a separate commit before final reviews. The first feature commit contains only this plan and its active-plan state. Review each logical commit before making it. Run Codex Security before the final feature push, then one correctly invoked local OCR/toolkit review to completion; fix any findings.
 
 ### Requirement Traceability
 
@@ -37,6 +37,7 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 | REQ-009 | v0.12.1 stable artifacts, immutable receipt, tracked issues and milestone are verified | WQ-10, WQ-11 | pending |
 | REQ-010 | Live site displays v0.12.1 after the real release notification | WQ-12 | pending |
 | REQ-011 | Exact external facts are archived through a protected closure PR | WQ-13 | pending |
+| REQ-012 | Documentation and agent instructions are complete, consistent, deduplicated, and correctly routed | WQ-08 | done |
 
 ### Explicit Non-Goals
 
@@ -54,7 +55,7 @@ No OCR upstream change, global DLP allowlist, arbitrary source execution, second
 ### Inputs And Sources
 
 - GitHub issues [#248](https://github.com/xeonvs/open-code-review-toolkit/issues/248), [#249](https://github.com/xeonvs/open-code-review-toolkit/issues/249), [#250](https://github.com/xeonvs/open-code-review-toolkit/issues/250), [#251](https://github.com/xeonvs/open-code-review-toolkit/issues/251), [#252](https://github.com/xeonvs/open-code-review-toolkit/issues/252), and [#253](https://github.com/xeonvs/open-code-review-toolkit/issues/253), including complete acceptance examples.
-- `docs/engineering/project_principles.md`, `docs/development.md`, `docs/release.md`, `docs/engineering/m5_context_contracts.md`, `docs/review-decision-flow.md`, and current runtime/tests are contract owners.
+- `docs/engineering/project_principles.md`, `docs/development.md`, `docs/release.md`, `docs/engineering/governed_federation_contracts.md`, `docs/review-context.md`, `docs/review-decision-flow.md`, and current runtime/tests are contract owners. M5 context contracts are historical.
 - Current `main` is `c313362`; prior site plan was archived in `docs/engineering/execution_history/2026-10-22-toolkit-site-launch-and-release-notification.md` by #256.
 
 ### User Decisions And Answers
@@ -76,7 +77,7 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | done |
 | WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | done |
 | WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | done |
-| WQ-08 | REQ-008 | Towncrier/docs, focused and full gates, aggregate changed-range review, staged/history secret scans | in_progress |
+| WQ-08 | REQ-008, REQ-012 | Towncrier and current contracts, separate documentation/instruction audit commit, focused and full gates, aggregate changed-range review, staged/history secret scans | in_progress |
 | WQ-09 | REQ-008 | Codex Security scan, one local OCR review, finding fixes, final push and checked feature merge | pending |
 | WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | pending |
 | WQ-11 | REQ-009 | Verify stable CI, registry hashes/provenance/installs, tag, immutable Release, issue receipts/milestone | pending |
@@ -99,6 +100,7 @@ Run focused production-boundary regression suites per issue, including immutable
 - 2026-10-22: Documentation-only classifier and required-check-preserving CI branches pass 18 focused classifier/workflow tests. Workflow changes themselves remain on the full validation path.
 - 2026-10-22: #253 source-bound optional-code proof passes 8 helper tests and 6 publication/renderer tests; opaque DLP retains independent mixed secret, PII, HTML-comment, destination and control checks. Broader quality matrix remains pending.
 - 2026-10-22: #249 immutable mode-160000 add/update/delete were qualified against installed OCR 1.13.2 and close before model launch with a typed status; #250 versioned pre-execution, federation, publication and posting contracts have focused stage/race/legacy tests. Full pytest completed with 2019 passed, five skipped and one stale CI-matrix assertion, which was corrected and retested; final quality gate remains pending.
+- 2026-10-22: Public v0.12.1 contract documentation and Towncrier fragments committed as `cccb7f3`; 49 affected documentation/CI tests passed. Separate read-only audits inventoried documentation and instruction routes: one broken anchor, current receipt-version drift, historical/current M5 ownership, and an unguarded agent-configuration route. The audit commit archives the M5 design and evidence migration records, gives the current governed federation contract a milestone-neutral name, and corrects the other findings. Instruction lint and documentation tests pass; final gates remain pending.
 
 ### Risks And Recovery
 

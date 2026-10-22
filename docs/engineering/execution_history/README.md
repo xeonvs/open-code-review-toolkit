@@ -1,10 +1,12 @@
 # Execution History Index
 
-`PLANS.md` owns active or blocked repository work. This archive preserves completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version.
+`PLANS.md` owns active or blocked repository work. This archive preserves completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version. It also retains the historical [review-context design checkpoint](review_context_design_checkpoint.md) (formerly `m5_context_contracts.md`) and [evidence migration matrix](evidence_migration_matrix.md); neither owns current runtime contracts.
 
 <!-- engineering-workflow:index:start -->
 - [2026-10-22-toolkit-site-launch-and-release-notification.md](2026-10-22-toolkit-site-launch-and-release-notification.md)
+- [evidence_migration_matrix.md](evidence_migration_matrix.md)
 - [releases.md](releases.md)
+- [review_context_design_checkpoint.md](review_context_design_checkpoint.md)
 <!-- engineering-workflow:index:end -->
 
 ## Release index

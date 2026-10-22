@@ -108,7 +108,11 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
         encoding="utf-8"
     )
     context_contracts = (
-        PROJECT_ROOT / "docs" / "engineering" / "m5_context_contracts.md"
+        PROJECT_ROOT
+        / "docs"
+        / "engineering"
+        / "execution_history"
+        / "review_context_design_checkpoint.md"
     ).read_text(encoding="utf-8")
     readme = README.read_text(encoding="utf-8")
 
@@ -135,8 +139,9 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
         "toolkit_strategy.md",
         "project_principles.md",
         "review_signal_ownership.md",
-        "m5_context_contracts.md",
-        "evidence_migration_matrix.md",
+        "execution_history/review_context_design_checkpoint.md",
+        "execution_history/evidence_migration_matrix.md",
+        "governed_federation_contracts.md",
         "test_evidence_matrix.md",
         "execution_history/README.md",
     ):
@@ -215,7 +220,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
 
     for phrase in (
         "Source-to-signal matrix",
-        "receipt v9",
+        "receipt v10",
         "action-receipt-v3 accounting",
         "Group labels are model-produced",
         "sorted changed paths",
@@ -614,7 +619,7 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         assert "OCR_GITLAB_TARGET_PROTECTION_MODE" in document
         assert "required" in document
         assert "unprotected" in document
-    for document in (configuration, security, bounded):
+    for document in (configuration, gitlab, security, bounded):
         assert "receipt v10" in document
     for phrase in (
         "Explicit empty strings",

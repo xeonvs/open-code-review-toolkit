@@ -1,12 +1,12 @@
-# M5 Bounded Review-Context Contracts
+# Historical M5 Review-Context Design Checkpoint
 
 > Historical checkpoint: M7 supersedes executable adapters and direct MCP
 > passthrough. Current policy v4 has no references; v1-v3 references are parsed
 > only for migration and never execute. Current behavior is owned by
-> [M7 federation contracts](m7_federation_contracts.md) and the public
-> [bounded review-context contract](../review-context.md).
+> [federation contracts](../governed_federation_contracts.md) and the public
+> [bounded review-context contract](../../review-context.md).
 
-This checkpoint fixed the v0.7.0 production contracts before implementation and remains the engineering-level boundary record. The implementation and current contracts live on `main`; production-owner evidence and explicit residual limits are recorded in the test-evidence matrix, while completed release evidence is archived in the execution history. Public operator behavior is owned by [Bounded review context](../review-context.md).
+This checkpoint fixed the v0.7.0 production contracts before implementation and remains the engineering-level boundary record. The implementation and current contracts live on `main`; production-owner evidence and explicit residual limits are recorded in the test-evidence matrix, while completed release evidence is archived in the execution history. Public operator behavior is owned by [Bounded review context](../../review-context.md).
 
 The v3 pre-execution status, v8 receipt, v2 publication signal, and executable
 adapter paragraphs below describe that historical checkpoint. Current releases
@@ -14,8 +14,8 @@ use the closed pre-execution status v4, result/receipt v10 with publication
 `ocr.publication/v2`, signal v4, and governed federation v2. Current source-bound
 HTML-like code admission, public/private DLP count separation, stale-revision
 local reporting, and gitlink/preview stop behavior are specified in the public
-[review flow](../review-decision-flow.md), [configuration](../configuration.md),
-and [M7 federation contracts](m7_federation_contracts.md). Do not use the
+[review flow](../../review-decision-flow.md), [configuration](../../configuration.md),
+and [federation contracts](../governed_federation_contracts.md). Do not use the
 historical schemas below to authorize a current posting or approval.
 
 ## Ownership and dependency direction

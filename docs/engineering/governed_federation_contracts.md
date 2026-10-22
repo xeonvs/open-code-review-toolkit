@@ -1,7 +1,7 @@
 # Governed MCP federation contracts
 
-M7 keeps OCR as the only model/review loop. The toolkit mediates external tool
-use; upstream services remain responsible for tenant/object authorization. This
+Governed federation keeps OCR as the only model/review loop. The toolkit mediates
+external tool use; upstream services remain responsible for tenant/object authorization. This
 contract supersedes M5's external adapter acquisition architecture only. Internal
 repository evidence, immutable forge acquisition and the separate context store
 retain their existing owners and admission rules.
