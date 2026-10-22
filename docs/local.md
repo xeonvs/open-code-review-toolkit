@@ -135,6 +135,7 @@ flowchart LR
 | Native registration missing or unsafe | Run native login in the normal user session and keep its store operator-owned and private. Do not copy token files into the repository or weaken checks. |
 | Account retained but plan usage disabled | Run `ocr auth login --provider chatgpt --enable-plan` for the retained registration and complete consent. |
 | Model, grant, expiry or quota rejected | Follow OCR's native diagnostic; use the account's model catalog or restore account access/limits. There is no automatic API fallback. |
+| A newly installed OCR binary times out at `/v1/models` | Check the local firewall rule for that exact executable and run `ocr llm models` before a long review. A successful toolkit preflight checks store metadata but does not test network access. |
 | Preflight passes but review fails | Preflight proves structural readiness only. Inspect the normal private stderr or an authorized debug bundle; a failed or rejected review is not a successful report. |
 
 ### Evidence and external tools

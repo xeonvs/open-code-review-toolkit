@@ -42,7 +42,7 @@ Implement all six original open issues, the newly requested qualified OCR 1.13.3
 
 ### Explicit Non-Goals
 
-No OCR upstream change, global DLP allowlist, arbitrary source execution, second model review, separate fresh-clone/host QA, manual replacement of immutable release objects, or speculative reconstruction of historical rejected content.
+No OCR upstream change, global DLP allowlist, arbitrary source execution, repeated model review after final finding fixes, separate fresh-clone/host QA, manual replacement of immutable release objects, or speculative reconstruction of historical rejected content.
 
 ### Constraints
 
@@ -62,7 +62,7 @@ No OCR upstream change, global DLP allowlist, arbitrary source execution, second
 
 ### User Decisions And Answers
 
-The owner chose v0.12.1, all six issues, toolkit-owned truthful gitlink degradation instead of OCR upstream modification, and no extra fresh clone or host checks. Mandatory CI and published-package smoke still apply. Fixes come first; verify the live site only after the actual v0.12.1 release dispatch. A documentation-only CI gate was approved, but workflow changes themselves require full checks. The feature PR begins with a reviewed plan-only commit; before every later commit perform self-review. Run Codex Security and then one correct local OCR review before the final feature push. The owner subsequently requested OCR 1.13.3 qualification and inclusion, and authorized one additional final local review after correcting the private output path instructions. Formulate and set the goal after execution begins.
+The owner chose v0.12.1, all six issues, toolkit-owned truthful gitlink degradation instead of OCR upstream modification, and no extra fresh clone or host checks. Mandatory CI and published-package smoke still apply. Fixes come first; verify the live site only after the actual v0.12.1 release dispatch. A documentation-only CI gate was approved, but workflow changes themselves require full checks. The feature PR begins with a reviewed plan-only commit; before every later commit perform self-review. Run Codex Security and then one correct local OCR review before the final feature push. The owner subsequently requested OCR 1.13.3 qualification and inclusion, and authorized a corrected final local review after the private output path failure. After the 1.13.3 binary was unblocked in the host firewall, the owner requested another check; that run completed and its findings were fixed. Formulate and set the goal after execution begins.
 
 ### Completed Baseline State
 
@@ -107,6 +107,7 @@ Run focused production-boundary regression suites per issue, including immutable
 - 2026-10-22: The rerun passed with 2020 tests, five skips, 345 subtests and 86% aggregate coverage. Codex Security scan `f2f440ac-78b4-4e98-9b4f-96fd26db3ad8` sealed the initial source/workflow range with 21 reviewed surfaces and no findings. Gitleaks tree/history and changed-range whitespace checks passed.
 - 2026-10-22: The first real OCR 1.13.2 review reached a complete JSON result with four findings, but `ocr-ci` exited 2 at Markdown reporting because its `/tmp` output parent is a macOS symlink. Receipt schema type guards, complete push-range classification and classifier timeouts were corrected in `825aea1` and `e7e247b`; docs and the agent route now require a fresh physical private output parent. The owner explicitly authorized one final corrected run.
 - 2026-10-22: OCR 1.13.3 upstream release was human-reviewed and qualified by hosted run `39773385483`; all asset checksums, consumed Linux probes and local Darwin arm64 contract probes passed. `ca83abd` advances the exact manifest, runtime/native-auth gates and GitLab pin. Compatibility issue #258 joins the v0.12.1 milestone. The second full quality gate and final changed-range security scan remain pending.
+- 2026-10-22: The corrected 1.13.3 local review initially stopped before model execution at `/v1/models`; `ocr llm models` confirmed the same binary was blocked by the host firewall while 1.13.2 worked. After the owner corrected that rule, 1.13.3 model discovery succeeded and the full toolkit/OCR review completed with 28/28 selected items, DLP admission, and two findings. `a867800` executes the PR classifier from trusted base Git content, and `3205cda` updates installed federation smoke to v2; targeted tests and installed-package probes pass. Codex Security scan `689e7980-77c2-4dca-a95b-5230081be09e` sealed all five changed source/workflow surfaces from `dae5577..3205cda` with no findings. Full post-fix quality and final feature push remain pending.
 
 ### Risks And Recovery
 
@@ -118,7 +119,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Resume Point
 
-WQ-08/WQ-09: finish the post-qualification full quality gate, review the final changed range and updated docs, scan the post-finding code/workflow delta with Codex Security, then run the authorized single final local OCR review with a physical private output path and verified 1.13.3 binary. Inspect terminal report and fix any remaining findings before the feature push.
+WQ-08/WQ-09: complete the post-finding full quality, tree/history secret scans, aggregate changed-range and documentation review. Reconcile the successful OCR result and three sealed Codex Security ranges against the exact feature head, then push and verify protected PR checks before merge.
 
 ### Plan Fidelity Check
 
