@@ -4,7 +4,6 @@ This index routes maintainers to canonical engineering owners without duplicatin
 
 <!-- engineering-workflow:index:start -->
 - [evidence_migration_matrix.md](evidence_migration_matrix.md)
-- [execution_history/README.md](execution_history/README.md)
 - [m5_context_contracts.md](m5_context_contracts.md)
 - [m7_federation_contracts.md](m7_federation_contracts.md)
 - [project_principles.md](project_principles.md)

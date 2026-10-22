@@ -16,3 +16,4 @@ dist/
 .idea/
 *.log
 .codex
+.playwright-cli/
