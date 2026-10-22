@@ -45,20 +45,40 @@ jobs:
             '.id == $id and .path == ".github/workflows/release.yml" and .state == "active"' \
             "${RUNNER_TEMP}/release-workflow.json" >/dev/null
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/attempts/${SOURCE_RUN_ATTEMPT}/jobs?per_page=100" \
-            > "${RUNNER_TEMP}/release-jobs.json"
-          jq -e '
-            (.total_count | type == "number" and . > 0 and . <= 100) and
-            (.jobs | type) == "array" and (.jobs | length) == .total_count and
-            ([.jobs[] | select(.name == "publish-github-release")] | length == 1)
-          ' "${RUNNER_TEMP}/release-jobs.json" >/dev/null
-          publish_conclusion=$(jq -r '[.jobs[] | select(.name == "publish-github-release")][0].conclusion' \
-            "${RUNNER_TEMP}/release-jobs.json")
+          publish_conclusion=
+          for attempt in 1 2 3 4 5 6; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/attempts/${SOURCE_RUN_ATTEMPT}/jobs?per_page=100" \
+              > "${RUNNER_TEMP}/release-jobs.json"
+            jq -e '
+              (.total_count | type == "number" and . > 0 and . <= 100) and
+              (.jobs | type) == "array" and (.jobs | length) == .total_count and
+              ([.jobs[] | select(.name == "publish-github-release")] | length == 1)
+            ' "${RUNNER_TEMP}/release-jobs.json" >/dev/null
+            publish_status=$(jq -r '[.jobs[] | select(.name == "publish-github-release")][0].status' \
+              "${RUNNER_TEMP}/release-jobs.json")
+            publish_conclusion=$(jq -r '[.jobs[] | select(.name == "publish-github-release")][0].conclusion' \
+              "${RUNNER_TEMP}/release-jobs.json")
+            if [[ "${publish_status}" == completed ]]; then
+              break
+            fi
+            if [[ "${publish_status}" != in_progress && "${publish_status}" != queued ]]; then
+              echo 'Release publication job has invalid status.' >&2
+              exit 1
+            fi
+            if [[ "${attempt}" == 6 ]]; then
+              echo 'Release publication job remained unfinished after bounded readback.' >&2
+              exit 1
+            fi
+            sleep 5
+          done
           if [[ "${publish_conclusion}" == skipped ]]; then
             echo 'No GitHub Release was published by this run.'
             exit 0
           fi
-          test "${publish_conclusion}" = success
+          if [[ "${publish_conclusion}" != success ]]; then
+            echo 'Release publication job was not successful.' >&2
+            exit 1
+          fi
 
           gh api "repos/${GITHUB_REPOSITORY}/releases/latest" \
             > "${RUNNER_TEMP}/latest-release.json"
