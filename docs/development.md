@@ -43,14 +43,17 @@ evidence. Generic fixtures derive the current identity from its runtime owner;
 frozen historical fixtures must not follow the current pin. A version-neutral
 description still needs semantic review when the consumed contract changes.
 
-Optional local ChatGPT authentication has a separate qualified-version gate in
-`local_chatgpt.CHATGPT_OCR_VERSIONS`. During OCR promotion, review native provider
-resolution, auth-store ownership, locking/refresh and supported request controls;
-update this gate with the applicable focused evidence and local/compatibility
-documentation. API-provider qualification alone does not qualify native auth.
+Optional local ChatGPT authentication has a separate native-contract line and
+minimum patch in `local_chatgpt`; exact binary qualification still happens first
+through `preflight.validate_ocr_binary`. During OCR promotion, compare upstream
+changes in native provider resolution, auth-store ownership, locking/refresh and
+supported request controls with the previously reviewed contract. An adjacent
+qualified patch in the same line inherits that contract when none of those
+surfaces changed; it does not need another version entry or a live model call.
+Update the native gate and focused evidence when the consumed contract or version
+line changes. API-provider qualification alone does not qualify native auth.
 Keep personal credentials out of shared CI. Use an operator-authorized local
-native login/review when a changed consumed auth contract requires it; preserve
-applicable prior evidence when that contract is unchanged.
+native login/review when a changed consumed auth contract requires it.
 
 The live suite in `scripts/ocr_compat.py` runs the same forward-only probes for
 every candidate, then validates observations against the contract epoch owned by
