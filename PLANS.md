@@ -1,8 +1,8 @@
 # Execution Plans
 
-Use this file for active or blocked work. Stable release plans are indexed in
-[execution history](docs/engineering/execution_history/README.md); completed
-no-release work is compacted after its outcome and validation are retained.
+Use this file for active or blocked work. Stable releases require indexing in
+[execution history](docs/engineering/execution_history/README.md); this
+no-release site launch will also be archived at the owner's explicit request.
 
 ## Active Plan: Toolkit site launch and release notification
 
@@ -44,7 +44,7 @@ No custom domain, site account, form, analytics, raw operational report, private
 - Preserve the approved calm palette and cat speech-bubble style. The cat appears after three taps on a separate brand control; reduced-motion users see a still image without sound.
 - Read GitHub Releases at build time. Required CI and production builds fail on unavailable, invalid, or mismatched latest release data. Do not poll on a schedule.
 - Keep the site repository private. GitHub Free does not enforce its branch protection; deployment triggers only on merged PRs or a verified release dispatch, never a direct push.
-- Keep `SITE_DEPLOY_ENABLED` unset through checks and credential setup. The owner separately authorized first publication after successful PR checks; enable it immediately before merging the reviewed site PR so that merge triggers the first deployment.
+- The owner authorized first publication after successful PR checks. The site PR merge triggers that deployment; the temporary `SITE_DEPLOY_ENABLED` variable has been removed from the site workflow and documentation.
 - Publish no private paths, raw counts, production examples, credential values, or source report material.
 
 ### Inputs And Sources
@@ -56,7 +56,7 @@ No custom domain, site account, form, analytics, raw operational report, private
 
 ### User Decisions And Answers
 
-The owner approved the revised palette, release block, and comic-style cat; asked for natural English without self-repetition, no irrelevant site-data FAQ, and restrained license references. The owner requested cleanup and review before commits, supplied the cross-repository dispatch secret directly in GitHub, and approved Cloudflare publication after checks and GitHub completion. They confirmed that the toolkit change should be merged into `main` without a new stable version or stable-release artifacts, then the local toolkit checkout should return to current `main`. The ordinary TestPyPI development build may still run after merge.
+The owner approved the revised palette, release block, and comic-style cat; asked for natural English without self-repetition, no irrelevant site-data FAQ, and restrained license references. The owner requested cleanup and review before commits, supplied the cross-repository dispatch secret directly in GitHub, and approved Cloudflare publication after checks and GitHub completion. They confirmed that the toolkit change should be merged into `main` without a new stable version or stable-release artifacts, then the local toolkit checkout should return to current `main`. The ordinary TestPyPI development build may still run after merge. They explicitly requested archiving the final plan after live delivery.
 
 ### Completed Baseline State
 
@@ -68,10 +68,10 @@ Toolkit `main` had a stable v0.12.0 Release and protected release workflow. The 
 | --- | --- | --- | --- |
 | WQ-01 | REQ-001, REQ-002, REQ-003 | Edited site, release parser/tests, optimized cat assets, Astro check and strict build | `done` |
 | WQ-02 | REQ-002, REQ-004 | Site deploy workflow and toolkit release notifier, trigger and receipt guards | `done` |
-| WQ-03 | REQ-004 | Cloudflare secrets and owner-provided site-only dispatch secret verified; deploy gate off | `done` |
+| WQ-03 | REQ-004 | Cloudflare secrets and owner-provided site-only dispatch secret verified | `done` |
 | WQ-04 | REQ-005, REQ-006, REQ-007 | Separate Astra High review, completed Codex Security diff scans, Gitleaks, documentation audit | `done` |
 | WQ-05 | REQ-001, REQ-003, REQ-005 | Desktop/mobile inspection and two sequential four-persona QA rounds | `done` |
-| WQ-06 | REQ-002, REQ-004, REQ-006, REQ-007 | Merge checked PRs, enable gate, verify Workers.dev deployment and release-refresh path, synchronize toolkit checkout with current main, close plan | `in_progress` |
+| WQ-06 | REQ-002, REQ-004, REQ-006, REQ-007 | Merge checked PRs, verify Workers.dev deployment and release-refresh path, synchronize toolkit checkout with current main, close plan | `in_progress` |
 
 ### Locked Decisions
 
@@ -86,7 +86,7 @@ Run toolkit `scripts/quality.sh check`, Gitleaks, scoped diff and instruction/do
 - 2026-10-22: Site Astro check, three release-parser tests, strict v0.12.0 build, Wrangler dry run, staged public-content scan and Gitleaks passed. Toolkit full quality matrix and staged Gitleaks passed. YAML syntax and diff whitespace checks passed. `actionlint` was unavailable on the last local pass after a network timeout; GitHub Actions execution is the live workflow gate.
 - 2026-10-22: Four first-user browser personas ran in sequence, fixes were applied, then four fresh personas repeated the path. The 375 px and 320 px layouts had no horizontal overflow. On-site command copy took two actions for three personas; actual review still requires local setup. Headless automation did not establish video playback progress.
 - 2026-10-22: Astra High reviewed both diffs, found two notification edge cases that were fixed, and reported no remaining actionable findings. Both Codex Security diff scans completed with full changed-surface coverage and zero findings.
-- 2026-10-22: Both GitHub PRs are open. Site checks and the toolkit PR's full matrix passed on their original heads. The toolkit documentation follow-up and new site workflow documentation still need hosted checks. Cloudflare publication gate remains unset.
+- 2026-10-22: Both GitHub PRs are open. Site checks passed on its current documentation head; the toolkit follow-up's matrix is running. The temporary site deploy variable has been removed in the site branch before publication.
 - 2026-10-22: Reachable history in both repositories passed Gitleaks; historical path and text searches found no task QA artifacts or private report path. Agent instruction contract, documentation navigation, and plan-lifecycle checks passed. The broader repo audit still labels the explicit archive successor link as an orphan despite the lifecycle and navigation checks accepting it; four prompt-risk heuristics are ordinary token references, not instruction overrides.
 
 ### Risks And Recovery
@@ -98,7 +98,7 @@ Run toolkit `scripts/quality.sh check`, Gitleaks, scoped diff and instruction/do
 
 ### Resume Point
 
-WQ-06: commit and push the reviewed toolkit documentation follow-up, wait for its PR checks, merge the toolkit PR without a new stable version, enable `SITE_DEPLOY_ENABLED`, merge the reviewed site PR to trigger Cloudflare deployment, verify the live site, synchronize the local toolkit checkout to current `main`, then reconcile plan closure. The owner already approved first publication after these checks.
+WQ-06: commit and push this reviewed documentation correction, wait for toolkit PR checks, then merge it without a new stable version. Merge the newly checked site PR to trigger Cloudflare deployment. Verify the live site, synchronize the local toolkit checkout to current `main`, then reconcile plan closure. The owner already approved first publication after these checks.
 
 ### Plan Fidelity Check
 
@@ -115,7 +115,7 @@ WQ-06: commit and push the reviewed toolkit documentation follow-up, wait for it
 
 - [ ] All requirements and queue items are terminal and final validation matches delivered commits.
 - [ ] GitHub merge, Cloudflare deployment, token narrowing, live readback, and release refresh wiring are verified.
-- [ ] Complete the no-release plan lifecycle transition only after publication evidence exists; retain the outcome in commits and PRs.
+- [ ] Archive this no-release plan through the installed lifecycle tool after publication evidence exists, as explicitly requested by the owner.
 
 ### Post-Close Delivery
 
@@ -123,4 +123,4 @@ Provide the verified Workers.dev URL, merged PRs, security and QA summary, and r
 
 ### Handoff Notes
 
-Continue only from WQ-06 and current GitHub check state. Both reviewed commits are on `codex/` branches; deployment is not active yet. Maintain the owner-approved first-publication gate and report actual live results rather than inferred success.
+Continue only from WQ-06 and current GitHub check state. Both reviewed branches are open; deployment is not active yet. The site workflow removes the temporary variable and retains checked merge/dispatch triggers. Report actual live results rather than inferred success.
