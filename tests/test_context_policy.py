@@ -594,3 +594,32 @@ def test_federation_ingress_admits_technical_numbers_but_rejects_mixed_pii() -> 
     check_dlp({"summary": "Use 192.0.2.128/25.", "count": 123456789012345}, matcher)
     with pytest.raises(FederationError, match="dlp_rejected"):
         check_dlp({"summary": "Use 192.0.2.128/25; call +420.123.456.789"}, matcher)
+
+
+@pytest.mark.parametrize("value", ["List<Entry>", "(?P<entry>[a-z]+)", "<Widget enabled />"])
+def test_opaque_code_relaxes_only_literal_tag_syntax(value: str) -> None:
+    budgets = TextBudgets(2000, 8000, 30)
+    assert check_text(value, budgets=budgets, publication=True).detector == "html_tag"
+    assert check_text(value, budgets=budgets, publication=True, allow_opaque_code=True).admitted
+
+
+@pytest.mark.parametrize(
+    "value,reason",
+    [
+        ("<Widget />\ncontact@example.invalid", "pii"),
+        ("<Widget />\nCall +420 123 456 789", "pii"),
+        ("<Widget />\nlogin_password: 'synthetic-secret-value'", "secret"),
+        ("<Widget />\n<!-- hidden -->", "laundering"),
+        ("&lt;Widget /&gt;", "laundering"),
+        ("<Widget />\n[link](https://example.invalid)", "laundering"),
+        ("<Widget />\n\u202eflow", "invalid_text"),
+    ],
+)
+def test_opaque_code_preserves_whole_unit_checks(value: str, reason: str) -> None:
+    checked = check_text(
+        value,
+        budgets=TextBudgets(2000, 8000, 30),
+        publication=True,
+        allow_opaque_code=True,
+    )
+    assert checked.reason == reason

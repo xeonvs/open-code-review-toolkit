@@ -70,6 +70,7 @@ from ocr_toolkit.evidence.mcp import (
     call_tool,
     evidence_summary,
 )
+from ocr_toolkit.evidence.opaque_code import OpaqueCodeProof, prove_opaque_code
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
@@ -715,6 +716,7 @@ def _dlp_reasons(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     allow_horizontal_tabs: bool = False,
+    allow_opaque_code: bool = False,
     debug: DebugBundle | None = None,
     path: tuple[object, ...] = (),
     action: str = "detect-sink",
@@ -748,6 +750,7 @@ def _dlp_reasons(
                 publication=True,
                 forbidden_matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                allow_opaque_code=allow_opaque_code,
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
@@ -1075,6 +1078,7 @@ def _safe_publication_comments(
     *,
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
+    opaque_fields: frozenset[tuple[int, str]] = frozenset(),
     debug: DebugBundle | None = None,
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
@@ -1098,6 +1102,7 @@ def _safe_publication_comments(
                 allow_horizontal_tabs=(
                     isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
+                allow_opaque_code=(index, key) in opaque_fields,
                 debug=debug,
                 path=("comments", index, key),
                 action="omit-field",
@@ -1390,6 +1395,7 @@ def _publication_projection(
     forbidden: tuple[str | ForbiddenValue, ...],
     allowed_tools: frozenset[str],
     dlp_enabled: bool = True,
+    code_proof: Callable[[dict[str, object]], OpaqueCodeProof] | None = None,
     debug: DebugBundle | None = None,
 ) -> tuple[dict[str, object], dict[str, object], bool]:
     """Return a DLP-safe result plus one exact v8 publication state."""
@@ -1406,6 +1412,17 @@ def _publication_projection(
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
+    opaque_fields: set[tuple[int, str]] = set()
+    if code_proof is not None and isinstance(payload.get("comments"), list):
+        for index, comment in enumerate(payload["comments"]):
+            if not isinstance(comment, dict):
+                continue
+            proof = code_proof(comment)
+            if proof.existing_verified:
+                opaque_fields.add((index, "existing_code"))
+            if proof.suggestion_verified:
+                opaque_fields.add((index, "suggestion_code"))
+    verified_opaque_fields = frozenset(opaque_fields)
     sink_reasons: Counter[str] = Counter()
     source_units: dict[tuple[object, ...], set[str]] = {}
     source_counts: Counter[str] = Counter()
@@ -1420,6 +1437,11 @@ def _publication_projection(
                 budgets=budgets,
                 matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
+                allow_opaque_code=(
+                    len(sink_path) == 3
+                    and sink_path[0] == "comments"
+                    and (sink_path[1], sink_path[2]) in verified_opaque_fields
+                ),
                 debug=debug,
                 path=sink_path,
                 source_classes=sources,
@@ -1472,7 +1494,11 @@ def _publication_projection(
             publication_changed = True
     if publication_changed:
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
-            payload.get("comments"), budgets=budgets, matcher=matcher, debug=debug
+            payload.get("comments"),
+            budgets=budgets,
+            matcher=matcher,
+            opaque_fields=verified_opaque_fields,
+            debug=debug,
         )
         warnings, omitted_warnings = _safe_publication_warnings(
             payload.get("warnings"), budgets=budgets, matcher=matcher, debug=debug
@@ -1579,6 +1605,23 @@ def _finalize_ocr_result(
     failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
     report: ReviewReport | None = None
+    source_reader = GitRepositoryReader(Path.cwd())
+    source_cache: dict[str, str | None] = {}
+
+    def read_reviewed_head(path: str) -> str | None:
+        if path not in source_cache:
+            try:
+                blob = source_reader.read_blob(identity.source_sha, path)
+                source_cache[path] = blob.decode("utf-8") if blob is not None else None
+            except (RepositoryEvidenceError, UnicodeDecodeError):
+                source_cache[path] = None
+        return source_cache[path]
+
+    def code_proof(comment: dict[str, object]) -> OpaqueCodeProof:
+        path = comment.get("path")
+        if not isinstance(path, str):
+            return OpaqueCodeProof()
+        return prove_opaque_code(comment, path, read_reviewed_head)
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
@@ -1616,6 +1659,7 @@ def _finalize_ocr_result(
             forbidden=forbidden,
             allowed_tools=allowed_tools,
             dlp_enabled=dlp_enabled,
+            code_proof=code_proof,
             **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
         if state is not None:

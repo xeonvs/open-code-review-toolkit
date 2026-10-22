@@ -303,6 +303,7 @@ def check_text(
     forbidden: tuple[str | ForbiddenValue, ...] = (),
     forbidden_matcher: ForbiddenMatcher | None = None,
     allow_horizontal_tabs: bool = False,
+    allow_opaque_code: bool = False,
     enabled: bool | None = None,
 ) -> DLPResult:
     """Apply independent units, redaction, PII, and optional publication checks."""
@@ -368,7 +369,7 @@ def check_text(
             else "html_comment"
             if HTML_COMMENT_RE.search(decoded)
             else "html_tag"
-            if HTML_TAG_RE.search(decoded)
+            if HTML_TAG_RE.search(decoded) and not (allow_opaque_code and decoded == normalized)
             else "display_control"
             if any(_is_display_control(character) for character in decoded)
             else None
