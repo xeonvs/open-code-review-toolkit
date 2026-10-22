@@ -14,31 +14,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  classify:
+    name: classify-documentation
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.paths.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/docs_only.py --base "$BASE" --head "$HEAD"
+
   sast-bandit:
     name: sast-bandit
+    needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           version: "0.13.4"
-      - run: ./scripts/quality.sh security
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: ./scripts/quality.sh security
 
   dependency-audit:
     name: dependency-audit
+    needs: classify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: needs.classify.outputs.docs_only != 'true'
         with:
           version: "0.13.4"
-      - run: uv sync --locked
-      - run: uv run --no-sync pip-audit
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv sync --locked
+      - if: needs.classify.outputs.docs_only != 'true'
+        run: uv run --no-sync pip-audit
 
   secrets:
     name: secrets

@@ -12,9 +12,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  classify:
+    name: classify-development-push
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.paths.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        env:
+          HEAD: ${{ github.sha }}
+        run: |
+          BASE=$(git rev-parse "${HEAD}^")
+          python scripts/docs_only.py --base "$BASE" --head "$HEAD"
+
   build:
     name: verify-and-build-development
+    needs: classify
     if: >-
+      needs.classify.outputs.docs_only != 'true' &&
       !(startsWith(github.event.head_commit.message, 'Release v') &&
       contains(github.event.head_commit.message, '(#'))
     runs-on: ubuntu-latest

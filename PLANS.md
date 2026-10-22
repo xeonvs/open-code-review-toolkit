@@ -32,7 +32,7 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 | REQ-004 | #253 publishes proven, safely rendered optional code syntax | WQ-04 | pending |
 | REQ-005 | #249 gives an explicit truthful gitlink outcome | WQ-05 | pending |
 | REQ-006 | #250 reports stage-specific outcomes and disjoint DLP accounting | WQ-05, WQ-06 | pending |
-| REQ-007 | Documentation-only changes avoid unnecessary code/build work without bypassing required checks | WQ-07 | pending |
+| REQ-007 | Documentation-only changes avoid unnecessary code/build work without bypassing required checks | WQ-07 | done |
 | REQ-008 | Feature commits, review, security scan, one local OCR review and protected merge are verified | WQ-01, WQ-08, WQ-09 | pending |
 | REQ-009 | v0.12.1 stable artifacts, immutable receipt, tracked issues and milestone are verified | WQ-10, WQ-11 | pending |
 | REQ-010 | Live site displays v0.12.1 after the real release notification | WQ-12 | pending |
@@ -75,7 +75,7 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | WQ-04 | REQ-004 | Reviewed-source proof before projection and both-sink rendering tests | in_progress |
 | WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | pending |
 | WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | pending |
-| WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | pending |
+| WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | done |
 | WQ-08 | REQ-008 | Towncrier/docs, focused and full gates, aggregate changed-range review, staged/history secret scans | pending |
 | WQ-09 | REQ-008 | Codex Security scan, one local OCR review, finding fixes, final push and checked feature merge | pending |
 | WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | pending |
@@ -96,6 +96,7 @@ Run focused production-boundary regression suites per issue, including immutable
 - 2026-10-22: First plan-only signed commit `b72b295`, draft feature PR #257, active goal and milestone v0.12.1 with all six issues assigned.
 - 2026-10-22: #252 field-aware registration passes production enrichment composition for current/outdated and complete/partial records, with safe prose/code, protected text, omission and operator-secret controls (5 focused tests). Broader quality matrix remains pending.
 - 2026-10-22: #248/#251 narrow syntax classifiers pass 85 focused DLP, publication, ingress and federation tests, including mixed PII/secret/forbidden controls. Broader quality matrix remains pending.
+- 2026-10-22: Documentation-only classifier and required-check-preserving CI branches pass 18 focused classifier/workflow tests. Workflow changes themselves remain on the full validation path.
 
 ### Risks And Recovery
 
