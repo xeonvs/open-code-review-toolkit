@@ -41,6 +41,9 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
 | `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
 
+<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify canonical private output paths terminal exit status delivered report and admitted findings" -->
+| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Physical private paths, terminal status, report and findings |
+
 <!-- ew:route id="workflow-instructions" triggers="AGENTS.md|docs/engineering/project_principles.md|docs/codex/AGENT_EXECUTION_PITFALLS.md" owners="skill://engineering-workflow/references/instruction_lifecycle.md|docs/engineering/project_principles.md" guards="lint:instruction-contract" -->
 | `workflow-instructions` | Instruction owner, route, or incident change | Installed instruction lifecycle and project principles | `lint:instruction-contract` |
 

@@ -7,8 +7,16 @@ then configure the LLM environment described in [configuration.md](configuration
 
 ```console
 ocr-ci preflight --local
-ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
+
+Keep all three output paths in that new private directory. Resolve its physical
+path before launch: on macOS `/tmp` commonly points through a symlink to
+`/private/tmp`, and the report writer rejects a symlinked parent after OCR has
+already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
+an OCR JSON file alone does not establish successful local delivery.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
@@ -107,7 +115,7 @@ offline inference. OpenAI determines subscription eligibility, available models
 and usage limits. The toolkit does not import ChatGPT conversations or use a
 Codex credential cache. It keeps the same mandatory evidence, validation and
 DLP pipeline; a subscription does not bypass repository/service egress rules.
-See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.2/pages/src/content/docs/en/chatgpt-preview.md)
+See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.3/pages/src/content/docs/en/chatgpt-preview.md)
 and [OpenAI's token-sharing overview](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ```mermaid
