@@ -28,7 +28,17 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: python scripts/docs_only.py --base "$BASE" --head "$HEAD"
+        run: |
+          result=docs_only=false
+          trusted_script="$RUNNER_TEMP/docs_only.py"
+          if git show "${BASE}:scripts/docs_only.py" > "$trusted_script"; then
+            if output=$(env -u GITHUB_OUTPUT python "$trusted_script" --base "$BASE" --head "$HEAD"); then
+              case "$output" in
+                docs_only=true|docs_only=false) result="$output" ;;
+              esac
+            fi
+          fi
+          echo "$result" >> "$GITHUB_OUTPUT"
 
   test-python312:
     name: test-ubuntu-latest-py3.12

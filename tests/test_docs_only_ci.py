@@ -1,6 +1,7 @@
 """The documentation shortcut is narrow and keeps protected check identities."""
 
 import importlib.util
+import os
 import subprocess
 from pathlib import Path
 
@@ -128,8 +129,42 @@ def test_required_job_names_and_full_fallback() -> None:
         assert "github.event_name == 'pull_request'" in source
         assert "needs.classify.outputs.docs_only != 'true'" in source
         assert jobs["classify"]["timeout-minutes"] == 5
+        classifier = jobs["classify"]["steps"][-1]["run"]
+        assert 'git show "${BASE}:scripts/docs_only.py"' in classifier
+        assert 'env -u GITHUB_OUTPUT python "$trusted_script"' in classifier
+        assert "result=docs_only=false" in classifier
+        assert 'echo "$result" >> "$GITHUB_OUTPUT"' in classifier
     preview = (ROOT / ".github/workflows/testpypi.yml").read_text()
     assert "needs.classify.outputs.docs_only != 'true'" in preview
     assert "github.event.before" in preview
     assert 'BASE=$(git rev-parse "${HEAD}^")' not in preview
     assert yaml.safe_load(preview)["jobs"]["classify"]["timeout-minutes"] == 5
+
+
+def test_pr_cannot_replace_trusted_classifier(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    _git(tmp_path, "config", "user.name", "Test")
+    script = tmp_path / "scripts" / "docs_only.py"
+    script.parent.mkdir()
+    script.write_text(SCRIPT.read_text())
+    (tmp_path / "README.md").write_text("original\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "trusted base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    script.write_text('print("docs_only=true")\n')
+    (tmp_path / "app.py").write_text("changed code\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "malicious PR")
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    classifier = workflow["jobs"]["classify"]["steps"][-1]["run"]
+    output = tmp_path / "github-output"
+    environment = {
+        **os.environ,
+        "BASE": base,
+        "HEAD": _git(tmp_path, "rev-parse", "HEAD"),
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(output),
+    }
+    subprocess.run(["bash", "-e", "-c", classifier], cwd=tmp_path, env=environment, check=True)
+    assert output.read_text() == "docs_only=false\n"
