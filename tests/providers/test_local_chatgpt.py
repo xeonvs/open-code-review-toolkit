@@ -185,7 +185,7 @@ def test_chatgpt_preflight_is_structural_only_and_never_calls_status_or_models(
 
 @pytest.mark.parametrize("version", ["1.13.1", "1.14.0", "1.13.bad", "1.13." + "9" * 5000])
 def test_chatgpt_native_contract_rejects_other_versions(version: str) -> None:
-    with pytest.raises(local_chatgpt.LocalChatGPTError, match="qualified OCR 1.13.2"):
+    with pytest.raises(local_chatgpt.LocalChatGPTError, match=r"qualified OCR 1\.13\.2"):
         local_chatgpt.require_supported_version(version)
 
 
