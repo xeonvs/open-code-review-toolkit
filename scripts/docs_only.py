@@ -22,22 +22,25 @@ def documentation_path(path: str) -> bool:
 def docs_only(base: str, head: str) -> bool:
     """Return true only for a nonempty exact range of allowed documentation paths."""
     if not _SHA.fullmatch(base) or not _SHA.fullmatch(head):
-        raise ValueError("base and head must be full Git commit SHA values")
-    changed = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--no-ext-diff",
-            "--find-renames",
-            "--name-status",
-            "-z",
-            base,
-            head,
-            "--",
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
+        return False
+    try:
+        changed = subprocess.run(
+            [
+                "git",
+                "diff",
+                "--no-ext-diff",
+                "--find-renames",
+                "--name-status",
+                "-z",
+                base,
+                head,
+                "--",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return False
     fields = [field for field in changed.split(b"\0") if field]
     if len(fields) % 2:
         return False

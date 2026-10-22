@@ -15,6 +15,7 @@ jobs:
   classify:
     name: classify-development-push
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.paths.outputs.docs_only }}
     steps:
@@ -24,9 +25,9 @@ jobs:
           persist-credentials: false
       - id: paths
         env:
+          BASE: ${{ github.event.before }}
           HEAD: ${{ github.sha }}
         run: |
-          BASE=$(git rev-parse "${HEAD}^")
           python scripts/docs_only.py --base "$BASE" --head "$HEAD"
 
   build:
