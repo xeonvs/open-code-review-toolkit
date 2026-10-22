@@ -27,8 +27,8 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
 | REQ-001 | #252 protects remediation content without poisoning ordinary text | WQ-02 | done |
-| REQ-002 | #248 distinguishes technical numbers from phone PII | WQ-03 | pending |
-| REQ-003 | #251 distinguishes proven pure credential references and empty YAML values from literals | WQ-03 | pending |
+| REQ-002 | #248 distinguishes technical numbers from phone PII | WQ-03 | done |
+| REQ-003 | #251 distinguishes proven pure credential references and empty YAML values from literals | WQ-03 | done |
 | REQ-004 | #253 publishes proven, safely rendered optional code syntax | WQ-04 | pending |
 | REQ-005 | #249 gives an explicit truthful gitlink outcome | WQ-05 | pending |
 | REQ-006 | #250 reports stage-specific outcomes and disjoint DLP accounting | WQ-05, WQ-06 | pending |
@@ -71,8 +71,8 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | --- | --- | --- | --- |
 | WQ-01 | REQ-008 | Review this complete plan, commit only plan/state files, set goal, create milestone and feature PR | done |
 | WQ-02 | REQ-001 | Producer registry and production enrichment tests for protected versus structural values | done |
-| WQ-03 | REQ-002, REQ-003 | Narrow numeric/reference classifiers, whole-unit controls and ingress/publication tests | in_progress |
-| WQ-04 | REQ-004 | Reviewed-source proof before projection and both-sink rendering tests | pending |
+| WQ-03 | REQ-002, REQ-003 | Narrow numeric/reference classifiers, whole-unit controls and ingress/publication tests | done |
+| WQ-04 | REQ-004 | Reviewed-source proof before projection and both-sink rendering tests | in_progress |
 | WQ-05 | REQ-005, REQ-006 | Installed OCR gitlink qualification, typed preview/stale handoff and protected posting tests | pending |
 | WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | pending |
 | WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | pending |
@@ -95,6 +95,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 - 2026-10-22: First plan-only signed commit `b72b295`, draft feature PR #257, active goal and milestone v0.12.1 with all six issues assigned.
 - 2026-10-22: #252 field-aware registration passes production enrichment composition for current/outdated and complete/partial records, with safe prose/code, protected text, omission and operator-secret controls (5 focused tests). Broader quality matrix remains pending.
+- 2026-10-22: #248/#251 narrow syntax classifiers pass 85 focused DLP, publication, ingress and federation tests, including mixed PII/secret/forbidden controls. Broader quality matrix remains pending.
 
 ### Risks And Recovery
 
@@ -106,7 +107,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Resume Point
 
-WQ-03: finish narrow DLP numeric/reference classifiers and tests, then self-review and commit the scoped change. Continue to source-bound code publication, typed preview diagnostics and other queued work.
+WQ-04: implement immutable reviewed-source proof for optional code publication, retain full DLP on every unit and verify both renderer paths. Then continue typed preview diagnostics and other queued work.
 
 ### Plan Fidelity Check
 
