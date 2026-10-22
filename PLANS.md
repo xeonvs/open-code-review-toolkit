@@ -20,7 +20,7 @@ plan_mode_approved
 
 ### Requested Scope
 
-Implement all six open issues, a narrow documentation-only CI gate, one protected feature PR, a protected release PR and stable artifact process, and a final external-reconciliation PR. Audit all project documentation, agent instructions, and routes; fix findings in a separate commit before final reviews. The first feature commit contains only this plan and its active-plan state. Review each logical commit before making it. Run Codex Security before the final feature push, then one correctly invoked local OCR/toolkit review to completion; fix any findings.
+Implement all six original open issues, the newly requested qualified OCR 1.13.3 update, a narrow documentation-only CI gate, one protected feature PR, a protected release PR and stable artifact process, and a final external-reconciliation PR. Audit all project documentation, agent instructions, and routes; fix findings in a separate commit before final reviews. The first feature commit contains only this plan and its active-plan state. Review each logical commit before making it. Run Codex Security before the final feature push, then one correctly invoked local OCR/toolkit review to completion; fix any findings.
 
 ### Requirement Traceability
 
@@ -38,6 +38,7 @@ Implement all six open issues, a narrow documentation-only CI gate, one protecte
 | REQ-010 | Live site displays v0.12.1 after the real release notification | WQ-12 | pending |
 | REQ-011 | Exact external facts are archived through a protected closure PR | WQ-13 | pending |
 | REQ-012 | Documentation and agent instructions are complete, consistent, deduplicated, and correctly routed | WQ-08 | done |
+| REQ-013 | OCR 1.13.3 is qualified and pinned for the toolkit release | WQ-08, WQ-11 | done |
 
 ### Explicit Non-Goals
 
@@ -55,12 +56,13 @@ No OCR upstream change, global DLP allowlist, arbitrary source execution, second
 ### Inputs And Sources
 
 - GitHub issues [#248](https://github.com/xeonvs/open-code-review-toolkit/issues/248), [#249](https://github.com/xeonvs/open-code-review-toolkit/issues/249), [#250](https://github.com/xeonvs/open-code-review-toolkit/issues/250), [#251](https://github.com/xeonvs/open-code-review-toolkit/issues/251), [#252](https://github.com/xeonvs/open-code-review-toolkit/issues/252), and [#253](https://github.com/xeonvs/open-code-review-toolkit/issues/253), including complete acceptance examples.
+- OCR 1.13.3 [upstream release](https://github.com/alibaba/open-code-review/releases/tag/v1.13.3), [qualification run 39773385483](https://github.com/xeonvs/open-code-review-toolkit/actions/runs/39773385483), and generated toolkit issue [#258](https://github.com/xeonvs/open-code-review-toolkit/issues/258).
 - `docs/engineering/project_principles.md`, `docs/development.md`, `docs/release.md`, `docs/engineering/governed_federation_contracts.md`, `docs/review-context.md`, `docs/review-decision-flow.md`, and current runtime/tests are contract owners. M5 context contracts are historical.
 - Current `main` is `c313362`; prior site plan was archived in `docs/engineering/execution_history/2026-10-22-toolkit-site-launch-and-release-notification.md` by #256.
 
 ### User Decisions And Answers
 
-The owner chose v0.12.1, all six issues, toolkit-owned truthful gitlink degradation instead of OCR upstream modification, and no extra fresh clone or host checks. Mandatory CI and published-package smoke still apply. Fixes come first; verify the live site only after the actual v0.12.1 release dispatch. A documentation-only CI gate was approved, but workflow changes themselves require full checks. The feature PR begins with a reviewed plan-only commit; before every later commit perform self-review. Run Codex Security and then one correct local OCR review before the final feature push. Formulate and set the goal after execution begins.
+The owner chose v0.12.1, all six issues, toolkit-owned truthful gitlink degradation instead of OCR upstream modification, and no extra fresh clone or host checks. Mandatory CI and published-package smoke still apply. Fixes come first; verify the live site only after the actual v0.12.1 release dispatch. A documentation-only CI gate was approved, but workflow changes themselves require full checks. The feature PR begins with a reviewed plan-only commit; before every later commit perform self-review. Run Codex Security and then one correct local OCR review before the final feature push. The owner subsequently requested OCR 1.13.3 qualification and inclusion, and authorized one additional final local review after correcting the private output path instructions. Formulate and set the goal after execution begins.
 
 ### Completed Baseline State
 
@@ -78,7 +80,7 @@ v0.12.0 is the latest stable release. The six target issues are open and no v0.1
 | WQ-06 | REQ-006 | Versioned federation, DLP, result and reporting contracts with exact producer counts | done |
 | WQ-07 | REQ-007 | Closed path classifier and required-check-preserving documentation-only workflow branches | done |
 | WQ-08 | REQ-008, REQ-012 | Towncrier and current contracts, separate documentation/instruction audit commit, focused and full gates, aggregate changed-range review, staged/history secret scans | in_progress |
-| WQ-09 | REQ-008 | Codex Security scan, one local OCR review, finding fixes, final push and checked feature merge | pending |
+| WQ-09 | REQ-008 | Codex Security scan, final local OCR review, finding fixes, final push and checked feature merge | in_progress |
 | WQ-10 | REQ-009 | Verify development build; prepare and merge exact protected release/v0.12.1 PR | pending |
 | WQ-11 | REQ-009 | Verify stable CI, registry hashes/provenance/installs, tag, immutable Release, issue receipts/milestone | pending |
 | WQ-12 | REQ-010 | Verify real site dispatch, build and live v0.12.1 content | pending |
@@ -102,6 +104,9 @@ Run focused production-boundary regression suites per issue, including immutable
 - 2026-10-22: #249 immutable mode-160000 add/update/delete were qualified against installed OCR 1.13.2 and close before model launch with a typed status; #250 versioned pre-execution, federation, publication and posting contracts have focused stage/race/legacy tests. Full pytest completed with 2019 passed, five skipped and one stale CI-matrix assertion, which was corrected and retested; final quality gate remains pending.
 - 2026-10-22: Public v0.12.1 contract documentation and Towncrier fragments committed as `cccb7f3`; 49 affected documentation/CI tests passed. Separate read-only audits inventoried documentation and instruction routes: one broken anchor, current receipt-version drift, historical/current M5 ownership, and an unguarded agent-configuration route. The audit commit archives the M5 design and evidence migration records, gives the current governed federation contract a milestone-neutral name, and corrects the other findings. Instruction lint and documentation tests pass; final gates remain pending.
 - 2026-10-22: Initial full quality run reached 86.35% coverage with 2019 passing tests, five skips and one stale public-contract assertion after the documentation renames. The assertion and a historically worded strategy sentence were corrected and the affected test passed; rerun of the full gate remains pending.
+- 2026-10-22: The rerun passed with 2020 tests, five skips, 345 subtests and 86% aggregate coverage. Codex Security scan `f2f440ac-78b4-4e98-9b4f-96fd26db3ad8` sealed the initial source/workflow range with 21 reviewed surfaces and no findings. Gitleaks tree/history and changed-range whitespace checks passed.
+- 2026-10-22: The first real OCR 1.13.2 review reached a complete JSON result with four findings, but `ocr-ci` exited 2 at Markdown reporting because its `/tmp` output parent is a macOS symlink. Receipt schema type guards, complete push-range classification and classifier timeouts were corrected in `825aea1` and `e7e247b`; docs and the agent route now require a fresh physical private output parent. The owner explicitly authorized one final corrected run.
+- 2026-10-22: OCR 1.13.3 upstream release was human-reviewed and qualified by hosted run `39773385483`; all asset checksums, consumed Linux probes and local Darwin arm64 contract probes passed. `ca83abd` advances the exact manifest, runtime/native-auth gates and GitLab pin. Compatibility issue #258 joins the v0.12.1 milestone. The second full quality gate and final changed-range security scan remain pending.
 
 ### Risks And Recovery
 
@@ -113,7 +118,7 @@ Run focused production-boundary regression suites per issue, including immutable
 
 ### Resume Point
 
-WQ-08: reconcile public contract documents and Towncrier fragments, run the full quality and secret gates, review the complete changed range, then perform Codex Security and one local OCR review before the final feature push.
+WQ-08/WQ-09: finish the post-qualification full quality gate, review the final changed range and updated docs, scan the post-finding code/workflow delta with Codex Security, then run the authorized single final local OCR review with a physical private output path and verified 1.13.3 binary. Inspect terminal report and fix any remaining findings before the feature push.
 
 ### Plan Fidelity Check
 
