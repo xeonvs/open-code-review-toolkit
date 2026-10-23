@@ -11,6 +11,12 @@ import pytest
 
 from ocr_toolkit import review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
+from ocr_toolkit.evidence.gitlink_projection import (
+    make_gitlink_projection,
+    qualify_gitlink_manifest,
+    qualify_gitlink_preview,
+    verify_gitlink_projection,
+)
 from ocr_toolkit.evidence.gitlinks import changed_gitlinks, plan_gitlink_input
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.preflight import validate_ocr_binary
@@ -46,6 +52,39 @@ def _fixture(root: Path, kind: str) -> tuple[str, str]:
         _git(root, "update-index", "--force-remove", "schema")
     else:
         _git(root, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
+    _git(root, "commit", "-qm", "head")
+    return base, _git(root, "rev-parse", "HEAD")
+
+
+def _mixed_fixture(root: Path) -> tuple[str, str]:
+    _git(root, "init", "-q")
+    _git(root, "config", "user.name", "Synthetic Reviewer")
+    _git(root, "config", "user.email", "reviewer@example.invalid")
+    (root / "main.py").write_text("value = 1\n", encoding="utf-8")
+    (root / "old.py").write_text("old = True\n", encoding="utf-8")
+    (root / "gone.py").write_text("gone = True\n", encoding="utf-8")
+    _git(root, "add", "main.py", "old.py", "gone.py")
+    _git(root, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(root, "commit", "-qm", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    (root / "main.py").write_text("value = 2\n", encoding="utf-8")
+    (root / "new.py").write_text("new = True\n", encoding="utf-8")
+    _git(root, "mv", "old.py", "renamed.py")
+    _git(root, "rm", "gone.py")
+    _git(root, "add", "main.py", "new.py")
+    _git(root, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
+    _git(root, "commit", "-qm", "head")
+    return base, _git(root, "rev-parse", "HEAD")
+
+
+def _gitlink_only_fixture(root: Path) -> tuple[str, str]:
+    _git(root, "init", "-q")
+    _git(root, "config", "user.name", "Synthetic Reviewer")
+    _git(root, "config", "user.email", "reviewer@example.invalid")
+    _git(root, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(root, "commit", "-qm", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    _git(root, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
     _git(root, "commit", "-qm", "head")
     return base, _git(root, "rev-parse", "HEAD")
 
@@ -96,7 +135,391 @@ def test_private_input_plan_retains_original_ordinary_delta(tmp_path: Path, kind
     assert plan.ordinary[0].after is not None
 
 
-def test_unique_gitlink_move_keeps_changed_gitmodules_reviewable(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["added", "updated", "deleted"])
+def test_projection_preserves_original_ordinary_diff(tmp_path: Path, kind: str) -> None:
+    base, head = _fixture(tmp_path, kind)
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    assert len(projection.original_diff) == 2
+    assert [entry.path for entry in projection.ordinary_diff] == ["main.php"]
+    assert [entry.path for entry in projection.gitlink_diff] == ["schema"]
+    assert projection.child_environment()["GIT_CONFIG_KEY_0"] == "diff.ignoreSubmodules"
+    verify_gitlink_projection(reader, projection)
+
+
+def _preview(path: str = "main.php", *, selected: bool = True) -> bytes:
+    item: dict[str, object] = {
+        "path": path,
+        "status": "modified",
+        "insertions": 1,
+        "deletions": 1,
+        "will_review": selected,
+    }
+    if not selected:
+        item["exclude_reason"] = "user_exclude"
+    return json.dumps(
+        {
+            "files": [item],
+            "total_insertions": 1,
+            "total_deletions": 1,
+            "total_files": 1,
+            "reviewable_count": int(selected),
+            "excluded_count": int(not selected),
+        }
+    ).encode()
+
+
+def test_projection_qualifies_exact_preview_and_zero_selection(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    assert qualify_gitlink_preview(projection, _preview()) == projection.ordinary_diff
+    assert qualify_gitlink_preview(projection, _preview(selected=False)) == ()
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload["files"].append(dict(payload["files"][0])),
+        lambda payload: payload["files"][0].update(path="schema"),
+        lambda payload: payload["files"][0].update(status="added"),
+        lambda payload: payload.update(reviewable_count=0),
+        lambda payload: payload["files"][0].update(
+            exclude_reason="future_reason", will_review=False
+        ),
+    ],
+)
+def test_projection_rejects_wrong_preview(tmp_path: Path, mutate: object) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    payload = json.loads(_preview())
+    mutate(payload)  # type: ignore[operator]
+    with pytest.raises(RepositoryEvidenceError, match="preview"):
+        qualify_gitlink_preview(projection, json.dumps(payload).encode())
+
+
+def test_projection_detects_local_git_input_drift(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    (tmp_path / ".gitignore").write_text("main.php\n", encoding="utf-8")
+    with pytest.raises(RepositoryEvidenceError, match="drifted"):
+        verify_gitlink_projection(reader, projection)
+
+
+def test_projection_scrubs_inherited_git_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    _git(tmp_path, "config", "diff.ignoreSubmodules", "none")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "diff.ignoreSubmodules")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "none")
+    monkeypatch.setenv("GIT_WORK_TREE", "/outside")
+    monkeypatch.setenv("GIT_EXTERNAL_DIFF", "/outside/diff")
+    projection = make_gitlink_projection(reader, plan)
+    env = projection.child_environment()
+    assert env["GIT_CONFIG_COUNT"] == "1"
+    assert env["GIT_CONFIG_KEY_0"] == "diff.ignoreSubmodules"
+    assert env["GIT_CONFIG_VALUE_0"] == "all"
+    assert "GIT_WORK_TREE" not in env and "GIT_EXTERNAL_DIFF" not in env
+    assert [entry.path for entry in projection.ordinary_diff] == ["main.php"]
+
+
+def test_projection_uses_exact_slash_qualified_gitmodules_name(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    (tmp_path / "main.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "vendor/schema"]\npath = schema\nurl = https://example.invalid/repo\n',
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", "main.py", ".gitmodules")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "main.py").write_text("value = 2\n", encoding="utf-8")
+    _git(tmp_path, "add", "main.py")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None and plan.config_names == ("vendor/schema",)
+    projection = make_gitlink_projection(reader, plan)
+    assert projection.child_environment()["GIT_CONFIG_KEY_1"] == "submodule.vendor/schema.ignore"
+
+
+def test_gitlink_only_projection_has_no_selected_work(tmp_path: Path) -> None:
+    base, head = _gitlink_only_fixture(tmp_path)
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    assert projection.ordinary_diff == ()
+    assert len(projection.gitlink_diff) == 1
+    empty_preview = {
+        "files": [],
+        "total_insertions": 0,
+        "total_deletions": 0,
+        "total_files": 0,
+        "reviewable_count": 0,
+        "excluded_count": 0,
+    }
+    assert qualify_gitlink_preview(projection, json.dumps(empty_preview).encode()) == ()
+
+
+def test_runner_uses_one_projected_environment_and_skips_empty_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    base, head = _gitlink_only_fixture(repo)
+    reader = GitRepositoryReader(repo)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    artifacts = repository_artifacts(repo)
+    prepare_artifact_directory(artifacts)
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    preview = {
+        "files": [],
+        "total_insertions": 0,
+        "total_deletions": 0,
+        "total_files": 0,
+        "reviewable_count": 0,
+        "excluded_count": 0,
+    }
+    calls: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        assert kwargs["env"] == projection.child_environment()
+        kwargs["stdout"].write(json.dumps(preview).encode())  # type: ignore[union-attr]
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(review_runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_args, **_kwargs: pytest.fail("model must not run for gitlink-only input"),
+    )
+    identity = review_runner.ReviewIdentity(
+        source_sha=head,
+        policy_sha="a" * 40,
+        mr_author_id=None,
+        context_mode="off",
+        context=None,
+        target_sha=base,
+        target_protection="local",
+    )
+    args = ["--from", base, "--to", head, "--format", "json"]
+    code, qualification = review_runner._run_background_qualified_review(
+        tmp_path / "result.json",
+        tmp_path / "stderr.log",
+        args,
+        ocr_binary="/synthetic/ocr",
+        session_home=home,
+        artifacts=artifacts,
+        refs=review_runner.ReviewRefs(base, head),
+        identity=identity,
+        projection=projection,
+    )
+    assert code == 2 and qualification.selected_diff == ()
+    assert calls == [["/synthetic/ocr", "review", *args, "--preview"]]
+    assert list(home.iterdir()) == []
+
+
+@pytest.mark.parametrize("drift", [False, True])
+def test_runner_rechecks_projection_before_using_frozen_child_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: bool
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    base, head = _fixture(repo, "updated")
+    reader = GitRepositoryReader(repo)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    artifacts = repository_artifacts(repo)
+    prepare_artifact_directory(artifacts)
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    calls: list[tuple[str, object]] = []
+
+    def qualify(*_args: object, **_kwargs: object) -> review_runner.BackgroundQualification:
+        calls.append(("preview", _kwargs.get("projection")))
+        return review_runner.BackgroundQualification(selected_diff=projection.ordinary_diff)
+
+    def verify(*_args: object) -> None:
+        calls.append(("recheck", projection))
+        if drift:
+            raise RepositoryEvidenceError("synthetic drift")
+
+    def production(*_args: object, **kwargs: object) -> int:
+        calls.append(("production", kwargs.get("child_environment")))
+        return 0
+
+    monkeypatch.setattr(review_runner, "_qualify_review_background", qualify)
+    monkeypatch.setattr(review_runner, "verify_gitlink_projection", verify)
+    monkeypatch.setattr(review_runner, "run_review", production)
+    identity = review_runner.ReviewIdentity(
+        source_sha=head,
+        policy_sha="a" * 40,
+        mr_author_id=None,
+        context_mode="off",
+        context=None,
+        target_sha=base,
+        target_protection="local",
+    )
+    monkeypatch.chdir(repo)
+    args = ["--from", base, "--to", head, "--format", "json"]
+    if drift:
+        with pytest.raises(review_runner.ReviewRunnerError, match="drifted before"):
+            review_runner._run_background_qualified_review(
+                tmp_path / "result.json",
+                tmp_path / "stderr.log",
+                args,
+                ocr_binary="/synthetic/ocr",
+                session_home=home,
+                artifacts=artifacts,
+                refs=review_runner.ReviewRefs(base, head),
+                identity=identity,
+                projection=projection,
+            )
+        assert [call[0] for call in calls] == ["preview", "recheck"]
+    else:
+        code, qualification = review_runner._run_background_qualified_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            args,
+            ocr_binary="/synthetic/ocr",
+            session_home=home,
+            artifacts=artifacts,
+            refs=review_runner.ReviewRefs(base, head),
+            identity=identity,
+            projection=projection,
+        )
+        assert code == 0 and qualification.selected_diff == projection.ordinary_diff
+        assert calls == [
+            ("preview", projection),
+            ("recheck", projection),
+            ("production", projection.child_environment()),
+        ]
+
+
+def test_projection_rejects_local_git_config_include(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    _git(tmp_path, "config", "include.path", "/tmp/unused-config")
+    with pytest.raises(RepositoryEvidenceError, match="includes"):
+        make_gitlink_projection(reader, plan)
+
+
+def test_projection_rejects_changed_symlink_with_gitlink(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    (tmp_path / "alias.py").symlink_to("first.py")
+    _git(tmp_path, "add", "alias.py")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "alias.py").unlink()
+    (tmp_path / "alias.py").symlink_to("second.py")
+    _git(tmp_path, "add", "alias.py")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    with pytest.raises(RepositoryEvidenceError, match="non-regular"):
+        make_gitlink_projection(reader, plan)
+
+
+def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    item_id, fingerprint = projection.fingerprints[0]
+    item = {"item_id": item_id, "path": "main.php", "fingerprint": fingerprint}
+    import hashlib
+
+    source = hashlib.sha256()
+    for field in (item_id, fingerprint):
+        raw = field.encode()
+        source.update(len(raw).to_bytes(8, "big"))
+        source.update(raw)
+    payload: dict[str, object] = {
+        "status": "complete",
+        "comments": [],
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "terminal_state": "complete",
+            "input": {
+                "mode": "range",
+                "requested_from": base,
+                "requested_head": head,
+                "resolved_base": base,
+                "resolved_head": head,
+                "exact_range": f"{base}..{head}",
+                "source_artifact_sha256": source.hexdigest(),
+            },
+            "execution": {"ocr_version": "v1.13.3"},
+            "coverage": {
+                "selected": [item],
+                "completed": [item],
+                "reused": [],
+                "failed": [],
+                "waived": [],
+            },
+        },
+    }
+    qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    manifest = payload["manifest"]
+    assert isinstance(manifest, dict)
+    native_input = manifest["input"]
+    assert isinstance(native_input, dict)
+    native_input["resolved_head"] = base
+    with pytest.raises(RepositoryEvidenceError, match="identity"):
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    native_input["resolved_head"] = head
+    native_input["source_artifact_sha256"] = "0" * 64
+    with pytest.raises(RepositoryEvidenceError, match="source artifact"):
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    native_input["source_artifact_sha256"] = source.hexdigest()
+    coverage = manifest["coverage"]
+    assert isinstance(coverage, dict)
+    bad_item = dict(item, fingerprint="0" * 64)
+    coverage["completed"] = [bad_item]
+    with pytest.raises(RepositoryEvidenceError, match="disagrees with Git"):
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    coverage["completed"] = [item]
+    coverage["reused"] = [item]
+    with pytest.raises(RepositoryEvidenceError, match="unreviewed"):
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+
+
+def _move_fixture(tmp_path: Path) -> tuple[str, str]:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
     _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
@@ -119,6 +542,11 @@ def test_unique_gitlink_move_keeps_changed_gitmodules_reviewable(tmp_path: Path)
     _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema-new")
     _git(tmp_path, "commit", "-qm", "head")
     head = _git(tmp_path, "rev-parse", "HEAD")
+    return base, head
+
+
+def test_unique_gitlink_move_keeps_changed_gitmodules_reviewable(tmp_path: Path) -> None:
+    base, head = _move_fixture(tmp_path)
 
     plan = plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
     assert plan is not None
@@ -327,3 +755,84 @@ def test_installed_ocr_gitlink_preview_qualification(
         assert completed.stderr.startswith(b"[ocr] WARNING: cannot read file schema at ref ")
         assert completed.stderr.endswith(b": exit status 128\n")
     assert changed_gitlinks(GitRepositoryReader(repo), base, head)[0].kind == kind
+
+
+@pytest.mark.parametrize("kind", ["added", "updated", "deleted", "mixed", "move"])
+def test_installed_ocr_projected_review_matches_native_manifest(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Opt-in production proof against the official binary and local fake provider."""
+
+    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
+    if binary is None:
+        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the checksum-verified OCR 1.13.3")
+    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    from ocr_compat import _stub_gateway
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    base, head = (
+        _mixed_fixture(repo)
+        if kind == "mixed"
+        else _move_fixture(repo)
+        if kind == "move"
+        else _fixture(repo, kind)
+    )
+    reader = GitRepositoryReader(repo)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    home = tmp_path / "ocr-home"
+    home.mkdir(mode=0o700)
+    env = projection.child_environment()
+    env["HOME"] = str(home)
+    args = [
+        binary,
+        "review",
+        "--from",
+        base,
+        "--to",
+        head,
+        "--format",
+        "json",
+        "--audience",
+        "agent",
+        "--concurrency",
+        "1",
+    ]
+    preview = subprocess.run(
+        [*args, "--preview"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert preview.returncode == 0 and preview.stderr == b""
+    selected = qualify_gitlink_preview(projection, preview.stdout)
+    assert selected
+    assert all(entry.status != "D" for entry in selected)
+    if kind in {"added", "updated", "deleted"}:
+        assert selected == projection.ordinary_diff
+    with _stub_gateway() as gateway:
+        env.update(
+            {
+                "OCR_LLM_URL": gateway,
+                "OCR_LLM_TOKEN": "synthetic-token",
+                "OCR_LLM_MODEL": "synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_TELEMETRY_ENABLED": "false",
+            }
+        )
+        production = subprocess.run(
+            args,
+            cwd=repo,
+            env=env,
+            capture_output=True,
+            check=False,
+            timeout=90,
+        )
+    assert production.returncode == 0 and production.stderr == b""
+    qualify_gitlink_manifest(projection, selected, json.loads(production.stdout))
+    verify_gitlink_projection(reader, projection)

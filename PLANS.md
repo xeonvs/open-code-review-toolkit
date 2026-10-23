@@ -48,6 +48,7 @@ No OCR fork/upstream change, consumer-CI bypass, submodule initialization/fetch/
 - Version exact receipt/status schemas rather than appending fields to v11/v5. `ocr-ci post` independently validates identity-bound facts. Never alter native OCR coverage to claim repository coverage.
 - No OCR-selected ordinary work: `ocr-ci review` returns 2; GitLab `post` publishes advisory status and returns 0, or 1 in existing strict mode. Local output carries the same closed reason without model execution.
 - Protected release PR is the final repository mutation; external publication/readback remains required post-close delivery.
+- Feature PR #269 is an early draft containing only plan commit `db27f37`; implementation commits remain local until final feature push. Before that push, finish the codex-security diff review and then a local review through this toolkit with the configured ChatGPT provider and qualified OCR. Fix findings and repeat invalidated checks. Increase test coverage in every touched runtime/contract/reporting module.
 
 ### Inputs And Sources
 
@@ -57,10 +58,11 @@ No OCR fork/upstream change, consumer-CI bypass, submodule initialization/fetch/
 - Baseline: clean synchronized `main`, published v0.13.0, `.next-version=0.14.0`, no active plan, #268 only open issue; remaining backlog triggers unmet.
 - Pre-implementation proof: official OCR 1.13.3 Darwin arm64 SHA-256 `fa9b8530c0a35e6106a9ab2e81c21d98ef26d3f31c1f39ad3ef4c2528047c4f4`. Five mixed pure-gitlink synthetic forms had clean preview and production manifest `complete`, exactly ordinary selected/completed items, zero failed/reused; gitlink-only preview `files=[]`; both type-transition directions had duplicate same-path entries, one with a warning. This proves measured forms, not the integrated toolkit or all inputs.
 - Prior release chats were read as historical process evidence, not authorization. Their command counts span multiple releases; repeated broad searches/unchanged CI reads motivate decision-bound calls without an arbitrary call quota.
+- Draft feature PR: https://github.com/xeonvs/open-code-review-toolkit/pull/269 at plan-only head `db27f37`. The user's later workflow clarification governs the final feature push and review order.
 
 ### User Decisions And Answers
 
-Target v0.13.1, keep 0.14.0 development marker; include #268 and required adversarial/contract checks, leave conditional backlog inactive; no-model GitLab post is advisory by default and strict only under existing strict mode; embed tool-use improvements in this execution, not a separate workflow PR; implement through protected feature and stable release lifecycle.
+Target v0.13.1, keep 0.14.0 development marker; include #268 and required adversarial/contract checks, leave conditional backlog inactive; no-model GitLab post is advisory by default and strict only under existing strict mode; embed tool-use improvements in this execution, not a separate workflow PR; implement through protected feature and stable release lifecycle. Use a plan-only early draft PR, no intermediate feature pushes, broader tests for all touched files, logical signed commits with self-review/amend for fixes, codex-security before the final push and local toolkit/OCR review with ChatGPT after it but still before the push.
 
 ### Completed Baseline State
 
@@ -72,8 +74,8 @@ v0.13.0 is published with immutable assets and #264 closed. Its archived plan is
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009 | Full plan/state pointer, reviewed plan-only signed commit, #268 milestone | done |
 | WQ-02 | REQ-001, REQ-005 | Private before/after shape and safe `.gitmodules`/Git inventory, adversarial tests, self-reviewed commit | done |
-| WQ-03 | REQ-002, REQ-005 | Frozen OCR invocation/environment, independent diff, preview/native-manifest qualification, real-binary regression, self-reviewed commit | in_progress |
-| WQ-04 | REQ-003, REQ-004 | Exact receipt v12/status v6, effective coverage/reporting and local no-model path, hostile/legacy tests, self-reviewed commit | pending |
+| WQ-03 | REQ-002, REQ-005 | Frozen OCR invocation/environment, independent diff, preview/native-manifest qualification, real-binary regression, self-reviewed commit | done |
+| WQ-04 | REQ-003, REQ-004 | Exact receipt v12/status v6, effective coverage/reporting and local no-model path, hostile/legacy tests, self-reviewed commit | in_progress |
 | WQ-05 | REQ-004 | GitLab posting, finding admission, approval blocker and partial lifecycle retention with failure/freshness tests, self-reviewed commit | pending |
 | WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | pending |
 | WQ-07 | REQ-005, REQ-007 | Scoped/final quality, build, secret/dependency gates, security diff scan, real local OCR review, aggregate self-review, protected feature PR/merge, dev artifacts | pending |
@@ -94,7 +96,7 @@ Only proven OCR 1.13.3 pure-pointer projection proceeds. Unique identical-OID be
 
 ### Latest Validation Results
 
-2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. The signed plan-only commit is `db27f37`; plan-lifecycle and instruction-contract checks and staged Gitleaks passed. Milestone v0.13.1 (#22) tracks #268. The WQ-02 shape/parser layer passes 19 focused tests (three opt-in real-binary tests skipped), Ruff, formatting, mypy and scoped diff review. Full integrated validation remains pending.
+2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. The signed plan-only commit is `db27f37`; plan-lifecycle and instruction-contract checks and staged Gitleaks passed. Milestone v0.13.1 (#22) tracks #268. Draft feature PR #269 has only the plan commit at its remote head. Local WQ-02 commit `203a50e` is not pushed. WQ-03 adds bounded unfiltered/projected Git inventory, original patch fingerprints and line counts, one frozen OCR child environment, exact preview and native manifest/source-artifact comparison, and before/after drift checks. The checksum-verified OCR 1.13.3 and local fake provider passed add/update/delete/mixed ordinary rename/add/delete/gitlink move forms; the focused runner/gitlink suites passed 247 tests before the final symlink-negative addition. Ruff, formatting and mypy passed. Toolkit-wide integrated production validation and effective-coverage contracts remain pending.
 
 ### Risks And Recovery
 
@@ -102,7 +104,7 @@ Git configuration precedence or local input drift can hide ordinary changes: rev
 
 ### Resume Point
 
-WQ-03: freeze the OCR child invocation/environment and qualify preview against an independent ordinary diff, then verify the native manifest. Start with the exact synthetic 1.13.3 shape proven before implementation.
+WQ-04: define exact receipt v12 and pre-execution status v6 effective coverage, preserve v11/v5, and carry no-model/partial outcomes into local and GitLab reports. Begin by tracing the existing receipt parser and post advisory branch; retain native OCR manifest unchanged.
 
 ### Plan Fidelity Check
 
