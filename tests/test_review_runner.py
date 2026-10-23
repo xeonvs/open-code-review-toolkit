@@ -2138,8 +2138,10 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert blocked is True
 
 
+@pytest.mark.parametrize("private_diagnostics", [False, True])
 def test_publication_dlp_retains_only_safe_local_findings_without_provider_receipt(
     tmp_path: Path,
+    private_diagnostics: bool,
 ) -> None:
     result = tmp_path / "result.json"
     result.write_text(
@@ -2195,6 +2197,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         forbidden=("private discussion sentence",),
         report_consumer=local_state.admit_report,
         state=local_state,
+        private_diagnostics=private_diagnostics,
     )
 
     assert usage == {"ocr_toolkit_evidence": 1}
@@ -2209,8 +2212,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         "secret": 0,
     }
     persisted = json.loads(result.read_text(encoding="utf-8"))
-    assert persisted["status"] == "completed_with_errors"
-    assert persisted["comments"] == [
+    safe_comments = [
         {
             "path": "src/safe.py",
             "line": 7,
@@ -2224,16 +2226,25 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
             "content": "Validate the safe branch before returning.",
         },
     ]
-    assert persisted["warnings"] == ["Safe bounded warning."]
+    if private_diagnostics:
+        assert persisted[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY] == {
+            "reason": "private-retention"
+        }
+        assert persisted["comments"][1]["content"] == "Copied private discussion sentence."
+        assert ocr_result.TOOLKIT_RESULT_KEY not in persisted
+    else:
+        assert persisted["status"] == "completed_with_errors"
+        assert persisted["comments"] == safe_comments
+        assert persisted["warnings"] == ["Safe bounded warning."]
+        assert "_ocr_toolkit" not in persisted
     assert persisted["tool_calls"] == {
         "total": 2,
         "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
     }
-    assert "_ocr_toolkit" not in persisted
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
     assert local_state.report is not None
-    assert list(local_state.report.comments) == persisted["comments"]
+    assert list(local_state.report.comments) == safe_comments
     assert local_state.report.publication == publication
     assert local_state.report.outcome.kind == "clean"
     assert local_state.report.outcome.manifest_present is False

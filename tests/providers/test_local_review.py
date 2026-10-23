@@ -148,6 +148,45 @@ def test_local_busy_review_delivers_failure_report_without_touching_active_artif
     assert "Review failed" in shared_report.read_text(encoding="utf-8")
 
 
+def test_local_private_retention_reaches_review_and_delivers_failure_report(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The explicit local diagnostic option reaches execution and reports a failure."""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_MODE", raising=False)
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    observed: list[bool] = []
+
+    def finish(
+        *_args: object,
+        preserve_private_artifacts: bool,
+        state: review_runner.ReviewRunState,
+        **_kwargs: object,
+    ) -> int:
+        assert state.local is True
+        observed.append(preserve_private_artifacts)
+        return 1
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", finish)
+    result = tmp_path / "result.json"
+    report = tmp_path / "review.md"
+    assert (
+        review_runner.run_evidence_review(
+            result,
+            tmp_path / "stderr.log",
+            [],
+            local=True,
+            preserve_private_artifacts=True,
+            report_path=report,
+        )
+        == 1
+    )
+    assert observed == [True]
+    assert "Review failed" in report.read_text(encoding="utf-8")
+
+
 def test_explicit_local_ignores_inherited_forge_identity(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

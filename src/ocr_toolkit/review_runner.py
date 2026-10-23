@@ -1783,7 +1783,10 @@ def _finalize_ocr_result(
         finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
-        if report_consumer is not None and not private_diagnostics:
+        if report_consumer is not None and (
+            not private_diagnostics
+            or (identity.target_protection == "local" and identity.mr_author_id is None)
+        ):
             evidence = metadata.get("evidence")
             if not isinstance(evidence, dict):
                 raise ReviewRunnerError("verified evidence facts are unavailable")
@@ -2964,10 +2967,6 @@ def run_evidence_review(
         if local:
             if debug_dir is not None and preserve_private_artifacts:
                 raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
-            if preserve_private_artifacts:
-                raise ReviewRunnerError(
-                    "--local requires result finalization and cannot preserve legacy private artifacts"
-                )
             try:
                 ocr_args = _local_review_options(ocr_args)
                 destination = report_path or Path(str(result_path) + ".md")
