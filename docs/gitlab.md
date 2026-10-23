@@ -31,6 +31,17 @@ OCR semantically groups related changed files before review and filters candidat
 
 The summary keeps four inputs separate: OCR manifest coverage, publication integrity, published findings, and an optional OCR core advisory. Complete manifest coverage that later loses public fields is labelled `Review complete with publication filtering`; it is warning-bearing and approval-ineligible, but it is not called incomplete OCR coverage and does not invent failed-file diagnostics. Actual partial, failed, waived, or budget-stopped manifest coverage keeps its stronger status. Ordinary OCR warnings retain their own complete-with-warnings state. The reviewer guide ranks bounded focus areas only when at least two findings are published; one finding remains in its inline or fallback discussion without a duplicate snippet. Security focus uses explicit published metadata, strong vulnerability terms, and closed injection classes rather than the standalone word `injection`, so neutral knowledge/dependency terminology cannot increase its count or effort estimate.
 
+Toolkit 0.13.1 adds a separate effective repository-coverage line when the MR
+changes a qualified Git submodule pointer. The installed OCR 1.13.3 reviews
+selected ordinary files against the original MR `B..H` range; the changed
+pointer and submodule contents remain unreviewed. Receipt v12 records only
+closed counts and the partial reason. The GitLab adapter checks those counts
+against Git and OCR's native selected/completed manifest before posting, keeps
+prior finding discussions, and never automatically approves this run. A
+gitlink-only or fully excluded ordinary diff produces a v6 no-model advisory
+note; default posting exits 0 and strict posting exits 1. Older or unqualified
+OCR/gitlink shapes stop before the model and cannot claim a partial review.
+
 The collapsed technical details keep aggregate input/output/cache token usage separate from OCR tool activity. The existing `all OCR tool calls` line lists every non-zero count for the closed review set (`file_read`, `file_read_diff`, `file_find`, `code_search`, `code_comment`, `task_done`, `ocr_toolkit_evidence`, `ocr_toolkit_evidence_search`, `ocr_toolkit_evidence_coverage`, `context_list`, and `context_get`) and is omitted when that admitted list is empty. These counts help explain whether OCR read context, searched the repository, checked cross-file diffs, consulted toolkit evidence, searched unknown evidence identities, checked absence coverage, or emitted review output; they are not per-tool token attribution. Dynamic external MCP tool names remain private and appear only through the existing verified per-server aggregate. A separate action line contains only reconciled non-zero `summary/list/get/search/coverage` counts; arguments, queries, scopes, IDs, and results stay private. Tool and token lines remain independent of `passed`, `private-sanitized`, or `publication-filtered` receipt state. If OCR accepts a background above its recommended character count, a separate `OCR core advisory` line contains only the actual and recommended counts. It does not become a warning or change review completeness or approval eligibility.
 
 ## Choose one operating mode

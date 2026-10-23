@@ -211,6 +211,15 @@ configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
 
+With qualified OCR 1.13.3, a changed Git submodule pointer can be excluded
+automatically while selected ordinary files are reviewed. Local Markdown
+states the effective repository coverage separately from the native OCR
+manifest; the changed pointer and submodule contents remain unreviewed. A
+gitlink-only or fully excluded ordinary diff stops before the model with exit
+2 and a closed no-model coverage statement. An unsafe or unqualified pointer
+shape stops without a coverage claim. The toolkit never initializes or fetches
+submodules, and MCP context cannot turn a skipped pointer into a reviewed file.
+
 Before disabling DLP to diagnose a suspected false positive, run
 `ocr-ci review --local --preserve-private-artifacts` with the normal private
 result, stderr, and report paths. After valid bounded output, it retains

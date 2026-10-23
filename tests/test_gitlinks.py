@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from io import BytesIO
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -891,3 +893,160 @@ def test_installed_ocr_projected_review_matches_native_manifest(
     assert production.returncode == 0 and production.stderr == b""
     qualify_gitlink_manifest(projection, selected, json.loads(production.stdout))
     verify_gitlink_projection(reader, projection)
+
+
+@pytest.mark.parametrize("kind", ["updated", "only"])
+def test_installed_ocr_toolkit_local_gitlink_route(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise the toolkit and real OCR together without a paid model or forge."""
+
+    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
+    if binary is None:
+        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the checksum-verified OCR 1.13.3")
+    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    import http.server
+    import threading
+
+    from ocr_compat import _StubHandler
+
+    from ocr_toolkit import cli, provider_config
+
+    class EvidenceStub(_StubHandler):
+        request_count = 0
+        request_stages: list[str] = []
+        issued_evidence = False
+
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length)
+            request = json.loads(raw)
+            tools = request.get("tools", [])
+            names = {
+                function["name"]
+                for tool in tools
+                if isinstance(tool, dict)
+                if isinstance((function := tool.get("function")), dict)
+                if isinstance(function.get("name"), str)
+            }
+            if "ocr_toolkit_evidence" not in names or "approve_all_comments" in names:
+                self.rfile = BytesIO(raw)
+                super().do_POST()
+                return
+            cls = type(self)
+            cls.request_count += 1
+            if not cls.issued_evidence:
+                cls.issued_evidence = True
+                cls.request_stages.append("evidence")
+                function = {"name": "ocr_toolkit_evidence", "arguments": '{"action":"summary"}'}
+                call_id = "call-evidence"
+            else:
+                cls.request_stages.append("done")
+                function = {"name": "task_done", "arguments": "{}"}
+                call_id = "call-done"
+            payload = json.dumps(
+                {
+                    "id": "toolkit-gitlink-proof",
+                    "object": "chat.completion",
+                    "model": "synthetic-model",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": call_id,
+                                        "type": "function",
+                                        "function": function,
+                                    }
+                                ],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            self.close_connection = True
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    base, head = _gitlink_only_fixture(repo) if kind == "only" else _fixture(repo, kind)
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "ocr").symlink_to(binary)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+    monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-token")
+    monkeypatch.setenv("OCR_LLM_MODEL", "synthetic-model")
+    monkeypatch.setenv("OCR_LLM_PROTOCOL", "openai")
+    monkeypatch.setenv("OCR_TELEMETRY_ENABLED", "false")
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "off")
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "false")
+    # The product continues to require HTTPS. This disposable in-process fixture
+    # admits only its own loopback server so OCR can use an HTTP fake provider.
+    original_url_parser = provider_config._parse_https_url
+
+    def local_url_parser(value: str, name: str):  # type: ignore[no-untyped-def]
+        if value == local_url:
+            return urlsplit(value)
+        return original_url_parser(value, name)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), EvidenceStub)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    local_url = f"http://127.0.0.1:{server.server_port}/v1"
+    monkeypatch.setenv("OCR_LLM_URL", local_url)
+    monkeypatch.setattr(provider_config, "_parse_https_url", local_url_parser)
+    monkeypatch.chdir(repo)
+    result = tmp_path / "review.json"
+    stderr = tmp_path / "review.stderr"
+    report = tmp_path / "review.md"
+    try:
+        code = cli.main(
+            [
+                "review",
+                "--local",
+                "--result",
+                str(result),
+                "--stderr",
+                str(stderr),
+                "--report",
+                str(report),
+                "--",
+                "--from",
+                base,
+                "--to",
+                head,
+                "--concurrency",
+                "1",
+            ]
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+    if kind == "only":
+        assert code == 2
+        assert EvidenceStub.request_count == 0
+        assert "no ordinary files" in report.read_text(encoding="utf-8").lower()
+    else:
+        assert code == 0, stderr.read_text(encoding="utf-8")[:2000]
+        assert EvidenceStub.issued_evidence
+        assert "evidence" in EvidenceStub.request_stages
+        assert "partial" in report.read_text(encoding="utf-8").lower()
+        payload = json.loads(result.read_text(encoding="utf-8"))
+        assert payload["status"] == "complete"

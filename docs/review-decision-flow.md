@@ -117,12 +117,17 @@ flowchart TD
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
     acquire_ok -- Yes --> gitlink_check{Changed gitlink?}
-    gitlink_check -- Yes --> gitlink[Closed gitlink status;<br/>model not started; ordinary files not reviewed]
-    gitlink_check -- No --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
+    gitlink_check -- Yes --> gitlink_scope{Pure pointer shape and<br/>qualified OCR 1.13.3?}
+    gitlink_scope -- No --> gitlink[Closed v6 unqualified status;<br/>model not started]
+    gitlink_scope -- Yes --> gitlink_projection[Freeze original trees, ordinary diff,<br/>Git inputs and child overrides]
+    gitlink_projection --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
+    gitlink_check -- No --> preview
     preview --> preview_ok{Preview accepted?}
     preview_ok -- Unclassified diagnostics --> preview_unclassified[Closed stage/count status;<br/>model not started]
     preview_ok -- Other failure --> preview_error[OCR not started; bounded failure path]
-    preview_ok -- Yes --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
+    preview_ok -- Yes --> selected{Qualified gitlink and<br/>no ordinary file selected?}
+    selected -- Yes --> no_work[Closed v6 no-model coverage;<br/>advisory post, strict mode nonzero]
+    selected -- No --> review[Run OCR against exact from/to refs<br/>with internal MCP plus fixed relay;<br/>guide summary and direct MR intent read,<br/>then relevant allowlisted tools when useful]
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
@@ -154,7 +159,7 @@ flowchart TD
     runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
     integrity_error -- Explicit local --> local_failure
     local_output -- No --> local_handoff[Private JSON handoff only]
-    mode -- GitLab MR --> receipt[Attach exact receipt v11:<br/>diff, target T, policy P and CI job]
+    mode -- GitLab MR --> receipt[Attach exact v11 ordinary or v12 partial receipt:<br/>diff, target T, policy P and CI job]
     receipt --> post{Posting input valid at readback?}
     retained_rejected --> posting_error
     post -- No --> posting_error[Job-local publication-policy error;<br/>findings transaction not started]
@@ -166,6 +171,7 @@ flowchart TD
     transaction_ok -- Yes --> published{Projection complete?}
     published -- Yes --> success[Review signal published]
     published -- Safe partial --> warning[Safe review subset published;<br/>not a complete public review]
+    published -- Repository partial v12 --> warning
 
     classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
     classDef warning fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px;
@@ -177,15 +183,18 @@ flowchart TD
     class warning warning;
     class local auxiliary;
     class preflight_error,terminal_strict_error,preview_error,gitlink,preview_unclassified,no_handoff,runtime_error,integrity_error,posting_error error;
-    class start,api,native_auth,terminal_route,target_policy,unprotected_rules,separate_policy,acquire,registry,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction auxiliary;
-    class auth,local_auth,input,profile,detached,initial_state,terminal_gate,current_diff,protected,selector,limited,default_policy,acquire_ok,gitlink_check,preview_ok,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
+    class no_work warning;
+    class start,api,native_auth,terminal_route,target_policy,unprotected_rules,separate_policy,acquire,registry,gitlink_projection,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction auxiliary;
+    class auth,local_auth,input,profile,detached,initial_state,terminal_gate,current_diff,protected,selector,limited,default_policy,acquire_ok,gitlink_check,gitlink_scope,preview_ok,selected,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
 
-Recognized stops record an identity-bound `ocr.pre-execution-status/v5` with a closed
-stage and `model_execution=not_started`. A stale merge-request revision is
-reported only in the old job's local output; it never posts into the newer
-merge request. A changed gitlink stops preview qualification before model
-review. Note-capable setup and preview statuses carry the complete authenticated
+Recognized stops record an identity-bound `ocr.pre-execution-status/v5` or
+gitlink-specific v6 with a closed stage and `model_execution=not_started`.
+A stale merge-request revision is reported only in the old job's local output;
+it never posts into the newer merge request. Pure changed gitlinks under OCR
+1.13.3 are projected from the original trees before preview; unsafe forms
+stop. Zero selected ordinary files also stop without model execution and use
+an advisory v6 status. Note-capable setup and preview statuses carry the complete authenticated
 B/H/T/P identity for live revalidation before each write; setup also requires
 the exact captured P. Unclassified preview diagnostics retain only a bounded
 count, never raw stderr. Generic OCR, parse, schema and provider failures
@@ -210,6 +219,15 @@ checks. Publication `ocr.publication/v2` separates public omitted fields and
 reasons from private-only sanitized fields and reasons. The v4 summary signal
 and receipt v11 expose those closed counts without converting OCR coverage or
 provider posting counts.
+
+Receipt v12 adds separate path-free effective repository coverage only for a
+qualified partial gitlink review. Native OCR `complete` then covers its selected
+ordinary files; it does not claim the skipped pointer or submodule contents.
+Posting independently rebuilds original Git inputs and checks the native
+selected/completed manifest before a current-result write. This route blocks
+automatic approval, old finding-thread deletion, and requested discussion
+resolution even when the native manifest is complete. v11 retains its exact
+ordinary-review meaning.
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
 contradictory manifest, stale identity, failed cleanup, or missing/mismatched toolkit action
@@ -280,9 +298,13 @@ flowchart TD
     receipt -- No --> ci_context{GitLab CI MR context?}
     ci_context -- Yes --> schema_error
     ci_context -- No --> direct[Standalone compatible receipt-less posting path]
-    receipt -- Yes --> exact{Exact current v11 receipt valid?}
+    receipt -- Yes --> exact{Exact current v11 or v12 receipt valid?}
     exact -- No --> schema_error[Job-local publication-policy error]
-    exact -- Yes --> fresh{Current CI job, diff, target<br/>and policy authority valid?}
+    exact -- Yes --> partial_check{v12 partial gitlink receipt?}
+    partial_check -- Yes --> source_proof{Original Git trees, counts and<br/>native selected work match?}
+    source_proof -- No --> schema_error
+    source_proof -- Yes --> fresh{Current CI job, diff, target<br/>and policy authority valid?}
+    partial_check -- No --> fresh
     fresh -- No --> stale_error[Stale or unavailable;<br/>preserve prior review]
     fresh -- Yes --> projection{Publication projection}
     direct --> publish[Publish findings and summary]
@@ -293,7 +315,7 @@ flowchart TD
     writes -- No attempt or direct failure --> post_error[Posting failed;<br/>previous review state preserved]
     writes -- Draft publish attempted, partial or unknown --> draft_partial[Stop nonzero; retain attempted notes;<br/>attempt cleanup of unattempted drafts;<br/>preserve prior review]
     writes -- Yes --> public_ok[Review signal published]
-    public_ok --> action{Optional later action eligible?}
+    public_ok --> action{Optional later action eligible?<br/>v12 always ineligible}
     action -- Yes --> fresh_again{Identity and authority<br/>still current before write?}
     fresh_again -- Yes --> action_ok[Review published; later action completed]
     fresh_again -- No --> action_stale[Current publication stops nonzero;<br/>previous review preserved;<br/>published drafts may remain visible]
@@ -301,7 +323,7 @@ flowchart TD
     action_ok --> cleanup{Old-review cleanup<br/>before each mutation}
     action_warn --> cleanup
     cleanup -- Before first mutation, stale --> action_stale
-    cleanup -- All confirmed --> complete[Replacement complete]
+    cleanup -- All confirmed --> complete[Replacement complete;<br/>v12 preserves prior finding threads]
     cleanup -- After cleanup starts, drift or unconfirmed write --> cleanup_partial[Stop nonzero; old cleanup partial;<br/>retain current-run comments]
 
     classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
@@ -314,7 +336,7 @@ flowchart TD
     class publish_partial,action_warn warning;
     class schema_error,stale_error,post_error,draft_partial,action_stale,cleanup_partial error;
     class handoff,direct,publish auxiliary;
-    class receipt,ci_context,exact,fresh,projection,writes,action,fresh_again,cleanup decision;
+    class receipt,ci_context,exact,partial_check,source_proof,fresh,projection,writes,action,fresh_again,cleanup decision;
 ```
 
 The current GitLab later action is an optional receipt-bound approval write. It is only one

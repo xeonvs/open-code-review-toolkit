@@ -66,7 +66,7 @@ Target v0.13.1, keep 0.14.0 development marker; include #268 and required advers
 
 ### Completed Baseline State
 
-v0.13.0 is published with immutable assets and #264 closed. Its archived plan is a historical prepublication snapshot; current roadmap/index wording may need factual correction. OCR 1.13.3 is qualified in `compatibility/ocr-support.json`, while host default `ocr` is 1.13.2. The feasibility probe used a local fake provider and left no repository changes. `codex/gitlink-partial-review-0131` was created from clean synchronized main.
+v0.13.0 is published with immutable assets and #264 closed. Its archived plan is a historical prepublication snapshot; current roadmap/index wording now reflects live release evidence. OCR 1.13.3 is qualified in `compatibility/ocr-support.json`, while host default `ocr` is 1.13.2. The feasibility probe used a local fake provider and left no repository changes. `codex/gitlink-partial-review-0131` was created from clean synchronized main.
 
 ### Current Work Queue
 
@@ -77,7 +77,7 @@ v0.13.0 is published with immutable assets and #264 closed. Its archived plan is
 | WQ-03 | REQ-002, REQ-005 | Frozen OCR invocation/environment, independent diff, preview/native-manifest qualification, real-binary regression, self-reviewed commit | done |
 | WQ-04 | REQ-003, REQ-004 | Exact receipt v12/status v6, effective coverage/reporting and local no-model path, hostile/legacy tests, self-reviewed commit | done |
 | WQ-05 | REQ-004 | GitLab posting, finding admission, approval blocker and partial lifecycle retention with failure/freshness tests, self-reviewed commit | done |
-| WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | pending |
+| WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | done |
 | WQ-07 | REQ-005, REQ-007 | Scoped/final quality, build, secret/dependency gates, security diff scan, real local OCR review, aggregate self-review, protected feature PR/merge, dev artifacts | pending |
 | WQ-08 | REQ-007, REQ-010 | Release markers/metadata/epoch/notes, checked plan archive/reset, release validation, protected signed release PR | pending |
 | WQ-09 | REQ-008 | Protected release merge, stable publication, receipt and external reconciliation | out_of_scope |
@@ -96,7 +96,7 @@ Only proven OCR 1.13.3 pure-pointer projection proceeds. Unique identical-OID be
 
 ### Latest Validation Results
 
-2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. The signed plan-only commit is `db27f37`; plan-lifecycle and instruction-contract checks and staged Gitleaks passed. Milestone v0.13.1 (#22) tracks #268. Draft feature PR #269 has only the plan commit at its remote head. Local WQ-02 commit `203a50e` and WQ-03 commit `827fc3b` are not pushed. WQ-03 has bounded unfiltered/projected Git inventory, original patch fingerprints and line counts, one frozen OCR child environment, exact preview and native manifest/source-artifact comparison, and before/after drift checks. WQ-04/05 add closed v12 effective coverage and v6 no-model status while preserving v11/v5, local/GitLab partial notices, independent post readback of original trees and native selected work, an approval blocker, and prior finding-thread retention. The checksum-verified OCR 1.13.3 and local fake provider passed add/update/delete/mixed ordinary rename/add/delete/gitlink move forms. Current focused runner/gitlink/coverage suite passed 269 tests; focused GitLab posting suite passed 364 tests and 299 subtests. Ruff, formatter and mypy passed. Toolkit-wide integrated production validation and final gates remain pending.
+2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. The signed plan-only commit is `db27f37`; plan-lifecycle and instruction-contract checks and staged Gitleaks passed. Milestone v0.13.1 (#22) tracks #268. Draft feature PR #269 has only the plan commit at its remote head. Local WQ-02 commit `203a50e`, WQ-03 commit `827fc3b`, and WQ-04/05 commit `7f17a3f` are not pushed. WQ-03 has bounded unfiltered/projected Git inventory, original patch fingerprints and line counts, one frozen OCR child environment, exact preview and native manifest/source-artifact comparison, and before/after drift checks. WQ-04/05 add closed v12 effective coverage and v6 no-model status while preserving v11/v5, local/GitLab partial notices, independent post readback of original trees and native selected work, an approval blocker, and prior finding-thread retention. The checksum-verified OCR 1.13.3 and local fake provider passed add/update/delete/mixed ordinary rename/add/delete/gitlink move forms. The integrated local toolkit test also passed an ordinary-plus-gitlink review through the real OCR binary and mandatory evidence MCP, and a gitlink-only no-model case; its loopback fake-provider HTTP allowance exists only inside the test process, with product HTTPS validation intact. Focused runner/gitlink/coverage suite passed 269 tests before this integrated addition; focused GitLab posting suite passed 364 tests and 299 subtests. Towncrier rendered the 0.13.1 Feature draft and plan lifecycle check passed. The first full quality run reached 86.25% coverage but found 10 stale documentation/v5/v11 test expectations; corrected targeted contracts passed 98/98. The corrected-tree full `scripts/quality.sh check` then passed. The checksum-verified installed OCR matrix passed 49/49 including integrated toolkit proof. Final build, secret/dependency and review gates remain pending.
 
 ### Risks And Recovery
 
@@ -104,7 +104,7 @@ Git configuration precedence or local input drift can hide ordinary changes: rev
 
 ### Resume Point
 
-WQ-06: extend the installed-toolkit matrix and hostile shape checks, update operator/security/decision-flow/example contracts, add the Feature fragment, and reconcile status-bearing v0.13.0 documents. Preserve the draft feature PR's plan-only remote head until the final security and local OCR reviews.
+WQ-07: complete the corrected-tree quality and installed-artifact gates, tree/history secret and dependency gates, codex-security diff scan, aggregate self-review, and one correctly invoked local toolkit/OCR review with ChatGPT before the single final feature push. Preserve the draft feature PR's plan-only remote head until those reviews pass.
 
 ### Plan Fidelity Check
 

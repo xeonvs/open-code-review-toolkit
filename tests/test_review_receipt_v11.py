@@ -220,7 +220,8 @@ def test_v11_review_keys_and_federation_version_are_exact() -> None:
 def test_future_receipt_number_cannot_reinterpret_v11_payload() -> None:
     receipt = _receipt_v11(external=True)
     receipt["schema_version"] = 12
-    assert receipt_review_identity(receipt) is None
+    identity = receipt_review_identity(receipt)
+    assert identity is not None and identity.schema_version == 12
     assert validated_review_identity(receipt) is None
     assert not toolkit_receipt_is_valid(receipt)
 

@@ -389,7 +389,8 @@ def test_note_status_rejects_missing_or_malformed_review_tuple(
     tmp_path: Path, mutation: dict[str, object]
 ) -> None:
     path = private_directory(tmp_path) / "pre-execution-status.json"
-    payload = {**asdict(status()), **mutation}
+    write_pre_execution_status(path, status())
+    payload = {**json.loads(path.read_text(encoding="utf-8")), **mutation}
     path.write_text(json.dumps(payload), encoding="utf-8")
     path.chmod(0o600)
     with pytest.raises(PreExecutionStatusError, match="review identity"):

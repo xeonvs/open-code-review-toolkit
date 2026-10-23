@@ -189,12 +189,14 @@ Apply the [cohesive-module invariant](engineering/project_principles.md#product-
 
 ## Review reporting and provider adapters
 
-`ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION` owns the current receipt number;
-posting, freshness, and approval select it through that constant. The v9/v10
-readback rules and v11 tuple parser are version-specific contracts. When a new
-receipt version is introduced, add the prior current version to the historical
-set, implement its new parser and nested-schema mapping explicitly, and version
-the private pre-execution status if its embedded review tuple changes. Verify
+`ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION` owns ordinary receipt v11;
+`PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION` owns the qualified gitlink partial
+receipt v12. Posting and freshness accept the exact current form for each
+route; automatic approval accepts only eligible v11. The v9/v10 readback
+rules, v11/v12 tuple parser, and pre-execution status v5/v6 are separate
+version-specific contracts. When a new receipt version is introduced, preserve
+prior wire meanings, implement its parser and nested-schema mapping explicitly,
+and version the private pre-execution status if its embedded review tuple changes. Verify
 old readback, new producer/readback, static-note handoff, normal publication,
 approval, and cross-job rejection separately. A version bump alone must fail
 closed rather than silently treating the new shape as the old one.
