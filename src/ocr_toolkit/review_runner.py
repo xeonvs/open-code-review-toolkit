@@ -64,7 +64,16 @@ from ocr_toolkit.evidence.artifacts import (
     write_private_text,
 )
 from ocr_toolkit.evidence.collect import collect_repository_evidence
-from ocr_toolkit.evidence.gitlinks import changed_gitlinks
+from ocr_toolkit.evidence.gitlink_projection import (
+    GitlinkProjection,
+    RawDiffEntry,
+    gitlink_selection_proof,
+    make_gitlink_projection,
+    qualify_gitlink_manifest,
+    qualify_gitlink_preview,
+    verify_gitlink_projection,
+)
+from ocr_toolkit.evidence.gitlinks import changed_gitlinks, plan_gitlink_input
 from ocr_toolkit.evidence.invocation import collect_invocation_evidence
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
@@ -91,8 +100,10 @@ from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
+    PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_GITLINK_SELECTION_KEY,
     TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -112,7 +123,9 @@ from ocr_toolkit.pre_execution import (
     BACKGROUND_CHARACTER_LIMIT_REASON,
     BACKGROUND_FILE_SIZE_LIMIT_REASON,
     GITLAB_MERGE_REQUEST_TERMINAL,
-    GITLINK_PREVIEW_UNSUPPORTED,
+    GITLINK_NO_REVIEWABLE_FILES,
+    GITLINK_PROJECTION_UNQUALIFIED,
+    GITLINK_STATUS_SCHEMA,
     OCR_PREVIEW_STAGE,
     PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
@@ -155,6 +168,7 @@ from ocr_toolkit.reporting.model import (
     failed_report,
     report_from_result,
 )
+from ocr_toolkit.repository_coverage import RepositoryCoverage, coverage_from_projection
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
@@ -297,6 +311,7 @@ class BackgroundQualification:
 
     advisory: OcrToolkitAdvisory | None = None
     operator_notices: tuple[str, ...] = ()
+    selected_diff: tuple[RawDiffEntry, ...] = ()
 
 
 class BackgroundQualificationRejected(ReviewRunnerError):
@@ -393,6 +408,8 @@ class ReviewRunState:
     report: ReviewReport | None = None
     debug: DebugBundle | None = None
     progress: ReviewProgress | None = None
+    repository_coverage: RepositoryCoverage | None = None
+    gitlink_unqualified: bool = False
 
     def enter(self, stage: FailureStage) -> None:
         """Enter a real execution phase and notify the optional progress observer."""
@@ -1683,6 +1700,24 @@ def _retain_private_diagnostic_result(result_path: Path, *, reason: str) -> bool
     return True
 
 
+def _verify_gitlink_after_execution(
+    result_path: Path, projection: GitlinkProjection, *, preserve_authorized: bool
+) -> None:
+    """Reject drift and dispose of raw model output before any publication DLP work."""
+
+    try:
+        verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
+    except (RepositoryEvidenceError, OSError, subprocess.TimeoutExpired) as exc:
+        if preserve_authorized:
+            _retain_private_diagnostic_result(result_path, reason="gitlink-input-drift")
+        else:
+            try:
+                result_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise ReviewRunnerError("OCR gitlink inputs drifted during model execution") from exc
+
+
 def _finalize_ocr_result(
     result_path: Path,
     composition: mcp_config.MCPComposition,
@@ -1696,6 +1731,8 @@ def _finalize_ocr_result(
     report_consumer: Callable[[ReviewReport], None] | None = None,
     state: ReviewRunState | None = None,
     private_diagnostics: bool = False,
+    projection: GitlinkProjection | None = None,
+    selected_diff: tuple[RawDiffEntry, ...] = (),
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1725,12 +1762,22 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
-        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY, TOOLKIT_PRIVATE_DIAGNOSTIC_KEY):
+        for reserved in (
+            TOOLKIT_RESULT_KEY,
+            TOOLKIT_ADVISORY_KEY,
+            TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
+            TOOLKIT_GITLINK_SELECTION_KEY,
+        ):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
+        if projection is not None:
+            try:
+                qualify_gitlink_manifest(projection, selected_diff, payload)
+            except RepositoryEvidenceError as exc:
+                raise ReviewRunnerError("OCR gitlink manifest did not prove selected work") from exc
         failure_telemetry = _tool_failure_telemetry(payload.get("tool_calls"))
         if state is not None:
             state.enter("mcp-use")
@@ -1770,7 +1817,15 @@ def _finalize_ocr_result(
             )
             state.enter("result-validation")
         metadata["publication"] = publication
-        metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
+        effective_coverage: RepositoryCoverage | None = None
+        if projection is not None:
+            effective_coverage = coverage_from_projection(
+                projection, selected_diff, state="partial"
+            )
+            metadata["repository_coverage"] = effective_coverage.payload()
+            metadata["schema_version"] = PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION
+        else:
+            metadata["schema_version"] = TOOLKIT_RESULT_SCHEMA_VERSION
         provider_receipt = identity.target_protection in {"protected", "unprotected"}
         if provider_receipt:
             if not toolkit_receipt_is_valid(metadata):
@@ -1781,6 +1836,10 @@ def _finalize_ocr_result(
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
         finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
+        if projection is not None and filtered and provider_receipt:
+            finalized[TOOLKIT_GITLINK_SELECTION_KEY] = gitlink_selection_proof(
+                projection, selected_diff
+            )
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
         if report_consumer is not None and (
@@ -1800,6 +1859,7 @@ def _finalize_ocr_result(
                         toolkit_advisory,
                         mcp.get("federation") if isinstance(mcp, dict) else None,
                         enrichment.legacy_policy if enrichment is not None else False,
+                        effective_coverage,
                     ),
                     reviewed_sha=identity.source_sha,
                 )
@@ -2067,7 +2127,11 @@ def _parse_background_preview(*, returncode: int, stderr: bytes) -> BackgroundQu
 
 
 def _qualify_review_background(
-    ocr_args: list[str], *, ocr_binary: str, session_home: Path
+    ocr_args: list[str],
+    *,
+    ocr_binary: str,
+    session_home: Path,
+    projection: GitlinkProjection | None = None,
 ) -> BackgroundQualification:
     """Ask the installed qualified OCR to classify the exact production background."""
 
@@ -2091,15 +2155,28 @@ def _qualify_review_background(
                     stdin=subprocess.DEVNULL,
                     stdout=stdout_file,
                     stderr=stderr_file,
-                    env=_ocr_child_environment(),
+                    env=(
+                        projection.child_environment()
+                        if projection is not None
+                        else _ocr_child_environment()
+                    ),
                 )
         except OSError as exc:
             raise ReviewRunnerError(f"could not execute OCR background preview: {exc}") from exc
-        _read_bounded_artifact(stdout_path, limit=2_000_000, label="stdout")
+        stdout = _read_bounded_artifact(stdout_path, limit=2_000_000, label="stdout")
         stderr = _read_bounded_artifact(
             stderr_path, limit=BACKGROUND_PREVIEW_STDERR_BYTES, label="stderr"
         )
-        return _parse_background_preview(returncode=completed.returncode, stderr=stderr)
+        qualification = _parse_background_preview(returncode=completed.returncode, stderr=stderr)
+        if projection is not None:
+            try:
+                selected = qualify_gitlink_preview(projection, stdout)
+            except RepositoryEvidenceError as exc:
+                raise ReviewRunnerError(
+                    "OCR gitlink preview did not match the ordinary diff"
+                ) from exc
+            return replace(qualification, selected_diff=selected)
+        return qualification
     finally:
         active_error = sys.exception()
         os.umask(previous_umask)
@@ -2123,18 +2200,21 @@ def _run_background_qualified_review(
     refs: ReviewRefs,
     identity: ReviewIdentity,
     gitlink_detected: bool = False,
+    projection: GitlinkProjection | None = None,
     state: ReviewRunState | None = None,
 ) -> tuple[int, BackgroundQualification]:
     """Run the model review only after installed OCR accepts its background."""
 
     status_review = _status_review(identity)
     if gitlink_detected:
+        if state is not None:
+            state.gitlink_unqualified = True
         if status_review is not None:
             write_pre_execution_status(
                 artifacts.pre_execution_status,
                 PreExecutionStatus(
-                    schema_version=STATUS_SCHEMA,
-                    reason=GITLINK_PREVIEW_UNSUPPORTED,
+                    schema_version=GITLINK_STATUS_SCHEMA,
+                    reason=GITLINK_PROJECTION_UNQUALIFIED,
                     diff_base_sha=refs.base,
                     source_sha=refs.head,
                     policy_sha=identity.policy_sha,
@@ -2154,6 +2234,7 @@ def _run_background_qualified_review(
             production_args,
             ocr_binary=ocr_binary,
             session_home=session_home,
+            **({"projection": projection} if projection is not None else {}),
         )
     except BackgroundQualificationRejected as exc:
         if state is not None:
@@ -2219,6 +2300,40 @@ def _run_background_qualified_review(
         print(f"OCR argument qualification notice: {notice}", file=sys.stderr)
     if state is not None:
         state.observe("preview", "degraded" if qualification.advisory is not None else "passed")
+    if projection is not None:
+        if not qualification.selected_diff:
+            coverage = coverage_from_projection(projection, (), state="not_started")
+            if state is not None:
+                state.repository_coverage = coverage
+            if status_review is not None:
+                try:
+                    write_pre_execution_status(
+                        artifacts.pre_execution_status,
+                        PreExecutionStatus(
+                            schema_version=GITLINK_STATUS_SCHEMA,
+                            reason=GITLINK_NO_REVIEWABLE_FILES,
+                            diff_base_sha=refs.base,
+                            source_sha=refs.head,
+                            policy_sha=identity.policy_sha,
+                            review=status_review,
+                            stage=OCR_PREVIEW_STAGE,
+                            repository_coverage=coverage.payload(),
+                        ),
+                    )
+                except PreExecutionStatusError as exc:
+                    raise ReviewRunnerError(
+                        "OCR gitlink no-model status could not be persisted safely"
+                    ) from exc
+            print(
+                "OCR gitlink qualification: no ordinary files selected; model review did not run",
+                file=sys.stderr,
+            )
+            return 2, qualification
+        try:
+            verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
+        except (RepositoryEvidenceError, OSError, subprocess.TimeoutExpired) as exc:
+            raise ReviewRunnerError("OCR gitlink inputs drifted before model execution") from exc
+    if state is not None:
         state.enter("subprocess")
     try:
         code = run_review(
@@ -2226,6 +2341,11 @@ def _run_background_qualified_review(
             stderr_path,
             production_args,
             ocr_binary=ocr_binary,
+            **(
+                {"child_environment": projection.child_environment()}
+                if projection is not None
+                else {}
+            ),
         )
     finally:
         if state is not None and state.debug is not None:
@@ -3048,7 +3168,12 @@ def run_evidence_review(
             report = (
                 state.report
                 if code == 0
-                else failed_report(state.stage, reviewed_sha=state.reviewed_sha)
+                else failed_report(
+                    state.stage,
+                    reviewed_sha=state.reviewed_sha,
+                    repository_coverage=state.repository_coverage,
+                    gitlink_unqualified=state.gitlink_unqualified,
+                )
             )
             assert report is not None
             state.enter("reporting")
@@ -3159,11 +3284,13 @@ def _run_evidence_review(
 
     native_store = None
     native_binary = None
+    native_version: str | None = None
     try:
         if local_chatgpt.auth_mode(os.environ, local=state.local) == "chatgpt":
             local_chatgpt.provider_entry(os.environ)
             native_binary = _resolve_ocr_binary()
             version = preflight.validate_ocr_binary(executable=native_binary, announce=False)
+            native_version = version
             local_chatgpt.require_supported_version(version)
             native_store = local_chatgpt.native_store(os.environ)
     except (local_chatgpt.LocalChatGPTError, preflight.PreflightError) as exc:
@@ -3359,12 +3486,41 @@ def _run_evidence_review(
         ]
         state.enter("preview")
         ocr_binary = native_binary or _resolve_ocr_binary()
+        projection: GitlinkProjection | None = None
+        gitlink_detected = False
+        gitlink_plan = None
         try:
-            gitlink_detected = bool(
-                changed_gitlinks(GitRepositoryReader(Path.cwd()), refs.base, refs.head)
-            )
+            reader = GitRepositoryReader(Path.cwd())
+            gitlink_plan = plan_gitlink_input(reader, refs.base, refs.head)
+            if gitlink_plan is not None:
+                if native_version is None:
+                    try:
+                        native_version = preflight.validate_ocr_binary(
+                            executable=ocr_binary, announce=False
+                        )
+                    except preflight.PreflightError as exc:
+                        raise ReviewRunnerError(str(exc)) from exc
+                if native_version == "1.13.3":
+                    projection = make_gitlink_projection(reader, gitlink_plan)
+                else:
+                    gitlink_detected = True
         except RepositoryEvidenceError as exc:
-            raise ReviewRunnerError("changed gitlink evidence could not be qualified") from exc
+            if gitlink_plan is not None:
+                gitlink_detected = True
+            else:
+                try:
+                    gitlink_detected = bool(changed_gitlinks(reader, refs.base, refs.head))
+                except RepositoryEvidenceError:
+                    raise ReviewRunnerError(
+                        "changed gitlink evidence could not be qualified"
+                    ) from exc
+            if not gitlink_detected:
+                raise ReviewRunnerError("changed gitlink evidence could not be qualified") from exc
+            print(
+                "OCR gitlink qualification: immutable changed pointer is outside the "
+                "qualified subset; model review did not run",
+                file=sys.stderr,
+            )
         exit_code, background_qualification = _run_background_qualified_review(
             result_path,
             stderr_path,
@@ -3375,6 +3531,7 @@ def _run_evidence_review(
             refs=refs,
             identity=identity,
             gitlink_detected=gitlink_detected,
+            projection=projection,
             **({"state": state} if state.local or state.progress is not None else {}),
         )
     finally:
@@ -3417,6 +3574,10 @@ def _run_evidence_review(
                     forbidden += enrichment.forbidden_sources or tuple(
                         ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
                     )
+                if projection is not None:
+                    _verify_gitlink_after_execution(
+                        result_path, projection, preserve_authorized=preserve_authorized
+                    )
                 try:
                     usage, publication_filtered, publication = _finalize_ocr_result(
                         result_path,
@@ -3427,6 +3588,14 @@ def _run_evidence_review(
                         forbidden=forbidden,
                         dlp_enabled=dlp_enabled,
                         toolkit_advisory=background_qualification.advisory,
+                        **(
+                            {
+                                "projection": projection,
+                                "selected_diff": background_qualification.selected_diff,
+                            }
+                            if projection is not None
+                            else {}
+                        ),
                         **({"private_diagnostics": True} if preserve_authorized else {}),
                         **({"report_consumer": state.admit_report} if state.local else {}),
                         **({"state": state} if state.local or state.progress is not None else {}),
@@ -3595,6 +3764,7 @@ def run_review(
     ocr_args: list[str],
     *,
     ocr_binary: str = "ocr",
+    child_environment: dict[str, str] | None = None,
 ) -> int:
     """Execute `ocr review`, retain private artifacts, and report safe failures."""
 
@@ -3622,7 +3792,9 @@ def run_review(
                 stdin=subprocess.DEVNULL,
                 stdout=result_file,
                 stderr=stderr_file,
-                env=_ocr_child_environment(),
+                env=child_environment
+                if child_environment is not None
+                else _ocr_child_environment(),
             )
     except OSError as exc:
         raise ReviewRunnerError(f"could not execute OCR: {exc}") from exc

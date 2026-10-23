@@ -27,6 +27,9 @@ BATCH_HEADER_RE = re.compile(
 MAX_BATCH_BLOB_BYTES = 32_000_000
 MAX_GIT_TEXT_BYTES = 8_000_000
 MAX_ANCESTRY_FETCH_DEPTH = 128
+MAX_GITMODULES_BYTES = 128_000
+MAX_GITMODULES_ENTRIES = 256
+MAX_SUBMODULE_NAME_BYTES = 256
 
 
 def _git_environment() -> dict[str, str]:
@@ -324,6 +327,63 @@ class GitRepositoryReader:
         if content.returncode != 0 or len(content.stdout) != size:
             raise RepositoryEvidenceError("failed to read the complete repository blob")
         return content.stdout
+
+    def gitmodules_paths(self, ref: str) -> dict[str, str]:
+        """Parse one committed .gitmodules blob without includes or URL access.
+
+        The mapping is name to normalized path. Callers retain it privately and
+        only use names as data in process-local Git configuration, never a shell.
+        """
+
+        entry = self.object_at(ref, ".gitmodules")
+        if entry is None:
+            return {}
+        if entry.mode != "100644" or entry.object_type != "blob":
+            raise RepositoryEvidenceError(".gitmodules is not a regular configuration blob")
+        if self.bounded_regular_blob_size(entry) > MAX_GITMODULES_BYTES:
+            raise RepositoryEvidenceError(".gitmodules exceeds the bounded byte limit")
+        result = self._run(
+            ["config", f"--blob={entry.object_sha}", "--no-includes", "-z", "--list"],
+            text=False,
+        )
+        assert isinstance(result.stdout, bytes)
+        if result.returncode != 0 or len(result.stdout) > MAX_GITMODULES_BYTES * 2:
+            raise RepositoryEvidenceError(".gitmodules configuration is invalid or too large")
+        records = result.stdout.split(b"\0")
+        if records[-1] != b"":
+            raise RepositoryEvidenceError(".gitmodules configuration is truncated")
+        records.pop()
+        if len(records) > MAX_GITMODULES_ENTRIES:
+            raise RepositoryEvidenceError(".gitmodules has too many entries")
+        paths: dict[str, str] = {}
+        seen_paths: set[str] = set()
+        for record in records:
+            if record.count(b"\n") != 1:
+                raise RepositoryEvidenceError(".gitmodules contains an invalid entry")
+            raw_key, raw_value = record.split(b"\n", 1)
+            try:
+                key = raw_key.decode("utf-8")
+                value = raw_value.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise RepositoryEvidenceError(".gitmodules contains invalid UTF-8") from exc
+            if key.startswith(("include.", "includeif.")):
+                raise RepositoryEvidenceError(".gitmodules includes are unsupported")
+            if not key.startswith("submodule.") or not key.endswith(".path"):
+                continue
+            name = key[len("submodule.") : -len(".path")]
+            if (
+                not name
+                or len(name.encode("utf-8")) > MAX_SUBMODULE_NAME_BYTES
+                or any(ord(char) < 32 or ord(char) == 127 for char in name)
+                or name in paths
+            ):
+                raise RepositoryEvidenceError(".gitmodules submodule name is ambiguous")
+            path = normalize_repo_path(value)
+            if path in seen_paths:
+                raise RepositoryEvidenceError(".gitmodules path is ambiguous")
+            paths[name] = path
+            seen_paths.add(path)
+        return paths
 
     def bounded_regular_blob_size(self, entry: RepositoryObject) -> int:
         """Validate one exact entry as a bounded regular blob without reading its content."""

@@ -4813,7 +4813,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "_immutable_review_refs",
             lambda _refs: review_runner.ReviewRefs("a" * 40, "b" * 40),
         ),
-        patched_attr(review_runner, "changed_gitlinks", lambda *_args: ()),
+        patched_attr(review_runner, "plan_gitlink_input", lambda *_args: None),
         patched_attr(review_runner, "_write_isolated_runtime_config", lambda: None),
         patched_attr(
             review_runner,

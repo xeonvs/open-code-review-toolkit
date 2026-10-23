@@ -719,6 +719,7 @@ def summarize_result(
     outcome_status: str = "success",
     outcome_message: str = "",
     coverage_summary: str = "",
+    repository_coverage_summary: str = "",
     coverage_diagnostics: CoverageDiagnostics | None = None,
     warnings: Sequence[Any] = (),
     suppressed_count: int = 0,
@@ -743,6 +744,8 @@ def summarize_result(
         emoji=use_emoji,
     )
     lines = ["## Open Code Review", "", outcome_line]
+    if repository_coverage_summary:
+        lines.extend(["", repository_coverage_summary])
     if protected_policy_anchor_sha:
         lines.append(
             PROTECTED_POLICY_ANCHOR.format(

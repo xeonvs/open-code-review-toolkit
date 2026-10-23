@@ -31,15 +31,21 @@ ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/r
 ```
 
 Keep all three output paths in that new private directory. Resolve its physical
-path before launch: on macOS `/tmp` commonly points through a symlink to
-`/private/tmp`, and the report writer rejects a symlinked parent after OCR has
-already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
+path before launch. `/tmp` can be a symlink on macOS or Linux, while a mounted
+directory can have no symlink at all. The runner checks the actual path
+components and rejects symlinks and parent-opening errors before OCR starts.
+It reopens the destination directory when publishing the report. Check the
+report path is fresh and wait for the `ocr-ci` exit status;
 an OCR JSON file alone does not establish successful local delivery. After a
 zero exit, read the complete private Markdown and JSON: require `status=complete`,
 compare selected/completed/reused/failed/waived coverage, inspect DLP admission and
 every admitted finding, and inspect stderr for failed auxiliary tool reads that
-could limit the conclusion. Preserve these artifacts until findings are fixed
-and the corrected head has been reviewed.
+could limit the conclusion. For each failed `file_read`, compare its path and
+range with the reviewed tree and decide whether the missed context bears on
+the changed code or a finding. A native complete manifest proves selected-file
+completion, not that every auxiliary read succeeded; resolve a material gap
+before accepting the local review. Preserve these artifacts until findings are
+fixed and the corrected head has been reviewed.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
@@ -210,6 +216,15 @@ report destination has been accepted also publish the closed failure report;
 configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
+
+With qualified OCR 1.13.3, a changed Git submodule pointer can be excluded
+automatically while selected ordinary files are reviewed. Local Markdown
+states the effective repository coverage separately from the native OCR
+manifest; the changed pointer and submodule contents remain unreviewed. A
+gitlink-only or fully excluded ordinary diff stops before the model with exit
+2 and a closed no-model coverage statement. An unsafe or unqualified pointer
+shape stops without a coverage claim. The toolkit never initializes or fetches
+submodules, and MCP context cannot turn a skipped pointer into a reviewed file.
 
 Before disabling DLP to diagnose a suspected false positive, run
 `ocr-ci review --local --preserve-private-artifacts` with the normal private

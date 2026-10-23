@@ -90,6 +90,12 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
+For a safely separable changed Git submodule pointer under qualified OCR
+1.13.3, the toolkit reviews selected ordinary files and labels repository
+coverage partial. It leaves the pointer and submodule contents unreviewed,
+preserves prior finding threads and cannot automatically approve. A diff with
+no selected ordinary files starts no model review and posts an advisory status.
+
 After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v11's exact reviewed diff, actual target, policy authority, merge-request author, DLP mode, and reconciled federation use. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. DLP-clean metadata, generic discussions, protected same-revision CI outcomes, unused governed services, and successful `review_read` tool use do not independently block approval. An unprotected target, disabled DLP, degraded metadata, a DLP rejection, required context degradation, admitted remediation history, older receipts, publication filtering, used advisory tools, uncertain federation accounting, author movement, or bot self-authorship prevents an approval write. A CI status is review context, never approval authority. GitLab approval rules, Code Owners, and protected-branch policy remain authoritative merge policy. They are not prerequisites for OCR execution. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
 
 An intentionally absent toolkit receipt retains compatible direct posting outside

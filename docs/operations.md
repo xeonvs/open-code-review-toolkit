@@ -49,6 +49,21 @@ findings; DLP omission totals and their bounded overlapping source-class counts
 are shown separately. Previous comments are preserved with the actual incomplete
 stage reason instead of being replaced by a falsely clean review.
 
+When a changed Git submodule pointer is safely separable under the qualified
+OCR 1.13.3 executable, the toolkit reviews only the selected ordinary files.
+The summary labels effective repository coverage **partial** and gives path-free
+ordinary-file and changed-pointer counts. OCR's native `complete` manifest then
+means only that its selected ordinary work completed. The pointer and submodule
+contents remain unreviewed; the toolkit does not initialize or fetch a
+submodule. No setting or MCP tool has to opt into this behavior. A partial
+repository review cannot automatically approve, delete previous finding
+threads, or resolve `/ocr resolve` discussions. Findings on skipped pointers
+or files outside the selected ordinary set are rejected before publication.
+If preview selects no ordinary files, `ocr-ci review` exits 2 without starting
+the model; `ocr-ci post` publishes an advisory note with the same closed
+coverage counts and exits 0, or 1 with `OCR_STRICT_POSTING=true`. Unsafe or
+unqualified gitlink forms also stop before the model and never claim coverage.
+
 `OCR_DLP_ENABLED` defaults to strict `true`. Exact `false` disables context,
 federation and publication DLP for that run, emits a prominent warning in the
 summary and Technical details, and makes automatic approval unreachable. It can

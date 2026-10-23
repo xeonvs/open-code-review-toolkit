@@ -13,6 +13,7 @@ from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
@@ -21,20 +22,24 @@ from ocr_toolkit.reporting.dlp import (
     publication_outcome_for_summary as publication_outcome_for_summary,
 )
 from ocr_toolkit.reporting.federation import valid_reconciliation
+from ocr_toolkit.repository_coverage import RepositoryCoverageError, parse_repository_coverage
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
 # Keep historical wire shapes explicit; changing the current producer version
 # must never reinterpret a persisted v11 receipt as a future format.
 RECEIPT_V11 = 11
+RECEIPT_V12 = PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION
 _FEDERATION_SCHEMA_BY_RECEIPT_VERSION = {
     9: "ocr.federation/v1",
     10: "ocr.federation/v2",
     RECEIPT_V11: "ocr.federation/v2",
+    RECEIPT_V12: "ocr.federation/v2",
 }
 _PUBLICATION_SCHEMA_BY_RECEIPT_VERSION = {
     9: None,
     10: "ocr.publication/v2",
     RECEIPT_V11: "ocr.publication/v2",
+    RECEIPT_V12: "ocr.publication/v2",
 }
 UNPROTECTED_APPROVAL_REASON = (
     "the GitLab target branch was unprotected; limited reviews are comment-only"
@@ -238,7 +243,7 @@ def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewId
             schema_version=receipt_version,
             policy_sha=review["policy_sha"],
         )
-    if receipt_version != RECEIPT_V11 or set(review) not in {
+    if receipt_version not in {RECEIPT_V11, RECEIPT_V12} or set(review) not in {
         _V11_REVIEW_KEYS,
         _V11_REVIEW_KEYS | {"ci_job_id"},
     }:
@@ -335,12 +340,20 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             "tool_execution",
             "cleanup",
         }
+        | ({"repository_coverage"} if receipt_version == RECEIPT_V12 else set())
     ):
         return invalid
 
     review_identity = _parse_review_identity(toolkit_metadata.get("review"), receipt_version)
     if review_identity is None:
         return invalid
+    if receipt_version == RECEIPT_V12:
+        try:
+            parse_repository_coverage(
+                toolkit_metadata["repository_coverage"], required_state="partial"
+            )
+        except RepositoryCoverageError:
+            return invalid
 
     context = toolkit_metadata.get("context")
     if not isinstance(context, dict) or set(context) != {
@@ -600,6 +613,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return "mutable review context was admitted"
     if external and federation["state"] == "degraded":
         return "external MCP use was advisory, incomplete or accounting-mismatched"
+    if receipt_version == RECEIPT_V12:
+        return "changed Git submodule pointers were not reviewed; automatic approval is unavailable"
     return ""
 
 

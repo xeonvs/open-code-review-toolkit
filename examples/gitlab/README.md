@@ -8,6 +8,15 @@ before model execution; no new project variable is needed.
 
 The pipeline pins the exact qualified OCR release from the [compatibility manifest](../../compatibility/ocr-support.json) and explicitly sets `OCR_REVIEW_EFFORT=medium`, which permits two review rounds. Use `low` for one round when latency/cost is the priority, or `high` for three only after accepting the additional provider work. OCR uses a 15-minute subtask base and scales it to 15/30/45 minutes for low/medium/high; the example's 45-minute job timeout accommodates every preset without adding another environment control. Semantic grouping and filtering are OCR behavior shared by every context mode; they do not change which merge-request text a mode admits. `OCR_MAX_TOOLS=0` selects the embedded template default `100`. Values `1-49` report normalization to `50` but remain effectively `100`; only values above `100` raise the per-subtask cap. `OCR_MAX_TOKENS_BUDGET` and the optional completion cap remain independent controls.
 
+Toolkit 0.13.1 automatically handles safely separable changed Git submodule
+pointers with its qualified OCR 1.13.3 binary. Selected ordinary files can
+receive findings, while changed pointers and submodule contents remain
+unreviewed and the GitLab summary explicitly reports partial repository
+coverage. This route cannot automatically approve or resolve prior finding
+threads. A gitlink-only diff starts no model review and posts an advisory
+status; set the existing `OCR_STRICT_POSTING=true` only if that advisory should
+fail the job. No extra CI variable or MCP capability is needed.
+
 | Mode | Recipe | MR text admitted | External access | Automatic approval |
 | --- | --- | --- | --- | --- |
 | Identity only | [`modes/identity-only.gitlab-ci.yml`](modes/identity-only.gitlab-ci.yml) | None | None | May remain enabled |

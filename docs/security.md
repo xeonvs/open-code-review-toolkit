@@ -33,8 +33,33 @@ The main trust transitions are:
    only frozen `server__tool` aliases through a fixed private relay; upstream
    credentials never enter OCR configuration or arguments.
 5. OCR output crosses result validation, publication projection, stage-aware DLP,
-   cleanup, receipt v11, current-MR freshness checks and the provider posting
-   transaction.
+   cleanup, a versioned review receipt, current-MR freshness checks and the
+   provider posting transaction.
+
+Changed Git submodule pointers are a separate repository-coverage boundary.
+For qualified OCR 1.13.3 only, the toolkit compares complete before/after Git
+trees, the explicit unfiltered diff, and the ordinary-file projection before
+the model runs. It reads `.gitmodules` from immutable blobs without using its
+URLs, freezes process-local Git overrides for preview and production, then
+checks the native manifest against the ordinary files selected by preview.
+User and XDG Git attributes are disabled for this projection; repository
+attributes remain input-bound across review and posting.
+Type transitions, ambiguous moves, unsafe configuration, unknown diagnostics,
+drift, reuse, or mismatched manifest evidence stop the review. Neither the
+internal evidence MCP nor an external MCP server can grant review coverage for
+a skipped gitlink or authorize a finding about its contents. A v12 receipt
+states path-free partial repository coverage and blocks automatic approval and
+old finding-thread cleanup; the native OCR manifest retains its own meaning.
+`post` independently rechecks the original Git trees and selected native work
+before a GitLab write. A v6 no-model status contains only closed counts or a
+closed unqualified reason, with the authenticated MR identity.
+If publication DLP removes a finding or warning, the filtered handoff omits
+the native manifest. Only after validating that manifest, the toolkit carries
+a path-free selection proof made of item digests and the source-artifact digest;
+`post` checks it against immutable Git changes and the original complete
+coverage before publishing any retained finding. A missing or altered proof
+stops publication. Git diff output is also bounded while the child runs, so
+an oversized patch cannot fill temporary storage before the limit is checked.
 
 The `auto` fallback is sensitive to wrong-project source substitution,
 retargeting, default-branch or protection changes, stale diff versions,

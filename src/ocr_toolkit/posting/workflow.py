@@ -16,8 +16,19 @@ from typing import Any
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import neutralize_quick_actions
 from ocr_toolkit.evidence.artifacts import repository_artifacts
+from ocr_toolkit.evidence.gitlink_projection import (
+    make_gitlink_projection,
+    qualify_gitlink_manifest,
+    selected_gitlink_manifest_entries,
+    selected_gitlink_proof_entries,
+    verify_gitlink_projection,
+)
+from ocr_toolkit.evidence.gitlinks import plan_gitlink_input
+from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.ocr_result import (
+    PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_GITLINK_SELECTION_KEY,
     TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -108,7 +119,9 @@ from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
     BACKGROUND_REASONS,
     GITLAB_MERGE_REQUEST_TERMINAL,
+    GITLINK_NO_REVIEWABLE_FILES,
     GITLINK_PREVIEW_UNSUPPORTED,
+    GITLINK_PROJECTION_UNQUALIFIED,
     PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
     REVIEW_IDENTITY_UNAVAILABLE,
@@ -129,12 +142,23 @@ from ocr_toolkit.providers.gitlab import (
     GitLabProviderError,
     parse_merge_request_lifecycle,
 )
+from ocr_toolkit.repository_coverage import (
+    RepositoryCoverage,
+    RepositoryCoverageError,
+    coverage_from_projection,
+    parse_repository_coverage,
+    repository_coverage_summary,
+)
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.review_identity import effective_reviewed_sha, full_sha
 from ocr_toolkit.review_receipt import ReceiptReviewIdentity, validated_review_identity
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
+
+CURRENT_POSTING_RECEIPT_VERSIONS = frozenset(
+    {TOOLKIT_RESULT_SCHEMA_VERSION, PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION}
+)
 from ocr_toolkit.posting.settings import (
     auto_approve,
     max_post_comments,
@@ -236,7 +260,7 @@ def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
         identity is not None
         and identity.target_protection == "unprotected"
         and not (
-            identity.schema_version == TOOLKIT_RESULT_SCHEMA_VERSION
+            identity.schema_version in CURRENT_POSTING_RECEIPT_VERSIONS
             and identity.protection_mode == "auto"
             and identity.policy_protection == "protected"
         )
@@ -249,7 +273,7 @@ def protected_policy_anchor_sha(toolkit_metadata: Any) -> str:
     identity = validated_review_identity(toolkit_metadata)
     if (
         identity is not None
-        and identity.schema_version == TOOLKIT_RESULT_SCHEMA_VERSION
+        and identity.schema_version in CURRENT_POSTING_RECEIPT_VERSIONS
         and identity.protection_mode == "auto"
         and identity.target_protection == "unprotected"
         and identity.policy_protection == "protected"
@@ -263,7 +287,7 @@ def validate_posting_review_identity(
 ) -> ReviewFreshnessResult:
     """Bind the validated receipt to this job before a current-result write."""
 
-    if identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION:
+    if identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS:
         raise ReviewFreshnessUnavailable("receipt_unavailable")
     if (
         identity.project_id != config.project_id
@@ -384,7 +408,7 @@ def exact_receipt_diff_refs(identity: ReceiptReviewIdentity) -> dict[str, str]:
     """Use the reviewed diff tuple, never a provider version matched only by H."""
 
     if (
-        identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION
+        identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS
         or identity.diff_base_sha is None
         or identity.diff_start_sha is None
         or identity.diff_head_sha is None
@@ -953,6 +977,67 @@ def remap_existing_code_location(
     return matches[0] if len(matches) == 1 else (path, 0)
 
 
+def verified_partial_repository_coverage(
+    result: dict[str, Any], identity: ReceiptReviewIdentity
+) -> RepositoryCoverage:
+    """Rebuild the original trees and native selected work before GitLab writes."""
+
+    if identity.diff_base_sha is None:
+        raise RepositoryEvidenceError("partial review has no original diff identity")
+    reader = GitRepositoryReader(Path.cwd())
+    plan = plan_gitlink_input(reader, identity.diff_base_sha, identity.source_sha)
+    if plan is None:
+        raise RepositoryEvidenceError("partial review has no changed gitlink")
+    projection = make_gitlink_projection(reader, plan)
+    metadata = result.get(TOOLKIT_RESULT_KEY)
+    publication = metadata.get("publication") if isinstance(metadata, dict) else None
+    if isinstance(publication, dict) and publication.get("state") == "publication-filtered":
+        selected = selected_gitlink_proof_entries(projection, result)
+    else:
+        if TOOLKIT_GITLINK_SELECTION_KEY in result:
+            raise RepositoryEvidenceError("OCR gitlink selection proof is unexpected")
+        selected = selected_gitlink_manifest_entries(projection, result)
+        qualify_gitlink_manifest(projection, selected, result)
+    try:
+        actual = coverage_from_projection(projection, selected, state="partial")
+    except RepositoryCoverageError as exc:
+        raise RepositoryEvidenceError("partial review selected coverage is invalid") from exc
+    try:
+        claimed = parse_repository_coverage(
+            metadata["repository_coverage"], required_state="partial"
+        )
+    except (KeyError, TypeError, RepositoryCoverageError) as exc:
+        raise RepositoryEvidenceError("partial review coverage is invalid") from exc
+    if claimed != actual:
+        raise RepositoryEvidenceError("partial review coverage disagrees with Git and OCR")
+    verify_gitlink_projection(reader, projection)
+    return actual
+
+
+def verified_no_model_repository_coverage(status: PreExecutionStatus) -> RepositoryCoverage:
+    """Rebuild a path-free gitlink-only advisory before publishing it."""
+
+    reader = GitRepositoryReader(Path.cwd())
+    plan = plan_gitlink_input(reader, status.diff_base_sha, status.source_sha)
+    if plan is None:
+        raise RepositoryEvidenceError("gitlink advisory has no changed gitlink")
+    projection = make_gitlink_projection(reader, plan)
+    try:
+        actual = coverage_from_projection(projection, (), state="not_started")
+    except RepositoryCoverageError as exc:
+        raise RepositoryEvidenceError("gitlink advisory coverage is invalid") from exc
+    try:
+        claimed = parse_repository_coverage(
+            status.repository_coverage, required_state="not_started"
+        )
+    except RepositoryCoverageError as exc:
+        raise RepositoryEvidenceError("gitlink advisory coverage is invalid") from exc
+    if claimed != actual:
+        raise RepositoryEvidenceError("gitlink advisory coverage disagrees with Git")
+    verify_gitlink_projection(reader, projection)
+    return actual
+
+
 def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     """Post OCR result comments to GitLab and return a process exit code."""
 
@@ -987,7 +1072,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         return 1
     if (
         receipt_identity is not None
-        and receipt_identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION
+        and receipt_identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS
     ):
         print(
             "Historical toolkit receipt is readback-only; current publication requires "
@@ -995,6 +1080,20 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             file=sys.stderr,
         )
         return 1
+    repository_coverage: RepositoryCoverage | None = None
+    if (
+        receipt_identity is not None
+        and receipt_identity.schema_version == PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION
+    ):
+        try:
+            repository_coverage = verified_partial_repository_coverage(result, receipt_identity)
+        except (RepositoryEvidenceError, OSError) as exc:
+            print(
+                f"Partial review could not be revalidated ({exc}); no merge-request note "
+                "was written. Previous review preserved.",
+                file=sys.stderr,
+            )
+            return 1
     constrained_target = unprotected_target_limitation(toolkit_metadata)
     policy_anchor_sha = protected_policy_anchor_sha(toolkit_metadata)
     publication = toolkit_metadata.get("publication") if toolkit_metadata is not None else None
@@ -1184,6 +1283,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 outcome_status=summary_status,
                 outcome_message=outcome_message,
                 coverage_summary=summary_outcome.coverage_summary,
+                repository_coverage_summary=(
+                    repository_coverage_summary(repository_coverage)
+                    if repository_coverage is not None
+                    else ""
+                ),
                 coverage_diagnostics=coverage_diagnostics,
                 warnings=warnings,
                 suppressed_count=suppressed_count,
@@ -1410,6 +1514,11 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             outcome_status=summary_status,
             outcome_message=outcome_message,
             coverage_summary=summary_outcome.coverage_summary,
+            repository_coverage_summary=(
+                repository_coverage_summary(repository_coverage)
+                if repository_coverage is not None
+                else ""
+            ),
             coverage_diagnostics=coverage_diagnostics,
             warnings=warnings,
             suppressed_count=suppressed_count,
@@ -1479,6 +1588,10 @@ def finalize_previous_review_state(
     if review_identity is not None:
         if transaction is None:
             raise ValueError("current-receipt cleanup requires the posting transaction")
+        partial_effective = (
+            outcome.kind == "partial"
+            or review_identity.schema_version == PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION
+        )
         cleanup_started = False
 
         def remove_if_current(delete: Callable[..., bool], *args: object) -> bool:
@@ -1510,7 +1623,7 @@ def finalize_previous_review_state(
                 return False
             return True
 
-        if outcome.kind == "partial":
+        if partial_effective:
             note_ids = previous_refs.summary_plain_note_ids
             draft_ids = previous_refs.summary_draft_note_ids
             discussion_refs: list[tuple[str, int]] = []
@@ -1527,13 +1640,14 @@ def finalize_previous_review_state(
         for note_id in draft_ids:
             if not remove_if_current(gitlab_api.delete_draft_note, note_id):
                 return False
-        if outcome.kind == "partial":
+        if partial_effective:
             for note_id in previous_refs.terminal_plain_note_ids:
                 if not remove_if_current(gitlab_api.delete_plain_note, note_id):
                     return False
-        for discussion_id in previous_refs.discussions_to_resolve:
-            if not remove_if_current(resolve_discussion, discussion_id):
-                return False
+        if not partial_effective:
+            for discussion_id in previous_refs.discussions_to_resolve:
+                if not remove_if_current(resolve_discussion, discussion_id):
+                    return False
         return True
 
     if outcome.kind == "partial":
@@ -1884,6 +1998,16 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
     }
     if pre_execution_status_fresh_or_exit(config, status, exact_policy=exact_policy) is not None:
         return 1
+    no_model_coverage: RepositoryCoverage | None = None
+    if status.reason == GITLINK_NO_REVIEWABLE_FILES:
+        try:
+            no_model_coverage = verified_no_model_repository_coverage(status)
+        except (RepositoryEvidenceError, OSError) as exc:
+            print(
+                f"Gitlink advisory could not be revalidated ({exc}); previous review preserved.",
+                file=sys.stderr,
+            )
+            return 1
 
     published_draft = False
     cleanup_started = False
@@ -1933,9 +2057,21 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
             file=sys.stderr,
         )
         return 1
-    if status.reason in {GITLINK_PREVIEW_UNSUPPORTED, UNCLASSIFIED_PREVIEW_DIAGNOSTICS}:
+    if status.reason in {
+        GITLINK_PREVIEW_UNSUPPORTED,
+        GITLINK_NO_REVIEWABLE_FILES,
+        GITLINK_PROJECTION_UNQUALIFIED,
+        UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+    }:
         transaction = PostingTransaction()
-        if status.reason == GITLINK_PREVIEW_UNSUPPORTED:
+        if status.reason == GITLINK_NO_REVIEWABLE_FILES:
+            heading = "**Open Code Review: changed gitlinks remain unreviewed**"
+            body = (
+                repository_coverage_summary(no_model_coverage)
+                + " Ordinary files were not reviewed in this run. Previous review "
+                "comments were preserved."
+            )
+        elif status.reason in {GITLINK_PREVIEW_UNSUPPORTED, GITLINK_PROJECTION_UNQUALIFIED}:
             heading = "**Open Code Review preview could not cover a changed gitlink**"
             body = (
                 "Review not started: a changed Git submodule pointer cannot be safely covered "

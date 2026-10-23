@@ -47,8 +47,8 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
 | `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
 
-<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings" -->
-| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Mode, binary, flags, private paths, terminal status, report and findings |
+<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings|manual_review:inspect failed auxiliary reads for material review gaps" -->
+| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Mode, binary, flags, private paths, result, findings and failed reads |
 
 <!-- ew:route id="workflow-instructions" triggers="AGENTS.md|docs/engineering/project_principles.md|docs/codex/AGENT_EXECUTION_PITFALLS.md" owners="skill://engineering-workflow/references/instruction_lifecycle.md|docs/engineering/project_principles.md" guards="lint:instruction-contract" -->
 | `workflow-instructions` | Instruction owner, route, or incident change | Installed instruction lifecycle and project principles | `lint:instruction-contract` |
@@ -59,8 +59,8 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="release-lifecycle" triggers="docs/release.md|.github/workflows/release.yml|release-required change|release-deferred change|stable publication|release authorization|stable delivery|release closure" owners="docs/release.md" guards="release_gate:.github/workflows/release.yml|manual_review:reconcile current archive and external receipts" -->
 | `release-lifecycle` | Release authorization, stable delivery, or closure | Release guide | Protected release gate and external receipt review |
 
-<!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|test:scripts/quality.sh check" -->
-| `development-validation` | Status or changed-boundary validation | Development guide | Status review and Python quality matrix |
+<!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|manual_review:map changed producer-consumer handoffs and failure cleanup|test:scripts/quality.sh check" -->
+| `development-validation` | Status or changed-boundary validation | Development guide | Status and handoff review; Python quality matrix |
 
 <!-- ew:route id="dependency-audit" triggers="pre-push|pyproject.toml|uv.lock|.github/workflows/security.yml|scripts/dependency-audit.sh" owners="docs/development.md" guards="test:scripts/dependency-audit.sh" -->
 | `dependency-audit` | Every push and dependency or audit-workflow change | Development guide | Shared local and hosted dependency audit |

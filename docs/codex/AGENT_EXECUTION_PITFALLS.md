@@ -168,7 +168,7 @@ This is a diagnostic catalogue of recurring incident classes. Current requiremen
 - Owner: docs/engineering/project_principles.md#outcome-consistency
 - Route: trust-boundary
 - Guard: test:scripts/quality.sh check
-- Evidence: [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7). Prior control: table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts. Historical cause: outcomes were assembled independently and tests asserted prose rather than one result invariant.
+- Evidence: [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7) and the v0.13.1 gitlink review's safe-plus-filtered finding case in `tests/test_repository_coverage.py`. Prior control: table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts. Historical cause: outcomes were assembled independently and tests asserted prose rather than one result invariant; the v0.13.1 first review found that producer and consumer tests still missed a transformed handoff.
 - Status: guarded
 - Retirement: Retire when this historical class no longer improves diagnosis and its owner, route, and guard remain established.
 
@@ -180,6 +180,6 @@ This is a diagnostic catalogue of recurring incident classes. Current requiremen
 - Owner: docs/local.md#review-preparation
 - Route: local-ocr-review
 - Guard: manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings
-- Evidence: The 2026-10-23 v0.13.0 local review attempts rejected absent `OCR_LLM_MODEL` and `--background-file` before model execution; the corrected OCR 1.13.3 invocation completed with 29/29 selected items and an admitted finding. The earlier [v0.12.1 review](../engineering/execution_history/releases.md#plan-toolkit-0-12-1) exposed the symlinked-path report failure. The preparation route now names each check at the launch boundary.
+- Evidence: The 2026-10-23 v0.13.0 local review attempts rejected absent `OCR_LLM_MODEL` and `--background-file` before model execution; the corrected OCR 1.13.3 invocation completed with 29/29 selected items and an admitted finding. The [v0.12.1 review](../engineering/execution_history/releases.md#plan-toolkit-0-12-1) and v0.13.1 review both exposed symlinked-path report failures. The v0.13.1 runner now validates the report parent before model execution and the publisher checks again after execution; `docs/local.md` shows physical-path preparation.
 - Status: guarded
 - Retirement: Retire when the owner, route, and guard remain established and the historical class no longer improves launch diagnosis.

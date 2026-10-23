@@ -82,8 +82,8 @@ def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
     assert "not the installation\nsmoke test" in install
 
 
-def test_current_operator_guidance_uses_manifest_without_ocr_release_literals() -> None:
-    """Keep living guidance tied to qualified pins without per-release text churn."""
+def test_current_operator_guidance_uses_manifest_with_only_gitlink_ocr_literal() -> None:
+    """Keep general pins in the manifest while naming the fixed gitlink boundary."""
 
     for document in (
         README,
@@ -94,7 +94,10 @@ def test_current_operator_guidance_uses_manifest_without_ocr_release_literals() 
     ):
         content = document.read_text(encoding="utf-8")
         assert "compatibility/ocr-support.json" in content
-        assert not re.search(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
+        assert all(
+            match.group() == "OCR 1.13.3"
+            for match in re.finditer(r"(?:OCR|Open Code Review) v?\d+\.\d+\.\d+", content)
+        )
         assert not re.search(r"open-code-review/releases/tag/v\d+\.\d+\.\d+", content)
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     assert "Qualified OCR pin for the example's toolkit release" in configuration
@@ -221,9 +224,15 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
         assert "### Post-Close Delivery" in archived_plan
         assert "outside the closed repository plan" in archived_plan
         assert f"plans/{archive_path.name}" in current_index_row
-        assert "stable-delivery handoff" in current_index_row
+        if "stable-delivery handoff" not in current_index_row:
+            assert "immutable GitHub Release published" in current_index_row
+            assert "archived plan remains a prepublication snapshot" in current_index_row
         assert "external reconciliation verified" not in current_index_row
-        assert "## Active Plan:" not in (PROJECT_ROOT / "PLANS.md").read_text(encoding="utf-8")
+        active_plan = (PROJECT_ROOT / "PLANS.md").read_text(encoding="utf-8")
+        active_match = re.search(r"^## Active Plan: Toolkit (\d+\.\d+\.\d+)\b", active_plan, re.M)
+        if active_match:
+            active_version_key = tuple(int(part) for part in active_match.group(1).split("."))
+            assert active_version_key > release_version_key
 
 
 def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:
