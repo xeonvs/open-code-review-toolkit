@@ -14,8 +14,49 @@ def test_local_preflight_does_not_validate_gitlab(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: seen.append("ocr"))
     monkeypatch.setattr(preflight, "validate_llm_model", lambda: seen.append("llm"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: pytest.fail("GitLab called"))
+    monkeypatch.setattr(
+        preflight, "validate_gitlab_review_settings", lambda: pytest.fail("GitLab mode touched")
+    )
     assert cli.main(["preflight", "--local"]) == 0
     assert seen == ["ocr", "llm"]
+
+
+@pytest.mark.parametrize("mode", [None, "auto", "required", "unprotected"])
+def test_gitlab_preflight_accepts_detached_identity_and_exact_modes(
+    monkeypatch: pytest.MonkeyPatch, mode: str | None
+) -> None:
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", "a" * 40)
+    monkeypatch.delenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", raising=False)
+    if mode is None:
+        monkeypatch.delenv("OCR_GITLAB_TARGET_PROTECTION_MODE", raising=False)
+    else:
+        monkeypatch.setenv("OCR_GITLAB_TARGET_PROTECTION_MODE", mode)
+    preflight.validate_gitlab_review_settings()
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"OCR_GITLAB_TARGET_PROTECTION_MODE": ""}, "must be exactly"),
+        ({"OCR_GITLAB_TARGET_PROTECTION_MODE": "AUTO"}, "must be exactly"),
+        ({"CI_MERGE_REQUEST_EVENT_TYPE": "merged_result"}, "detached"),
+        ({"CI_MERGE_REQUEST_EVENT_TYPE": "merge_train"}, "detached"),
+        ({"CI_COMMIT_SHA": "b" * 39}, "full commit SHA"),
+        ({"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "b" * 40}, "contradicts"),
+    ],
+)
+def test_gitlab_preflight_rejects_unsupported_or_contradictory_identity(
+    monkeypatch: pytest.MonkeyPatch, updates: dict[str, str], message: str
+) -> None:
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", "a" * 40)
+    monkeypatch.delenv("OCR_GITLAB_TARGET_PROTECTION_MODE", raising=False)
+    monkeypatch.delenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", raising=False)
+    for name, value in updates.items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(preflight.PreflightError, match=message):
+        preflight.validate_gitlab_review_settings()
 
 
 @pytest.mark.parametrize(

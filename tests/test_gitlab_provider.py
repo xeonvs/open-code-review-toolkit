@@ -23,7 +23,6 @@ from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.pre_execution import read_pre_execution_status
 from ocr_toolkit.providers import gitlab
 from ocr_toolkit.review_runner import (
-    ReviewIdentity,
     ReviewRefs,
     ReviewRunnerError,
     _prepare_policy_context,
@@ -32,6 +31,9 @@ from ocr_toolkit.review_runner import (
 
 SOURCE_SHA = "a" * 40
 TARGET_SHA = "b" * 40
+DIFF_BASE_SHA = "c" * 40
+DIFF_START_SHA = "d" * 40
+POLICY_SHA = "e" * 40
 
 
 class _GitLabHandler(BaseHTTPRequestHandler):
@@ -41,6 +43,9 @@ class _GitLabHandler(BaseHTTPRequestHandler):
     response_mode = "valid"
     source_sha = SOURCE_SHA
     target_sha = TARGET_SHA
+    policy_sha = POLICY_SHA
+    diff_base_sha = DIFF_BASE_SHA
+    diff_start_sha = DIFF_START_SHA
 
     def do_GET(self) -> None:
         type(self).requests.append((self.path, self.headers.get("PRIVATE-TOKEN")))
@@ -83,8 +88,20 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                 "iid": 9,
                 "sha": type(self).source_sha,
                 "state": "opened",
+                "source_project_id": 7,
                 "target_project_id": 7,
-                "target_branch": "main",
+                "target_branch": (
+                    "feature/#author"
+                    if self.response_mode == "unprotected_encoded_branch"
+                    else "feature/catalog-index"
+                    if self.response_mode.startswith("unprotected")
+                    else "main"
+                ),
+                "diff_refs": {
+                    "base_sha": type(self).diff_base_sha,
+                    "start_sha": type(self).diff_start_sha,
+                    "head_sha": type(self).source_sha,
+                },
                 "author": {"id": 41},
                 "title": "Deploy synthetic service",
                 "description": "The broad rollout is intentional.",
@@ -99,6 +116,38 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                 payload = {**payload, "state": "closed"}  # type: ignore[arg-type]
             if self.response_mode == "merged":
                 payload = {**payload, "state": "merged"}  # type: ignore[arg-type]
+            if self.response_mode == "missing_source_project":
+                payload = {
+                    key: value for key, value in payload.items() if key != "source_project_id"
+                }  # type: ignore[union-attr]
+            if self.response_mode == "foreign_source_project":
+                payload = {**payload, "source_project_id": 8}  # type: ignore[arg-type]
+            if self.response_mode == "malformed_source_project":
+                payload = {**payload, "source_project_id": "7"}  # type: ignore[arg-type]
+            if self.response_mode == "malformed_target_branch":
+                payload = {**payload, "target_branch": "../main"}  # type: ignore[arg-type]
+            if self.response_mode == "pending_diff":
+                payload = {**payload, "diff_refs": None}  # type: ignore[arg-type]
+            if self.response_mode == "malformed_diff":
+                payload = {**payload, "diff_refs": {"base_sha": ""}}  # type: ignore[arg-type]
+            if self.response_mode == "contradictory_diff_head":
+                payload = {  # type: ignore[assignment]
+                    **payload,
+                    "diff_refs": {
+                        "base_sha": DIFF_BASE_SHA,
+                        "start_sha": type(self).diff_start_sha,
+                        "head_sha": TARGET_SHA,
+                    },
+                }
+            if self.response_mode == "empty_diff":
+                payload = {  # type: ignore[assignment]
+                    **payload,
+                    "diff_refs": {
+                        "base_sha": type(self).source_sha,
+                        "start_sha": type(self).diff_start_sha,
+                        "head_sha": type(self).source_sha,
+                    },
+                }
             if self.response_mode == "adversarial":
                 payload = {
                     **payload,  # type: ignore[arg-type]
@@ -109,17 +158,78 @@ class _GitLabHandler(BaseHTTPRequestHandler):
                     "author": {"id": 41, "username": "must-not-be-collected"},
                     "web_url": "https://private.example.invalid/must-not-be-collected",
                 }
-        elif self.path == "/api/v4/projects/7/repository/branches/main":
+        elif self.path == "/api/v4/projects/7/merge_requests/9/versions?per_page=1":
+            payload = [
+                {
+                    "id": 17,
+                    "base_commit_sha": type(self).diff_base_sha,
+                    "start_commit_sha": type(self).diff_start_sha,
+                    "head_commit_sha": type(self).source_sha,
+                }
+            ]
+            if self.response_mode == "pending_version":
+                payload = []
+            if self.response_mode == "malformed_version":
+                payload = [{"id": 17, "base_commit_sha": ""}]
+            if self.response_mode == "invalid_version_id":
+                payload = [{**payload[0], "id": "17"}]
+            if self.response_mode == "contradictory_version":
+                payload = [{**payload[0], "base_commit_sha": TARGET_SHA}]
+            if self.response_mode == "empty_diff":
+                payload = [{**payload[0], "base_commit_sha": type(self).source_sha}]
+        elif self.path == "/api/v4/projects/7":
+            if self.response_mode == "unprotected_project_inaccessible":
+                self.send_error(403)
+                return
+            payload = {"id": 7, "default_branch": "main"}
+            if self.response_mode == "unprotected_foreign_project":
+                payload = {**payload, "id": 8}
+            if self.response_mode == "unprotected_missing_default":
+                payload = {"id": 7}
+            if self.response_mode == "unprotected_invalid_default_ref":
+                payload = {"id": 7, "default_branch": "../main"}
+            if self.response_mode == "unprotected_invalid_default_unicode":
+                payload = {"id": 7, "default_branch": "\ud800"}
+            if self.response_mode == "unprotected_encoded_default":
+                payload = {"id": 7, "default_branch": "policy/#main"}
+        elif self.path in {
+            "/api/v4/projects/7/repository/branches/main",
+            "/api/v4/projects/7/repository/branches/feature%2Fcatalog-index",
+            "/api/v4/projects/7/repository/branches/feature%2F%23author",
+            "/api/v4/projects/7/repository/branches/policy%2F%23main",
+        }:
+            branch_name = (
+                "feature/#author"
+                if self.path.endswith("feature%2F%23author")
+                else "policy/#main"
+                if self.path.endswith("policy%2F%23main")
+                else "feature/catalog-index"
+                if self.path.endswith("feature%2Fcatalog-index")
+                else "main"
+            )
             payload = {
-                "name": "main",
-                "protected": True,
-                "commit": {"id": type(self).target_sha},
+                "name": branch_name,
+                "protected": branch_name in {"main", "policy/#main"},
+                "commit": {
+                    "id": type(self).policy_sha
+                    if branch_name in {"main", "policy/#main"}
+                    and self.response_mode.startswith("unprotected")
+                    else type(self).target_sha
+                },
             }
-            if self.response_mode == "unprotected":
+            if self.response_mode == "unprotected_default_unprotected" and branch_name == "main":
                 payload = {**payload, "protected": False}
+            if self.response_mode == "unprotected_default_missing" and branch_name == "main":
+                self.send_error(404)
+                return
             if self.response_mode == "malformed_protection":
                 payload = {**payload, "protected": "false"}
             if self.response_mode == "missing_target_commit":
+                payload = {**payload, "commit": {}}
+            if (
+                self.response_mode == "unprotected_target_unreadable"
+                and branch_name == "feature/catalog-index"
+            ):
                 payload = {**payload, "commit": {}}
         else:
             self.send_error(404)
@@ -142,6 +252,8 @@ def _https_gitlab(
     *,
     source_sha: str = SOURCE_SHA,
     target_sha: str = TARGET_SHA,
+    diff_base_sha: str = DIFF_BASE_SHA,
+    diff_start_sha: str = DIFF_START_SHA,
 ) -> Iterator[str]:
     """Run a local TLS peer beyond the production urllib adapter."""
 
@@ -179,6 +291,8 @@ def _https_gitlab(
     _GitLabHandler.response_mode = mode
     _GitLabHandler.source_sha = source_sha
     _GitLabHandler.target_sha = target_sha
+    _GitLabHandler.diff_base_sha = diff_base_sha
+    _GitLabHandler.diff_start_sha = diff_start_sha
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     previous = os.environ.get("SSL_CERT_FILE")
@@ -225,6 +339,17 @@ def test_gitlab_snapshot_crosses_real_https_adapter_and_binds_protected_target(
     assert snapshot.target_sha == TARGET_SHA
     assert snapshot.target_protection == "protected"
     assert snapshot.target_branch == "main"
+    assert snapshot.policy_branch == "main"
+    assert snapshot.policy_sha == TARGET_SHA
+    assert snapshot.policy_protection == "protected"
+    assert snapshot.protection_mode == "auto"
+    assert (snapshot.diff_base_sha, snapshot.diff_start_sha, snapshot.diff_head_sha) == (
+        DIFF_BASE_SHA,
+        DIFF_START_SHA,
+        SOURCE_SHA,
+    )
+    assert snapshot.diff_base_sha != snapshot.target_sha
+    assert snapshot.diff_version_id == 17
     assert snapshot.author_id == 41
     assert snapshot.context.admitted is True
     assert snapshot.context.fields["description"] == {
@@ -233,6 +358,7 @@ def test_gitlab_snapshot_crosses_real_https_adapter_and_binds_protected_target(
     }
     assert _GitLabHandler.requests == [
         ("/api/v4/projects/7/merge_requests/9", "synthetic-token"),
+        ("/api/v4/projects/7/merge_requests/9/versions?per_page=1", "synthetic-token"),
         ("/api/v4/projects/7/repository/branches/main", "synthetic-token"),
     ]
 
@@ -246,8 +372,9 @@ def test_target_protection_mode_grammar_is_exact_and_fail_closed(raw: str) -> No
         gitlab.parse_target_protection_mode(raw)
 
 
-def test_target_protection_mode_defaults_to_required() -> None:
-    assert gitlab.parse_target_protection_mode(None) == "required"
+def test_target_protection_mode_defaults_to_auto() -> None:
+    assert gitlab.parse_target_protection_mode(None) == "auto"
+    assert gitlab.parse_target_protection_mode("auto") == "auto"
     assert gitlab.parse_target_protection_mode("required") == "required"
     assert gitlab.parse_target_protection_mode("unprotected") == "unprotected"
 
@@ -264,9 +391,163 @@ def test_explicit_unprotected_mode_binds_actual_unprotected_target_over_https(
     assert snapshot.source_sha == SOURCE_SHA
     assert snapshot.target_sha == TARGET_SHA
     assert snapshot.target_protection == "unprotected"
+    assert snapshot.policy_branch == "feature/catalog-index"
+    assert snapshot.policy_sha == TARGET_SHA
+    assert snapshot.policy_protection == "unprotected"
+    assert snapshot.protection_mode == "unprotected"
 
 
-@pytest.mark.parametrize("setting", (None, "required", "unprotected"))
+def test_auto_unprotected_target_uses_authenticated_protected_default_policy(
+    tmp_path: Path,
+) -> None:
+    with _https_gitlab(tmp_path, "unprotected") as api_root:
+        snapshot = gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert snapshot.target_branch == "feature/catalog-index"
+    assert snapshot.target_sha == TARGET_SHA
+    assert snapshot.target_protection == "unprotected"
+    assert snapshot.policy_branch == "main"
+    assert snapshot.policy_sha == POLICY_SHA
+    assert snapshot.policy_protection == "protected"
+    assert snapshot.protection_mode == "auto"
+    assert snapshot.diff_base_sha == DIFF_BASE_SHA
+    assert snapshot.diff_base_sha != snapshot.target_sha
+    assert _GitLabHandler.requests == [
+        ("/api/v4/projects/7/merge_requests/9", "synthetic-token"),
+        ("/api/v4/projects/7/merge_requests/9/versions?per_page=1", "synthetic-token"),
+        ("/api/v4/projects/7/repository/branches/feature%2Fcatalog-index", "synthetic-token"),
+        ("/api/v4/projects/7", "synthetic-token"),
+        ("/api/v4/projects/7/repository/branches/main", "synthetic-token"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "message"),
+    (
+        ("missing_source_project", "source project id"),
+        ("malformed_source_project", "source project id"),
+        ("foreign_source_project", "source belongs to a different project"),
+    ),
+)
+def test_same_project_identity_is_required_before_diff_or_branch_reads(
+    tmp_path: Path, mode: str, message: str
+) -> None:
+    with (
+        _https_gitlab(tmp_path, mode) as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match=message),
+    ):
+        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert _GitLabHandler.requests == [("/api/v4/projects/7/merge_requests/9", "synthetic-token")]
+
+
+@pytest.mark.parametrize(
+    ("mode", "message", "reads_version"),
+    (
+        ("pending_diff", "diff refs are unavailable or pending", False),
+        ("malformed_diff", "diff refs are malformed", False),
+        ("contradictory_diff_head", "diff head contradicts", False),
+        ("pending_version", "diff version is unavailable or pending", True),
+        ("malformed_version", "diff version is malformed", True),
+        ("invalid_version_id", "invalid current diff version id", True),
+        ("contradictory_version", "diff version contradicts", True),
+    ),
+)
+def test_current_diff_identity_fails_closed_before_branch_or_policy_reads(
+    tmp_path: Path, mode: str, message: str, reads_version: bool
+) -> None:
+    with (
+        _https_gitlab(tmp_path, mode) as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match=message),
+    ):
+        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    expected = [("/api/v4/projects/7/merge_requests/9", "synthetic-token")]
+    if reads_version:
+        expected.append(
+            ("/api/v4/projects/7/merge_requests/9/versions?per_page=1", "synthetic-token")
+        )
+    assert _GitLabHandler.requests == expected
+
+
+def test_valid_empty_current_diff_is_distinct_from_unavailable_diff(tmp_path: Path) -> None:
+    with _https_gitlab(tmp_path, "empty_diff") as api_root:
+        snapshot = gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert snapshot.diff_base_sha == snapshot.diff_head_sha == SOURCE_SHA
+    assert snapshot.diff_version_id == 17
+
+
+def test_valid_hostile_looking_target_name_is_encoded_as_one_branch_path(tmp_path: Path) -> None:
+    with _https_gitlab(tmp_path, "unprotected_encoded_branch") as api_root:
+        snapshot = gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert snapshot.target_branch == "feature/#author"
+    assert snapshot.policy_branch == "main"
+    assert _GitLabHandler.requests[2] == (
+        "/api/v4/projects/7/repository/branches/feature%2F%23author",
+        "synthetic-token",
+    )
+
+
+def test_valid_hostile_looking_default_name_is_encoded_as_policy_branch(tmp_path: Path) -> None:
+    with _https_gitlab(tmp_path, "unprotected_encoded_default") as api_root:
+        snapshot = gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert snapshot.policy_branch == "policy/#main"
+    assert snapshot.policy_sha == POLICY_SHA
+    assert _GitLabHandler.requests[-1] == (
+        "/api/v4/projects/7/repository/branches/policy%2F%23main",
+        "synthetic-token",
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "message"),
+    (
+        ("unprotected_project_inaccessible", "HTTP 403"),
+        ("unprotected_foreign_project", "different project"),
+        ("unprotected_missing_default", "invalid default branch"),
+        ("unprotected_invalid_default_ref", "invalid default branch"),
+        ("unprotected_invalid_default_unicode", "invalid default branch"),
+        ("unprotected_default_missing", "HTTP 404"),
+        ("unprotected_default_unprotected", "not protected policy authority"),
+    ),
+)
+def test_auto_fallback_requires_exact_accessible_protected_default_authority(
+    tmp_path: Path, mode: str, message: str
+) -> None:
+    with (
+        _https_gitlab(tmp_path, mode) as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match=message),
+    ):
+        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert _GitLabHandler.requests[0][0] == "/api/v4/projects/7/merge_requests/9"
+    assert _GitLabHandler.requests[2][0].endswith("feature%2Fcatalog-index")
+
+
+def test_invalid_target_ref_stops_before_diff_or_policy_reads(tmp_path: Path) -> None:
+    with (
+        _https_gitlab(tmp_path, "malformed_target_branch") as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match="invalid target branch"),
+    ):
+        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert _GitLabHandler.requests == [("/api/v4/projects/7/merge_requests/9", "synthetic-token")]
+
+
+def test_unreadable_actual_target_cannot_trigger_default_policy_fallback(tmp_path: Path) -> None:
+    with (
+        _https_gitlab(tmp_path, "unprotected_target_unreadable") as api_root,
+        pytest.raises(gitlab.GitLabProviderError, match="branch head"),
+    ):
+        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+
+    assert all(path != "/api/v4/projects/7" for path, _token in _GitLabHandler.requests)
+
+
+@pytest.mark.parametrize("setting", (None, "auto", "required", "unprotected"))
 def test_protected_target_behavior_is_unchanged_in_every_valid_mode(
     tmp_path: Path, setting: str | None
 ) -> None:
@@ -278,13 +559,15 @@ def test_protected_target_behavior_is_unchanged_in_every_valid_mode(
 
     assert snapshot.target_protection == "protected"
     assert snapshot.target_sha == TARGET_SHA
+    assert snapshot.policy_sha == TARGET_SHA
+    assert snapshot.policy_branch == "main"
 
 
 @pytest.mark.parametrize(
     ("mode", "message"),
     (
         ("malformed_protection", "protection metadata"),
-        ("missing_target_commit", "target head"),
+        ("missing_target_commit", "branch head"),
     ),
 )
 def test_target_protection_and_identity_shapes_fail_closed_over_https(
@@ -344,20 +627,23 @@ def test_adversarial_provider_text_stays_bounded_untrusted_data_through_real_htt
 
 
 @pytest.mark.parametrize(
-    ("mode", "message"),
+    ("mode", "message", "setting"),
     (
-        ("mismatch", "does not match"),
-        ("unprotected", "not the captured protected"),
+        ("mismatch", "does not match", None),
+        ("unprotected", "not the captured protected", "required"),
     ),
 )
 def test_gitlab_snapshot_rejects_identity_failures_through_real_https(
-    tmp_path: Path, mode: str, message: str
+    tmp_path: Path, mode: str, message: str, setting: str | None
 ) -> None:
     with (
         _https_gitlab(tmp_path, mode) as api_root,
         pytest.raises(gitlab.GitLabProviderError, match=message),
     ):
-        gitlab.acquire_review_snapshot(_environment(api_root), expected_head=SOURCE_SHA)
+        environment = _environment(api_root)
+        if setting is not None:
+            environment[gitlab.TARGET_PROTECTION_MODE_VARIABLE] = setting
+        gitlab.acquire_review_snapshot(environment, expected_head=SOURCE_SHA)
 
 
 def test_stale_snapshot_uses_typed_identity_bound_error(tmp_path: Path) -> None:
@@ -473,7 +759,10 @@ def test_exact_policy_rule_transport_uses_real_git_objects_and_preserves_externa
     prepare_artifact_directory(artifacts)
 
     identity, arguments = _prepare_policy_context(
-        ReviewRefs(policy, head), ["--rule", "rules.json", "--format", "json"], artifacts
+        ReviewRefs(policy, head),
+        ["--rule", "rules.json", "--format", "json"],
+        artifacts,
+        local=True,
     )
 
     assert identity.policy_sha == policy
@@ -485,23 +774,25 @@ def test_exact_policy_rule_transport_uses_real_git_objects_and_preserves_externa
     rules.unlink()
     rules.symlink_to(tmp_path.parent / "source-controlled-target.json")
     assert _prepare_policy_context(
-        ReviewRefs(policy, head), ["--rule", str(rules.absolute())], artifacts
+        ReviewRefs(policy, head), ["--rule", str(rules.absolute())], artifacts, local=True
     )[1] == ["--rule", str(artifacts.policy_rules)]
     assert artifacts.policy_rules.read_bytes() == b'{"include":["protected.j2"]}\n'
     external = tmp_path.parent / "operator-rules.json"
-    assert _prepare_policy_context(ReviewRefs(base, head), ["--rule", str(external)], artifacts)[
-        1
-    ] == ["--rule", str(external)]
+    assert _prepare_policy_context(
+        ReviewRefs(base, head), ["--rule", str(external)], artifacts, local=True
+    )[1] == ["--rule", str(external)]
     assert not artifacts.policy_rules.exists()
     artifacts.policy_rules.write_bytes(b"stale")
-    assert _prepare_policy_context(ReviewRefs(base, head), ["--format", "json"], artifacts)[1] == [
+    assert _prepare_policy_context(
+        ReviewRefs(base, head), ["--format", "json"], artifacts, local=True
+    )[1] == [
         "--format",
         "json",
     ]
     assert not artifacts.policy_rules.exists()
 
 
-def test_metadata_mode_requires_merge_request_before_ocr(
+def test_local_metadata_mode_is_rejected_before_ocr(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _git(tmp_path, "init", "-q")
@@ -517,8 +808,8 @@ def test_metadata_mode_requires_merge_request_before_ocr(
     artifacts = repository_artifacts(tmp_path)
     prepare_artifact_directory(artifacts)
 
-    with pytest.raises(ReviewRunnerError, match="requires a GitLab merge request"):
-        _prepare_policy_context(ReviewRefs(sha, sha), [], artifacts)
+    with pytest.raises(ReviewRunnerError, match="local review does not support"):
+        _prepare_policy_context(ReviewRefs(sha, sha), [], artifacts, local=True)
 
 
 @pytest.mark.parametrize("context_mode", ("off", "metadata"))
@@ -566,6 +857,14 @@ def test_unprotected_policy_context_reads_rules_only_from_exact_target(
             target_branch="main",
             target_sha=target,
             target_protection="unprotected",
+            policy_branch="main",
+            policy_sha=target,
+            policy_protection="unprotected",
+            protection_mode="unprotected",
+            diff_base_sha=target,
+            diff_start_sha=target,
+            diff_head_sha=source,
+            diff_version_id=17,
             author_id=41,
             context=context,
         ),
@@ -577,17 +876,140 @@ def test_unprotected_policy_context_reads_rules_only_from_exact_target(
         ReviewRefs(target, source), ["--rule", "rules.json"], artifacts
     )
 
-    assert identity == ReviewIdentity(
-        source,
-        target,
-        41,
-        context_mode,
-        context,
-        target,
-        "unprotected",
-    )
+    assert identity.source_sha == source
+    assert identity.target_sha == target
+    assert identity.policy_sha == target
+    assert identity.target_protection == "unprotected"
+    assert identity.policy_protection == "unprotected"
+    assert identity.protection_mode == "unprotected"
+    assert identity.diff_base_sha == target
+    assert identity.diff_head_sha == source
+    assert identity.context_mode == context_mode
+    assert identity.context == context
+    assert identity.limited_unprotected
     assert artifacts.policy_rules.read_text(encoding="utf-8") == '{"target":true}\n'
     assert arguments == ["--rule", str(artifacts.policy_rules)]
+
+
+@pytest.mark.parametrize("context_mode", ("off", "metadata", "enriched"))
+def test_auto_fallback_materializes_rules_from_protected_policy_not_code_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, context_mode: str
+) -> None:
+    """A distinct P grants policy capability while B and T keep their code roles."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@example.invalid")
+    (tmp_path / "rules.json").write_text('{"base":true}\n', encoding="utf-8")
+    (tmp_path / "app.py").write_text("BASE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-qb", "policy", base)
+    (tmp_path / "rules.json").write_text('{"protected_policy":true}\n', encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "protected policy")
+    policy = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-qb", "target", base)
+    (tmp_path / "rules.json").write_text('{"untrusted_target":true}\n', encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "target")
+    target = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-qb", "source", base)
+    (tmp_path / "rules.json").write_text('{"untrusted_source":true}\n', encoding="utf-8")
+    _git(tmp_path, "commit", "-qam", "source")
+    source = _git(tmp_path, "rev-parse", "HEAD")
+    assert base != target != policy
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", context_mode)
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    context = (
+        normalize_merge_request_context(
+            provider="gitlab",
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=source,
+            title="Synthetic review",
+            description="Current MR only.",
+            labels=[],
+            source_branch="feature/source",
+        )
+        if context_mode != "off"
+        else None
+    )
+    monkeypatch.setattr(
+        "ocr_toolkit.review_runner.acquire_review_snapshot",
+        lambda *_args, **_kwargs: gitlab.GitLabReviewSnapshot(
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=source,
+            target_branch="feature/target",
+            target_sha=target,
+            target_protection="unprotected",
+            policy_branch="policy",
+            policy_sha=policy,
+            policy_protection="protected",
+            protection_mode="auto",
+            diff_base_sha=base,
+            diff_start_sha=target,
+            diff_head_sha=source,
+            diff_version_id=17,
+            author_id=41,
+            context=context,
+        ),
+    )
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+
+    identity, arguments = _prepare_policy_context(
+        ReviewRefs(base, source), ["--rule", "rules.json"], artifacts
+    )
+
+    assert identity.diff_base_sha == base
+    assert identity.target_sha == target
+    assert identity.policy_sha == policy
+    assert identity.target_protection == "unprotected"
+    assert identity.has_protected_policy and not identity.limited_unprotected
+    assert identity.context_mode == context_mode and identity.context == context
+    assert artifacts.policy_rules.read_text(encoding="utf-8") == '{"protected_policy":true}\n'
+    assert arguments == ["--rule", str(artifacts.policy_rules)]
+    with pytest.raises(ReviewRunnerError, match="require repository rules"):
+        _prepare_policy_context(ReviewRefs(base, source), [], artifacts)
+    with pytest.raises(ReviewRunnerError, match="require repository rules"):
+        _prepare_policy_context(
+            ReviewRefs(base, source), ["--rule", str(tmp_path.parent / "external.json")], artifacts
+        )
+
+
+def test_local_policy_preparation_never_queries_gitlab_even_with_mr_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The changed absent-setting default is irrelevant to explicit local review."""
+
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@example.invalid")
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setenv("OCR_GITLAB_TARGET_PROTECTION_MODE", "invalid-for-gitlab")
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "off")
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    monkeypatch.setattr(
+        "ocr_toolkit.review_runner.acquire_review_snapshot",
+        lambda *_args, **_kwargs: pytest.fail("explicit local review must not query GitLab"),
+    )
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+
+    identity, arguments = _prepare_policy_context(ReviewRefs(base, base), [], artifacts, local=True)
+
+    assert identity.target_protection == "local"
+    assert identity.policy_sha == base
+    assert identity.project_id is None
+    assert arguments == []
 
 
 @pytest.mark.parametrize(
@@ -624,7 +1046,22 @@ def test_unprotected_policy_context_rejects_privileged_context_before_rules_read
     monkeypatch.setattr(
         "ocr_toolkit.review_runner.acquire_review_snapshot",
         lambda *_args, **_kwargs: gitlab.GitLabReviewSnapshot(
-            "7", "9", sha, "main", sha, "unprotected", 41, None
+            project_id="7",
+            merge_request_iid="9",
+            source_sha=sha,
+            target_branch="main",
+            target_sha=sha,
+            target_protection="unprotected",
+            policy_branch="main",
+            policy_sha=sha,
+            policy_protection="unprotected",
+            protection_mode="unprotected",
+            diff_base_sha=sha,
+            diff_start_sha=sha,
+            diff_head_sha=sha,
+            diff_version_id=17,
+            author_id=41,
+            context=None,
         ),
     )
     read_called = False
@@ -664,18 +1101,23 @@ def test_policy_rule_transport_rejects_unsafe_or_unavailable_repository_inputs(
     prepare_artifact_directory(artifacts)
 
     with pytest.raises(ReviewRunnerError, match="does not exist"):
-        _prepare_policy_context(ReviewRefs(missing, symlink), ["--rule", "rules.json"], artifacts)
+        _prepare_policy_context(
+            ReviewRefs(missing, symlink), ["--rule", "rules.json"], artifacts, local=True
+        )
     with pytest.raises(ReviewRunnerError, match="unavailable or unsafe"):
-        _prepare_policy_context(ReviewRefs(symlink, symlink), ["--rule", "rules.json"], artifacts)
+        _prepare_policy_context(
+            ReviewRefs(symlink, symlink), ["--rule", "rules.json"], artifacts, local=True
+        )
     with pytest.raises(ReviewRunnerError, match="at most once"):
         _prepare_policy_context(
             ReviewRefs(missing, symlink),
             ["--rule", "rules.json", "--rule=other.json"],
             artifacts,
+            local=True,
         )
     with pytest.raises(ReviewRunnerError, match="unsafe"):
         _prepare_policy_context(
-            ReviewRefs(missing, symlink), ["--rule", "../rules.json"], artifacts
+            ReviewRefs(missing, symlink), ["--rule", "../rules.json"], artifacts, local=True
         )
 
 
@@ -714,7 +1156,13 @@ def test_rules_path_setup_uses_only_protected_identity_and_source_blob_metadata(
         return original_read_blob(reader, ref, path)
 
     monkeypatch.setattr(GitRepositoryReader, "read_blob", record_read)
-    with _https_gitlab(tmp_path / "tls", source_sha=source, target_sha=policy) as api_root:
+    with _https_gitlab(
+        tmp_path / "tls",
+        source_sha=source,
+        target_sha=policy,
+        diff_base_sha=base,
+        diff_start_sha=policy,
+    ) as api_root:
         for name, value in _environment(api_root).items():
             monkeypatch.setenv(name, value)
         with pytest.raises(ReviewRunnerError, match="setup is pending"):
@@ -999,6 +1447,8 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "CI_API_V4_URL": "placeholder",
         "CI_PROJECT_ID": "7",
         "CI_MERGE_REQUEST_IID": "9",
+        "CI_MERGE_REQUEST_EVENT_TYPE": "detached",
+        "CI_COMMIT_SHA": head,
         "GITLAB_API_TOKEN": "synthetic-token",
         "OCR_REVIEW_CONTEXT_MODE": "metadata",
         "HOME": str(home),
@@ -1015,7 +1465,13 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
 
     from ocr_toolkit import review_runner
 
-    with _https_gitlab(tmp_path / "tls", source_sha=head, target_sha=policy) as api_root:
+    with _https_gitlab(
+        tmp_path / "tls",
+        source_sha=head,
+        target_sha=policy,
+        diff_base_sha=base,
+        diff_start_sha=policy,
+    ) as api_root:
         monkeypatch.setenv("CI_API_V4_URL", api_root)
         exit_code = review_runner.run_evidence_review(
             result,
@@ -1039,12 +1495,23 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 10,
+        "schema_version": 11,
         "review": {
             "source_sha": head,
+            "diff_base_sha": base,
+            "diff_start_sha": policy,
+            "diff_head_sha": head,
+            "diff_version_id": 17,
+            "project_id": "7",
+            "merge_request_iid": "9",
+            "target_branch": "main",
             "policy_sha": policy,
             "target_sha": policy,
             "target_protection": "protected",
+            "policy_project_id": "7",
+            "policy_branch": "main",
+            "policy_protection": "protected",
+            "protection_mode": "auto",
             "mr_author_id": 41,
         },
         "context": {

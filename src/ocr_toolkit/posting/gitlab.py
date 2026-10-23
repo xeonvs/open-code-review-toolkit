@@ -904,6 +904,7 @@ def get_diff_refs(config: GitLabConfig) -> dict[str, str] | None:
     reviewed_head = effective_reviewed_sha(
         {
             "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA"),
+            "CI_MERGE_REQUEST_EVENT_TYPE": getenv("CI_MERGE_REQUEST_EVENT_TYPE"),
             "CI_COMMIT_SHA": getenv("CI_COMMIT_SHA"),
         }
     )
