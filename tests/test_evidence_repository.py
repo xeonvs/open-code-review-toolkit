@@ -202,6 +202,45 @@ def test_reader_reports_missing_objects_without_fetching(tmp_path: Path) -> None
         reader.resolve_commit("f" * 40)
 
 
+def test_reader_distinguishes_real_ancestry_from_rewrite(tmp_path: Path) -> None:
+    """Use immutable Git commit ancestry, including an unrelated branch tip."""
+
+    root, base_sha, head_sha = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root)
+    assert reader.is_ancestor(base_sha, head_sha)
+    assert reader.is_ancestor(head_sha, head_sha)
+
+    git(root, "checkout", "-qb", "rewritten", base_sha)
+    (root / "unrelated.txt").write_text("rewritten\n", encoding="utf-8")
+    git(root, "add", "unrelated.txt")
+    git(root, "commit", "-qm", "rewrite")
+    rewritten_sha = git(root, "rev-parse", "HEAD")
+    assert not reader.is_ancestor(head_sha, rewritten_sha)
+    with pytest.raises(RepositoryEvidenceError, match="lowercase SHA-1"):
+        reader.is_ancestor("HEAD", rewritten_sha)
+
+    graft_path = Path(git(root, "rev-parse", "--git-path", "info/grafts"))
+    if not graft_path.is_absolute():
+        graft_path = root / graft_path
+    graft_path.parent.mkdir(parents=True, exist_ok=True)
+    graft_path.write_text(f"{rewritten_sha} {head_sha}\n", encoding="ascii")
+    with pytest.raises(RepositoryEvidenceError, match="grafts"):
+        reader.is_ancestor(head_sha, rewritten_sha)
+
+
+def test_reader_rejects_unknown_shallow_ancestry(tmp_path: Path) -> None:
+    """Separate shallow history uncertainty from a proven non-ancestor."""
+
+    origin, base_sha, head_sha = synthetic_repository(tmp_path)
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth=1", f"file://{origin}", str(shallow))
+    reader = GitRepositoryReader(shallow)
+    assert reader.resolve_commit(head_sha) == head_sha
+    reader.fetch_commit(base_sha)
+    with pytest.raises(RepositoryEvidenceError, match="shallow repository"):
+        reader.is_ancestor(base_sha, head_sha)
+
+
 def test_reader_enforces_blob_and_tree_bounds(tmp_path: Path) -> None:
     """Reject over-limit content before loading it into memory."""
 

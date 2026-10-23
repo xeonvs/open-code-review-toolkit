@@ -1119,7 +1119,7 @@ def test_summary_describes_schema_v3_target_policy_without_authority() -> None:
 
     summary = _payload(call_tool(_store(1), {"action": "summary"}))
 
-    assert summary["schema_version"] == 4
+    assert summary["schema_version"] == 5
     assert summary["policy"] == {
         "accepted_decisions": 0,
         "guidance_documents": 0,

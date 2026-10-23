@@ -23,7 +23,7 @@ from ocr_toolkit.context.mcp import (
 )
 from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence.actions import UNATTRIBUTED_ACTION, record_action
-from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord
+from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord, RefRole
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 
@@ -161,6 +161,14 @@ def evidence_summary(store: EvidenceStore) -> dict[str, object]:
         "policy": policy,
         "merge_request_context": merge_request_context,
         "policy_ref": store.policy.commit_sha if store.policy else None,
+        "target": store.target.commit_sha if store.target else None,
+        "target_context": {
+            "records": sum(record.ref is RefRole.TARGET for record in store.records),
+            "trust": "target_repository" if store.target else None,
+            "content_role": "untrusted_code_evidence" if store.target else None,
+            "authoritative_for_policy": False,
+            "absence_authoritative": False,
+        },
         "coverage_contract": ("repository.evidence-coverage/v1" if store.coverage else "absent"),
         "base": store.base.commit_sha if store.base else None,
         "head": store.head.commit_sha if store.head else None,
@@ -233,8 +241,8 @@ def _list_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[st
         raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
     if query.kind == "repository.evidence_delta" and query.ref is not None:
         raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
-    if query.ref not in {None, "base", "head", "policy", "shared"}:
-        raise EvidenceMCPError("ref must be base, head, policy, or shared")
+    if query.ref not in {None, "base", "head", "policy", "target", "shared"}:
+        raise EvidenceMCPError("ref must be base, head, policy, target, or shared")
     page_size = arguments.get("page_size", DEFAULT_PAGE_SIZE)
     if isinstance(page_size, bool) or not isinstance(page_size, int):
         raise EvidenceMCPError("page_size must be an integer")
@@ -375,8 +383,8 @@ def _search_records(store: EvidenceStore, arguments: dict[str, object]) -> dict[
         raise EvidenceMCPError("delta_kind requires kind=repository.evidence_delta")
     if kind == "repository.evidence_delta" and ref is not None:
         raise EvidenceMCPError("evidence deltas span base and head and do not accept ref")
-    if ref not in {None, "base", "head", "policy", "shared"}:
-        raise EvidenceMCPError("ref must be base, head, policy, or shared")
+    if ref not in {None, "base", "head", "policy", "target", "shared"}:
+        raise EvidenceMCPError("ref must be base, head, policy, target, or shared")
     max_results = arguments.get("max_results", DEFAULT_SEARCH_RESULTS)
     if isinstance(max_results, bool) or not isinstance(max_results, int):
         raise EvidenceMCPError("max_results must be an integer")
@@ -560,7 +568,8 @@ def _tool_definition() -> dict[str, object]:
     return {
         "name": TOOL_NAME,
         "description": (
-            "Read bounded, redacted repository evidence for immutable base/head refs. "
+            "Read bounded, redacted repository evidence for immutable base/head refs and "
+            "optional actual-target code context (ref=target). "
             "Use summary first, list to narrow, and get for one stable record. Query "
             "kind=repository.evidence_delta with optional delta_kind for base/head changes. "
             "Current structured decisions and guidance are target-derived non-authoritative "
@@ -601,7 +610,7 @@ def _tool_definition() -> dict[str, object]:
                 },
                 "ref": {
                     "type": "string",
-                    "enum": ["base", "head", "policy", "shared"],
+                    "enum": ["base", "head", "policy", "target", "shared"],
                     "description": "Optional immutable-ref filter for action=list only.",
                 },
                 "page_size": {
@@ -659,7 +668,7 @@ def _search_tool_definition() -> dict[str, object]:
                     ),
                 },
                 "component": {"type": "string", "maxLength": 256},
-                "ref": {"type": "string", "enum": ["base", "head", "policy", "shared"]},
+                "ref": {"type": "string", "enum": ["base", "head", "policy", "target", "shared"]},
                 "max_results": {
                     "type": "integer",
                     "minimum": 1,

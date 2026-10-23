@@ -188,6 +188,41 @@ class GitRepositoryReader:
         if self.resolve_commit(sha) != sha:
             raise RepositoryEvidenceError("fetched protected-target identity does not match")
 
+    def is_ancestor(self, older_sha: str, newer_sha: str) -> bool:
+        """Prove ancestry of two available commits without accepting shallow uncertainty."""
+
+        for sha in (older_sha, newer_sha):
+            if not re.fullmatch(r"[0-9a-f]{40}", sha):
+                raise RepositoryEvidenceError("Git ancestry requires lowercase SHA-1 identities")
+            if self.resolve_commit(sha) != sha:
+                raise RepositoryEvidenceError("Git ancestry commit identity does not match")
+        graft_path_result = self._run(["rev-parse", "--git-path", "info/grafts"])
+        assert isinstance(graft_path_result.stdout, str)
+        graft_path_text = graft_path_result.stdout
+        if (
+            graft_path_result.returncode != 0
+            or not graft_path_text.endswith("\n")
+            or graft_path_text.count("\n") != 1
+            or not graft_path_text[:-1]
+        ):
+            raise RepositoryEvidenceError("Git graft location is unverifiable")
+        graft_path = Path(graft_path_text[:-1])
+        if not graft_path.is_absolute():
+            graft_path = self.root / graft_path
+        if graft_path.exists() or graft_path.is_symlink():
+            raise RepositoryEvidenceError("Git grafts make ancestry unverifiable")
+        result = self._run(["merge-base", "--is-ancestor", older_sha, newer_sha])
+        if result.returncode == 0:
+            return True
+        if result.returncode != 1:
+            raise RepositoryEvidenceError("Git ancestry check failed")
+        shallow = self._run(["rev-parse", "--is-shallow-repository"])
+        if shallow.returncode != 0 or shallow.stdout.strip() not in {"true", "false"}:
+            raise RepositoryEvidenceError("Git ancestry depth is unverifiable")
+        if shallow.stdout.strip() == "true":
+            raise RepositoryEvidenceError("Git ancestry is unverifiable in a shallow repository")
+        return False
+
     def resolve_commit(self, ref: str) -> str:
         """Resolve an explicit ref to an existing commit without fetching objects."""
 
@@ -512,13 +547,17 @@ def build_file_snapshot(
 ) -> EvidenceSnapshot:
     """Build repository-file facts for a commit without reading file contents."""
 
-    if role not in {RefRole.BASE, RefRole.HEAD}:
-        raise RepositoryEvidenceError("file snapshot role must be base or head")
+    if role not in {RefRole.BASE, RefRole.HEAD, RefRole.TARGET}:
+        raise RepositoryEvidenceError("file snapshot role must be base, head, or target")
     sha = reader.resolve_commit(ref)
     selected = set(paths) if paths is not None else None
     records = []
     diagnostics = []
-    trust = TrustClass.TARGET_REPOSITORY if role is RefRole.BASE else TrustClass.SOURCE_REPOSITORY
+    trust = (
+        TrustClass.TARGET_REPOSITORY
+        if role in {RefRole.BASE, RefRole.TARGET}
+        else TrustClass.SOURCE_REPOSITORY
+    )
     for entry in reader.list_objects(sha):
         if selected is not None and entry.path not in selected:
             continue
