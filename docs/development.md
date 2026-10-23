@@ -31,7 +31,7 @@ For documentation-only or bookkeeping changes that do not alter runtime, packagi
 
 During an authorized implementation task, run the scoped local tests that use synthetic fixtures and temporary resources, fix failures caused by the change, and rerun affected tests without asking for approval at each step. This does not authorize live provider calls, OCR execution, production access, or publication; follow the user's current constraints for those actions.
 
-For an authorized real local OCR review, follow the [local review output recipe](local.md#standalone-local-review) before launching the model. Use a fresh private directory and its physical `pwd -P` path for JSON, stderr and Markdown; verify the process exit status and delivered report, then inspect the admitted findings. Do not infer success from OCR's intermediate JSON when report publication fails.
+For an authorized real local OCR review, follow the [local review preparation and output recipe](local.md#review-preparation) before launching the model. Select the API or native authentication mode, verify the exact qualified executable and supported local flags, and check native model reachability separately from toolkit preflight. Use a fresh private directory and its physical `pwd -P` path for JSON, stderr and Markdown; verify the process exit status and delivered report, then inspect the admitted findings. Do not infer success from OCR's intermediate JSON when report publication fails.
 
 ## Maintaining OCR qualification
 

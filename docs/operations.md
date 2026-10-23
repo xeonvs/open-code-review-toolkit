@@ -262,4 +262,6 @@ For position-bearing inline creates, outcomes are closed: `posted`, `invalid_pos
 
 The previous review is deleted only after the new review has been created and, in draft mode, published. Explicit provider-returned or reconciled current-run identities drive rollback, guarded by the complete pre-run ID baseline; the toolkit never infers rollback ownership from a marker-only global rescan. An ambiguous draft-publish failure still does not delete possibly published notes because the runner cannot prove which drafts became visible.
 
+Before old-review cleanup begins, a stale current identity stops publication and preserves the old review; direct current-run notes can then be rolled back. After any old-note deletion or resolution is attempted, a later stale identity or unconfirmed provider response stops further cleanup with a nonzero outcome and keeps current-run comments. The old state may be partial, so this path reports partial cleanup rather than claiming the previous review was preserved.
+
 Source and base merge-request SHAs define the reviewed range. A merge-result commit is not treated as the source branch head. The summary records the reviewed SHA and warns when the current MR head has moved, so reviewers can distinguish a current review from a stale pipeline result.

@@ -5,6 +5,24 @@ findings in a Markdown artifact and the console, without connecting the reposito
 Install the toolkit and its [qualified OCR binary](../compatibility/ocr-support.json),
 then configure the LLM environment described in [configuration.md](configuration.md).
 
+<!-- ew:invariant id="local-review.preparation" -->
+## Review preparation
+
+Choose the authentication mode before preflight. API mode requires an exact
+`OCR_LLM_MODEL` and its endpoint/token configuration; native ChatGPT mode uses
+the [setup below](#native-chatgpt-setup) and `OCR_LLM_AUTH_MODE=chatgpt` without
+API-only variables. Check that `ocr` on the review command's `PATH` is the
+checksum-verified version in the [compatibility manifest](../compatibility/ocr-support.json).
+For native ChatGPT mode, run `ocr llm models` with that same executable before a
+long review: toolkit preflight checks local store metadata but does not test
+model reachability, account eligibility, or a host firewall rule.
+
+Use only arguments accepted by the standalone local path after `--`. In
+particular, `--background` and `--background-file` are unsupported for local
+review and are rejected before OCR runs. Check `ocr-ci review --help`, the
+[local input contract](#inputs-and-isolation), and the exact invocation before
+starting the model.
+
 ```console
 ocr-ci preflight --local
 review_dir=$(mktemp -d)

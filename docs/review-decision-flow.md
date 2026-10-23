@@ -293,6 +293,11 @@ flowchart TD
     fresh_again -- Yes --> action_ok[Review published; later action completed]
     fresh_again -- No --> action_stale[Current publication stops nonzero;<br/>previous review preserved;<br/>published drafts may remain visible]
     action -- No --> action_warn[Review published; later action skipped,<br/>disabled, ineligible, or failed]
+    action_ok --> cleanup{Old-review cleanup<br/>before each mutation}
+    action_warn --> cleanup
+    cleanup -- Before first mutation, stale --> action_stale
+    cleanup -- All confirmed --> complete[Replacement complete]
+    cleanup -- After cleanup starts, drift or unconfirmed write --> cleanup_partial[Stop nonzero; old cleanup partial;<br/>retain current-run comments]
 
     classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
     classDef warning fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px;
@@ -300,11 +305,11 @@ flowchart TD
     classDef auxiliary fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
     classDef decision fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
 
-    class public_ok,action_ok success;
+    class public_ok,action_ok,complete success;
     class publish_partial,action_warn warning;
-    class schema_error,stale_error,post_error,action_stale error;
+    class schema_error,stale_error,post_error,action_stale,cleanup_partial error;
     class handoff,direct,publish auxiliary;
-    class receipt,ci_context,exact,fresh,projection,writes,action,fresh_again decision;
+    class receipt,ci_context,exact,fresh,projection,writes,action,fresh_again,cleanup decision;
 ```
 
 The current GitLab later action is an optional receipt-bound approval write. It is only one
