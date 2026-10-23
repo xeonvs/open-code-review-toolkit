@@ -1,3 +1,10 @@
+## 0.13.1 - 2026-10-23
+
+### 🚀 Features
+
+- GitLab and local reviews can now cover selected ordinary files alongside safely separable changed Git submodule pointers with qualified OCR 1.13.3. Reports identify the unreviewed pointers as partial repository coverage; these runs cannot automatically approve or clear earlier finding discussions. A change with no selected ordinary files stops before the model and posts an advisory GitLab status. ([#268](https://github.com/xeonvs/open-code-review-toolkit/issues/268))
+
+
 ## 0.13.0 - 2026-10-23
 
 ### 🚀 Features
