@@ -19,6 +19,11 @@ from ocr_toolkit.evidence.gitlink_projection import (
 )
 from ocr_toolkit.evidence.gitlinks import changed_gitlinks, plan_gitlink_input
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.pre_execution import (
+    GITLINK_PROJECTION_UNQUALIFIED,
+    GITLINK_STATUS_SCHEMA,
+    read_pre_execution_status,
+)
 from ocr_toolkit.preflight import validate_ocr_binary
 
 OLD_OID = "1" * 40
@@ -695,6 +700,56 @@ def test_changed_gitlink_closes_preview_before_model(
     )
     assert code == 2 and calls == []
     assert not artifacts.pre_execution_status.exists()
+
+
+def test_unqualified_gitlink_writes_versioned_no_model_status(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    base, head = _fixture(repo, "updated")
+    artifacts = repository_artifacts(repo)
+    prepare_artifact_directory(artifacts)
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    identity = review_runner.ReviewIdentity(
+        source_sha=head,
+        policy_sha=base,
+        mr_author_id=41,
+        context_mode="off",
+        context=None,
+        target_sha=base,
+        target_protection="protected",
+        project_id="1",
+        merge_request_iid="2",
+        diff_base_sha=base,
+        diff_start_sha=base,
+        diff_head_sha=head,
+        diff_version_id=7,
+        target_branch="main",
+        policy_project_id="1",
+        policy_branch="main",
+        policy_protection="protected",
+        protection_mode="auto",
+    )
+    code, _qualification = review_runner._run_background_qualified_review(
+        tmp_path / "result.json",
+        tmp_path / "stderr.log",
+        [],
+        ocr_binary="/private/ocr",
+        session_home=home,
+        artifacts=artifacts,
+        refs=review_runner.ReviewRefs(base, head),
+        identity=identity,
+        gitlink_detected=True,
+    )
+    assert code == 2
+    status = read_pre_execution_status(
+        artifacts.pre_execution_status,
+        expected_diff_base_sha=base,
+        expected_source_sha=head,
+    )
+    assert status.schema_version == GITLINK_STATUS_SCHEMA
+    assert status.reason == GITLINK_PROJECTION_UNQUALIFIED
+    assert status.repository_coverage is None
 
 
 @pytest.mark.parametrize("kind", ["added", "updated", "deleted"])

@@ -13,7 +13,10 @@ from ocr_toolkit.evidence.repository import (
     RepositoryEvidenceError,
     ShallowAncestryUnavailable,
 )
-from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
+from ocr_toolkit.ocr_result import (
+    PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
+    TOOLKIT_RESULT_SCHEMA_VERSION,
+)
 from ocr_toolkit.providers.gitlab import (
     GitLabMergeRequestStale,
     GitLabMergeRequestTerminal,
@@ -65,7 +68,10 @@ def validate_review_freshness(
 ) -> ReviewFreshnessResult:
     """Require the current receipt tuple or a proven policy fast-forward."""
 
-    if identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION or any(
+    if identity.schema_version not in {
+        TOOLKIT_RESULT_SCHEMA_VERSION,
+        PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
+    } or any(
         value is None
         for value in (
             identity.project_id,

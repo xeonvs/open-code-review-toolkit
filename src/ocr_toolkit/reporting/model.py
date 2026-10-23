@@ -16,6 +16,7 @@ from ocr_toolkit.reporting.usage import (
     format_verified_mcp_usage,
     validated_completed_actions,
 )
+from ocr_toolkit.repository_coverage import RepositoryCoverage
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 
 FailureStage = Literal[
@@ -47,6 +48,7 @@ class ExecutionFacts:
     advisory: OcrToolkitAdvisory | None = None
     federation: dict[str, Any] | None = None
     legacy_policy: bool = False
+    repository_coverage: RepositoryCoverage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +67,8 @@ class ReviewReport:
     publication: dict[str, Any] | None = None
     advisory: OcrToolkitAdvisory | None = None
     failure_stage: FailureStage | None = None
+    repository_coverage: RepositoryCoverage | None = None
+    gitlink_unqualified: bool = False
 
 
 def report_from_result(
@@ -113,10 +117,17 @@ def report_from_result(
         mcp_usage_summary=mcp_summary,
         publication=deepcopy(execution.publication),
         advisory=execution.advisory,
+        repository_coverage=execution.repository_coverage,
     )
 
 
-def failed_report(stage: FailureStage, *, reviewed_sha: str = "") -> ReviewReport:
+def failed_report(
+    stage: FailureStage,
+    *,
+    reviewed_sha: str = "",
+    repository_coverage: RepositoryCoverage | None = None,
+    gitlink_unqualified: bool = False,
+) -> ReviewReport:
     """Represent unavailable review data without rendering raw exceptions or output."""
 
     if stage not in get_args(FailureStage):
@@ -129,4 +140,6 @@ def failed_report(stage: FailureStage, *, reviewed_sha: str = "") -> ReviewRepor
         diagnostics=CoverageDiagnostics((), 0, 0, 0, 0),
         reviewed_sha=safe_sha,
         failure_stage=stage,
+        repository_coverage=repository_coverage,
+        gitlink_unqualified=gitlink_unqualified,
     )

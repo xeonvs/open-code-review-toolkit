@@ -20,6 +20,7 @@ from ocr_toolkit.reporting.model import ReviewReport
 from ocr_toolkit.reporting.outcome import FindingVisibility, review_outcome_line
 from ocr_toolkit.reporting.sections import report_sections
 from ocr_toolkit.reporting.text import clean_text, code_text, comment_line
+from ocr_toolkit.repository_coverage import repository_coverage_summary
 
 
 def local_summary(report: ReviewReport) -> str:
@@ -43,11 +44,21 @@ def local_summary(report: ReviewReport) -> str:
     ]
     if report.failure_stage is not None:
         lines.extend(
+            ["", f"Stopped at: {inline_code(report.failure_stage, escape_controls=True)}."]
+        )
+        if report.repository_coverage is None:
+            lines.append(
+                "Findings, coverage and execution usage are unavailable or untrusted. "
+                "See the diagnostic output for the blocking check."
+            )
+    if report.repository_coverage is not None:
+        lines.extend(["", repository_coverage_summary(report.repository_coverage)])
+    elif report.gitlink_unqualified:
+        lines.extend(
             [
                 "",
-                f"Stopped at: {inline_code(report.failure_stage, escape_controls=True)}.",
-                "Findings, coverage and execution usage are unavailable or untrusted. "
-                "See the diagnostic output for the blocking check.",
+                "Review not started: changed Git submodule pointer(s) could not be "
+                "qualified and were not reviewed.",
             ]
         )
     lines.extend(report_sections(report.comments, report.diagnostics, report.warnings))

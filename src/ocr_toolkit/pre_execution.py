@@ -11,11 +11,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from ocr_toolkit.repository_coverage import RepositoryCoverageError, parse_repository_coverage
 from ocr_toolkit.review_receipt import ReceiptReviewIdentity, _parse_review_identity
 
 STATUS_SCHEMA = "ocr.pre-execution-status/v5"
+GITLINK_STATUS_SCHEMA = "ocr.pre-execution-status/v6"
 # v5 embeds the frozen v11 review tuple; a new receipt shape needs a new status schema.
 STATUS_REVIEW_RECEIPT_VERSION = 11
+GITLINK_STATUS_REVIEW_RECEIPT_VERSION = 12
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
 PROTECTED_POLICY_RULE_PATH_PENDING = "protected_policy_rule_path_pending"
 GITLAB_MERGE_REQUEST_TERMINAL = "gitlab_merge_request_terminal"
@@ -25,6 +28,8 @@ BACKGROUND_CHARACTER_LIMIT_REASON = "ocr_background_character_limit"
 BACKGROUND_FILE_SIZE_LIMIT_REASON = "ocr_background_file_size_limit"
 UNCLASSIFIED_PREVIEW_DIAGNOSTICS = "unclassified_preview_diagnostics"
 GITLINK_PREVIEW_UNSUPPORTED = "gitlink_preview_unsupported"
+GITLINK_NO_REVIEWABLE_FILES = "gitlink_no_reviewable_files"
+GITLINK_PROJECTION_UNQUALIFIED = "gitlink_projection_unqualified"
 EVIDENCE_PREFLIGHT_STAGE = "evidence_preflight"
 OCR_PREVIEW_STAGE = "ocr_preview"
 MODEL_NOT_STARTED = "not_started"
@@ -70,6 +75,7 @@ class PreExecutionStatus:
     project_id: str | None = None
     change_id: str | None = None
     terminal_state: str | None = None
+    repository_coverage: dict[str, object] | None = None
 
 
 def _sha(value: str) -> bool:
@@ -77,11 +83,16 @@ def _sha(value: str) -> bool:
 
 
 def _validate(status: PreExecutionStatus) -> None:
-    if status.schema_version != STATUS_SCHEMA or any(
+    if status.schema_version not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA} or any(
         not _sha(value) for value in (status.diff_base_sha, status.source_sha)
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.model_execution != MODEL_NOT_STARTED:
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.schema_version == GITLINK_STATUS_SCHEMA:
+        _validate_gitlink_status(status)
+        return
+    if status.repository_coverage is not None:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.reason in NOTE_REASONS:
         review = _parse_review_identity(status.review, STATUS_REVIEW_RECEIPT_VERSION)
@@ -218,6 +229,44 @@ def _validate(status: PreExecutionStatus) -> None:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
 
 
+def _validate_gitlink_status(status: PreExecutionStatus) -> None:
+    if (
+        status.reason not in {GITLINK_NO_REVIEWABLE_FILES, GITLINK_PROJECTION_UNQUALIFIED}
+        or status.stage != OCR_PREVIEW_STAGE
+        or not isinstance(status.policy_sha, str)
+        or not _sha(status.policy_sha)
+        or any(
+            value is not None
+            for value in (
+                status.diagnostic_count,
+                status.actual,
+                status.limit,
+                status.unit,
+                status.provider,
+                status.project_id,
+                status.change_id,
+                status.terminal_state,
+            )
+        )
+    ):
+        raise PreExecutionStatusError("pre-execution status fields are invalid")
+    review = _parse_review_identity(status.review, GITLINK_STATUS_REVIEW_RECEIPT_VERSION)
+    if (
+        review is None
+        or review.diff_base_sha != status.diff_base_sha
+        or review.source_sha != status.source_sha
+        or review.policy_sha != status.policy_sha
+    ):
+        raise PreExecutionStatusError("pre-execution status review identity is invalid")
+    if status.reason == GITLINK_NO_REVIEWABLE_FILES:
+        try:
+            parse_repository_coverage(status.repository_coverage, required_state="not_started")
+        except RepositoryCoverageError as exc:
+            raise PreExecutionStatusError("pre-execution gitlink coverage is invalid") from exc
+    elif status.repository_coverage is not None:
+        raise PreExecutionStatusError("pre-execution gitlink coverage is invalid")
+
+
 def _valid_provider_ids(*values: str | None) -> bool:
     return all(
         isinstance(value, str)
@@ -234,7 +283,12 @@ def pre_execution_review_identity(status: PreExecutionStatus) -> ReceiptReviewId
     """Return the status-versioned identity only from a valid private envelope."""
 
     _validate(status)
-    return _parse_review_identity(status.review, STATUS_REVIEW_RECEIPT_VERSION)
+    version = (
+        GITLINK_STATUS_REVIEW_RECEIPT_VERSION
+        if status.schema_version == GITLINK_STATUS_SCHEMA
+        else STATUS_REVIEW_RECEIPT_VERSION
+    )
+    return _parse_review_identity(status.review, version)
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -272,8 +326,11 @@ def write_pre_execution_status(path: Path, status: PreExecutionStatus) -> None:
     """Atomically create an owner-only exact envelope without following links."""
 
     _validate(status)
+    fields = asdict(status)
+    if status.schema_version == STATUS_SCHEMA:
+        fields.pop("repository_coverage")
     payload = (
-        json.dumps(asdict(status), sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+        json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
     ).encode("ascii")
     if len(payload) > MAX_STATUS_BYTES:
         raise PreExecutionStatusError("pre-execution status exceeds its byte limit")
@@ -365,7 +422,7 @@ def read_pre_execution_status(
             value = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_pairs)
         except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise PreExecutionStatusError("pre-execution status is malformed") from exc
-        if not isinstance(value, dict) or set(value) != {
+        legacy_fields = {
             "schema_version",
             "reason",
             "diff_base_sha",
@@ -382,7 +439,17 @@ def read_pre_execution_status(
             "project_id",
             "change_id",
             "terminal_state",
-        }:
+        }
+        if (
+            not isinstance(value, dict)
+            or value.get("schema_version") not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA}
+            or set(value)
+            != (
+                legacy_fields | {"repository_coverage"}
+                if value.get("schema_version") == GITLINK_STATUS_SCHEMA
+                else legacy_fields
+            )
+        ):
             raise PreExecutionStatusError("pre-execution status fields are invalid")
         if any(
             not isinstance(value.get(key), str)

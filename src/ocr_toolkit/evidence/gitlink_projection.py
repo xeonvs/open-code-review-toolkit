@@ -613,3 +613,27 @@ def qualify_gitlink_manifest(
     for comment in comments:
         if not isinstance(comment, dict) or comment.get("path") not in selected_paths:
             raise RepositoryEvidenceError("OCR gitlink result has a finding outside selected files")
+
+
+def selected_gitlink_manifest_entries(
+    projection: GitlinkProjection, result: dict[str, object]
+) -> tuple[RawDiffEntry, ...]:
+    """Recover the native selected subset for independent posting readback."""
+
+    manifest = result.get("manifest")
+    coverage = manifest.get("coverage") if isinstance(manifest, dict) else None
+    records = coverage.get("selected") if isinstance(coverage, dict) else None
+    if not isinstance(records, list):
+        raise RepositoryEvidenceError("OCR gitlink manifest selected items are unavailable")
+    expected = {_manifest_id(entry): entry for entry in projection.ordinary_diff}
+    if len(expected) != len(projection.ordinary_diff):
+        raise RepositoryEvidenceError("OCR gitlink ordinary identities are ambiguous")
+    selected: list[RawDiffEntry] = []
+    seen: set[str] = set()
+    for record in records:
+        item_id = record.get("item_id") if isinstance(record, dict) else None
+        if not isinstance(item_id, str) or item_id not in expected or item_id in seen:
+            raise RepositoryEvidenceError("OCR gitlink manifest selected item is invalid")
+        seen.add(item_id)
+        selected.append(expected[item_id])
+    return tuple(selected)
