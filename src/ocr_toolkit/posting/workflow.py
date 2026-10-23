@@ -335,8 +335,15 @@ def pre_execution_status_fresh_or_exit(
     status: PreExecutionStatus,
     *,
     exact_policy: bool = False,
+    cleanup_started: bool = False,
 ) -> int | None:
     """Bind a static note to the stored MR version before each provider write."""
+
+    previous_state = (
+        "previous setup-note cleanup may be partial; current replacement retained."
+        if cleanup_started
+        else "previous review preserved."
+    )
 
     try:
         identity = pre_execution_review_identity(status)
@@ -345,7 +352,7 @@ def pre_execution_status_fresh_or_exit(
     if identity is None:
         print(
             "Pre-execution status has no authenticated review identity; "
-            "no merge-request note was written. Previous review preserved.",
+            f"no further merge-request note was written; {previous_state}",
             file=sys.stderr,
         )
         return 1
@@ -353,21 +360,20 @@ def pre_execution_status_fresh_or_exit(
         current = validate_posting_review_identity(config, identity)
     except (ReviewFreshnessStale, ReviewFreshnessUnavailable) as exc:
         print(
-            f"Pre-execution review identity is no longer current ({exc.reason}); "
-            "previous review preserved.",
+            f"Pre-execution review identity is no longer current ({exc.reason}); {previous_state}",
             file=sys.stderr,
         )
         return 1
     except GitLabMergeRequestTerminal:
         print(
             "Merge request became terminal before pre-execution status publication; "
-            "previous review preserved.",
+            f"{previous_state}",
             file=sys.stderr,
         )
         return 1
     if exact_policy and current.current_policy_sha != status.policy_sha:
         print(
-            "Protected policy changed after setup-pending admission; previous review preserved.",
+            f"Protected policy changed after setup-pending admission; {previous_state}",
             file=sys.stderr,
         )
         return 1
@@ -492,15 +498,29 @@ def finalize_review_approval(
 ) -> int:
     """Publish notes, manage exact-SHA approval, update summary, then clean old state."""
 
+    publish_attempted = False
     published_draft = False
+    unattempted_drafts: list[int] = []
 
     def stop_current_review() -> int:
-        if published_draft:
+        if publish_attempted:
+            baseline_drafts = set(previous_refs.all_draft_note_ids or previous_refs.draft_note_ids)
+            unconfirmed_cleanup = False
+            for note_id in unattempted_drafts:
+                if note_id in baseline_drafts or not gitlab_api.delete_draft_note(config, note_id):
+                    unconfirmed_cleanup = True
             print(
-                "OCR draft publication is partial: a published note may remain visible. "
-                "Previous review was preserved; no further posting or old-note cleanup was attempted.",
+                "OCR draft publication is partial or unconfirmed: an attempted note may "
+                "remain visible. Previous review was preserved; no old-note cleanup was "
+                "attempted.",
                 file=sys.stderr,
             )
+            if unconfirmed_cleanup:
+                print(
+                    "OCR unattempted draft cleanup could not be confirmed; pending drafts "
+                    "are not counted as published findings on a later run.",
+                    file=sys.stderr,
+                )
         else:
             rollback_current_run_comments(config, previous_refs, transaction)
         return 1
@@ -511,16 +531,15 @@ def finalize_review_approval(
     ):
         return stop_current_review()
     if review_identity is not None and post_mode() == "draft" and transaction.draft_note_ids:
-        for note_id in transaction.consume_drafts_for_publication():
+        unattempted_drafts = list(transaction.consume_drafts_for_publication())
+        for note_id in tuple(unattempted_drafts):
             if publication_freshness_or_exit(config, review_identity) is not None:
                 return stop_current_review()
+            unattempted_drafts.pop(0)
+            publish_attempted = True
             if not gitlab_api.publish_draft_note(config, note_id):
                 print(f"Failed to publish OCR draft note id={note_id}.", file=sys.stderr)
-                return (
-                    stop_current_review()
-                    if published_draft
-                    else publish_failure_exit(config, transaction)
-                )
+                return stop_current_review()
             published_draft = True
     elif not finalize_posting(config, transaction):
         return publish_failure_exit(config, transaction)
@@ -1867,13 +1886,25 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
         return 1
 
     published_draft = False
+    cleanup_started = False
 
     def current_or_rollback(
         transaction: PostingTransaction, previous_refs: BotCommentRefs | None = None
     ) -> bool:
-        if pre_execution_status_fresh_or_exit(config, status, exact_policy=exact_policy) is None:
+        if (
+            pre_execution_status_fresh_or_exit(
+                config, status, exact_policy=exact_policy, cleanup_started=cleanup_started
+            )
+            is None
+        ):
             return True
-        if published_draft:
+        if cleanup_started:
+            print(
+                "OCR setup-note cleanup is partial: current replacement retained; "
+                "no further old-note cleanup was attempted.",
+                file=sys.stderr,
+            )
+        elif published_draft:
             print(
                 "OCR setup note publication is partial: a published note may remain visible. "
                 "Previous review was preserved; no further posting or old-note cleanup was attempted.",
@@ -2024,14 +2055,28 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
             return 1
         return publish_failure_exit(config, transaction)
     published_draft = attempted_draft_publish
+
+    def remove_setup_if_current(delete: Callable[[GitLabConfig, int], bool], note_id: int) -> bool:
+        nonlocal cleanup_started
+        if not current_or_rollback(transaction, previous_refs):
+            return False
+        # The provider can apply a delete even if its response is lost.
+        cleanup_started = True
+        if not delete(config, note_id):
+            print(
+                "OCR setup-note cleanup is partial: provider did not confirm the "
+                "mutation; current replacement retained.",
+                file=sys.stderr,
+            )
+            return False
+        return True
+
     for note_id in previous_refs.setup_plain_note_ids:
-        if not current_or_rollback(transaction, previous_refs):
+        if not remove_setup_if_current(gitlab_api.delete_plain_note, note_id):
             return 1
-        gitlab_api.delete_plain_note(config, note_id)
     for note_id in previous_refs.setup_draft_note_ids:
-        if not current_or_rollback(transaction, previous_refs):
+        if not remove_setup_if_current(gitlab_api.delete_draft_note, note_id):
             return 1
-        gitlab_api.delete_draft_note(config, note_id)
     return 1 if strict_posting() else 0
 
 

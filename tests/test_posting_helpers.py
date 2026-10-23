@@ -5497,10 +5497,19 @@ class GitLabSnapshotTests(unittest.TestCase):
             },
             {"id": "../unsafe", "notes": [{"id": 22, "body": "ignored"}]},
         ]
+        pending_fingerprint = "a" * FINGERPRINT_LEN
         drafts = [
             {"id": 30, "note": "human", "author_id": 8},
-            {"id": 31, "note": build_marker(None) + "\nbot", "author_id": 7},
+            {
+                "id": 31,
+                "note": build_marker(pending_fingerprint) + "\nbot",
+                "author_id": 7,
+            },
         ]
+        self.assertEqual(
+            markers.finding_fingerprints_from_marked_body(str(drafts[1]["note"])),
+            {pending_fingerprint},
+        )
 
         def page(_config: Any, endpoint: str, **_kwargs: Any) -> list[Any]:
             if endpoint.startswith("/notes"):
@@ -5534,6 +5543,7 @@ class GitLabSnapshotTests(unittest.TestCase):
         self.assertEqual(refs.discussion_note_refs, [])
         self.assertEqual(refs.all_draft_note_ids, [30, 31])
         self.assertEqual(refs.draft_note_ids, [31])
+        self.assertNotIn(pending_fingerprint, refs.published_fingerprints)
 
     def test_rollback_collection_keeps_current_run_bot_notes_with_human_reply(self) -> None:
         refs = snapshot.BotCommentRefs()

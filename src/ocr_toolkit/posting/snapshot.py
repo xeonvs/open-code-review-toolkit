@@ -387,12 +387,9 @@ def collect_previous_bot_comment_refs(
                 refs.summary_draft_note_ids.append(note_id)
             if has_setup_pending_marker(str(note.get("note") or "")):
                 refs.setup_draft_note_ids.append(note_id)
-            fingerprints = finding_fingerprints_from_marked_body(str(note.get("note") or ""))
-            refs.published_fingerprints.update(fingerprints)
-            for fingerprint in fingerprints:
-                refs.published_fingerprint_counts[fingerprint] = (
-                    refs.published_fingerprint_counts.get(fingerprint, 0) + 1
-                )
+            # A pending draft is not visible as a published finding. In
+            # particular, an interrupted publication must not suppress a
+            # later retry merely because an unattempted draft remained.
 
     return refs
 

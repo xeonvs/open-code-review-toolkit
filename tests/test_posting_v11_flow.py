@@ -817,8 +817,11 @@ def test_mid_publication_drift_stops_next_write_and_rolls_back_current_run(
     assert writes == ["inline", "rollback-current"]
 
 
+@pytest.mark.parametrize("cleanup_confirmed", [True, False])
 def test_drift_between_draft_publications_stops_remaining_writes(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    cleanup_confirmed: bool,
 ) -> None:
     stale = False
     writes: list[str] = []
@@ -839,6 +842,11 @@ def test_drift_between_draft_publications_stops_remaining_writes(
     monkeypatch.setattr(workflow, "validate_review_freshness", freshness_check)
     monkeypatch.setattr(workflow, "post_mode", lambda: "draft")
     monkeypatch.setattr(workflow.gitlab_api, "publish_draft_note", publish)
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "delete_draft_note",
+        lambda _config, note_id: writes.append(f"delete-draft-{note_id}") or cleanup_confirmed,
+    )
     monkeypatch.setattr(
         workflow,
         "rollback_current_run_comments",
@@ -870,7 +878,10 @@ def test_drift_between_draft_publications_stops_remaining_writes(
         )
         == 1
     )
-    assert writes == ["publish-11"]
+    assert writes == ["publish-11", "delete-draft-12"]
+    assert ("unattempted draft cleanup could not be confirmed" in capsys.readouterr().err) is (
+        not cleanup_confirmed
+    )
 
 
 def test_draft_publish_failure_after_first_visible_note_preserves_previous(
@@ -879,6 +890,7 @@ def test_draft_publish_failure_after_first_visible_note_preserves_previous(
     transaction = PostingTransaction()
     assert transaction.record_draft(11)
     assert transaction.record_draft(12)
+    assert transaction.record_draft(13)
     writes: list[str] = []
     monkeypatch.setattr(
         workflow,
@@ -890,6 +902,11 @@ def test_draft_publish_failure_after_first_visible_note_preserves_previous(
         workflow.gitlab_api,
         "publish_draft_note",
         lambda _config, note_id: writes.append(f"publish-{note_id}") or note_id == 11,
+    )
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "delete_draft_note",
+        lambda _config, note_id: writes.append(f"delete-draft-{note_id}") or True,
     )
     monkeypatch.setattr(
         workflow,
@@ -916,7 +933,54 @@ def test_draft_publish_failure_after_first_visible_note_preserves_previous(
         )
         == 1
     )
-    assert writes == ["publish-11", "publish-12"]
+    assert writes == ["publish-11", "publish-12", "delete-draft-13"]
+
+
+def test_first_draft_publish_failure_retains_ambiguous_attempt_and_cleans_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction = PostingTransaction()
+    assert transaction.record_draft(11)
+    assert transaction.record_draft(12)
+    writes: list[str] = []
+    monkeypatch.setattr(
+        workflow,
+        "validate_review_freshness",
+        lambda *_args: freshness.ReviewFreshnessResult("b" * 40, False),
+    )
+    monkeypatch.setattr(workflow, "post_mode", lambda: "draft")
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "publish_draft_note",
+        lambda _config, note_id: writes.append(f"publish-{note_id}") or False,
+    )
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "delete_draft_note",
+        lambda _config, note_id: writes.append(f"delete-draft-{note_id}") or True,
+    )
+    monkeypatch.setattr(
+        workflow,
+        "rollback_current_run_comments",
+        lambda *_args: pytest.fail("attempted publication cannot be rolled back by draft ID"),
+    )
+
+    assert (
+        workflow.finalize_review_approval(
+            gitlab_config(),
+            BotCommentRefs(plain_note_ids=[91]),
+            _outcome("clean"),
+            transaction,
+            ApprovalEligibility(False, ApprovalResult(ApprovalStatus.NOT_ELIGIBLE, "partial")),
+            "a" * 40,
+            41,
+            "f" * 32,
+            lambda _approval: "summary",
+            review_identity=_identity(),
+        )
+        == 1
+    )
+    assert writes == ["publish-11", "delete-draft-12"]
 
 
 def test_drift_during_summary_lookup_blocks_final_update_and_old_cleanup(
@@ -1243,6 +1307,51 @@ def test_setup_status_drift_before_old_note_cleanup_preserves_previous_state(
 
     assert workflow.post_pre_execution_status(gitlab_config(), status) == 1
     assert writes == ["create-current", "publish-current", "rollback-current"]
+
+
+@pytest.mark.parametrize("confirmed", [True, False])
+def test_setup_cleanup_retains_replacement_after_first_delete_attempt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], confirmed: bool
+) -> None:
+    status = _pre_execution_status(PROTECTED_POLICY_RULE_PATH_PENDING)
+    previous = BotCommentRefs(setup_plain_note_ids=[91, 92])
+    stale = False
+    writes: list[str] = []
+
+    def freshness_check(*_args: Any) -> freshness.ReviewFreshnessResult:
+        if stale:
+            raise freshness.ReviewFreshnessStale("target_changed")
+        return freshness.ReviewFreshnessResult(status.policy_sha or "", False)
+
+    def delete(_config: Any, note_id: int) -> bool:
+        nonlocal stale
+        writes.append(f"delete-{note_id}")
+        stale = True
+        return confirmed
+
+    monkeypatch.setattr(workflow, "validate_review_freshness", freshness_check)
+    monkeypatch.setattr(
+        workflow,
+        "current_merge_request_lifecycle",
+        lambda *_args: GitLabMergeRequestLifecycle("1", "2", status.source_sha, "opened"),
+    )
+    monkeypatch.setattr(workflow, "collect_previous_bot_comment_refs", lambda _config: previous)
+    monkeypatch.setattr(
+        workflow,
+        "post_review_note_bounded",
+        lambda *_args: writes.append("create-current") or {"id": 11},
+    )
+    monkeypatch.setattr(workflow, "finalize_posting", lambda *_args: True)
+    monkeypatch.setattr(workflow.gitlab_api, "delete_plain_note", delete)
+    monkeypatch.setattr(
+        workflow,
+        "rollback_current_run_comments",
+        lambda *_args: pytest.fail("replacement must survive attempted old-note cleanup"),
+    )
+
+    assert workflow.post_pre_execution_status(gitlab_config(), status) == 1
+    assert writes == ["create-current", "delete-91"]
+    assert "cleanup is partial" in capsys.readouterr().err
 
 
 def test_setup_draft_drift_after_publish_keeps_visible_partial_and_old_state(
