@@ -158,7 +158,7 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
 
 
 def test_release_archive_reconciles_current_external_delivery_truth() -> None:
-    """Bind the current archive status to the external-reconciliation marker."""
+    """Preserve the last legacy archive while the new plan closure is prepared."""
 
     release_guide = (PROJECT_ROOT / "docs" / "release.md").read_text(encoding="utf-8")
     release_archive = (
@@ -189,8 +189,9 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
     release_version_key = tuple(int(part) for part in release_version.split("."))
     reconciled_version_key = tuple(int(part) for part in reconciled_version.split("."))
 
-    assert "one protected `no-release` closure pull request" in release_guide
-    assert "do not leave its pre-publication status as the current release status" in release_guide
+    assert "without another repository pull request" in release_guide
+    assert "under `docs/engineering/execution_history/plans/`" in release_guide
+    assert "The v0.13.0 release PR must update CI contracts" in release_guide
     assert "List tracked release issues in a release PR as bare references" in release_guide
     assert "The Release workflow is the sole closure owner" in release_guide
     assert archive_version == release_version

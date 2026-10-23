@@ -4,29 +4,28 @@ Use this file for active or blocked repository work. Update it before implementa
 before handoff or commit. Completed stable plans are indexed in
 [the execution-history archive](docs/engineering/execution_history/README.md).
 
-## Active Work
-
-### Toolkit 0.13.0: protected default-policy fallback for single-MR review
+## Active Plan: Toolkit 0.13.0 protected default-policy fallback for single-MR review
 
 plan_schema_version: 2
 Status: active
+Owner: root
 Last Updated: 2026-10-23
 Release classification: #264 `release-required`, target v0.13.0; #265 `no-release` planning and the requested harness maintenance are separate logical changes in the same feature PR.
 
-#### Goal
+### Goal
 
 Implement #264 without conflating the actual MR code target with protected policy authority, record the conditional #265 follow-up without activating chain review, and deliver, independently verify, and reconcile the stable v0.13.0 release through the protected repository workflow.
 
-#### Plan Origin
+### Plan Origin
 
 `plan_mode_approved`
 
-#### Requested Scope
+### Requested Scope
 
 The feature PR contains #264 implementation and public-contract updates plus a separate logical documentation commit for #265. Its first commit contains only this reviewed plan. Self-review every subsequent logical commit. Before the final feature push, run Codex Security on the changed range, then one real local toolkit/OCR review through the documented private-artifact path and fix admitted findings. Audit project documentation, agent instructions, and routes; correct any findings in a separate commit before final reviews. Use the protected feature PR, development artifact verification, protected release PR, stable publication/receipt, issue closure, and site check after actual publication. In the release PR, archive the complete repository plan and reset `PLANS.md`; after publication, reconcile external facts against the immutable receipt and issue comments without another repository PR. Clean obsolete completed-run GitHub Actions artifacts and superseded caches without touching published Release assets or active-run inputs. Do not run additional checks on another host or environment.
 The owner later requested an Astra harness/process audit. Its bounded current-branch follow-up removes one duplicate setup shared by two negative installed-artifact probes and preserves the failing command's exit status in the quality wrapper; keep both wheel/sdist behavioral cases and independent published-artifact gates. Capture per-test durations in the next required full quality run rather than adding a separate heavy measurement run.
 
-#### Requirement Traceability
+### Requirement Traceability
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
@@ -44,13 +43,14 @@ The owner later requested an Astra harness/process audit. Its bounded current-br
 | REQ-012 | Reclaim Actions storage from obsolete completed-run artifacts and superseded caches, with before/after readback and retained release/current-run evidence | WQ-13 | done |
 | REQ-013 | Improve meaningful test coverage in touched Python modules, measuring affected-file coverage before and after the change | WQ-02–WQ-05, WQ-14 | in_progress |
 | REQ-014 | Reduce duplicate installed-artifact negative-probe setup, preserve exact quality failure exit status, and record timing/process evidence without weakening wheel/sdist or registry gates | WQ-14 | done |
+| REQ-015 | Align this active plan and future archive ownership with the installed engineering-workflow lifecycle without rewriting the consolidated historical release archive; keep release and development instructions consistent and avoid a duplicate full quality run for documentation-only changes | WQ-15 | done |
 
-#### Explicit Non-Goals
+### Explicit Non-Goals
 
 No related-MR discovery, chain/integration review, merge orchestration, source-branch policy bootstrap, fork/cross-project authority, new CI variable or policy field, second model pass, direct external MCP passthrough, approval revocation, downstream-project mutation, or new public command for #265. No separate host QA. Actual target protection is not a coverage score, and a successful current-MR review does not prove a parent or future integration.
 Do not drop wheel or sdist packaging, remove the existing installed local-review scenarios, or repeat full tests in the release publication gate to optimize this task. Matrix reduction awaits measured scenario timing and an independent maintenance decision.
 
-#### Constraints
+### Constraints
 
 - GitLab acquisition is authenticated, bounded, and same-project; missing or contradictory source/target/project, diff, branch protection, default metadata, or Git objects fail with explicit diagnostics, not inferred fallback.
 - `B..H` is the current MR delta. `B != T` is valid if the authenticated MR diff identity is coherent. Never substitute `P..H`, `T..H`, synthetic `CI_COMMIT_SHA`, or unrelated CI evidence. Preserve B/H deltas while exposing T as a separate bounded, untrusted code snapshot; T content never becomes P authority.
@@ -60,48 +60,49 @@ Do not drop wheel or sdist packaging, remove the existing installed local-review
 - An actually unprotected target is always comment-only, including when `OCR_AUTO_APPROVE=true`; prior bot approvals may remain and are not revoked. Protected targets keep their own policy and approval gates.
 - Use only synthetic/private-safe examples and artifacts. Follow signed, linear protected PR and trusted-base release authorization; no manual mutation of immutable release objects.
 
-#### Inputs And Sources
+### Inputs And Sources
 
 - Live [#264](https://github.com/xeonvs/open-code-review-toolkit/issues/264) (updated 2026-10-23 08:52 UTC) and [#265](https://github.com/xeonvs/open-code-review-toolkit/issues/265) (updated 08:31 UTC), including acceptance lists; GitLab's official MR/version, project, CI-variable, merged-results and merge-train API documentation.
 - Current `main` baseline `b8786e7`, stable `.release-version=0.12.1`, next `.next-version=0.13.0`, empty active plan, and the completed v0.12.1 archive.
 - Canonical owners: `AGENTS.md`, `docs/engineering/project_principles.md`, `docs/development.md`, `docs/release.md`, `docs/review-decision-flow.md`, `docs/review-context.md`, `docs/engineering/toolkit_strategy.md`, `ROADMAP.md`, `docs/codex/TASKS_BACKLOG.md`, and `docs/engineering/test_evidence_matrix.md`.
 
-#### User Decisions And Answers
+### User Decisions And Answers
 
 The owner selected a full stable v0.13.0 release after #264 and chose one feature PR containing #265 as a separate logical commit. The owner requested the previous release's plan-first, self-review, security then local OCR review, protected PR, artifact/receipt, site-after-release and clean plan closure sequence. The root agent must switch to the feature branch; #265 remains planning-only and does not itself authorize a release.
 The owner additionally requested cleanup of GitHub Actions run artifacts because storage is scarce; this is `no-release` operational work.
 The owner also requested regular coverage improvement in touched files; focus on behavior and failure branches rather than tests that only reproduce an implementation.
 The owner requested a separate Astra agent to audit harness duplication and process, then apply justified corrections. This scoped harness maintenance is `no-release` by itself and does not add another release trigger or publication job.
-The owner later requested that the release PR return `PLANS.md` to its template state and that external readback close the work without a post-release repository PR. The release archive must describe publication as pending at merge; the immutable receipt and Actions-owned issue comments carry verified external facts afterward. The release guide and its tests must be updated in the release branch before publication so they do not require the old closure PR.
+The owner later requested that the release PR return `PLANS.md` to its template state and that external readback close the work without a post-release repository PR. The release archive must describe publication as pending at merge; the immutable receipt and Actions-owned issue comments carry verified external facts afterward. The release workflow and validation contracts must be updated in the release branch before publication so they do not require the old closure PR; the guide is aligned in WQ-15.
 
-#### Completed Baseline State
+### Completed Baseline State
 
 v0.12.1 is published and externally reconciled; prior release and internal follow-up issues are closed. `main` was clean and synchronized with `origin/main` at `b8786e7`. Both current issues are open. `feature/264-auto-policy-0.13.0` was created from that baseline; its first signed commit contains only this plan and draft feature PR [#266](https://github.com/xeonvs/open-code-review-toolkit/pull/266) is open. Milestone v0.13.0 tracks #264 only. At activation no feature implementation existed. BL-024 is historical, so BL-025 is the next unused backlog identifier.
 
-#### Current Work Queue
+### Current Work Queue
 
 | Queue | Requirements | Exit evidence | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-009 | Review and commit only this plan; establish goal, milestone and feature PR identity | done |
-| WQ-02 | REQ-001, REQ-002, REQ-009 | Provider/config/CI identity changes and production-boundary tests; self-reviewed commit | done |
-| WQ-03 | REQ-002, REQ-003, REQ-006, REQ-009 | Immutable diff/authority/rule acquisition, distinct target T evidence/readback and applicability tests; self-reviewed commit | done |
-| WQ-04 | REQ-003, REQ-004, REQ-006, REQ-009 | Capability/context/federation, receipt/result v11 and hostile readback tests; self-reviewed commit | done |
-| WQ-05 | REQ-001, REQ-004–REQ-006, REQ-009 | Full-identity freshness at current-result and static-note writes, publication/approval/draft and cleanup boundaries, receipt-less error isolation, cross-run private-artifact isolation, and local-entry tests; self-reviewed commit | done |
-| WQ-06 | REQ-007, REQ-009 | Public contracts, examples, threat model, decision flow, changelog; self-reviewed commit | done |
-| WQ-07 | REQ-008, REQ-009 | Self-contained BL-025 with Source #265 and reference #264, status/theme/prerequisites/trigger/scope/deliverables/acceptance/exclusions/validation/future release classification; per-variant dependencies, A–F coverage, graph shapes and request/publication trade-offs; aligned strategy/roadmap and self-reviewed separate commit | done |
-| WQ-08 | REQ-007, REQ-009 | Documentation/instruction/route audit, distinct correction commit, focused documentation checks and valid instruction contract | done |
-| WQ-14 | REQ-014, REQ-009 | Astra-backed installed negative-probe setup and quality exit-status corrections, focused tests, docs, timing in the next full quality gate, separate self-reviewed commit | done |
-| WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; mark verified acceptance checkboxes in #264/#265, link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | in_progress |
-| WQ-10 | REQ-010 | Verified deterministic TestPyPI development wheel and sdist, release PR repository prep and protected checks/merge | pending |
-| WQ-11 | REQ-010 | Stable TestPyPI/PyPI, provenance, attestation, immutable release/receipt, issue/milestone and real site readback | pending |
-| WQ-12 | REQ-011 | Independently verify exact external receipts, issue/milestone and site state; close the goal with `PLANS.md` already clean from the release PR and no post-release repository change | pending |
-| WQ-13 | REQ-012 | Inventory completed-run artifacts/cache, delete only obsolete bytes, retain current PR and latest release evidence, verify remaining inventory and record reclaimed size | done |
+| WQ-01 | REQ-009 | Review and commit only this plan; establish goal, milestone and feature PR identity | `done` |
+| WQ-02 | REQ-001, REQ-002, REQ-009, REQ-013 | Provider/config/CI identity changes and production-boundary tests; self-reviewed commit | `done` |
+| WQ-03 | REQ-002, REQ-003, REQ-006, REQ-009, REQ-013 | Immutable diff/authority/rule acquisition, distinct target T evidence/readback and applicability tests; self-reviewed commit | `done` |
+| WQ-04 | REQ-003, REQ-004, REQ-006, REQ-009, REQ-013 | Capability/context/federation, receipt/result v11 and hostile readback tests; self-reviewed commit | `done` |
+| WQ-05 | REQ-001, REQ-004, REQ-005, REQ-006, REQ-009, REQ-013 | Full-identity freshness at current-result and static-note writes, publication/approval/draft and cleanup boundaries, receipt-less error isolation, cross-run private-artifact isolation, and local-entry tests; self-reviewed commit | `done` |
+| WQ-06 | REQ-007, REQ-009 | Public contracts, examples, threat model, decision flow, changelog; self-reviewed commit | `done` |
+| WQ-07 | REQ-008, REQ-009 | Self-contained BL-025 with Source #265 and reference #264, status/theme/prerequisites/trigger/scope/deliverables/acceptance/exclusions/validation/future release classification; per-variant dependencies, A–F coverage, graph shapes and request/publication trade-offs; aligned strategy/roadmap and self-reviewed separate commit | `done` |
+| WQ-08 | REQ-007, REQ-009 | Documentation/instruction/route audit, distinct correction commit, focused documentation checks and valid instruction contract | `done` |
+| WQ-14 | REQ-014, REQ-009, REQ-013 | Astra-backed installed negative-probe setup and quality exit-status corrections, focused tests, docs, timing in the next full quality gate, separate self-reviewed commit | `done` |
+| WQ-15 | REQ-015, REQ-009 | Adopt the canonical active-plan headings and queue statuses, add a dedicated per-plan archive index, align workflow state and documentation, pass lifecycle/route/documentation checks without repeating the full quality gate, and self-review the commit | `done` |
+| WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; mark verified acceptance checkboxes in #264/#265, link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | `in_progress` |
+| WQ-10 | REQ-010 | Verified deterministic TestPyPI development wheel and sdist, release PR repository prep and protected checks/merge | `pending` |
+| WQ-11 | REQ-010 | Stable TestPyPI/PyPI, provenance, attestation, immutable release/receipt, issue/milestone and real site readback | `pending` |
+| WQ-12 | REQ-011 | Independently verify exact external receipts, issue/milestone and site state; close the goal with `PLANS.md` already clean from the release PR and no post-release repository change | `pending` |
+| WQ-13 | REQ-012 | Inventory completed-run artifacts/cache, delete only obsolete bytes, retain current PR and latest release evidence, verify remaining inventory and record reclaimed size | `done` |
 
-#### Locked Decisions
+### Locked Decisions
 
 Use `auto` as the absent-setting default and retain explicit modes. Use closed provider-neutral authority/capability identity with GitLab acquisition behind the adapter. Receipt v11 distinguishes code target from policy authority; historical v9/v10 remain readback-only under their original invariants, never guessed into a new profile. Choose clear rejection for unsupported pipeline or rule forms. Keep #265 in BL-025 only until separately activated by owner approval. Track only #264 in the v0.13.0 release issue set; close #265 through its feature PR after its planning deliverable is reviewed.
 
-#### Verification
+### Verification
 
 - Focused parser/provider, real temporary Git and bounded local HTTP, result/receipt hostile-readback, context/federation, posting/approval, lifecycle and source-identity tests for every #264 acceptance branch; preserve exact owner entry points and note test doubles beyond them.
 - A B!=T!=P evidence fixture must prove T-only implementation facts are available as untrusted target evidence without changing B..H deltas, policy authority, historical store readback or bounded admission.
@@ -110,7 +111,7 @@ Use `auto` as the absent-setting default and retain explicit modes. Use closed p
 - Codex Security diff scan after implementation and before final feature push; then one correctly invoked local toolkit/OCR review to completion with private physical output path, terminal status, report and findings readback; fix findings and rerun only on a genuine failed launch or authorized correction.
 - Exact required protected feature/release PR checks; stable workflow's independent hash, registry provenance, supported-Python installed smoke, immutable receipt readback and post-publication external verification. Check the live site only after release notification/deployment.
 
-#### Latest Validation Results
+### Latest Validation Results
 
 Plan-only signed commit `d616e98` contains only `PLANS.md` and passed `git diff --check`; `scripts/gitleaks.sh --tree` and the reachable-range scan passed before its push. Draft PR #266 exists, and #264 is in milestone v0.13.0 while #265 remains outside it. At that plan-only point no feature test or review gate had run.
 GitHub Actions inventory at 2026-10-23 shows 42 artifacts totaling 14,613,655 bytes and four caches totaling 142,839,380 bytes. The current draft-PR artifact is 7,171 bytes; the completed v0.12.1 release and its development-build artifact remain useful for recovery/readback. Two superseded uv caches account for 89,449,983 bytes. All 100 most recent workflow runs are completed.
@@ -127,39 +128,42 @@ The bounded WQ-14 patch now shares one module-scoped wheel-only interpreter betw
 The complete local quality gate now passes: 2288 tests, five qualified skips and 357 subtests in 295.67 seconds, with 86.47% aggregate line/branch coverage. The installed wheel/sdist MCP scenario accounts for 157.09 seconds; the shared negative-probe setup takes 1.06 seconds, and the independent wheel/sdist behavioral cases remain intact. Current changed-file coverage includes 100% for `posting/freshness.py` and `review_identity.py`, 88.02% for `review_receipt.py`, 86.74% for `providers/gitlab.py`, and 80.14% for `posting/workflow.py`. The available pre-change JSON was collected from an incomplete test run (70.24%) and is not a valid before/after baseline; do not report it as coverage growth. A public-tree secret scan passes. Astra's process recommendation is captured in the bounded harness commit; the remaining expensive integration matrix needs a separately measured follow-up before any reduction.
 Codex Security completed a diff scan of `b8786e73783fb9a9b2572da6a409a456191f2186..e6ab0ca87161a38389d63d933da03151a6448912` with complete coverage of 25 changed source files and zero findings. The scan reported the existing read-before-write provider race as a residual risk, not a validated finding. This later plan-only commit changes no runtime source; local OCR and final feature checks are next.
 The first local preflight lacked an authentication-mode selection and required API model; a later candidate command used local-unsupported `--background-file` and was rejected before OCR ran. The corrected native ChatGPT invocation used checksum-verified OCR 1.13.3 and physical private outputs. It exited zero, delivered JSON and Markdown, completed 29/29 selected items with DLP admission and seven reconciled mandatory evidence calls, and reported one high bug in old-review cleanup after the first deletion. Commit `eeca61a` retains current-run comments after a destructive cleanup attempt and stops on unconfirmed deletes; 95 posting/freshness tests pass. Separate instruction/contract commit `08f0a70` adds the launch guard and truthful partial-cleanup diagram; 51 documentation tests and instruction-contract lint pass.
-The corrected head then passed the complete quality gate: 2290 tests, five skips and 357 subtests in 296.21 seconds, with 86% rounded aggregate coverage and 81% rounded posting-workflow coverage. A second Codex Security scan covered the changed runtime delta from `e6ab0ca` through `e60108f` and returned zero validated findings. The second local OCR 1.13.3 review exited zero with physical private JSON/Markdown, 29/29 completed, zero failed/waived/reused, eight reconciled evidence calls and DLP admission. One auxiliary model file-read used a nonexistent path; selected-item coverage remained complete. It reported three medium bugs: target-only tree-limit abort, setup-note rollback after partial old cleanup, and unpublished draft carry-forward. The optional T limit correction is `ee2f5d2`; unreadable T identity and non-budget read errors still fail closed. Posting correction `e8e2d3d` retains replacement notes after a cleanup attempt, attempts removal of definitely unattempted draft IDs and excludes pending drafts from published-finding fingerprints. Instruction/contract update `c8017d2` records exact local result verification and the partial-state boundaries. The focused evidence/posting/docs suite passed 344 tests and 205 subtests; types, Ruff, instruction-contract lint, and staged secret checks passed. The installed generic `plan_lifecycle.py check` reports a format mismatch on this repository's customized `## Active Work` heading and consolidated historical archive, so it is not treated as a current-plan gate; the in-scope issue/queue/status mapping was manually reconciled. The new head needs a full quality run, updated security scan and another local OCR review before final feature push.
+The corrected head then passed the complete quality gate: 2290 tests, five skips and 357 subtests in 296.21 seconds, with 86% rounded aggregate coverage and 81% rounded posting-workflow coverage. A second Codex Security scan covered the changed runtime delta from `e6ab0ca` through `e60108f` and returned zero validated findings. The second local OCR 1.13.3 review exited zero with physical private JSON/Markdown, 29/29 completed, zero failed/waived/reused, eight reconciled evidence calls and DLP admission. One auxiliary model file-read used a nonexistent path; selected-item coverage remained complete. It reported three medium bugs: target-only tree-limit abort, setup-note rollback after partial old cleanup, and unpublished draft carry-forward. The optional T limit correction is `ee2f5d2`; unreadable T identity and non-budget read errors still fail closed. Posting correction `e8e2d3d` retains replacement notes after a cleanup attempt, attempts removal of definitely unattempted draft IDs and excludes pending drafts from published-finding fingerprints. Instruction/contract update `c8017d2` records exact local result verification and the partial-state boundaries. The focused evidence/posting/docs suite passed 344 tests and 205 subtests; types, Ruff, instruction-contract lint, and staged secret checks passed. The generic `plan_lifecycle.py check` exposed this repository's customized active heading and consolidated historical archive; WQ-15 migrates only future per-plan ownership while retaining legacy history.
+The complete quality gate on corrected runtime head `bb0c9c4` passed on 2026-10-23: 2297 tests, five qualified skips and 357 subtests in 301.94 seconds, with 86.52% aggregate coverage. The installed wheel/sdist MCP test took 158.27 seconds. WQ-15 changes only plan, workflow state, navigation, release/development guidance, and its documentation contract test; no runtime or product test code changed.
+The WQ-15 migration uses the installed plan schema without changing the consolidated historical archive. `plan_lifecycle.py check`, instruction-contract lint, 45 focused documentation/integration tests, Ruff on the touched test file, documentation navigation with zero errors or warnings, public-tree secret scan, and `git diff --check` pass on 2026-10-23. The full quality gate was not repeated for this bounded documentation delta.
 
-#### Risks And Recovery
+### Risks And Recovery
 
 GitLab diff/version and pipeline variants may require rejecting unsupported forms before model work; do not guess identity. Shallow Git history may prevent proving policy fast-forward; fail closed with actionable stale/security outcome. If protection/default selection or target changes during review, retain earlier valid publication and report stale. External publication or workflow state must be read back before retry; resume a failed authorized release through its documented exact-artifact recovery rather than republishing different bytes. Preserve private review artifacts until report and admitted findings are verified.
 
-#### Resume Point
+### Resume Point
 
-Run the full local quality gate on the three-finding corrected head, then update the security diff scan before a fresh local OCR review through physical private output paths. Fix any admitted findings and repeat affected gates before the final feature push. Reconcile final coverage without claiming a before/after change from incomplete baseline data; run the remaining secret and instruction gates. After feature merge, mark verified GitHub issue checkboxes. In the release branch, update the release guide and documentation contracts for same-PR plan closure before protected release checks.
+WQ-09: self-review and commit the completed plan/archive migration, then update the security diff scan before a fresh local OCR review through physical private output paths. Fix admitted findings and repeat affected gates only as needed before the final feature push. Reconcile final coverage without claiming a before/after change from incomplete baseline data; run the remaining secret and instruction gates. After feature merge, mark verified GitHub issue checkboxes. In the release branch, update workflow and validation contracts for same-PR plan closure before protected release checks.
 
-#### Plan Fidelity Check
+### Plan Fidelity Check
 
 - [x] #264 and #265 outcomes, non-goals, updated #264 identity/freshness additions, and user decisions map to REQ and ordered WQ items.
 - [x] Release classification, 0.13.0 target, #265 no-release boundary and plan/closure ownership are explicit.
 - [x] Each acceptance family has focused verification and production-boundary evidence; reviews, site timing, and external receipts have owners.
 - [x] Risks, fail-closed recovery, immutable artifacts and first safe unfinished action are recorded.
 - [x] The newly requested Actions storage cleanup has an independent `no-release` requirement and readback owner.
+- [x] The later plan-format and bounded-validation request has a separate requirement, queue item, owner and first safe unfinished action.
 
-#### Reconciliation Check
+### Reconciliation Check
 
 - [x] This plan reflects the current issue bodies and clean `b8786e7` baseline at activation.
 - [ ] Reconcile changed implementation, test, PR, release and external facts before their dependent milestones and final archive.
 
-#### Closure Gate
+### Closure Gate
 
 - [ ] Every in-scope requirement and queue item is done with final validation evidence.
 - [ ] No issue, instruction, document, backlog or release state contradicts the delivered result.
 - [ ] The protected release PR archives repository-complete work with external delivery pending and leaves no active plan; exact external receipts are independently verified after publication without another repository PR.
 
-#### Post-Close Delivery
+### Post-Close Delivery
 
 Pending: feature and release PRs, stable artifacts, immutable receipt, tracked issue/milestone, site check and external readback. Completion requires their independent readback, not a local commit or green advisory job alone.
 
-#### Handoff Notes
+### Handoff Notes
 
 Root owns `PLANS.md`, BL-025 status, commit sequencing, external writes and final synthesis. Delegated work must not close the plan or mutate shared plan state. At interruption, read this current plan and `git status`, then resume the first non-terminal WQ item without repeating side effects.
