@@ -23,7 +23,7 @@ Implement #264 without conflating the actual MR code target with protected polic
 
 #### Requested Scope
 
-The feature PR contains #264 implementation and public-contract updates plus a separate logical documentation commit for #265. Its first commit contains only this reviewed plan. Self-review every subsequent logical commit. Before the final feature push, run Codex Security on the changed range, then one real local toolkit/OCR review through the documented private-artifact path and fix admitted findings. Audit project documentation, agent instructions, and routes; correct any findings in a separate commit before final reviews. Use the protected feature PR, development artifact verification, protected release PR, stable publication/receipt, issue closure, site check after actual publication, and one `no-release` external-reconciliation PR. Clean obsolete completed-run GitHub Actions artifacts and superseded caches without touching published Release assets or active-run inputs. Do not run additional checks on another host or environment.
+The feature PR contains #264 implementation and public-contract updates plus a separate logical documentation commit for #265. Its first commit contains only this reviewed plan. Self-review every subsequent logical commit. Before the final feature push, run Codex Security on the changed range, then one real local toolkit/OCR review through the documented private-artifact path and fix admitted findings. Audit project documentation, agent instructions, and routes; correct any findings in a separate commit before final reviews. Use the protected feature PR, development artifact verification, protected release PR, stable publication/receipt, issue closure, and site check after actual publication. In the release PR, archive the complete repository plan and reset `PLANS.md`; after publication, reconcile external facts against the immutable receipt and issue comments without another repository PR. Clean obsolete completed-run GitHub Actions artifacts and superseded caches without touching published Release assets or active-run inputs. Do not run additional checks on another host or environment.
 The owner later requested an Astra harness/process audit. Its bounded current-branch follow-up removes one duplicate setup shared by two negative installed-artifact probes and preserves the failing command's exit status in the quality wrapper; keep both wheel/sdist behavioral cases and independent published-artifact gates. Capture per-test durations in the next required full quality run rather than adding a separate heavy measurement run.
 
 #### Requirement Traceability
@@ -40,7 +40,7 @@ The owner later requested an Astra harness/process audit. Its bounded current-br
 | REQ-008 | Record #265 as inactive BL-025 with its durable issue links, full backlog fields, per-variant #264 dependencies, A–F alternatives, relationship shapes, request surfaces, activation authority, validation and non-claims; reconcile the merged entry back to #265 without runtime or public setting | WQ-07, WQ-09 | in_progress |
 | REQ-009 | Review every commit; run applicable tests, secret scan, security diff scan, real local OCR review, and protected feature PR checks | WQ-01, WQ-02–WQ-09 | pending |
 | REQ-010 | Publish and independently read back v0.13.0 distributions, provenance, attestation, tag, immutable Release, receipt, tracked issue/milestone, and post-release site notification | WQ-10, WQ-11 | pending |
-| REQ-011 | Reconcile exact external facts and leave `PLANS.md` clean in the protected `no-release` closure PR | WQ-12 | pending |
+| REQ-011 | Archive the repository-complete plan and reset `PLANS.md` in the protected release PR; independently reconcile later external facts against the immutable receipt and issue comments without another PR | WQ-10, WQ-12 | pending |
 | REQ-012 | Reclaim Actions storage from obsolete completed-run artifacts and superseded caches, with before/after readback and retained release/current-run evidence | WQ-13 | done |
 | REQ-013 | Improve meaningful test coverage in touched Python modules, measuring affected-file coverage before and after the change | WQ-02–WQ-05, WQ-14 | in_progress |
 | REQ-014 | Reduce duplicate installed-artifact negative-probe setup, preserve exact quality failure exit status, and record timing/process evidence without weakening wheel/sdist or registry gates | WQ-14 | done |
@@ -72,6 +72,7 @@ The owner selected a full stable v0.13.0 release after #264 and chose one featur
 The owner additionally requested cleanup of GitHub Actions run artifacts because storage is scarce; this is `no-release` operational work.
 The owner also requested regular coverage improvement in touched files; focus on behavior and failure branches rather than tests that only reproduce an implementation.
 The owner requested a separate Astra agent to audit harness duplication and process, then apply justified corrections. This scoped harness maintenance is `no-release` by itself and does not add another release trigger or publication job.
+The owner later requested that the release PR return `PLANS.md` to its template state and that external readback close the work without a post-release repository PR. The release archive must describe publication as pending at merge; the immutable receipt and Actions-owned issue comments carry verified external facts afterward. The release guide and its tests must be updated in the release branch before publication so they do not require the old closure PR.
 
 #### Completed Baseline State
 
@@ -93,7 +94,7 @@ v0.12.1 is published and externally reconciled; prior release and internal follo
 | WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | in_progress |
 | WQ-10 | REQ-010 | Verified deterministic TestPyPI development wheel and sdist, release PR repository prep and protected checks/merge | pending |
 | WQ-11 | REQ-010 | Stable TestPyPI/PyPI, provenance, attestation, immutable release/receipt, issue/milestone and real site readback | pending |
-| WQ-12 | REQ-011 | One protected no-release reconciliation PR with exact receipts, clean plan, and synchronized main | pending |
+| WQ-12 | REQ-011 | Independently verify exact external receipts, issue/milestone and site state; close the goal with `PLANS.md` already clean from the release PR and no post-release repository change | pending |
 | WQ-13 | REQ-012 | Inventory completed-run artifacts/cache, delete only obsolete bytes, retain current PR and latest release evidence, verify remaining inventory and record reclaimed size | done |
 
 #### Locked Decisions
@@ -124,6 +125,7 @@ The first full quality attempt stopped at a single Ruff formatting defect in the
 Astra's read-only harness audit confirmed #260 is closed and the expensive installed-artifact suite already runs on one Ubuntu/Python 3.12 CI leg; other legs start in parallel, while stable publication verifies new artifacts without repeating full pytest. Different observed CI runs spanned 13m24s and 4m22s, which is directional evidence rather than a controlled benchmark. The remaining duplicate was two negative probes creating equivalent clean no-dependency environments. The quality wrapper also reduced an underlying failing command's exit status to 1 before the WQ-14 fix.
 The bounded WQ-14 patch now shares one module-scoped wheel-only interpreter between both read-only negative dependency probes, preserves their distinct PATH/cwd assertions, and makes `scripts/quality.sh` propagate failure statuses. The fake-uv regression checks exit codes 2, 7 and 130 plus stop-before-coverage behavior. All 12 focused harness tests pass in 2.14 seconds; 40 focused documentation/environment tests, repository-wide Ruff check/format, instruction-contract lint and whitespace checks pass. The prior failed quality log is retained in a private task archive outside the repository.
 The complete local quality gate now passes: 2288 tests, five qualified skips and 357 subtests in 295.67 seconds, with 86.47% aggregate line/branch coverage. The installed wheel/sdist MCP scenario accounts for 157.09 seconds; the shared negative-probe setup takes 1.06 seconds, and the independent wheel/sdist behavioral cases remain intact. Current changed-file coverage includes 100% for `posting/freshness.py` and `review_identity.py`, 88.02% for `review_receipt.py`, 86.74% for `providers/gitlab.py`, and 80.14% for `posting/workflow.py`. The available pre-change JSON was collected from an incomplete test run (70.24%) and is not a valid before/after baseline; do not report it as coverage growth. A public-tree secret scan passes. Astra's process recommendation is captured in the bounded harness commit; the remaining expensive integration matrix needs a separately measured follow-up before any reduction.
+Codex Security completed a diff scan of `b8786e73783fb9a9b2572da6a409a456191f2186..e6ab0ca87161a38389d63d933da03151a6448912` with complete coverage of 25 changed source files and zero findings. The scan reported the existing read-before-write provider race as a residual risk, not a validated finding. This later plan-only commit changes no runtime source; local OCR and final feature checks are next.
 
 #### Risks And Recovery
 
@@ -131,7 +133,7 @@ GitLab diff/version and pipeline variants may require rejecting unsupported form
 
 #### Resume Point
 
-Run the Codex Security diff scan over `b8786e7..HEAD`, fix validated findings, then run the real local OCR review through physical private output paths. Reconcile final coverage without claiming a before/after change from incomplete baseline data; run the remaining secret and instruction gates before final feature push. Continue the protected PR and release lifecycle only after those results are reconciled.
+Run the real local OCR review through physical private output paths and fix admitted findings. Reconcile final coverage without claiming a before/after change from incomplete baseline data; run the remaining secret and instruction gates before final feature push. In the release branch, update the release guide and documentation contracts for same-PR plan closure before protected release checks. Continue publication only after those results are reconciled.
 
 #### Plan Fidelity Check
 
@@ -150,11 +152,11 @@ Run the Codex Security diff scan over `b8786e7..HEAD`, fix validated findings, t
 
 - [ ] Every in-scope requirement and queue item is done with final validation evidence.
 - [ ] No issue, instruction, document, backlog or release state contradicts the delivered result.
-- [ ] The protected release PR archives repository-complete work with external delivery pending; the closure PR records exact external receipts and leaves no active plan.
+- [ ] The protected release PR archives repository-complete work with external delivery pending and leaves no active plan; exact external receipts are independently verified after publication without another repository PR.
 
 #### Post-Close Delivery
 
-Pending: feature and release PRs, stable artifacts, immutable receipt, tracked issue/milestone, site check and protected no-release external reconciliation. Completion requires their independent readback, not a local commit or green advisory job alone.
+Pending: feature and release PRs, stable artifacts, immutable receipt, tracked issue/milestone, site check and external readback. Completion requires their independent readback, not a local commit or green advisory job alone.
 
 #### Handoff Notes
 
