@@ -62,5 +62,8 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|test:scripts/quality.sh check" -->
 | `development-validation` | Status or changed-boundary validation | Development guide | Status review and Python quality matrix |
 
+<!-- ew:route id="dependency-audit" triggers="pre-push|pyproject.toml|uv.lock|.github/workflows/security.yml|scripts/dependency-audit.sh" owners="docs/development.md" guards="test:scripts/dependency-audit.sh" -->
+| `dependency-audit` | Every push and dependency or audit-workflow change | Development guide | Shared local and hosted dependency audit |
+
 <!-- ew:route id="trust-boundary" triggers="src/ocr_toolkit/**|tests/**|public fixtures|release artifacts" owners="docs/engineering/project_principles.md" guards="test:scripts/quality.sh check|lint:scripts/gitleaks.sh|manual_review:verify clean built artifacts and real external boundary evidence" -->
 | `trust-boundary` | Runtime, test, or public-source trust boundary | Project principles | Behavioral tests, secret scan, and installed integration review |

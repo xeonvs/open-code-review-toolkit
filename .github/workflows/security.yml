@@ -73,9 +73,7 @@ jobs:
         with:
           version: "0.13.4"
       - if: needs.classify.outputs.docs_only != 'true'
-        run: uv sync --locked
-      - if: needs.classify.outputs.docs_only != 'true'
-        run: uv run --no-sync pip-audit
+        run: ./scripts/dependency-audit.sh
 
   secrets:
     name: secrets
