@@ -23,7 +23,7 @@ from ocr_toolkit.evidence.mcp import (
 )
 from ocr_toolkit.evidence.model import EvidenceRecord, EvidenceSnapshot, RefRole, TrustClass
 from ocr_toolkit.evidence.project import render_bootstrap
-from ocr_toolkit.evidence.repository import GitRepositoryReader
+from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError, EvidenceStoreLimits
 
 
@@ -192,6 +192,60 @@ def test_bounded_target_context_degrades_without_changing_diff(
     assert len(store.base.records) == len(store.head.records) == 2
     assert len([delta for delta in store.deltas if delta.kind == "repository.file"]) == 2
     assert any("target code context is incomplete" in item for item in store.diagnostics)
+
+
+def test_target_only_tree_limit_preserves_review_and_policy_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, base, head, target, policy = _distinct_review_refs(tmp_path)
+    baseline = collect_repository_evidence(root, base_ref=base, head_ref=head, policy_ref=policy)
+    original = GitRepositoryReader.list_objects
+
+    def small_tree_limit(
+        reader: GitRepositoryReader, ref: str, *, max_entries: int = 20_000
+    ) -> tuple[Any, ...]:
+        return original(reader, ref, max_entries=min(max_entries, 3))
+
+    monkeypatch.setattr(GitRepositoryReader, "list_objects", small_tree_limit)
+    store = collect_repository_evidence(
+        root, base_ref=base, head_ref=head, target_ref=target, policy_ref=policy
+    )
+
+    assert store.target == EvidenceSnapshot(RefRole.TARGET, target, ())
+    assert store.base == baseline.base
+    assert store.head == baseline.head
+    assert store.policy == baseline.policy
+    assert store.deltas == baseline.deltas
+    assert any("actual target code context omitted" in item for item in store.diagnostics)
+    assert not any(record.ref is RefRole.TARGET for record in store.records)
+
+
+def test_unreadable_target_identity_still_fails_closed(tmp_path: Path) -> None:
+    root, base, head, _target, policy = _distinct_review_refs(tmp_path)
+    with pytest.raises(RepositoryEvidenceError, match="unavailable locally"):
+        collect_repository_evidence(
+            root, base_ref=base, head_ref=head, target_ref="f" * 40, policy_ref=policy
+        )
+
+
+def test_non_budget_target_read_failure_still_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, base, head, target, policy = _distinct_review_refs(tmp_path)
+    original = evidence_collect.build_file_snapshot
+
+    def unreadable_target(
+        reader: GitRepositoryReader, ref: str, role: RefRole, **kwargs: Any
+    ) -> Any:
+        if role is RefRole.TARGET:
+            raise RepositoryEvidenceError("failed to enumerate repository tree")
+        return original(reader, ref, role, **kwargs)
+
+    monkeypatch.setattr(evidence_collect, "build_file_snapshot", unreadable_target)
+    with pytest.raises(RepositoryEvidenceError, match="failed to enumerate"):
+        collect_repository_evidence(
+            root, base_ref=base, head_ref=head, target_ref=target, policy_ref=policy
+        )
 
 
 def test_optional_target_header_omission_preserves_core_evidence(

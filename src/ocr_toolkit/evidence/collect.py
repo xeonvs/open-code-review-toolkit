@@ -300,10 +300,22 @@ def collect_repository_evidence(
             target_facts = [_as_target_record(record, target_sha) for record in prior_facts]
             target_fact_diagnostics: list[str] = []
         else:
-            target_files = build_file_snapshot(reader, target_sha, RefRole.TARGET, paths=changed)
-            target_facts, target_fact_diagnostics = collect_ref_facts(
-                reader, target_sha, RefRole.TARGET, changed_paths=changed
-            )
+            try:
+                target_files = build_file_snapshot(
+                    reader, target_sha, RefRole.TARGET, paths=changed
+                )
+                target_facts, target_fact_diagnostics = collect_ref_facts(
+                    reader, target_sha, RefRole.TARGET, changed_paths=changed
+                )
+            except RepositoryEvidenceError as exc:
+                if str(exc) != "repository tree exceeds the bounded entry limit":
+                    raise
+                # T's commit identity was resolved before this optional scan.
+                # A target-only tree limit cannot change B/H/P or their deltas.
+                _add_target_diagnostic(
+                    store, "actual target code context omitted by repository tree entry limit"
+                )
+                return store
         diagnostics = (*target_files.diagnostics, *target_fact_diagnostics)
         target_diagnostics = diagnostics[:MAX_TARGET_DIAGNOSTICS]
         files = target_files.records[:MAX_TARGET_FILE_RECORDS]
