@@ -1066,6 +1066,7 @@ def test_drift_before_previous_cleanup_preserves_old_notes_and_resolutions(
 
 def test_drift_between_previous_cleanup_writes_stops_remaining_mutations(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     stale = False
     writes: list[str] = []
@@ -1100,7 +1101,73 @@ def test_drift_between_previous_cleanup_writes_stops_remaining_mutations(
         review_identity=_identity(),
         transaction=PostingTransaction(),
     )
-    assert writes == ["delete-91", "rollback-current"]
+    assert writes == ["delete-91"]
+    error = capsys.readouterr().err
+    assert "previous review cleanup is partial; current-run comments retained" in error
+    assert "previous review preserved" not in error
+
+
+def test_unconfirmed_previous_cleanup_retains_current_review_and_stops(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    writes: list[str] = []
+    previous = BotCommentRefs(plain_note_ids=[91, 92], discussions_to_resolve=["prior-thread"])
+    monkeypatch.setattr(workflow, "validate_review_freshness", lambda *_args: None)
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "delete_plain_note",
+        lambda _config, note_id: writes.append(f"delete-{note_id}") or False,
+    )
+    monkeypatch.setattr(
+        workflow,
+        "resolve_discussion",
+        lambda *_args: pytest.fail("unconfirmed cleanup must stop before resolving"),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "rollback_current_run_comments",
+        lambda *_args: pytest.fail("an attempted delete cannot be rolled back"),
+    )
+    assert not workflow.finalize_previous_review_state(
+        gitlab_config(),
+        previous,
+        _outcome("clean"),
+        review_identity=_identity(),
+        transaction=PostingTransaction(),
+    )
+    assert writes == ["delete-91"]
+    assert "provider did not confirm the mutation" in capsys.readouterr().err
+
+
+def test_confirmed_previous_cleanup_checks_freshness_before_each_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writes: list[str] = []
+    previous = BotCommentRefs(plain_note_ids=[91, 92], discussions_to_resolve=["prior-thread"])
+    monkeypatch.setattr(
+        workflow,
+        "validate_review_freshness",
+        lambda *_args: writes.append("fresh") or None,
+    )
+    monkeypatch.setattr(
+        workflow.gitlab_api,
+        "delete_plain_note",
+        lambda _config, note_id: writes.append(f"delete-{note_id}") or True,
+    )
+    monkeypatch.setattr(
+        workflow,
+        "resolve_discussion",
+        lambda _config, discussion_id: writes.append(f"resolve-{discussion_id}") or True,
+    )
+    assert workflow.finalize_previous_review_state(
+        gitlab_config(),
+        previous,
+        _outcome("clean"),
+        review_identity=_identity(),
+        transaction=PostingTransaction(),
+    )
+    assert writes == ["fresh", "delete-91", "fresh", "delete-92", "fresh", "resolve-prior-thread"]
 
 
 def test_pre_execution_status_requires_full_live_tuple_and_exact_setup_policy(

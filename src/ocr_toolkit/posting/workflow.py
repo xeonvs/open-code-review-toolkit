@@ -274,25 +274,33 @@ def validate_posting_review_identity(
 
 
 def publication_freshness_or_exit(
-    config: GitLabConfig, identity: ReceiptReviewIdentity | None
+    config: GitLabConfig,
+    identity: ReceiptReviewIdentity | None,
+    *,
+    cleanup_started: bool = False,
 ) -> int | None:
-    """Reject stale or unprovable current results without mutating prior state."""
+    """Reject stale or unprovable current results with accurate cleanup state."""
 
     if identity is None:
         return None
+    prior_state = (
+        "previous review cleanup is partial; current-run comments retained."
+        if cleanup_started
+        else "previous review preserved."
+    )
     try:
         validate_posting_review_identity(config, identity)
     except (ReviewFreshnessStale, ReviewFreshnessUnavailable) as exc:
         print(
             f"OCR reviewed identity is no longer publication-eligible ({exc.reason}); "
-            "previous review preserved.",
+            f"{prior_state}",
             file=sys.stderr,
         )
         return 1
     except GitLabMergeRequestTerminal:
         print(
             "Merge request became terminal after review; normal publication stopped "
-            "and previous review preserved.",
+            f"and {prior_state}",
             file=sys.stderr,
         )
         return 1
@@ -1452,9 +1460,17 @@ def finalize_previous_review_state(
     if review_identity is not None:
         if transaction is None:
             raise ValueError("current-receipt cleanup requires the posting transaction")
+        cleanup_started = False
 
         def remove_if_current(delete: Callable[..., bool], *args: object) -> bool:
-            if not current_publication_or_rollback(
+            nonlocal cleanup_started
+            if cleanup_started:
+                if (
+                    publication_freshness_or_exit(config, review_identity, cleanup_started=True)
+                    is not None
+                ):
+                    return False
+            elif not current_publication_or_rollback(
                 config,
                 review_identity,
                 previous_refs,
@@ -1462,7 +1478,17 @@ def finalize_previous_review_state(
                 published_draft=published_draft,
             ):
                 return False
-            delete(config, *args)
+            # A provider may apply a mutation even when its response is lost.
+            # Once cleanup is attempted, rolling back the replacement could
+            # leave the MR without either a complete old or new review.
+            cleanup_started = True
+            if not delete(config, *args):
+                print(
+                    "OCR previous review cleanup is partial: provider did not confirm "
+                    "the mutation; current-run comments retained.",
+                    file=sys.stderr,
+                )
+                return False
             return True
 
         if outcome.kind == "partial":
