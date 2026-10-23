@@ -8,7 +8,6 @@ import pytest
 
 from ocr_toolkit import review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
-from ocr_toolkit.pre_execution import read_pre_execution_status
 
 
 def test_unclassified_preview_diagnostics_never_start_model(
@@ -43,16 +42,7 @@ def test_unclassified_preview_diagnostics_never_start_model(
         identity=review_runner.ReviewIdentity(head, policy, None, "off", None, policy, "local"),
     )
     assert code == 2 and not calls
-    status = read_pre_execution_status(
-        artifacts.pre_execution_status,
-        expected_diff_base_sha=base,
-        expected_source_sha=head,
-    )
-    assert status is not None
-    assert status.reason == "unclassified_preview_diagnostics"
-    assert status.stage == "ocr_preview"
-    assert status.model_execution == "not_started"
-    assert status.diagnostic_count == 2
+    assert not artifacts.pre_execution_status.exists()
 
 
 def test_unknown_success_stderr_is_not_a_qualified_preview() -> None:

@@ -8,15 +8,16 @@ import pytest
 
 from ocr_toolkit import ocr_result
 from ocr_toolkit.posting import gitlab, snapshot, workflow
-from ocr_toolkit.posting.approval import ApprovalStatus
+from ocr_toolkit.posting.freshness import ReviewFreshnessUnavailable
 from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.pre_execution import (
     GITLAB_MERGE_REQUEST_TERMINAL,
     STATUS_SCHEMA,
     PreExecutionStatus,
 )
-from ocr_toolkit.providers.gitlab import GitLabMergeRequestLifecycle, GitLabProviderError
-from tests.support import gitlab_config, review_receipt_v8
+from ocr_toolkit.providers.gitlab import GitLabMergeRequestLifecycle, GitLabMergeRequestTerminal
+from tests.support import gitlab_config
+from tests.test_review_receipt_v11 import _receipt_v11
 
 SOURCE = "a" * 40
 BASE = "b" * 40
@@ -129,23 +130,24 @@ def _complete_result(*, comments: list[dict[str, Any]] | None = None) -> dict[st
                 "waived": [],
             },
         },
-        ocr_result.TOOLKIT_RESULT_KEY: review_receipt_v8(),
+        ocr_result.TOOLKIT_RESULT_KEY: _receipt_v11(),
     }
 
 
 @pytest.mark.parametrize("state", ["merged", "closed"])
-def test_admitted_terminal_result_publishes_normally_but_never_approves(
+def test_reviewed_terminal_result_preserves_previous_review_without_write(
     monkeypatch: pytest.MonkeyPatch, state: str
 ) -> None:
     notes: list[str] = []
-    approvals: list[ApprovalStatus] = []
     monkeypatch.setattr(
         workflow, "collect_previous_bot_comment_refs", lambda _config: snapshot.BotCommentRefs()
     )
     monkeypatch.setattr(
         workflow,
-        "current_merge_request_lifecycle",
-        lambda *_args: GitLabMergeRequestLifecycle("1", "2", SOURCE, state),
+        "validate_posting_review_identity",
+        lambda *_args: (_ for _ in ()).throw(
+            GitLabMergeRequestTerminal(GitLabMergeRequestLifecycle("1", "2", SOURCE, state))
+        ),
     )
     monkeypatch.setattr(
         workflow,
@@ -153,21 +155,17 @@ def test_admitted_terminal_result_publishes_normally_but_never_approves(
         lambda _config, _title, body, *_args: notes.append(body) or {"id": 19},
     )
 
-    def finalize(*args: Any, **_kwargs: Any) -> int:
-        eligibility = args[4]
-        approvals.append(eligibility.result.status)
-        return 0
+    monkeypatch.setattr(
+        workflow,
+        "finalize_review_approval",
+        lambda *_args, **_kwargs: pytest.fail("terminal MR must not reach approval"),
+    )
 
-    monkeypatch.setattr(workflow, "finalize_review_approval", finalize)
-
-    assert workflow.post_results(gitlab_config(), _complete_result()) == 0
-    assert approvals == [ApprovalStatus.SKIPPED]
-    assert f"Merge request lifecycle at publication: `{state}`" in notes[0]
-    assert f"merge request was already {state}" in notes[0]
-    assert SOURCE in notes[0]
+    assert workflow.post_results(gitlab_config(), _complete_result()) == 1
+    assert notes == []
 
 
-def test_admitted_result_lifecycle_failure_stops_before_first_mutation(
+def test_current_result_unavailable_freshness_stops_before_first_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -175,8 +173,8 @@ def test_admitted_result_lifecycle_failure_stops_before_first_mutation(
     )
     monkeypatch.setattr(
         workflow,
-        "current_merge_request_lifecycle",
-        lambda *_args: (_ for _ in ()).throw(GitLabProviderError("head mismatch")),
+        "validate_posting_review_identity",
+        lambda *_args: (_ for _ in ()).throw(ReviewFreshnessUnavailable("provider_unavailable")),
     )
     monkeypatch.setattr(
         workflow,
@@ -187,10 +185,9 @@ def test_admitted_result_lifecycle_failure_stops_before_first_mutation(
     assert workflow.post_results(gitlab_config(), _complete_result()) == 1
 
 
-def test_terminal_finding_result_checks_lifecycle_after_diff_read_and_keeps_limit(
+def test_terminal_finding_result_stops_before_any_finding_or_summary_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    order: list[str] = []
     notes: list[str] = []
     result = _complete_result(
         comments=[
@@ -208,32 +205,29 @@ def test_terminal_finding_result_checks_lifecycle_after_diff_read_and_keeps_limi
         workflow, "collect_previous_bot_comment_refs", lambda _config: snapshot.BotCommentRefs()
     )
     monkeypatch.setattr(
-        workflow, "get_diff_refs", lambda _config: order.append("diff-read") or None
+        workflow, "get_diff_refs", lambda _config: pytest.fail("v11 uses bound diff refs")
     )
     monkeypatch.setattr(
         workflow,
-        "current_merge_request_lifecycle",
-        lambda *_args: (
-            order.append("lifecycle-read")
-            or GitLabMergeRequestLifecycle("1", "2", SOURCE, "closed")
+        "validate_posting_review_identity",
+        lambda *_args: (_ for _ in ()).throw(
+            GitLabMergeRequestTerminal(GitLabMergeRequestLifecycle("1", "2", SOURCE, "closed"))
         ),
     )
     monkeypatch.setattr(workflow, "max_post_comments", lambda: 1)
     monkeypatch.setattr(
         workflow,
         "post_review_note_bounded",
-        lambda _config, title, body, *_args: (
-            order.append("write") or notes.append(f"{title}\n{body}") or {"id": len(notes)}
-        ),
+        lambda _config, title, body, *_args: notes.append(f"{title}\n{body}") or {"id": 1},
     )
-    monkeypatch.setattr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(
+        workflow,
+        "finalize_review_approval",
+        lambda *_args, **_kwargs: pytest.fail("terminal MR must not reach approval"),
+    )
 
-    assert workflow.post_results(gitlab_config(), result) == 0
-    assert order[:3] == ["diff-read", "lifecycle-read", "write"]
-    published = "\n".join(notes)
-    assert "Open Code Review omitted comments" in published
-    assert "remaining 1 comment(s)" in published
-    assert "Merge request lifecycle at publication: `closed`" in published
+    assert workflow.post_results(gitlab_config(), result) == 1
+    assert notes == []
 
 
 def test_snapshot_classifies_only_owned_plain_terminal_marker(

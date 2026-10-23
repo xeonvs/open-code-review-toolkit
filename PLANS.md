@@ -115,6 +115,7 @@ Signed self-reviewed planning commit `76a1c3a` records conditional BL-025 for #2
 WQ-05 focused source and boundary suites passed with 686 tests and 299 subtests after the CI-job handoff and current-version-contract additions. Ruff format/check, mypy across 132 source files, and diff whitespace checks passed. A second independent seam audit found the review-to-post interval in a shared checkout; receipt and preview/setup status now bind the supplied GitLab job ID, code 75 prevents a losing review from adopting another run's status, and the example uses job-specific output paths. Production GitLab uses one review/post pair per CI job. Full quality and final security/OCR reviews remain pending until WQ-06/WQ-08 documentation is committed.
 Signed self-reviewed WQ-05 commit `d5bc468` contains the posting, cross-run, current-version contract and regression changes. WQ-06 public documentation now explains v11, default `auto`, B/H/T/P, job-specific handoff, local private paths and the no-note failure policy. The public GitLab example omits the selector so its still-published wheel pin remains valid until the release PR advances it; the new toolkit then supplies the `auto` default. The 51 focused documentation/example contracts passed.
 Signed self-reviewed WQ-06 commit `58d29d3` contains the public docs, examples and changelog. Signed self-reviewed commit `0b416c8` makes the historical v9/v10/v11 nested-schema mapping explicit, so a future v12 cannot inherit a predecessor's federation or publication schema by fallback; 129 receipt/approval/freshness tests and 94 subtests passed. The WQ-08 documentation/instruction audit corrected context and federation ownership routes, engineering contracts and example links; the instruction contract is valid, the 51 focused documentation contracts pass, and full quality and final reviews remain pending.
+The first full quality attempt stopped at a single Ruff formatting defect in the public-example contract test; it was corrected in amended documentation commit `ae83977`. The next full pytest/coverage run reached 86.36% total coverage and 2270 passing tests, but 14 tests still asserted obsolete local-status, private-error-note or historical-receipt publication behavior. Six affected test modules now assert the current no-write/no-status boundaries and retain late debug/progress coverage; 108 focused tests pass with three qualified skips. A new full quality result is pending.
 
 #### Risks And Recovery
 
@@ -122,7 +123,7 @@ GitLab diff/version and pipeline variants may require rejecting unsupported form
 
 #### Resume Point
 
-Self-review and commit the WQ-08 engineering documentation, instructions and route corrections as a distinct commit. Then run complete quality, secret scan, security diff scan and real local OCR; continue the protected PR and release lifecycle only after those results are reconciled.
+Self-review and commit the focused quality-test corrections, then rerun complete quality on the corrected branch. Reconcile the separate Astra harness audit before final review. Run the secret scan, security diff scan and real local OCR; continue the protected PR and release lifecycle only after those results are reconciled.
 
 #### Plan Fidelity Check
 
