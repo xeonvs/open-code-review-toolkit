@@ -22,8 +22,9 @@ from ocr_toolkit.posting import (
 from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.snapshot import BotCommentRefs
 from ocr_toolkit.result_contract import ReviewOutcome
-from ocr_toolkit.review_receipt import receipt_review_identity
+from ocr_toolkit.review_receipt import receipt_review_identity, validated_review_identity
 from tests.support import cleared_env, gitlab_config, patched_attr, patched_env
+from tests.test_review_receipt_v11 import _receipt_v11
 
 
 def complete_outcome() -> ReviewOutcome:
@@ -156,6 +157,39 @@ def receipt_v8(
         "tool_execution": {"state": "verified", "failed": failed_tools},
         "cleanup": {"result": "passed"},
     }
+
+
+def publishable_receipt_v11(*, target_protection: str = "protected") -> dict[str, Any]:
+    """Use a current exact-boundary receipt for result-driven posting tests."""
+
+    return _receipt_v11(
+        target_protection=target_protection,
+        protection_mode="unprotected" if target_protection == "unprotected" else "auto",
+    )
+
+
+def execute_current_approval(
+    config: gitlab.GitLabConfig,
+    eligibility: approval.ApprovalEligibility,
+    source_sha: str,
+    author_id: int,
+    **kwargs: Any,
+) -> gitlab_approval.ApprovalExecution:
+    """Exercise the adapter with a fully validated current receipt boundary."""
+
+    receipt = publishable_receipt_v11()
+    receipt["review"]["mr_author_id"] = author_id
+    identity = validated_review_identity(receipt)
+    assert identity is not None
+    return gitlab_approval.execute_approval(
+        config,
+        eligibility,
+        source_sha,
+        author_id,
+        review_identity=identity,
+        freshness_check=lambda: None,
+        **kwargs,
+    )
 
 
 def test_unprotected_receipt_is_valid_but_structurally_comment_only() -> None:
@@ -862,7 +896,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             ),
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
-            result = gitlab_approval.execute_approval(
+            result = execute_current_approval(
                 gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
             )
 
@@ -906,7 +940,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                     ),
                     patched_attr(gitlab, "approve_merge_request", approve),
                 ):
-                    result = gitlab_approval.execute_approval(
+                    result = execute_current_approval(
                         gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
                     )
 
@@ -934,7 +968,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             ),
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
-            result = gitlab_approval.execute_approval(
+            result = execute_current_approval(
                 gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
             )
 
@@ -960,7 +994,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                 lambda *_args: writes.append("approve"),
             ),
         ):
-            result = gitlab_approval.execute_approval(gitlab_config(), eligibility(), self.SHA, 41)
+            result = execute_current_approval(gitlab_config(), eligibility(), self.SHA, 41)
 
         self.assertEqual(result.result.status, approval.ApprovalStatus.SKIPPED)
         self.assertEqual(writes, [])
@@ -985,10 +1019,10 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
             ),
             patched_attr(gitlab, "approve_merge_request", approve),
         ):
-            mismatch = gitlab_approval.execute_approval(
+            mismatch = execute_current_approval(
                 gitlab_config(), eligibility(), self.SHA, 42, sleep=lambda _seconds: None
             )
-            self_authored = gitlab_approval.execute_approval(
+            self_authored = execute_current_approval(
                 gitlab_config(current_user_id=41),
                 eligibility(),
                 self.SHA,
@@ -1025,7 +1059,7 @@ class GitLabApprovalAdapterTests(unittest.TestCase):
                 },
             ),
         ):
-            result = gitlab_approval.execute_approval(
+            result = execute_current_approval(
                 gitlab_config(), eligibility(), self.SHA, 41, sleep=lambda _seconds: None
             )
 
@@ -1113,7 +1147,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_valid_receipt_binds_advisory_without_changing_summary_or_approval_inputs(self) -> None:
         """Publish one closed advisory in Technical details with ordinary clean status."""
 
-        receipt = receipt_v8(author_id=41)
+        receipt = publishable_receipt_v11()
         self.assertTrue(approval.toolkit_receipt_is_valid(receipt))
         notes: list[str] = []
 
@@ -1130,6 +1164,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
         ):
@@ -1211,7 +1246,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         summary: dict[str, bool],
         comments: list[dict[str, Any]],
     ) -> None:
-        receipt = receipt_v8(target_protection="unprotected")
+        receipt = publishable_receipt_v11(target_protection="unprotected")
         if status in {"skipped", "failed"}:
             receipt["evidence"] = {
                 "mandatory": False,
@@ -1282,13 +1317,22 @@ class ApprovalWorkflowTests(unittest.TestCase):
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(
+                workflow,
+                "post_review_discussion",
+                lambda *_args, **_kwargs: gitlab.GitLabWriteResult("posted"),
+            ),
             patched_attr(workflow, "post_review_note_bounded", capture),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
             patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
         ):
             workflow.post_results(gitlab_config(), result)
 
+        if status == "failed":
+            self.assertEqual(notes, [])
+            return
         limitation = formatting.UNPROTECTED_TARGET_LIMITATION
         summary_note = next(note for note in notes if "## Open Code Review" in note)
         assert summary_note.count(limitation) == 1
@@ -1312,9 +1356,21 @@ class ApprovalWorkflowTests(unittest.TestCase):
     ) -> None:
         """Render scenario B without inventing partial coverage or a failed item."""
 
-        receipt = receipt_v8(author_id=41, target_protection="unprotected")
+        receipt = publishable_receipt_v11(target_protection="unprotected")
         receipt["publication"] = {
+            "schema": "ocr.publication/v2",
             "state": "publication-filtered",
+            "private_sanitization": {
+                "fields": 0,
+                "reason_counts": {
+                    "forbidden": 0,
+                    "invalid_text": 0,
+                    "laundering": 0,
+                    "limit": 0,
+                    "pii": 0,
+                    "secret": 0,
+                },
+            },
             "reason_counts": {
                 "forbidden": 0,
                 "invalid_text": 2,
@@ -1354,7 +1410,13 @@ class ApprovalWorkflowTests(unittest.TestCase):
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(
+                workflow,
+                "post_review_discussion",
+                lambda *_args, **_kwargs: gitlab.GitLabWriteResult("posted"),
+            ),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
         ):
@@ -1405,18 +1467,21 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_private_sanitized_review_keeps_tool_and_token_activity_visible(self) -> None:
         """Keep independent numeric activity lines after private-only sanitization."""
 
-        receipt = receipt_v8(author_id=41)
+        receipt = publishable_receipt_v11()
         receipt["publication"] = {
+            "schema": "ocr.publication/v2",
             "state": "private-sanitized",
-            "reason_counts": {
-                "forbidden": 0,
-                "invalid_text": 0,
-                "laundering": 0,
-                "limit": 0,
-                "pii": 1,
-                "secret": 0,
+            "private_sanitization": {
+                "fields": 1,
+                "reason_counts": {
+                    "forbidden": 0,
+                    "invalid_text": 0,
+                    "laundering": 0,
+                    "limit": 0,
+                    "pii": 1,
+                    "secret": 0,
+                },
             },
-            "sanitized_fields": 1,
         }
         notes: list[str] = []
 
@@ -1433,6 +1498,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             patched_attr(
                 workflow, "collect_previous_bot_comment_refs", lambda _config: BotCommentRefs()
             ),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_review_approval", lambda *_args, **_kwargs: 0),
         ):

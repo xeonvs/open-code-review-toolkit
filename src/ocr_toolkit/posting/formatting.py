@@ -93,6 +93,10 @@ UNPROTECTED_TARGET_LIMITATION = (
     "*The target branch was not protected in GitLab. This review ran in limited, "
     "comment-only mode.*"
 )
+PROTECTED_POLICY_ANCHOR = (
+    "*The target branch was not protected in GitLab. This review used a protected "
+    "policy anchor at {policy_sha}; automatic approval was unavailable (comment-only).*"
+)
 
 
 def inline_code(value: str) -> str:
@@ -720,6 +724,7 @@ def summarize_result(
     suppressed_count: int = 0,
     approval_result: ApprovalResult | None = None,
     unprotected_target: bool = False,
+    protected_policy_anchor_sha: str = "",
     merge_request_lifecycle: str = "",
     emoji: bool | None = None,
 ) -> str:
@@ -738,7 +743,13 @@ def summarize_result(
         emoji=use_emoji,
     )
     lines = ["## Open Code Review", "", outcome_line]
-    if unprotected_target:
+    if protected_policy_anchor_sha:
+        lines.append(
+            PROTECTED_POLICY_ANCHOR.format(
+                policy_sha=_inline_code(protected_policy_anchor_sha),
+            )
+        )
+    elif unprotected_target:
         lines.append(UNPROTECTED_TARGET_LIMITATION)
     if outcome_status == "failed":
         lines.extend(

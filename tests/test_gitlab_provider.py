@@ -23,6 +23,7 @@ from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.pre_execution import read_pre_execution_status
 from ocr_toolkit.providers import gitlab
 from ocr_toolkit.review_runner import (
+    ReviewIdentity,
     ReviewRefs,
     ReviewRunnerError,
     _prepare_policy_context,
@@ -34,6 +35,31 @@ TARGET_SHA = "b" * 40
 DIFF_BASE_SHA = "c" * 40
 DIFF_START_SHA = "d" * 40
 POLICY_SHA = "e" * 40
+
+
+def _setup_identity(base: str, head: str, policy: str) -> ReviewIdentity:
+    """Supply a complete authenticated-shaped tuple to direct setup-helper probes."""
+
+    return ReviewIdentity(
+        source_sha=head,
+        policy_sha=policy,
+        mr_author_id=41,
+        context_mode="off",
+        context=None,
+        target_sha=policy,
+        target_protection="protected",
+        project_id="7",
+        merge_request_iid="9",
+        diff_base_sha=base,
+        diff_start_sha=policy,
+        diff_head_sha=head,
+        diff_version_id=1,
+        target_branch="main",
+        policy_project_id="7",
+        policy_branch="main",
+        policy_protection="protected",
+        protection_mode="required",
+    )
 
 
 class _GitLabHandler(BaseHTTPRequestHandler):
@@ -1188,6 +1214,7 @@ def test_rules_path_setup_uses_only_protected_identity_and_source_blob_metadata(
         refs=ReviewRefs(source, source),
         policy_sha=policy,
         repository_path=".opencodereview/rules.json",
+        identity=_setup_identity(base, source, policy),
     )
     assert not _record_rules_path_setup(
         reader,
@@ -1195,6 +1222,7 @@ def test_rules_path_setup_uses_only_protected_identity_and_source_blob_metadata(
         refs=ReviewRefs(base, base),
         policy_sha=policy,
         repository_path=".opencodereview/rules.json",
+        identity=_setup_identity(base, base, policy),
     )
     assert not artifacts.pre_execution_status.exists()
 
@@ -1249,6 +1277,7 @@ def test_rules_path_setup_rejects_unsafe_and_oversized_source_objects(
                 refs=ReviewRefs(base, head),
                 policy_sha=base,
                 repository_path=".opencodereview/rules.json",
+                identity=_setup_identity(base, head, base),
             )
         assert not artifacts.pre_execution_status.exists()
 

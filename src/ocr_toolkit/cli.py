@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -93,6 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 **({"report_path": Path(args.report)} if args.report is not None else {}),
                 **({"debug_dir": Path(args.debug_dir)} if args.debug_dir is not None else {}),
             )
+        except review_runner.ReviewRunnerNoHandoff as exc:
+            print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)
+            return os.EX_TEMPFAIL
         except review_runner.ReviewRunnerError as exc:
             if not isinstance(exc, review_runner.ReviewRejected):
                 print(f"Cannot run Open Code Review: {exc}", file=sys.stderr)

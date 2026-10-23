@@ -111,6 +111,21 @@ def test_protected_target_v11_binds_independent_diff_and_policy_identities(
     ).eligible
 
 
+@pytest.mark.parametrize("job_id", ("0", "01", "", 11, None, "a" * 1000))
+def test_v11_review_rejects_malformed_optional_ci_job_identity(job_id: object) -> None:
+    receipt = _receipt_v11()
+    receipt["review"]["ci_job_id"] = job_id
+    assert not toolkit_receipt_is_valid(receipt)
+
+
+def test_v11_review_preserves_valid_ci_job_identity() -> None:
+    receipt = _receipt_v11()
+    receipt["review"]["ci_job_id"] = "11"
+    identity = validated_review_identity(receipt)
+    assert identity is not None
+    assert identity.ci_job_id == "11"
+
+
 def test_auto_fallback_uses_protected_policy_capability_but_never_approves() -> None:
     receipt = _receipt_v11(target_protection="unprotected", enriched=True, external=True)
     assert toolkit_receipt_is_valid(receipt)

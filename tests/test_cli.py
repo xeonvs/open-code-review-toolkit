@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,19 @@ class CliTests(unittest.TestCase):
             calls,
             [(Path("result.json"), Path("ocr.log"), ["--from", "base", "--to", "head"], True)],
         )
+
+    def test_review_without_private_handoff_has_distinct_exit(self) -> None:
+        def no_handoff(*_args: object, **_kwargs: object) -> int:
+            raise cli.review_runner.ReviewRunnerNoHandoff("another review owns this checkout")
+
+        with (
+            patched_attr(cli.review_runner, "run_evidence_review", no_handoff),
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            result = cli.main(["review", "--result", "result.json", "--stderr", "ocr.log"])
+
+        self.assertEqual(result, os.EX_TEMPFAIL)
+        self.assertIn("another review owns this checkout", stderr.getvalue())
 
     def test_top_level_version_uses_centralized_package_metadata(self) -> None:
         stdout = io.StringIO()

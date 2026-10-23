@@ -49,13 +49,47 @@ from ocr_toolkit.pre_execution import (
 )
 from ocr_toolkit.provider_failure import ProviderFailureReason
 from ocr_toolkit.result_contract import CoverageFailure, OcrResultContractError, ReviewOutcome
-from ocr_toolkit.review_identity import effective_reviewed_sha
+from ocr_toolkit.review_identity import (
+    effective_reviewed_sha,
+    validate_detached_merge_request_pipeline,
+)
 from tests.support import (
     gitlab_config,
     patched_attr,
     patched_env,
     review_receipt_v8,
 )
+from tests.test_review_receipt_v11 import _receipt_v11
+
+
+def failed_receipt_v11() -> dict[str, Any]:
+    """Current receipt for a failed OCR result with no completed evidence call."""
+
+    receipt = _receipt_v11()
+    receipt["mcp"]["usage"] = {}
+    receipt["evidence"] = {
+        "mandatory": False,
+        "used": False,
+        "calls": 0,
+        "actions": {"state": "unavailable"},
+    }
+    receipt["tool_execution"] = {"state": "absent", "failed": None}
+    return receipt
+
+
+def pre_execution_review_v11() -> dict[str, object]:
+    """Synthetic authenticated tuple matching the posting status test SHAs."""
+
+    review: dict[str, object] = dict(_receipt_v11()["review"])
+    review.update(
+        source_sha="b" * 40,
+        diff_base_sha="a" * 40,
+        diff_head_sha="b" * 40,
+        diff_start_sha="c" * 40,
+        target_sha="c" * 40,
+        policy_sha="c" * 40,
+    )
+    return review
 
 
 class PostingIdentityTests(unittest.TestCase):
@@ -63,11 +97,12 @@ class PostingIdentityTests(unittest.TestCase):
         valid = "b" * 40
         commit = "c" * 40
         for merge_request_sha, commit_sha, expected in (
-            (valid, commit, valid),
+            (valid, commit, ""),
             ("", valid, valid),
             ("0" * 40, valid, valid),
-            (valid, "", valid),
-            ("d" * 40, valid, "d" * 40),
+            (valid, valid, valid),
+            (valid, "", ""),
+            ("d" * 40, valid, ""),
             ("B" * 40, valid, ""),
             ("bad", valid, ""),
             (f" {valid}", commit, ""),
@@ -82,10 +117,41 @@ class PostingIdentityTests(unittest.TestCase):
         ):
             with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
                 environment = {
+                    "CI_MERGE_REQUEST_EVENT_TYPE": "detached",
                     "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": merge_request_sha,
                     "CI_COMMIT_SHA": commit_sha,
                 }
                 self.assertEqual(effective_reviewed_sha(environment), expected)
+
+    def test_unsupported_or_missing_pipeline_type_cannot_supply_a_source(self) -> None:
+        source = "b" * 40
+        for event_type in ("", "merged_result", "merge_train", "branch", "DETACHED"):
+            with self.subTest(event_type=event_type):
+                environment = {
+                    "CI_MERGE_REQUEST_EVENT_TYPE": event_type,
+                    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": source,
+                    "CI_COMMIT_SHA": source,
+                }
+                self.assertEqual(effective_reviewed_sha(environment), "")
+                with self.assertRaisesRegex(ValueError, "detached merge-request pipeline"):
+                    validate_detached_merge_request_pipeline(
+                        environment, expected_source_sha=source
+                    )
+
+    def test_detached_pipeline_requires_same_checked_out_and_mr_source(self) -> None:
+        source = "b" * 40
+        valid = {"CI_MERGE_REQUEST_EVENT_TYPE": "detached", "CI_COMMIT_SHA": source}
+        validate_detached_merge_request_pipeline(valid, expected_source_sha=source)
+        for changes, diagnostic in (
+            ({"CI_COMMIT_SHA": "c" * 40}, "CI commit"),
+            ({"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "c" * 40}, "CI MR source"),
+            ({"CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "B" * 40}, "CI MR source"),
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaisesRegex(ValueError, diagnostic):
+                    validate_detached_merge_request_pipeline(
+                        valid | changes, expected_source_sha=source
+                    )
 
     def test_post_results_fails_closed_without_current_user(self) -> None:
         calls: list[str] = []
@@ -124,8 +190,8 @@ class PostingIdentityTests(unittest.TestCase):
         ):
             exit_code = workflow.post_results(gitlab_config(), result_data)
 
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
     def test_advisory_without_exact_receipt_v8_never_reaches_normal_result_flow(self) -> None:
         """Treat a correctly shaped but unbound advisory as an invalid result."""
@@ -153,8 +219,8 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(notes, ["**Open Code Review result schema error**"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
     def test_advisory_parser_rejects_unknown_extended_and_malformed_values(self) -> None:
         """Accept no provider text, schema extension, boolean, or impossible threshold."""
@@ -918,7 +984,7 @@ class PostingIdentityTests(unittest.TestCase):
 
         inline_bodies: list[str] = []
         notes: list[tuple[str, str]] = []
-        receipt = review_receipt_v8()
+        receipt = _receipt_v11()
         receipt["tool_execution"] = {"state": "invalid", "failed": None}
         result_data = {
             "status": "complete",
@@ -981,6 +1047,7 @@ class PostingIdentityTests(unittest.TestCase):
                 "collect_previous_bot_comment_refs",
                 lambda _config: snapshot.BotCommentRefs(),
             ),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "post_review_discussion", capture_discussion),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
@@ -1422,7 +1489,15 @@ class PostingIdentityTests(unittest.TestCase):
                 lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
             ),
             patched_attr(workflow, "collect_previous_bot_comment_refs", lambda _config: previous),
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(workflow, "get_diff_refs", lambda _config: None),
+            patched_attr(
+                workflow,
+                "post_review_discussion",
+                lambda *_args, **kwargs: (
+                    notes.append(kwargs["body"]) or gitlab.GitLabWriteResult("posted")
+                ),
+            ),
             patched_attr(workflow, "post_review_note_bounded", capture_note),
             patched_attr(workflow, "finalize_posting", lambda *_args: True),
             patched_attr(
@@ -1440,8 +1515,22 @@ class PostingIdentityTests(unittest.TestCase):
                     "comments": [old, new],
                     "warnings": [],
                     "_ocr_toolkit": {
-                        **review_receipt_v8(),
-                        "publication": publication,
+                        **_receipt_v11(),
+                        "publication": {
+                            "schema": "ocr.publication/v2",
+                            **publication,
+                            "private_sanitization": {
+                                "fields": 0,
+                                "reason_counts": {
+                                    "forbidden": 0,
+                                    "invalid_text": 0,
+                                    "laundering": 0,
+                                    "limit": 0,
+                                    "pii": 0,
+                                    "secret": 0,
+                                },
+                            },
+                        },
                     },
                 },
             )
@@ -1484,9 +1573,9 @@ class PostingIdentityTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(exit_code, 0)
+        self.assertEqual(exit_code, 1)
         self.assertEqual(collect_calls, [])
-        self.assertEqual(notes, ["**Open Code Review publication policy error**"])
+        self.assertEqual(notes, [])
 
     def test_manifest_failed_posts_failure_without_collecting_or_replacing_previous(self) -> None:
         notes: list[str] = []
@@ -1518,58 +1607,13 @@ class PostingIdentityTests(unittest.TestCase):
                     "waived": [],
                 },
             },
-            "_ocr_toolkit": {
-                "schema_version": 9,
-                "review": {
-                    "source_sha": "a" * 40,
-                    "policy_sha": "b" * 40,
-                    "target_sha": "b" * 40,
-                    "target_protection": "protected",
-                    "mr_author_id": 41,
-                },
-                "context": {
-                    "mode": "off",
-                    "state": "disabled",
-                    "classes": [],
-                    "policy_digest": None,
-                    "per_source": {},
-                    "degradation_counts": {"invalid": 0, "limit": 0, "unavailable": 0},
-                    "required_degraded": False,
-                    "mutable_admitted": False,
-                    "legacy_policy": False,
-                    "tool_usage": {"context_get": 0, "context_list": 0},
-                },
-                "mcp": {
-                    "federation": None,
-                    "capabilities": [
-                        {
-                            "server": "ocr_toolkit_evidence",
-                            "transport": "builtin",
-                            "tools": [
-                                "ocr_toolkit_evidence",
-                                "ocr_toolkit_evidence_search",
-                                "ocr_toolkit_evidence_coverage",
-                            ],
-                        }
-                    ],
-                    "usage": {},
-                },
-                "evidence": {
-                    "mandatory": False,
-                    "used": False,
-                    "calls": 0,
-                    "actions": {"state": "unavailable"},
-                },
-                "dlp": {"enabled": True},
-                "publication": {"state": "passed"},
-                "tool_execution": {"state": "absent", "failed": None},
-                "cleanup": {"result": "passed"},
-            },
+            "_ocr_toolkit": failed_receipt_v11(),
             ocr_result.TOOLKIT_ADVISORY_KEY: ocr_result.toolkit_advisory_payload(
                 ocr_result.background_recommended_advisory(actual=2_100, recommended=2_000)
             ),
         }
         with (
+            patched_attr(workflow, "validate_review_freshness", lambda *_args: None),
             patched_attr(
                 workflow,
                 "collect_previous_bot_comment_refs",
@@ -1583,15 +1627,7 @@ class PostingIdentityTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(collect_calls, [])
-        self.assertIn("Previous OCR review comments were preserved", notes[0])
-        self.assertIn("Coverage: selected 1", notes[0])
-        visible, technical = notes[0].split("<details>", 1)
-        self.assertNotIn("OCR core advisory", visible)
-        self.assertIn(
-            "OCR core advisory: background 2100 characters; recommended 2000 characters; "
-            "accepted by OCR core",
-            technical,
-        )
+        self.assertEqual(notes, [])
 
     def test_no_comments_note_uses_bounded_publishing(self) -> None:
         called: list[str] = []
@@ -1843,8 +1879,19 @@ class PostingWorkflowTests(unittest.TestCase):
                     OCR_EXIT_CODE="1",
                     OCR_POST_ERROR_DETAILS="1",
                     OCR_STRICT_POSTING="false",
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                    CI_COMMIT_SHA="b" * 40,
                 ),
                 patched_attr(workflow, "load_gitlab_config", lambda: gitlab_config()),
+                patched_attr(
+                    workflow,
+                    "current_merge_request_lifecycle",
+                    lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                        "1", "2", "b" * 40, "opened"
+                    ),
+                ),
                 patched_attr(
                     workflow,
                     "repository_artifacts",
@@ -1854,11 +1901,6 @@ class PostingWorkflowTests(unittest.TestCase):
                 patched_attr(workflow, "finalize_posting", lambda *_args: True),
                 patched_attr(
                     workflow,
-                    "read_stderr_excerpt",
-                    lambda *_args: self.fail("classified failure read stderr"),
-                ),
-                patched_attr(
-                    workflow,
                     "execute_approval",
                     lambda *_args: self.fail("provider failure reached approval"),
                 ),
@@ -1866,16 +1908,15 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 exit_code = workflow.main([str(result_path), str(stderr_path)])
 
-        self.assertEqual(exit_code, 0)
+        self.assertEqual(exit_code, 1)
         published = "\n".join(notes)
         controlled_log = stderr.getvalue()
-        self.assertIn("rate-or-spending-limit", published)
-        self.assertIn("Previous OCR review comments were preserved", published)
-        self.assertIn("Automatic approval was not attempted", published)
+        self.assertEqual(published, "")
+        self.assertIn("rate-or-spending-limit", controlled_log)
         self.assertIn(
             "Try lowering `OCR_REVIEW_CONCURRENCY` and/or "
             "`OCR_LLM_MAX_COMPLETION_TOKENS`, then start a new merge request pipeline.",
-            published,
+            controlled_log,
         )
         self.assertNotIn("OCR provider diagnostics:", published)
         self.assertNotIn("OCR provider diagnostics:", controlled_log)
@@ -1912,7 +1953,21 @@ class PostingWorkflowTests(unittest.TestCase):
             result_path.write_text(json.dumps(payload), encoding="utf-8")
             stderr_path.write_text("safe bounded diagnostic", encoding="utf-8")
             with (
-                patched_env(OCR_POST_ERROR_DETAILS="1", OCR_STRICT_POSTING="false"),
+                patched_env(
+                    OCR_POST_ERROR_DETAILS="1",
+                    OCR_STRICT_POSTING="false",
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                    CI_COMMIT_SHA="b" * 40,
+                ),
+                patched_attr(
+                    workflow,
+                    "current_merge_request_lifecycle",
+                    lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                        "1", "2", "b" * 40, "opened"
+                    ),
+                ),
                 patched_attr(
                     workflow,
                     "repository_artifacts",
@@ -1923,10 +1978,8 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 1, result_path)
 
-        self.assertEqual(exit_code, 0)
-        self.assertIn("Open Code Review failure", notes[0])
-        self.assertIn("safe bounded diagnostic", notes[0])
-        self.assertNotIn("provider failure", notes[0].lower())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
     def test_legacy_billing_warning_uses_shared_provider_renderer(self) -> None:
         """Route the pre-v1 warning shape to the same closed reason and renderer."""
@@ -2253,6 +2306,7 @@ class PostingWorkflowTests(unittest.TestCase):
         )
 
         with patched_env(
+            CI_MERGE_REQUEST_EVENT_TYPE="detached",
             CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="0" * 40,
             CI_COMMIT_SHA="b" * 40,
         ):
@@ -2266,6 +2320,7 @@ class PostingWorkflowTests(unittest.TestCase):
         ):
             with self.subTest(merge_request_sha=merge_request_sha, commit_sha=commit_sha):
                 with patched_env(
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
                     CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
                     CI_COMMIT_SHA=commit_sha,
                 ):
@@ -2435,7 +2490,7 @@ class PostingWorkflowTests(unittest.TestCase):
         self.assertEqual((path, line), ("", 0))
         self.assertEqual(calls, 0)
 
-    def test_ocr_failure_details_neutralize_quick_actions(self) -> None:
+    def test_ocr_failure_details_stay_job_only(self) -> None:
         notes: list[str] = []
 
         def fake_post_review_note_bounded(
@@ -2451,18 +2506,30 @@ class PostingWorkflowTests(unittest.TestCase):
             stderr_path = Path(tmp) / "stderr.log"
             stderr_path.write_text("/merge\n", encoding="utf-8")
             with (
-                patched_env(OCR_POST_ERROR_DETAILS="1"),
+                patched_env(
+                    OCR_POST_ERROR_DETAILS="1",
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                    CI_COMMIT_SHA="b" * 40,
+                ),
+                patched_attr(
+                    workflow,
+                    "current_merge_request_lifecycle",
+                    lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                        "1", "2", "b" * 40, "opened"
+                    ),
+                ),
                 patched_attr(workflow, "post_review_note_bounded", fake_post_review_note_bounded),
                 patched_attr(workflow, "finalize_posting", lambda *_args: True),
             ):
                 exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 1)
 
-        self.assertEqual(exit_code, 0)
-        self.assertIn("\\/merge", notes[0])
-        self.assertNotIn("\n/merge", notes[0])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
-    def test_parse_error_preserves_previous_review_and_respects_strict_mode(self) -> None:
-        """Preserve prior review state and apply strictness after result parse failure."""
+    def test_parse_error_preserves_previous_review_regardless_of_strict_mode(self) -> None:
+        """A malformed result stays in the job with no provider mutation."""
 
         stderr_path = Path("unused-stderr.log")
         read_paths: list[Path] = []
@@ -2471,7 +2538,7 @@ class PostingWorkflowTests(unittest.TestCase):
             read_paths.append(path)
             return "token=***\n/merge"
 
-        for details, strict, expected in (("0", "false", 0), ("1", "true", 1)):
+        for details, strict in (("0", "false"), ("1", "true")):
             notes: list[str] = []
 
             def capture(
@@ -2483,17 +2550,15 @@ class PostingWorkflowTests(unittest.TestCase):
             with (
                 self.subTest(details=details, strict=strict),
                 patched_env(OCR_POST_ERROR_DETAILS=details, OCR_STRICT_POSTING=strict),
-                patched_attr(workflow, "read_stderr_excerpt", safe_excerpt),
                 patched_attr(workflow, "post_review_note_bounded", capture),
                 patched_attr(workflow, "finalize_posting", lambda *_args: True),
             ):
                 exit_code = workflow.post_parse_error(gitlab_config(), stderr_path)
 
-            self.assertEqual(exit_code, expected)
-            self.assertNotIn("\n/merge", notes[0])
-            self.assertEqual("token=***" in notes[0], details == "1")
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(notes, [])
 
-        self.assertEqual(read_paths, [stderr_path])
+        self.assertEqual(read_paths, [])
 
     def test_missing_result_failure_is_distinct_and_preserves_previous_review(self) -> None:
         """Report a missing result distinctly without deleting the prior review."""
@@ -2509,7 +2574,20 @@ class PostingWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             stderr_path = Path(tmp) / "stderr.log"
             with (
-                patched_env(OCR_POST_ERROR_DETAILS="0"),
+                patched_env(
+                    OCR_POST_ERROR_DETAILS="0",
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                    CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                    CI_COMMIT_SHA="b" * 40,
+                ),
+                patched_attr(
+                    workflow,
+                    "current_merge_request_lifecycle",
+                    lambda *_args: workflow.GitLabMergeRequestLifecycle(
+                        "1", "2", "b" * 40, "opened"
+                    ),
+                ),
                 patched_attr(
                     workflow,
                     "repository_artifacts",
@@ -2520,15 +2598,13 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, -1)
 
-        self.assertEqual(exit_code, 0)
-        self.assertIn("result file was missing", notes[0])
-        self.assertNotIn("exit code", notes[0])
-        self.assertIn("Previous OCR review comments were preserved", notes[0])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
-    def test_provider_failure_renderer_is_static_and_respects_strict_mode(self) -> None:
-        """Render only closed guidance while retaining advisory versus strict behavior."""
+    def test_provider_failure_renderer_is_job_only_for_both_strict_modes(self) -> None:
+        """Print closed guidance without creating a stale provider note."""
 
-        for strict, expected in (("false", 0), ("true", 1)):
+        for strict in ("false", "true"):
             notes: list[str] = []
 
             def capture(
@@ -2548,11 +2624,8 @@ class PostingWorkflowTests(unittest.TestCase):
                     gitlab_config(), ProviderFailureReason.RATE_OR_SPENDING_LIMIT
                 )
 
-            self.assertEqual(exit_code, expected)
-            self.assertIn("rate-or-spending-limit", notes[0])
-            self.assertIn("OCR_REVIEW_CONCURRENCY", notes[0])
-            self.assertIn("start a new merge request pipeline", notes[0])
-            self.assertIn("OCR_LLM_MAX_COMPLETION_TOKENS", notes[0])
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(notes, [])
 
     def test_previous_review_cleanup_depends_only_on_coverage_completeness(self) -> None:
         """Clean prior review state only after complete replacement coverage."""
@@ -2599,12 +2672,13 @@ class PostingWorkflowTests(unittest.TestCase):
                         diff_base_sha="a" * 40,
                         source_sha="b" * 40,
                         policy_sha="c" * 40,
+                        review=pre_execution_review_v11(),
                     ),
                 )
                 stderr_path = root / "stderr.log"
                 stderr_path.write_text("/merge repository-controlled details\n", encoding="utf-8")
                 notes: list[tuple[str, str]] = []
-                setup_cleanup: list[list[int]] = []
+                setup_cleanup: list[int] = []
                 previous = snapshot.BotCommentRefs(
                     summary_plain_note_ids=[8], setup_plain_note_ids=[9]
                 )
@@ -2623,6 +2697,8 @@ class PostingWorkflowTests(unittest.TestCase):
                     patched_env(
                         CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
                         CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                        CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                        CI_COMMIT_SHA="b" * 40,
                         OCR_POST_EMOJI=emoji,
                         OCR_POST_ERROR_DETAILS="1",
                         OCR_STRICT_POSTING=strict,
@@ -2636,6 +2712,11 @@ class PostingWorkflowTests(unittest.TestCase):
                     patched_attr(workflow, "finalize_posting", lambda *_args: True),
                     patched_attr(
                         workflow,
+                        "validate_review_freshness",
+                        lambda *_args: workflow.ReviewFreshnessResult("c" * 40, False),
+                    ),
+                    patched_attr(
+                        workflow,
                         "current_merge_request_lifecycle",
                         lambda *_args: workflow.GitLabMergeRequestLifecycle(
                             "1", "2", "b" * 40, "opened"
@@ -2647,9 +2728,9 @@ class PostingWorkflowTests(unittest.TestCase):
                         lambda *_args: previous,
                     ),
                     patched_attr(
-                        workflow,
-                        "delete_previous_setup_notes",
-                        lambda _config, refs: setup_cleanup.append(refs.setup_plain_note_ids),
+                        gitlab,
+                        "delete_plain_note",
+                        lambda _config, note_id: setup_cleanup.append(note_id) or True,
                     ),
                 ):
                     exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
@@ -2662,7 +2743,7 @@ class PostingWorkflowTests(unittest.TestCase):
                 self.assertIn(markers.SETUP_PENDING_MARKER, notes[0][1])
                 self.assertNotIn("/merge", notes[0][1])
                 self.assertNotIn("rules.json", notes[0][1])
-                self.assertEqual(setup_cleanup, [[9]])
+                self.assertEqual(setup_cleanup, [9])
 
     def test_pre_execution_status_uses_effective_detached_pipeline_sha(self) -> None:
         """Use the same strict SHA fallback for setup and background statuses."""
@@ -2694,6 +2775,7 @@ class PostingWorkflowTests(unittest.TestCase):
                             diff_base_sha="a" * 40,
                             source_sha="b" * 40,
                             policy_sha="c" * 40,
+                            review=pre_execution_review_v11(),
                             stage=(
                                 OCR_PREVIEW_STAGE
                                 if reason == BACKGROUND_CHARACTER_LIMIT_REASON
@@ -2721,6 +2803,7 @@ class PostingWorkflowTests(unittest.TestCase):
                         patched_env(
                             CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
                             CI_MERGE_REQUEST_SOURCE_BRANCH_SHA=merge_request_sha,
+                            CI_MERGE_REQUEST_EVENT_TYPE="detached",
                             CI_COMMIT_SHA="b" * 40,
                         ),
                         patched_attr(
@@ -2730,6 +2813,11 @@ class PostingWorkflowTests(unittest.TestCase):
                         ),
                         patched_attr(workflow, "post_review_note_bounded", capture_note),
                         patched_attr(workflow, "finalize_posting", lambda *_args: True),
+                        patched_attr(
+                            workflow,
+                            "validate_review_freshness",
+                            lambda *_args: workflow.ReviewFreshnessResult("c" * 40, False),
+                        ),
                         patched_attr(
                             workflow,
                             "current_merge_request_lifecycle",
@@ -2742,7 +2830,6 @@ class PostingWorkflowTests(unittest.TestCase):
                             "collect_previous_bot_comment_refs",
                             lambda *_args: snapshot.BotCommentRefs(),
                         ),
-                        patched_attr(workflow, "delete_previous_setup_notes", lambda *_args: None),
                     ):
                         self.assertEqual(
                             workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0
@@ -2769,6 +2856,7 @@ class PostingWorkflowTests(unittest.TestCase):
                     diff_base_sha="a" * 40,
                     source_sha="b" * 40,
                     policy_sha="c" * 40,
+                    review=pre_execution_review_v11(),
                 ),
             )
             stderr_path = root / "stderr.log"
@@ -2788,6 +2876,7 @@ class PostingWorkflowTests(unittest.TestCase):
                     CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
                     CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="B" * 40,
                     CI_COMMIT_SHA="b" * 40,
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
                     OCR_POST_ERROR_DETAILS="1",
                 ),
                 patched_attr(
@@ -2798,13 +2887,11 @@ class PostingWorkflowTests(unittest.TestCase):
                 patched_attr(workflow, "post_review_note_bounded", capture_note),
                 patched_attr(workflow, "finalize_posting", lambda *_args: True),
             ):
-                self.assertEqual(workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 0)
+                self.assertEqual(workflow.post_ocr_failure(gitlab_config(), stderr_path, 2), 1)
 
-        self.assertEqual(len(notes), 1)
-        self.assertIn("result may be partial", notes[0])
-        self.assertIn("generic details", notes[0])
+        self.assertEqual(notes, [])
 
-    def test_stale_setup_status_falls_back_to_generic_failure(self) -> None:
+    def test_stale_setup_status_remains_job_only(self) -> None:
         notes: list[str] = []
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2819,6 +2906,7 @@ class PostingWorkflowTests(unittest.TestCase):
                     diff_base_sha="a" * 40,
                     source_sha="b" * 40,
                     policy_sha="c" * 40,
+                    review=pre_execution_review_v11(),
                 ),
             )
             stderr_path = root / "stderr.log"
@@ -2837,6 +2925,8 @@ class PostingWorkflowTests(unittest.TestCase):
                 patched_env(
                     CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
                     CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="d" * 40,
+                    CI_COMMIT_SHA="d" * 40,
+                    CI_MERGE_REQUEST_EVENT_TYPE="detached",
                     OCR_POST_ERROR_DETAILS="1",
                 ),
                 patched_attr(
@@ -2849,9 +2939,8 @@ class PostingWorkflowTests(unittest.TestCase):
             ):
                 exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
 
-        self.assertEqual(exit_code, 0)
-        self.assertIn("result may be partial", notes[0])
-        self.assertIn("generic details", notes[0])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(notes, [])
 
     def test_background_rejection_status_uses_only_static_numeric_summary(self) -> None:
         """Publish installed-OCR limits without its private path or raw stderr."""
@@ -2873,6 +2962,7 @@ class PostingWorkflowTests(unittest.TestCase):
                         diff_base_sha="a" * 40,
                         source_sha="b" * 40,
                         policy_sha="c" * 40,
+                        review=pre_execution_review_v11(),
                         stage=OCR_PREVIEW_STAGE,
                         actual=actual,
                         limit=limit,
@@ -2899,6 +2989,8 @@ class PostingWorkflowTests(unittest.TestCase):
                     patched_env(
                         CI_MERGE_REQUEST_DIFF_BASE_SHA="a" * 40,
                         CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                        CI_MERGE_REQUEST_EVENT_TYPE="detached",
+                        CI_COMMIT_SHA="b" * 40,
                         OCR_POST_ERROR_DETAILS="1",
                     ),
                     patched_attr(
@@ -2910,10 +3002,20 @@ class PostingWorkflowTests(unittest.TestCase):
                     patched_attr(workflow, "finalize_posting", lambda *_args: True),
                     patched_attr(
                         workflow,
+                        "validate_review_freshness",
+                        lambda *_args: workflow.ReviewFreshnessResult("c" * 40, False),
+                    ),
+                    patched_attr(
+                        workflow,
                         "current_merge_request_lifecycle",
                         lambda *_args: workflow.GitLabMergeRequestLifecycle(
                             "1", "2", "b" * 40, "opened"
                         ),
+                    ),
+                    patched_attr(
+                        workflow,
+                        "collect_previous_bot_comment_refs",
+                        lambda *_args: snapshot.BotCommentRefs(),
                     ),
                 ):
                     exit_code = workflow.post_ocr_failure(gitlab_config(), stderr_path, 2)
@@ -2980,6 +3082,7 @@ class PostingWorkflowTests(unittest.TestCase):
                     diff_base_sha="a" * 40,
                     source_sha="b" * 40,
                     policy_sha="c" * 40,
+                    review=pre_execution_review_v11(),
                     stage=OCR_PREVIEW_STAGE,
                     diagnostic_count=(1 if reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS else None),
                 )
@@ -2987,10 +3090,20 @@ class PostingWorkflowTests(unittest.TestCase):
                 with (
                     patched_attr(
                         workflow,
+                        "validate_review_freshness",
+                        lambda *_args: workflow.ReviewFreshnessResult("c" * 40, False),
+                    ),
+                    patched_attr(
+                        workflow,
                         "current_merge_request_lifecycle",
                         lambda *_args: workflow.GitLabMergeRequestLifecycle(
                             "1", "2", "b" * 40, "opened"
                         ),
+                    ),
+                    patched_attr(
+                        workflow,
+                        "collect_previous_bot_comment_refs",
+                        lambda *_args: snapshot.BotCommentRefs(),
                     ),
                     patched_attr(
                         workflow,
@@ -3017,6 +3130,7 @@ class PostingWorkflowTests(unittest.TestCase):
             diff_base_sha="a" * 40,
             source_sha="b" * 40,
             policy_sha="c" * 40,
+            review=pre_execution_review_v11(),
             stage=OCR_PREVIEW_STAGE,
             diagnostic_count=1,
         )
@@ -3024,6 +3138,11 @@ class PostingWorkflowTests(unittest.TestCase):
             with self.subTest(state=state):
                 calls: list[str] = []
                 with (
+                    patched_attr(
+                        workflow,
+                        "validate_review_freshness",
+                        lambda *_args: workflow.ReviewFreshnessResult("c" * 40, False),
+                    ),
                     patched_attr(
                         workflow,
                         "current_merge_request_lifecycle",
@@ -4803,8 +4922,9 @@ class GitLabSnapshotTests(unittest.TestCase):
         ]
         with (
             patched_env(
+                CI_MERGE_REQUEST_EVENT_TYPE="detached",
                 CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
-                CI_COMMIT_SHA="c" * 40,
+                CI_COMMIT_SHA="b" * 40,
             ),
             patched_attr(gitlab, "api_get_paginated", lambda *_args, **_kwargs: versions),
         ):
@@ -4833,12 +4953,29 @@ class GitLabSnapshotTests(unittest.TestCase):
         ):
             with (
                 self.subTest(values=values, response=response),
-                patched_env(**values),
+                patched_env(CI_MERGE_REQUEST_EVENT_TYPE="detached", **values),
                 patched_attr(
                     gitlab,
                     "api_get_paginated",
                     lambda *_args, value=response, **_kwargs: value,
                 ),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertIsNone(gitlab.get_diff_refs(gitlab_config()))
+
+        for event_type, commit in (
+            ("merged_result", "c" * 40),
+            ("merge_train", "c" * 40),
+            ("detached", "c" * 40),
+        ):
+            with (
+                self.subTest(event_type=event_type),
+                patched_env(
+                    CI_MERGE_REQUEST_EVENT_TYPE=event_type,
+                    CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+                    CI_COMMIT_SHA=commit,
+                ),
+                patched_attr(gitlab, "api_get_paginated", lambda *_args, **_kwargs: versions),
                 redirect_stderr(io.StringIO()),
             ):
                 self.assertIsNone(gitlab.get_diff_refs(gitlab_config()))

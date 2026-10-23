@@ -11,7 +11,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-STATUS_SCHEMA = "ocr.pre-execution-status/v4"
+from ocr_toolkit.review_receipt import ReceiptReviewIdentity, _parse_review_identity
+
+STATUS_SCHEMA = "ocr.pre-execution-status/v5"
+# v5 embeds the frozen v11 review tuple; a new receipt shape needs a new status schema.
+STATUS_REVIEW_RECEIPT_VERSION = 11
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
 PROTECTED_POLICY_RULE_PATH_PENDING = "protected_policy_rule_path_pending"
 GITLAB_MERGE_REQUEST_TERMINAL = "gitlab_merge_request_terminal"
@@ -29,7 +33,16 @@ BACKGROUND_REASONS = {
     BACKGROUND_CHARACTER_LIMIT_REASON: "characters",
     BACKGROUND_FILE_SIZE_LIMIT_REASON: "bytes",
 }
-MAX_STATUS_BYTES = 2_048
+NOTE_REASONS = frozenset(
+    {
+        PROTECTED_TARGET_RULE_PATH_PENDING,
+        PROTECTED_POLICY_RULE_PATH_PENDING,
+        UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+        GITLINK_PREVIEW_UNSUPPORTED,
+        *BACKGROUND_REASONS,
+    }
+)
+MAX_STATUS_BYTES = 8_192
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -46,6 +59,7 @@ class PreExecutionStatus:
     diff_base_sha: str
     source_sha: str
     policy_sha: str | None
+    review: dict[str, object] | None = None
     stage: str = EVIDENCE_PREFLIGHT_STAGE
     model_execution: str = MODEL_NOT_STARTED
     diagnostic_count: int | None = None
@@ -69,6 +83,17 @@ def _validate(status: PreExecutionStatus) -> None:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
     if status.model_execution != MODEL_NOT_STARTED:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason in NOTE_REASONS:
+        review = _parse_review_identity(status.review, STATUS_REVIEW_RECEIPT_VERSION)
+        if (
+            review is None
+            or review.diff_base_sha != status.diff_base_sha
+            or review.source_sha != status.source_sha
+            or review.policy_sha != status.policy_sha
+        ):
+            raise PreExecutionStatusError("pre-execution status review identity is invalid")
+    elif status.review is not None:
+        raise PreExecutionStatusError("pre-execution status review identity is invalid")
     if status.reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS:
         if (
             status.stage != OCR_PREVIEW_STAGE
@@ -205,6 +230,13 @@ def _valid_provider_ids(*values: str | None) -> bool:
     )
 
 
+def pre_execution_review_identity(status: PreExecutionStatus) -> ReceiptReviewIdentity | None:
+    """Return the status-versioned identity only from a valid private envelope."""
+
+    _validate(status)
+    return _parse_review_identity(status.review, STATUS_REVIEW_RECEIPT_VERSION)
+
+
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -339,6 +371,7 @@ def read_pre_execution_status(
             "diff_base_sha",
             "source_sha",
             "policy_sha",
+            "review",
             "stage",
             "model_execution",
             "diagnostic_count",

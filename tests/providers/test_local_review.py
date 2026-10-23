@@ -1,5 +1,7 @@
 """Standalone provider selection and closed CLI failure contracts."""
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -7,6 +9,7 @@ import pytest
 
 from ocr_toolkit import cli, preflight, review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
+from ocr_toolkit.reporting.model import failed_report
 
 
 def test_local_preflight_does_not_validate_gitlab(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -81,6 +84,68 @@ def test_local_rejects_competing_inputs_before_artifacts(
     output = capsys.readouterr().out
     assert "Review failed" in output and "Stopped at: `configuration`" in output
     assert not result.exists() and not stderr.exists()
+
+
+def test_local_busy_review_delivers_failure_report_without_touching_active_artifacts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A second local review reports lock contention and preserves the active run."""
+
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_MODE", raising=False)
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    monkeypatch.chdir(tmp_path)
+    artifacts = repository_artifacts(tmp_path)
+    prepare_artifact_directory(artifacts)
+    shared_report = tmp_path / "report.md"
+    child = (
+        "from pathlib import Path\n"
+        "from ocr_toolkit import review_runner\n"
+        "try:\n"
+        "    review_runner.run_evidence_review("
+        "Path('loser.json'), Path('loser.log'), [], local=True, report_path=Path('report.md'))\n"
+        "except review_runner.ReviewRunnerBusy as exc:\n"
+        "    print(str(exc))\n"
+        "else:\n"
+        "    raise SystemExit('concurrent review unexpectedly proceeded')\n"
+    )
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(Path(review_runner.__file__).resolve().parents[1])
+    with review_runner.locked_review_run(artifacts):
+        artifacts.bootstrap.write_text("active", encoding="utf-8")
+        artifacts.bootstrap.chmod(0o600)
+        completed = subprocess.run(
+            [sys.executable, "-c", child],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "another review is already running" in completed.stdout
+        assert "Review failed" in completed.stdout
+        assert not shared_report.exists()
+        assert artifacts.bootstrap.read_text(encoding="utf-8") == "active"
+        assert not (tmp_path / "loser.json").exists()
+
+    def finish(*_args: object, state: review_runner.ReviewRunState, **_kwargs: object) -> int:
+        state.report = failed_report("identity")
+        return 0
+
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    monkeypatch.setattr(review_runner, "_run_evidence_review", finish)
+    assert (
+        review_runner.run_evidence_review(
+            tmp_path / "winner.json",
+            tmp_path / "winner.log",
+            [],
+            local=True,
+            report_path=shared_report,
+        )
+        == 0
+    )
+    assert "Review failed" in shared_report.read_text(encoding="utf-8")
 
 
 def test_explicit_local_ignores_inherited_forge_identity(

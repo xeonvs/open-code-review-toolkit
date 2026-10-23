@@ -62,6 +62,15 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     policy_protection="protected",
     protection_mode="auto",
 )
+BACKGROUND_STATUS_IDENTITY = replace(
+    DEFAULT_IDENTITY,
+    source_sha="b" * 40,
+    diff_base_sha="a" * 40,
+    diff_head_sha="b" * 40,
+    diff_start_sha="c" * 40,
+    policy_sha="c" * 40,
+    target_sha="c" * 40,
+)
 LOCAL_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
     policy_sha="b" * 40,
@@ -145,6 +154,142 @@ def test_invalid_dlp_setting_fails_before_review_execution(
     with pytest.raises(review_runner.ReviewRunnerError, match="OCR_DLP_ENABLED must be one of"):
         review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
     assert called == []
+
+
+def _previous_pre_execution_status() -> review_runner.PreExecutionStatus:
+    """Return one real, note-eligible status for the same immutable MR tuple."""
+
+    return review_runner.PreExecutionStatus(
+        schema_version=review_runner.STATUS_SCHEMA,
+        reason=review_runner.PROTECTED_TARGET_RULE_PATH_PENDING,
+        diff_base_sha=DEFAULT_IDENTITY.diff_base_sha or "",
+        source_sha=DEFAULT_IDENTITY.source_sha,
+        policy_sha=DEFAULT_IDENTITY.policy_sha,
+        review=review_runner._status_review(DEFAULT_IDENTITY),
+    )
+
+
+@pytest.mark.parametrize("early_failure", ["dlp", "progress", "report_option"])
+def test_early_review_failure_invalidates_previous_pre_execution_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, early_failure: str
+) -> None:
+    """A previous same-identity note status cannot survive new setup failure."""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    review_runner.write_pre_execution_status(
+        artifacts.pre_execution_status, _previous_pre_execution_status()
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "_run_evidence_review",
+        lambda *_args, **_kwargs: pytest.fail("review execution must not start"),
+    )
+    kwargs: dict[str, Path] = {}
+    if early_failure == "dlp":
+        monkeypatch.setenv("OCR_DLP_ENABLED", "invalid")
+    elif early_failure == "progress":
+        monkeypatch.setenv("OCR_REVIEW_PROGRESS", "invalid")
+    else:
+        kwargs["report_path"] = tmp_path / "report.md"
+
+    with pytest.raises(review_runner.ReviewRunnerError):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json", tmp_path / "stderr.log", [], **kwargs
+        )
+    assert not artifacts.pre_execution_status.exists()
+    assert artifacts.review_run_lock.is_file()
+    assert stat.S_IMODE(artifacts.review_run_lock.stat().st_mode) == 0o600
+
+
+def test_concurrent_review_does_not_clear_active_review_status_or_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The losing process fails before it can touch the winning run's files."""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    monkeypatch.delenv("OCR_DLP_ENABLED", raising=False)
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "false")
+    artifacts = repository_artifacts(tmp_path)
+    child = (
+        "from pathlib import Path\n"
+        "from ocr_toolkit import review_runner\n"
+        "try:\n"
+        "    review_runner.run_evidence_review(Path('loser.json'), Path('loser.log'), [])\n"
+        "except review_runner.ReviewRunnerBusy as exc:\n"
+        "    print(str(exc))\n"
+        "else:\n"
+        "    raise SystemExit('concurrent review unexpectedly proceeded')\n"
+    )
+
+    def active_review(*_args: object, **_kwargs: object) -> int:
+        review_runner.write_pre_execution_status(
+            artifacts.pre_execution_status, _previous_pre_execution_status()
+        )
+        artifacts.bootstrap.write_text("winner", encoding="utf-8")
+        artifacts.bootstrap.chmod(0o600)
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(Path(review_runner.__file__).resolve().parents[1])
+        completed = subprocess.run(
+            [sys.executable, "-c", child],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "another review is already running" in completed.stdout
+        assert artifacts.pre_execution_status.exists()
+        assert artifacts.bootstrap.read_text(encoding="utf-8") == "winner"
+        assert not (tmp_path / "loser.json").exists()
+        return 0
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", active_review)
+    assert (
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+        == 0
+    )
+    assert artifacts.pre_execution_status.exists()
+    assert artifacts.review_run_lock.is_file()
+    lock_inode = artifacts.review_run_lock.stat().st_ino
+    monkeypatch.setattr(review_runner, "_run_evidence_review", lambda *_args, **_kwargs: 0)
+    assert review_runner.run_evidence_review(tmp_path / "next.json", tmp_path / "next.log", []) == 0
+    assert artifacts.review_run_lock.stat().st_ino == lock_inode
+    assert not artifacts.pre_execution_status.exists()
+
+
+@pytest.mark.parametrize("unsafe_kind", ["symlink", "hardlink", "fifo"])
+def test_review_rejects_unsafe_lock_without_clearing_previous_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unsafe_kind: str
+) -> None:
+    """An unsafe lock name cannot redirect IO or trigger artifact cleanup."""
+
+    monkeypatch.chdir(tmp_path)
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    review_runner.write_pre_execution_status(
+        artifacts.pre_execution_status, _previous_pre_execution_status()
+    )
+    outside = tmp_path / "outside"
+    outside.write_text("unchanged", encoding="utf-8")
+    if unsafe_kind == "symlink":
+        artifacts.review_run_lock.symlink_to(outside)
+    elif unsafe_kind == "hardlink":
+        os.link(outside, artifacts.review_run_lock)
+    else:
+        os.mkfifo(artifacts.review_run_lock)
+
+    with pytest.raises(
+        review_runner.ReviewRunnerNoHandoff, match="private pre-execution state is unsafe"
+    ):
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+    assert outside.read_text(encoding="utf-8") == "unchanged"
+    assert artifacts.pre_execution_status.exists()
 
 
 def complete_review_payload(*, tool_calls: dict[str, object]) -> dict[str, object]:
@@ -537,7 +682,7 @@ def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
 def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does_not() -> None:
     """Keep safe MR context approval-neutral and remediation comment-only."""
 
-    identity = enriched_identity()
+    identity = replace(enriched_identity(), ci_job_id="11")
     payload: dict[str, object] = {
         "status": "complete",
         "comments": [],
@@ -617,6 +762,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
     )
 
     assert eligible.eligible is True
+    assert metadata["review"]["ci_job_id"] == "11"  # type: ignore[index]
     assert metadata["context"]["per_source"] == safe_enrichment.completeness  # type: ignore[index]
     assert metadata["context"]["tool_usage"] == {  # type: ignore[index]
         "context_get": 1,
@@ -3987,6 +4133,7 @@ def test_unavailable_preflight_identity_writes_only_closed_job_status(
     assert persisted["provider"] is None
     assert persisted["diff_base_sha"] == refs.base
     assert persisted["source_sha"] == refs.head
+    assert persisted["review"] is None
 
 
 @pytest.mark.parametrize("failure", ["provider_stale", "diff_mismatch"])
@@ -4013,6 +4160,7 @@ def test_authenticated_preflight_revision_drift_records_stale_status(
     assert (persisted["project_id"], persisted["change_id"]) == ("1", "2")
     assert persisted["policy_sha"] is None
     assert persisted["model_execution"] == "not_started"
+    assert persisted["review"] is None
 
 
 def test_auto_fallback_missing_rules_uses_protected_policy_setup_status(
@@ -4056,6 +4204,13 @@ def test_auto_fallback_missing_rules_uses_protected_policy_setup_status(
     assert persisted["policy_sha"] == "d" * 40
     assert persisted["diff_base_sha"] == refs.base
     assert persisted["source_sha"] == refs.head
+    assert persisted["schema_version"] == "ocr.pre-execution-status/v5"
+    assert persisted["review"]["source_sha"] == refs.head
+    assert persisted["review"]["diff_base_sha"] == refs.base
+    assert persisted["review"]["target_sha"] == "c" * 40
+    assert persisted["review"]["target_protection"] == "unprotected"
+    assert persisted["review"]["policy_sha"] == "d" * 40
+    assert persisted["review"]["policy_protection"] == "protected"
 
 
 def test_local_policy_preflight_never_writes_gitlab_identity_status(
@@ -4383,7 +4538,7 @@ def test_background_preview_preserves_rejection_when_cleanup_also_fails(
         session_home=session_home,
         artifacts=artifacts,
         refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
-        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+        identity=BACKGROUND_STATUS_IDENTITY,
     )
 
     assert exit_code == 2
@@ -4459,7 +4614,7 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
         session_home=session_home,
         artifacts=artifacts,
         refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
-        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+        identity=BACKGROUND_STATUS_IDENTITY,
     )
 
     assert exit_code == 2
@@ -4474,8 +4629,9 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
         "policy_sha": "c" * 40,
         "project_id": None,
         "provider": None,
+        "review": review_runner._status_review(BACKGROUND_STATUS_IDENTITY),
         "reason": "ocr_background_character_limit",
-        "schema_version": "ocr.pre-execution-status/v4",
+        "schema_version": "ocr.pre-execution-status/v5",
         "source_sha": "b" * 40,
         "stage": "ocr_preview",
         "model_execution": "not_started",
@@ -4799,7 +4955,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
                 "collect_previous_bot_comment_refs",
                 lambda *_args: pytest.fail("private result must not inspect previous comments"),
             )
-            assert workflow.post_results(gitlab_config(), retained) == 0
+            # A private execution diagnostic cannot be a successful posting job.
+            assert workflow.post_results(gitlab_config(), retained) == 1
             assert "not publication-eligible" in capsys.readouterr().err
         session_homes[0].rmdir()
     else:
@@ -4833,10 +4990,13 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
         path.write_text("private", encoding="utf-8")
         path.chmod(0o600)
 
-    review_runner._remove_ephemeral_review_artifacts(artifacts)
+    with review_runner.locked_review_run(artifacts):
+        review_runner._remove_ephemeral_review_artifacts(artifacts)
+        assert artifacts.review_run_lock.is_file()
 
     assert all(not path.exists() for path in ephemeral)
     assert artifacts.pre_execution_status.read_text(encoding="utf-8") == "private"
+    assert artifacts.review_run_lock.is_file()
 
 
 def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:

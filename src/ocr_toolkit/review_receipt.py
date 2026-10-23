@@ -13,6 +13,7 @@ from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
+    SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
 from ocr_toolkit.reporting.dlp import publication_dlp_state as publication_dlp_state
@@ -22,6 +23,11 @@ from ocr_toolkit.reporting.dlp import (
 from ocr_toolkit.reporting.federation import valid_reconciliation
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
+# Keep historical wire shapes explicit; changing the current producer version
+# must never reinterpret a persisted v11 receipt as a future format.
+RECEIPT_V11 = 11
+FEDERATION_V2_RECEIPT_VERSIONS = frozenset({10, RECEIPT_V11})
+PUBLICATION_V2_RECEIPT_VERSIONS = frozenset({10, RECEIPT_V11})
 UNPROTECTED_APPROVAL_REASON = (
     "the GitLab target branch was unprotected; limited reviews are comment-only"
 )
@@ -51,6 +57,7 @@ class ReceiptReviewIdentity:
     policy_branch: str | None = None
     policy_protection: str | None = None
     protection_mode: str | None = None
+    ci_job_id: str | None = None
 
 
 def verified_evidence_actions(
@@ -223,7 +230,10 @@ def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewId
             schema_version=receipt_version,
             policy_sha=review["policy_sha"],
         )
-    if receipt_version != 11 or set(review) != _V11_REVIEW_KEYS:
+    if receipt_version != RECEIPT_V11 or set(review) not in {
+        _V11_REVIEW_KEYS,
+        _V11_REVIEW_KEYS | {"ci_job_id"},
+    }:
         return None
     if (
         not all(
@@ -252,6 +262,7 @@ def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewId
         or not isinstance(review.get("protection_mode"), str)
         or review.get("protection_mode") not in {"auto", "required", "unprotected"}
         or not _positive_id(review.get("mr_author_id"))
+        or ("ci_job_id" in review and not _decimal_identifier(review.get("ci_job_id")))
     ):
         return None
 
@@ -288,6 +299,7 @@ def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewId
         policy_branch=review["policy_branch"],
         policy_protection=review["policy_protection"],
         protection_mode=review["protection_mode"],
+        ci_job_id=review.get("ci_job_id"),
     )
 
 
@@ -300,7 +312,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     receipt_version = toolkit_metadata.get("schema_version")
     if (
         type(receipt_version) is not int
-        or receipt_version not in {9, 10, 11}
+        or receipt_version not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
         or set(toolkit_metadata)
         != {
             "schema_version",
@@ -462,7 +474,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         if not valid_reconciliation(federation):
             return invalid
         expected_federation_schema = (
-            "ocr.federation/v2" if receipt_version in {10, 11} else "ocr.federation/v1"
+            "ocr.federation/v2"
+            if receipt_version in FEDERATION_V2_RECEIPT_VERSIONS
+            else "ocr.federation/v1"
         )
         if federation["receipt"]["schema"] != expected_federation_schema:
             return invalid
@@ -521,7 +535,10 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     publication = toolkit_metadata.get("publication")
     if not isinstance(publication, dict) or (
         (receipt_version == 9 and "schema" in publication)
-        or (receipt_version in {10, 11} and publication.get("schema") != "ocr.publication/v2")
+        or (
+            receipt_version in PUBLICATION_V2_RECEIPT_VERSIONS
+            and publication.get("schema") != "ocr.publication/v2"
+        )
     ):
         return invalid
     tool_execution = toolkit_metadata.get("tool_execution")
@@ -591,7 +608,7 @@ def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | No
     if (
         not isinstance(toolkit_metadata, dict)
         or type(toolkit_metadata.get("schema_version")) is not int
-        or toolkit_metadata.get("schema_version") not in {9, 10, 11}
+        or toolkit_metadata.get("schema_version") not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
     ):
         return None
     return _parse_review_identity(

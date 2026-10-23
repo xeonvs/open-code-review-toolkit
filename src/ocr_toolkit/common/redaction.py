@@ -147,9 +147,9 @@ def redact_env_secret_values(text: str) -> str:
 def redact_sensitive(text: str) -> str:
     """Replace known secret values from the process environment with `***`.
 
-    Used before publishing OCR-controlled text to the merge request, including
-    stderr excerpts from `OCR_POST_ERROR_DETAILS=1` and structured OCR JSON
-    fields. Performs two passes:
+    Used before publishing OCR-controlled text to the merge request and when
+    rendering bounded local diagnostics from structured OCR JSON fields.
+    Performs two passes:
 
     1. Replace each known env value (length >= 4). This is exact-match
        replacement over a small allowlist of secret-bearing environment

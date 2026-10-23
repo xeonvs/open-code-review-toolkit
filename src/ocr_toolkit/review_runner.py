@@ -55,6 +55,8 @@ from ocr_toolkit.context.store import (
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
+    ReviewRunBusy,
+    locked_review_run,
     prepare_artifact_directory,
     remove_private_artifact,
     repository_artifacts,
@@ -222,6 +224,14 @@ MAX_TOOL_FAILURE_LOG_FIELD_CHARS = 500
 
 class ReviewRunnerError(Exception):
     """OCR execution or result admission failed safely."""
+
+
+class ReviewRunnerNoHandoff(ReviewRunnerError):
+    """Review setup stopped before this run could invalidate prior handoff state."""
+
+
+class ReviewRunnerBusy(ReviewRunnerNoHandoff):
+    """Another review owns this checkout's fixed private review artifacts."""
 
 
 class ReviewRejected(ReviewRunnerError):
@@ -427,6 +437,7 @@ class ReviewIdentity:
     policy_branch: str | None = None
     policy_protection: str | None = None
     protection_mode: str | None = None
+    ci_job_id: str | None = None
 
     @property
     def context_state(self) -> str:
@@ -443,6 +454,32 @@ class ReviewIdentity:
     @property
     def limited_unprotected(self) -> bool:
         return self.target_protection == "unprotected" and not self.has_protected_policy
+
+
+def _status_review(identity: ReviewIdentity) -> dict[str, object] | None:
+    """Carry the exact authenticated current tuple for a possible GitLab note."""
+
+    if identity.mr_author_id is None:
+        return None
+    return {
+        "source_sha": identity.source_sha,
+        "diff_base_sha": identity.diff_base_sha,
+        "diff_start_sha": identity.diff_start_sha,
+        "diff_head_sha": identity.diff_head_sha,
+        "diff_version_id": identity.diff_version_id,
+        "project_id": identity.project_id,
+        "merge_request_iid": identity.merge_request_iid,
+        "target_branch": identity.target_branch,
+        "target_sha": identity.target_sha,
+        "target_protection": identity.target_protection,
+        "policy_project_id": identity.policy_project_id,
+        "policy_branch": identity.policy_branch,
+        "policy_sha": identity.policy_sha,
+        "policy_protection": identity.policy_protection,
+        "protection_mode": identity.protection_mode,
+        "mr_author_id": identity.mr_author_id,
+        **({"ci_job_id": identity.ci_job_id} if identity.ci_job_id is not None else {}),
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -723,6 +760,7 @@ def _review_receipt(
             "policy_protection": identity.policy_protection,
             "protection_mode": identity.protection_mode,
             "mr_author_id": identity.mr_author_id,
+            **({"ci_job_id": identity.ci_job_id} if identity.ci_job_id is not None else {}),
         },
         "context": context_receipt,
         "mcp": {
@@ -2086,18 +2124,21 @@ def _run_background_qualified_review(
 ) -> tuple[int, BackgroundQualification]:
     """Run the model review only after installed OCR accepts its background."""
 
+    status_review = _status_review(identity)
     if gitlink_detected:
-        write_pre_execution_status(
-            artifacts.pre_execution_status,
-            PreExecutionStatus(
-                schema_version=STATUS_SCHEMA,
-                reason=GITLINK_PREVIEW_UNSUPPORTED,
-                diff_base_sha=refs.base,
-                source_sha=refs.head,
-                policy_sha=identity.policy_sha,
-                stage=OCR_PREVIEW_STAGE,
-            ),
-        )
+        if status_review is not None:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=GITLINK_PREVIEW_UNSUPPORTED,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=identity.policy_sha,
+                    review=status_review,
+                    stage=OCR_PREVIEW_STAGE,
+                ),
+            )
         if state is not None:
             state.observe("preview", "failed")
         print(
@@ -2115,20 +2156,22 @@ def _run_background_qualified_review(
         if state is not None:
             state.observe("preview", "failed")
         try:
-            write_pre_execution_status(
-                artifacts.pre_execution_status,
-                PreExecutionStatus(
-                    schema_version=STATUS_SCHEMA,
-                    reason=exc.reason,
-                    diff_base_sha=refs.base,
-                    source_sha=refs.head,
-                    policy_sha=identity.policy_sha,
-                    stage=OCR_PREVIEW_STAGE,
-                    actual=exc.actual,
-                    limit=exc.limit,
-                    unit=exc.unit,
-                ),
-            )
+            if status_review is not None:
+                write_pre_execution_status(
+                    artifacts.pre_execution_status,
+                    PreExecutionStatus(
+                        schema_version=STATUS_SCHEMA,
+                        reason=exc.reason,
+                        diff_base_sha=refs.base,
+                        source_sha=refs.head,
+                        policy_sha=identity.policy_sha,
+                        review=status_review,
+                        stage=OCR_PREVIEW_STAGE,
+                        actual=exc.actual,
+                        limit=exc.limit,
+                        unit=exc.unit,
+                    ),
+                )
         except PreExecutionStatusError as status_exc:
             raise ReviewRunnerError(
                 "OCR background rejection status could not be persisted safely"
@@ -2143,18 +2186,20 @@ def _run_background_qualified_review(
     except BackgroundPreviewUnclassified as exc:
         if state is not None:
             state.observe("preview", "failed")
-        write_pre_execution_status(
-            artifacts.pre_execution_status,
-            PreExecutionStatus(
-                schema_version=STATUS_SCHEMA,
-                reason=UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
-                diff_base_sha=refs.base,
-                source_sha=refs.head,
-                policy_sha=identity.policy_sha,
-                stage=OCR_PREVIEW_STAGE,
-                diagnostic_count=exc.diagnostic_count,
-            ),
-        )
+        if status_review is not None:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=identity.policy_sha,
+                    review=status_review,
+                    stage=OCR_PREVIEW_STAGE,
+                    diagnostic_count=exc.diagnostic_count,
+                ),
+            )
         print(
             "OCR preview qualification: diagnostics unclassified; model review did not run",
             file=sys.stderr,
@@ -2259,6 +2304,7 @@ def _record_rules_path_setup(
     refs: ReviewRefs,
     policy_sha: str,
     repository_path: str,
+    identity: ReviewIdentity,
     setup_reason: str = PROTECTED_TARGET_RULE_PATH_PENDING,
 ) -> bool:
     """Record only a bounded regular-blob introduction without reading source content."""
@@ -2277,6 +2323,7 @@ def _record_rules_path_setup(
             diff_base_sha=refs.base,
             source_sha=refs.head,
             policy_sha=policy_sha,
+            review=_status_review(identity),
         ),
     )
     return True
@@ -2429,6 +2476,7 @@ def _prepare_policy_context(
         policy_branch=snapshot.policy_branch if snapshot is not None else None,
         policy_protection=snapshot.policy_protection if snapshot is not None else None,
         protection_mode=snapshot.protection_mode if snapshot is not None else None,
+        ci_job_id=os.environ.get("CI_JOB_ID") if snapshot is not None else None,
     )
     rule = _one_option(ocr_args, "--rule")
     if rule is None:
@@ -2464,6 +2512,7 @@ def _prepare_policy_context(
                     refs=refs,
                     policy_sha=policy_sha,
                     repository_path=repository_path,
+                    identity=identity,
                     setup_reason=(
                         PROTECTED_POLICY_RULE_PATH_PENDING
                         if identity.protection_mode == "auto"
@@ -2891,7 +2940,67 @@ def run_evidence_review(
 
     state = ReviewRunState(local=local)
     report_destination: Path | None = None
+    local_input_error: ReviewRunnerError | None = None
+    review_lock = ExitStack()
     try:
+        if local:
+            # Local-only context refusal precedes even private artifact I/O.
+            try:
+                validate_local_context(os.environ)
+            except ValueError as exc:
+                raise ReviewRunnerError(str(exc)) from exc
+        try:
+            artifacts = repository_artifacts()
+            review_lock.enter_context(locked_review_run(artifacts))
+            remove_private_artifact(artifacts.pre_execution_status)
+        except ReviewRunBusy as exc:
+            # This process owns no review artifacts. A failure report at the
+            # caller's shared destination could preempt the active review.
+            report_destination = None
+            raise ReviewRunnerBusy("another review is already running in this repository") from exc
+        except (OSError, RuntimeError) as exc:
+            report_destination = None
+            raise ReviewRunnerNoHandoff("OCR private pre-execution state is unsafe") from exc
+        if local:
+            if debug_dir is not None and preserve_private_artifacts:
+                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
+            if preserve_private_artifacts:
+                raise ReviewRunnerError(
+                    "--local requires result finalization and cannot preserve legacy private artifacts"
+                )
+            try:
+                ocr_args = _local_review_options(ocr_args)
+                destination = report_path or Path(str(result_path) + ".md")
+                try:
+                    prepare_local_report_path(destination, other_outputs=(result_path, stderr_path))
+                except (OSError, ValueError, RuntimeError) as exc:
+                    raise ReviewRunnerError(
+                        "local report destination is unavailable or unsafe"
+                    ) from exc
+                report_destination = destination
+            except ReviewRunnerError as exc:
+                if debug_dir is None:
+                    raise
+                # A requested debug journal records early local refusal only
+                # after this run has safely claimed the private handoff.
+                local_input_error = exc
+        if debug_dir is not None:
+            if not local:
+                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
+            try:
+                state.debug = DebugBundle(
+                    debug_dir,
+                    other_outputs=(
+                        result_path,
+                        stderr_path,
+                        report_path or Path(str(result_path) + ".md"),
+                    ),
+                )
+                state.debug.flush()
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise ReviewRunnerError("debug directory could not be prepared safely") from exc
+        if local_input_error is not None:
+            raise local_input_error
         try:
             mode = local_chatgpt.auth_mode(os.environ, local=local)
             if mode == "chatgpt":
@@ -2923,41 +3032,8 @@ def run_evidence_review(
         if enabled:
             state.progress = ReviewProgress(sys.stderr)
             state.progress.start()
-        if debug_dir is not None:
-            if not local or preserve_private_artifacts:
-                raise ReviewRunnerError("--debug-dir requires --local without legacy retention")
-            try:
-                state.debug = DebugBundle(
-                    debug_dir,
-                    other_outputs=(
-                        result_path,
-                        stderr_path,
-                        report_path or Path(str(result_path) + ".md"),
-                    ),
-                )
-                state.debug.flush()
-            except (OSError, ValueError, RuntimeError) as exc:
-                raise ReviewRunnerError("debug directory could not be prepared safely") from exc
         if report_path is not None and not local:
             raise ReviewRunnerError("--report requires --local")
-        if local and preserve_private_artifacts:
-            raise ReviewRunnerError(
-                "--local requires result finalization and cannot preserve legacy private artifacts"
-            )
-        if local:
-            try:
-                validate_local_context(os.environ)
-            except ValueError as exc:
-                raise ReviewRunnerError(str(exc)) from exc
-            ocr_args = _local_review_options(ocr_args)
-            destination = report_path or Path(str(result_path) + ".md")
-            try:
-                prepare_local_report_path(destination, other_outputs=(result_path, stderr_path))
-            except (OSError, ValueError, RuntimeError) as exc:
-                raise ReviewRunnerError(
-                    "local report destination is unavailable or unsafe"
-                ) from exc
-            report_destination = destination
         with dlp_mode(dlp_enabled):
             code = _run_evidence_review(
                 result_path,
@@ -3033,20 +3109,23 @@ def run_evidence_review(
             )
         raise
     finally:
-        if state.progress is not None:
-            state.progress.close()
-        if state.debug is not None:
-            try:
-                if state.report is not None:
-                    state.debug.capture("safe-result.json", result_path)
-                state.debug.flush(complete=True)
-            except (OSError, ValueError):
+        try:
+            if state.progress is not None:
+                state.progress.close()
+            if state.debug is not None:
                 try:
-                    print("Local debug journal output failed.", file=sys.stderr)
+                    if state.report is not None:
+                        state.debug.capture("safe-result.json", result_path)
+                    state.debug.flush(complete=True)
                 except (OSError, ValueError):
-                    pass
-            finally:
-                state.debug.close()
+                    try:
+                        print("Local debug journal output failed.", file=sys.stderr)
+                    except (OSError, ValueError):
+                        pass
+                finally:
+                    state.debug.close()
+        finally:
+            review_lock.close()
 
 
 def _local_review_options(args: list[str]) -> list[str]:
@@ -3093,7 +3172,6 @@ def _run_evidence_review(
     artifacts = repository_artifacts()
     try:
         prepare_artifact_directory(artifacts)
-        remove_private_artifact(artifacts.pre_execution_status)
         remove_private_artifact(artifacts.action_receipt)
         remove_private_artifact(artifacts.action_receipt_lock)
         remove_private_artifact(artifacts.dlp_decisions)
