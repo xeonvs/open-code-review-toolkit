@@ -196,7 +196,10 @@ Evidence keeps the reviewed `B..H` delta, the actual target T, and the selected
 policy commit P distinct. The optional bounded `ref=target` snapshot exposes
 untrusted file metadata and dependency facts for relevant changed paths at T;
 it cannot supply Rules, guidance, decisions, a second delta, or an absence
-proof. Local review has no GitLab target snapshot.
+proof. If only T's optional tree scan exceeds its entry budget, the snapshot
+stays empty with an explicit omission diagnostic while B/H/P evidence remains
+intact. Failure to resolve T or a non-budget repository read error still stops
+the review. Local review has no GitLab target snapshot.
 
 Source-bound `existing_code` and `suggestion_code` may contain HTML-like syntax
 only after exact immutable reviewed-head proof and safe code rendering. Other
@@ -286,7 +289,8 @@ flowchart TD
     projection -- publication-filtered --> publish_partial[Publish safe subset and explicit limitation]
     publish --> writes{Posting transaction complete?}
     publish_partial --> writes
-    writes -- No --> post_error[Posting failed;<br/>previous review state preserved]
+    writes -- No attempt or direct failure --> post_error[Posting failed;<br/>previous review state preserved]
+    writes -- Draft publish attempted, partial or unknown --> draft_partial[Stop nonzero; retain attempted notes;<br/>attempt cleanup of unattempted drafts;<br/>preserve prior review]
     writes -- Yes --> public_ok[Review signal published]
     public_ok --> action{Optional later action eligible?}
     action -- Yes --> fresh_again{Identity and authority<br/>still current before write?}
@@ -307,7 +311,7 @@ flowchart TD
 
     class public_ok,action_ok,complete success;
     class publish_partial,action_warn warning;
-    class schema_error,stale_error,post_error,action_stale,cleanup_partial error;
+    class schema_error,stale_error,post_error,draft_partial,action_stale,cleanup_partial error;
     class handoff,direct,publish auxiliary;
     class receipt,ci_context,exact,fresh,projection,writes,action,fresh_again,cleanup decision;
 ```
@@ -333,6 +337,13 @@ new current publication. A detached GitLab CI job without v11 cannot use the
 standalone direct-posting path; local review stays receipt-less and does not post
 to GitLab. Pre-write checks leave a provider-side race; neither the diagram nor a comment-only
 outcome implies that an earlier bot approval was revoked.
+
+Pending drafts are not counted as published findings on a later partial retry.
+After a draft publish attempt fails or freshness changes, the transaction retains
+every attempted note whose visibility is uncertain and attempts to delete only drafts whose
+publication was never attempted. Setup-pending note replacement follows the
+same old-state boundary: after its first old-note deletion attempt, later drift
+or an unconfirmed delete retains the replacement and reports partial cleanup.
 
 ## Maintenance contract
 

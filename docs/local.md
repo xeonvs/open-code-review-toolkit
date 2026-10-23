@@ -34,7 +34,12 @@ Keep all three output paths in that new private directory. Resolve its physical
 path before launch: on macOS `/tmp` commonly points through a symlink to
 `/private/tmp`, and the report writer rejects a symlinked parent after OCR has
 already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
-an OCR JSON file alone does not establish successful local delivery.
+an OCR JSON file alone does not establish successful local delivery. After a
+zero exit, read the complete private Markdown and JSON: require `status=complete`,
+compare selected/completed/reused/failed/waived coverage, inspect DLP admission and
+every admitted finding, and inspect stderr for failed auxiliary tool reads that
+could limit the conclusion. Preserve these artifacts until findings are fixed
+and the corrected head has been reviewed.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
