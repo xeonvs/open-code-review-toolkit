@@ -70,9 +70,9 @@ v0.13.0 is published with immutable assets and #264 closed. Its archived plan is
 
 | Queue | Requirements | Exit evidence | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-009 | Full plan/state pointer, reviewed plan-only signed commit, #268 milestone | in_progress |
-| WQ-02 | REQ-001, REQ-005 | Private before/after shape and safe `.gitmodules`/Git inventory, adversarial tests, self-reviewed commit | pending |
-| WQ-03 | REQ-002, REQ-005 | Frozen OCR invocation/environment, independent diff, preview/native-manifest qualification, real-binary regression, self-reviewed commit | pending |
+| WQ-01 | REQ-009 | Full plan/state pointer, reviewed plan-only signed commit, #268 milestone | done |
+| WQ-02 | REQ-001, REQ-005 | Private before/after shape and safe `.gitmodules`/Git inventory, adversarial tests, self-reviewed commit | done |
+| WQ-03 | REQ-002, REQ-005 | Frozen OCR invocation/environment, independent diff, preview/native-manifest qualification, real-binary regression, self-reviewed commit | in_progress |
 | WQ-04 | REQ-003, REQ-004 | Exact receipt v12/status v6, effective coverage/reporting and local no-model path, hostile/legacy tests, self-reviewed commit | pending |
 | WQ-05 | REQ-004 | GitLab posting, finding admission, approval blocker and partial lifecycle retention with failure/freshness tests, self-reviewed commit | pending |
 | WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | pending |
@@ -94,7 +94,7 @@ Only proven OCR 1.13.3 pure-pointer projection proceeds. Unique identical-OID be
 
 ### Latest Validation Results
 
-2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. Integrated validation is pending; no feature-branch implementation or release check has run.
+2026-10-23 pre-implementation OCR 1.13.3 probe passed for mixed update/add/delete/move/multiple pure gitlinks and demonstrated no-model gitlink-only preview plus unsafe type transitions. Digest matches the pinned manifest. The signed plan-only commit is `db27f37`; plan-lifecycle and instruction-contract checks and staged Gitleaks passed. Milestone v0.13.1 (#22) tracks #268. The WQ-02 shape/parser layer passes 19 focused tests (three opt-in real-binary tests skipped), Ruff, formatting, mypy and scoped diff review. Full integrated validation remains pending.
 
 ### Risks And Recovery
 
@@ -102,7 +102,7 @@ Git configuration precedence or local input drift can hide ordinary changes: rev
 
 ### Resume Point
 
-WQ-01: review this plan/state pointer, run lifecycle/instruction checks and staged secret scan, then make a signed plan-only commit. Create the v0.13.1 milestone for #268 before WQ-02.
+WQ-03: freeze the OCR child invocation/environment and qualify preview against an independent ordinary diff, then verify the native manifest. Start with the exact synthetic 1.13.3 shape proven before implementation.
 
 ### Plan Fidelity Check
 

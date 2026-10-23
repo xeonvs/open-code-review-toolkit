@@ -11,7 +11,7 @@ import pytest
 
 from ocr_toolkit import review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
-from ocr_toolkit.evidence.gitlinks import changed_gitlinks
+from ocr_toolkit.evidence.gitlinks import changed_gitlinks, plan_gitlink_input
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.preflight import validate_ocr_binary
 
@@ -81,6 +81,154 @@ def test_unchanged_gitlink_is_not_reported(tmp_path: Path) -> None:
     with pytest.raises(RepositoryEvidenceError, match="immutable commit IDs"):
         changed_gitlinks(reader, "HEAD~1", head)
     assert changed_gitlinks(reader, base, head)[0].kind == "updated"
+
+
+@pytest.mark.parametrize("kind", ["added", "updated", "deleted"])
+def test_private_input_plan_retains_original_ordinary_delta(tmp_path: Path, kind: str) -> None:
+    base, head = _fixture(tmp_path, kind)
+    plan = plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+    assert plan is not None
+    assert plan.base_sha == base and plan.head_sha == head
+    assert plan.counts[kind] == 1
+    assert plan.config_names == ()
+    assert [change.path for change in plan.ordinary] == ["main.php"]
+    assert plan.ordinary[0].before is not None
+    assert plan.ordinary[0].after is not None
+
+
+def test_unique_gitlink_move_keeps_changed_gitmodules_reviewable(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    (tmp_path / "main.php").write_text("<?php\n$limit = 1;\n", encoding="utf-8")
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "example"]\npath = schema-old\nurl = https://example.invalid/repo\nignore = none\n',
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", "main.php", ".gitmodules")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema-old")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "main.php").write_text("<?php\n$limit = 2;\n", encoding="utf-8")
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "example"]\npath = schema-new\nurl = https://example.invalid/repo\nignore = none\n',
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", "main.php", ".gitmodules")
+    _git(tmp_path, "update-index", "--force-remove", "schema-old")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema-new")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    plan = plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+    assert plan is not None
+    assert plan.moves == (("schema-old", "schema-new"),)
+    assert plan.counts == {"added": 0, "updated": 0, "deleted": 0, "moved": 1}
+    assert plan.config_names == ("example",)
+    assert [change.path for change in plan.ordinary] == [".gitmodules", "main.php"]
+
+
+@pytest.mark.parametrize("to_gitlink", [True, False])
+def test_same_path_type_transition_is_not_a_pure_pointer(tmp_path: Path, to_gitlink: bool) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    if to_gitlink:
+        (tmp_path / "schema").write_text("ordinary\n", encoding="utf-8")
+        _git(tmp_path, "add", "schema")
+    else:
+        _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    if to_gitlink:
+        _git(tmp_path, "update-index", "--cacheinfo", f"160000,{NEW_OID},schema")
+    else:
+        (tmp_path / "schema").write_text("ordinary\n", encoding="utf-8")
+        _git(tmp_path, "add", "schema")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    change = changed_gitlinks(GitRepositoryReader(tmp_path), base, head)[0]
+    assert change.kind == "transition"
+    assert change.before_entry is not None and change.after_entry is not None
+    assert {change.before_entry.mode, change.after_entry.mode} == {"100644", "160000"}
+    with pytest.raises(RepositoryEvidenceError, match="type transition"):
+        plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+
+
+def test_directory_to_gitlink_transition_is_rejected(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "schema" / "part.py").write_text("value = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "schema/part.py")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "rm", "-q", "--cached", "schema/part.py")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{NEW_OID},schema")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    with pytest.raises(RepositoryEvidenceError, match="directory transition"):
+        plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+
+
+def test_gitlink_to_directory_transition_is_rejected(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},schema")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "update-index", "--force-remove", "schema")
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "schema" / "part.py").write_text("value = 2\n", encoding="utf-8")
+    _git(tmp_path, "add", "schema/part.py")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    with pytest.raises(RepositoryEvidenceError, match="directory transition"):
+        plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+
+
+@pytest.mark.parametrize(
+    ("content", "error"),
+    [
+        (
+            '[submodule "one"]\npath = schema\n[submodule "two"]\npath = schema\n',
+            "path is ambiguous",
+        ),
+        ("[include]\npath = ../ignored.conf\n", "includes are unsupported"),
+        ('[submodule "one"]\npath = ../outside\n', "normalized and relative"),
+    ],
+)
+def test_untrusted_gitmodules_cannot_authorize_projection(
+    tmp_path: Path, content: str, error: str
+) -> None:
+    base, _head = _fixture(tmp_path, "updated")
+    (tmp_path / ".gitmodules").write_text(content, encoding="utf-8")
+    _git(tmp_path, "add", ".gitmodules")
+    _git(tmp_path, "commit", "-qm", "untrusted mapping")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    with pytest.raises(RepositoryEvidenceError, match=error):
+        plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
+
+
+def test_ambiguous_gitlink_move_pairing_is_rejected(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
+    _git(tmp_path, "config", "user.email", "reviewer@example.invalid")
+    for path in ("old-a", "old-b"):
+        _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},{path}")
+    _git(tmp_path, "commit", "-qm", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    for path in ("old-a", "old-b"):
+        _git(tmp_path, "update-index", "--force-remove", path)
+    for path in ("new-a", "new-b"):
+        _git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{OLD_OID},{path}")
+    _git(tmp_path, "commit", "-qm", "head")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    with pytest.raises(RepositoryEvidenceError, match="ambiguous"):
+        plan_gitlink_input(GitRepositoryReader(tmp_path), base, head)
 
 
 @pytest.mark.parametrize("kind", ["added", "updated", "deleted"])
