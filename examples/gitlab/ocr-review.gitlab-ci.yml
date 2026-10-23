@@ -12,8 +12,6 @@ variables:
   OCR_SHA256: "843be0e56fdff0a5ca6f86c5866f942d6a372dff1c0ca19e7893d72495abf45c"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
-  # Secure default: reject an unprotected GitLab target before OCR.
-  OCR_GITLAB_TARGET_PROTECTION_MODE: "required"
   # Default-on receipt-bound approval; governed federation still applies receipt gates.
   OCR_AUTO_APPROVE: "true"
   # Identity-only by default; use "metadata" to admit bounded MR text fields.
@@ -103,8 +101,8 @@ open_code_review:
     - ocr-ci preflight
     - ocr-ci configure
     - export OCR_LLM_TOKEN="${OCR_LLM_TOKEN}"
-    - ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" --rule examples/gitlab/rules.json --format json --max-tools "${OCR_MAX_TOOLS:-0}" --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
-    - ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
+    - ocr-ci review --result "/tmp/ocr-result-${CI_JOB_ID}.json" --stderr "/tmp/ocr-stderr-${CI_JOB_ID}.log" -- --from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --to "${CI_COMMIT_SHA}" --rule examples/gitlab/rules.json --format json --max-tools "${OCR_MAX_TOOLS:-0}" --max-tokens-budget "${OCR_MAX_TOKENS_BUDGET:-0}" || export OCR_EXIT_CODE=$?
+    - ocr-ci post --result "/tmp/ocr-result-${CI_JOB_ID}.json" --stderr "/tmp/ocr-stderr-${CI_JOB_ID}.log"
 
 open_code_review_self_test:
   stage: ai_review

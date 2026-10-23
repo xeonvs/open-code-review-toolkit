@@ -9,17 +9,18 @@ import secrets
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
-from ocr_toolkit.common.markdown import markdown_code_block, neutralize_quick_actions
+from ocr_toolkit.common.markdown import neutralize_quick_actions
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.ocr_result import (
     TOOLKIT_ADVISORY_KEY,
     TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
+    TOOLKIT_RESULT_SCHEMA_VERSION,
     OcrResultMalformed,
     OcrResultMissing,
     OcrResultTooLarge,
@@ -52,9 +53,14 @@ from ocr_toolkit.posting.formatting import (
     format_reviewer_guide,
     format_token_usage_summary,
     format_tool_calls_summary,
-    inline_code,
     publication_dlp_signal,
     summarize_result,
+)
+from ocr_toolkit.posting.freshness import (
+    ReviewFreshnessResult,
+    ReviewFreshnessStale,
+    ReviewFreshnessUnavailable,
+    validate_review_freshness,
 )
 from ocr_toolkit.posting.gitlab import (
     GitLabConfig,
@@ -84,7 +90,6 @@ from ocr_toolkit.posting.snapshot import (
     collect_previous_bot_comment_refs,
     collect_terminal_status_note_ids,
     delete_previous_bot_comments_if_collected,
-    delete_previous_setup_notes,
     delete_previous_summary_notes,
     delete_previous_terminal_notes,
     filter_previously_published_comments,
@@ -104,11 +109,14 @@ from ocr_toolkit.pre_execution import (
     BACKGROUND_REASONS,
     GITLAB_MERGE_REQUEST_TERMINAL,
     GITLINK_PREVIEW_UNSUPPORTED,
+    PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEW_IDENTITY_UNAVAILABLE,
     REVIEWED_REVISION_NO_LONGER_CURRENT,
     UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
+    pre_execution_review_identity,
     read_pre_execution_status,
 )
 from ocr_toolkit.provider_failure import (
@@ -117,12 +125,13 @@ from ocr_toolkit.provider_failure import (
 )
 from ocr_toolkit.providers.gitlab import (
     GitLabMergeRequestLifecycle,
+    GitLabMergeRequestTerminal,
     GitLabProviderError,
     parse_merge_request_lifecycle,
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
-from ocr_toolkit.review_identity import effective_reviewed_sha
-from ocr_toolkit.review_receipt import validated_review_identity
+from ocr_toolkit.review_identity import effective_reviewed_sha, full_sha
+from ocr_toolkit.review_receipt import ReceiptReviewIdentity, validated_review_identity
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -135,7 +144,6 @@ from ocr_toolkit.posting.settings import (
     post_mode,
     strict_posting,
 )
-from ocr_toolkit.review_runner import read_stderr_excerpt
 
 
 def finalize_posting(config: GitLabConfig, transaction: PostingTransaction) -> bool:
@@ -221,10 +229,190 @@ def publication_lifecycle_or_exit(
 
 
 def unprotected_target_limitation(toolkit_metadata: Any) -> bool:
-    """Select the static limitation only from one fully validated receipt v9."""
+    """Select limited wording only for explicitly unprotected review authority."""
 
     identity = validated_review_identity(toolkit_metadata)
-    return identity is not None and identity.target_protection == "unprotected"
+    return bool(
+        identity is not None
+        and identity.target_protection == "unprotected"
+        and not (
+            identity.schema_version == TOOLKIT_RESULT_SCHEMA_VERSION
+            and identity.protection_mode == "auto"
+            and identity.policy_protection == "protected"
+        )
+    )
+
+
+def protected_policy_anchor_sha(toolkit_metadata: Any) -> str:
+    """Render only the validated immutable P for automatic comment-only fallback."""
+
+    identity = validated_review_identity(toolkit_metadata)
+    if (
+        identity is not None
+        and identity.schema_version == TOOLKIT_RESULT_SCHEMA_VERSION
+        and identity.protection_mode == "auto"
+        and identity.target_protection == "unprotected"
+        and identity.policy_protection == "protected"
+    ):
+        return identity.policy_sha
+    return ""
+
+
+def validate_posting_review_identity(
+    config: GitLabConfig, identity: ReceiptReviewIdentity
+) -> ReviewFreshnessResult:
+    """Bind the validated receipt to this job before a current-result write."""
+
+    if identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION:
+        raise ReviewFreshnessUnavailable("receipt_unavailable")
+    if (
+        identity.project_id != config.project_id
+        or identity.merge_request_iid != config.merge_request_iid
+    ):
+        raise ReviewFreshnessStale("invocation_changed")
+    return validate_review_freshness(os.environ, identity, Path.cwd())
+
+
+def publication_freshness_or_exit(
+    config: GitLabConfig,
+    identity: ReceiptReviewIdentity | None,
+    *,
+    cleanup_started: bool = False,
+) -> int | None:
+    """Reject stale or unprovable current results with accurate cleanup state."""
+
+    if identity is None:
+        return None
+    prior_state = (
+        "previous review cleanup is partial; current-run comments retained."
+        if cleanup_started
+        else "previous review preserved."
+    )
+    try:
+        validate_posting_review_identity(config, identity)
+    except (ReviewFreshnessStale, ReviewFreshnessUnavailable) as exc:
+        print(
+            f"OCR reviewed identity is no longer publication-eligible ({exc.reason}); "
+            f"{prior_state}",
+            file=sys.stderr,
+        )
+        return 1
+    except GitLabMergeRequestTerminal:
+        print(
+            "Merge request became terminal after review; normal publication stopped "
+            f"and {prior_state}",
+            file=sys.stderr,
+        )
+        return 1
+    return None
+
+
+def current_publication_or_rollback(
+    config: GitLabConfig,
+    identity: ReceiptReviewIdentity | None,
+    previous_refs: BotCommentRefs,
+    transaction: PostingTransaction,
+    *,
+    published_draft: bool = False,
+) -> bool:
+    """Stop current-result writes at drift without claiming draft rollback."""
+
+    if publication_freshness_or_exit(config, identity) is None:
+        return True
+    if published_draft:
+        print(
+            "OCR draft publication is partial: a published note may remain visible. "
+            "Previous review was preserved; no further posting or old-note cleanup was attempted.",
+            file=sys.stderr,
+        )
+    else:
+        rollback_current_run_comments(config, previous_refs, transaction)
+    return False
+
+
+def pre_execution_status_fresh_or_exit(
+    config: GitLabConfig,
+    status: PreExecutionStatus,
+    *,
+    exact_policy: bool = False,
+    cleanup_started: bool = False,
+) -> int | None:
+    """Bind a static note to the stored MR version before each provider write."""
+
+    previous_state = (
+        "previous setup-note cleanup may be partial; current replacement retained."
+        if cleanup_started
+        else "previous review preserved."
+    )
+
+    try:
+        identity = pre_execution_review_identity(status)
+    except PreExecutionStatusError:
+        identity = None
+    if identity is None:
+        print(
+            "Pre-execution status has no authenticated review identity; "
+            f"no further merge-request note was written; {previous_state}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        current = validate_posting_review_identity(config, identity)
+    except (ReviewFreshnessStale, ReviewFreshnessUnavailable) as exc:
+        print(
+            f"Pre-execution review identity is no longer current ({exc.reason}); {previous_state}",
+            file=sys.stderr,
+        )
+        return 1
+    except GitLabMergeRequestTerminal:
+        print(
+            "Merge request became terminal before pre-execution status publication; "
+            f"{previous_state}",
+            file=sys.stderr,
+        )
+        return 1
+    if exact_policy and current.current_policy_sha != status.policy_sha:
+        print(
+            f"Protected policy changed after setup-pending admission; {previous_state}",
+            file=sys.stderr,
+        )
+        return 1
+    return None
+
+
+def exact_receipt_diff_refs(identity: ReceiptReviewIdentity) -> dict[str, str]:
+    """Use the reviewed diff tuple, never a provider version matched only by H."""
+
+    if (
+        identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION
+        or identity.diff_base_sha is None
+        or identity.diff_start_sha is None
+        or identity.diff_head_sha is None
+    ):
+        raise ValueError("exact current-receipt diff refs are unavailable")
+    return {
+        "base_sha": identity.diff_base_sha,
+        "start_sha": identity.diff_start_sha,
+        "head_sha": identity.diff_head_sha,
+    }
+
+
+def gitlab_ci_profile_present() -> bool:
+    """Treat even malformed GitLab CI identity as requiring a current receipt."""
+
+    return any(
+        key in os.environ
+        for key in (
+            "GITLAB_CI",
+            "CI_COMMIT_SHA",
+            "CI_MERGE_REQUEST_EVENT_TYPE",
+            "CI_MERGE_REQUEST_DIFF_BASE_SHA",
+            "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
+            "CI_PIPELINE_ID",
+            "CI_JOB_ID",
+            "CI_PIPELINE_SOURCE",
+        )
+    )
 
 
 def summary_with_run_marker(body: str, run_id: str) -> str:
@@ -265,6 +453,8 @@ def replace_current_summary(
     config: GitLabConfig,
     run_id: str,
     body: str,
+    *,
+    review_identity: ReceiptReviewIdentity | None = None,
 ) -> bool:
     """Update and read back one current summary without retrying the write."""
 
@@ -275,6 +465,11 @@ def replace_current_summary(
             "leaving the published advisory review unchanged.",
             file=sys.stderr,
         )
+        return False
+    if (
+        review_identity is not None
+        and publication_freshness_or_exit(config, review_identity) is not None
+    ):
         return False
     write = update_plain_note(config, note_id, body)
     if not write.posted:
@@ -298,22 +493,90 @@ def finalize_review_approval(
     run_id: str,
     render_summary: Callable[[ApprovalResult], str],
     publication: object = None,
+    *,
+    review_identity: ReceiptReviewIdentity | None = None,
 ) -> int:
     """Publish notes, manage exact-SHA approval, update summary, then clean old state."""
 
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
+    publish_attempted = False
+    published_draft = False
+    unattempted_drafts: list[int] = []
 
+    def stop_current_review() -> int:
+        if publish_attempted:
+            baseline_drafts = set(previous_refs.all_draft_note_ids or previous_refs.draft_note_ids)
+            unconfirmed_cleanup = False
+            for note_id in unattempted_drafts:
+                if note_id in baseline_drafts or not gitlab_api.delete_draft_note(config, note_id):
+                    unconfirmed_cleanup = True
+            print(
+                "OCR draft publication is partial or unconfirmed: an attempted note may "
+                "remain visible. Previous review was preserved; no old-note cleanup was "
+                "attempted.",
+                file=sys.stderr,
+            )
+            if unconfirmed_cleanup:
+                print(
+                    "OCR unattempted draft cleanup could not be confirmed; pending drafts "
+                    "are not counted as published findings on a later run.",
+                    file=sys.stderr,
+                )
+        else:
+            rollback_current_run_comments(config, previous_refs, transaction)
+        return 1
+
+    if (
+        review_identity is not None
+        and publication_freshness_or_exit(config, review_identity) is not None
+    ):
+        return stop_current_review()
+    if review_identity is not None and post_mode() == "draft" and transaction.draft_note_ids:
+        unattempted_drafts = list(transaction.consume_drafts_for_publication())
+        for note_id in tuple(unattempted_drafts):
+            if publication_freshness_or_exit(config, review_identity) is not None:
+                return stop_current_review()
+            unattempted_drafts.pop(0)
+            publish_attempted = True
+            if not gitlab_api.publish_draft_note(config, note_id):
+                print(f"Failed to publish OCR draft note id={note_id}.", file=sys.stderr)
+                return stop_current_review()
+            published_draft = True
+    elif not finalize_posting(config, transaction):
+        return publish_failure_exit(config, transaction)
+    if (
+        review_identity is not None
+        and not eligibility.eligible
+        and publication_freshness_or_exit(config, review_identity) is not None
+    ):
+        return stop_current_review()
+
+    freshness_options = (
+        {
+            "review_identity": review_identity,
+            "freshness_check": lambda: validate_posting_review_identity(config, review_identity),
+        }
+        if review_identity is not None
+        else {}
+    )
     execution = (
         execute_approval(
             config,
             eligibility,
             reviewed_commit,
             reviewed_author_id,
+            **freshness_options,
         )
         if eligibility.eligible
         else ApprovalExecution(eligibility.result)
     )
+    if execution.preserve_previous_review:
+        stop_current_review()
+        print(
+            "OCR review identity could not be safely confirmed before approval; "
+            "the previous review was preserved.",
+            file=sys.stderr,
+        )
+        return 1
     final_body = summary_with_run_marker(
         render_summary(execution.result),
         run_id,
@@ -322,12 +585,30 @@ def finalize_review_approval(
         render_summary(provisional_approval_result(eligibility)),
         run_id,
     )
+    if (
+        review_identity is not None
+        and publication_freshness_or_exit(config, review_identity) is not None
+    ):
+        return stop_current_review()
     summary_updated = final_body == provisional_body or replace_current_summary(
         config,
         run_id,
         final_body,
+        **({"review_identity": review_identity} if review_identity is not None else {}),
     )
+    if (
+        review_identity is not None
+        and publication_freshness_or_exit(config, review_identity) is not None
+    ):
+        return stop_current_review()
     if not summary_updated:
+        if review_identity is not None:
+            print(
+                "Automatic approval summary update could not be confirmed; "
+                "previous review preserved.",
+                file=sys.stderr,
+            )
+            return stop_current_review()
         execution = ApprovalExecution(
             ApprovalResult(
                 ApprovalStatus.FAILED,
@@ -339,10 +620,23 @@ def finalize_review_approval(
             file=sys.stderr,
         )
 
+    cleanup_options = (
+        {
+            "review_identity": review_identity,
+            "transaction": transaction,
+            "published_draft": published_draft,
+        }
+        if review_identity is not None
+        else {}
+    )
     if publication is None:
-        finalize_previous_review_state(config, previous_refs, outcome)
+        cleaned = finalize_previous_review_state(config, previous_refs, outcome, **cleanup_options)
     else:
-        finalize_previous_review_state(config, previous_refs, outcome, publication=publication)
+        cleaned = finalize_previous_review_state(
+            config, previous_refs, outcome, publication=publication, **cleanup_options
+        )
+    if cleaned is False:
+        return 1
     if execution.result.status is ApprovalStatus.FAILED and strict_posting():
         return 1
     return 0
@@ -676,23 +970,42 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         )
 
     toolkit_metadata = result.get(TOOLKIT_RESULT_KEY)
-    if toolkit_metadata is not None and not toolkit_receipt_is_valid(toolkit_metadata):
-        return invalid_ocr_schema_exit(
-            config,
-            "receipt v9 is invalid",
-            intro="OCR result publication policy state could not be validated.",
-            title="**Open Code Review publication policy error**",
+    if TOOLKIT_RESULT_KEY in result and not toolkit_receipt_is_valid(toolkit_metadata):
+        print(
+            "Toolkit review receipt is invalid; no merge-request note was written. "
+            "Previous review preserved.",
+            file=sys.stderr,
         )
+        return 1
+    receipt_identity = validated_review_identity(toolkit_metadata)
+    if toolkit_metadata is None and gitlab_ci_profile_present():
+        print(
+            "GitLab CI review result has no authenticated current receipt; no merge-request "
+            "note was written and previous review was preserved.",
+            file=sys.stderr,
+        )
+        return 1
+    if (
+        receipt_identity is not None
+        and receipt_identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION
+    ):
+        print(
+            "Historical toolkit receipt is readback-only; current publication requires "
+            "a current review identity. Previous review preserved.",
+            file=sys.stderr,
+        )
+        return 1
     constrained_target = unprotected_target_limitation(toolkit_metadata)
+    policy_anchor_sha = protected_policy_anchor_sha(toolkit_metadata)
     publication = toolkit_metadata.get("publication") if toolkit_metadata is not None else None
     publication_state = "direct" if toolkit_metadata is None else publication_dlp_state(publication)
     if publication_state is None:
-        return invalid_ocr_schema_exit(
-            config,
-            "receipt v9 publication state is invalid",
-            intro="OCR result publication policy state could not be validated.",
-            title="**Open Code Review publication policy error**",
+        print(
+            "Toolkit receipt publication state is invalid; no merge-request note was written. "
+            "Previous review preserved.",
+            file=sys.stderr,
         )
+        return 1
 
     advisory = None
     if TOOLKIT_ADVISORY_KEY in result:
@@ -703,7 +1016,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         if not toolkit_receipt_is_valid(toolkit_metadata):
             return invalid_ocr_schema_exit(
                 config,
-                "OCR toolkit advisory is not bound to a valid receipt v9",
+                "OCR toolkit advisory is not bound to a valid receipt",
             )
     ocr_core_advisory_summary = format_ocr_core_advisory(advisory)
 
@@ -743,20 +1056,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         legacy_warning_fallback=publication_state != "publication-filtered",
     )
     if summary_outcome.kind == "failed":
-        return post_manifest_failure(
-            config,
-            summary_outcome,
-            outcome_message,
-            warnings,
-            tool_calls_summary=tool_calls_summary,
-            mcp_usage_summary=mcp_usage_summary,
-            token_usage_summary=token_usage_summary,
-            ocr_core_advisory_summary=ocr_core_advisory_summary,
-            unprotected_target=constrained_target,
-        )
+        freshness_exit = publication_freshness_or_exit(config, receipt_identity)
+        if freshness_exit is not None:
+            return freshness_exit
+        return post_manifest_failure()
 
     billing_reason = llm_billing_failure_reason(warnings)
     if billing_reason is not None:
+        freshness_exit = publication_freshness_or_exit(config, receipt_identity)
+        if freshness_exit is not None:
+            return freshness_exit
         print(
             "OCR reported an LLM provider billing/quota failure; refusing to publish normal review notes.",
             file=sys.stderr,
@@ -842,13 +1151,18 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     )
 
     if publishable_comment_count == 0:
-        publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
-            config, toolkit_metadata, reviewed_commit
-        )
-        if lifecycle_exit is not None:
-            return lifecycle_exit
-        if publication_lifecycle is not None and publication_lifecycle.state != "opened":
-            approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
+        if receipt_identity is not None:
+            freshness_exit = publication_freshness_or_exit(config, receipt_identity)
+            if freshness_exit is not None:
+                return freshness_exit
+        else:
+            publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
+                config, toolkit_metadata, reviewed_commit
+            )
+            if lifecycle_exit is not None:
+                return lifecycle_exit
+            if publication_lifecycle is not None and publication_lifecycle.state != "opened":
+                approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
 
         def render_no_comments_summary(approval_result: ApprovalResult) -> str:
             """Render the no-findings summary with one approval state."""
@@ -875,6 +1189,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 suppressed_count=suppressed_count,
                 approval_result=approval_result,
                 unprotected_target=constrained_target,
+                protected_policy_anchor_sha=policy_anchor_sha,
                 merge_request_lifecycle=(
                     publication_lifecycle.state
                     if publication_lifecycle is not None and publication_lifecycle.state != "opened"
@@ -887,6 +1202,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             render_no_comments_summary(provisional_approval_result(approval_eligibility)),
             summary_run_id,
         )
+        if not current_publication_or_rollback(
+            config, receipt_identity, previous_bot_comment_refs, transaction
+        ):
+            return 1
         response = post_review_note_bounded(
             config,
             "",
@@ -907,16 +1226,23 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             summary_run_id,
             render_no_comments_summary,
             publication=publication,
+            review_identity=receipt_identity,
         )
 
-    refs = get_diff_refs(config)
-    publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
-        config, toolkit_metadata, reviewed_commit
-    )
-    if lifecycle_exit is not None:
-        return lifecycle_exit
-    if publication_lifecycle is not None and publication_lifecycle.state != "opened":
-        approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
+    if receipt_identity is not None:
+        refs = exact_receipt_diff_refs(receipt_identity)
+        freshness_exit = publication_freshness_or_exit(config, receipt_identity)
+        if freshness_exit is not None:
+            return freshness_exit
+    else:
+        refs = get_diff_refs(config)
+        publication_lifecycle, lifecycle_exit = publication_lifecycle_or_exit(
+            config, toolkit_metadata, reviewed_commit
+        )
+        if lifecycle_exit is not None:
+            return lifecycle_exit
+        if publication_lifecycle is not None and publication_lifecycle.state != "opened":
+            approval_eligibility = terminal_approval_eligibility(publication_lifecycle.state)
     inline_count = 0
     failed_comments: list[tuple[dict[str, Any], SuggestionDecision]] = []
     fallback_reasons: Counter[str] = Counter()
@@ -971,6 +1297,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             failed_comments.append((raw_comment, suggestion_decision))
             continue
 
+        if not current_publication_or_rollback(
+            config, receipt_identity, previous_bot_comment_refs, transaction
+        ):
+            return 1
         inline_result = post_review_discussion(
             config=config,
             path=path,
@@ -1024,6 +1354,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 f"{fallback_chunk}"
             )
 
+            if not current_publication_or_rollback(
+                config, receipt_identity, previous_bot_comment_refs, transaction
+            ):
+                return 1
             fallback_response = post_review_note_bounded(
                 config,
                 fallback_title,
@@ -1036,6 +1370,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 return posting_failure_exit(config, previous_bot_comment_refs, transaction)
 
     if omitted_count:
+        if not current_publication_or_rollback(
+            config, receipt_identity, previous_bot_comment_refs, transaction
+        ):
+            return 1
         omitted_response = post_review_note_bounded(
             config,
             "**Open Code Review omitted comments**",
@@ -1077,6 +1415,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             suppressed_count=suppressed_count,
             approval_result=approval_result,
             unprotected_target=constrained_target,
+            protected_policy_anchor_sha=policy_anchor_sha,
             merge_request_lifecycle=(
                 publication_lifecycle.state
                 if publication_lifecycle is not None and publication_lifecycle.state != "opened"
@@ -1085,6 +1424,10 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             emoji=emoji,
         )
 
+    if not current_publication_or_rollback(
+        config, receipt_identity, previous_bot_comment_refs, transaction
+    ):
+        return 1
     summary_response = post_review_note_bounded(
         config,
         "",
@@ -1110,6 +1453,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
         summary_run_id,
         render_findings_summary,
         publication=publication,
+        review_identity=receipt_identity,
     )
 
     print(
@@ -1126,8 +1470,71 @@ def finalize_previous_review_state(
     outcome: ReviewOutcome,
     *,
     publication: object = None,
-) -> None:
+    review_identity: ReceiptReviewIdentity | None = None,
+    transaction: PostingTransaction | None = None,
+    published_draft: bool = False,
+) -> bool:
     """Replace prior notes only after a complete outcome; preserve them for partial coverage."""
+
+    if review_identity is not None:
+        if transaction is None:
+            raise ValueError("current-receipt cleanup requires the posting transaction")
+        cleanup_started = False
+
+        def remove_if_current(delete: Callable[..., bool], *args: object) -> bool:
+            nonlocal cleanup_started
+            if cleanup_started:
+                if (
+                    publication_freshness_or_exit(config, review_identity, cleanup_started=True)
+                    is not None
+                ):
+                    return False
+            elif not current_publication_or_rollback(
+                config,
+                review_identity,
+                previous_refs,
+                transaction,
+                published_draft=published_draft,
+            ):
+                return False
+            # A provider may apply a mutation even when its response is lost.
+            # Once cleanup is attempted, rolling back the replacement could
+            # leave the MR without either a complete old or new review.
+            cleanup_started = True
+            if not delete(config, *args):
+                print(
+                    "OCR previous review cleanup is partial: provider did not confirm "
+                    "the mutation; current-run comments retained.",
+                    file=sys.stderr,
+                )
+                return False
+            return True
+
+        if outcome.kind == "partial":
+            note_ids = previous_refs.summary_plain_note_ids
+            draft_ids = previous_refs.summary_draft_note_ids
+            discussion_refs: list[tuple[str, int]] = []
+        else:
+            note_ids = previous_refs.plain_note_ids
+            draft_ids = previous_refs.draft_note_ids
+            discussion_refs = previous_refs.discussion_note_refs
+        for note_id in note_ids:
+            if not remove_if_current(gitlab_api.delete_plain_note, note_id):
+                return False
+        for discussion_id, note_id in discussion_refs:
+            if not remove_if_current(gitlab_api.delete_discussion_note, discussion_id, note_id):
+                return False
+        for note_id in draft_ids:
+            if not remove_if_current(gitlab_api.delete_draft_note, note_id):
+                return False
+        if outcome.kind == "partial":
+            for note_id in previous_refs.terminal_plain_note_ids:
+                if not remove_if_current(gitlab_api.delete_plain_note, note_id):
+                    return False
+        for discussion_id in previous_refs.discussions_to_resolve:
+            if not remove_if_current(resolve_discussion, discussion_id):
+                return False
+        return True
 
     if outcome.kind == "partial":
         if publication_dlp_state(publication) == "publication-filtered":
@@ -1146,6 +1553,7 @@ def finalize_previous_review_state(
     else:
         delete_previous_bot_comments_if_collected(config, previous_refs)
     resolve_requested_discussions(config, previous_refs)
+    return True
 
 
 def resolve_requested_discussions(
@@ -1168,87 +1576,34 @@ def resolve_requested_discussions(
 def invalid_ocr_schema_exit(
     config: GitLabConfig,
     message: str,
-    intro: str = "OCR produced valid JSON that does not match the expected review schema.",
-    title: str = "**Open Code Review result schema error**",
 ) -> int:
-    """Post a visible OCR result artifact error without replacing old review notes."""
+    """Keep an unbound result error in the job; preserve prior MR state."""
 
-    print(f"OCR result schema error: {message}", file=sys.stderr)
-    transaction = PostingTransaction()
-    safe_message = neutralize_quick_actions(clean_text(message))
-    response = post_review_note_bounded(
-        config,
-        title,
-        f"{neutralize_quick_actions(clean_text(intro))}\n\n"
-        "- Normal review comments were not published.\n"
-        "- Previous OCR review comments were preserved.\n"
-        f"- Schema error: {inline_code(safe_message)}",
-        transaction,
+    print(
+        f"OCR result schema error: {neutralize_quick_actions(clean_text(message))}. "
+        "No merge-request note was written; previous review preserved.",
+        file=sys.stderr,
     )
-    if response is None:
-        print("Failed to create OCR schema-error note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
-
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
-
-    return 1 if strict_posting() else 0
+    return 1
 
 
-def post_manifest_failure(
-    config: GitLabConfig,
-    outcome: ReviewOutcome,
-    message: str,
-    warnings: Sequence[Any],
-    *,
-    tool_calls_summary: str = "",
-    mcp_usage_summary: str = "",
-    token_usage_summary: str = "",
-    ocr_core_advisory_summary: str = "",
-    unprotected_target: bool = False,
-) -> int:
-    """Post a manifest-declared run failure while preserving prior review notes."""
+def post_manifest_failure() -> int:
+    """Keep a failed result job-only until its live review tuple can be proven."""
 
-    transaction = PostingTransaction()
-    body = summarize_result(
-        total=0,
-        inline_count=0,
-        fallback_count=0,
-        warning_count=len(warnings),
-        tool_calls_summary=tool_calls_summary,
-        mcp_usage_summary=mcp_usage_summary,
-        token_usage_summary=token_usage_summary,
-        ocr_core_advisory_summary=ocr_core_advisory_summary,
-        outcome_status="failed",
-        outcome_message=message,
-        coverage_summary=outcome.coverage_summary,
-        coverage_diagnostics=normalize_coverage_diagnostics(outcome, warnings),
-        warnings=warnings,
-        unprotected_target=unprotected_target,
-        emoji=post_emoji(),
+    print(
+        "OCR review failed; no merge-request note was written and previous review "
+        "was preserved. Inspect the private job diagnostics.",
+        file=sys.stderr,
     )
-
-    response = post_review_note_bounded(
-        config,
-        "",
-        body,
-        transaction,
-    )
-    if response is None:
-        print("Failed to create OCR manifest-failure note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
-    return 1 if strict_posting() else 0
+    return 1
 
 
 def post_llm_provider_failure(
     config: GitLabConfig,
     reason: ProviderFailureReason,
 ) -> int:
-    """Render one closed provider failure without publishing private diagnostics."""
+    """Keep an unbound provider failure in the job, with a closed reason."""
 
-    transaction = PostingTransaction()
     summary, remediation = {
         ProviderFailureReason.AUTHENTICATION: (
             "The LLM provider did not accept the configured credential.",
@@ -1304,31 +1659,12 @@ def post_llm_provider_failure(
         ),
     }[reason]
 
-    body_parts = [
-        summary,
-        "",
-        f"- Safe classification: `{reason.value}`.",
-        "- Normal review comments were not published.",
-        "- Previous OCR review comments were preserved.",
-        "- Automatic approval was not attempted.",
-        f"- {remediation}",
-    ]
-
-    response = post_review_note_bounded(
-        config,
-        "**Open Code Review provider failure**",
-        "\n".join(body_parts),
-        transaction,
+    print(
+        f"Open Code Review provider failure ({reason.value}): {summary} {remediation} "
+        "No merge-request note was written; previous review preserved.",
+        file=sys.stderr,
     )
-    if response is None:
-        print("Failed to create OCR provider-failure note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
-
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
-
-    print(f"Open Code Review provider failure: {reason.value}.", file=sys.stderr)
-    return 1 if strict_posting() else 0
+    return 1
 
 
 def _result_provider_failure_reason(result_path: Path) -> ProviderFailureReason | None:
@@ -1342,41 +1678,25 @@ def _result_provider_failure_reason(result_path: Path) -> ProviderFailureReason 
 
 
 def post_parse_error(config: GitLabConfig, stderr_path: Path) -> int:
-    """Post a safe error note when OCR output is not valid JSON.
+    """Keep a malformed result job-only without replacing old review notes."""
 
-    Previous OCR bot notes are intentionally NOT cleaned up here: a parse
-    error means the new review may be partial or misleading, so the last
-    valid review must remain visible until a successful run replaces it.
-    """
+    print(
+        "Open Code Review did not produce valid JSON. No merge-request note was "
+        "written; previous review preserved. Inspect the private job diagnostics.",
+        file=sys.stderr,
+    )
+    return 1
 
-    transaction = PostingTransaction()
-    details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
-    details = read_stderr_excerpt(stderr_path) if details_enabled else ""
 
-    if details:
-        parse_error_response = post_review_note_bounded(
-            config,
-            "**Open Code Review parse error**",
-            "**Open Code Review failed to produce valid JSON.**\n\n"
-            + neutralize_quick_actions(markdown_code_block("text", details)),
-            transaction,
-        )
-    else:
-        parse_error_response = post_review_note_bounded(
-            config,
-            "**Open Code Review parse error**",
-            "**Open Code Review failed to produce valid JSON.** Check the CI job log.",
-            transaction,
-        )
+def post_no_handoff_failure() -> int:
+    """Keep a review that did not claim private handoff state in its own job."""
 
-    if parse_error_response is None:
-        print("Failed to create OCR parse-error note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
-
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
-
-    return 1 if strict_posting() else 0
+    print(
+        "Review handoff was not claimed; no merge-request note was written. "
+        "Previous review preserved.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def post_ocr_failure(
@@ -1385,7 +1705,7 @@ def post_ocr_failure(
     exit_code: int,
     result_path: Path | None = None,
 ) -> int:
-    """Post a safe failure note when OCR exits with a non-zero status.
+    """Keep an unbound OCR failure in job diagnostics without mutating MR notes.
 
     A non-zero OCR exit code means the JSON output may be partial or misleading,
     so this script intentionally does not publish normal review comments. A
@@ -1400,57 +1720,52 @@ def post_ocr_failure(
     instead of a confusing negative number.
     """
 
+    if exit_code == os.EX_TEMPFAIL:
+        # Review could not claim the checkout's private handoff. Its status may
+        # belong to another process, even when both reviews target the same MR.
+        return post_no_handoff_failure()
+
+    source_sha = reviewed_sha()
+    diff_base_sha = full_sha(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
+    if not source_sha or not diff_base_sha:
+        print(
+            "Review identity is unavailable; no merge-request note was written. "
+            "Previous review preserved.",
+            file=sys.stderr,
+        )
+        return 1
     try:
         status_path = repository_artifacts().pre_execution_status
-        source_sha = reviewed_sha()
-        diff_base_sha = clean_text(os.environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""))
-        status = read_pre_execution_status(
-            status_path,
-            expected_diff_base_sha=diff_base_sha,
-            expected_source_sha=source_sha,
-        )
-    except (OSError, PreExecutionStatusError, RuntimeError):
-        status = None
+    except (OSError, RuntimeError):
+        status_path = None
+    status = None
+    if status_path is not None:
+        try:
+            status = read_pre_execution_status(
+                status_path,
+                expected_diff_base_sha=diff_base_sha,
+                expected_source_sha=source_sha,
+            )
+        except (OSError, PreExecutionStatusError):
+            if os.path.lexists(status_path):
+                print(
+                    "Private pre-execution status could not be authenticated; no "
+                    "merge-request note was written. Previous review preserved.",
+                    file=sys.stderr,
+                )
+                return 1
     if status is not None:
         return post_pre_execution_status(config, status)
-
     reason = _result_provider_failure_reason(result_path) if result_path is not None else None
     if reason is not None:
         return post_llm_provider_failure(config, reason)
-
-    transaction = PostingTransaction()
-    details_enabled = os.environ.get("OCR_POST_ERROR_DETAILS") == "1"
-    details = read_stderr_excerpt(stderr_path) if details_enabled else ""
-
-    if exit_code < 0:
-        exit_code_line = "- OCR result file was missing on disk."
-    else:
-        exit_code_line = f"- OCR exit code: `{exit_code}`"
-
-    body = (
-        f"**Open Code Review did not complete successfully.**\n\n"
-        f"{exit_code_line}\n"
-        "- Normal review comments were not published because the result may be partial or misleading.\n"
-        "- Previous OCR review comments were preserved."
+    detail = "result artifact missing" if exit_code < 0 else "OCR process failed"
+    print(
+        f"Open Code Review {detail}; no merge-request note was written. "
+        "Previous review preserved. Inspect the private job diagnostics.",
+        file=sys.stderr,
     )
-
-    if details:
-        body += "\n\n" + neutralize_quick_actions(markdown_code_block("text", details))
-
-    response = post_review_note_bounded(
-        config,
-        "**Open Code Review failure**",
-        body,
-        transaction,
-    )
-    if response is None:
-        print("Failed to create OCR failure note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
-
-    if not finalize_posting(config, transaction):
-        return publish_failure_exit(config, transaction)
-
-    return 1 if strict_posting() else 0
+    return 1
 
 
 def terminal_status_exit(config: GitLabConfig, source_sha: str, *, posting_succeeded: bool) -> int:
@@ -1555,6 +1870,50 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
             file=sys.stderr,
         )
         return 1
+    if status.reason == REVIEW_IDENTITY_UNAVAILABLE:
+        print(
+            "Review not started: the current merge-request diff identity could not be "
+            "validated. Check the private job diagnostics and retry a pipeline for the "
+            "current revision; previous review preserved.",
+            file=sys.stderr,
+        )
+        return 1
+    exact_policy = status.reason in {
+        PROTECTED_TARGET_RULE_PATH_PENDING,
+        PROTECTED_POLICY_RULE_PATH_PENDING,
+    }
+    if pre_execution_status_fresh_or_exit(config, status, exact_policy=exact_policy) is not None:
+        return 1
+
+    published_draft = False
+    cleanup_started = False
+
+    def current_or_rollback(
+        transaction: PostingTransaction, previous_refs: BotCommentRefs | None = None
+    ) -> bool:
+        if (
+            pre_execution_status_fresh_or_exit(
+                config, status, exact_policy=exact_policy, cleanup_started=cleanup_started
+            )
+            is None
+        ):
+            return True
+        if cleanup_started:
+            print(
+                "OCR setup-note cleanup is partial: current replacement retained; "
+                "no further old-note cleanup was attempted.",
+                file=sys.stderr,
+            )
+        elif published_draft:
+            print(
+                "OCR setup note publication is partial: a published note may remain visible. "
+                "Previous review was preserved; no further posting or old-note cleanup was attempted.",
+                file=sys.stderr,
+            )
+        else:
+            rollback_current_run_comments(config, previous_refs, transaction)
+        return False
+
     try:
         lifecycle = current_merge_request_lifecycle(config, status.source_sha)
     except GitLabProviderError:
@@ -1566,6 +1925,13 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
         return 1
     if lifecycle.state != "opened":
         print("Merge request is no longer open; previous review preserved.", file=sys.stderr)
+        return 1
+    previous_refs = collect_previous_bot_comment_refs(config)
+    if previous_refs is None:
+        print(
+            "Cannot collect previous OCR bot notes reliably; previous review preserved.",
+            file=sys.stderr,
+        )
         return 1
     if status.reason in {GITLINK_PREVIEW_UNSUPPORTED, UNCLASSIFIED_PREVIEW_DIAGNOSTICS}:
         transaction = PostingTransaction()
@@ -1584,9 +1950,23 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
                 "and installed OCR compatibility. "
                 "Previous review comments were preserved."
             )
+        if not current_or_rollback(transaction, previous_refs):
+            return 1
         response = post_review_note_bounded(config, heading, body, transaction)
-        if response is None or not finalize_posting(config, transaction):
-            return posting_failure_exit(config, None, transaction)
+        if response is not None and not current_or_rollback(transaction, previous_refs):
+            return 1
+        if response is None:
+            return posting_failure_exit(config, previous_refs, transaction)
+        attempted_draft_publish = post_mode() == "draft" and bool(transaction.draft_note_ids)
+        if not finalize_posting(config, transaction):
+            if attempted_draft_publish:
+                print(
+                    "OCR preview draft publication could not be confirmed; "
+                    "a note may remain visible. Previous review preserved.",
+                    file=sys.stderr,
+                )
+                return 1
+            return posting_failure_exit(config, previous_refs, transaction)
         return 1 if strict_posting() else 0
     if status.reason in BACKGROUND_REASONS:
         transaction = PostingTransaction()
@@ -1603,33 +1983,56 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
             "No model review or review findings were produced. Previous Open Code Review "
             "comments were preserved."
         )
+        if not current_or_rollback(transaction, previous_refs):
+            return 1
         response = post_review_note_bounded(config, heading, body, transaction)
         if response is None:
             print("Failed to create OCR background-rejection note.", file=sys.stderr)
-            return posting_failure_exit(config, None, transaction)
+            return posting_failure_exit(config, previous_refs, transaction)
+        if not current_or_rollback(transaction, previous_refs):
+            return 1
+        attempted_draft_publish = post_mode() == "draft" and bool(transaction.draft_note_ids)
         if not finalize_posting(config, transaction):
+            if attempted_draft_publish:
+                print(
+                    "OCR background draft publication could not be confirmed; "
+                    "a note may remain visible. Previous review preserved.",
+                    file=sys.stderr,
+                )
+                return 1
             return publish_failure_exit(config, transaction)
         return 1 if strict_posting() else 0
-    if status.reason != PROTECTED_TARGET_RULE_PATH_PENDING:
+    if status.reason not in {
+        PROTECTED_TARGET_RULE_PATH_PENDING,
+        PROTECTED_POLICY_RULE_PATH_PENDING,
+    }:
         raise ValueError("unsupported pre-execution status")
-    previous_refs = collect_previous_bot_comment_refs(config)
-    if previous_refs is None:
-        print("Cannot collect previous OCR setup notes reliably.", file=sys.stderr)
-        return 1 if strict_posting() else 0
     transaction = PostingTransaction()
     heading = (
         "**⏳ Open Code Review setup is pending**"
         if post_emoji()
         else "**Open Code Review setup is pending**"
     )
+    authority = (
+        "protected default-branch policy commit"
+        if status.reason == PROTECTED_POLICY_RULE_PATH_PENDING
+        else "protected-target commit"
+    )
+    destination = (
+        "protected default branch"
+        if status.reason == PROTECTED_POLICY_RULE_PATH_PENDING
+        else "protected target branch"
+    )
     body = (
         "This merge request adds the repository rules file configured for Open Code Review. "
-        "Open Code Review did not run because this file was not present in the protected-target "
-        "commit captured for this pipeline. This is expected while the rules path is being "
-        "introduced. Once valid rules are available at this path in the protected target branch, "
+        f"Open Code Review did not run because this file was not present in the {authority} "
+        "captured for this pipeline. This is expected while the rules path is being "
+        f"introduced. Once valid rules are available at this path in the {destination}, "
         "subsequent merge requests can run a full review.\n\n"
         "No review findings were produced. Previous Open Code Review comments were preserved."
     )
+    if not current_or_rollback(transaction, previous_refs):
+        return 1
     response = post_review_note_bounded(
         config,
         heading,
@@ -1638,10 +2041,42 @@ def post_pre_execution_status(config: GitLabConfig, status: PreExecutionStatus) 
     )
     if response is None:
         print("Failed to create OCR setup-pending note.", file=sys.stderr)
-        return posting_failure_exit(config, None, transaction)
+        return posting_failure_exit(config, previous_refs, transaction)
+    if not current_or_rollback(transaction, previous_refs):
+        return 1
+    attempted_draft_publish = post_mode() == "draft" and bool(transaction.draft_note_ids)
     if not finalize_posting(config, transaction):
+        if attempted_draft_publish:
+            print(
+                "OCR setup draft publication could not be confirmed; a note may remain visible. "
+                "Previous review was preserved.",
+                file=sys.stderr,
+            )
+            return 1
         return publish_failure_exit(config, transaction)
-    delete_previous_setup_notes(config, previous_refs)
+    published_draft = attempted_draft_publish
+
+    def remove_setup_if_current(delete: Callable[[GitLabConfig, int], bool], note_id: int) -> bool:
+        nonlocal cleanup_started
+        if not current_or_rollback(transaction, previous_refs):
+            return False
+        # The provider can apply a delete even if its response is lost.
+        cleanup_started = True
+        if not delete(config, note_id):
+            print(
+                "OCR setup-note cleanup is partial: provider did not confirm the "
+                "mutation; current replacement retained.",
+                file=sys.stderr,
+            )
+            return False
+        return True
+
+    for note_id in previous_refs.setup_plain_note_ids:
+        if not remove_setup_if_current(gitlab_api.delete_plain_note, note_id):
+            return 1
+    for note_id in previous_refs.setup_draft_note_ids:
+        if not remove_setup_if_current(gitlab_api.delete_draft_note, note_id):
+            return 1
     return 1 if strict_posting() else 0
 
 
@@ -1652,6 +2087,12 @@ def main(argv: list[str] | None = None) -> int:
     # Defaults are per-job files in the isolated CI container; callers can override both.
     result_path = Path(args[0]) if len(args) >= 1 else Path("/tmp/ocr-result.json")  # nosec B108
     stderr_path = Path(args[1]) if len(args) >= 2 else Path("/tmp/ocr-stderr.log")  # nosec B108
+
+    exit_code = ocr_exit_code()
+    if exit_code == os.EX_TEMPFAIL:
+        # No-handoff exit is decided before config/provider reads so a losing
+        # review cannot adopt the running review's authenticated status.
+        return post_no_handoff_failure()
 
     config = load_gitlab_config()
     if config is None:
@@ -1668,7 +2109,6 @@ def main(argv: list[str] | None = None) -> int:
         print_posting_failure_banner()
         return 1
 
-    exit_code = ocr_exit_code()
     if exit_code != 0:
         return post_ocr_failure(config, stderr_path, exit_code, result_path)
 
@@ -1683,12 +2123,7 @@ def main(argv: list[str] | None = None) -> int:
         return post_ocr_failure(config, stderr_path, exit_code=-1)
     except OcrResultTooLarge as exc:
         print(f"OCR result file is too large: {exc}", file=sys.stderr)
-        return invalid_ocr_schema_exit(
-            config,
-            str(exc),
-            intro="OCR result artifact exceeded the configured safety limit before it could be parsed.",
-            title="**Open Code Review result artifact error**",
-        )
+        return invalid_ocr_schema_exit(config, str(exc))
     except OcrResultMalformed as exc:
         print(f"Cannot parse OCR result JSON: {exc}", file=sys.stderr)
         return post_parse_error(config, stderr_path)

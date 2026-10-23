@@ -13,7 +13,6 @@ from ocr_toolkit import review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.evidence.gitlinks import changed_gitlinks
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
-from ocr_toolkit.pre_execution import read_pre_execution_status
 from ocr_toolkit.preflight import validate_ocr_binary
 
 OLD_OID = "1" * 40
@@ -119,15 +118,7 @@ def test_changed_gitlink_closes_preview_before_model(
         gitlink_detected=bool(changed_gitlinks(GitRepositoryReader(repo), base, head)),
     )
     assert code == 2 and calls == []
-    status = read_pre_execution_status(
-        artifacts.pre_execution_status,
-        expected_diff_base_sha=base,
-        expected_source_sha=head,
-    )
-    assert status is not None
-    assert status.reason == "gitlink_preview_unsupported"
-    assert status.stage == "ocr_preview"
-    assert status.model_execution == "not_started"
+    assert not artifacts.pre_execution_status.exists()
 
 
 @pytest.mark.parametrize("kind", ["added", "updated", "deleted"])

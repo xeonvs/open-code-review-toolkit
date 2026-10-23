@@ -17,12 +17,15 @@ from ocr_toolkit.pre_execution import (
     MAX_STATUS_BYTES,
     MODEL_NOT_STARTED,
     OCR_PREVIEW_STAGE,
+    PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEW_IDENTITY_UNAVAILABLE,
     REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
     UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
     PreExecutionStatus,
     PreExecutionStatusError,
+    pre_execution_review_identity,
     read_pre_execution_status,
     write_pre_execution_status,
 )
@@ -32,6 +35,27 @@ SOURCE = "b" * 40
 POLICY = "c" * 40
 
 
+def review_identity() -> dict[str, object]:
+    return {
+        "project_id": "1",
+        "merge_request_iid": "2",
+        "mr_author_id": 41,
+        "source_sha": SOURCE,
+        "diff_base_sha": BASE,
+        "diff_start_sha": POLICY,
+        "diff_head_sha": SOURCE,
+        "diff_version_id": 7,
+        "target_branch": "main",
+        "target_sha": POLICY,
+        "target_protection": "protected",
+        "policy_project_id": "1",
+        "policy_branch": "main",
+        "policy_sha": POLICY,
+        "policy_protection": "protected",
+        "protection_mode": "auto",
+    }
+
+
 def status() -> PreExecutionStatus:
     return PreExecutionStatus(
         schema_version=STATUS_SCHEMA,
@@ -39,6 +63,7 @@ def status() -> PreExecutionStatus:
         diff_base_sha=BASE,
         source_sha=SOURCE,
         policy_sha=POLICY,
+        review=review_identity(),
     )
 
 
@@ -52,6 +77,12 @@ def test_pre_execution_status_atomic_round_trip_and_identity_binding(tmp_path: P
     path = private_directory(tmp_path) / "pre-execution-status.json"
 
     write_pre_execution_status(path, status())
+
+    identity = pre_execution_review_identity(status())
+    assert identity is not None
+    assert identity.schema_version == 11
+    assert identity.target_branch == "main"
+    assert identity.policy_sha == POLICY
 
     assert path.stat().st_mode & 0o777 == 0o600
     assert (
@@ -82,6 +113,7 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
         "diff_base_sha": BASE,
         "source_sha": SOURCE,
         "policy_sha": POLICY,
+        "review": review_identity(),
         "stage": EVIDENCE_PREFLIGHT_STAGE,
         "model_execution": MODEL_NOT_STARTED,
         "diagnostic_count": None,
@@ -129,7 +161,7 @@ def test_pre_execution_status_rejects_hostile_files_and_closed_schema_changes(
     for payload in variants:
         path.write_text(json.dumps(payload), encoding="utf-8")
         path.chmod(0o600)
-        with pytest.raises(PreExecutionStatusError, match="fields"):
+        with pytest.raises(PreExecutionStatusError, match=r"fields|review identity"):
             read_pre_execution_status(
                 path,
                 expected_diff_base_sha=BASE,
@@ -209,6 +241,7 @@ def test_pre_execution_status_round_trips_closed_background_rejection(
         diff_base_sha=BASE,
         source_sha=SOURCE,
         policy_sha=POLICY,
+        review=review_identity(),
         stage=OCR_PREVIEW_STAGE,
         actual=actual,
         limit=limit,
@@ -270,6 +303,7 @@ def test_pre_execution_status_round_trips_typed_pre_model_failures(
         diff_base_sha=BASE,
         source_sha=SOURCE,
         policy_sha=policy_sha,
+        review=review_identity() if reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS else None,
         stage=stage,
         model_execution=MODEL_NOT_STARTED,
         diagnostic_count=count,
@@ -286,6 +320,80 @@ def test_pre_execution_status_round_trips_typed_pre_model_failures(
     serialized = path.read_text(encoding="utf-8")
     assert "private.example.invalid" not in serialized
     assert '"model_execution":"not_started"' in serialized
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [PROTECTED_TARGET_RULE_PATH_PENDING, PROTECTED_POLICY_RULE_PATH_PENDING],
+)
+def test_setup_status_distinguishes_policy_authority(tmp_path: Path, reason: str) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=reason,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=POLICY,
+        review=review_identity(),
+    )
+    write_pre_execution_status(path, expected)
+    assert (
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+        == expected
+    )
+
+
+def test_unavailable_review_identity_is_closed_and_job_scoped(tmp_path: Path) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=REVIEW_IDENTITY_UNAVAILABLE,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=None,
+    )
+    write_pre_execution_status(path, expected)
+    assert pre_execution_review_identity(expected) is None
+    assert (
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+        == expected
+    )
+    for mutation in (
+        {"stage": OCR_PREVIEW_STAGE},
+        {"policy_sha": POLICY},
+        {"provider": "gitlab"},
+        {"project_id": "17"},
+        {"diagnostic_count": 1},
+        {"reason": "untrusted details"},
+        {"review": review_identity()},
+    ):
+        path.write_text(json.dumps({**asdict(expected), **mutation}), encoding="utf-8")
+        path.chmod(0o600)
+        with pytest.raises(PreExecutionStatusError, match=r"fields|review identity"):
+            read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"review": None},
+        {"review": {**review_identity(), "target_branch": "release"}},
+        {"review": {**review_identity(), "target_sha": "d" * 40}},
+        {"review": {**review_identity(), "diff_base_sha": "d" * 40}},
+        {"review": {**review_identity(), "project_id": "17"}},
+        {"review": {**review_identity(), "policy_sha": "d" * 40}},
+        {"review": {**review_identity(), "unexpected": "field"}},
+    ],
+)
+def test_note_status_rejects_missing_or_malformed_review_tuple(
+    tmp_path: Path, mutation: dict[str, object]
+) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    payload = {**asdict(status()), **mutation}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    path.chmod(0o600)
+    with pytest.raises(PreExecutionStatusError, match="review identity"):
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
 
 
 @pytest.mark.parametrize(
@@ -326,6 +434,7 @@ def test_pre_execution_status_rejects_invalid_typed_failure_tuple(
         diff_base_sha=BASE,
         source_sha=SOURCE,
         policy_sha=None if reason == REVIEWED_REVISION_NO_LONGER_CURRENT else POLICY,
+        review=review_identity() if reason == UNCLASSIFIED_PREVIEW_DIAGNOSTICS else None,
         stage=EVIDENCE_PREFLIGHT_STAGE
         if reason == REVIEWED_REVISION_NO_LONGER_CURRENT
         else OCR_PREVIEW_STAGE,
@@ -394,6 +503,7 @@ def test_pre_execution_status_rejects_hostile_terminal_identity(
         "diff_base_sha": BASE,
         "source_sha": SOURCE,
         "policy_sha": None,
+        "review": None,
         "stage": EVIDENCE_PREFLIGHT_STAGE,
         "model_execution": MODEL_NOT_STARTED,
         "diagnostic_count": None,

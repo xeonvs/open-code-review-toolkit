@@ -204,8 +204,14 @@ def test_progress_stops_when_review_raises(tmp_path, monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(ReviewProgress, "start", start)
     monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true")
-    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "metadata")
-    with pytest.raises(review_runner.ReviewRunnerError, match="change-request context"):
+    monkeypatch.setattr(
+        review_runner,
+        "_run_evidence_review",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            review_runner.ReviewRunnerError("synthetic late failure")
+        ),
+    )
+    with pytest.raises(review_runner.ReviewRunnerError, match="synthetic late failure"):
         review_runner.run_evidence_review(tmp_path / "result", tmp_path / "stderr", [], local=True)
     assert len(observed) == 1 and observed[0]._thread is None
     assert observed[0]._stop.is_set()

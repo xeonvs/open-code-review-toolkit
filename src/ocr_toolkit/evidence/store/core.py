@@ -35,6 +35,7 @@ from ocr_toolkit.evidence.store.contracts import (
     KNOWN_KINDS,
     POLICY_KINDS,
     SCHEMA_VERSION,
+    TARGET_CONTEXT_KINDS,
     EvidenceStoreError,
     EvidenceStoreLimits,
 )
@@ -55,6 +56,7 @@ class EvidenceStore:
     base: EvidenceSnapshot | None = None
     head: EvidenceSnapshot | None = None
     policy: EvidenceSnapshot | None = None
+    target: EvidenceSnapshot | None = None
     deltas: tuple[EvidenceDelta, ...] = ()
     schema_version: int = field(default=SCHEMA_VERSION, init=False)
     diagnostics: list[str] = field(default_factory=list)
@@ -88,6 +90,12 @@ class EvidenceStore:
 
         if record.kind not in KNOWN_KINDS:
             raise EvidenceStoreError(f"unregistered evidence kind: {record.kind}")
+        if record.ref is RefRole.TARGET and (
+            self.schema_version < 5
+            or record.kind not in TARGET_CONTEXT_KINDS
+            or record.trust.value != "target_repository"
+        ):
+            raise EvidenceStoreError("target code evidence has invalid role, kind, or trust")
         try:
             if record.kind == CONTEXT_KIND:
                 validate_merge_request_context(record.value)
@@ -196,6 +204,49 @@ class EvidenceStore:
             return "kind"
         return None
 
+    def add_target_context(self, record: EvidenceRecord) -> bool:
+        """Admit optional target context atomically, including the serialized byte bound."""
+
+        if self.target is None or record.ref is not RefRole.TARGET:
+            raise EvidenceStoreError("target context requires its target snapshot")
+        if record.commit_sha != self.target.commit_sha:
+            raise EvidenceStoreError("target context commit does not match its snapshot")
+        previous_ids = set(self._records)
+        previous_diagnostics = list(self.diagnostics)
+        if not self.add(record):
+            try:
+                self.to_json()
+            except EvidenceStoreError as exc:
+                self.diagnostics = previous_diagnostics
+                if str(exc) != "serialized evidence store exceeds its byte budget":
+                    raise
+            return False
+        added_ids = set(self._records) - previous_ids
+        if not added_ids:
+            return True
+        admitted = self._records[added_ids.pop()]
+        previous_target = self.target
+        self.target = EvidenceSnapshot(
+            RefRole.TARGET,
+            previous_target.commit_sha,
+            (*previous_target.records, admitted),
+            diagnostics=previous_target.diagnostics,
+        )
+        try:
+            serialized = self.to_json()
+            # Leave room for an explicit degradation notice if a later target
+            # record reaches the shared byte ceiling.
+            if len(serialized.encode("utf-8")) > self.limits.max_bytes - 256:
+                raise EvidenceStoreError("serialized evidence store exceeds its byte budget")
+        except EvidenceStoreError as exc:
+            self.target = previous_target
+            self._records.pop(admitted.id)
+            self._kind_counts[admitted.kind] -= 1
+            if str(exc) != "serialized evidence store exceeds its byte budget":
+                raise
+            return False
+        return True
+
     def _validate_policy_snapshot_bindings(self, schema_version: int = SCHEMA_VERSION) -> None:
         """Bind structured policy to its schema-owned immutable snapshot."""
 
@@ -237,6 +288,33 @@ class EvidenceStore:
                 validate_policy_applicability(record.kind, record.value, changed_paths)
             except ValueError as exc:
                 raise EvidenceStoreError(f"invalid {record.kind} snapshot applicability") from exc
+
+    def _validate_target_snapshot_bindings(self, schema_version: int = SCHEMA_VERSION) -> None:
+        """Keep target code context tied to its own immutable snapshot and role."""
+
+        target_records = tuple(
+            record for record in self._records.values() if record.ref is RefRole.TARGET
+        )
+        if schema_version < 5:
+            if self.target is not None or target_records:
+                raise EvidenceStoreError("historical evidence cannot contain target context")
+            return
+        if self.target is None:
+            if target_records:
+                raise EvidenceStoreError("target records require a target snapshot")
+            return
+        if self.target.ref is not RefRole.TARGET or self.target.coverage:
+            raise EvidenceStoreError("target snapshot has invalid role or coverage")
+        snapshot_ids = {record.id for record in self.target.records}
+        if snapshot_ids != {record.id for record in target_records}:
+            raise EvidenceStoreError("target records do not match the target snapshot")
+        if any(
+            record.kind not in TARGET_CONTEXT_KINDS
+            or record.trust.value != "target_repository"
+            or record.commit_sha != self.target.commit_sha
+            for record in target_records
+        ):
+            raise EvidenceStoreError("target evidence has invalid provenance")
 
     def _diagnose_once(self, message: str) -> None:
         """Append one deterministic diagnostic without repeated noise."""
@@ -319,10 +397,13 @@ class EvidenceStore:
         """Return the complete versioned store representation."""
 
         self._validate_policy_snapshot_bindings(self.schema_version)
+        self._validate_target_snapshot_bindings(self.schema_version)
         snapshots: dict[str, object] = {}
         snapshot_items = [("base", self.base), ("head", self.head)]
         if self.schema_version >= 4:
             snapshot_items.append(("policy", self.policy))
+        if self.schema_version >= 5:
+            snapshot_items.append(("target", self.target))
         for name, snapshot in snapshot_items:
             if snapshot is not None:
                 record_ids = [record.id for record in snapshot.records]

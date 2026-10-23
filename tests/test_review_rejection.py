@@ -146,7 +146,7 @@ def test_private_diagnostic_marker_blocks_receiptless_posting(
     reason: str,
     strict: str,
 ) -> None:
-    """Cross real loader and posting owner; replace only external failure-note delivery."""
+    """A private diagnostic remains job-only under both strictness settings."""
     result = tmp_path / "result.json"
     result.write_text(
         json.dumps(
@@ -172,10 +172,8 @@ def test_private_diagnostic_marker_blocks_receiptless_posting(
         workflow, "execute_approval", lambda *_args, **_kwargs: pytest.fail("must not approve")
     )
     code = workflow.post_results(gitlab_config(), ocr_result.load_ocr_result(result))
-    assert code == int(strict)
-    assert len(notes) == 1
-    assert "not publication-eligible" in notes[0][2]
-    assert "must not publish" not in notes[0][2]
+    assert code == 1
+    assert notes == []
     assert "not publication-eligible" in capsys.readouterr().err
 
 

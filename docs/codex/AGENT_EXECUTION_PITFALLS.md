@@ -171,3 +171,15 @@ This is a diagnostic catalogue of recurring incident classes. Current requiremen
 - Evidence: [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7). Prior control: table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts. Historical cause: outcomes were assembled independently and tests asserted prose rather than one result invariant.
 - Status: guarded
 - Retirement: Retire when this historical class no longer improves diagnosis and its owner, route, and guard remain established.
+
+### INC-015 Local OCR review began with unresolved launch prerequisites
+
+- Symptom: A local review attempt stopped before model work because its authentication mode lacked a required model, or because a GitLab-only background flag was passed to the standalone path; a prior run reached model work but could not publish its report through a symlinked temporary path.
+- Cause: unguarded_rule
+- Invariant: local-review.preparation
+- Owner: docs/local.md#review-preparation
+- Route: local-ocr-review
+- Guard: manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings
+- Evidence: The 2026-10-23 v0.13.0 local review attempts rejected absent `OCR_LLM_MODEL` and `--background-file` before model execution; the corrected OCR 1.13.3 invocation completed with 29/29 selected items and an admitted finding. The earlier [v0.12.1 review](../engineering/execution_history/releases.md#plan-toolkit-0-12-1) exposed the symlinked-path report failure. The preparation route now names each check at the launch boundary.
+- Status: guarded
+- Retirement: Retire when the owner, route, and guard remain established and the historical class no longer improves launch diagnosis.

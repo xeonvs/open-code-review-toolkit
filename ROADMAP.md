@@ -77,6 +77,13 @@ flowchart LR
   trusted base. Protected stable publication, external readback, and live site
   refresh completed on 2026-10-22.
 
+- The v0.13.0 release candidate separates the current GitLab MR diff and actual
+  target from protected policy authority. The absent protection setting selects
+  `auto`; an unprotected target can use its same-project protected default policy
+  for single-MR review while remaining comment-only. Receipt v11 and publication
+  freshness checks bind these identities. Stable delivery and external readback
+  are pending. Optional related-MR review remains inactive planning in BL-025.
+
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M8 and do not reopen M2.

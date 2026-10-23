@@ -6,21 +6,25 @@ No input becomes safe merely because a trusted pipeline acquired it.
 
 ## Threat model
 
-Protected assets include immutable review identities, coverage and finding
-integrity, private evidence/context/result/session data, registry and receipts,
+Protected assets include immutable review identities (source H, current MR diff,
+actual target T, and policy authority P), coverage and finding integrity,
+private evidence/context/result/session data, registry and receipts,
 forge/LLM/MCP credentials, external-object confidentiality, and publication and
 approval state.
 
 A contributor can control repository content, merge-request metadata and
 discussion text, including tool-like instructions and crafted references. An MCP
 upstream controls its descriptions, schemas and responses. An operator controls
-the reviewed registry, credentials and protected-target policy. A compromised
+the reviewed registry, credentials and selected protected policy. A compromised
 runner or same-user process remains a host-level threat outside the toolkit's
 process-isolation guarantees.
 
 The main trust transitions are:
 
-1. Immutable Git objects and provider identities cross closed bounded parsers.
+1. Immutable Git objects and authenticated provider identities cross closed
+   bounded parsers. The actual MR code target and protected policy authority
+   remain separate; a source branch, arbitrary protected branch, or synthetic
+   merge commit cannot stand in for either.
 2. Optional metadata and protected-policy discussions/remediation/CI outcomes
    cross normalization, stage-specific DLP and owner-only storage.
 3. Repository evidence enters the mandatory internal MCP. Operator registry v2
@@ -29,7 +33,19 @@ The main trust transitions are:
    only frozen `server__tool` aliases through a fixed private relay; upstream
    credentials never enter OCR configuration or arguments.
 5. OCR output crosses result validation, publication projection, stage-aware DLP,
-   cleanup, receipt v10 and the provider posting transaction.
+   cleanup, receipt v11, current-MR freshness checks and the provider posting
+   transaction.
+
+The `auto` fallback is sensitive to wrong-project source substitution,
+retargeting, default-branch or protection changes, stale diff versions,
+cross-job handoff replacement, and policy object replacement. It requires
+authenticated same-project IDs and bounded provider/Git reads; a locally
+available SHA or CI declaration alone is
+not authority. A forged persisted receipt cannot fill missing v11 authority
+fields from older versions. Configured federation still carries
+confused-deputy and object/tenant authorization risk: DLP and origin checks do
+not repair an overprivileged upstream service. These controls do not secure an
+untrusted CI job or runner, or an already exposed CI credential.
 
 ## Governed federation boundary
 
@@ -63,7 +79,7 @@ and OCR-session retention.
 The content-free `ocr.federation/v2` receipt records closed per-alias counts,
 argument/result DLP gate and reason counts, and cleanup state. Legacy v1
 receipts remain readable but do not identify the rejection boundary or reason.
-Receipt v10 reconciles OCR attempts independently with gateway
+Receipt v11 reconciles OCR attempts independently with gateway
 attempts and terminal outcomes. Used advisory tools, known denied/failed calls,
 or accounting mismatch make the run comment-only. Missing, malformed,
 unfinalized or cleanup-uncertain federation evidence blocks normal publication.
@@ -93,12 +109,19 @@ be restored by legacy configuration.
 
 An admitted remediation thread remains historical evidence and blocks automatic
 approval. A CI pass is scoped context, never suppression or approval authority.
-Source policy cannot grant tools or credentials. An actually unprotected target
-allows only `off|metadata`, mandatory immutable evidence and exact-target Rules as
-untrusted guidance; enriched context and external federation are rejected.
-`OCR_GITLAB_TARGET_PROTECTION_MODE=unprotected` is the sole explicit operator
-opt-in; the required default and malformed values fail closed before OCR.
-An actually unprotected target cannot reach the approval executor.
+Source policy and MR discussion text cannot grant tools, credentials or consent.
+The missing `OCR_GITLAB_TARGET_PROTECTION_MODE` setting now selects `auto`: an
+actually unprotected target can use the authenticated same-project protected
+default branch P for Rules, context policy and governed federation. The review
+still uses the actual `B..H` MR diff, keeps target T separate, and remains
+comment-only. Bounded target-snapshot facts at T are untrusted code context;
+they carry no policy, completeness, tool, posting or approval authority. The
+explicit `unprotected` setting retains the earlier limited
+`off|metadata`, exact-target Rules and no-enrichment/federation profile;
+`required` rejects an unprotected target. Malformed values fail before OCR.
+Neither protected P nor a clean current-MR review proves the unprotected target
+is safe to merge into P. An actually unprotected target cannot reach the
+approval executor for a new approval write.
 
 ## DLP and publication
 
@@ -126,7 +149,7 @@ rejection: `forge_discussions`, `remediation_threads`, `ci_outcomes`,
 `external_context`, `operator_secret`, or `other`. Each rejected item counts each
 matching class once. Counts may overlap and need not sum to total omitted items.
 Rejected text is not retained or reprocessed later to infer attribution.
-`ocr.publication-dlp-signal/v4`, Technical details and receipt v10 expose only
+`ocr.publication-dlp-signal/v4`, Technical details and receipt v11 expose only
 bounded states and counts. Publication `ocr.publication/v2` separates omitted
 public fields and reasons from private-only sanitized fields and reasons; OCR
 coverage and provider posting counts remain independent.
@@ -157,12 +180,16 @@ coverage and provider posting counts remain independent.
   private auth directory through a link in that home. Persistent host/account
   state, refresh and locking stay OCR-owned; credentials are not copied into
   toolkit artifacts. GitLab rejects this option before auth-store access.
-- Automatic approval binds exact source, target protection and author identity,
-  skips self-approval, never removes an existing approval, and accepts only exact
-  receipt v10 or exact compatible v9 with enabled DLP and every existing
-  eligibility gate satisfied.
-- Provider lifecycle state is revalidated before publication. A terminal MR keeps
-  admitted findings and DLP semantics but cannot approve.
+- Automatic approval binds exact source, actual target/diff, policy authority,
+  protection and author identity, skips self-approval, and accepts only exact
+  receipt v11 with enabled DLP and every existing eligibility gate satisfied.
+  The toolkit never removes an existing approval; a prior bot approval may
+  remain after retargeting under GitLab's approval-reset policy.
+- Provider identity, diff, authority and lifecycle are revalidated before normal
+  publication and again before an eligible approval. Code-tuple movement and
+  changed or unverifiable authority stop the write. Only a proven same protected
+  default-policy branch fast-forward may finish against captured P. A v11 result
+  whose MR became terminal is not newly published; the prior review remains.
 - Ambiguous inline creates use one author-bound readback without retry. Rollback deletes only recorded IDs absent from the baseline; marker text cannot claim
   ownership of another note.
 - Secrets and raw transport diagnostics remain outside public notes, fixtures,
@@ -185,6 +212,11 @@ paraphrase, make model judgment deterministic, protect data after same-user host
 compromise, or prove an upstream's internal authorization. Local stdio process
 groups are lifecycle ownership, not a sandbox against a malicious executable or
 compromised host.
+
+Authenticated reads before GitLab publication and approval reduce stale writes,
+but they are not mutation-time guards. A provider-side change between the final
+read and write remains a residual race. GitLab's merge/approval policy and reset
+settings remain the final authorities.
 
 Local ChatGPT authentication is optional; custom API providers remain the
 default locally and in GitLab. Native browser login and plan consent authorize

@@ -222,10 +222,9 @@ def test_debug_observes_actual_dlp_without_extra_checks(
         bundle.close()
 
 
-def test_early_configuration_failure_records_not_run_and_no_source_capture(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_claimed_local_option_failure_records_not_run_and_no_source_capture(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "metadata")
     result = tmp_path / "result.json"
     result.write_text("caller-owned old result")
     directory = tmp_path / "debug"
@@ -240,6 +239,9 @@ def test_early_configuration_failure_records_not_run_and_no_source_capture(
                 str(tmp_path / "stderr"),
                 "--debug-dir",
                 str(directory),
+                "--",
+                "--format",
+                "text",
             ]
         )
         == 2
@@ -257,6 +259,36 @@ def test_early_configuration_failure_records_not_run_and_no_source_capture(
     console = capsys.readouterr().out
     assert "caller-owned" not in console
     assert (directory / "summary.md").read_text() == console
+
+
+def test_local_context_refusal_precedes_private_debug_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "metadata")
+    result = tmp_path / "result.json"
+    result.write_text("caller-owned old result")
+    directory = tmp_path / "debug"
+
+    assert (
+        cli.main(
+            [
+                "review",
+                "--local",
+                "--result",
+                str(result),
+                "--stderr",
+                str(tmp_path / "stderr"),
+                "--debug-dir",
+                str(directory),
+            ]
+        )
+        == 2
+    )
+    assert not directory.exists()
+    assert result.read_text() == "caller-owned old result"
+    output = capsys.readouterr()
+    assert "change-request context" in output.err
+    assert "Stopped at: `configuration`" in output.out
 
 
 @pytest.mark.parametrize("local", [False, True])
@@ -336,11 +368,16 @@ def test_late_debug_write_failure_preserves_original_review_failure(
         original_write(self, name, content)
 
     monkeypatch.setattr(DebugBundle, "_write", fail_after_initial)
-    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "metadata")
     directory = tmp_path / "debug"
-    with pytest.raises(review_runner.ReviewRunnerError, match="change-request context"):
+    with pytest.raises(
+        review_runner.ReviewRunnerError, match="local review requires --format json"
+    ):
         review_runner.run_evidence_review(
-            tmp_path / "result", tmp_path / "stderr", [], local=True, debug_dir=directory
+            tmp_path / "result",
+            tmp_path / "stderr",
+            ["--format", "text"],
+            local=True,
+            debug_dir=directory,
         )
     output = capsys.readouterr()
     assert "Local debug journal output failed" in output.err

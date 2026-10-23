@@ -29,7 +29,7 @@ MAX_PROVIDER_BODY_BYTES = 2_000_000
 PROVIDER_READ_CHUNK_BYTES = 64 * 1024
 PROVIDER_TIMEOUT_SECONDS = 30
 TARGET_PROTECTION_MODE_VARIABLE = "OCR_GITLAB_TARGET_PROTECTION_MODE"
-TargetProtectionMode = Literal["required", "unprotected"]
+TargetProtectionMode = Literal["auto", "required", "unprotected"]
 TargetProtectionState = Literal["protected", "unprotected"]
 MergeRequestState = Literal["opened", "merged", "closed"]
 
@@ -67,7 +67,7 @@ class GitLabMergeRequestStale(GitLabProviderError):
 
 @dataclass(frozen=True, slots=True)
 class GitLabReviewSnapshot:
-    """Bind one reviewed source head to the current target commit and protection state."""
+    """Bind code, diff, and policy authority to one authenticated MR snapshot."""
 
     project_id: str
     merge_request_iid: str
@@ -75,6 +75,14 @@ class GitLabReviewSnapshot:
     target_branch: str
     target_sha: str
     target_protection: TargetProtectionState
+    policy_branch: str
+    policy_sha: str
+    policy_protection: TargetProtectionState
+    protection_mode: TargetProtectionMode
+    diff_base_sha: str
+    diff_start_sha: str
+    diff_head_sha: str
+    diff_version_id: int
     author_id: int
     context: MergeRequestContext | None
 
@@ -222,7 +230,7 @@ def _read_json(url: str, token: str, *, deadline: float) -> object:
         raise GitLabProviderError("GitLab review metadata request failed") from exc
     try:
         return json.loads(b"".join(chunks).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise GitLabProviderError("GitLab review metadata is not valid bounded JSON") from exc
 
 
@@ -237,7 +245,12 @@ def _sha(value: object, label: str) -> str:
 def _positive_identifier(value: object, label: str) -> int:
     """Return one positive provider identity without accepting coercive values."""
 
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value <= 0
+        or len(str(value)) > MAX_CI_IDENTIFIER_CHARS
+    ):
         raise GitLabProviderError(f"GitLab returned invalid {label}")
     return value
 
@@ -271,11 +284,14 @@ def parse_merge_request_lifecycle(
     if not isinstance(value, dict):
         raise GitLabProviderError("GitLab merge-request metadata must be an object")
     project_id = _positive_identifier(value.get("target_project_id"), "target project id")
+    source_project_id = _positive_identifier(value.get("source_project_id"), "source project id")
     merge_request_iid = _positive_identifier(value.get("iid"), "merge-request iid")
     source_sha = _sha(value.get("sha"), "merge-request source head")
     state = value.get("state")
     if str(project_id) != expected_project_id:
         raise GitLabProviderError("GitLab merge request targets a different project")
+    if str(source_project_id) != expected_project_id:
+        raise GitLabProviderError("GitLab merge request source belongs to a different project")
     if str(merge_request_iid) != expected_merge_request_iid:
         raise GitLabProviderError("GitLab returned a different merge request")
     if source_sha != expected_head:
@@ -294,33 +310,128 @@ def parse_target_protection_mode(raw: str | None) -> TargetProtectionMode:
     """Parse the exact fail-closed target-protection policy setting."""
 
     if raw is None:
-        return "required"
+        return "auto"
+    if raw == "auto":
+        return "auto"
     if raw == "required":
         return "required"
     if raw == "unprotected":
         return "unprotected"
     raise GitLabProviderError(
-        f"{TARGET_PROTECTION_MODE_VARIABLE} must be exactly 'required' or 'unprotected'"
+        f"{TARGET_PROTECTION_MODE_VARIABLE} must be exactly 'auto', 'required', or 'unprotected'"
     )
 
 
-def _branch(value: object) -> str:
-    """Return one bounded safe target branch name for endpoint construction."""
+def _branch(value: object, *, label: str = "target") -> str:
+    """Return one bounded Git branch name for URL-encoded endpoint construction."""
 
+    if not isinstance(value, str):
+        raise GitLabProviderError(f"GitLab returned an invalid {label} branch")
+    try:
+        byte_length = len(value.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise GitLabProviderError(f"GitLab returned an invalid {label} branch") from exc
     if (
-        not isinstance(value, str)
-        or not 1 <= len(value) <= 512
-        or len(value.encode("utf-8")) > 2_048
-        or any(character == "\x7f" or ord(character) < 32 for character in value)
+        not 1 <= len(value) <= 512
+        or byte_length > 2_048
+        or value == "@"
+        or value.startswith("-")
+        or value.endswith(("/", "."))
+        or ".." in value
+        or "@{" in value
+        or any(
+            character == "\x7f" or ord(character) < 32 or character in " ~^:?*[\\"
+            for character in value
+        )
+        or any(
+            not part or part.startswith(".") or part.endswith(".lock") for part in value.split("/")
+        )
     ):
-        raise GitLabProviderError("GitLab returned an invalid target branch")
+        raise GitLabProviderError(f"GitLab returned an invalid {label} branch")
     return value
+
+
+def _current_diff_identity(
+    mr: dict[str, object],
+    *,
+    api_root: str,
+    project: str,
+    merge_request_iid: str,
+    token: str,
+    deadline: float,
+    source_sha: str,
+) -> tuple[str, str, str, int]:
+    """Bind current MR diff refs to its current authenticated version."""
+
+    refs = mr.get("diff_refs")
+    if refs is None:
+        raise GitLabProviderError(
+            "GitLab current merge-request diff refs are unavailable or pending"
+        )
+    if not isinstance(refs, dict):
+        raise GitLabProviderError("GitLab current merge-request diff refs are malformed")
+    try:
+        base_sha = _sha(refs.get("base_sha"), "current diff base")
+        start_sha = _sha(refs.get("start_sha"), "current diff start")
+        head_sha = _sha(refs.get("head_sha"), "current diff head")
+    except GitLabProviderError as exc:
+        raise GitLabProviderError("GitLab current merge-request diff refs are malformed") from exc
+    if head_sha != source_sha:
+        raise GitLabProviderError(
+            "GitLab current merge-request diff head contradicts its source head"
+        )
+    versions = _read_json(
+        f"{api_root}/projects/{project}/merge_requests/{merge_request_iid}/versions?per_page=1",
+        token,
+        deadline=deadline,
+    )
+    if not isinstance(versions, list) or not versions:
+        raise GitLabProviderError(
+            "GitLab current merge-request diff version is unavailable or pending"
+        )
+    if len(versions) != 1 or not isinstance(versions[0], dict):
+        raise GitLabProviderError("GitLab current merge-request diff version is malformed")
+    version = versions[0]
+    version_id = _positive_identifier(version.get("id"), "current diff version id")
+    try:
+        version_refs = (
+            _sha(version.get("base_commit_sha"), "current diff version base"),
+            _sha(version.get("start_commit_sha"), "current diff version start"),
+            _sha(version.get("head_commit_sha"), "current diff version head"),
+        )
+    except GitLabProviderError as exc:
+        raise GitLabProviderError("GitLab current merge-request diff version is malformed") from exc
+    if version_refs != (base_sha, start_sha, head_sha):
+        raise GitLabProviderError("GitLab current merge-request diff version contradicts its refs")
+    return base_sha, start_sha, head_sha, version_id
+
+
+def _branch_snapshot(
+    *, api_root: str, project: str, branch_name: str, token: str, deadline: float
+) -> tuple[bool, str]:
+    """Read a named branch's protected state and immutable head over HTTPS."""
+
+    encoded_branch = urllib.parse.quote(branch_name, safe="")
+    branch = _read_json(
+        f"{api_root}/projects/{project}/repository/branches/{encoded_branch}",
+        token,
+        deadline=deadline,
+    )
+    if not isinstance(branch, dict):
+        raise GitLabProviderError("GitLab branch metadata must be an object")
+    protected = branch.get("protected")
+    if branch.get("name") != branch_name or not isinstance(protected, bool):
+        raise GitLabProviderError("GitLab branch protection metadata is invalid")
+    commit = branch.get("commit")
+    if not isinstance(commit, dict):
+        raise GitLabProviderError("GitLab branch has no commit identity")
+    return protected, _sha(commit.get("id"), "branch head")
 
 
 def acquire_review_snapshot(
     environment: Mapping[str, str], *, expected_head: str, include_metadata: bool = True
 ) -> GitLabReviewSnapshot:
-    """Acquire and cross-check one MR plus protected-target branch snapshot."""
+    """Acquire the live MR code tuple and its selected policy authority."""
 
     expected_head = _sha(expected_head, "reviewed source head")
     protection_mode = parse_target_protection_mode(environment.get(TARGET_PROTECTION_MODE_VARIABLE))
@@ -363,23 +474,48 @@ def acquire_review_snapshot(
             labels=mr.get("labels"),
             source_branch=mr.get("source_branch"),
         )
-    encoded_branch = urllib.parse.quote(target_branch, safe="")
-    branch = _read_json(
-        f"{api_root}/projects/{project}/repository/branches/{encoded_branch}",
-        token,
+    diff_base_sha, diff_start_sha, diff_head_sha, diff_version_id = _current_diff_identity(
+        mr,
+        api_root=api_root,
+        project=project,
+        merge_request_iid=merge_request_iid,
+        token=token,
+        deadline=deadline,
+        source_sha=source_sha,
+    )
+    protected, target_sha = _branch_snapshot(
+        api_root=api_root,
+        project=project,
+        branch_name=target_branch,
+        token=token,
         deadline=deadline,
     )
-    if not isinstance(branch, dict):
-        raise GitLabProviderError("GitLab target-branch metadata must be an object")
-    protected = branch.get("protected")
-    if branch.get("name") != target_branch or not isinstance(protected, bool):
-        raise GitLabProviderError("GitLab target branch protection metadata is invalid")
     if not protected and protection_mode != "unprotected":
-        raise GitLabProviderError("GitLab target branch is not the captured protected branch")
-    commit = branch.get("commit")
-    if not isinstance(commit, dict):
-        raise GitLabProviderError("GitLab target branch has no commit identity")
-    target_sha = _sha(commit.get("id"), "target head")
+        if protection_mode == "required":
+            raise GitLabProviderError("GitLab target branch is not the captured protected branch")
+        project_metadata = _read_json(
+            f"{api_root}/projects/{project}",
+            token,
+            deadline=deadline,
+        )
+        if not isinstance(project_metadata, dict):
+            raise GitLabProviderError("GitLab project metadata must be an object")
+        if _positive_identifier(project_metadata.get("id"), "project id") != int(project_id):
+            raise GitLabProviderError("GitLab project metadata belongs to a different project")
+        policy_branch = _branch(project_metadata.get("default_branch"), label="default")
+        policy_protected, policy_sha = _branch_snapshot(
+            api_root=api_root,
+            project=project,
+            branch_name=policy_branch,
+            token=token,
+            deadline=deadline,
+        )
+        if not policy_protected:
+            raise GitLabProviderError("GitLab default branch is not protected policy authority")
+    else:
+        policy_branch = target_branch
+        policy_sha = target_sha
+        policy_protected = protected
     return GitLabReviewSnapshot(
         project_id=project_id,
         merge_request_iid=merge_request_iid,
@@ -387,6 +523,14 @@ def acquire_review_snapshot(
         target_branch=target_branch,
         target_sha=target_sha,
         target_protection="protected" if protected else "unprotected",
+        policy_branch=policy_branch,
+        policy_sha=policy_sha,
+        policy_protection="protected" if policy_protected else "unprotected",
+        protection_mode=protection_mode,
+        diff_base_sha=diff_base_sha,
+        diff_start_sha=diff_start_sha,
+        diff_head_sha=diff_head_sha,
+        diff_version_id=diff_version_id,
         author_id=author_id,
         context=context,
     )

@@ -10,9 +10,12 @@ it. Optional external tools use the separate governed federation described in
 
 `off` retains only the validated review identities needed for execution and
 publication. `metadata` adds bounded merge-request title, description, labels,
-and source branch. `enriched` additionally reads the protected-target policy and
+and source branch. `enriched` additionally reads the selected protected policy:
+the actual protected target, or the same project's protected default branch P
+when `OCR_GITLAB_TARGET_PROTECTION_MODE=auto` and the target is unprotected. It
 can acquire generic GitLab discussions, verified remediation threads, and exact
-same-revision CI outcomes before OCR starts.
+same-revision CI outcomes before OCR starts. The latter remain tied to the
+reviewed source H; a synthetic merge commit is not same-revision evidence.
 
 When metadata is selected, the compact bootstrap supplies an opaque MR-context
 record ID for a direct `ocr_toolkit_evidence(action=get, id=...)` read after the
@@ -32,10 +35,12 @@ only committed records through fixed `context_list` and `context_get` tools on
 the mandatory internal MCP; neither tool has network, subprocess, arbitrary URL,
 arbitrary identifier, search, traversal, or write authority.
 
-## Protected-target policy v4
+## Protected policy v4
 
 The toolkit reads only `.opencodereview/review-context-policy.json` from the
-captured target-policy commit. New policy documents use
+captured protected policy commit P. An `auto` review of an unprotected target
+uses the protected default branch, while an actually protected target uses
+itself. New policy documents use
 `ocr.review-context-policy/v4`. V4 retains the bounded aggregate budgets,
 `forge_discussions`, `remediation_threads`, and `ci_outcomes` selectors from the
 established contracts. It does not accept `references`: external acquisition is
@@ -132,7 +137,7 @@ Previous review comments are preserved with the actual incomplete publication
 reason. Posting counters describe admitted findings only; DLP omissions are shown
 separately. Publication `ocr.publication/v2` separates public omitted fields and
 reasons from private-only sanitized fields and reasons. The
-`ocr.publication-dlp-signal/v4` marker and receipt v10 carry only closed counts
+`ocr.publication-dlp-signal/v4` marker and receipt v11 carry only closed counts
 and state, never protected content, paths, identifiers, URLs, or raw errors.
 Historical v3 aggregates do not establish this public/private split.
 
@@ -146,16 +151,21 @@ transaction gates remain enforced.
 
 ## Receipt and cleanup
 
-Receipt v10 binds review identities, context mode and per-source state, legacy
-policy state, DLP mode, stage-aware publication accounting, mandatory evidence,
-governed federation reconciliation, and cleanup. It is content-free. Receipt
-v1-v8 cannot authorize current posting or approval. An exact v9 receipt remains
-readable for a compatible older result; ephemeral results have no migration path.
+Receipt v11 binds the current MR diff/version and source H, actual target
+branch/T/protection, selected policy project/branch/P/protection/mode, context
+mode and per-source state, legacy policy state, DLP mode, stage-aware publication
+accounting, mandatory evidence, governed federation reconciliation, and cleanup.
+It is content-free. Exact v9/v10 receipts remain readable under their original
+policy-equals-target invariant but cannot establish new authority or publish a
+current review; v1-v8 remain unsupported. Ephemeral results have no migration path.
 
-`OCR_GITLAB_TARGET_PROTECTION_MODE` defaults to `required`. Exact `unprotected`
-permits only the bounded comment-only contract described above; missing target
-Rules, enriched context, or federation still fails closed before OCR.
-The static unprotected-target limitation does not change result completeness or status.
+`OCR_GITLAB_TARGET_PROTECTION_MODE` defaults to `auto`. An unprotected target
+with a verified protected P can use the configured context mode and federation;
+the review is still comment-only. Exact `unprotected` retains the earlier
+limited profile: only `off|metadata`, exact-target Rules as untrusted guidance,
+and no enriched context or federation. Missing Rules, malformed authority, and
+unsupported rule forms fail before OCR. Neither profile changes result
+completeness or turns the actual target into a protected branch.
 
 A federation receipt records configured aliases and closed attempt/completion/
 denial/failure/timeout/DLP/oversize/cache/single-flight counts. OCR attempts are

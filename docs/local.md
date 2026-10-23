@@ -5,6 +5,24 @@ findings in a Markdown artifact and the console, without connecting the reposito
 Install the toolkit and its [qualified OCR binary](../compatibility/ocr-support.json),
 then configure the LLM environment described in [configuration.md](configuration.md).
 
+<!-- ew:invariant id="local-review.preparation" -->
+## Review preparation
+
+Choose the authentication mode before preflight. API mode requires an exact
+`OCR_LLM_MODEL` and its endpoint/token configuration; native ChatGPT mode uses
+the [setup below](#native-chatgpt-setup) and `OCR_LLM_AUTH_MODE=chatgpt` without
+API-only variables. Check that `ocr` on the review command's `PATH` is the
+checksum-verified version in the [compatibility manifest](../compatibility/ocr-support.json).
+For native ChatGPT mode, run `ocr llm models` with that same executable before a
+long review: toolkit preflight checks local store metadata but does not test
+model reachability, account eligibility, or a host firewall rule.
+
+Use only arguments accepted by the standalone local path after `--`. In
+particular, `--background` and `--background-file` are unsupported for local
+review and are rejected before OCR runs. Check `ocr-ci review --help`, the
+[local input contract](#inputs-and-isolation), and the exact invocation before
+starting the model.
+
 ```console
 ocr-ci preflight --local
 review_dir=$(mktemp -d)
@@ -16,13 +34,24 @@ Keep all three output paths in that new private directory. Resolve its physical
 path before launch: on macOS `/tmp` commonly points through a symlink to
 `/private/tmp`, and the report writer rejects a symlinked parent after OCR has
 already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
-an OCR JSON file alone does not establish successful local delivery.
+an OCR JSON file alone does not establish successful local delivery. After a
+zero exit, read the complete private Markdown and JSON: require `status=complete`,
+compare selected/completed/reused/failed/waived coverage, inspect DLP admission and
+every admitted finding, and inspect stderr for failed auxiliary tool reads that
+could limit the conclusion. Preserve these artifacts until findings are fixed
+and the corrected head has been reviewed.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
 scans, resumed sessions and competing repository/background inputs are unsupported.
 The toolkit owns JSON output and agent audience; contradictory `--format` or
 `--audience` options fail before execution.
+
+Only one review may use a checkout's private `.review-context/` artifacts at a
+time. The toolkit holds a private nonblocking lock for the entire review; a
+second run in that checkout fails without clearing the first run's artifacts.
+Use separate worktrees when concurrent local reviews are needed.
+The second run exits with code `75` and does not claim the first run's report path.
 
 ## Inputs and isolation
 
@@ -71,8 +100,10 @@ unset OCR_LLM_URL OCR_LLM_TOKEN OCR_LLM_PROTOCOL OCR_LLM_AUTH_HEADER \
   OCR_ANTHROPIC_DISABLE_THINKING OCR_USE_ANTHROPIC OCR_LLM_MODEL OCR_LLM_REASONING_EFFORT
 export OCR_LLM_AUTH_MODE=chatgpt
 # Optional: set OCR_LLM_MODEL to an exact model available to this account.
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
 ocr-ci preflight --local
-ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
 
 The existing local preflight checks the qualified binary and the native store's
@@ -180,11 +211,14 @@ configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
 
-Before disabling DLP to diagnose a suspected false positive, run the local review
-with `--preserve-private-artifacts`. It retains owner-only private inputs and
-decisions without creating a posting-eligible receipt. Inspect the material only
+Before disabling DLP to diagnose a suspected false positive, run
+`ocr-ci review --local --preserve-private-artifacts` with the normal private
+result, stderr, and report paths. After valid bounded output, it retains
+owner-only private inputs, the raw marked diagnostic JSON, and DLP decisions
+without creating a posting-eligible receipt. The local Markdown and console
+report still contain only admitted findings. Inspect the retained material only
 on the trusted host, keep it out of commits and shared artifacts, and remove it
-after diagnosis.
+after diagnosis. This option cannot be combined with `--debug-dir`.
 
 `OCR_DLP_ENABLED=false` is a strict per-run escape hatch. It disables
 context/federation and publication DLP, emits a prominent Markdown and console

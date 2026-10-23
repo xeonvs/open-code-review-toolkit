@@ -8,6 +8,7 @@ source_ref: "0.9.8"
 source_commit: "9a28224af9efc329ed420ddcbd25b1f0aa354565"
 managed_paths:
   - docs/codex/ENGINEERING_WORKFLOW_STATE.yaml
+  - docs/engineering/execution_history/plans/README.md
 shared_paths:
   - AGENTS.md
   - PLANS.md
@@ -25,8 +26,9 @@ protected_paths:
   - docs/development.md
   - docs/release.md
   - docs/engineering/execution_history/releases.md
-plan_archive_path: docs/engineering/execution_history
+plan_archive_path: docs/engineering/execution_history/plans
 plan_archive_indexes:
+  - docs/engineering/execution_history/plans/README.md
   - docs/engineering/execution_history/README.md
   - docs/engineering/README.md
   - docs/README.md

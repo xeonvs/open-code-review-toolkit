@@ -8,12 +8,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
 from ocr_toolkit.posting import gitlab
 from ocr_toolkit.posting.approval import (
     ApprovalEligibility,
     ApprovalResult,
     ApprovalStatus,
 )
+from ocr_toolkit.posting.freshness import ReviewFreshnessStale, ReviewFreshnessUnavailable
+from ocr_toolkit.providers.gitlab import GitLabMergeRequestTerminal
+from ocr_toolkit.review_receipt import ReceiptReviewIdentity
 
 SYNC_ATTEMPTS = 10
 SYNC_INTERVAL_SECONDS = 2.0
@@ -25,6 +29,7 @@ class ApprovalExecution:
     """Final provider result after exact-SHA synchronization and readback."""
 
     result: ApprovalResult
+    preserve_previous_review: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +188,8 @@ def execute_approval(
     expected_sha: str,
     expected_author_id: int | None = None,
     *,
+    review_identity: ReceiptReviewIdentity | None = None,
+    freshness_check: Callable[[], object] | None = None,
     attempts: int = SYNC_ATTEMPTS,
     interval_seconds: float = SYNC_INTERVAL_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
@@ -191,6 +198,31 @@ def execute_approval(
 
     if not eligibility.eligible:
         return ApprovalExecution(eligibility.result)
+    if review_identity is None or review_identity.schema_version != TOOLKIT_RESULT_SCHEMA_VERSION:
+        return ApprovalExecution(
+            ApprovalResult(ApprovalStatus.FAILED, "a current review receipt is required"),
+            preserve_previous_review=True,
+        )
+    if freshness_check is None:
+        return ApprovalExecution(
+            ApprovalResult(ApprovalStatus.FAILED, "approval freshness check is unavailable"),
+            preserve_previous_review=True,
+        )
+    if (
+        review_identity.source_sha != expected_sha
+        or review_identity.mr_author_id != expected_author_id
+    ):
+        return ApprovalExecution(
+            ApprovalResult(ApprovalStatus.SKIPPED, "approval identity differs from receipt"),
+            preserve_previous_review=True,
+        )
+    if review_identity.target_protection != "protected":
+        return ApprovalExecution(
+            ApprovalResult(
+                ApprovalStatus.SKIPPED,
+                "the GitLab target branch was unprotected; no approval was attempted",
+            )
+        )
 
     state, synchronization_result = wait_for_synchronized_approval_state(
         config,
@@ -203,13 +235,42 @@ def execute_approval(
         return ApprovalExecution(
             synchronization_result
             or ApprovalResult(ApprovalStatus.FAILED, "GitLab synchronization failed"),
+            preserve_previous_review=review_identity is not None,
         )
+    if freshness_check is not None:
+        try:
+            freshness_check()
+        except ReviewFreshnessStale as exc:
+            return ApprovalExecution(
+                ApprovalResult(
+                    ApprovalStatus.SKIPPED,
+                    f"the reviewed GitLab identity changed ({exc.reason})",
+                ),
+                preserve_previous_review=True,
+            )
+        except ReviewFreshnessUnavailable as exc:
+            return ApprovalExecution(
+                ApprovalResult(
+                    ApprovalStatus.FAILED,
+                    f"the reviewed GitLab identity could not be confirmed ({exc.reason})",
+                ),
+                preserve_previous_review=True,
+            )
+        except GitLabMergeRequestTerminal:
+            return ApprovalExecution(
+                ApprovalResult(
+                    ApprovalStatus.SKIPPED,
+                    "the merge request became terminal before approval",
+                ),
+                preserve_previous_review=True,
+            )
     if expected_author_id is None or state.author_id != expected_author_id:
         return ApprovalExecution(
             ApprovalResult(
                 ApprovalStatus.SKIPPED,
                 "the merge-request author no longer matches the reviewed identity",
-            )
+            ),
+            preserve_previous_review=review_identity is not None,
         )
     if config.current_user_id == state.author_id:
         return ApprovalExecution(
@@ -227,9 +288,15 @@ def execute_approval(
             )
         )
 
+    # GitLab's approve endpoint binds the source SHA, but does not offer a
+    # compare-and-set for the target, diff version, or protected policy tip.
+    # Current-receipt freshness narrows that unavoidable provider race.
     write = gitlab.approve_merge_request(config, expected_sha)
     if not write.posted:
-        return ApprovalExecution(_write_rejection(write, "approve"))
+        return ApprovalExecution(
+            _write_rejection(write, "approve"),
+            preserve_previous_review=review_identity is not None and write.http_status == 409,
+        )
     confirmed, confirmation_error = wait_for_synchronized_approval_state(
         config,
         expected_sha,

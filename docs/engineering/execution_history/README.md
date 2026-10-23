@@ -5,6 +5,7 @@
 <!-- engineering-workflow:index:start -->
 - [2026-10-22-toolkit-site-launch-and-release-notification.md](2026-10-22-toolkit-site-launch-and-release-notification.md)
 - [evidence_migration_matrix.md](evidence_migration_matrix.md)
+- [plans/README.md](plans/README.md)
 - [releases.md](releases.md)
 - [review_context_design_checkpoint.md](review_context_design_checkpoint.md)
 <!-- engineering-workflow:index:end -->

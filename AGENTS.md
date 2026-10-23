@@ -38,11 +38,17 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="review-flow" triggers="docs/review-decision-flow.md|review execution|publication branch" owners="docs/review-decision-flow.md|docs/engineering/project_principles.md" guards="manual_review:compare changed execution branches with the decision flow" -->
 | `review-flow` | Review execution or publication branch | Review decision flow and project principles | Branch and diagram comparison |
 
+<!-- ew:route id="review-context" triggers="src/ocr_toolkit/context/**|docs/review-context.md|review context admission|context publication" owners="docs/review-context.md|docs/engineering/project_principles.md" guards="manual_review:compare context acquisition admission store and publication with the current contract|test:scripts/quality.sh check" -->
+| `review-context` | Review-context admission or publication | Current bounded-context contract and project principles | Context lifecycle comparison and quality checks |
+
+<!-- ew:route id="federation" triggers="src/ocr_toolkit/federation/**|docs/engineering/governed_federation_contracts.md|federation admission|external MCP gateway" owners="docs/engineering/governed_federation_contracts.md|docs/engineering/project_principles.md" guards="manual_review:compare registry admission gateway DLP and receipt changes with the federation contract|test:scripts/quality.sh check" -->
+| `federation` | Governed external-tool admission or gateway | Federation contract and project principles | Gateway contract comparison and quality checks |
+
 <!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
 | `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
 
-<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify canonical private output paths terminal exit status delivered report and admitted findings" -->
-| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Physical private paths, terminal status, report and findings |
+<!-- ew:route id="local-ocr-review" triggers="local OCR review|ocr-ci review --local|review artifacts" owners="docs/local.md|docs/development.md" guards="manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings" -->
+| `local-ocr-review` | Authorized real local OCR review | Local review and development procedures | Mode, binary, flags, private paths, terminal status, report and findings |
 
 <!-- ew:route id="workflow-instructions" triggers="AGENTS.md|docs/engineering/project_principles.md|docs/codex/AGENT_EXECUTION_PITFALLS.md" owners="skill://engineering-workflow/references/instruction_lifecycle.md|docs/engineering/project_principles.md" guards="lint:instruction-contract" -->
 | `workflow-instructions` | Instruction owner, route, or incident change | Installed instruction lifecycle and project principles | `lint:instruction-contract` |
@@ -55,6 +61,9 @@ Read the matching owners and run their applicable guards. The general repository
 
 <!-- ew:route id="development-validation" triggers="docs/development.md|status-bearing documents|parser changes|provider changes|subprocess changes" owners="docs/development.md" guards="manual_review:compare status documents with current implementation|test:scripts/quality.sh check" -->
 | `development-validation` | Status or changed-boundary validation | Development guide | Status review and Python quality matrix |
+
+<!-- ew:route id="dependency-audit" triggers="pre-push|pyproject.toml|uv.lock|.github/workflows/security.yml|scripts/dependency-audit.sh" owners="docs/development.md" guards="test:scripts/dependency-audit.sh" -->
+| `dependency-audit` | Every push and dependency or audit-workflow change | Development guide | Shared local and hosted dependency audit |
 
 <!-- ew:route id="trust-boundary" triggers="src/ocr_toolkit/**|tests/**|public fixtures|release artifacts" owners="docs/engineering/project_principles.md" guards="test:scripts/quality.sh check|lint:scripts/gitleaks.sh|manual_review:verify clean built artifacts and real external boundary evidence" -->
 | `trust-boundary` | Runtime, test, or public-source trust boundary | Project principles | Behavioral tests, secret scan, and installed integration review |

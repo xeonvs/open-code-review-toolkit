@@ -78,7 +78,7 @@ def collect_ref_facts(
     diagnostics = []
     trust = (
         TrustClass.TARGET_REPOSITORY
-        if ref in {RefRole.BASE, RefRole.POLICY}
+        if ref in {RefRole.BASE, RefRole.POLICY, RefRole.TARGET}
         else TrustClass.SOURCE_REPOSITORY
     )
     changed_exact = tuple(sorted(set(changed_paths)))

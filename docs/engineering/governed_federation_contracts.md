@@ -14,6 +14,15 @@ tools. Configuration parses the registry; federation owns schema validation,
 transport, dispatch, cache and lifecycle; review_runner coordinates admission;
 shared receipt/reporting owners interpret content-free results.
 
+For GitLab, the current `auto` profile may use an already configured registry-v2
+gateway when the actual MR target T is unprotected and the same project's
+captured default branch P is protected. The registry and the gateway retain
+their independent operator/tenant/object/origin/DLP/budget gates; P does not
+install a tool or expand a credential. An absent setting selects `auto`;
+explicit `required` rejects an unprotected T, and explicit `unprotected`
+retains its historical limited profile without federation. Local review keeps
+its own explicit configuration and does not initiate GitLab policy selection.
+
 Before OCR starts, an owned background async worker connects to configured
 upstreams, discovers and freezes their allowlisted tools, validates schemas and
 metadata, and reports readiness. The same sessions remain alive for execution.
@@ -111,6 +120,12 @@ this receipt. Historical v1 receipts remain readable, but their aggregate
 `dlp_rejected` count cannot identify a gate or reason and must not be
 retrospectively attributed.
 
+Toolkit receipt v11 binds federation reconciliation to the authenticated
+B/H/T/P review identity. Its v0.12/v10 predecessor remains historical
+readback data and cannot authorize a new current-result publication. External
+gateway counts cannot prove source, target or protected-policy freshness;
+those checks occur separately before provider writes.
+
 Each gateway attempt closes exactly once. OCR attempt counts are independent and
 must match per alias; malformed arguments rejected by OCR before dispatch cause a
 mismatch, not a fabricated gateway count. Used advisory tools, known failed/denied
@@ -151,7 +166,7 @@ federation ingress/egress DLP plus publication DLP only. Schema, size, time,
 origin, identity, evidence, cleanup and posting-transaction gates remain active.
 
 Disabled mode emits a prominent private warning and bounded Technical-details
-warning, records the effective state in receipt v10, and is always comment-only.
+warning, records the effective state in current receipt v11, and is always comment-only.
 It may expose sensitive material through service/model egress, local Markdown or
 GitLab publication, and later re-enablement cannot retract prior disclosure.
 Operators should diagnose locally with `--preserve-private-artifacts` before this

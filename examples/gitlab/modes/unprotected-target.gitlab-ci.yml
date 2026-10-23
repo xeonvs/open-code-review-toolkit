@@ -1,7 +1,8 @@
 variables:
-  # Explicitly permit an unprotected target; protected targets keep normal behavior.
+  # Select the earlier limited profile for an unprotected target. Toolkit 0.13.0
+  # default auto instead uses the protected default branch as policy authority.
   OCR_GITLAB_TARGET_PROTECTION_MODE: "unprotected"
   # Only "off" and bounded untrusted "metadata" are allowed for an actual unprotected target.
   OCR_REVIEW_CONTEXT_MODE: "metadata"
-  # Defense in depth; receipt v9 also makes an actual unprotected target ineligible.
+  # Defense in depth; the receipt also makes an actual unprotected target ineligible.
   OCR_AUTO_APPROVE: "false"

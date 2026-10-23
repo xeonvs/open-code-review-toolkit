@@ -213,7 +213,10 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert "ocr-accept: generated-client-timeout" in configuration
     assert "not a source-code parser" in configuration
     assert "Repository reads use immutable objects" in security
-    assert "Source policy cannot grant tools or credentials" in security
+    assert (
+        "Source policy and MR discussion text cannot grant tools, credentials or consent"
+        in security
+    )
     assert f'OCR_VERSION: "v{example_version}"' in workflow
     assert "compatibility/ocr-support.json" in readme
     assert "../compatibility/ocr-support.json" in docs
@@ -229,7 +232,7 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     assert 'set -- "$@" --background ' not in workflow
     assert "review-background.md" not in workflow
     assert '--from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"' in workflow
-    assert '--to "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"' in workflow
+    assert '--to "${CI_COMMIT_SHA}"' in workflow
     assert "Pin the exact recommended Open Code Review release" in security
     assert "when: manual" in workflow
     assert "env -u OCR_LLM_TOKEN" in workflow
@@ -300,13 +303,13 @@ def test_public_docs_describe_current_context_and_federation_boundaries() -> Non
         "ocr.context-store/v2",
         "context_list",
         "context_get",
-        "receipt v10",
+        "receipt v11",
         "no migration path",
         "semantic paraphrase",
     ):
         assert contract in normalized_bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v10" in document
+        assert "receipt v11" in document
         assert "review-context.md" in document
     for document in (configuration, operations, security):
         assert "OCR_DLP_ENABLED" in document

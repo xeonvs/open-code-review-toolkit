@@ -225,10 +225,11 @@ def test_default_custom_api_survives_existing_native_provider_selection(
     assert config["llm"]["protocol"] == protocol
     seen: list[str] = []
     monkeypatch.setattr(preflight, "validate_ocr_binary", lambda: seen.append("ocr"))
+    monkeypatch.setattr(preflight, "validate_gitlab_review_settings", lambda: seen.append("mr"))
     monkeypatch.setattr(preflight, "validate_gitlab_access", lambda: seen.append("gitlab"))
     monkeypatch.setattr(preflight, "validate_llm_model", lambda: seen.append("api"))
     assert preflight.main(local=local) == 0
-    assert seen == (["ocr", "api"] if local else ["ocr", "gitlab", "api"])
+    assert seen == (["ocr", "api"] if local else ["ocr", "mr", "gitlab", "api"])
 
 
 @pytest.mark.parametrize(

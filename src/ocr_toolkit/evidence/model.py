@@ -43,6 +43,7 @@ class RefRole(str, Enum):
     BASE = "base"
     HEAD = "head"
     POLICY = "policy"
+    TARGET = "target"
     SHARED = "shared"
 
 
@@ -408,9 +409,9 @@ class EvidenceSnapshot:
         """Ensure snapshot records match the declared ref and are ordered."""
 
         if self.ref is RefRole.SHARED:
-            raise ValueError("snapshot ref must be base, head, or policy")
-        if self.ref is RefRole.POLICY and self.coverage:
-            raise ValueError("policy snapshot cannot contain coverage")
+            raise ValueError("snapshot ref must be base, head, policy, or target")
+        if self.ref in {RefRole.POLICY, RefRole.TARGET} and self.coverage:
+            raise ValueError("policy and target snapshots cannot contain coverage")
         if len(self.commit_sha) != 40 or not all(c in "0123456789abcdef" for c in self.commit_sha):
             raise ValueError("snapshot commit_sha must be a lowercase 40-character SHA-1")
         for record in self.records:

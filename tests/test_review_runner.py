@@ -27,9 +27,15 @@ from ocr_toolkit.context.store import ContextStore
 from ocr_toolkit.evidence import EvidenceRecord, EvidenceSnapshot, EvidenceStore, RefRole
 from ocr_toolkit.evidence.actions import record_action
 from ocr_toolkit.evidence.artifacts import EvidenceArtifacts, repository_artifacts
+from ocr_toolkit.evidence.repository import RepositoryEvidenceError
 from ocr_toolkit.evidence.review_context import normalize_merge_request_context
 from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
-from ocr_toolkit.posting import approval, settings, snapshot, workflow
+from ocr_toolkit.posting import approval, gitlab, settings, snapshot, workflow
+from ocr_toolkit.providers.gitlab import (
+    GitLabMergeRequestStale,
+    GitLabProviderError,
+    GitLabReviewSnapshot,
+)
 from ocr_toolkit.reporting.dlp import publication_dlp_state
 from ocr_toolkit.result_contract import parse_result_outcome
 from tests.support import gitlab_config, patched_attr, patched_env
@@ -44,6 +50,26 @@ DEFAULT_IDENTITY = review_runner.ReviewIdentity(
     context=None,
     target_sha="b" * 40,
     target_protection="protected",
+    project_id="1",
+    merge_request_iid="2",
+    diff_base_sha="c" * 40,
+    diff_start_sha="d" * 40,
+    diff_head_sha="a" * 40,
+    diff_version_id=7,
+    target_branch="main",
+    policy_project_id="1",
+    policy_branch="main",
+    policy_protection="protected",
+    protection_mode="auto",
+)
+BACKGROUND_STATUS_IDENTITY = replace(
+    DEFAULT_IDENTITY,
+    source_sha="b" * 40,
+    diff_base_sha="a" * 40,
+    diff_head_sha="b" * 40,
+    diff_start_sha="c" * 40,
+    policy_sha="c" * 40,
+    target_sha="c" * 40,
 )
 LOCAL_IDENTITY = review_runner.ReviewIdentity(
     source_sha="a" * 40,
@@ -130,6 +156,142 @@ def test_invalid_dlp_setting_fails_before_review_execution(
     assert called == []
 
 
+def _previous_pre_execution_status() -> review_runner.PreExecutionStatus:
+    """Return one real, note-eligible status for the same immutable MR tuple."""
+
+    return review_runner.PreExecutionStatus(
+        schema_version=review_runner.STATUS_SCHEMA,
+        reason=review_runner.PROTECTED_TARGET_RULE_PATH_PENDING,
+        diff_base_sha=DEFAULT_IDENTITY.diff_base_sha or "",
+        source_sha=DEFAULT_IDENTITY.source_sha,
+        policy_sha=DEFAULT_IDENTITY.policy_sha,
+        review=review_runner._status_review(DEFAULT_IDENTITY),
+    )
+
+
+@pytest.mark.parametrize("early_failure", ["dlp", "progress", "report_option"])
+def test_early_review_failure_invalidates_previous_pre_execution_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, early_failure: str
+) -> None:
+    """A previous same-identity note status cannot survive new setup failure."""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    review_runner.write_pre_execution_status(
+        artifacts.pre_execution_status, _previous_pre_execution_status()
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "_run_evidence_review",
+        lambda *_args, **_kwargs: pytest.fail("review execution must not start"),
+    )
+    kwargs: dict[str, Path] = {}
+    if early_failure == "dlp":
+        monkeypatch.setenv("OCR_DLP_ENABLED", "invalid")
+    elif early_failure == "progress":
+        monkeypatch.setenv("OCR_REVIEW_PROGRESS", "invalid")
+    else:
+        kwargs["report_path"] = tmp_path / "report.md"
+
+    with pytest.raises(review_runner.ReviewRunnerError):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json", tmp_path / "stderr.log", [], **kwargs
+        )
+    assert not artifacts.pre_execution_status.exists()
+    assert artifacts.review_run_lock.is_file()
+    assert stat.S_IMODE(artifacts.review_run_lock.stat().st_mode) == 0o600
+
+
+def test_concurrent_review_does_not_clear_active_review_status_or_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The losing process fails before it can touch the winning run's files."""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    monkeypatch.delenv("OCR_DLP_ENABLED", raising=False)
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "false")
+    artifacts = repository_artifacts(tmp_path)
+    child = (
+        "from pathlib import Path\n"
+        "from ocr_toolkit import review_runner\n"
+        "try:\n"
+        "    review_runner.run_evidence_review(Path('loser.json'), Path('loser.log'), [])\n"
+        "except review_runner.ReviewRunnerBusy as exc:\n"
+        "    print(str(exc))\n"
+        "else:\n"
+        "    raise SystemExit('concurrent review unexpectedly proceeded')\n"
+    )
+
+    def active_review(*_args: object, **_kwargs: object) -> int:
+        review_runner.write_pre_execution_status(
+            artifacts.pre_execution_status, _previous_pre_execution_status()
+        )
+        artifacts.bootstrap.write_text("winner", encoding="utf-8")
+        artifacts.bootstrap.chmod(0o600)
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(Path(review_runner.__file__).resolve().parents[1])
+        completed = subprocess.run(
+            [sys.executable, "-c", child],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "another review is already running" in completed.stdout
+        assert artifacts.pre_execution_status.exists()
+        assert artifacts.bootstrap.read_text(encoding="utf-8") == "winner"
+        assert not (tmp_path / "loser.json").exists()
+        return 0
+
+    monkeypatch.setattr(review_runner, "_run_evidence_review", active_review)
+    assert (
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+        == 0
+    )
+    assert artifacts.pre_execution_status.exists()
+    assert artifacts.review_run_lock.is_file()
+    lock_inode = artifacts.review_run_lock.stat().st_ino
+    monkeypatch.setattr(review_runner, "_run_evidence_review", lambda *_args, **_kwargs: 0)
+    assert review_runner.run_evidence_review(tmp_path / "next.json", tmp_path / "next.log", []) == 0
+    assert artifacts.review_run_lock.stat().st_ino == lock_inode
+    assert not artifacts.pre_execution_status.exists()
+
+
+@pytest.mark.parametrize("unsafe_kind", ["symlink", "hardlink", "fifo"])
+def test_review_rejects_unsafe_lock_without_clearing_previous_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unsafe_kind: str
+) -> None:
+    """An unsafe lock name cannot redirect IO or trigger artifact cleanup."""
+
+    monkeypatch.chdir(tmp_path)
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    review_runner.write_pre_execution_status(
+        artifacts.pre_execution_status, _previous_pre_execution_status()
+    )
+    outside = tmp_path / "outside"
+    outside.write_text("unchanged", encoding="utf-8")
+    if unsafe_kind == "symlink":
+        artifacts.review_run_lock.symlink_to(outside)
+    elif unsafe_kind == "hardlink":
+        os.link(outside, artifacts.review_run_lock)
+    else:
+        os.mkfifo(artifacts.review_run_lock)
+
+    with pytest.raises(
+        review_runner.ReviewRunnerNoHandoff, match="private pre-execution state is unsafe"
+    ):
+        review_runner.run_evidence_review(tmp_path / "result.json", tmp_path / "stderr.log", [])
+    assert outside.read_text(encoding="utf-8") == "unchanged"
+    assert artifacts.pre_execution_status.exists()
+
+
 def complete_review_payload(*, tool_calls: dict[str, object]) -> dict[str, object]:
     """Return one complete review whose public signal must survive diagnostics."""
 
@@ -175,15 +337,7 @@ def enriched_identity() -> review_runner.ReviewIdentity:
         labels=["review"],
         source_branch="feature/context",
     )
-    return review_runner.ReviewIdentity(
-        source_sha="a" * 40,
-        policy_sha="b" * 40,
-        mr_author_id=41,
-        context_mode="enriched",
-        context=context,
-        target_sha="b" * 40,
-        target_protection="protected",
-    )
+    return replace(DEFAULT_IDENTITY, context_mode="enriched", context=context)
 
 
 def configure_enrichment_test(
@@ -528,7 +682,7 @@ def test_enrichment_dlp_rejection_cannot_make_approval_eligible(
 def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does_not() -> None:
     """Keep safe MR context approval-neutral and remediation comment-only."""
 
-    identity = enriched_identity()
+    identity = replace(enriched_identity(), ci_job_id="11")
     payload: dict[str, object] = {
         "status": "complete",
         "comments": [],
@@ -608,6 +762,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
     )
 
     assert eligible.eligible is True
+    assert metadata["review"]["ci_job_id"] == "11"  # type: ignore[index]
     assert metadata["context"]["per_source"] == safe_enrichment.completeness  # type: ignore[index]
     assert metadata["context"]["tool_usage"] == {  # type: ignore[index]
         "context_get": 1,
@@ -756,12 +911,23 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 10,
+        "schema_version": 11,
         "review": {
             "source_sha": "a" * 40,
+            "diff_base_sha": "c" * 40,
+            "diff_start_sha": "d" * 40,
+            "diff_head_sha": "a" * 40,
+            "diff_version_id": 7,
+            "project_id": "1",
+            "merge_request_iid": "2",
+            "target_branch": "main",
             "policy_sha": "b" * 40,
             "target_sha": "b" * 40,
             "target_protection": "protected",
+            "policy_project_id": "1",
+            "policy_branch": "main",
+            "policy_protection": "protected",
+            "protection_mode": "auto",
             "mr_author_id": 41,
         },
         "context": {
@@ -1118,6 +1284,12 @@ def test_private_failure_arguments_preserve_finalized_signal_and_gitlab_notes(
         lambda *_args: workflow.GitLabMergeRequestLifecycle("1", "2", "a" * 40, "opened"),
     )
     monkeypatch.setattr(workflow, "get_diff_refs", lambda _: None)
+    monkeypatch.setattr(workflow, "validate_review_freshness", lambda *_args: None)
+    monkeypatch.setattr(
+        workflow,
+        "post_review_discussion",
+        lambda *_args, **kwargs: notes.append(kwargs["body"]) or gitlab.GitLabWriteResult("posted"),
+    )
     monkeypatch.setattr(
         workflow,
         "post_review_note_bounded",
@@ -1742,19 +1914,28 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     review_runner._record_ocr_result_mcp_usage(
         result,
         composition,
-        review_runner.ReviewIdentity(
-            "a" * 40, "b" * 40, 41, "metadata", None, "b" * 40, "protected"
-        ),
+        replace(DEFAULT_IDENTITY, context_mode="metadata"),
         evidence_action_counts=SUMMARY_ACTION_COUNTS,
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 10,
+        "schema_version": 11,
         "review": {
             "source_sha": "a" * 40,
+            "diff_base_sha": "c" * 40,
+            "diff_start_sha": "d" * 40,
+            "diff_head_sha": "a" * 40,
+            "diff_version_id": 7,
+            "project_id": "1",
+            "merge_request_iid": "2",
+            "target_branch": "main",
             "policy_sha": "b" * 40,
             "target_sha": "b" * 40,
             "target_protection": "protected",
+            "policy_project_id": "1",
+            "policy_branch": "main",
+            "policy_protection": "protected",
+            "protection_mode": "auto",
             "mr_author_id": 41,
         },
         "context": {
@@ -1957,8 +2138,10 @@ def test_publication_dlp_allows_tabs_only_in_code_fields_without_skipping_contro
     assert blocked is True
 
 
+@pytest.mark.parametrize("private_diagnostics", [False, True])
 def test_publication_dlp_retains_only_safe_local_findings_without_provider_receipt(
     tmp_path: Path,
+    private_diagnostics: bool,
 ) -> None:
     result = tmp_path / "result.json"
     result.write_text(
@@ -2014,6 +2197,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         forbidden=("private discussion sentence",),
         report_consumer=local_state.admit_report,
         state=local_state,
+        private_diagnostics=private_diagnostics,
     )
 
     assert usage == {"ocr_toolkit_evidence": 1}
@@ -2028,8 +2212,7 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
         "secret": 0,
     }
     persisted = json.loads(result.read_text(encoding="utf-8"))
-    assert persisted["status"] == "completed_with_errors"
-    assert persisted["comments"] == [
+    safe_comments = [
         {
             "path": "src/safe.py",
             "line": 7,
@@ -2043,16 +2226,25 @@ def test_publication_dlp_retains_only_safe_local_findings_without_provider_recei
             "content": "Validate the safe branch before returning.",
         },
     ]
-    assert persisted["warnings"] == ["Safe bounded warning."]
+    if private_diagnostics:
+        assert persisted[ocr_result.TOOLKIT_PRIVATE_DIAGNOSTIC_KEY] == {
+            "reason": "private-retention"
+        }
+        assert persisted["comments"][1]["content"] == "Copied private discussion sentence."
+        assert ocr_result.TOOLKIT_RESULT_KEY not in persisted
+    else:
+        assert persisted["status"] == "completed_with_errors"
+        assert persisted["comments"] == safe_comments
+        assert persisted["warnings"] == ["Safe bounded warning."]
+        assert "_ocr_toolkit" not in persisted
     assert persisted["tool_calls"] == {
         "total": 2,
         "by_tool": {"ocr_toolkit_evidence": 1, "task_done": 1},
     }
-    assert "_ocr_toolkit" not in persisted
     assert publication["retained"] == {"comments": 2, "warnings": 1}
     assert publication["omitted"] == {"comments": 1, "warnings": 1, "fields": 2}
     assert local_state.report is not None
-    assert list(local_state.report.comments) == persisted["comments"]
+    assert list(local_state.report.comments) == safe_comments
     assert local_state.report.publication == publication
     assert local_state.report.outcome.kind == "clean"
     assert local_state.report.outcome.manifest_present is False
@@ -3800,6 +3992,305 @@ def test_review_refs_are_resolved_before_evidence_and_ocr(
     ) == review_runner.ReviewRefs("a" * 40, "b" * 40)
 
 
+@pytest.mark.parametrize("event_type", ["", "merged_result", "merge_train"])
+def test_unsupported_gitlab_pipeline_stops_before_provider_or_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event_type: str
+) -> None:
+    """Synthetic or unclassified MR jobs cannot execute the source review."""
+
+    source = "b" * 40
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CI_PROJECT_ID", "1")
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "2")
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", event_type)
+    monkeypatch.setenv("CI_COMMIT_SHA", source)
+    monkeypatch.setattr(
+        review_runner,
+        "_immutable_review_refs",
+        lambda _refs: review_runner.ReviewRefs("a" * 40, source),
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_review_snapshot",
+        lambda *_args, **_kwargs: pytest.fail("provider must not run for unsupported CI"),
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_args, **_kwargs: pytest.fail("OCR must not run for unsupported CI"),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="detached merge-request pipeline"):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            ["--from", "a" * 40, "--to", source],
+        )
+
+
+def test_missing_gitlab_mr_identity_stops_before_provider_or_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CI invocation cannot silently become a standalone local review."""
+
+    source = "b" * 40
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CI_MERGE_REQUEST_IID", raising=False)
+    monkeypatch.setenv("CI_PROJECT_ID", "1")
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", source)
+    monkeypatch.setattr(
+        review_runner,
+        "_immutable_review_refs",
+        lambda _refs: review_runner.ReviewRefs("a" * 40, source),
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_review_snapshot",
+        lambda *_args, **_kwargs: pytest.fail("provider must not run without MR identity"),
+    )
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_args, **_kwargs: pytest.fail("OCR must not run without MR identity"),
+    )
+
+    with pytest.raises(review_runner.ReviewRunnerError, match="GitLab merge-request identity"):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            ["--from", "a" * 40, "--to", source],
+        )
+
+
+def _auto_review_snapshot(*, diff_base: str = "a" * 40) -> GitLabReviewSnapshot:
+    """One authenticated same-project fallback snapshot with distinct B, T and P."""
+
+    return GitLabReviewSnapshot(
+        project_id="1",
+        merge_request_iid="2",
+        source_sha="b" * 40,
+        target_branch="integration",
+        target_sha="c" * 40,
+        target_protection="unprotected",
+        policy_branch="main",
+        policy_sha="d" * 40,
+        policy_protection="protected",
+        protection_mode="auto",
+        diff_base_sha=diff_base,
+        diff_start_sha="c" * 40,
+        diff_head_sha="b" * 40,
+        diff_version_id=7,
+        author_id=41,
+        context=None,
+    )
+
+
+def _prepare_preflight_status_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[EvidenceArtifacts, review_runner.ReviewRefs]:
+    artifacts = repository_artifacts(tmp_path)
+    review_runner.prepare_artifact_directory(artifacts)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "off")
+    monkeypatch.setattr(review_runner, "is_merge_request_environment", lambda _env: True)
+    refs = review_runner.ReviewRefs("a" * 40, "b" * 40)
+    return artifacts, refs
+
+
+@pytest.mark.parametrize("failure", ["missing_mr", "provider", "target_object", "policy_object"])
+def test_unavailable_preflight_identity_writes_only_closed_job_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    artifacts, refs = _prepare_preflight_status_test(tmp_path, monkeypatch)
+    if failure == "missing_mr":
+        monkeypatch.setattr(review_runner, "is_merge_request_environment", lambda _env: False)
+    elif failure == "provider":
+        monkeypatch.setattr(
+            review_runner,
+            "acquire_review_snapshot",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                GitLabProviderError("synthetic metadata unavailable")
+            ),
+        )
+    else:
+        monkeypatch.setattr(
+            review_runner,
+            "acquire_review_snapshot",
+            lambda *_args, **_kwargs: _auto_review_snapshot(),
+        )
+
+    class Reader:
+        def __init__(self, root: Path) -> None:
+            assert root == tmp_path
+
+        def fetch_commit(self, sha: str) -> None:
+            if (failure == "target_object" and sha == "c" * 40) or (
+                failure == "policy_object" and sha == "d" * 40
+            ):
+                raise RepositoryEvidenceError("synthetic private object unavailable")
+
+        def resolve_commit(self, sha: str) -> str:
+            return sha
+
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", Reader)
+    with pytest.raises(review_runner.ReviewRunnerError):
+        review_runner._prepare_policy_context(refs, [], artifacts)
+    persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
+    assert persisted["reason"] == "review_identity_unavailable"
+    assert persisted["stage"] == "evidence_preflight"
+    assert persisted["model_execution"] == "not_started"
+    assert persisted["policy_sha"] is None
+    assert persisted["provider"] is None
+    assert persisted["diff_base_sha"] == refs.base
+    assert persisted["source_sha"] == refs.head
+    assert persisted["review"] is None
+
+
+@pytest.mark.parametrize("failure", ["provider_stale", "diff_mismatch"])
+def test_authenticated_preflight_revision_drift_records_stale_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    artifacts, refs = _prepare_preflight_status_test(tmp_path, monkeypatch)
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", lambda _root: SimpleNamespace())
+    if failure == "provider_stale":
+
+        def acquire(*_args: object, **_kwargs: object) -> GitLabReviewSnapshot:
+            raise GitLabMergeRequestStale("1", "2")
+    else:
+
+        def acquire(*_args: object, **_kwargs: object) -> GitLabReviewSnapshot:
+            return _auto_review_snapshot(diff_base="e" * 40)
+
+    monkeypatch.setattr(review_runner, "acquire_review_snapshot", acquire)
+    with pytest.raises(review_runner.ReviewRunnerError):
+        review_runner._prepare_policy_context(refs, [], artifacts)
+    persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
+    assert persisted["reason"] == "reviewed_revision_no_longer_current"
+    assert persisted["provider"] == "gitlab"
+    assert (persisted["project_id"], persisted["change_id"]) == ("1", "2")
+    assert persisted["policy_sha"] is None
+    assert persisted["model_execution"] == "not_started"
+    assert persisted["review"] is None
+
+
+def test_auto_fallback_missing_rules_uses_protected_policy_setup_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifacts, refs = _prepare_preflight_status_test(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_review_snapshot",
+        lambda *_args, **_kwargs: _auto_review_snapshot(),
+    )
+
+    class Reader:
+        root = tmp_path
+
+        def __init__(self, root: Path) -> None:
+            assert root == tmp_path
+
+        def fetch_commit(self, _sha: str) -> None:
+            return None
+
+        def resolve_commit(self, sha: str) -> str:
+            return sha
+
+        def read_blob(self, sha: str, path: str) -> None:
+            assert (sha, path) == ("d" * 40, "rules.md")
+            return None
+
+        def object_at(self, sha: str, path: str) -> object | None:
+            assert path == "rules.md"
+            return None if sha == refs.base else object()
+
+        def bounded_regular_blob_size(self, _value: object) -> None:
+            return None
+
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", Reader)
+    with pytest.raises(review_runner.ReviewRunnerError, match="setup is pending"):
+        review_runner._prepare_policy_context(refs, ["--rule", "rules.md"], artifacts)
+    persisted = json.loads(artifacts.pre_execution_status.read_text(encoding="utf-8"))
+    assert persisted["reason"] == "protected_policy_rule_path_pending"
+    assert persisted["policy_sha"] == "d" * 40
+    assert persisted["diff_base_sha"] == refs.base
+    assert persisted["source_sha"] == refs.head
+    assert persisted["schema_version"] == "ocr.pre-execution-status/v5"
+    assert persisted["review"]["source_sha"] == refs.head
+    assert persisted["review"]["diff_base_sha"] == refs.base
+    assert persisted["review"]["target_sha"] == "c" * 40
+    assert persisted["review"]["target_protection"] == "unprotected"
+    assert persisted["review"]["policy_sha"] == "d" * 40
+    assert persisted["review"]["policy_protection"] == "protected"
+
+
+def test_local_policy_preflight_never_writes_gitlab_identity_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifacts, refs = _prepare_preflight_status_test(tmp_path, monkeypatch)
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", lambda _root: SimpleNamespace())
+    monkeypatch.setattr(review_runner, "is_merge_request_environment", lambda _env: False)
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_review_snapshot",
+        lambda *_args, **_kwargs: pytest.fail("--local must not read GitLab"),
+    )
+    identity, _args = review_runner._prepare_policy_context(refs, [], artifacts, local=True)
+    assert identity.target_protection == "local"
+    assert not artifacts.pre_execution_status.exists()
+
+
+def test_local_review_orchestration_collects_policy_records_from_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The local runner passes B as policy evidence before starting OCR."""
+
+    artifacts = repository_artifacts(tmp_path)
+    refs = review_runner.ReviewRefs("a" * 40, "b" * 40)
+    calls: list[dict[str, object]] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "off")
+    monkeypatch.setenv("OCR_REVIEW_PROGRESS", "false")
+    monkeypatch.delenv("OCR_REVIEW_CONTEXT_ADAPTERS_JSON", raising=False)
+    monkeypatch.setattr(review_runner.local_chatgpt, "auth_mode", lambda *_a, **_kw: "api")
+    monkeypatch.setattr(review_runner, "repository_artifacts", lambda: artifacts)
+    monkeypatch.setattr(review_runner, "_immutable_review_refs", lambda _refs: refs)
+    monkeypatch.setattr(review_runner, "GitRepositoryReader", lambda _root: SimpleNamespace())
+    monkeypatch.setattr(review_runner, "_write_isolated_runtime_config", lambda: None)
+    monkeypatch.setattr(
+        review_runner,
+        "acquire_review_snapshot",
+        lambda *_a, **_kw: pytest.fail("local review must not read GitLab"),
+    )
+
+    def collect(**kwargs: object) -> None:
+        calls.append(kwargs)
+        raise review_runner.ReviewRunnerError("stop after repository collection boundary")
+
+    monkeypatch.setattr(review_runner, "collect_repository_evidence", collect)
+    monkeypatch.setattr(
+        review_runner,
+        "run_review",
+        lambda *_a, **_kw: pytest.fail("OCR must not run after collector failure"),
+    )
+    with pytest.raises(review_runner.ReviewRunnerError, match="collection boundary"):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            ["--from", refs.base, "--to", refs.head],
+            local=True,
+        )
+    assert calls == [
+        {
+            "base_ref": refs.base,
+            "head_ref": refs.head,
+            "policy_ref": refs.base,
+            "target_ref": None,
+            "include_policy_records": True,
+        }
+    ]
+
+
 def test_immutable_ref_rewrite_preserves_non_diff_ocr_options() -> None:
     """Keep caller review settings while replacing only movable diff selectors."""
 
@@ -4058,7 +4549,7 @@ def test_background_preview_preserves_rejection_when_cleanup_also_fails(
         session_home=session_home,
         artifacts=artifacts,
         refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
-        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+        identity=BACKGROUND_STATUS_IDENTITY,
     )
 
     assert exit_code == 2
@@ -4134,7 +4625,7 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
         session_home=session_home,
         artifacts=artifacts,
         refs=review_runner.ReviewRefs("a" * 40, "b" * 40),
-        identity=replace(DEFAULT_IDENTITY, policy_sha="c" * 40),
+        identity=BACKGROUND_STATUS_IDENTITY,
     )
 
     assert exit_code == 2
@@ -4149,8 +4640,9 @@ def test_hard_background_rejection_persists_status_without_running_model_review(
         "policy_sha": "c" * 40,
         "project_id": None,
         "provider": None,
+        "review": review_runner._status_review(BACKGROUND_STATUS_IDENTITY),
         "reason": "ocr_background_character_limit",
-        "schema_version": "ocr.pre-execution-status/v4",
+        "schema_version": "ocr.pre-execution-status/v5",
         "source_sha": "b" * 40,
         "stage": "ocr_preview",
         "model_execution": "not_started",
@@ -4205,6 +4697,11 @@ def test_evidence_review_prepares_internal_context_before_ocr(
     """Clean ordinary success/failure while retaining requested local diagnostics."""
 
     monkeypatch.setenv("OCR_REVIEW_PROGRESS", "true" if progress_on else "false")
+    monkeypatch.setenv("CI_PROJECT_ID", "1")
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "2")
+    monkeypatch.setenv("CI_MERGE_REQUEST_EVENT_TYPE", "detached")
+    monkeypatch.setenv("CI_COMMIT_SHA", "b" * 40)
+    monkeypatch.delenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA", raising=False)
     events: list[object] = []
     composition_inputs: list[dict[str, object]] = []
     bootstrap_inputs: list[dict[str, object]] = []
@@ -4220,6 +4717,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(
 
     class Store:
         head = SimpleNamespace(commit_sha="b" * 40)
+        base = None
+        policy = None
+        target = None
 
         def add(self, record: object) -> bool:
             events.append(("enrich", record))
@@ -4303,6 +4803,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
         target_sha="a" * 40,
         target_protection=target_protection,
         mr_author_id=41 if target_protection != "local" else None,
+        policy_protection=("unprotected" if target_protection == "unprotected" else "protected"),
+        protection_mode=("unprotected" if target_protection == "unprotected" else "auto"),
     )
 
     with (
@@ -4393,6 +4895,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "base_ref": "a" * 40,
             "head_ref": "b" * 40,
             "policy_ref": "a" * 40,
+            "target_ref": "a" * 40,
             "include_policy_records": target_protection != "unprotected",
         },
     )
@@ -4408,6 +4911,7 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             "capabilities": composition.capabilities,
             "context_hints": None,
             "unprotected_target": target_protection == "unprotected",
+            "protected_policy_fallback": False,
         }
     ]
     assert events[1] == ("enrich", f"invocation:{'b' * 40}")
@@ -4462,7 +4966,8 @@ def test_evidence_review_prepares_internal_context_before_ocr(
                 "collect_previous_bot_comment_refs",
                 lambda *_args: pytest.fail("private result must not inspect previous comments"),
             )
-            assert workflow.post_results(gitlab_config(), retained) == 0
+            # A private execution diagnostic cannot be a successful posting job.
+            assert workflow.post_results(gitlab_config(), retained) == 1
             assert "not publication-eligible" in capsys.readouterr().err
         session_homes[0].rmdir()
     else:
@@ -4496,10 +5001,13 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
         path.write_text("private", encoding="utf-8")
         path.chmod(0o600)
 
-    review_runner._remove_ephemeral_review_artifacts(artifacts)
+    with review_runner.locked_review_run(artifacts):
+        review_runner._remove_ephemeral_review_artifacts(artifacts)
+        assert artifacts.review_run_lock.is_file()
 
     assert all(not path.exists() for path in ephemeral)
     assert artifacts.pre_execution_status.read_text(encoding="utf-8") == "private"
+    assert artifacts.review_run_lock.is_file()
 
 
 def test_private_artifact_preservation_is_rejected_for_gitlab_mr_profile() -> None:
@@ -4539,6 +5047,13 @@ def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Pat
         return 0
 
     with (
+        patched_env(
+            CI_PROJECT_ID="1",
+            CI_MERGE_REQUEST_IID="2",
+            CI_MERGE_REQUEST_EVENT_TYPE="detached",
+            CI_COMMIT_SHA="b" * 40,
+            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA="b" * 40,
+        ),
         patched_attr(
             review_runner,
             "_immutable_review_refs",

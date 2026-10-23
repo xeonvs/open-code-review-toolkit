@@ -13,6 +13,90 @@ import pytest
 ROOT = Path(__file__).parents[1]
 
 
+@pytest.mark.parametrize(
+    ("sync_exit", "audit_exit", "expected_exit"),
+    [(0, 0, 0), (0, 7, 7), (9, 0, 9)],
+)
+def test_local_dependency_audit_matches_hosted_gate_and_preserves_failure(
+    tmp_path: Path, sync_exit: int, audit_exit: int, expected_exit: int
+) -> None:
+    script = ROOT / "scripts/dependency-audit.sh"
+    script_text = script.read_text()
+    pin = re.search(r"^UV_VERSION=([0-9.]+)$", script_text, re.MULTILINE)
+    assert pin is not None
+    security = (ROOT / ".github/workflows/security.yml").read_text()
+    audit_job = security.split("  dependency-audit:", 1)[1].split("  secrets:", 1)[0]
+    assert "run: ./scripts/dependency-audit.sh" in audit_job
+    assert f'version: "{pin.group(1)}"' in audit_job
+
+    fake_uv = tmp_path / "uv"
+    trace = tmp_path / "trace"
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1" = --version ]; then echo "uv {pin.group(1)} (test)"; exit 0; fi\n'
+        'printf "%s|%s|%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$*" >> "$AUDIT_TRACE"\n'
+        'if [ "$1" = sync ]; then exit "$SYNC_EXIT"; fi\n'
+        'if [ "$1" = run ]; then exit "$AUDIT_EXIT"; fi\n'
+    )
+    fake_uv.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+        "AUDIT_TRACE": str(trace),
+        "SYNC_EXIT": str(sync_exit),
+        "AUDIT_EXIT": str(audit_exit),
+    }
+    result = subprocess.run(
+        [str(script)],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == expected_exit, result.stderr
+    expected_calls = [f"{ROOT}|.quality-logs/dependency-audit-venv|sync --locked"]
+    if sync_exit == 0:
+        expected_calls.append(f"{ROOT}|.quality-logs/dependency-audit-venv|run --no-sync pip-audit")
+    assert trace.read_text().splitlines() == expected_calls
+
+
+def test_local_dependency_audit_uses_ci_pinned_uv_when_installed_uv_is_older(
+    tmp_path: Path,
+) -> None:
+    script = ROOT / "scripts/dependency-audit.sh"
+    pin = re.search(r"^UV_VERSION=([0-9.]+)$", script.read_text(), re.MULTILINE)
+    assert pin is not None
+    fake_uv = tmp_path / "uv"
+    fake_uv.write_text('#!/bin/sh\necho "uv 0.9.7 (old)"\n')
+    fake_uv.chmod(0o755)
+    trace = tmp_path / "trace"
+    fake_uvx = tmp_path / "uvx"
+    fake_uvx.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$AUDIT_TRACE"\n')
+    fake_uvx.chmod(0o755)
+    result = subprocess.run(
+        [str(script)],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+            "AUDIT_TRACE": str(trace),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert trace.read_text().splitlines() == [
+        f"--from uv=={pin.group(1)} uv sync --locked",
+        f"--from uv=={pin.group(1)} uv run --no-sync pip-audit",
+    ]
+
+
 def test_workflows_consume_locked_environments_without_implicit_resolution() -> None:
     for name in (
         "ci.yml",

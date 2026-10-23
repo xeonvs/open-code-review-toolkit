@@ -27,7 +27,13 @@ from ocr_toolkit.provider_config import (
     ProviderConfigError,
     provider_config_from_environment,
 )
+from ocr_toolkit.providers.gitlab import (
+    TARGET_PROTECTION_MODE_VARIABLE,
+    GitLabProviderError,
+    parse_target_protection_mode,
+)
 from ocr_toolkit.providers.local_config import validate_local_context
+from ocr_toolkit.review_identity import full_sha, validate_detached_merge_request_pipeline
 
 HTTP_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BODY_BYTES = 2_000_000
@@ -221,6 +227,18 @@ def validate_gitlab_access() -> None:
     _request_json(f"{api_root}/projects/{project_id_encoded}/merge_requests/{mr_iid}", headers)
 
 
+def validate_gitlab_review_settings() -> None:
+    """Reject unsupported MR CI identity and target policy before network or model work."""
+
+    try:
+        parse_target_protection_mode(os.environ.get(TARGET_PROTECTION_MODE_VARIABLE))
+        validate_detached_merge_request_pipeline(
+            os.environ, expected_source_sha=full_sha(os.environ.get("CI_COMMIT_SHA", ""))
+        )
+    except (GitLabProviderError, ValueError) as exc:
+        raise PreflightError(str(exc)) from exc
+
+
 def validate_ocr_binary(*, executable: str | None = None, announce: bool = True) -> str:
     """Verify that the external OCR binary has the supported release."""
 
@@ -412,6 +430,7 @@ def main(*, local: bool = False) -> int:
             )
             return 0
         if not local:
+            validate_gitlab_review_settings()
             validate_gitlab_access()
         validate_llm_model()
     except (PreflightError, LocalChatGPTError) as exc:

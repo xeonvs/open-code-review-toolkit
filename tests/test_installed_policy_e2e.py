@@ -128,17 +128,19 @@ def installed_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path,
     return next(direct.glob("*.whl")), next(rebuilt.glob("*.whl")), runtime_requirements
 
 
-def test_installation_without_runtime_lock_fails_functional_mcp_probe(
-    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
-) -> None:
-    """The historical wheel-only recipe must fail in a clean interpreter."""
+@pytest.fixture(scope="module")
+def installed_without_dependencies(
+    installed_artifacts: tuple[Path, Path, Path], tmp_path_factory: pytest.TempPathFactory
+) -> Path:
+    """Share one wheel-only interpreter between read-only missing-dependency probes."""
 
     uv_binary = shutil.which("uv")
     assert uv_binary is not None
-    environment = tmp_path / "missing-dependencies"
+    root = tmp_path_factory.mktemp("missing-runtime-dependencies")
+    environment = root / "venv"
     _run(
         [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
-        cwd=tmp_path,
+        cwd=root,
     )
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     _run(
@@ -151,8 +153,17 @@ def test_installation_without_runtime_lock_fails_functional_mcp_probe(
             "--no-deps",
             str(installed_artifacts[0]),
         ],
-        cwd=tmp_path,
+        cwd=root,
     )
+    return python
+
+
+def test_installation_without_runtime_lock_fails_functional_mcp_probe(
+    installed_without_dependencies: Path, tmp_path: Path
+) -> None:
+    """The historical wheel-only recipe must fail in a clean interpreter."""
+
+    python = installed_without_dependencies
     probe = subprocess.run(
         [str(python), "-I", str(PROJECT_ROOT / "scripts" / "installed_runtime_smoke.py")],
         cwd=tmp_path,
@@ -314,33 +325,14 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
 
 
 def test_installed_runtime_smoke_fails_without_runtime_dependencies(
-    installed_artifacts: tuple[Path, Path, Path], tmp_path: Path
+    installed_without_dependencies: Path, tmp_path: Path
 ) -> None:
     """Prove the functional smoke detects a wheel installed without its runtime lock."""
 
-    uv_binary = shutil.which("uv")
-    assert uv_binary is not None
     root = tmp_path / "missing-runtime-dependencies"
     root.mkdir(mode=0o700)
-    environment = root / "venv"
-    _run(
-        [uv_binary, "venv", "--python", sys.executable, "--no-project", str(environment)],
-        cwd=root,
-    )
-    binary_directory = environment / ("Scripts" if os.name == "nt" else "bin")
-    python = binary_directory / ("python.exe" if os.name == "nt" else "python")
-    _run(
-        [
-            uv_binary,
-            "pip",
-            "install",
-            "--python",
-            str(python),
-            "--no-deps",
-            str(installed_artifacts[0]),
-        ],
-        cwd=root,
-    )
+    python = installed_without_dependencies
+    binary_directory = python.parent
     completed = subprocess.run(
         [str(python), "-I", str(RUNTIME_SMOKE)],
         cwd=root,

@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parents[1] / "scripts" / "quality.sh"
 PROJECT_ROOT = SCRIPT.parent.parent
 CI_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
@@ -109,6 +111,51 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
     assert output.count("fresh invocation: run --no-sync sh -c") == 5
+
+
+@pytest.mark.parametrize("failure_code", [2, 7, 130])
+def test_quality_script_preserves_failure_status_and_stops(
+    tmp_path: Path, failure_code: int
+) -> None:
+    """A failed pytest preserves its status and prevents later coverage gates."""
+
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    fake_uv = binary_dir / "uv"
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = sync ]; then exit 0; fi\n'
+        'printf "invocation: %s\\n" "$*"\n'
+        'case "$*" in\n'
+        f'  *"pytest -q"*) echo "synthetic pytest failure" >&2; exit {failure_code} ;;\n'
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    log_dir = tmp_path / "logs"
+    environment = os.environ.copy()
+    environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
+    environment["OCR_TOOLKIT_LOG_DIR"] = str(log_dir)
+    environment["OCR_TOOLKIT_QUALITY_ENVIRONMENT"] = str(tmp_path / "venv")
+
+    completed = subprocess.run(
+        [str(SCRIPT), "coverage"],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert completed.returncode == failure_code
+    assert "quality check failed: pytest -q" in completed.stderr
+    assert "synthetic pytest failure" in completed.stderr
+    assert "passed" not in completed.stdout
+    output = (log_dir / "coverage.log").read_text(encoding="utf-8")
+    assert "synthetic pytest failure" in output
+    assert output.count("invocation:") == 1
+    assert "coverage report" not in output
 
 
 def test_gitleaks_wrapper_scans_the_complete_feature_history(tmp_path: Path) -> None:

@@ -278,7 +278,7 @@ def test_store_round_trips_current_coverage_and_legacy_v1_fails_closed(tmp_path:
     restored = EvidenceStore.read(path)
 
     assert restored.coverage == (coverage(),)
-    assert restored.to_dict()["schema_version"] == 4
+    assert restored.to_dict()["schema_version"] == 5
 
     legacy = store.to_dict()
     legacy["schema_version"] = 1

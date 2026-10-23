@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-SCHEMA_VERSION = 4
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, SCHEMA_VERSION}
+SCHEMA_VERSION = 5
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, SCHEMA_VERSION}
 POLICY_KINDS = frozenset({"repository.accepted_decision", "repository.guidance"})
+TARGET_CONTEXT_KINDS = frozenset({"repository.file", "dependency.declared", "dependency.locked"})
 MAX_SERIALIZED_BYTES = 20_000_000
 KNOWN_KINDS = frozenset(
     {

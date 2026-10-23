@@ -32,6 +32,7 @@ class ReadbackStore(Protocol):
     base: EvidenceSnapshot | None
     head: EvidenceSnapshot | None
     policy: EvidenceSnapshot | None
+    target: EvidenceSnapshot | None
     schema_version: int
     deltas: tuple[EvidenceDelta, ...]
     _records: dict[str, EvidenceRecord]
@@ -50,6 +51,8 @@ class ReadbackStore(Protocol):
     def add_diagnostic(self, message: str) -> None: ...
 
     def _validate_policy_snapshot_bindings(self, schema_version: int) -> None: ...
+
+    def _validate_target_snapshot_bindings(self, schema_version: int) -> None: ...
 
 
 StoreT = TypeVar("StoreT", bound=ReadbackStore)
@@ -155,6 +158,7 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
     read_snapshots(store, raw.get("snapshots", {}), schema_version=schema_version)
     if schema_version >= 3:
         store._validate_policy_snapshot_bindings(schema_version)
+    store._validate_target_snapshot_bindings(schema_version)
     read_deltas(store, raw.get("deltas", []))
     return store
 
@@ -162,12 +166,18 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
 def read_snapshots(store: ReadbackStore, raw: object, *, schema_version: int) -> None:
     """Validate exact historical snapshot shapes and accepted references."""
 
-    allowed_snapshots = {"base", "head", "policy"} if schema_version >= 4 else {"base", "head"}
+    allowed_snapshots = {"base", "head"}
+    if schema_version >= 4:
+        allowed_snapshots.add("policy")
+    if schema_version >= 5:
+        allowed_snapshots.add("target")
     if not isinstance(raw, dict) or not set(raw) <= allowed_snapshots:
         raise EvidenceStoreError("evidence snapshots must be a closed object")
     roles = [("base", RefRole.BASE), ("head", RefRole.HEAD)]
     if schema_version >= 4:
         roles.append(("policy", RefRole.POLICY))
+    if schema_version >= 5:
+        roles.append(("target", RefRole.TARGET))
     for name, role in roles:
         item = raw.get(name)
         if item is None:
