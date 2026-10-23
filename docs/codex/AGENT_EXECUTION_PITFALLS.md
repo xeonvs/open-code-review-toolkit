@@ -168,7 +168,7 @@ This is a diagnostic catalogue of recurring incident classes. Current requiremen
 - Owner: docs/engineering/project_principles.md#outcome-consistency
 - Route: trust-boundary
 - Guard: test:scripts/quality.sh check
-- Evidence: [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7). Prior control: table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts. Historical cause: outcomes were assembled independently and tests asserted prose rather than one result invariant.
+- Evidence: [0.4.7 final OCR correction](../engineering/execution_history/releases.md#plan-toolkit-0-4-7) and the v0.13.1 gitlink review's safe-plus-filtered finding case in `tests/test_repository_coverage.py`. Prior control: table-driven result and posting tests cover skipped, clean, warning, error, finding, partial, and zero-value cases through shared contracts. Historical cause: outcomes were assembled independently and tests asserted prose rather than one result invariant; the v0.13.1 first review found that producer and consumer tests still missed a transformed handoff.
 - Status: guarded
 - Retirement: Retire when this historical class no longer improves diagnosis and its owner, route, and guard remain established.
 

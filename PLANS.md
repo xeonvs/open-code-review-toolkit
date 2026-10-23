@@ -34,6 +34,8 @@ Implement private input planning, OCR 1.13.3-only process-local Git projection, 
 | REQ-008 | After release merge, verify stable registries, provenance, tag, immutable Release/receipt, #268/milestone, site notification and external state | WQ-09; Post-Close Delivery | out_of_scope |
 | REQ-009 | Apply bounded tool-use decisions from prior release-chat audits while preserving mandatory gates | WQ-01–WQ-09 | pending |
 | REQ-010 | Correct current status-bearing v0.13.0 docs from live evidence; keep archived prepublication snapshot intact | WQ-06, WQ-08 | pending |
+| REQ-011 | Make the review-found boundary gaps a durable, narrowly routed validation control for future changes | WQ-07 | pending |
+| REQ-012 | Audit recurring OCR `file_read` failures against toolkit input, failure telemetry and review acceptance; correct only a demonstrated toolkit defect | WQ-07 | pending |
 
 ### Explicit Non-Goals
 
@@ -62,7 +64,7 @@ No OCR fork/upstream change, consumer-CI bypass, submodule initialization/fetch/
 
 ### User Decisions And Answers
 
-Target v0.13.1, keep 0.14.0 development marker; include #268 and required adversarial/contract checks, leave conditional backlog inactive; no-model GitLab post is advisory by default and strict only under existing strict mode; embed tool-use improvements in this execution, not a separate workflow PR; implement through protected feature and stable release lifecycle. Use a plan-only early draft PR, no intermediate feature pushes, broader tests for all touched files, logical signed commits with self-review/amend for fixes, codex-security before the final push and local toolkit/OCR review with ChatGPT after it but still before the push.
+Target v0.13.1, keep 0.14.0 development marker; include #268 and required adversarial/contract checks, leave conditional backlog inactive; no-model GitLab post is advisory by default and strict only under existing strict mode; embed tool-use improvements in this execution, not a separate workflow PR; implement through protected feature and stable release lifecycle. Use a plan-only early draft PR, no intermediate feature pushes, broader tests for all touched files, logical signed commits with self-review/amend for fixes, codex-security before the final push and local toolkit/OCR review with ChatGPT after it but still before the push. After review findings, make a prospective cross-stage validation control in the existing canonical development owner, preserving route-only `AGENTS.md` and a non-normative incident catalogue. Audit repeated native `file_read` failures without conflating built-in OCR tools with the toolkit MCP federation.
 
 ### Completed Baseline State
 
@@ -78,7 +80,7 @@ v0.13.0 is published with immutable assets and #264 closed. Its archived plan is
 | WQ-04 | REQ-003, REQ-004 | Exact receipt v12/status v6, effective coverage/reporting and local no-model path, hostile/legacy tests, self-reviewed commit | done |
 | WQ-05 | REQ-004 | GitLab posting, finding admission, approval blocker and partial lifecycle retention with failure/freshness tests, self-reviewed commit | done |
 | WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | done |
-| WQ-07 | REQ-005, REQ-007 | Scoped/final quality, build, secret/dependency gates, security diff scan, real local OCR review, aggregate self-review, protected feature PR/merge, dev artifacts | pending |
+| WQ-07 | REQ-005, REQ-007, REQ-011, REQ-012 | Scoped/final quality, boundary-validation process correction, native failed-tool audit, build, secret/dependency gates, security diff scan, real local OCR review, aggregate self-review, protected feature PR/merge, dev artifacts | pending |
 | WQ-08 | REQ-007, REQ-010 | Release markers/metadata/epoch/notes, checked plan archive/reset, release validation, protected signed release PR | pending |
 | WQ-09 | REQ-008 | Protected release merge, stable publication, receipt and external reconciliation | out_of_scope |
 
@@ -100,13 +102,17 @@ Only proven OCR 1.13.3 pure-pointer projection proceeds. Unique identical-OID be
 
 The first local ChatGPT OCR review of `bdf5832..4183c1d` completed with a native complete manifest (14 selected/completed, no reuse/failure/waiver), DLP admission, and six actionable findings. This is correction evidence, not an approval of the range. The local follow-up fixes preserve a path-free selected-work proof when publication DLP removes unsafe findings, reject unhashable v12/v6 fields, remove or privately mark raw output on post-model drift, and bound Git patch output during execution. Focused runner/gitlink/coverage/status tests passed 296 with 10 environment-gated skips; the installed OCR gitlink suite passed 52/52. These edits change the reviewed range, so final quality, security diff scan and local OCR review must be repeated before push.
 
+The signed correction commit `9f5de34` passed full quality (2369 tests, 12 skipped, 357 subtests, 86.35% total coverage), installed wheel/sdist MCP execution, real OCR gitlink tests, Gitleaks and dependency audit. Codex Security diff scan of `bdf5832..9f5de34` sealed with zero findings and no deferred files. The second local ChatGPT OCR review completed with native complete coverage (14 selected/completed, zero reuse/failure/waiver), 8 internal evidence-MCP calls and two actionable findings: post-model input read/timeouts missed result disposal, and user Git attributes could differ between temporary review HOME and normal posting HOME. The local correction now catches all three verification failure classes before/after execution, disables user attributes in the projected Git child and tests a changed HOME with hostile attributes; 63/63 real-OCR gitlink tests passed. The external governed federation was not part of this local review. No feature implementation has been pushed after the plan-only draft PR.
+
+Native OCR generated four invalid `file_read` requests in the first model review and one in the second (bad path or out-of-range lines). Toolkit code does not construct those requests. Its existing bounded failure telemetry records them privately, strips arguments/details from published results and blocks automatic approval for verified failures; focused telemetry tests passed 10/10. The missing operational control was accepting a local complete manifest without assessing material auxiliary read failures. The local review route now requires that assessment. A proposed bootstrap instruction was rejected: the clean installed wheel/sdist test showed that it displaced higher-priority project guidance under the existing 2,300-character cap. The canonical development validation owner now calls for a small changed-handoff map and integrated mixed/error fixtures; existing incident classes cover the observed causes. Instruction-contract validation passed. The initial quality run on the oversized-bootstrap commit failed only the installed-artifact test (2375 passed, 12 skipped, 357 subtests, 86.35% coverage); the bootstrap addition was removed before final validation.
+
 ### Risks And Recovery
 
 Git configuration precedence or local input drift can hide ordinary changes: revalidate consulted inputs and independent diff; stop on uncertainty. False-complete receipt could launder approval/cleanup: exact parsing, original identity binding, independent approval blocker and thread retention. If installed proof fails for a proposed safe form, narrow it and test the fallback; if core mixed behavior cannot be proved, keep the plan active/blocked and do not publish. External publication failures resume only through exact-artifact documented recovery after readback.
 
 ### Resume Point
 
-WQ-07: self-review and commit the six local OCR corrections, then repeat final quality, installed-artifact, secret/dependency, codex-security diff scan and local toolkit/OCR ChatGPT gates on the new immutable HEAD before the single final feature push. Preserve the draft feature PR's plan-only remote head until those reviews pass.
+WQ-07: self-review and commit the second OCR corrections and workflow/tool-use controls, then repeat affected quality/installed-OCR, secret/dependency, codex-security diff scan and local toolkit/OCR ChatGPT gates on the new immutable HEAD before the single final feature push. Preserve the draft feature PR's plan-only remote head until those reviews pass.
 
 ### Plan Fidelity Check
 

@@ -170,7 +170,12 @@ def _projection_environment(plan: GitlinkInputPlan) -> dict[str, str]:
             "LC_ALL": "C",
         }
     )
-    overrides = [("diff.ignoreSubmodules", "all")]
+    overrides = [
+        ("diff.ignoreSubmodules", "all"),
+        # OCR uses a temporary HOME, while posting uses the operator's HOME.
+        # Keep user/XDG attributes out of both Git projections.
+        ("core.attributesFile", os.devnull),
+    ]
     for name in plan.config_names:
         if _SAFE_CONFIG_NAME.fullmatch(name) is None or ".." in name or name.endswith("/"):
             raise RepositoryEvidenceError(".gitmodules name is unsafe for OCR Git config")

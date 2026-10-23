@@ -1707,7 +1707,7 @@ def _verify_gitlink_after_execution(
 
     try:
         verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
-    except RepositoryEvidenceError as exc:
+    except (RepositoryEvidenceError, OSError, subprocess.TimeoutExpired) as exc:
         if preserve_authorized:
             _retain_private_diagnostic_result(result_path, reason="gitlink-input-drift")
         else:
@@ -2331,7 +2331,7 @@ def _run_background_qualified_review(
             return 2, qualification
         try:
             verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
-        except RepositoryEvidenceError as exc:
+        except (RepositoryEvidenceError, OSError, subprocess.TimeoutExpired) as exc:
             raise ReviewRunnerError("OCR gitlink inputs drifted before model execution") from exc
     if state is not None:
         state.enter("subprocess")

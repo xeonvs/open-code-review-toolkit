@@ -240,11 +240,45 @@ def test_projection_scrubs_inherited_git_overrides(
     monkeypatch.setenv("GIT_EXTERNAL_DIFF", "/outside/diff")
     projection = make_gitlink_projection(reader, plan)
     env = projection.child_environment()
-    assert env["GIT_CONFIG_COUNT"] == "1"
+    assert env["GIT_CONFIG_COUNT"] == "2"
     assert env["GIT_CONFIG_KEY_0"] == "diff.ignoreSubmodules"
     assert env["GIT_CONFIG_VALUE_0"] == "all"
+    assert env["GIT_CONFIG_KEY_1"] == "core.attributesFile"
+    assert env["GIT_CONFIG_VALUE_1"] == os.devnull
     assert "GIT_WORK_TREE" not in env and "GIT_EXTERNAL_DIFF" not in env
     assert [entry.path for entry in projection.ordinary_diff] == ["main.php"]
+
+
+def test_projection_ignores_user_attributes_when_home_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    review_home = tmp_path / "review-home"
+    review_home.mkdir()
+    posting_home = tmp_path / "posting-home"
+    attributes = posting_home / ".config" / "git" / "attributes"
+    attributes.parent.mkdir(parents=True)
+    attributes.write_text("*.php -diff\n", encoding="utf-8")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(posting_home))
+    observed = subprocess.run(
+        ["git", "check-attr", "diff", "--", "main.php"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    assert observed.stdout.strip() == b"main.php: diff: unset"
+
+    monkeypatch.setenv("HOME", str(review_home))
+    projection = make_gitlink_projection(reader, plan)
+    monkeypatch.setenv("HOME", str(posting_home))
+    rebuilt = make_gitlink_projection(reader, plan)
+    assert rebuilt.fingerprints == projection.fingerprints
+    assert rebuilt.line_counts == projection.line_counts
+    verify_gitlink_projection(reader, projection)
 
 
 def test_projection_uses_exact_slash_qualified_gitmodules_name(tmp_path: Path) -> None:
@@ -269,7 +303,7 @@ def test_projection_uses_exact_slash_qualified_gitmodules_name(tmp_path: Path) -
     plan = plan_gitlink_input(reader, base, head)
     assert plan is not None and plan.config_names == ("vendor/schema",)
     projection = make_gitlink_projection(reader, plan)
-    assert projection.child_environment()["GIT_CONFIG_KEY_1"] == "submodule.vendor/schema.ignore"
+    assert projection.child_environment()["GIT_CONFIG_KEY_2"] == "submodule.vendor/schema.ignore"
 
 
 def test_gitlink_only_projection_has_no_selected_work(tmp_path: Path) -> None:
@@ -353,9 +387,17 @@ def test_runner_uses_one_projected_environment_and_skips_empty_model(
     assert list(home.iterdir()) == []
 
 
-@pytest.mark.parametrize("drift", [False, True])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        RepositoryEvidenceError("synthetic drift"),
+        OSError("synthetic local input failure"),
+        subprocess.TimeoutExpired(["git", "diff"], 30),
+    ],
+)
 def test_runner_rechecks_projection_before_using_frozen_child_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception | None
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -376,8 +418,8 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
 
     def verify(*_args: object) -> None:
         calls.append(("recheck", projection))
-        if drift:
-            raise RepositoryEvidenceError("synthetic drift")
+        if failure is not None:
+            raise failure
 
     def production(*_args: object, **kwargs: object) -> int:
         calls.append(("production", kwargs.get("child_environment")))
@@ -397,7 +439,7 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
     )
     monkeypatch.chdir(repo)
     args = ["--from", base, "--to", head, "--format", "json"]
-    if drift:
+    if failure is not None:
         with pytest.raises(review_runner.ReviewRunnerError, match="drifted before"):
             review_runner._run_background_qualified_review(
                 tmp_path / "result.json",
@@ -432,8 +474,19 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
 
 
 @pytest.mark.parametrize("preserve_authorized", [False, True])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RepositoryEvidenceError("synthetic post-model drift"),
+        OSError("synthetic local input failure"),
+        subprocess.TimeoutExpired(["git", "diff"], 30),
+    ],
+)
 def test_post_model_gitlink_drift_disposes_or_marks_raw_result(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preserve_authorized: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preserve_authorized: bool,
+    failure: Exception,
 ) -> None:
     base, head = _fixture(tmp_path, "updated")
     reader = GitRepositoryReader(tmp_path)
@@ -445,7 +498,7 @@ def test_post_model_gitlink_drift_disposes_or_marks_raw_result(
     monkeypatch.chdir(tmp_path)
 
     def drift(*_args: object) -> None:
-        raise RepositoryEvidenceError("synthetic post-model drift")
+        raise failure
 
     monkeypatch.setattr(review_runner, "verify_gitlink_projection", drift)
     with pytest.raises(review_runner.ReviewRunnerError, match="drifted during"):

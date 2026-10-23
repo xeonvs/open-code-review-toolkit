@@ -38,8 +38,12 @@ an OCR JSON file alone does not establish successful local delivery. After a
 zero exit, read the complete private Markdown and JSON: require `status=complete`,
 compare selected/completed/reused/failed/waived coverage, inspect DLP admission and
 every admitted finding, and inspect stderr for failed auxiliary tool reads that
-could limit the conclusion. Preserve these artifacts until findings are fixed
-and the corrected head has been reviewed.
+could limit the conclusion. For each failed `file_read`, compare its path and
+range with the reviewed tree and decide whether the missed context bears on
+the changed code or a finding. A native complete manifest proves selected-file
+completion, not that every auxiliary read succeeded; resolve a material gap
+before accepting the local review. Preserve these artifacts until findings are
+fixed and the corrected head has been reviewed.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository

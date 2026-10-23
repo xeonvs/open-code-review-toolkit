@@ -183,6 +183,17 @@ The maintained [test evidence matrix](engineering/test_evidence_matrix.md) recor
 
 Treat one confirmed boundary or parser defect as a risk class: inspect sibling implementations, make negative tests reach the intended rejection or degradation branch, and assert that contract rather than an unrelated earlier failure. Before implementing a new parser or trust boundary, record its grammar, normalization, degradation, budget units, inherited-process state, and adversarial fixtures in the active plan or focused tests.
 
+For a change crossing more than one execution owner, map the changed producer,
+each transformation or persisted handoff, and the final consumer before the
+first complete quality gate. Name the evidence carried across each edge and
+what happens after a partial, filtered, malformed, or failed result. Exercise
+the changed edge through its real owner with a mixed success/failure fixture;
+also check cleanup after external work, hostile wire types, and process-local
+inputs where they can change that edge. Review the observed consumer result and
+remaining private artifacts, not only each producer's unit result. Keep this
+small map in the active plan or focused test cases; do not create a standing
+checklist for unchanged branches.
+
 New runtime modules, classes, and functions need purpose-focused docstrings. Comments at non-obvious security, compatibility, ownership, and state-transition boundaries explain why the constraint exists rather than narrating the code. Do not add legacy namespace shims or historical integrations outside the public contract.
 
 Apply the [cohesive-module invariant](engineering/project_principles.md#product-and-architecture) during self-review. Prefer an extract-and-delegate refactor that moves already characterized functions or classes intact, preserves the intentional package facade, and reruns the same contract suite before and after each move. Split on distinct responsibility and dependency direction, not an arbitrary line count; do not rewrite a working algorithm merely to make a file shorter. Architecture tests should protect required owners and forbidden upward dependencies without freezing every future helper-module name.

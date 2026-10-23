@@ -42,6 +42,8 @@ trees, the explicit unfiltered diff, and the ordinary-file projection before
 the model runs. It reads `.gitmodules` from immutable blobs without using its
 URLs, freezes process-local Git overrides for preview and production, then
 checks the native manifest against the ordinary files selected by preview.
+User and XDG Git attributes are disabled for this projection; repository
+attributes remain input-bound across review and posting.
 Type transitions, ambiguous moves, unsafe configuration, unknown diagnostics,
 drift, reuse, or mismatched manifest evidence stop the review. Neither the
 internal evidence MCP nor an external MCP server can grant review coverage for
