@@ -624,7 +624,9 @@ def test_gitlab_mode_recipe_requires_replacing_main_variables() -> None:
 def test_public_review_and_post_share_job_specific_result_paths() -> None:
     """Two CI jobs sharing a host must not reuse the same result/stderr names."""
 
-    script = yaml.safe_load(GITLAB_EXAMPLE.read_text(encoding="utf-8"))["open_code_review"]["script"]
+    script = yaml.safe_load(GITLAB_EXAMPLE.read_text(encoding="utf-8"))["open_code_review"][
+        "script"
+    ]
     review = next(command for command in script if command.startswith("ocr-ci review "))
     post = next(command for command in script if command.startswith("ocr-ci post "))
     for path in ("/tmp/ocr-result-${CI_JOB_ID}.json", "/tmp/ocr-stderr-${CI_JOB_ID}.log"):

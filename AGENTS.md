@@ -38,6 +38,12 @@ Read the matching owners and run their applicable guards. The general repository
 <!-- ew:route id="review-flow" triggers="docs/review-decision-flow.md|review execution|publication branch" owners="docs/review-decision-flow.md|docs/engineering/project_principles.md" guards="manual_review:compare changed execution branches with the decision flow" -->
 | `review-flow` | Review execution or publication branch | Review decision flow and project principles | Branch and diagram comparison |
 
+<!-- ew:route id="review-context" triggers="src/ocr_toolkit/context/**|docs/review-context.md|review context admission|context publication" owners="docs/review-context.md|docs/engineering/project_principles.md" guards="manual_review:compare context acquisition admission store and publication with the current contract|test:scripts/quality.sh check" -->
+| `review-context` | Review-context admission or publication | Current bounded-context contract and project principles | Context lifecycle comparison and quality checks |
+
+<!-- ew:route id="federation" triggers="src/ocr_toolkit/federation/**|docs/engineering/governed_federation_contracts.md|federation admission|external MCP gateway" owners="docs/engineering/governed_federation_contracts.md|docs/engineering/project_principles.md" guards="manual_review:compare registry admission gateway DLP and receipt changes with the federation contract|test:scripts/quality.sh check" -->
+| `federation` | Governed external-tool admission or gateway | Federation contract and project principles | Gateway contract comparison and quality checks |
+
 <!-- ew:route id="long-running-execution" triggers="long-running commands|builds|tests|local processes|polling|terminal sessions" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:verify process completion exit status bounded output and task-owned cleanup" -->
 | `long-running-execution` | Long-running command, waiter, or process cleanup | Project principles and development procedures | Completion evidence and bounded output |
 
