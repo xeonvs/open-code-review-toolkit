@@ -53,25 +53,24 @@ RUNTIME_DEFAULTS = {
     "OCR_AUTO_APPROVE": "true",
     "OCR_MAX_POST_COMMENTS": "50",
     "OCR_MAX_RESULT_BYTES": "2000000",
-    "OCR_POST_ERROR_DETAILS": "Unset (disabled)",
     "OCR_EXIT_CODE": "0",
 }
 
 GITLAB_DEFAULTS = {
     "GITLAB_API_TOKEN": "None",
+    "GITLAB_CI": "None",
     "CI_API_V4_URL": "Derived as `${CI_SERVER_URL}/api/v4`",
     "CI_SERVER_URL": "`https://gitlab.com` in posting only",
     "CI_PROJECT_ID": "None",
     "CI_MERGE_REQUEST_IID": "None",
-    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": (
-        "Falls back to `CI_COMMIT_SHA` only where explicitly documented"
-    ),
+    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA": "May be empty",
     "CI_MERGE_REQUEST_DIFF_BASE_SHA": "None",
     "CI_COMMIT_SHA": "None",
+    "CI_MERGE_REQUEST_EVENT_TYPE": "None",
     "CI_PIPELINE_ID": "Omitted",
     "CI_JOB_ID": "Omitted",
     "CI_PIPELINE_SOURCE": "None",
-    "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
+    "OCR_GITLAB_TARGET_PROTECTION_MODE": "auto",
 }
 
 EXAMPLE_DEFAULTS = {
@@ -101,8 +100,9 @@ REQUIRED_DISPLAY_NAMES = {
     "CI_SERVER_URL",
     "CI_PROJECT_ID",
     "CI_MERGE_REQUEST_IID",
-    "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
     "CI_MERGE_REQUEST_DIFF_BASE_SHA",
+    "CI_COMMIT_SHA",
+    "CI_MERGE_REQUEST_EVENT_TYPE",
     "CI_PIPELINE_SOURCE",
     "OCR_VERSION",
     "OCR_SHA256",
@@ -235,10 +235,10 @@ def test_required_environment_inputs_are_visually_distinct() -> None:
 
 def test_source_environment_inventory_matches_the_documented_contract() -> None:
     source_names = _literal_source_environment_names()
-    # CI_PIPELINE_SOURCE belongs solely to the public example's GitLab rules.
+    # The posting CI profile also consumes CI_PIPELINE_SOURCE as a pipeline marker.
     expected = (
         set(RUNTIME_DEFAULTS)
-        | (set(GITLAB_DEFAULTS) - {"CI_PIPELINE_SOURCE"})
+        | set(GITLAB_DEFAULTS)
         | REDACTION_ONLY
         | CHILD_ENVIRONMENT_DENYLIST
         | {"OCR_USE_ANTHROPIC"}
@@ -316,9 +316,9 @@ def test_example_local_defaults_match_the_pipeline() -> None:
         "OCR_MAX_TOOLS": "0",
         "OCR_MAX_TOKENS_BUDGET": "0",
         "OCR_REVIEW_EFFORT": "medium",
-        "OCR_GITLAB_TARGET_PROTECTION_MODE": "required",
     }.items():
         assert f'{name}: "{value}"' in workflow
+    assert "OCR_GITLAB_TARGET_PROTECTION_MODE:" not in workflow
     assert (
         'export OCR_TOOLKIT_WHEEL="open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl"'
         in workflow

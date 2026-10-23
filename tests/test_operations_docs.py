@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+import yaml
+
 PROJECT_ROOT = Path(__file__).parents[1]
 README = PROJECT_ROOT / "README.md"
 OPERATIONS = PROJECT_ROOT / "docs" / "operations.md"
@@ -290,20 +292,20 @@ def test_terminal_merge_request_race_contract_is_public_and_fail_closed() -> Non
     for phrase in (
         "stops before evidence collection and OCR",
         "Duplicate jobs update the same note",
-        "immediately before the publication transaction",
-        "automatic approval explicitly skipped",
-        "stops before the first publication write",
+        "before each current-result write and cleanup step",
+        "approval was not attempted",
+        "stops publication",
         "Every non-strict success path re-reads that exact lifecycle",
         "`closed` MR remains reopenable",
         "marker-like finding text cannot select, overwrite, or delete",
     ):
         assert phrase in operations
-    assert "ocr.pre-execution-status/v4" in configuration
+    assert "ocr.pre-execution-status/v5" in configuration
     assert "findings, summaries, suppression, discussions, or approval state" in gitlab
     assert "close/reopen timing therefore fails" in gitlab
     assert "Unknown, malformed, unavailable, or mismatched provider data fails closed" in security
     assert "Merged or closed" in flow
-    assert "skip approval" in flow
+    assert "no evidence, OCR, findings, or approval" in flow
 
 
 def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> None:
@@ -325,7 +327,7 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         "not a local-mode exception",
         "not an automatic-approval feature",
         "publication owns review-signal delivery",
-        "receipt v10",
+        "receipt v11",
         "OCR_REVIEW_PROGRESS",
         "Blocking pipe or unavailable",
         "Review continues unchanged",
@@ -422,7 +424,7 @@ def test_completion_cap_and_provider_failure_boundaries_are_public() -> None:
         "http-rate-limited",
         "not toolkit telemetry",
         "Neither setting is presented as the proven cause",
-        "`OCR_POST_ERROR_DETAILS=1` cannot add them",
+        "does not create a potentially stale MR failure note",
         "the previous successful review is preserved",
         "automatic approval is not attempted",
     ):
@@ -482,9 +484,9 @@ def test_auto_approval_contract_is_default_on_exact_sha_and_own_user_only() -> N
         "severity exactly `low`",
         "category exactly `style`, `documentation`, or `maintainability`",
         "`patch_id_sha`",
-        "never retried against the new identity",
+        "A moved or unverifiable identity before the write skips approval",
         "never removes an existing approval",
-        "Ineligible, partial, skipped, legacy, and disabled runs do not make an approval write",
+        "Ineligible, partial, skipped, older-receipt, and disabled runs do not make an approval write",
     ):
         assert phrase in normalized_operations
 
@@ -509,9 +511,9 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v10" in configuration
-    assert "Receipt v1-v8" in configuration
-    assert "Receipt v1-v8" in operations
+    assert "receipt v11" in configuration
+    assert "v1-v8 remains unsupported" in configuration
+    assert "v1-v8 remains unsupported" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "mandatory internal evidence MCP is unreplaceable" in configuration
     assert "required context degradation" in operations
@@ -520,7 +522,7 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
     assert 'Local review also accepts `{type:"stdio"' in configuration
 
 
-def test_builtin_search_coverage_and_receipt_v10_boundaries_are_public() -> None:
+def test_builtin_search_coverage_and_receipt_v11_boundaries_are_public() -> None:
     """Document efficient routing without exposing search or coverage arguments."""
 
     configuration = CONFIGURATION.read_text(encoding="utf-8")
@@ -541,7 +543,7 @@ def test_builtin_search_coverage_and_receipt_v10_boundaries_are_public() -> None
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
         "action receipt v3",
-        "Receipt v10",
+        "Receipt v11",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
@@ -571,9 +573,9 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         assert phrase in gitlab
     assert "Migration from" not in gitlab
     assert "service-side tenant/object/field/operation authorization" in gitlab
-    assert "#protected-target-policy-v4" in gitlab
+    assert "#protected-policy-v4" in gitlab
     for phrase in (
-        "## Protected-target policy v4",
+        "## Protected policy v4",
         "forge_discussions",
         "remediation_threads",
         "CI outcomes select exact job names",
@@ -599,6 +601,40 @@ def test_production_bot_modes_and_current_contract_are_public() -> None:
         assert "OCR_AUTO_APPROVE" in recipe
 
 
+def test_gitlab_mode_recipe_requires_replacing_main_variables() -> None:
+    """An included recipe cannot override overlapping variables in the main file."""
+
+    main_variables = yaml.safe_load(GITLAB_EXAMPLE.read_text(encoding="utf-8"))["variables"]
+    recipe = yaml.safe_load(
+        (GITLAB_EXAMPLES / "modes" / "unprotected-target.gitlab-ci.yml").read_text(encoding="utf-8")
+    )["variables"]
+    readme = (GITLAB_EXAMPLES / "README.md").read_text(encoding="utf-8")
+
+    included_result = {**recipe, **main_variables}
+    copied_result = {**main_variables, **recipe}
+    assert included_result["OCR_REVIEW_CONTEXT_MODE"] == "off"
+    assert included_result["OCR_AUTO_APPROVE"] == "true"
+    assert copied_result["OCR_GITLAB_TARGET_PROTECTION_MODE"] == "unprotected"
+    assert copied_result["OCR_REVIEW_CONTEXT_MODE"] == "metadata"
+    assert copied_result["OCR_AUTO_APPROVE"] == "false"
+    assert "replacing any keys already there" in readme
+    assert "Do not merely `include` a mode file" in readme
+
+
+def test_public_review_and_post_share_job_specific_result_paths() -> None:
+    """Two CI jobs sharing a host must not reuse the same result/stderr names."""
+
+    script = yaml.safe_load(GITLAB_EXAMPLE.read_text(encoding="utf-8"))["open_code_review"]["script"]
+    review = next(command for command in script if command.startswith("ocr-ci review "))
+    post = next(command for command in script if command.startswith("ocr-ci post "))
+    for path in ("/tmp/ocr-result-${CI_JOB_ID}.json", "/tmp/ocr-stderr-${CI_JOB_ID}.log"):
+        assert path in review
+        assert path in post
+    readme = README.read_text(encoding="utf-8")
+    assert 'review_result="/tmp/ocr-result-${CI_JOB_ID}.json"' in readme
+    assert 'review_stderr="/tmp/ocr-stderr-${CI_JOB_ID}.log"' in readme
+
+
 def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     gitlab = GITLAB_GUIDE.read_text(encoding="utf-8")
@@ -610,7 +646,7 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         encoding="utf-8"
     )
 
-    assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "required"' in example
+    assert "OCR_GITLAB_TARGET_PROTECTION_MODE:" not in example
     assert 'OCR_GITLAB_TARGET_PROTECTION_MODE: "unprotected"' in recipe
     assert 'OCR_REVIEW_CONTEXT_MODE: "metadata"' in recipe
     assert 'OCR_AUTO_APPROVE: "false"' in recipe
@@ -620,37 +656,38 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         assert "required" in document
         assert "unprotected" in document
     for document in (configuration, gitlab, security, bounded):
-        assert "receipt v10" in document
+        assert "receipt v11" in document
     for phrase in (
         "Explicit empty strings",
-        "Context `off` and bounded untrusted `metadata`",
-        "legacy adapter configuration",
-        "governed federation",
-        "Structured target guidance and accepted decisions are omitted",
-        "No target-derived input can enable tools",
+        "context `off` or bounded `metadata`",
+        "no enriched context or governed federation",
+        "Rules read as untrusted guidance from T",
+        "no structured guidance or accepted decisions",
+        "Policy selection grants no new tool or credential authority",
     ):
         assert phrase in configuration
     limitation = (
         "The target branch was not protected in GitLab. "
         "This review ran in limited, comment-only mode."
     )
-    assert limitation in configuration
-    assert limitation in gitlab
     assert limitation in operations
-    assert "without turning complete coverage into partial coverage" in gitlab
-    assert "cannot reach the approval executor" in security
-    assert "does not change result completeness or status" in bounded
+    assert "limited, comment-only mode" in configuration
+    assert "limited, comment-only mode" in gitlab
+    assert "Neither status changes OCR completeness" in gitlab
+    assert "cannot reach the approval executor" in " ".join(security.split())
+    assert "Neither profile changes result completeness" in " ".join(bounded.split())
 
     for phrase in (
         "Use two merge requests for the recommended setup",
         "Retrying that same merge request",
-        "generic fail-closed failure note",
+        "without a merge-request note and leaves the earlier review intact",
         "Code Owners and code-owner approval rules",
         "green advisory pipeline",
     ):
         assert phrase in gitlab
-    assert "valid non-zero MR SHA takes precedence" in operations
-    assert "absent or all-zero MR SHA" in operations
+    assert "`CI_COMMIT_SHA` must match the authenticated current MR source" in operations
+    assert "any populated MR-specific source SHA must agree" in operations
+    assert "Synthetic merge-result, merge-train, missing" in operations
     assert "require a valid result, complete manifest coverage" in operations
 
 
@@ -664,7 +701,11 @@ def test_examples_and_current_public_docs_use_product_oriented_language() -> Non
     )
     example_files = tuple(path for path in GITLAB_EXAMPLES.rglob("*") if path.is_file())
     for path in (*current_documents, *example_files):
-        assert "synthetic" not in path.read_text(encoding="utf-8").casefold(), path
+        text = path.read_text(encoding="utf-8").casefold()
+        # GitLab's merge-result description is a real CI term, not a test fixture.
+        text = re.sub(r"\bsynthetic merge(?:-result)? commit\b", "", text)
+        text = text.replace("synthetic merge-result, merge-train", "merge-train")
+        assert re.search(r"\bsynthetic\b", text) is None, path
 
 
 def test_accepted_decision_example_is_shown_in_a_later_review_flow() -> None:

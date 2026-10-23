@@ -64,7 +64,9 @@ commit without forge credentials:
 
 ```console
 ocr-ci preflight --local
-ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
 
 Local execution uses the same OCR, mandatory evidence MCP, validation and DLP
@@ -88,13 +90,17 @@ On a successful rerun, the toolkit replaces untouched OCR-only notes instead of 
 
 Suppression uses both the GitLab diff position and a stable finding fingerprint, so ordinary line shifts do not normally bring the same bug back. A materially changed finding can still receive a new discussion. See [GitLab review operations](docs/operations.md) for the complete lifecycle, posting modes, permissions, failure behavior, and Mermaid state diagram.
 
-After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v10's exact reviewed source SHA, target SHA/protection state, merge-request author, DLP mode, and reconciled federation use. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. DLP-clean metadata, generic discussions, protected same-revision CI outcomes, unused governed services, and successful `review_read` tool use do not independently block approval. An unprotected target, disabled DLP, degraded metadata, a DLP rejection, required context degradation, admitted remediation history, legacy receipts, publication filtering, used advisory tools, uncertain federation accounting, author movement, or bot self-authorship prevents an approval write. A CI status is review context, never approval authority. GitLab approval rules, Code Owners, and protected-branch policy remain authoritative merge policy. They are not prerequisites for OCR execution. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
+After every current review note publishes, the GitLab adapter can add a conservative approval bound to receipt v11's exact reviewed diff, actual target, policy authority, merge-request author, DLP mode, and reconciled federation use. This write is enabled by default; set `OCR_AUTO_APPROVE=false` when the bot must remain comment-only. DLP-clean metadata, generic discussions, protected same-revision CI outcomes, unused governed services, and successful `review_read` tool use do not independently block approval. An unprotected target, disabled DLP, degraded metadata, a DLP rejection, required context degradation, admitted remediation history, older receipts, publication filtering, used advisory tools, uncertain federation accounting, author movement, or bot self-authorship prevents an approval write. A CI status is review context, never approval authority. GitLab approval rules, Code Owners, and protected-branch policy remain authoritative merge policy. They are not prerequisites for OCR execution. The toolkit only adds an eligible approval; it never removes an existing approval when a later review is ineligible or disabled.
 
-Accepted tradeoffs can be recorded in `.opencodereview/accepted-decisions.md`; the evidence collector supplies only applicable target-ref decisions and never lets a source change self-authorize its review. Root and nested target `AGENTS.md`/`CLAUDE.md` guidance is similarly exposed through the existing evidence MCP with deterministic scope and precedence, while any guidance touched by the merge request is excluded. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) and [Target project guidance](docs/configuration.md#target-project-guidance) for formats and trust boundaries.
+An intentionally absent toolkit receipt retains compatible direct posting outside
+GitLab CI without automatic approval. A present v9/v10 receipt can be read for historical
+diagnostics, but cannot publish a new current MR review.
+
+Accepted tradeoffs can be recorded in `.opencodereview/accepted-decisions.md`; the evidence collector supplies only applicable decisions from the selected policy commit and never lets a source change self-authorize its review. Root and nested policy `AGENTS.md`/`CLAUDE.md` guidance is similarly exposed through the existing evidence MCP with deterministic scope and precedence, while any guidance touched by the merge request is excluded. See [Accepted project decisions](docs/configuration.md#accepted-project-decisions) and [Target project guidance](docs/configuration.md#target-project-guidance) for formats and trust boundaries.
 
 ## Project architecture
 
-The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, literal search, scoped absence checks, and base/head changes through the mandatory built-in read-only MCP server. That internal server is always present and cannot be removed or replaced by operator configuration. Protected-policy enriched reviews can also acquire stable GitLab discussions, verified remediation history, and protected same-revision CI outcomes before OCR. Optional external tools use the governed registry-v2 federation gateway: the toolkit freezes explicit allowlists, validates schemas, origins, DLP and budgets, and reconciles content-free usage receipts while OCR remains the only model loop. Local review permits explicit HTTPS or stdio upstreams; GitLab permits HTTPS only.
+The shipped Repository Evidence Engine reads immutable base/head Git objects, stores bounded typed facts and deltas, creates the compact bootstrap used by OCR, and exposes detailed facts, literal search, scoped absence checks, and base/head changes through the mandatory built-in read-only MCP server. GitLab reviews can also expose a bounded, separately labelled actual-target snapshot for relevant code context; it does not become policy or another reviewed delta. The internal server is always present and cannot be removed or replaced by operator configuration. Protected-policy enriched reviews can also acquire stable GitLab discussions, verified remediation history, and protected same-revision CI outcomes before OCR. Optional external tools use the governed registry-v2 federation gateway: the toolkit freezes explicit allowlists, validates schemas, origins, DLP and budgets, and reconciles content-free usage receipts while OCR remains the only model loop. Local review permits explicit HTTPS or stdio upstreams; GitLab permits HTTPS only.
 
 - [Toolkit strategy](docs/engineering/toolkit_strategy.md) - durable product boundaries, architecture, invariants, and non-goals.
 - [Bounded review context](docs/review-context.md) - protected policy, GitLab discussions and same-revision CI outcomes, legacy reference migration, opaque handles, DLP, receipt, and cleanup contracts.
@@ -105,21 +111,23 @@ The shipped Repository Evidence Engine reads immutable base/head Git objects, st
 
 1. Configure protected/masked `GITLAB_API_TOKEN` and LLM variables in GitLab.
 2. Pin and checksum the OCR binary.
-3. Keep `OCR_GITLAB_TARGET_PROTECTION_MODE=required` unless the project deliberately permits an unprotected target in limited, comment-only mode.
-4. Merge repository review configuration, including the Rules path, into the target branch.
+3. With toolkit 0.13.0, leave `OCR_GITLAB_TARGET_PROTECTION_MODE` unset to use its `auto` default for a single MR targeting an unprotected branch under the same project's protected default-branch policy. Select explicit `required` to reject unprotected targets, or `unprotected` for the earlier limited profile.
+4. Merge repository review configuration, including the Rules path, into the protected policy branch before relying on it.
 5. Enable the CI review job in a later merge request and install this package.
 6. Run the four public helper stages around `ocr review`:
 
 ```console
 ocr-ci preflight
 ocr-ci configure
-ocr-ci review --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log -- ... --format json
-ocr-ci post --result /tmp/ocr-result.json --stderr /tmp/ocr-stderr.log
+review_result="/tmp/ocr-result-${CI_JOB_ID}.json"
+review_stderr="/tmp/ocr-stderr-${CI_JOB_ID}.log"
+ocr-ci review --result "$review_result" --stderr "$review_stderr" -- ... --format json || export OCR_EXIT_CODE=$?
+ocr-ci post --result "$review_result" --stderr "$review_stderr"
 ```
 
 See the [GitLab mode matrix](examples/gitlab/README.md), the complete [`ocr-review.gitlab-ci.yml`](examples/gitlab/ocr-review.gitlab-ci.yml) pipeline, the [GitLab setup guide](docs/gitlab.md), and [GitLab review operations](docs/operations.md).
 
-The two-merge-request setup is recommended because repository Rules are loaded only from the captured target commit. On the default protected-target path, a supported one-merge-request alternative may add the Rules and CI job together when that integration merge request does not need review: its first run stops before OCR with a setup-pending note, retrying the same merge request cannot change the captured target Rules, and later merge requests work after it merges. An actually unprotected target with missing target Rules fails closed without promoting the source copy or promising setup-pending status. If the status identity is missing or mismatched, the toolkit likewise uses the generic fail-closed failure note. A green advisory job or pipeline does not prove that OCR or its model executed.
+The two-merge-request setup is recommended because repository Rules must already exist on the captured policy commit. For a protected target that is its own authority; for an unprotected target in `auto`, it is the protected default branch. The integration MR can add Rules and CI together when it need not be reviewed: its first run may stop with setup-pending, and later MRs work after the policy change merges. Retrying the same MR cannot promote its source Rules. An unprotected target in explicit `unprotected` mode with missing target Rules fails closed. A green advisory job or pipeline does not prove that OCR or its model executed. See the [GitLab setup guide](docs/gitlab.md#first-integration-sequence) for the exact boundary.
 
 ## Configuration and safety
 

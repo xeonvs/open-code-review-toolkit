@@ -24,6 +24,12 @@ scans, resumed sessions and competing repository/background inputs are unsupport
 The toolkit owns JSON output and agent audience; contradictory `--format` or
 `--audience` options fail before execution.
 
+Only one review may use a checkout's private `.review-context/` artifacts at a
+time. The toolkit holds a private nonblocking lock for the entire review; a
+second run in that checkout fails without clearing the first run's artifacts.
+Use separate worktrees when concurrent local reviews are needed.
+The second run exits with code `75` and does not claim the first run's report path.
+
 ## Inputs and isolation
 
 Local mode is explicit. It may run in a CI test job, but inherited CI identity does
@@ -71,8 +77,10 @@ unset OCR_LLM_URL OCR_LLM_TOKEN OCR_LLM_PROTOCOL OCR_LLM_AUTH_HEADER \
   OCR_ANTHROPIC_DISABLE_THINKING OCR_USE_ANTHROPIC OCR_LLM_MODEL OCR_LLM_REASONING_EFFORT
 export OCR_LLM_AUTH_MODE=chatgpt
 # Optional: set OCR_LLM_MODEL to an exact model available to this account.
+review_dir=$(mktemp -d)
+review_dir=$(cd "$review_dir" && pwd -P)
 ocr-ci preflight --local
-ocr-ci review --local --result review.json --stderr review.stderr --report review.md -- --commit HEAD
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
 ```
 
 The existing local preflight checks the qualified binary and the native store's

@@ -82,7 +82,7 @@ v0.12.1 is published and externally reconciled; prior release and internal follo
 | WQ-03 | REQ-002, REQ-003, REQ-006, REQ-009 | Immutable diff/authority/rule acquisition, distinct target T evidence/readback and applicability tests; self-reviewed commit | done |
 | WQ-04 | REQ-003, REQ-004, REQ-006, REQ-009 | Capability/context/federation, receipt/result v11 and hostile readback tests; self-reviewed commit | done |
 | WQ-05 | REQ-001, REQ-004–REQ-006, REQ-009 | Full-identity freshness at current-result and static-note writes, publication/approval/draft and cleanup boundaries, receipt-less error isolation, cross-run private-artifact isolation, and local-entry tests; self-reviewed commit | done |
-| WQ-06 | REQ-007, REQ-009 | Public contracts, examples, threat model, decision flow, changelog; self-reviewed commit | in_progress |
+| WQ-06 | REQ-007, REQ-009 | Public contracts, examples, threat model, decision flow, changelog; self-reviewed commit | done |
 | WQ-07 | REQ-008, REQ-009 | Self-contained BL-025 with Source #265 and reference #264, status/theme/prerequisites/trigger/scope/deliverables/acceptance/exclusions/validation/future release classification; per-variant dependencies, A–F coverage, graph shapes and request/publication trade-offs; aligned strategy/roadmap and self-reviewed separate commit | done |
 | WQ-08 | REQ-007, REQ-009 | Documentation/instruction/route audit, distinct correction commit if needed, complete local quality and private/public-source checks | in_progress |
 | WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | pending |
@@ -113,6 +113,7 @@ Focused provider tests pass (68 tests, 2026-10-23). Review of the B!=T!=P execut
 Signed self-reviewed implementation commits: `cd74ac4` binds detached MR CI, same-project provider and target/policy snapshot; `a1d056a` adds bounded target T evidence v5 and protected-P ancestry support; the following execution commit binds diagnostics and receipt v11, including the local-policy collection regression fix. Focused provider/local tests: 148 passed; evidence/freshness tests: 201 passed; execution/receipt/docs-contract tests: 254 passed. Full quality, security and local OCR gates remain pending until documentation is complete. Review of posting found additional mid-publication freshness transitions now being corrected in WQ-05.
 Signed self-reviewed planning commit `76a1c3a` records conditional BL-025 for #265 and its roadmap placement without runtime changes or a release claim. Its scoped diff check passed. #265 still needs issue-body reconciliation after the feature PR merges.
 WQ-05 focused source and boundary suites passed with 686 tests and 299 subtests after the CI-job handoff and current-version-contract additions. Ruff format/check, mypy across 132 source files, and diff whitespace checks passed. A second independent seam audit found the review-to-post interval in a shared checkout; receipt and preview/setup status now bind the supplied GitLab job ID, code 75 prevents a losing review from adopting another run's status, and the example uses job-specific output paths. Production GitLab uses one review/post pair per CI job. Full quality and final security/OCR reviews remain pending until WQ-06/WQ-08 documentation is committed.
+Signed self-reviewed WQ-05 commit `d5bc468` contains the posting, cross-run, current-version contract and regression changes. WQ-06 public documentation now explains v11, default `auto`, B/H/T/P, job-specific handoff, local private paths and the no-note failure policy. The public GitLab example omits the selector so its still-published wheel pin remains valid until the release PR advances it; the new toolkit then supplies the `auto` default. The 51 focused documentation/example contracts passed.
 
 #### Risks And Recovery
 
@@ -120,7 +121,7 @@ GitLab diff/version and pipeline variants may require rejecting unsupported form
 
 #### Resume Point
 
-After the WQ-05 scoped code/test commit, self-review and commit WQ-06 public contracts, examples, decision flow and changelog, then WQ-08 engineering documentation, instructions and route corrections as a distinct commit. The GitLab mode recipe correction belongs to WQ-08 because `include` cannot override overlapping variables. Run complete quality, instruction lint, secret scan, security diff scan and real local OCR only after documentation is committed; then continue the protected PR and release lifecycle.
+After the WQ-06 scoped public-documentation commit, self-review and commit WQ-08 engineering documentation, instructions and route corrections as a distinct commit. WQ-06 corrects the GitLab mode recipe because `include` cannot override overlapping main variables; WQ-08 reconciles the engineering owner map and agent routes. Run complete quality, instruction lint, secret scan, security diff scan and real local OCR only after documentation is committed; then continue the protected PR and release lifecycle.
 
 #### Plan Fidelity Check
 
