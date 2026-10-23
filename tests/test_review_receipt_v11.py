@@ -217,6 +217,14 @@ def test_v11_review_keys_and_federation_version_are_exact() -> None:
     assert not toolkit_receipt_is_valid(old_federation)
 
 
+def test_future_receipt_number_cannot_reinterpret_v11_payload() -> None:
+    receipt = _receipt_v11(external=True)
+    receipt["schema_version"] = 12
+    assert receipt_review_identity(receipt) is None
+    assert validated_review_identity(receipt) is None
+    assert not toolkit_receipt_is_valid(receipt)
+
+
 @pytest.mark.parametrize("schema_version", (9, 10))
 def test_historical_receipts_keep_exact_policy_target_binding(schema_version: int) -> None:
     receipt = review_receipt_v8()

@@ -26,8 +26,16 @@ INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing o
 # Keep historical wire shapes explicit; changing the current producer version
 # must never reinterpret a persisted v11 receipt as a future format.
 RECEIPT_V11 = 11
-FEDERATION_V2_RECEIPT_VERSIONS = frozenset({10, RECEIPT_V11})
-PUBLICATION_V2_RECEIPT_VERSIONS = frozenset({10, RECEIPT_V11})
+_FEDERATION_SCHEMA_BY_RECEIPT_VERSION = {
+    9: "ocr.federation/v1",
+    10: "ocr.federation/v2",
+    RECEIPT_V11: "ocr.federation/v2",
+}
+_PUBLICATION_SCHEMA_BY_RECEIPT_VERSION = {
+    9: None,
+    10: "ocr.publication/v2",
+    RECEIPT_V11: "ocr.publication/v2",
+}
 UNPROTECTED_APPROVAL_REASON = (
     "the GitLab target branch was unprotected; limited reviews are comment-only"
 )
@@ -313,6 +321,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if (
         type(receipt_version) is not int
         or receipt_version not in SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS
+        or receipt_version not in _FEDERATION_SCHEMA_BY_RECEIPT_VERSION
+        or receipt_version not in _PUBLICATION_SCHEMA_BY_RECEIPT_VERSION
         or set(toolkit_metadata)
         != {
             "schema_version",
@@ -473,11 +483,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if external:
         if not valid_reconciliation(federation):
             return invalid
-        expected_federation_schema = (
-            "ocr.federation/v2"
-            if receipt_version in FEDERATION_V2_RECEIPT_VERSIONS
-            else "ocr.federation/v1"
-        )
+        expected_federation_schema = _FEDERATION_SCHEMA_BY_RECEIPT_VERSION[receipt_version]
         if federation["receipt"]["schema"] != expected_federation_schema:
             return invalid
         expected = {
@@ -533,11 +539,12 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     if not isinstance(dlp, dict) or set(dlp) != {"enabled"} or type(dlp.get("enabled")) is not bool:
         return invalid
     publication = toolkit_metadata.get("publication")
+    expected_publication_schema = _PUBLICATION_SCHEMA_BY_RECEIPT_VERSION[receipt_version]
     if not isinstance(publication, dict) or (
-        (receipt_version == 9 and "schema" in publication)
+        (expected_publication_schema is None and "schema" in publication)
         or (
-            receipt_version in PUBLICATION_V2_RECEIPT_VERSIONS
-            and publication.get("schema") != "ocr.publication/v2"
+            expected_publication_schema is not None
+            and publication.get("schema") != expected_publication_schema
         )
     ):
         return invalid
