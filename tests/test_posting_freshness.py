@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from ocr_toolkit.evidence.repository import GitRepositoryReader
 from ocr_toolkit.posting import freshness
 from ocr_toolkit.providers.gitlab import (
     GitLabMergeRequestLifecycle,
@@ -200,6 +201,27 @@ def test_policy_only_fast_forward_preserves_reviewed_policy_commit(
 
     assert result == freshness.ReviewFreshnessResult(advanced, True)
     assert identity.policy_sha == snapshot.policy_sha
+
+
+def test_policy_fast_forward_fetched_after_checkout_has_ancestry_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new remote tip must not become an unprovable depth-one shallow boundary."""
+
+    origin, snapshot, _advanced, _rewrite = _review_graph(tmp_path)
+    _git(origin, "switch", "main")
+    _git(origin, "reset", "--hard", snapshot.policy_sha)
+    checkout = tmp_path / "checkout"
+    _git(tmp_path, "clone", "-q", "--no-local", str(origin), str(checkout))
+    later_policy = _commit(origin, "policy added after checkout")
+    assert not GitRepositoryReader(checkout).has_commit(later_policy)
+    _live_snapshot(monkeypatch, replace(snapshot, policy_sha=later_policy))
+
+    result = freshness.validate_review_freshness(
+        _environment(snapshot), _receipt(snapshot), checkout
+    )
+
+    assert result == freshness.ReviewFreshnessResult(later_policy, True)
 
 
 def test_policy_rewrite_is_stale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

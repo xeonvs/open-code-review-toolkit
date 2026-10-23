@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.evidence.repository import (
+    GitRepositoryReader,
+    RepositoryEvidenceError,
+    ShallowAncestryUnavailable,
+)
 from ocr_toolkit.ocr_result import TOOLKIT_RESULT_SCHEMA_VERSION
 from ocr_toolkit.providers.gitlab import (
     GitLabMergeRequestStale,
@@ -150,7 +154,12 @@ def validate_review_freshness(
         reader = GitRepositoryReader(root)
         reader.fetch_commit(identity.policy_sha)
         reader.fetch_commit(current.policy_sha)
-        if not reader.is_ancestor(identity.policy_sha, current.policy_sha):
+        try:
+            policy_is_ancestor = reader.is_ancestor(identity.policy_sha, current.policy_sha)
+        except ShallowAncestryUnavailable:
+            reader.fetch_commit_history(current.policy_sha)
+            policy_is_ancestor = reader.is_ancestor(identity.policy_sha, current.policy_sha)
+        if not policy_is_ancestor:
             raise ReviewFreshnessStale("policy_rewritten")
     except (OSError, RepositoryEvidenceError, subprocess.TimeoutExpired) as exc:
         raise ReviewFreshnessUnavailable("ancestry_unavailable") from exc

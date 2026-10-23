@@ -26,6 +26,7 @@ BATCH_HEADER_RE = re.compile(
 )
 MAX_BATCH_BLOB_BYTES = 32_000_000
 MAX_GIT_TEXT_BYTES = 8_000_000
+MAX_ANCESTRY_FETCH_DEPTH = 128
 
 
 def _git_environment() -> dict[str, str]:
@@ -42,6 +43,10 @@ def _git_prefix(root: Path) -> list[str]:
 
 class RepositoryEvidenceError(ValueError):
     """Report an invalid ref, path, object type, or bounded Git read."""
+
+
+class ShallowAncestryUnavailable(RepositoryEvidenceError):
+    """Ancestry is undecidable until a bounded fetch supplies more parents."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,12 +158,24 @@ class GitRepositoryReader:
     def fetch_commit(self, sha: str, *, remote: str = "origin") -> None:
         """Fetch one exact commit from the runner-owned origin without ref mutation."""
 
+        self._validate_fetch_identity(sha, remote)
+        if not self.has_commit(sha):
+            self._fetch_commit(sha, depth=1)
+
+    def fetch_commit_history(self, sha: str) -> None:
+        """Fetch bounded parents for a shallow ancestry proof, even if the tip exists."""
+
+        self._validate_fetch_identity(sha, "origin")
+        self._fetch_commit(sha, depth=MAX_ANCESTRY_FETCH_DEPTH)
+
+    @staticmethod
+    def _validate_fetch_identity(sha: str, remote: str) -> None:
         if not re.fullmatch(r"[0-9a-f]{40}", sha):
             raise RepositoryEvidenceError("Git commit identity must be a lowercase SHA-1")
         if remote != "origin":
             raise RepositoryEvidenceError("only the runner-owned origin remote is supported")
-        if self.has_commit(sha):
-            return
+
+    def _fetch_commit(self, sha: str, *, depth: int) -> None:
         try:
             completed = subprocess.run(
                 [
@@ -170,15 +187,15 @@ class GitRepositoryReader:
                     "--no-write-fetch-head",
                     "--no-recurse-submodules",
                     "--filter=blob:none",
-                    "--depth=1",
-                    remote,
+                    f"--depth={depth}",
+                    "origin",
                     sha,
                 ],
                 cwd=self.root,
-                capture_output=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 check=False,
                 env=_git_environment(),
-                text=True,
                 timeout=60,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -220,7 +237,7 @@ class GitRepositoryReader:
         if shallow.returncode != 0 or shallow.stdout.strip() not in {"true", "false"}:
             raise RepositoryEvidenceError("Git ancestry depth is unverifiable")
         if shallow.stdout.strip() == "true":
-            raise RepositoryEvidenceError("Git ancestry is unverifiable in a shallow repository")
+            raise ShallowAncestryUnavailable("Git ancestry is unverifiable in a shallow repository")
         return False
 
     def resolve_commit(self, ref: str) -> str:
