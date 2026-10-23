@@ -82,7 +82,7 @@ v0.13.0 is published with immutable assets and #264 closed. Its archived plan is
 | WQ-06 | REQ-005, REQ-006, REQ-010 | Synthetic/installed OCR matrix, public contracts, threat model, decision flow, examples, Feature fragment, factual status correction, self-reviewed commit | done |
 | WQ-07 | REQ-005, REQ-007, REQ-011, REQ-012 | Scoped/final quality, boundary-validation process correction, native failed-tool audit, build, secret/dependency gates, security diff scan, real local OCR review, aggregate self-review, protected feature PR/merge, dev artifacts | pending |
 | WQ-08 | REQ-007, REQ-010 | Release markers/metadata/epoch/notes, checked plan archive/reset, release validation, protected signed release PR | pending |
-| WQ-09 | REQ-008 | Protected release merge, stable publication, receipt and external reconciliation | out_of_scope |
+| WQ-09 | REQ-008 | Protected release merge, stable publication, receipt and external reconciliation | pending |
 
 ### Locked Decisions
 
@@ -106,13 +106,15 @@ The signed correction commit `9f5de34` passed full quality (2369 tests, 12 skipp
 
 Native OCR generated four invalid `file_read` requests in the first model review and one in the second (bad path or out-of-range lines). Toolkit code does not construct those requests. Its existing bounded failure telemetry records them privately, strips arguments/details from published results and blocks automatic approval for verified failures; focused telemetry tests passed 10/10. The missing operational control was accepting a local complete manifest without assessing material auxiliary read failures. The local review route now requires that assessment. A proposed bootstrap instruction was rejected: the clean installed wheel/sdist test showed that it displaced higher-priority project guidance under the existing 2,300-character cap. The canonical development validation owner now calls for a small changed-handoff map and integrated mixed/error fixtures; existing incident classes cover the observed causes. Instruction-contract validation passed. The initial quality run on the oversized-bootstrap commit failed only the installed-artifact test (2375 passed, 12 skipped, 357 subtests, 86.35% coverage); the bootstrap addition was removed before final validation.
 
+The signed `f65d519` correction passed full quality, installed wheel/sdist execution, real OCR gitlink tests, secret and dependency gates. Codex Security completed `bdf5832..f65d519` with zero findings. A third local ChatGPT OCR run completed natively with 14/14 selected files and six internal evidence-MCP calls; its JSON identified two valid Git input gaps: a BOM-prefixed local config include and direct `config.worktree`. The local Markdown delivery failed because the operator supplied a symlinked `/tmp` report parent, repeating the v0.12.1 mistake despite the documented physical-path example. The current correction pins and rejects those Git inputs, and rejects unsafe local report parents before model execution while rechecking at publication. New tests cover real Git parsing, input drift, pre-model rejection, and the host's actual `/tmp` alias state. The checksum-verified real OCR suite passed 65/65; local artifact tests passed 20/20; full quality passed 2380 tests with 12 environment-gated skips, 357 subtests and 86.35% total coverage. This third review is finding evidence, not an accepted final review; a corrected physical-path local review remains required.
+
 ### Risks And Recovery
 
 Git configuration precedence or local input drift can hide ordinary changes: revalidate consulted inputs and independent diff; stop on uncertainty. False-complete receipt could launder approval/cleanup: exact parsing, original identity binding, independent approval blocker and thread retention. If installed proof fails for a proposed safe form, narrow it and test the fallback; if core mixed behavior cannot be proved, keep the plan active/blocked and do not publish. External publication failures resume only through exact-artifact documented recovery after readback.
 
 ### Resume Point
 
-WQ-07: self-review and commit the second OCR corrections and workflow/tool-use controls, then repeat affected quality/installed-OCR, secret/dependency, codex-security diff scan and local toolkit/OCR ChatGPT gates on the new immutable HEAD before the single final feature push. Preserve the draft feature PR's plan-only remote head until those reviews pass.
+WQ-07: self-review and commit the third OCR corrections and early local report-path guard. Run affected quality and installed-OCR tests, staged secret check, and focused security/local OCR review of the correction delta with a physical private output path. Do not start another full-range model scan unless a concrete new finding requires it. Reconcile the complete reviewed range, then perform the single final feature push; the draft PR's remote head stays plan-only until these gates pass.
 
 ### Plan Fidelity Check
 

@@ -31,7 +31,7 @@ _GIT_TIMEOUT_SECONDS = 30
 _DIFF_ENTRY_LIMIT = 20_000
 _GITLINK_SELECTION_SCHEMA = "ocr.gitlink-selection/v1"
 _LOCAL_INPUTS = (".gitignore", ".gitmodules", ".gitattributes")
-_GIT_METADATA_INPUTS = ("config", "info/attributes", "info/exclude")
+_GIT_METADATA_INPUTS = ("config", "config.worktree", "info/attributes", "info/exclude")
 _PREVIEW_REASONS = frozenset(
     {
         "user_exclude",
@@ -142,8 +142,9 @@ def _input_digest(root: Path, plan: GitlinkInputPlan) -> str:
         digest.update(b"\0")
         digest.update(b"M" if payload is None else b"P")
         if payload is not None:
-            if path == git_dir / "config" and re.search(
-                rb"(?im)^\s*\[\s*include(?:if)?(?:\s|\])", payload
+            if path in {git_dir / "config", git_dir / "config.worktree"} and re.search(
+                rb"(?im)^\s*\[\s*include(?:if)?(?:\s|\])",
+                payload.removeprefix(b"\xef\xbb\xbf"),
             ):
                 raise RepositoryEvidenceError("OCR local Git config includes are unsupported")
             digest.update(hashlib.sha256(payload).digest())

@@ -125,6 +125,10 @@ def prepare_local_report_path(path: Path, *, other_outputs: tuple[Path, ...]) ->
         raise ValueError("local report path must differ from result and stderr")
     if path.is_symlink() or path.exists():
         raise ValueError("local report path must be fresh")
+    # Catch symlinked ancestors before model execution. Publication opens and
+    # pins the then-current parent again before writing.
+    parent_descriptor, _ = open_private_parent_directory(path)
+    os.close(parent_descriptor)
 
 
 def publish_local_report(report: ReviewReport, path: Path) -> None:

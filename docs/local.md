@@ -31,9 +31,11 @@ ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/r
 ```
 
 Keep all three output paths in that new private directory. Resolve its physical
-path before launch: on macOS `/tmp` commonly points through a symlink to
-`/private/tmp`, and the report writer rejects a symlinked parent after OCR has
-already run. Check the report path is fresh and wait for the `ocr-ci` exit status;
+path before launch. `/tmp` can be a symlink on macOS or Linux, while a mounted
+directory can have no symlink at all. The runner checks the actual path
+components and rejects symlinks and parent-opening errors before OCR starts.
+It reopens the destination directory when publishing the report. Check the
+report path is fresh and wait for the `ocr-ci` exit status;
 an OCR JSON file alone does not establish successful local delivery. After a
 zero exit, read the complete private Markdown and JSON: require `status=complete`,
 compare selected/completed/reused/failed/waived coverage, inspect DLP admission and

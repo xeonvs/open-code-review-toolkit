@@ -2,6 +2,7 @@
 
 import io
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,40 @@ def test_parent_symlink_is_rejected(tmp_path: Path) -> None:
         local.publish_local_report(failed_report("identity"), parent / "report.md")
 
 
+def test_parent_symlink_is_rejected_before_model_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "link"
+    parent.symlink_to(tmp_path, target_is_directory=True)
+    monkeypatch.setattr(
+        review_runner, "_run_evidence_review", lambda *_a, **_kw: pytest.fail("model ran")
+    )
+    with pytest.raises(review_runner.ReviewRunnerError, match="destination"):
+        review_runner.run_evidence_review(
+            tmp_path / "result.json",
+            tmp_path / "stderr.log",
+            [],
+            local=True,
+            report_path=parent / "report.md",
+        )
+    assert not (tmp_path / "report.md").exists()
+
+
+def test_tmp_alias_follows_host_filesystem_state() -> None:
+    if not Path("/tmp").is_dir():
+        pytest.skip("host has no /tmp directory")
+    with tempfile.TemporaryDirectory(prefix="ocr-report-parent-", dir="/tmp") as directory:
+        alias = Path(directory) / "report.md"
+        physical = Path(directory).resolve() / "report.md"
+        if alias.absolute() != physical:
+            with pytest.raises(ValueError, match="parent"):
+                local.prepare_local_report_path(alias, other_outputs=())
+        else:
+            local.prepare_local_report_path(alias, other_outputs=())
+        local.publish_local_report(failed_report("identity"), physical)
+        assert physical.is_file()
+
+
 def test_partial_render_is_never_published(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def fail(*_args: object) -> None:
         raise OSError("write failed")
@@ -94,15 +129,20 @@ def test_parent_replacement_cannot_redirect_private_report(
     replacement = tmp_path / "replacement"
     replacement.mkdir()
     original = local.open_private_parent_directory
+    calls = 0
 
     def replace_after_open(path: Path) -> tuple[int, str]:
+        nonlocal calls
+        calls += 1
         descriptor, name = original(path)
-        parent.rename(tmp_path / "moved")
-        parent.symlink_to(replacement, target_is_directory=True)
+        if calls == 2:
+            parent.rename(tmp_path / "moved")
+            parent.symlink_to(replacement, target_is_directory=True)
         return descriptor, name
 
     monkeypatch.setattr(local, "open_private_parent_directory", replace_after_open)
     local.publish_local_report(failed_report("identity"), destination)
+    assert calls == 2
     assert (tmp_path / "moved" / "report.md").is_file()
     assert not (replacement / "report.md").exists()
 

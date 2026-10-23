@@ -180,6 +180,6 @@ This is a diagnostic catalogue of recurring incident classes. Current requiremen
 - Owner: docs/local.md#review-preparation
 - Route: local-ocr-review
 - Guard: manual_review:verify selected auth mode qualified executable native model reachability supported local flags physical private paths terminal status report and admitted findings
-- Evidence: The 2026-10-23 v0.13.0 local review attempts rejected absent `OCR_LLM_MODEL` and `--background-file` before model execution; the corrected OCR 1.13.3 invocation completed with 29/29 selected items and an admitted finding. The earlier [v0.12.1 review](../engineering/execution_history/releases.md#plan-toolkit-0-12-1) exposed the symlinked-path report failure. The preparation route now names each check at the launch boundary.
+- Evidence: The 2026-10-23 v0.13.0 local review attempts rejected absent `OCR_LLM_MODEL` and `--background-file` before model execution; the corrected OCR 1.13.3 invocation completed with 29/29 selected items and an admitted finding. The [v0.12.1 review](../engineering/execution_history/releases.md#plan-toolkit-0-12-1) and v0.13.1 review both exposed symlinked-path report failures. The v0.13.1 runner now validates the report parent before model execution and the publisher checks again after execution; `docs/local.md` shows physical-path preparation.
 - Status: guarded
 - Retirement: Retire when the owner, route, and guard remain established and the historical class no longer improves launch diagnosis.

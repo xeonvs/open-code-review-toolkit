@@ -576,6 +576,38 @@ def test_projection_rejects_local_git_config_include(tmp_path: Path) -> None:
         make_gitlink_projection(reader, plan)
 
 
+def test_projection_rejects_bom_prefixed_local_git_config_include(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    git_dir = tmp_path / ".git"
+    original = (git_dir / "config").read_bytes()
+    (git_dir / "included.conf").write_text("[core]\n  abbrev = 7\n", encoding="utf-8")
+    (git_dir / "config").write_bytes(b"\xef\xbb\xbf[include]\n  path = included.conf\n" + original)
+    assert _git(tmp_path, "config", "--local", "--includes", "--get", "core.abbrev") == "7"
+    with pytest.raises(RepositoryEvidenceError, match="includes"):
+        make_gitlink_projection(reader, plan)
+
+
+def test_projection_pins_and_rejects_worktree_config(tmp_path: Path) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    _git(tmp_path, "config", "extensions.worktreeConfig", "true")
+    worktree_config = tmp_path / ".git" / "config.worktree"
+    worktree_config.write_text("[core]\n  abbrev = 7\n", encoding="utf-8")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    assert _git(tmp_path, "config", "--worktree", "--get", "core.abbrev") == "7"
+    projection = make_gitlink_projection(reader, plan)
+    worktree_config.write_text("[core]\n  abbrev = 8\n", encoding="utf-8")
+    with pytest.raises(RepositoryEvidenceError, match="drifted"):
+        verify_gitlink_projection(reader, projection)
+    worktree_config.write_text("[include]\n  path = missing.conf\n", encoding="utf-8")
+    with pytest.raises(RepositoryEvidenceError, match="includes"):
+        make_gitlink_projection(reader, plan)
+
+
 def test_projection_rejects_changed_symlink_with_gitlink(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "Synthetic Reviewer")
