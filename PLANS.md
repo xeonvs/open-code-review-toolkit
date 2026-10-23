@@ -11,7 +11,7 @@ before handoff or commit. Completed stable plans are indexed in
 plan_schema_version: 2
 Status: active
 Last Updated: 2026-10-23
-Release classification: #264 `release-required`, target v0.13.0; #265 `no-release` planning in the same feature PR.
+Release classification: #264 `release-required`, target v0.13.0; #265 `no-release` planning and the requested harness maintenance are separate logical changes in the same feature PR.
 
 #### Goal
 
@@ -24,6 +24,7 @@ Implement #264 without conflating the actual MR code target with protected polic
 #### Requested Scope
 
 The feature PR contains #264 implementation and public-contract updates plus a separate logical documentation commit for #265. Its first commit contains only this reviewed plan. Self-review every subsequent logical commit. Before the final feature push, run Codex Security on the changed range, then one real local toolkit/OCR review through the documented private-artifact path and fix admitted findings. Audit project documentation, agent instructions, and routes; correct any findings in a separate commit before final reviews. Use the protected feature PR, development artifact verification, protected release PR, stable publication/receipt, issue closure, site check after actual publication, and one `no-release` external-reconciliation PR. Clean obsolete completed-run GitHub Actions artifacts and superseded caches without touching published Release assets or active-run inputs. Do not run additional checks on another host or environment.
+The owner later requested an Astra harness/process audit. Its bounded current-branch follow-up removes one duplicate setup shared by two negative installed-artifact probes and preserves the failing command's exit status in the quality wrapper; keep both wheel/sdist behavioral cases and independent published-artifact gates. Capture per-test durations in the next required full quality run rather than adding a separate heavy measurement run.
 
 #### Requirement Traceability
 
@@ -41,11 +42,13 @@ The feature PR contains #264 implementation and public-contract updates plus a s
 | REQ-010 | Publish and independently read back v0.13.0 distributions, provenance, attestation, tag, immutable Release, receipt, tracked issue/milestone, and post-release site notification | WQ-10, WQ-11 | pending |
 | REQ-011 | Reconcile exact external facts and leave `PLANS.md` clean in the protected `no-release` closure PR | WQ-12 | pending |
 | REQ-012 | Reclaim Actions storage from obsolete completed-run artifacts and superseded caches, with before/after readback and retained release/current-run evidence | WQ-13 | done |
-| REQ-013 | Improve meaningful test coverage in touched Python modules, measuring affected-file coverage before and after the change | WQ-02–WQ-05, WQ-08 | in_progress |
+| REQ-013 | Improve meaningful test coverage in touched Python modules, measuring affected-file coverage before and after the change | WQ-02–WQ-05, WQ-14 | in_progress |
+| REQ-014 | Reduce duplicate installed-artifact negative-probe setup, preserve exact quality failure exit status, and record timing/process evidence without weakening wheel/sdist or registry gates | WQ-14 | done |
 
 #### Explicit Non-Goals
 
 No related-MR discovery, chain/integration review, merge orchestration, source-branch policy bootstrap, fork/cross-project authority, new CI variable or policy field, second model pass, direct external MCP passthrough, approval revocation, downstream-project mutation, or new public command for #265. No separate host QA. Actual target protection is not a coverage score, and a successful current-MR review does not prove a parent or future integration.
+Do not drop wheel or sdist packaging, remove the existing installed local-review scenarios, or repeat full tests in the release publication gate to optimize this task. Matrix reduction awaits measured scenario timing and an independent maintenance decision.
 
 #### Constraints
 
@@ -68,6 +71,7 @@ No related-MR discovery, chain/integration review, merge orchestration, source-b
 The owner selected a full stable v0.13.0 release after #264 and chose one feature PR containing #265 as a separate logical commit. The owner requested the previous release's plan-first, self-review, security then local OCR review, protected PR, artifact/receipt, site-after-release and clean plan closure sequence. The root agent must switch to the feature branch; #265 remains planning-only and does not itself authorize a release.
 The owner additionally requested cleanup of GitHub Actions run artifacts because storage is scarce; this is `no-release` operational work.
 The owner also requested regular coverage improvement in touched files; focus on behavior and failure branches rather than tests that only reproduce an implementation.
+The owner requested a separate Astra agent to audit harness duplication and process, then apply justified corrections. This scoped harness maintenance is `no-release` by itself and does not add another release trigger or publication job.
 
 #### Completed Baseline State
 
@@ -84,8 +88,9 @@ v0.12.1 is published and externally reconciled; prior release and internal follo
 | WQ-05 | REQ-001, REQ-004–REQ-006, REQ-009 | Full-identity freshness at current-result and static-note writes, publication/approval/draft and cleanup boundaries, receipt-less error isolation, cross-run private-artifact isolation, and local-entry tests; self-reviewed commit | done |
 | WQ-06 | REQ-007, REQ-009 | Public contracts, examples, threat model, decision flow, changelog; self-reviewed commit | done |
 | WQ-07 | REQ-008, REQ-009 | Self-contained BL-025 with Source #265 and reference #264, status/theme/prerequisites/trigger/scope/deliverables/acceptance/exclusions/validation/future release classification; per-variant dependencies, A–F coverage, graph shapes and request/publication trade-offs; aligned strategy/roadmap and self-reviewed separate commit | done |
-| WQ-08 | REQ-007, REQ-009 | Documentation/instruction/route audit, distinct correction commit if needed, complete local quality and private/public-source checks | in_progress |
-| WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | pending |
+| WQ-08 | REQ-007, REQ-009 | Documentation/instruction/route audit, distinct correction commit, focused documentation checks and valid instruction contract | done |
+| WQ-14 | REQ-014, REQ-009 | Astra-backed installed negative-probe setup and quality exit-status corrections, focused tests, docs, timing in the next full quality gate, separate self-reviewed commit | done |
+| WQ-09 | REQ-008, REQ-009 | Codex Security scan, corrected real local toolkit/OCR review, finding fixes and final feature PR checks/merge; link the merged BL-025 entry in #265 and record selected/deferred/rejected variants there | in_progress |
 | WQ-10 | REQ-010 | Verified deterministic TestPyPI development wheel and sdist, release PR repository prep and protected checks/merge | pending |
 | WQ-11 | REQ-010 | Stable TestPyPI/PyPI, provenance, attestation, immutable release/receipt, issue/milestone and real site readback | pending |
 | WQ-12 | REQ-011 | One protected no-release reconciliation PR with exact receipts, clean plan, and synchronized main | pending |
@@ -115,7 +120,10 @@ Signed self-reviewed planning commit `76a1c3a` records conditional BL-025 for #2
 WQ-05 focused source and boundary suites passed with 686 tests and 299 subtests after the CI-job handoff and current-version-contract additions. Ruff format/check, mypy across 132 source files, and diff whitespace checks passed. A second independent seam audit found the review-to-post interval in a shared checkout; receipt and preview/setup status now bind the supplied GitLab job ID, code 75 prevents a losing review from adopting another run's status, and the example uses job-specific output paths. Production GitLab uses one review/post pair per CI job. Full quality and final security/OCR reviews remain pending until WQ-06/WQ-08 documentation is committed.
 Signed self-reviewed WQ-05 commit `d5bc468` contains the posting, cross-run, current-version contract and regression changes. WQ-06 public documentation now explains v11, default `auto`, B/H/T/P, job-specific handoff, local private paths and the no-note failure policy. The public GitLab example omits the selector so its still-published wheel pin remains valid until the release PR advances it; the new toolkit then supplies the `auto` default. The 51 focused documentation/example contracts passed.
 Signed self-reviewed WQ-06 commit `58d29d3` contains the public docs, examples and changelog. Signed self-reviewed commit `0b416c8` makes the historical v9/v10/v11 nested-schema mapping explicit, so a future v12 cannot inherit a predecessor's federation or publication schema by fallback; 129 receipt/approval/freshness tests and 94 subtests passed. The WQ-08 documentation/instruction audit corrected context and federation ownership routes, engineering contracts and example links; the instruction contract is valid, the 51 focused documentation contracts pass, and full quality and final reviews remain pending.
-The first full quality attempt stopped at a single Ruff formatting defect in the public-example contract test; it was corrected in amended documentation commit `ae83977`. The next full pytest/coverage run reached 86.36% total coverage and 2270 passing tests, but 14 tests still asserted obsolete local-status, private-error-note or historical-receipt publication behavior. Six affected test modules now assert the current no-write/no-status boundaries and retain late debug/progress coverage; 108 focused tests pass with three qualified skips. A new full quality result is pending.
+The first full quality attempt stopped at a single Ruff formatting defect in the public-example contract test; it was corrected in amended documentation commit `ae83977`. The next full pytest/coverage run reached 86.36% total coverage and 2270 passing tests, but 14 tests still asserted obsolete local-status, private-error-note or historical-receipt publication behavior. Six affected test modules now assert the current no-write/no-status boundaries and retain late debug/progress coverage; 108 focused tests passed with three qualified skips before the successful complete run below.
+Astra's read-only harness audit confirmed #260 is closed and the expensive installed-artifact suite already runs on one Ubuntu/Python 3.12 CI leg; other legs start in parallel, while stable publication verifies new artifacts without repeating full pytest. Different observed CI runs spanned 13m24s and 4m22s, which is directional evidence rather than a controlled benchmark. The remaining duplicate was two negative probes creating equivalent clean no-dependency environments. The quality wrapper also reduced an underlying failing command's exit status to 1 before the WQ-14 fix.
+The bounded WQ-14 patch now shares one module-scoped wheel-only interpreter between both read-only negative dependency probes, preserves their distinct PATH/cwd assertions, and makes `scripts/quality.sh` propagate failure statuses. The fake-uv regression checks exit codes 2, 7 and 130 plus stop-before-coverage behavior. All 12 focused harness tests pass in 2.14 seconds; 40 focused documentation/environment tests, repository-wide Ruff check/format, instruction-contract lint and whitespace checks pass. The prior failed quality log is retained in a private task archive outside the repository.
+The complete local quality gate now passes: 2288 tests, five qualified skips and 357 subtests in 295.67 seconds, with 86.47% aggregate line/branch coverage. The installed wheel/sdist MCP scenario accounts for 157.09 seconds; the shared negative-probe setup takes 1.06 seconds, and the independent wheel/sdist behavioral cases remain intact. Current changed-file coverage includes 100% for `posting/freshness.py` and `review_identity.py`, 88.02% for `review_receipt.py`, 86.74% for `providers/gitlab.py`, and 80.14% for `posting/workflow.py`. The available pre-change JSON was collected from an incomplete test run (70.24%) and is not a valid before/after baseline; do not report it as coverage growth. A public-tree secret scan passes. Astra's process recommendation is captured in the bounded harness commit; the remaining expensive integration matrix needs a separately measured follow-up before any reduction.
 
 #### Risks And Recovery
 
@@ -123,7 +131,7 @@ GitLab diff/version and pipeline variants may require rejecting unsupported form
 
 #### Resume Point
 
-Self-review and commit the focused quality-test corrections, then rerun complete quality on the corrected branch. Reconcile the separate Astra harness audit before final review. Run the secret scan, security diff scan and real local OCR; continue the protected PR and release lifecycle only after those results are reconciled.
+Run the Codex Security diff scan over `b8786e7..HEAD`, fix validated findings, then run the real local OCR review through physical private output paths. Reconcile final coverage without claiming a before/after change from incomplete baseline data; run the remaining secret and instruction gates before final feature push. Continue the protected PR and release lifecycle only after those results are reconciled.
 
 #### Plan Fidelity Check
 

@@ -11,10 +11,13 @@ export UV_PROJECT_ENVIRONMENT="$quality_environment"
 
 run_logged_command() {
   quality_command=$1
-  if ! uv run --no-sync sh -c "$quality_command" >>"$log_file" 2>&1; then
+  if uv run --no-sync sh -c "$quality_command" >>"$log_file" 2>&1; then
+    return 0
+  else
+    quality_status=$?
     echo "quality check failed: $quality_command" >&2
     tail -n 80 "$log_file" >&2
-    exit 1
+    exit "$quality_status"
   fi
 }
 
