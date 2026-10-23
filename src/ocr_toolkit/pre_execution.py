@@ -13,8 +13,10 @@ from typing import Any
 
 STATUS_SCHEMA = "ocr.pre-execution-status/v4"
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"
+PROTECTED_POLICY_RULE_PATH_PENDING = "protected_policy_rule_path_pending"
 GITLAB_MERGE_REQUEST_TERMINAL = "gitlab_merge_request_terminal"
 REVIEWED_REVISION_NO_LONGER_CURRENT = "reviewed_revision_no_longer_current"
+REVIEW_IDENTITY_UNAVAILABLE = "review_identity_unavailable"
 BACKGROUND_CHARACTER_LIMIT_REASON = "ocr_background_character_limit"
 BACKGROUND_FILE_SIZE_LIMIT_REASON = "ocr_background_file_size_limit"
 UNCLASSIFIED_PREVIEW_DIAGNOSTICS = "unclassified_preview_diagnostics"
@@ -111,6 +113,25 @@ def _validate(status: PreExecutionStatus) -> None:
         return
     if status.diagnostic_count is not None:
         raise PreExecutionStatusError("pre-execution status fields are invalid")
+    if status.reason == REVIEW_IDENTITY_UNAVAILABLE:
+        if (
+            status.stage != EVIDENCE_PREFLIGHT_STAGE
+            or status.policy_sha is not None
+            or any(
+                value is not None
+                for value in (
+                    status.actual,
+                    status.limit,
+                    status.unit,
+                    status.provider,
+                    status.project_id,
+                    status.change_id,
+                    status.terminal_state,
+                )
+            )
+        ):
+            raise PreExecutionStatusError("pre-execution status fields are invalid")
+        return
     if status.reason == REVIEWED_REVISION_NO_LONGER_CURRENT:
         if (
             status.stage != EVIDENCE_PREFLIGHT_STAGE
@@ -149,7 +170,10 @@ def _validate(status: PreExecutionStatus) -> None:
         )
     ):
         raise PreExecutionStatusError("pre-execution status fields are invalid")
-    if status.reason == PROTECTED_TARGET_RULE_PATH_PENDING:
+    if status.reason in {
+        PROTECTED_TARGET_RULE_PATH_PENDING,
+        PROTECTED_POLICY_RULE_PATH_PENDING,
+    }:
         if status.stage != EVIDENCE_PREFLIGHT_STAGE or any(
             value is not None for value in (status.actual, status.limit, status.unit)
         ):

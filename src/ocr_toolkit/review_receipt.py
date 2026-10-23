@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocr_toolkit.evidence.actions import ACTION_RECEIPT_BUCKETS, EVIDENCE_ACTIONS
+from ocr_toolkit.evidence.invocation import MAX_CI_IDENTIFIER_CHARS
 from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOL_NAME_CHARS,
@@ -24,6 +25,9 @@ INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing o
 UNPROTECTED_APPROVAL_REASON = (
     "the GitLab target branch was unprotected; limited reviews are comment-only"
 )
+AUTO_UNPROTECTED_APPROVAL_REASON = (
+    "the GitLab target branch was unprotected; automatic approval is unavailable"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +38,19 @@ class ReceiptReviewIdentity:
     target_sha: str
     target_protection: str
     mr_author_id: int
+    schema_version: int
+    policy_sha: str
+    project_id: str | None = None
+    merge_request_iid: str | None = None
+    diff_base_sha: str | None = None
+    diff_start_sha: str | None = None
+    diff_head_sha: str | None = None
+    diff_version_id: int | None = None
+    target_branch: str | None = None
+    policy_project_id: str | None = None
+    policy_branch: str | None = None
+    policy_protection: str | None = None
+    protection_mode: str | None = None
 
 
 def verified_evidence_actions(
@@ -117,6 +134,163 @@ def _sha256(value: Any) -> bool:
     )
 
 
+def _decimal_identifier(value: Any) -> bool:
+    """Match canonical bounded GitLab project and MR identifiers."""
+
+    return (
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdecimal()
+        and 1 <= len(value) <= MAX_CI_IDENTIFIER_CHARS
+        and value[0] != "0"
+    )
+
+
+def _branch(value: Any) -> bool:
+    """Accept only a bounded Git branch suitable for an encoded provider lookup."""
+
+    if not isinstance(value, str):
+        return False
+    try:
+        byte_length = len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        return False
+    return not (
+        not 1 <= len(value) <= 512
+        or byte_length > 2_048
+        or value == "@"
+        or value.startswith("-")
+        or value.endswith(("/", "."))
+        or ".." in value
+        or "@{" in value
+        or any(
+            character == "\x7f" or ord(character) < 32 or character in " ~^:?*[\\"
+            for character in value
+        )
+        or any(
+            not part or part.startswith(".") or part.endswith(".lock") for part in value.split("/")
+        )
+    )
+
+
+_LEGACY_REVIEW_KEYS = frozenset(
+    {"source_sha", "policy_sha", "target_sha", "target_protection", "mr_author_id"}
+)
+_V11_REVIEW_KEYS = frozenset(
+    {
+        "source_sha",
+        "diff_base_sha",
+        "diff_start_sha",
+        "diff_head_sha",
+        "diff_version_id",
+        "project_id",
+        "merge_request_iid",
+        "target_branch",
+        "target_sha",
+        "target_protection",
+        "policy_project_id",
+        "policy_branch",
+        "policy_sha",
+        "policy_protection",
+        "protection_mode",
+        "mr_author_id",
+    }
+)
+
+
+def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewIdentity | None:
+    """Hostile-parse one versioned review section without upgrading legacy authority."""
+
+    if not isinstance(review, dict):
+        return None
+    if receipt_version in {9, 10}:
+        if (
+            set(review) != _LEGACY_REVIEW_KEYS
+            or not _full_sha(review.get("source_sha"))
+            or not _full_sha(review.get("policy_sha"))
+            or not _full_sha(review.get("target_sha"))
+            or review.get("policy_sha") != review.get("target_sha")
+            or not isinstance(review.get("target_protection"), str)
+            or review.get("target_protection") not in {"protected", "unprotected"}
+            or not _positive_id(review.get("mr_author_id"))
+        ):
+            return None
+        return ReceiptReviewIdentity(
+            source_sha=review["source_sha"],
+            target_sha=review["target_sha"],
+            target_protection=review["target_protection"],
+            mr_author_id=review["mr_author_id"],
+            schema_version=receipt_version,
+            policy_sha=review["policy_sha"],
+        )
+    if receipt_version != 11 or set(review) != _V11_REVIEW_KEYS:
+        return None
+    if (
+        not all(
+            _full_sha(review.get(field)) and review.get(field) != "0" * 40
+            for field in (
+                "source_sha",
+                "diff_base_sha",
+                "diff_start_sha",
+                "diff_head_sha",
+                "target_sha",
+                "policy_sha",
+            )
+        )
+        or review["source_sha"] != review["diff_head_sha"]
+        or not _positive_id(review.get("diff_version_id"))
+        or not _decimal_identifier(review.get("project_id"))
+        or not _decimal_identifier(review.get("merge_request_iid"))
+        or not _decimal_identifier(review.get("policy_project_id"))
+        or review["policy_project_id"] != review["project_id"]
+        or not _branch(review.get("target_branch"))
+        or not _branch(review.get("policy_branch"))
+        or not isinstance(review.get("target_protection"), str)
+        or review.get("target_protection") not in {"protected", "unprotected"}
+        or not isinstance(review.get("policy_protection"), str)
+        or review.get("policy_protection") not in {"protected", "unprotected"}
+        or not isinstance(review.get("protection_mode"), str)
+        or review.get("protection_mode") not in {"auto", "required", "unprotected"}
+        or not _positive_id(review.get("mr_author_id"))
+    ):
+        return None
+
+    target_protected = review["target_protection"] == "protected"
+    if target_protected or review["protection_mode"] == "unprotected":
+        if (
+            review["policy_branch"] != review["target_branch"]
+            or review["policy_sha"] != review["target_sha"]
+            or review["policy_protection"] != review["target_protection"]
+        ):
+            return None
+    elif (
+        review["protection_mode"] != "auto"
+        or review["policy_branch"] == review["target_branch"]
+        or review["policy_protection"] != "protected"
+    ):
+        return None
+
+    return ReceiptReviewIdentity(
+        source_sha=review["source_sha"],
+        target_sha=review["target_sha"],
+        target_protection=review["target_protection"],
+        mr_author_id=review["mr_author_id"],
+        schema_version=receipt_version,
+        policy_sha=review["policy_sha"],
+        project_id=review["project_id"],
+        merge_request_iid=review["merge_request_iid"],
+        diff_base_sha=review["diff_base_sha"],
+        diff_start_sha=review["diff_start_sha"],
+        diff_head_sha=review["diff_head_sha"],
+        diff_version_id=review["diff_version_id"],
+        target_branch=review["target_branch"],
+        policy_project_id=review["policy_project_id"],
+        policy_branch=review["policy_branch"],
+        policy_protection=review["policy_protection"],
+        protection_mode=review["protection_mode"],
+    )
+
+
 def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     """Return the closed review-time receipt blocker for automatic approval."""
 
@@ -126,7 +300,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     receipt_version = toolkit_metadata.get("schema_version")
     if (
         type(receipt_version) is not int
-        or receipt_version not in {9, 10}
+        or receipt_version not in {9, 10, 11}
         or set(toolkit_metadata)
         != {
             "schema_version",
@@ -142,25 +316,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     ):
         return invalid
 
-    review = toolkit_metadata.get("review")
-    if not isinstance(review, dict) or set(review) != {
-        "source_sha",
-        "policy_sha",
-        "target_sha",
-        "target_protection",
-        "mr_author_id",
-    }:
-        return invalid
-    if (
-        not _full_sha(review.get("source_sha"))
-        or not _full_sha(review.get("policy_sha"))
-        or not _full_sha(review.get("target_sha"))
-        or review.get("policy_sha") != review.get("target_sha")
-        or not isinstance(review.get("target_protection"), str)
-        or review.get("target_protection") not in {"protected", "unprotected"}
-    ):
-        return invalid
-    if not _positive_id(review.get("mr_author_id")):
+    review_identity = _parse_review_identity(toolkit_metadata.get("review"), receipt_version)
+    if review_identity is None:
         return invalid
 
     context = toolkit_metadata.get("context")
@@ -305,7 +462,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         if not valid_reconciliation(federation):
             return invalid
         expected_federation_schema = (
-            "ocr.federation/v2" if receipt_version == 10 else "ocr.federation/v1"
+            "ocr.federation/v2" if receipt_version in {10, 11} else "ocr.federation/v1"
         )
         if federation["receipt"]["schema"] != expected_federation_schema:
             return invalid
@@ -364,7 +521,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     publication = toolkit_metadata.get("publication")
     if not isinstance(publication, dict) or (
         (receipt_version == 9 and "schema" in publication)
-        or (receipt_version == 10 and publication.get("schema") != "ocr.publication/v2")
+        or (receipt_version in {10, 11} and publication.get("schema") != "ocr.publication/v2")
     ):
         return invalid
     tool_execution = toolkit_metadata.get("tool_execution")
@@ -397,9 +554,13 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     else:
         dlp_reason = ""
-    if review.get("target_protection") == "unprotected":
-        if mode not in {"off", "metadata"} or external:
+    if review_identity.target_protection == "unprotected":
+        if review_identity.policy_protection != "protected" and (
+            mode not in {"off", "metadata"} or external
+        ):
             return invalid
+        if review_identity.protection_mode == "auto":
+            return AUTO_UNPROTECTED_APPROVAL_REASON
         return UNPROTECTED_APPROVAL_REASON
     if dlp_reason:
         return dlp_reason
@@ -430,38 +591,11 @@ def receipt_review_identity(toolkit_metadata: Any) -> ReceiptReviewIdentity | No
     if (
         not isinstance(toolkit_metadata, dict)
         or type(toolkit_metadata.get("schema_version")) is not int
-        or toolkit_metadata.get("schema_version")
-        not in {
-            9,
-            10,
-        }
+        or toolkit_metadata.get("schema_version") not in {9, 10, 11}
     ):
         return None
-    review = toolkit_metadata.get("review")
-    if (
-        not isinstance(review, dict)
-        or set(review)
-        != {
-            "source_sha",
-            "policy_sha",
-            "target_sha",
-            "target_protection",
-            "mr_author_id",
-        }
-        or not _full_sha(review.get("source_sha"))
-        or not _full_sha(review.get("policy_sha"))
-        or not _full_sha(review.get("target_sha"))
-        or review.get("policy_sha") != review.get("target_sha")
-        or not isinstance(review.get("target_protection"), str)
-        or review.get("target_protection") not in {"protected", "unprotected"}
-        or not _positive_id(review.get("mr_author_id"))
-    ):
-        return None
-    return ReceiptReviewIdentity(
-        source_sha=review["source_sha"],
-        target_sha=review["target_sha"],
-        target_protection=review["target_protection"],
-        mr_author_id=review["mr_author_id"],
+    return _parse_review_identity(
+        toolkit_metadata.get("review"), toolkit_metadata["schema_version"]
     )
 
 

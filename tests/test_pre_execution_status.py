@@ -17,7 +17,9 @@ from ocr_toolkit.pre_execution import (
     MAX_STATUS_BYTES,
     MODEL_NOT_STARTED,
     OCR_PREVIEW_STAGE,
+    PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEW_IDENTITY_UNAVAILABLE,
     REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
     UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
@@ -286,6 +288,54 @@ def test_pre_execution_status_round_trips_typed_pre_model_failures(
     serialized = path.read_text(encoding="utf-8")
     assert "private.example.invalid" not in serialized
     assert '"model_execution":"not_started"' in serialized
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [PROTECTED_TARGET_RULE_PATH_PENDING, PROTECTED_POLICY_RULE_PATH_PENDING],
+)
+def test_setup_status_distinguishes_policy_authority(tmp_path: Path, reason: str) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=reason,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=POLICY,
+    )
+    write_pre_execution_status(path, expected)
+    assert (
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+        == expected
+    )
+
+
+def test_unavailable_review_identity_is_closed_and_job_scoped(tmp_path: Path) -> None:
+    path = private_directory(tmp_path) / "pre-execution-status.json"
+    expected = PreExecutionStatus(
+        schema_version=STATUS_SCHEMA,
+        reason=REVIEW_IDENTITY_UNAVAILABLE,
+        diff_base_sha=BASE,
+        source_sha=SOURCE,
+        policy_sha=None,
+    )
+    write_pre_execution_status(path, expected)
+    assert (
+        read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
+        == expected
+    )
+    for mutation in (
+        {"stage": OCR_PREVIEW_STAGE},
+        {"policy_sha": POLICY},
+        {"provider": "gitlab"},
+        {"project_id": "17"},
+        {"diagnostic_count": 1},
+        {"reason": "untrusted details"},
+    ):
+        path.write_text(json.dumps({**asdict(expected), **mutation}), encoding="utf-8")
+        path.chmod(0o600)
+        with pytest.raises(PreExecutionStatusError, match="fields"):
+            read_pre_execution_status(path, expected_diff_base_sha=BASE, expected_source_sha=SOURCE)
 
 
 @pytest.mark.parametrize(

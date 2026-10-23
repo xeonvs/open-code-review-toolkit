@@ -112,7 +112,9 @@ from ocr_toolkit.pre_execution import (
     GITLAB_MERGE_REQUEST_TERMINAL,
     GITLINK_PREVIEW_UNSUPPORTED,
     OCR_PREVIEW_STAGE,
+    PROTECTED_POLICY_RULE_PATH_PENDING,
     PROTECTED_TARGET_RULE_PATH_PENDING,
+    REVIEW_IDENTITY_UNAVAILABLE,
     REVIEWED_REVISION_NO_LONGER_CURRENT,
     STATUS_SCHEMA,
     UNCLASSIFIED_PREVIEW_DIAGNOSTICS,
@@ -154,6 +156,7 @@ from ocr_toolkit.reporting.model import (
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
+from ocr_toolkit.review_identity import validate_detached_merge_request_pipeline
 from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
@@ -413,12 +416,33 @@ class ReviewIdentity:
     context: MergeRequestContext | None
     target_sha: str
     target_protection: str
+    project_id: str | None = None
+    merge_request_iid: str | None = None
+    diff_base_sha: str | None = None
+    diff_start_sha: str | None = None
+    diff_head_sha: str | None = None
+    diff_version_id: int | None = None
+    target_branch: str | None = None
+    policy_project_id: str | None = None
+    policy_branch: str | None = None
+    policy_protection: str | None = None
+    protection_mode: str | None = None
 
     @property
     def context_state(self) -> str:
         if self.context_mode == "off":
             return "disabled"
         return self.context.state if self.context is not None else "degraded"
+
+    @property
+    def has_protected_policy(self) -> bool:
+        return self.policy_protection == "protected" or (
+            self.policy_protection is None and self.target_protection == "protected"
+        )
+
+    @property
+    def limited_unprotected(self) -> bool:
+        return self.target_protection == "unprotected" and not self.has_protected_policy
 
 
 @dataclass(frozen=True, slots=True)
@@ -684,9 +708,20 @@ def _review_receipt(
     return {
         "review": {
             "source_sha": identity.source_sha,
+            "diff_base_sha": identity.diff_base_sha,
+            "diff_start_sha": identity.diff_start_sha,
+            "diff_head_sha": identity.diff_head_sha,
+            "diff_version_id": identity.diff_version_id,
+            "project_id": identity.project_id,
+            "merge_request_iid": identity.merge_request_iid,
+            "target_branch": identity.target_branch,
             "policy_sha": identity.policy_sha,
             "target_sha": identity.target_sha,
             "target_protection": identity.target_protection,
+            "policy_project_id": identity.policy_project_id,
+            "policy_branch": identity.policy_branch,
+            "policy_protection": identity.policy_protection,
+            "protection_mode": identity.protection_mode,
             "mr_author_id": identity.mr_author_id,
         },
         "context": context_receipt,
@@ -2224,6 +2259,7 @@ def _record_rules_path_setup(
     refs: ReviewRefs,
     policy_sha: str,
     repository_path: str,
+    setup_reason: str = PROTECTED_TARGET_RULE_PATH_PENDING,
 ) -> bool:
     """Record only a bounded regular-blob introduction without reading source content."""
 
@@ -2237,13 +2273,28 @@ def _record_rules_path_setup(
         artifacts.pre_execution_status,
         PreExecutionStatus(
             schema_version=STATUS_SCHEMA,
-            reason=PROTECTED_TARGET_RULE_PATH_PENDING,
+            reason=setup_reason,
             diff_base_sha=refs.base,
             source_sha=refs.head,
             policy_sha=policy_sha,
         ),
     )
     return True
+
+
+def _record_unavailable_review_identity(artifacts: EvidenceArtifacts, refs: ReviewRefs) -> None:
+    """Keep an unproven provider boundary as a private, job-only outcome."""
+
+    write_pre_execution_status(
+        artifacts.pre_execution_status,
+        PreExecutionStatus(
+            schema_version=STATUS_SCHEMA,
+            reason=REVIEW_IDENTITY_UNAVAILABLE,
+            diff_base_sha=refs.base,
+            source_sha=refs.head,
+            policy_sha=None,
+        ),
+    )
 
 
 def _prepare_policy_context(
@@ -2264,7 +2315,13 @@ def _prepare_policy_context(
     context = None
     author_id = None
     target_protection = "local"
-    if not local and is_merge_request_environment(os.environ):
+    snapshot = None
+    if not local and not is_merge_request_environment(os.environ):
+        _record_unavailable_review_identity(artifacts, refs)
+        raise ReviewRunnerError(
+            "GitLab merge-request identity is required; use --local for a standalone review"
+        )
+    if not local:
         try:
             snapshot = acquire_review_snapshot(
                 os.environ,
@@ -2303,13 +2360,43 @@ def _prepare_policy_context(
                 ),
             )
             raise ReviewRunnerError(str(exc)) from exc
-        reader.fetch_commit(snapshot.target_sha)
-        policy_sha = reader.resolve_commit(snapshot.target_sha)
+        except GitLabProviderError as exc:
+            _record_unavailable_review_identity(artifacts, refs)
+            raise ReviewRunnerError(
+                "GitLab review identity or policy authority is unavailable"
+            ) from exc
+        if snapshot.diff_base_sha != refs.base or snapshot.diff_head_sha != refs.head:
+            write_pre_execution_status(
+                artifacts.pre_execution_status,
+                PreExecutionStatus(
+                    schema_version=STATUS_SCHEMA,
+                    reason=REVIEWED_REVISION_NO_LONGER_CURRENT,
+                    diff_base_sha=refs.base,
+                    source_sha=refs.head,
+                    policy_sha=None,
+                    provider="gitlab",
+                    project_id=snapshot.project_id,
+                    change_id=snapshot.merge_request_iid,
+                ),
+            )
+            raise ReviewRunnerError(
+                "reviewed refs do not match the authenticated current GitLab MR diff"
+            )
+        try:
+            reader.fetch_commit(snapshot.target_sha)
+            target_sha = reader.resolve_commit(snapshot.target_sha)
+            if snapshot.policy_sha != snapshot.target_sha:
+                reader.fetch_commit(snapshot.policy_sha)
+            policy_sha = reader.resolve_commit(snapshot.policy_sha)
+        except RepositoryEvidenceError as exc:
+            _record_unavailable_review_identity(artifacts, refs)
+            raise ReviewRunnerError(
+                "captured GitLab target or policy object is unavailable"
+            ) from exc
         context = snapshot.context
         author_id = snapshot.author_id
-        target_sha = policy_sha
         target_protection = snapshot.target_protection
-        if target_protection == "unprotected":
+        if snapshot.policy_protection == "unprotected":
             if context_mode == "enriched":
                 raise ReviewRunnerError(
                     "enriched review context requires a protected GitLab target branch"
@@ -2324,19 +2411,30 @@ def _prepare_policy_context(
         policy_sha = refs.base
         target_sha = policy_sha
     identity = ReviewIdentity(
-        refs.head,
-        policy_sha,
-        author_id,
-        context_mode,
-        context,
-        target_sha,
-        target_protection,
+        source_sha=refs.head,
+        policy_sha=policy_sha,
+        mr_author_id=author_id,
+        context_mode=context_mode,
+        context=context,
+        target_sha=target_sha,
+        target_protection=target_protection,
+        project_id=snapshot.project_id if snapshot is not None else None,
+        merge_request_iid=snapshot.merge_request_iid if snapshot is not None else None,
+        diff_base_sha=snapshot.diff_base_sha if snapshot is not None else None,
+        diff_start_sha=snapshot.diff_start_sha if snapshot is not None else None,
+        diff_head_sha=snapshot.diff_head_sha if snapshot is not None else None,
+        diff_version_id=snapshot.diff_version_id if snapshot is not None else None,
+        target_branch=snapshot.target_branch if snapshot is not None else None,
+        policy_project_id=snapshot.project_id if snapshot is not None else None,
+        policy_branch=snapshot.policy_branch if snapshot is not None else None,
+        policy_protection=snapshot.policy_protection if snapshot is not None else None,
+        protection_mode=snapshot.protection_mode if snapshot is not None else None,
     )
     rule = _one_option(ocr_args, "--rule")
     if rule is None:
         if target_protection == "unprotected":
             raise ReviewRunnerError(
-                "unprotected-target reviews require repository rules from the captured target commit"
+                "unprotected-target reviews require repository rules from the captured policy commit"
             )
         remove_private_artifact(artifacts.policy_rules)
         return identity, ocr_args
@@ -2344,7 +2442,7 @@ def _prepare_policy_context(
     if repository_path is None:
         if target_protection == "unprotected":
             raise ReviewRunnerError(
-                "unprotected-target reviews require repository rules from the captured target commit"
+                "unprotected-target reviews require repository rules from the captured policy commit"
             )
         remove_private_artifact(artifacts.policy_rules)
         return identity, ocr_args
@@ -2353,7 +2451,12 @@ def _prepare_policy_context(
     except RepositoryEvidenceError as exc:
         raise ReviewRunnerError("target OCR rule is unavailable or unsafe") from exc
     if content is None:
-        if author_id is not None and target_protection == "protected":
+        if author_id is not None and identity.has_protected_policy:
+            protected_branch_label = (
+                "protected policy"
+                if identity.target_protection == "unprotected"
+                else "protected target"
+            )
             try:
                 setup_pending = _record_rules_path_setup(
                     reader,
@@ -2361,15 +2464,22 @@ def _prepare_policy_context(
                     refs=refs,
                     policy_sha=policy_sha,
                     repository_path=repository_path,
+                    setup_reason=(
+                        PROTECTED_POLICY_RULE_PATH_PENDING
+                        if identity.protection_mode == "auto"
+                        and identity.target_protection == "unprotected"
+                        and identity.policy_protection == "protected"
+                        else PROTECTED_TARGET_RULE_PATH_PENDING
+                    ),
                 )
             except (PreExecutionStatusError, RepositoryEvidenceError) as exc:
                 raise ReviewRunnerError(
-                    "protected-target OCR rule does not exist and the source candidate is unsafe"
+                    f"{protected_branch_label} OCR rule does not exist and the source candidate is unsafe"
                 ) from exc
             if setup_pending:
-                raise ReviewRunnerError("protected-target OCR rule path setup is pending")
-        target_kind = "protected target" if target_protection == "protected" else "target"
-        raise ReviewRunnerError(f"{target_kind} OCR rule does not exist")
+                raise ReviewRunnerError(f"{protected_branch_label} OCR rule path setup is pending")
+        authority_kind = "protected policy" if identity.has_protected_policy else "target"
+        raise ReviewRunnerError(f"{authority_kind} OCR rule does not exist")
     policy_rules = artifacts.policy_rules
     write_private_bytes(policy_rules, content)
     return identity, _replace_rule_argument(ocr_args, rule, str(policy_rules))
@@ -2469,7 +2579,7 @@ def _prepare_enrichment(
             "OCR_REVIEW_CONTEXT_ADAPTERS_JSON was removed; configure governed MCP"
         )
 
-    if identity.target_protection == "unprotected":
+    if identity.limited_unprotected:
         if identity.context_mode == "enriched":
             raise ReviewRunnerError(
                 "enriched review context requires a protected GitLab target branch"
@@ -2995,6 +3105,17 @@ def _run_evidence_review(
     except RepositoryEvidenceError as exc:
         raise ReviewRunnerError("immutable review refs could not be resolved") from exc
     state.reviewed_sha = refs.head
+    if not state.local and not is_merge_request_environment(os.environ):
+        _record_unavailable_review_identity(artifacts, refs)
+        raise ReviewRunnerError(
+            "GitLab merge-request identity is required; use --local for a standalone review"
+        )
+    if not state.local:
+        try:
+            validate_detached_merge_request_pipeline(os.environ, expected_source_sha=refs.head)
+        except ValueError as exc:
+            _record_unavailable_review_identity(artifacts, refs)
+            raise ReviewRunnerError(str(exc)) from exc
     _reject_owned_review_options(ocr_args)
     _prepare_review_output_artifacts(result_path, stderr_path)
     print("OCR evidence preflight: collecting immutable review refs", file=sys.stderr)
@@ -3047,7 +3168,8 @@ def _run_evidence_review(
                 base_ref=refs.base,
                 head_ref=refs.head,
                 policy_ref=identity.policy_sha,
-                include_policy_records=identity.target_protection != "unprotected",
+                target_ref=identity.target_sha if not state.local else None,
+                include_policy_records=state.local or identity.has_protected_policy,
             )
             head_sha = store.head.commit_sha if store.head else ""
             identifiers = () if state.local else invocation_identifiers(os.environ)
@@ -3069,7 +3191,7 @@ def _run_evidence_review(
             if state.debug is not None:
                 diagnostic_count = len(store.diagnostics) + sum(
                     len(snapshot.diagnostics)
-                    for snapshot in (store.base, store.head, store.policy)
+                    for snapshot in (store.base, store.head, store.policy, store.target)
                     if snapshot is not None
                 )
                 state.observe(
@@ -3080,7 +3202,7 @@ def _run_evidence_review(
             state.enter("mcp-preflight")
             profile = "gitlab_mr" if identity.mr_author_id is not None else "local"
             servers = mcp_config.parse_mcp_servers(profile=profile)
-            if servers and identity.target_protection == "unprotected":
+            if servers and identity.limited_unprotected:
                 raise mcp_config.MCPConfigError(
                     "unprotected-target reviews do not allow external MCP"
                 )
@@ -3095,14 +3217,17 @@ def _run_evidence_review(
             composition = mcp_config.build_mcp_composition(
                 profile="gitlab_mr" if identity.mr_author_id is not None else "local",
                 context=context_config,
-                allow_external=identity.target_protection != "unprotected",
+                allow_external=not identity.limited_unprotected,
                 **({"gateway": gateway} if gateway is not None else {}),
             )
             bootstrap = render_bootstrap(
                 store,
                 capabilities=composition.capabilities,
                 context_hints=enrichment.bootstrap_hints if enrichment is not None else None,
-                unprotected_target=identity.target_protection == "unprotected",
+                unprotected_target=identity.limited_unprotected,
+                protected_policy_fallback=(
+                    identity.target_protection == "unprotected" and identity.has_protected_policy
+                ),
             )
             write_private_text(artifacts.bootstrap, bootstrap)
             mcp_config.apply_mcp_composition(composition)
