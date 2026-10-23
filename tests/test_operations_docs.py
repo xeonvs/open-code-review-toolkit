@@ -158,7 +158,7 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
 
 
 def test_release_archive_reconciles_current_external_delivery_truth() -> None:
-    """Preserve the last legacy archive while the new plan closure is prepared."""
+    """Keep legacy receipts and current repository closure distinct."""
 
     release_guide = (PROJECT_ROOT / "docs" / "release.md").read_text(encoding="utf-8")
     release_archive = (
@@ -191,27 +191,39 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
 
     assert "without another repository pull request" in release_guide
     assert "under `docs/engineering/execution_history/plans/`" in release_guide
-    assert "The v0.13.0 release PR must update CI contracts" in release_guide
+    assert "does not advance for plans closed in the release PR" in release_guide
     assert "List tracked release issues in a release PR as bare references" in release_guide
     assert "The Release workflow is the sole closure owner" in release_guide
-    assert archive_version == release_version
+    assert reconciled_version == archive_version
     assert reconciled_version_key <= release_version_key
-    if reconciled_version == release_version:
-        assert "completed" in current_status
-        assert "external reconciliation verified" in current_status
-        assert "pending" not in current_status
-        assert "External reconciliation date:" in current_release
-    else:
-        assert f"plan-toolkit-{reconciled_version.replace('.', '-')}" in release_archive
-        assert "pending" in current_status
-        assert "External reconciliation date:" not in current_release
+    assert "completed" in current_status
+    assert "external reconciliation verified" in current_status
+    assert "External reconciliation date:" in current_release
 
     current_index_row = next(
         line for line in release_index.splitlines() if line.startswith(f"| `v{release_version}`")
     )
-    if reconciled_version == release_version:
+    if release_version == archive_version:
         assert "external reconciliation" in current_index_row
         assert "stable-delivery handoff" not in current_index_row
+    else:
+        plan_directory = PROJECT_ROOT / "docs/engineering/execution_history/plans"
+        stable_archives = []
+        for path in plan_directory.glob("*.md"):
+            if path.name == "README.md":
+                continue
+            text = path.read_text(encoding="utf-8")
+            if re.search(rf"^## Active Plan: Toolkit {re.escape(release_version)}\b", text, re.M):
+                stable_archives.append((path, text))
+        assert len(stable_archives) == 1
+        archive_path, archived_plan = stable_archives[0]
+        assert "Status: done" in archived_plan
+        assert "### Post-Close Delivery" in archived_plan
+        assert "outside the closed repository plan" in archived_plan
+        assert f"plans/{archive_path.name}" in current_index_row
+        assert "stable-delivery handoff" in current_index_row
+        assert "external reconciliation verified" not in current_index_row
+        assert "## Active Plan:" not in (PROJECT_ROOT / "PLANS.md").read_text(encoding="utf-8")
 
 
 def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:

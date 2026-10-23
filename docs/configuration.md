@@ -158,7 +158,7 @@ These names belong to `examples/gitlab/ocr-review.gitlab-ci.yml`; they are shell
 | --- | --- | --- | --- | --- |
 | **`OCR_VERSION`** | Example pipeline | Yes | Qualified OCR pin for the example's toolkit release | Exact binary release pinned with its asset checksum in the [pipeline](../examples/gitlab/ocr-review.gitlab-ci.yml); not resolved dynamically. |
 | **`OCR_SHA256`** | Example pipeline | Yes | Manifest SHA-256 for `opencodereview-linux-amd64` | Exact digest pinned alongside `OCR_VERSION` in the pipeline; must belong to the same release entry. |
-| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.12.1` | Exact toolkit wheel release installed by the current published example; update this pin with the published release. |
+| **`OCR_TOOLKIT_VERSION`** | Example pipeline | Yes | `0.13.0` | Exact toolkit wheel version selected by the example; advance this table and the example together in the release PR. |
 | **`OCR_TOOLKIT_CHECKSUMS_URL`** | Example pipeline | Yes | Release URL derived from `OCR_TOOLKIT_VERSION` | Toolkit `SHA256SUMS` URL. |
 | `OCR_TOOLKIT_WHEEL` | Example shell | Computed | `open_code_review_toolkit-${OCR_TOOLKIT_VERSION}-py3-none-any.whl` | Exact wheel filename selected from the release. |
 | `OCR_TOOLKIT_WHEEL_SHA256` | Example shell | Computed | Matching value from `SHA256SUMS` | Digest checked before installing the toolkit wheel. |

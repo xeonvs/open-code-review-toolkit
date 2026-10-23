@@ -1,6 +1,6 @@
 # Execution History Index
 
-`PLANS.md` owns active or blocked repository work. This archive preserves completed plans so an agent can recover the decisions, validation evidence, merge receipts, hashes, and resume context behind a published toolkit version. It also retains the historical [review-context design checkpoint](review_context_design_checkpoint.md) (formerly `m5_context_contracts.md`) and [evidence migration matrix](evidence_migration_matrix.md); neither owns current runtime contracts.
+`PLANS.md` owns active or blocked repository work. This archive preserves completed repository plans, their decisions, validation evidence and pre-publication handoffs. Historical entries may also include later merge receipts and hashes; current external delivery is verified through the immutable release receipt and Actions-owned issue comments. It also retains the historical [review-context design checkpoint](review_context_design_checkpoint.md) (formerly `m5_context_contracts.md`) and [evidence migration matrix](evidence_migration_matrix.md); neither owns current runtime contracts.
 
 <!-- engineering-workflow:index:start -->
 - [2026-10-22-toolkit-site-launch-and-release-notification.md](2026-10-22-toolkit-site-launch-and-release-notification.md)
@@ -14,6 +14,7 @@
 
 | Stable tag | Primary archived plan | Related context in the same archive |
 | --- | --- | --- |
+| `v0.13.0` | [Protected policy fallback for single-MR reviews](plans/2026-10-23-toolkit-0-13-0-protected-default-policy-fallback-for-single-mr-review.md) | #264 protected-policy authority with distinct code target, #265 conditional BL-025 planning, security dependency audit, protected feature merge and verified development artifacts; stable-delivery handoff pending. |
 | `v0.12.1` | [Review diagnostics, DLP and OCR 1.13.3](releases.md#plan-toolkit-0-12-1) | Protected feature/release merges, local OCR and security review, verified development and stable artifacts, immutable release, issue/milestone closure, live site refresh, and external reconciliation. |
 | `v0.12.0` | [OCR 1.13.2, external-tool context and optional local ChatGPT auth](releases.md#plan-toolkit-0-12-0) | Adjacent local OCR qualification, protected MR-context navigation, optional local native authentication and compatible dependency/security updates; protected stable delivery and external reconciliation verified. |
 | `v0.11.3` | [OCR 1.12.13 and reviewed qualification signals](releases.md#plan-toolkit-0-11-3) | Adjacent 1.12.12–1.12.13 qualification, conservative provider/model/deadline review routing, and preserved timeout outcomes; verified stable delivery and external reconciliation. |

@@ -1,3 +1,19 @@
+## 0.13.0 - 2026-10-23
+
+### 🚀 Features
+
+- GitLab MR reviews now default `OCR_GITLAB_TARGET_PROTECTION_MODE` from `required` to `auto`: when the actual target is unprotected, the toolkit can use the same project's protected default branch for review rules and governed context while keeping the result comment-only.
+
+  - Changed: current MR reviews require a detached pipeline and bind the checked-out source, GitLab diff version, actual target, and policy commit in receipt v11; stale or unverifiable results stop before publication and approval.
+  - Migration: use `required` to retain protected-target-only admission, or `unprotected` for the previous limited comment-only path. Existing `--local` reviews remain standalone and do not require GitLab MR variables.
+
+  ([#264](https://github.com/xeonvs/open-code-review-toolkit/issues/264))
+
+### Security
+
+- Require OpenTelemetry API 1.45.1 or newer to exclude vulnerable tracestate parsing in MCP’s dependency graph. ([#266](https://github.com/xeonvs/open-code-review-toolkit/issues/266))
+
+
 ## 0.12.1 - 2026-10-22
 
 ### 🐛 Bug Fixes

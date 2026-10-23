@@ -160,11 +160,11 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
         item for item in manifest["releases"] if item["version"] == example_version
     )
     assert example_entry["status"] == "tested"
-    # A feature branch retains the published example pair until release
-    # preparation advances both toolkit and OCR pins atomically.
-    stable = (PROJECT_ROOT / ".release-version").read_text().strip()
-    reconciled = (PROJECT_ROOT / ".release-reconciled-version").read_text().strip()
-    if stable != reconciled:
+    # An active plan can qualify a newer OCR version before release preparation
+    # advances the published example. Once the plan is archived, the example
+    # must name the current recommendation without relying on a legacy marker.
+    plan = (PROJECT_ROOT / "PLANS.md").read_text()
+    if "## Active Plan:" not in plan:
         assert example_version == recommended
     linux_digest = next(
         asset["sha256"]
