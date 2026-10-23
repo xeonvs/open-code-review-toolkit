@@ -211,11 +211,14 @@ configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
 
-Before disabling DLP to diagnose a suspected false positive, run the local review
-with `--preserve-private-artifacts`. It retains owner-only private inputs and
-decisions without creating a posting-eligible receipt. Inspect the material only
+Before disabling DLP to diagnose a suspected false positive, run
+`ocr-ci review --local --preserve-private-artifacts` with the normal private
+result, stderr, and report paths. After valid bounded output, it retains
+owner-only private inputs, the raw marked diagnostic JSON, and DLP decisions
+without creating a posting-eligible receipt. The local Markdown and console
+report still contain only admitted findings. Inspect the retained material only
 on the trusted host, keep it out of commits and shared artifacts, and remove it
-after diagnosis.
+after diagnosis. This option cannot be combined with `--debug-dir`.
 
 `OCR_DLP_ENABLED=false` is a strict per-run escape hatch. It disables
 context/federation and publication DLP, emits a prominent Markdown and console

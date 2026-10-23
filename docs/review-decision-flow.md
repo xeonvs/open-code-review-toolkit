@@ -143,8 +143,9 @@ flowchart TD
     dlp_state -- publication-filtered --> partial[Safe partial projection;<br/>original coverage remains explicit]
     publishable --> mode{Execution profile}
     partial --> mode
-    mode -- Local diagnostic retention --> local[Owner-only artifacts retained;<br/>no provider receipt or posting authority]
+    mode -- Local diagnostic retention --> local[Owner-only marked JSON and inputs retained;<br/>no provider receipt or posting authority]
     mode -- Local ordinary --> local_result[Validated receipt-less local result]
+    local --> local_file
     local_result --> local_output{Explicit local provider?}
     local_output -- Yes --> local_file[Shared admitted summary and all findings<br/>to fresh private Markdown artifact and console]
     local_file --> local_delivery{Artifact and console delivery succeed?}

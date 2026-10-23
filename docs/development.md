@@ -168,6 +168,14 @@ Select checks from the changed boundary rather than from an ever-growing generic
   diagnostic, normalization, ownership, and effective-value facts; help text
   alone is not compatibility evidence.
 
+Keep a completed security or local OCR review tied to its exact reviewed range.
+After fixing its findings, use focused regression tests and a scoped self-review
+of the correction. Start another full review only when the earlier result was
+incomplete or a materially new risk boundary is outside its coverage; record
+that gap and the intended range before launch. Run the complete quality gate
+once on the final runtime handoff head. Later documentation-only changes need
+their documentation and instruction guards, not another full test matrix.
+
 Safe bounded read-only diagnostics are allowed. A boundary rule prohibits the unsafe acquisition, trust transition, or mutation mechanism, not HTTP, subprocesses, provider APIs, file cleanup, or debugging as whole categories.
 
 For every boundary or integration claim, write down the production owner, the entry point exercised, the observable result, and any external collaborator replaced by a test double. The double must sit beyond the claimed boundary: do not mock the Git reader to prove Git isolation, the HTTP adapter to prove redirect or byte limits, the store loader to prove hostile readback, the subprocess launcher to prove argv or descriptor behavior, or the MCP dispatcher to prove stdio protocol behavior. A mocked-owner test may prove orchestration only and must be paired with a production-path test before the broader claim is accepted. Prefer real temporary repositories, local HTTP peers, child processes, persisted files, stdio clients, and clean installed wheel/sdist environments. Make hostile cases traverse the same owner and assert the intended rejection branch rather than an earlier mock-selected failure.

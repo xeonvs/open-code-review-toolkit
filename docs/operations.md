@@ -83,12 +83,14 @@ data.
 
 For `auto` with an unprotected actual target, the same still-protected default
 policy branch may advance normally after P was captured, if bounded isolated Git
-proves P is an ancestor of its new head. The completed review remains bound to
-captured P and does not claim that P is latest. A changed default selection,
-lost protection, replaced authority, non-fast-forward rewrite, or ancestry that
-cannot be proved stops publication. A protected actual target is also its own
-code target, so its advancement makes the code tuple stale. These pre-write
-reads cannot eliminate a provider-side race between validation and mutation.
+proves P is an ancestor of its new head. A shallow graph gets one bounded
+depth-128 history fetch before the proof is retried. The completed review
+remains bound to captured P and does not claim that P is latest. A changed
+default selection, lost protection, replaced authority, non-fast-forward
+rewrite, or ancestry that still cannot be proved stops publication.
+A protected actual target is also its own code target, so its advancement makes
+the code tuple stale. These pre-write reads cannot eliminate a provider-side
+race between validation and mutation.
 After GitLab publishes a draft, its draft ID does not prove the identity of the
 visible note for rollback. A change detected mid-publication stops later writes
 and returns a visible failure, but already published current-run notes may remain
