@@ -20,6 +20,7 @@ from ocr_toolkit.evidence.gitlink_projection import (
     make_gitlink_projection,
     qualify_gitlink_manifest,
     selected_gitlink_manifest_entries,
+    selected_gitlink_proof_entries,
     verify_gitlink_projection,
 )
 from ocr_toolkit.evidence.gitlinks import plan_gitlink_input
@@ -27,6 +28,7 @@ from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvide
 from ocr_toolkit.ocr_result import (
     PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_GITLINK_SELECTION_KEY,
     TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -987,13 +989,19 @@ def verified_partial_repository_coverage(
     if plan is None:
         raise RepositoryEvidenceError("partial review has no changed gitlink")
     projection = make_gitlink_projection(reader, plan)
-    selected = selected_gitlink_manifest_entries(projection, result)
-    qualify_gitlink_manifest(projection, selected, result)
+    metadata = result.get(TOOLKIT_RESULT_KEY)
+    publication = metadata.get("publication") if isinstance(metadata, dict) else None
+    if isinstance(publication, dict) and publication.get("state") == "publication-filtered":
+        selected = selected_gitlink_proof_entries(projection, result)
+    else:
+        if TOOLKIT_GITLINK_SELECTION_KEY in result:
+            raise RepositoryEvidenceError("OCR gitlink selection proof is unexpected")
+        selected = selected_gitlink_manifest_entries(projection, result)
+        qualify_gitlink_manifest(projection, selected, result)
     try:
         actual = coverage_from_projection(projection, selected, state="partial")
     except RepositoryCoverageError as exc:
         raise RepositoryEvidenceError("partial review selected coverage is invalid") from exc
-    metadata = result.get(TOOLKIT_RESULT_KEY)
     try:
         claimed = parse_repository_coverage(
             metadata["repository_coverage"], required_state="partial"

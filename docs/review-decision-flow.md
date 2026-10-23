@@ -224,7 +224,10 @@ Receipt v12 adds separate path-free effective repository coverage only for a
 qualified partial gitlink review. Native OCR `complete` then covers its selected
 ordinary files; it does not claim the skipped pointer or submodule contents.
 Posting independently rebuilds original Git inputs and checks the native
-selected/completed manifest before a current-result write. This route blocks
+selected/completed manifest before a current-result write. If publication DLP
+filters the result, the producer first validates that native manifest and
+passes only a path-free selection proof; posting checks the proof, original
+coverage counts and remaining findings against Git. This route blocks
 automatic approval, old finding-thread deletion, and requested discussion
 resolution even when the native manifest is complete. v11 retains its exact
 ordinary-review meaning.

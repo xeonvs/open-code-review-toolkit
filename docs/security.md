@@ -51,6 +51,13 @@ old finding-thread cleanup; the native OCR manifest retains its own meaning.
 `post` independently rechecks the original Git trees and selected native work
 before a GitLab write. A v6 no-model status contains only closed counts or a
 closed unqualified reason, with the authenticated MR identity.
+If publication DLP removes a finding or warning, the filtered handoff omits
+the native manifest. Only after validating that manifest, the toolkit carries
+a path-free selection proof made of item digests and the source-artifact digest;
+`post` checks it against immutable Git changes and the original complete
+coverage before publishing any retained finding. A missing or altered proof
+stops publication. Git diff output is also bounded while the child runs, so
+an oversized patch cannot fill temporary storage before the limit is checked.
 
 The `auto` fallback is sensitive to wrong-project source substitution,
 retargeting, default-branch or protection changes, stale diff versions,

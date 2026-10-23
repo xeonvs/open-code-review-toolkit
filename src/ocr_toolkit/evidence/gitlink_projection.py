@@ -6,15 +6,17 @@ import hashlib
 import json
 import os
 import re
+import selectors
 import stat
 import subprocess
-import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from ocr_toolkit.common.git import read_only_git_prefix
 from ocr_toolkit.evidence.gitlinks import GitlinkInputPlan
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.ocr_result import TOOLKIT_GITLINK_SELECTION_KEY
 
 _SAFE_CONFIG_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,127}\Z")
 _RAW_HEADER = re.compile(
@@ -25,7 +27,9 @@ _RAW_HEADER = re.compile(
 _ZERO_OID = "0" * 40
 _GIT_INPUT_LIMIT = 512_000
 _DIFF_OUTPUT_LIMIT = 8_000_000
+_GIT_TIMEOUT_SECONDS = 30
 _DIFF_ENTRY_LIMIT = 20_000
+_GITLINK_SELECTION_SCHEMA = "ocr.gitlink-selection/v1"
 _LOCAL_INPUTS = (".gitignore", ".gitmodules", ".gitattributes")
 _GIT_METADATA_INPUTS = ("config", "info/attributes", "info/exclude")
 _PREVIEW_REASONS = frozenset(
@@ -179,24 +183,62 @@ def _projection_environment(plan: GitlinkInputPlan) -> dict[str, str]:
 
 
 def _git_output(root: Path, args: list[str], environment: dict[str, str]) -> bytes:
+    process: subprocess.Popen[bytes] | None = None
     try:
-        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
-            result = subprocess.run(
-                [*read_only_git_prefix(root), *args],
-                stdout=stdout,
-                stderr=stderr,
-                check=False,
-                env=environment,
-                timeout=30,
-            )
-            if result.returncode != 0 or stderr.tell() != 0 or stdout.tell() > _DIFF_OUTPUT_LIMIT:
-                raise RepositoryEvidenceError(
-                    "OCR Git diff inventory failed or produced diagnostics"
-                )
-            stdout.seek(0)
-            return stdout.read(_DIFF_OUTPUT_LIMIT + 1)
+        process = subprocess.Popen(
+            [*read_only_git_prefix(root), *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+        )
+        assert process.stdout is not None and process.stderr is not None
+        output = bytearray()
+        deadline = time.monotonic() + _GIT_TIMEOUT_SECONDS
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+            selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(process.args, _GIT_TIMEOUT_SECONDS)
+                ready = selector.select(remaining)
+                if not ready:
+                    raise subprocess.TimeoutExpired(process.args, _GIT_TIMEOUT_SECONDS)
+                for key, _ in ready:
+                    limit = _DIFF_OUTPUT_LIMIT + 1 - len(output)
+                    chunk = os.read(key.fileobj.fileno(), min(65_536, max(1, limit)))
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    elif key.data == "stderr":
+                        raise RepositoryEvidenceError(
+                            "OCR Git diff inventory failed or produced diagnostics"
+                        )
+                    else:
+                        output.extend(chunk)
+                        if len(output) > _DIFF_OUTPUT_LIMIT:
+                            raise RepositoryEvidenceError(
+                                "OCR Git diff inventory exceeded its output limit"
+                            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(process.args, _GIT_TIMEOUT_SECONDS)
+        if process.wait(timeout=remaining) != 0:
+            raise RepositoryEvidenceError("OCR Git diff inventory failed or produced diagnostics")
+        return bytes(output)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RepositoryEvidenceError("OCR Git diff inventory could not complete") from exc
+    finally:
+        if process is not None:
+            if process.poll() is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                process.wait()
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
 
 
 def _raw_diff(
@@ -298,6 +340,90 @@ def _manifest_id(entry: RawDiffEntry) -> str:
     old_path = entry.old_path or entry.new_path or ""
     identity = "\0".join(("review", "range", old_path, entry.new_path or ""))
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def gitlink_selection_proof(
+    projection: GitlinkProjection, selected: tuple[RawDiffEntry, ...]
+) -> dict[str, object]:
+    """Carry only closed, path-free selected identities across DLP projection."""
+
+    fingerprints = dict(projection.fingerprints)
+    item_ids = sorted(_manifest_id(entry) for entry in selected)
+    if len(item_ids) != len(set(item_ids)) or any(
+        item_id not in fingerprints for item_id in item_ids
+    ):
+        raise RepositoryEvidenceError("OCR gitlink selected identities are ambiguous")
+    source_hash = hashlib.sha256()
+    for item_id in item_ids:
+        for field in (item_id, fingerprints[item_id]):
+            raw = field.encode("utf-8")
+            source_hash.update(len(raw).to_bytes(8, "big"))
+            source_hash.update(raw)
+    return {
+        "schema_version": _GITLINK_SELECTION_SCHEMA,
+        "selected_item_ids": item_ids,
+        "source_artifact_sha256": source_hash.hexdigest(),
+    }
+
+
+def selected_gitlink_proof_entries(
+    projection: GitlinkProjection, result: dict[str, object]
+) -> tuple[RawDiffEntry, ...]:
+    """Rebuild DLP-filtered selection from the producer's path-free witness."""
+
+    proof = result.get(TOOLKIT_GITLINK_SELECTION_KEY)
+    metadata = result.get("_ocr_toolkit")
+    publication = metadata.get("publication") if isinstance(metadata, dict) else None
+    original = publication.get("original") if isinstance(publication, dict) else None
+    if (
+        result.get("status") != "completed_with_errors"
+        or result.get("manifest") is not None
+        or not isinstance(publication, dict)
+        or publication.get("state") != "publication-filtered"
+        or not isinstance(proof, dict)
+        or set(proof) != {"schema_version", "selected_item_ids", "source_artifact_sha256"}
+        or proof.get("schema_version") != _GITLINK_SELECTION_SCHEMA
+        or not isinstance(proof.get("selected_item_ids"), list)
+        or not isinstance(original, dict)
+    ):
+        raise RepositoryEvidenceError("OCR gitlink filtered selection proof is invalid")
+    item_ids = proof["selected_item_ids"]
+    if (
+        not item_ids
+        or len(item_ids) > _DIFF_ENTRY_LIMIT
+        or any(not isinstance(item_id, str) for item_id in item_ids)
+        or item_ids != sorted(set(item_ids))
+    ):
+        raise RepositoryEvidenceError("OCR gitlink filtered selection identities are invalid")
+    expected = {_manifest_id(entry): entry for entry in projection.ordinary_diff}
+    if len(expected) != len(projection.ordinary_diff) or any(
+        item_id not in expected for item_id in item_ids
+    ):
+        raise RepositoryEvidenceError("OCR gitlink filtered selection differs from Git")
+    selected = tuple(expected[item_id] for item_id in item_ids)
+    if proof != gitlink_selection_proof(projection, selected):
+        raise RepositoryEvidenceError("OCR gitlink filtered selection fingerprint differs from Git")
+    if original.get("outcome") != "clean" or any(
+        type(original.get(key)) is not int or original[key] != expected_count
+        for key, expected_count in (
+            ("selected", len(selected)),
+            ("completed", len(selected)),
+            ("reused", 0),
+            ("failed", 0),
+            ("waived", 0),
+        )
+    ):
+        raise RepositoryEvidenceError("OCR gitlink filtered original coverage is invalid")
+    comments = result.get("comments")
+    selected_paths = {entry.path for entry in selected}
+    if not isinstance(comments, list) or any(
+        not isinstance(comment, dict)
+        or not isinstance(comment.get("path"), str)
+        or comment["path"] not in selected_paths
+        for comment in comments
+    ):
+        raise RepositoryEvidenceError("OCR gitlink filtered finding is outside selected files")
+    return selected
 
 
 def _patch_fingerprints(
@@ -574,13 +700,8 @@ def qualify_gitlink_manifest(
     fingerprints = dict(projection.fingerprints)
     if len(expected) != len(selected):
         raise RepositoryEvidenceError("OCR gitlink selected identities are ambiguous")
-    source_hash = hashlib.sha256()
-    for item_id in sorted(expected):
-        for field in (item_id, fingerprints[item_id]):
-            raw = field.encode("utf-8")
-            source_hash.update(len(raw).to_bytes(8, "big"))
-            source_hash.update(raw)
-    if native_input.get("source_artifact_sha256") != source_hash.hexdigest():
+    proof = gitlink_selection_proof(projection, selected)
+    if native_input.get("source_artifact_sha256") != proof["source_artifact_sha256"]:
         raise RepositoryEvidenceError("OCR gitlink source artifact differs from the Git patch")
     for key in ("selected", "completed"):
         records = coverage.get(key)
@@ -611,7 +732,11 @@ def qualify_gitlink_manifest(
         raise RepositoryEvidenceError("OCR gitlink result comments are invalid")
     selected_paths = {entry.path for entry in selected}
     for comment in comments:
-        if not isinstance(comment, dict) or comment.get("path") not in selected_paths:
+        if (
+            not isinstance(comment, dict)
+            or not isinstance(comment.get("path"), str)
+            or comment["path"] not in selected_paths
+        ):
             raise RepositoryEvidenceError("OCR gitlink result has a finding outside selected files")
 
 

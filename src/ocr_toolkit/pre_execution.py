@@ -442,7 +442,8 @@ def read_pre_execution_status(
         }
         if (
             not isinstance(value, dict)
-            or value.get("schema_version") not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA}
+            or not isinstance(value.get("schema_version"), str)
+            or value["schema_version"] not in {STATUS_SCHEMA, GITLINK_STATUS_SCHEMA}
             or set(value)
             != (
                 legacy_fields | {"repository_coverage"}

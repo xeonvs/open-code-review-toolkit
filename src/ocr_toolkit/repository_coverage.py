@@ -47,7 +47,8 @@ def parse_repository_coverage(
         raise RepositoryCoverageError("repository coverage has an unsupported shape")
     if (
         value.get("schema_version") != REPOSITORY_COVERAGE_SCHEMA
-        or value.get("state") not in {"partial", "not_started"}
+        or not isinstance(value.get("state"), str)
+        or value["state"] not in {"partial", "not_started"}
         or value.get("reason") != GITLINK_PARTIAL_REASON
         or (required_state is not None and value.get("state") != required_state)
     ):

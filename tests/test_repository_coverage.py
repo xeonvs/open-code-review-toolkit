@@ -10,9 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from ocr_toolkit.evidence.gitlink_projection import make_gitlink_projection
+from ocr_toolkit import review_runner
+from ocr_toolkit.evidence.gitlink_projection import (
+    gitlink_selection_proof,
+    make_gitlink_projection,
+)
 from ocr_toolkit.evidence.gitlinks import plan_gitlink_input
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
+from ocr_toolkit.ocr_result import TOOLKIT_GITLINK_SELECTION_KEY, TOOLKIT_RESULT_KEY
 from ocr_toolkit.posting import workflow
 from ocr_toolkit.posting.snapshot import BotCommentRefs
 from ocr_toolkit.posting.transaction import PostingTransaction
@@ -45,8 +51,14 @@ from ocr_toolkit.review_receipt import (
     toolkit_receipt_is_valid,
 )
 from tests.support import gitlab_config
-from tests.test_gitlinks import _fixture, _gitlink_only_fixture, _move_fixture
+from tests.test_gitlinks import _fixture, _gitlink_only_fixture, _mixed_fixture, _move_fixture
 from tests.test_review_receipt_v11 import _receipt_v11
+from tests.test_review_runner import (
+    BUILTIN_EVIDENCE_TOOLS,
+    DEFAULT_IDENTITY,
+    SUMMARY_ACTION_COUNTS,
+    complete_review_payload,
+)
 
 
 def _coverage(*, state: str = "partial") -> dict[str, object]:
@@ -72,6 +84,8 @@ def _coverage(*, state: str = "partial") -> dict[str, object]:
     [
         ("reason", "future_reason"),
         ("state", "complete"),
+        ("state", []),
+        ("state", {}),
         ("ordinary_selected", True),
         ("ordinary_completed", 0),
         ("ordinary_excluded", 1),
@@ -164,6 +178,34 @@ def test_v6_no_model_status_round_trips_without_changing_v5_wire_shape(tmp_path:
         )
         == legacy
     )
+
+
+@pytest.mark.parametrize("schema_version", [[], {}])
+def test_v6_status_rejects_unhashable_schema_version(
+    tmp_path: Path, schema_version: object
+) -> None:
+    review = _receipt_v11()["review"]
+    path = tmp_path / "status.json"
+    status = PreExecutionStatus(
+        schema_version=GITLINK_STATUS_SCHEMA,
+        reason=GITLINK_NO_REVIEWABLE_FILES,
+        diff_base_sha=review["diff_base_sha"],
+        source_sha=review["source_sha"],
+        policy_sha=review["policy_sha"],
+        review=review,
+        stage=OCR_PREVIEW_STAGE,
+        repository_coverage=_coverage(state="not_started"),
+    )
+    write_pre_execution_status(path, status)
+    payload = json.loads(path.read_text())
+    payload["schema_version"] = schema_version
+    path.write_text(json.dumps(payload))
+    with pytest.raises(PreExecutionStatusError, match="fields are invalid"):
+        read_pre_execution_status(
+            path,
+            expected_diff_base_sha=review["diff_base_sha"],
+            expected_source_sha=review["source_sha"],
+        )
 
 
 def test_v6_no_model_status_rejects_wrong_coverage(tmp_path: Path) -> None:
@@ -290,6 +332,171 @@ def test_post_rebuilds_native_partial_coverage_and_rejects_tampering(
     result["manifest"]["input"]["source_artifact_sha256"] = hashlib.sha256().hexdigest()
     with pytest.raises(RepositoryEvidenceError, match="selected coverage"):
         workflow.verified_partial_repository_coverage(result, identity)
+
+
+def test_dlp_filtered_gitlink_review_keeps_safe_finding_and_verifiable_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    monkeypatch.chdir(tmp_path)
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    selected = projection.ordinary_diff
+    proof = gitlink_selection_proof(projection, selected)
+    item_id, fingerprint = projection.fingerprints[0]
+    item = {"item_id": item_id, "path": "main.php", "fingerprint": fingerprint}
+    payload = complete_review_payload(
+        tool_calls={"total": 1, "by_tool": {"ocr_toolkit_evidence": 1}}
+    )
+    payload["comments"] = [
+        {
+            "path": "main.php",
+            "line": 2,
+            "content": "Safe actionable finding.",
+            "severity": "medium",
+            "category": "bug",
+        },
+        {
+            "path": "main.php",
+            "line": 2,
+            "content": "synthetic-secret-token must not be published",
+            "severity": "medium",
+            "category": "bug",
+        },
+    ]
+    manifest = payload["manifest"]
+    assert isinstance(manifest, dict)
+    manifest["input"] = {
+        "mode": "range",
+        "requested_from": base,
+        "requested_head": head,
+        "resolved_base": base,
+        "resolved_head": head,
+        "exact_range": f"{base}..{head}",
+        "source_artifact_sha256": proof["source_artifact_sha256"],
+    }
+    manifest["execution"] = {"ocr_version": "v1.13.3"}
+    manifest["coverage"] = {
+        "selected": [item],
+        "completed": [item],
+        "reused": [],
+        "failed": [],
+        "waived": [],
+    }
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps(payload), encoding="utf-8")
+    identity = replace(
+        DEFAULT_IDENTITY,
+        source_sha=head,
+        policy_sha=base,
+        target_sha=base,
+        diff_base_sha=base,
+        diff_start_sha=base,
+        diff_head_sha=head,
+    )
+    composition = MCPComposition(
+        payload={},
+        capabilities=(MCPCapability("ocr_toolkit_evidence", BUILTIN_EVIDENCE_TOOLS, True),),
+        external_servers=(),
+        secret_values=(),
+    )
+    _usage, filtered, publication = review_runner._finalize_ocr_result(
+        result_path,
+        composition,
+        identity,
+        None,
+        SUMMARY_ACTION_COUNTS,
+        forbidden=("synthetic-secret-token",),
+        projection=projection,
+        selected_diff=selected,
+    )
+    assert filtered and publication["state"] == "publication-filtered"
+    result = json.loads(result_path.read_text())
+    assert result["status"] == "completed_with_errors"
+    assert "manifest" not in result
+    assert len(result["comments"]) == 1
+    assert result["comments"][0]["content"] == "Safe actionable finding."
+    assert "synthetic-secret-token" not in result_path.read_text()
+    assert result[TOOLKIT_GITLINK_SELECTION_KEY] == proof
+    receipt = result[TOOLKIT_RESULT_KEY]
+    assert toolkit_receipt_is_valid(receipt)
+    receipt_identity = receipt_review_identity(receipt)
+    assert receipt_identity is not None
+    assert (
+        workflow.verified_partial_repository_coverage(result, receipt_identity).ordinary_completed
+        == 1
+    )
+    assert "publication DLP filtered" in automatic_approval_metadata_reason(receipt)
+
+    for mutation in (
+        "missing",
+        "item",
+        "fingerprint",
+        "original",
+        "gitlink_comment",
+        "unhashable_comment",
+    ):
+        tampered = deepcopy(result)
+        if mutation == "missing":
+            tampered.pop(TOOLKIT_GITLINK_SELECTION_KEY)
+        elif mutation == "item":
+            tampered[TOOLKIT_GITLINK_SELECTION_KEY]["selected_item_ids"] = ["0" * 64]
+        elif mutation == "fingerprint":
+            tampered[TOOLKIT_GITLINK_SELECTION_KEY]["source_artifact_sha256"] = "0" * 64
+        elif mutation == "original":
+            tampered[TOOLKIT_RESULT_KEY]["publication"]["original"]["completed"] = 0
+        elif mutation == "gitlink_comment":
+            tampered["comments"][0]["path"] = "schema"
+        else:
+            tampered["comments"][0]["path"] = []
+        with pytest.raises(RepositoryEvidenceError):
+            workflow.verified_partial_repository_coverage(tampered, receipt_identity)
+
+
+def test_filtered_selection_proof_preserves_native_subset_not_all_ordinary_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, head = _mixed_fixture(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    assert len(projection.ordinary_diff) > 1
+    selected = (next(entry for entry in projection.ordinary_diff if entry.status != "D"),)
+    coverage = coverage_from_projection(projection, selected, state="partial")
+    proof = gitlink_selection_proof(projection, selected)
+    result = {
+        "status": "completed_with_errors",
+        "comments": [{"path": selected[0].path}],
+        TOOLKIT_GITLINK_SELECTION_KEY: proof,
+        TOOLKIT_RESULT_KEY: {
+            "publication": {
+                "state": "publication-filtered",
+                "original": {
+                    "outcome": "clean",
+                    "selected": 1,
+                    "completed": 1,
+                    "reused": 0,
+                    "failed": 0,
+                    "waived": 0,
+                },
+            },
+            "repository_coverage": coverage.payload(),
+        },
+    }
+    identity = replace(
+        receipt_review_identity(_receipt_v11()),  # type: ignore[arg-type]
+        schema_version=12,
+        diff_base_sha=base,
+        source_sha=head,
+    )
+    actual = workflow.verified_partial_repository_coverage(result, identity)
+    assert actual.ordinary_selected == 1
+    assert actual.ordinary_excluded == len(projection.ordinary_diff) - 1
+    assert selected[0].path not in json.dumps(proof)
 
 
 def test_post_rechecks_gitlink_only_advisory(

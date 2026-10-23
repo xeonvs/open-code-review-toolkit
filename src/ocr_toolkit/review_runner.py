@@ -67,6 +67,7 @@ from ocr_toolkit.evidence.collect import collect_repository_evidence
 from ocr_toolkit.evidence.gitlink_projection import (
     GitlinkProjection,
     RawDiffEntry,
+    gitlink_selection_proof,
     make_gitlink_projection,
     qualify_gitlink_manifest,
     qualify_gitlink_preview,
@@ -102,6 +103,7 @@ from ocr_toolkit.ocr_result import (
     PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     PUBLIC_REVIEW_TOOL_CALL_NAMES,
     TOOLKIT_ADVISORY_KEY,
+    TOOLKIT_GITLINK_SELECTION_KEY,
     TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
     TOOLKIT_RESULT_KEY,
     TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -1698,6 +1700,24 @@ def _retain_private_diagnostic_result(result_path: Path, *, reason: str) -> bool
     return True
 
 
+def _verify_gitlink_after_execution(
+    result_path: Path, projection: GitlinkProjection, *, preserve_authorized: bool
+) -> None:
+    """Reject drift and dispose of raw model output before any publication DLP work."""
+
+    try:
+        verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
+    except RepositoryEvidenceError as exc:
+        if preserve_authorized:
+            _retain_private_diagnostic_result(result_path, reason="gitlink-input-drift")
+        else:
+            try:
+                result_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise ReviewRunnerError("OCR gitlink inputs drifted during model execution") from exc
+
+
 def _finalize_ocr_result(
     result_path: Path,
     composition: mcp_config.MCPComposition,
@@ -1742,7 +1762,12 @@ def _finalize_ocr_result(
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
-        for reserved in (TOOLKIT_RESULT_KEY, TOOLKIT_ADVISORY_KEY, TOOLKIT_PRIVATE_DIAGNOSTIC_KEY):
+        for reserved in (
+            TOOLKIT_RESULT_KEY,
+            TOOLKIT_ADVISORY_KEY,
+            TOOLKIT_PRIVATE_DIAGNOSTIC_KEY,
+            TOOLKIT_GITLINK_SELECTION_KEY,
+        ):
             if reserved in payload:
                 raise OcrResultMalformed(f"OCR result contains reserved field {reserved!r}")
         warnings = payload.get("warnings", [])
@@ -1811,6 +1836,10 @@ def _finalize_ocr_result(
         raw_usage = mcp.get("usage") if isinstance(mcp, dict) else None
         usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
         finalized = {**projected, TOOLKIT_RESULT_KEY: metadata} if provider_receipt else projected
+        if projection is not None and filtered and provider_receipt:
+            finalized[TOOLKIT_GITLINK_SELECTION_KEY] = gitlink_selection_proof(
+                projection, selected_diff
+            )
         if toolkit_advisory is not None and provider_receipt:
             finalized[TOOLKIT_ADVISORY_KEY] = toolkit_advisory_payload(toolkit_advisory)
         if report_consumer is not None and (
@@ -3535,13 +3564,6 @@ def _run_evidence_review(
                 os.environ["HOME"] = previous_home
             if cleanup_error is None and exit_code == 0:
                 state.enter("result-validation")
-                if projection is not None:
-                    try:
-                        verify_gitlink_projection(GitRepositoryReader(Path.cwd()), projection)
-                    except RepositoryEvidenceError as exc:
-                        raise ReviewRunnerError(
-                            "OCR gitlink inputs drifted during model execution"
-                        ) from exc
                 forbidden: tuple[str | ForbiddenValue, ...] = tuple(
                     ForbiddenValue(v, "operator_secret") for v in composition.secret_values
                 )
@@ -3551,6 +3573,10 @@ def _run_evidence_review(
                 if enrichment is not None:
                     forbidden += enrichment.forbidden_sources or tuple(
                         ForbiddenValue(v, "other") for v in enrichment.forbidden_publication
+                    )
+                if projection is not None:
+                    _verify_gitlink_after_execution(
+                        result_path, projection, preserve_authorized=preserve_authorized
                     )
                 try:
                     usage, publication_filtered, publication = _finalize_ocr_result(

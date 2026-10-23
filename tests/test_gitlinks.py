@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from ocr_toolkit import review_runner
+from ocr_toolkit.evidence import gitlink_projection
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.evidence.gitlink_projection import (
     make_gitlink_projection,
@@ -429,6 +431,88 @@ def test_runner_rechecks_projection_before_using_frozen_child_environment(
         ]
 
 
+@pytest.mark.parametrize("preserve_authorized", [False, True])
+def test_post_model_gitlink_drift_disposes_or_marks_raw_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preserve_authorized: bool
+) -> None:
+    base, head = _fixture(tmp_path, "updated")
+    reader = GitRepositoryReader(tmp_path)
+    plan = plan_gitlink_input(reader, base, head)
+    assert plan is not None
+    projection = make_gitlink_projection(reader, plan)
+    result = tmp_path / "result.json"
+    result.write_text('{"status":"complete","message":"private model output"}')
+    monkeypatch.chdir(tmp_path)
+
+    def drift(*_args: object) -> None:
+        raise RepositoryEvidenceError("synthetic post-model drift")
+
+    monkeypatch.setattr(review_runner, "verify_gitlink_projection", drift)
+    with pytest.raises(review_runner.ReviewRunnerError, match="drifted during"):
+        review_runner._verify_gitlink_after_execution(
+            result, projection, preserve_authorized=preserve_authorized
+        )
+    if preserve_authorized:
+        retained = json.loads(result.read_text())
+        assert retained["_ocr_toolkit_private_diagnostic"]["reason"] == "gitlink-input-drift"
+        assert retained["result"]["message"] == "private model output"
+    else:
+        assert not result.exists()
+
+
+def test_git_inventory_kills_stream_when_byte_budget_is_exceeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = "import os; os.write(1, b'x' * 131072)"
+    monkeypatch.setattr(gitlink_projection, "_DIFF_OUTPUT_LIMIT", 1024)
+    monkeypatch.setattr(
+        gitlink_projection,
+        "read_only_git_prefix",
+        lambda _root: [sys.executable, "-c", script],
+    )
+    with pytest.raises(RepositoryEvidenceError, match="exceeded its output limit"):
+        gitlink_projection._git_output(tmp_path, ["ignored"], os.environ.copy())
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        ("import os; os.write(1, b'bounded-result')", b"bounded-result"),
+        ("import os; os.write(2, b'diagnostic')", None),
+        ("import sys; sys.exit(2)", None),
+    ],
+)
+def test_git_inventory_requires_clean_exit_and_no_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    script: str,
+    expected: bytes | None,
+) -> None:
+    monkeypatch.setattr(
+        gitlink_projection,
+        "read_only_git_prefix",
+        lambda _root: [sys.executable, "-c", script],
+    )
+    if expected is None:
+        with pytest.raises(RepositoryEvidenceError, match="diagnostics"):
+            gitlink_projection._git_output(tmp_path, [], os.environ.copy())
+    else:
+        assert gitlink_projection._git_output(tmp_path, [], os.environ.copy()) == expected
+
+
+def test_git_inventory_times_out_without_unbounded_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gitlink_projection, "_GIT_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(
+        gitlink_projection,
+        "read_only_git_prefix",
+        lambda _root: [sys.executable, "-c", "import time; time.sleep(5)"],
+    )
+    with pytest.raises(RepositoryEvidenceError, match="could not complete"):
+        gitlink_projection._git_output(tmp_path, [], os.environ.copy())
+
+
 def test_projection_rejects_local_git_config_include(tmp_path: Path) -> None:
     base, head = _fixture(tmp_path, "updated")
     reader = GitRepositoryReader(tmp_path)
@@ -523,6 +607,10 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
     coverage["completed"] = [item]
     coverage["reused"] = [item]
     with pytest.raises(RepositoryEvidenceError, match="unreviewed"):
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    coverage["reused"] = []
+    payload["comments"] = [{"path": []}]
+    with pytest.raises(RepositoryEvidenceError, match="outside selected"):
         qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
 
 
