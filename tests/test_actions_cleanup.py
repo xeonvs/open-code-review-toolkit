@@ -65,7 +65,7 @@ def test_cache_plan_keeps_only_current_main_uv_platforms_and_gitleaks() -> None:
     assert sum(candidate.size_bytes for candidate in plan) == 40
 
 
-def test_artifact_plan_uses_seven_day_handoff_window() -> None:
+def test_artifact_plan_uses_two_day_handoff_window() -> None:
     module = load_script()
     now = datetime(2026, 8, 3, tzinfo=UTC)
     artifacts = [
@@ -79,7 +79,7 @@ def test_artifact_plan_uses_seven_day_handoff_window() -> None:
         {
             "id": 11,
             "name": "fresh",
-            "created_at": "2026-08-01T00:00:00Z",
+            "created_at": "2026-08-02T00:00:00Z",
             "expired": False,
             "size_in_bytes": 200,
         },
@@ -90,14 +90,21 @@ def test_artifact_plan_uses_seven_day_handoff_window() -> None:
             "expired": True,
             "size_in_bytes": 300,
         },
+        {
+            "id": 13,
+            "name": "at cutoff",
+            "created_at": "2026-08-01T00:00:00Z",
+            "expired": False,
+            "size_in_bytes": 400,
+        },
     ]
 
     plan = module.plan_artifact_cleanup(artifacts, now)
 
-    assert [candidate.object_id for candidate in plan] == [10, 12]
+    assert [candidate.object_id for candidate in plan] == [10, 12, 13]
 
 
-def test_log_plan_preserves_release_logs_longer_and_bounds_retries() -> None:
+def test_log_plan_uses_two_days_for_every_run_and_bounds_retries() -> None:
     module = load_script()
     now = datetime(2026, 8, 3, tzinfo=UTC)
     runs = [
@@ -137,18 +144,36 @@ def test_log_plan_preserves_release_logs_longer_and_bounds_retries() -> None:
             "status": "completed",
             "created_at": "2026-07-20T00:00:00Z",
         },
+        {
+            "id": 26,
+            "name": "Release",
+            "status": "completed",
+            "created_at": "2026-08-01T00:00:00Z",
+        },
+        {
+            "id": 27,
+            "name": "TestPyPI preview",
+            "status": "completed",
+            "created_at": "2026-08-01T00:00:00Z",
+        },
+        {
+            "id": 28,
+            "name": "CI",
+            "status": "completed",
+            "created_at": "2026-08-01T00:00:01Z",
+        },
     ]
 
     plan = module.plan_log_cleanup(runs, now, include_all_old=True)
     scheduled_plan = module.plan_log_cleanup(runs, now)
 
-    assert [candidate.object_id for candidate in plan] == [20, 22, 24, 25]
-    assert [candidate.object_id for candidate in scheduled_plan] == [20, 24, 25]
+    assert [candidate.object_id for candidate in plan] == [20, 21, 22, 24, 25, 26, 27]
+    assert [candidate.object_id for candidate in scheduled_plan] == [24, 25, 26, 27]
     assert all(candidate.kind == "log" and candidate.size_bytes == 0 for candidate in plan)
     assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/20/logs")
 
 
-def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None:
+def test_run_plan_uses_two_days_for_testpypi_ordinary_and_release_runs() -> None:
     module = load_script()
     now = datetime(2026, 8, 23, tzinfo=UTC)
     runs = [
@@ -192,7 +217,7 @@ def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None
             "id": 36,
             "name": "TestPyPI preview",
             "status": "completed",
-            "created_at": "2026-08-17T00:00:00Z",
+            "created_at": "2026-08-22T00:00:00Z",
         },
         {
             "id": 37,
@@ -206,11 +231,35 @@ def test_run_plan_uses_testpypi_ordinary_and_release_retention_classes() -> None
             "status": "completed",
             "created_at": "2026-07-25T00:00:00Z",
         },
+        {
+            "id": 39,
+            "name": "CI",
+            "status": "completed",
+            "created_at": "2026-08-21T00:00:00Z",
+        },
+        {
+            "id": 40,
+            "name": "Release",
+            "status": "completed",
+            "created_at": "2026-08-21T00:00:00Z",
+        },
+        {
+            "id": 41,
+            "name": "TestPyPI preview",
+            "status": "completed",
+            "created_at": "2026-08-21T00:00:00Z",
+        },
+        {
+            "id": 42,
+            "name": "CI",
+            "status": "completed",
+            "created_at": "2026-08-21T00:00:01Z",
+        },
     ]
 
     plan = module.plan_run_cleanup(runs, now)
 
-    assert [candidate.object_id for candidate in plan] == [30, 31, 32, 33, 35]
+    assert [candidate.object_id for candidate in plan] == [30, 31, 32, 33, 35, 37, 38, 39, 40, 41]
     assert all(candidate.kind == "run" for candidate in plan)
     assert module.cleanup_url("synthetic/repository", plan[0]).endswith("/actions/runs/30")
 

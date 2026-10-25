@@ -355,7 +355,7 @@ jobs:
             SHA256SUMS
             runtime-requirements.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2
 
   publish-testpypi:
     name: publish-testpypi

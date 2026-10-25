@@ -5,4 +5,5 @@ Each new repository plan archived through the engineering-workflow lifecycle is 
 <!-- engineering-workflow:index:start -->
 - [2026-10-23-toolkit-0-13-0-protected-default-policy-fallback-for-single-mr-review.md](2026-10-23-toolkit-0-13-0-protected-default-policy-fallback-for-single-mr-review.md)
 - [2026-10-23-toolkit-0-13-1-partial-review-of-changes-containing-gitlinks.md](2026-10-23-toolkit-0-13-1-partial-review-of-changes-containing-gitlinks.md)
+- [2026-10-25-two-day-github-actions-retention.md](2026-10-25-two-day-github-actions-retention.md)
 <!-- engineering-workflow:index:end -->

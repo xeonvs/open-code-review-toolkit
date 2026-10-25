@@ -22,13 +22,13 @@ MAX_PAGES = 10
 PER_PAGE = 100
 MAX_RUN_SHARD_DAYS = 90
 MAX_NAME_CHARS = 512
-ARTIFACT_RETENTION_DAYS = 7
-ORDINARY_LOG_RETENTION_DAYS = 14
-RELEASE_LOG_RETENTION_DAYS = 30
+ARTIFACT_RETENTION_DAYS = 2
+ORDINARY_LOG_RETENTION_DAYS = 2
+RELEASE_LOG_RETENTION_DAYS = 2
 LOG_RETRY_WINDOW_DAYS = 14
-TESTPYPI_PREVIEW_RETENTION_DAYS = 7
-ORDINARY_RUN_RETENTION_DAYS = 14
-RELEASE_RUN_RETENTION_DAYS = 30
+TESTPYPI_PREVIEW_RETENTION_DAYS = 2
+ORDINARY_RUN_RETENTION_DAYS = 2
+RELEASE_RUN_RETENTION_DAYS = 2
 RUN_LIST_GRACE_DAYS = 14
 MAIN_REF = "refs/heads/main"
 RELEASE_WORKFLOWS = {"Release"}
@@ -182,7 +182,7 @@ def _cache_candidate(cache: dict[str, Any], reason: str) -> CleanupCandidate:
 
 
 def plan_artifact_cleanup(artifacts: list[dict[str, Any]], now: datetime) -> list[CleanupCandidate]:
-    """Remove workflow artifacts after the repository's seven-day handoff window."""
+    """Remove workflow artifacts after the repository's two-day handoff window."""
 
     cutoff = now.astimezone(UTC) - timedelta(days=ARTIFACT_RETENTION_DAYS)
     candidates: list[CleanupCandidate] = []
@@ -191,7 +191,7 @@ def plan_artifact_cleanup(artifacts: list[dict[str, Any]], now: datetime) -> lis
         expired = artifact.get("expired")
         if not isinstance(expired, bool):
             _fail("field 'artifact.expired' must be a boolean")
-        if not expired and created_at >= cutoff:
+        if not expired and created_at > cutoff:
             continue
         name = _bounded_name(artifact.get("name"), "artifact.name")
         candidates.append(
@@ -202,7 +202,11 @@ def plan_artifact_cleanup(artifacts: list[dict[str, Any]], now: datetime) -> lis
                 size_bytes=_nonnegative_size(
                     artifact.get("size_in_bytes"), "artifact.size_in_bytes"
                 ),
-                reason=("artifact is expired" if expired else "artifact is older than 7 days"),
+                reason=(
+                    "artifact is expired"
+                    if expired
+                    else f"artifact is older than {ARTIFACT_RETENTION_DAYS} days"
+                ),
             )
         )
     return sorted(candidates, key=lambda item: item.object_id)
