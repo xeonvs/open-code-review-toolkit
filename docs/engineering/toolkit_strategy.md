@@ -33,6 +33,13 @@ Repository-maintenance analyzers such as Bandit remain valid quality controls fo
 
 ## Implemented architecture
 
+One runner-owned immutable Git range connects acquisition, native admission,
+coverage, receipts and publication. Optional typed flow/sequence summaries use
+the existing OCR model loop and a separate private output collector on the
+internal MCP transport. Source/DLP admission precedes pure deterministic
+reporting; provider adapters own presentation and writes. This bounded summary
+capability is not a graph-analysis service or an independent review engine.
+
 The explicit local provider supplies immutable Git identity and private Markdown
 delivery through the same OCR execution, evidence MCP and result finalization as
 GitLab. Pure shared reporting owns review facts and wording, not forge acquisition
@@ -49,7 +56,7 @@ The legacy `context/*` Markdown renderer, its CLI/environment contract, and its 
 
 The built-in evidence MCP is mandatory for ordinary evidence-backed reviews. Optional HTTPS or local stdio upstreams remain behind one toolkit-owned federation gateway; operator registry v2 cannot remove, replace or shadow the built-in server. The compact bootstrap is generated from the same validated capability inventory that is written to OCR.
 
-GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. Receipt v11 retains the v10 publication, DLP, evidence and federation contracts while binding the current MR diff version, actual code target, and policy authority independently. Actual target protection controls approval; a separate protected policy snapshot can authorize review context and governed tools for an unprotected target without conferring approval. OCR coverage, public-projection integrity, published findings, core advisories, reconciled count-only evidence use, privacy-safe normalized token buckets, multi-finding Recommended focus ranking, and collapsed technical details are separate implemented concepts. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
+GitLab result normalization and posting are implemented behind provider-oriented modules. They bound and neutralize model-controlled text, use stable finding fingerprints, preserve human-owned discussions, and keep GitLab credentials outside OCR. Receipt v13 retains the v10 publication, DLP, evidence and federation contracts while binding the current MR diff version, actual code target, and policy authority independently. Actual target protection controls approval; a separate protected policy snapshot can authorize review context and governed tools for an unprotected target without conferring approval. OCR coverage, public-projection integrity, published findings, core advisories, reconciled count-only evidence use, privacy-safe normalized token buckets, multi-finding Recommended focus ranking, and collapsed technical details are separate implemented concepts. The current recommended and tested OCR baseline belongs in the operational compatibility contract, not this durable strategy.
 
 ## Implemented Repository Evidence Engine
 
@@ -128,7 +135,7 @@ GitLab accepts HTTPS upstreams only; local review may also use an explicit
 absolute stdio executable with no shell or setup hook. The official SDK v2 is the
 primary integration boundary, while wire revisions are negotiated independently
 with explicitly supported SDK v1/v2 peers. Upstreams retain tenant/object
-authorization responsibility. Current receipt v11 retains the v0.12/v10 federation contract: used advisory tools, known
+authorization responsibility. Current receipt v13 retains the v0.12/v10 federation contract: used advisory tools, known
 failures/denials and accounting mismatches comment-only; uncertain cleanup or an
 invalid federation receipt blocks normal publication. Unused services and
 successful `review_read` use are not independent approval blockers.
@@ -137,14 +144,14 @@ successful `review_read` use are not independent approval blockers.
 
 M5's foundation is established in v0.7.0. It extends the v0.6.3 selection/approval foundation with protected-target policy, stable GitLab discussions, deterministic references, provider-neutral adapters, a separate private context store, opaque handles, fixed `context_list`/`context_get`, isolated OCR sessions, publication DLP, receipt v4, and closed setup/CI-uncertainty outcomes. Receipt v5 in v0.7.1 superseded the result/posting contract without changing the established acquisition boundary. The v0.8.0 release tree adds policy v2 remediation selection, private context-store v2, authenticated toolkit-root ownership, fixed remediation projections, live-username mention commands, and explicit provider-neutral forge views. Toolkit 0.8.7 advanced output to receipt v6 and action receipt v2 for two additional fixed evidence search/coverage tools without reopening provider access or approval authority. Toolkit 0.9.0 advanced the then-current result boundary to receipt v8, advanced the private action receipt to v3 with separately authenticated attempted and completed counters, and added a separately constrained path for an explicitly permitted unprotected GitLab target. That path is comment-only, rejects enriched context, adapters, protected policy acquisition, and direct or inherited external MCP before OCR, omits accepted decisions and structured project guidance, and exposes only immutable repository evidence plus bounded target Rules. It is not protected-policy equivalence and cannot authorize approval. The owner waived the separate enriched OCR+LLM qualification: no receipt proves model-time `context_list`/`context_get`, still-present/evidence-resolved scenarios, or receipt-level raw provider-data leakage inspection. The protected release workflow and independent registry/GitHub readback remain mandatory delivery proof but do not substitute for that absent qualification.
 
-For the current GitLab profile, a closed receipt v11 binds source H, authenticated current MR diff base/version B, actual target branch/head T and protection, and protected policy project/branch/commit P as separate identities. An absent `OCR_GITLAB_TARGET_PROTECTION_MODE` selects `auto`: a protected actual target supplies P itself, while an unprotected target can use the same project's captured protected default branch P for rules and eligible context/tool policy without gaining approval authority. Explicit `required` still rejects an unprotected target; explicit `unprotected` keeps the historical limited comment-only profile. The actual review remains B..H even when B differs from T. Detached MR source identity is required; synthetic merged-results and merge-train commits are not silently treated as H. The local entry point does not select GitLab policy or create a platform receipt.
+For the current GitLab profile, a closed receipt v13 binds source H, authenticated current MR diff base/version B, actual target branch/head T and protection, and protected policy project/branch/commit P as separate identities. An absent `OCR_GITLAB_TARGET_PROTECTION_MODE` selects `auto`: a protected actual target supplies P itself, while an unprotected target can use the same project's captured protected default branch P for rules and eligible context/tool policy without gaining approval authority. Explicit `required` still rejects an unprotected target; explicit `unprotected` keeps the historical limited comment-only profile. The actual review remains B..H even when B differs from T. Detached MR source identity is required; synthetic merged-results and merge-train commits are not silently treated as H. The local entry point does not select GitLab policy or create a platform receipt.
 
-Receipt v12 extends that exact tuple only for a proven partial repository
+Receipt v14 extends that exact tuple only for a proven partial repository
 review containing safely separable changed gitlinks. A private immutable-tree
 plan and qualified OCR projection identify selected ordinary work, while the
 native manifest keeps its OCR coverage meaning. The public receipt carries
 only closed effective-coverage counts; no skipped pointer or submodule
-contents gain finding or approval authority. Receipt v11 retains its ordinary
+contents gain finding or approval authority. Receipt v13 retains its ordinary
 review meaning. A v6 pre-execution status records a no-model gitlink stop.
 
 When a protected policy authority is available, the review acquires only the current MR's authorized forge context before OCR. An immutable `.opencodereview/review-context-policy.json` read only from captured P controls admission, retrieval, model egress, publication, and retention. Protected policy is separate from untrusted source/target code, MR prose, and target-context evidence. The provider authorizes the exact project and current MR, normalizes bounded fields through DLP, and commits admitted records to a run-local context store before opaque handles are minted. Handles bind run, source, projection and expiry without exposing upstream identifiers.

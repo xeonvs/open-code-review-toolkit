@@ -369,7 +369,7 @@ def test_issue_receipt_rejects_duplicate_wrong_body_or_incompatible_issue_state(
 def test_release_workflow_builds_reads_back_and_recovers_the_receipt() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
+    assert workflow.count('python: ["3.12", "3.13", "3.14", "3.15"]') == 2
     assert "verify_registry_provenance.py" in (
         ROOT / "scripts" / "verify_registry_artifacts.sh"
     ).read_text(encoding="utf-8")

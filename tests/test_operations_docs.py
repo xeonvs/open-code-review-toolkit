@@ -64,7 +64,7 @@ def test_readme_install_is_isolated_checksum_pinned_and_no_llm() -> None:
 
     readme = README.read_text(encoding="utf-8")
     install = readme.split("## Install", 1)[1].split("## How reviews evolve", 1)[0]
-    assert "Python 3.12 through 3.14" in install
+    assert "Python 3.12 through 3.15" in install
     assert "uv tool install open-code-review-toolkit" in install
     assert install.index(". .venv/bin/activate") < install.index(
         "python -m pip install open-code-review-toolkit"

@@ -126,6 +126,22 @@ Reuse DLP and its explicit enablement contract; correct narrow technical context
 
 ### Verification
 
+BL-019 completion requires bounded properties/minimized replay for every family
+below, default-profile replay across supported Python and extended independent
+seeds. Parser properties do not claim live service behavior; real TLS/stdio,
+private-filesystem and installed checks retain their separate claims.
+
+| Fuzz family | Selected production owners | Required invariant |
+| --- | --- | --- |
+| DLP/result/range/policy/diagrams | Existing `tests/fuzz/` targets | Sensitive inverse checks, closed type errors, exact identity, global budgets and canonical round-trips |
+| Evidence models/store | Record/coverage/delta contracts and `EvidenceStore.read` | Canonical identity or closed rejection; hostile nested fields cannot broaden trust/completeness |
+| Internal/context MCP and handles | `evidence.mcp.handle_request`, `context.mcp`, `ContextStore.get` | Bounded serializable responses, closed errors, exact handle/run/policy/expiry and cursor isolation |
+| Context/CI store | `ContextStore.commit/read`, fixed CI-outcome projection | Valid persistence round-trip; hostile envelope/record/projection rejects atomically |
+| GitLab payloads | MR lifecycle/context normalizers and CI projection | Exact identity remains mandatory; malformed states/types cannot fabricate authority |
+| Federation registry | Registry-v2 parser, origins/transports/headers/tool policy | Only permitted canonical profiles/origins/aliases survive; malformed fields use FederationError |
+| Federation admission/wire | Schema/argument/result gates, `transport.parse_frame`, receipt reconciliation | Hostile schema/results/JSON-RPC stay bounded; DLP/origin gates hold and counters conserve attempts |
+| Distribution metadata | TestPyPI/PyPI index/artifact-manifest validators | Version/hash/filename/host identity is exact; malformed or conflicting metadata cannot authorize download/recovery |
+
 - Range: ancestor/equal/commit/merge-parent/empty/sibling/unrelated/shallow, hostile Git controls, missing/foreign manifests and exact base/head/range mismatch through the real launcher/parser/admission boundary; GitLab B/H/T/P and gitlink/selection regressions.
 - Diagrams: full configuration matrix before acquisition, pure union validation, byte/code-point/line/count boundaries, dangling/duplicate identities, invalid references, nested/global sequence limits, stale and hostile persistence, canonical repeat/conflict/budget behavior, absence on failed/unadmitted runs, safe Mermaid/text and expanded/collapsed delivery.
 - DLP: safe technical grammars and comparison forms, true secret/PII with mixed additions, Unicode/control/markup encodings, pure credentials references, optional source-proven code and whole-unit graph omission without changing findings/approval.

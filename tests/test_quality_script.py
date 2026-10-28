@@ -35,17 +35,18 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
         "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80",
         "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp.py,src/ocr_toolkit/posting/approval.py --fail-under=85",
         "coverage report --include=src/ocr_toolkit/mcp_config.py,src/ocr_toolkit/providers/gitlab.py,src/ocr_toolkit/providers/gitlab_context.py,src/ocr_toolkit/providers/gitlab_discussions.py,src/ocr_toolkit/providers/gitlab_remediation.py,src/ocr_toolkit/context/policy.py,src/ocr_toolkit/result_contract.py --fail-under=85",
+        "coverage report --include=src/ocr_toolkit/result_contract.py --fail-under=90",
     )
 
     assert script.count("pytest -q --cov=ocr_toolkit") == 1
     assert "--cov-fail-under=85" in script
-    assert script.count("coverage report --include=") == 4
+    assert script.count("coverage report --include=") == 6
     assert (
         "uv run --no-sync pytest --ignore=tests/test_installed_policy_e2e.py --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85"
         in workflow
     )
     assert workflow.count("coverage: true") == 1
-    assert workflow.count("coverage: false") == 3
+    assert workflow.count("coverage: false") == 4
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}" in workflow
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}" in workflow
     assert workflow.count("uv run --no-sync pytest -q") == 2
@@ -110,7 +111,7 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
 
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
-    assert output.count("fresh invocation: run --no-sync sh -c") == 5
+    assert output.count("fresh invocation: run --no-sync sh -c") == 10
 
 
 @pytest.mark.parametrize("failure_code", [2, 7, 130])

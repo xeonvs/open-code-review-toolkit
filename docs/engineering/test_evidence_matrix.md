@@ -10,6 +10,21 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.0 range, diagrams and bounded fuzzing
+
+| Boundary | Production owner and entry point | Evidence and observable result | Claim limit |
+| --- | --- | --- | --- |
+| Immutable range before evidence and final admission | `evidence.review_range.resolve_review_range`; runner; pure `review_range.admit_native_range` | `test_review_range.py`, actual Git topology/hostile-control and reused-checkout tests, controlled native identities, gitlink/selection regressions | Source proof is mechanical; unsupported/shallow topology never becomes a confirmed range claim |
+| Typed grammar and run collector | `diagrams.contracts`, `diagrams.collector` | `tests/diagrams/` and `tests/fuzz/`: nested/global limits, malformed types/Unicode, normalized repeats, sticky conflict/budget omission, concurrent real processes, private hostile readback | No semantic graph correctness claim |
+| Real native producer through MCP and cleanup | checksum-qualified OCR 1.13.3; runner; isolated evidence stdio server | Opt-in `test_native.py` exercises both formats, no candidate, off, stale candidate, conflict, failed output I/O and failed startup; manifest remains complete and checkout HEAD/index/staged/unstaged/untracked bytes remain unchanged | Local model peer controls tool calls; this proves transport/composition rather than natural model choice |
+| Installed delivery | installed CLI, MCP, receipt admission and local provider | `test_installed_policy_e2e.py` builds direct wheel and sdist-derived wheel; installed local peer delivers both Mermaid/text variants with hostile import/PATH conditions and private artifacts; Python 3.15 passes | Controlled OCR peer is beyond the installed launcher; actual OCR proof is separate |
+| Optional error isolation and exact persistence | lifecycle, admission, reporting and post consumers | Fault injection keeps mandatory evidence/findings/outcome usable; whole-unit DLP omits sensitive diagrams; current/historical receipt tests reject corrupt envelopes and preserve empty/template branch conditions byte-for-byte | Malformed persisted artifacts still reject atomically; diagrams do not prove approval eligibility |
+| DLP and closed parser variations | `context.dlp`, result/range, policy and diagram contracts | 100-example CI / 1000-example local Hypothesis profiles, independent explicit seeds, minimized synthetic enum/encoded-credential/surrogate regressions and representations/state/round-trip properties | Initial families proven; the full BL-019 expansion and supported-Python replay are active-plan gates |
+| Weak runtime branches | GitLab CI acquisition, policy schema, private filesystem, reporting usage and result contracts | Real TLS bounds/redirect/credential cases, malformed schemas, unsafe filesystem and exact counter tests; independent quality floors of 85%, result 90% | Coverage does not replace semantic regex alternatives or live provider qualification |
+
+Production own-tool/model qualification and protected stable publication are
+separate active-plan gates; the deterministic evidence above does not claim them.
+
 ## v0.6.1 requirement-to-evidence audit
 
 | Requirement or boundary | Production owner and entry point | Required observable result | Evidence | Double boundary and claim limit | State |
@@ -210,11 +225,11 @@ Every top-level test module is classified below. A module can contain more than 
 | `test_ocr_result_contract.py` | fixed upstream-result parser compatibility | fixture parsing, not OCR execution |
 | `test_operations_docs.py` | static public documentation/workflow contract | no operator or provider execution claim |
 | `test_posting_approval.py` | approval policy, exact-SHA request construction, ordering and fail-closed workflow | API owners are replaced; no live GitLab approval integration is claimed because writes are unsafe in tests |
-| `test_posting_freshness.py` | v11 identity, CI-job handoff, and bounded local Git ancestry policy | provider snapshots and graph faults are controlled; no atomicity or live GitLab protection guarantee |
+| `test_posting_freshness.py` | current identity, frozen pre-execution tuples, CI-job handoff and bounded local Git ancestry policy | provider snapshots and graph faults are controlled; no atomicity or live GitLab protection guarantee |
 | `test_posting_helpers.py` | pure formatting/workflow policy, real Git reads, real local HTTP create serialization and paginated reconciliation reads, real result-file boundaries | mocked GitLab API owner cases prove response/error/workflow behavior only; local peers prove transport/completeness mechanics, not live GitLab semantics |
 | `test_posting_no_write_diagnostics.py` | invalid/stale/unavailable handoff classification, cross-job static-status rejection, and static-note gating | captured note writes prove no-write boundaries, not live provider delivery |
 | `test_posting_suggestions.py` | pure proof-bound suggestion decisions | fake readers are collaborators beyond the pure decision owner; no Git blob integration claim |
-| `test_posting_v11_flow.py` | v11 normal, partial, stale and approval workflow ordering | provider/API doubles prove decisions and payload shape, not live mutation or race elimination |
+| `test_posting_v11_flow.py` | current v13 normal, partial, stale and approval ordering plus frozen pre-execution tuple handoffs | provider/API doubles prove decisions and payload shape, not live mutation or race elimination |
 | `test_provider_failure.py` | strict bounded retry-report v1 parsing and closed provider-neutral reason projection | fixture records prove the toolkit parser only; actual OCR request behavior is separately observed by the compatibility probe |
 | `test_python_support.py` | static metadata/CI support range | supported interpreters are proven by the quality matrix, not this test alone |
 | `test_quality_script.py` | real synthetic Git history for Gitleaks range plus static wrapper policy | fake scanner proves wrapper invocation/range, not secret-detection efficacy; pinned real Gitleaks runs before push |
@@ -225,6 +240,7 @@ Every top-level test module is classified below. A module can contain more than 
 | `test_review_context.py` | real store persistence/hostile reload and MCP component projection | direct dispatcher is not stdio; stdio proof is installed/full-preflight E2E |
 | `test_review_runner.py` | private result/filesystem owner, real child-process launcher, receipt parser; separate wiring tests | patched subprocess/orchestration tests are explicitly unit evidence only |
 | `test_review_receipt_v11.py` | hostile v11 review identity, policy capability and historical compatibility parsing | synthetic receipt values prove validation, not authenticated producer truth |
+| `test_review_receipt_v13.py` | current range/diagram grammar, optional failure accounting, approval neutrality and v14 partial proof | synthetic receipts prove validation; native and installed producer boundaries are covered separately |
 | `test_runtime_helpers.py` | config filesystem boundaries and real local preflight HTTP transport; MCP/config parsing | mocked binary and `URL_OPENER` cases prove version/request/error policy only, not executable/network integration |
 | `test_testpypi_preview.py` | registry-manifest parser and static workflow contract | fixture index payloads do not prove publication; live TestPyPI/PyPI verification is a release gate |
 

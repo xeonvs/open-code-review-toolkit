@@ -16,7 +16,7 @@ Open Code Review Toolkit is an unofficial review control and integration layer f
 
 ## Install
 
-Python 3.12 through 3.14 is supported. Install the toolkit CLI in an isolated tool
+Python 3.12 through 3.15 is supported. Install the toolkit CLI in an isolated tool
 environment:
 
 ```console
