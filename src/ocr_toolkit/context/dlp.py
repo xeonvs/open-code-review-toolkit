@@ -151,9 +151,9 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
             return bool(IP_CONTEXT_RE.search(before[-96:]))
     except ValueError:
         pass
-    # Only the bounded technical prefix is decoded: other representations and
+    # Only the bounded technical prefix is decoded/normalized: other representations and
     # the complete unit still pass all secret, contact and laundering checks.
-    technical_prefix = _html_decode(before[-64:])
+    technical_prefix = unicodedata.normalize("NFKC", _html_decode(before[-64:]))
     if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(technical_prefix):
         try:
             date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
@@ -344,8 +344,17 @@ def check_text(
     decoded = _html_decode(normalized) if publication else normalized
     displayed = _display_normalize(normalized) if publication else normalized
     source = _source_normalize(normalized) if publication else normalized
-    semantic_displayed = _display_normalize(semantic) if publication else semantic
-    semantic_source = _source_normalize(semantic) if publication else semantic
+    # Check decoded keys before Markdown normalization can remove underscores
+    # from credential names. Preserve the exact empty/template grammar at this
+    # representation too; decoding alone does not make a value sensitive.
+    decoded_semantic = _semantic_secret_text(decoded) if publication else semantic
+    if publication and (
+        redact_env_secret_values(decoded) != decoded
+        or redact_sensitive(decoded_semantic) != decoded_semantic
+    ):
+        return DLPResult(False, None, "secret", "decoded")
+    semantic_displayed = _display_normalize(decoded_semantic) if publication else semantic
+    semantic_source = _source_normalize(decoded_semantic) if publication else semantic
     if publication and (
         redact_env_secret_values(displayed) != displayed
         or redact_sensitive(semantic_displayed) != semantic_displayed

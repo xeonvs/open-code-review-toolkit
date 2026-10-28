@@ -555,7 +555,7 @@ def test_no_value_reference_does_not_mask_displayed_environment_secret(
     value = 'login_password: "{{ service_password }}"\n' + sentinel.replace("-", "&#45;")
     checked = check_text(value, budgets=TextBudgets(2000, 8000, 30), publication=True)
     assert checked.reason == "secret"
-    assert checked.detector in {"displayed", "source"}
+    assert checked.detector in {"decoded", "displayed", "source"}
 
 
 def test_publication_retains_technical_code_fields_and_pure_reference() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import date
 
 import pytest
@@ -13,7 +14,21 @@ from ocr_toolkit.context.dlp import check_text, normalize_text
 
 BUDGETS = TextBudgets(2000, 8000, 30)
 COMPARISONS = st.sampled_from(
-    (" ", "<", " <= ", " > ", ">=", " == ", " != ", " = ", " ≤ ", " ≥ ", " ≠ ")
+    (
+        " ",
+        "<",
+        " <= ",
+        " > ",
+        ">=",
+        " == ",
+        " != ",
+        " = ",
+        " ≤ ",
+        " ≥ ",
+        " ≠ ",
+        "\u00a0<\u00a0",
+        "\u202f>=\u202f",
+    )
 )
 
 
@@ -21,7 +36,9 @@ COMPARISONS = st.sampled_from(
 def technical_text(draw: st.DrawFn) -> str:
     """Construct parsed-safe technical values without reusing the detector regex."""
 
-    kind = draw(st.sampled_from(("version", "date", "ip", "cidr", "decimal", "id", "reference")))
+    kind = draw(
+        st.sampled_from(("version", "date", "ip", "cidr", "port", "decimal", "id", "reference"))
+    )
     if kind == "version":
         prefix = draw(st.sampled_from(("version", "release", "build", "pin", "VERSION")))
         value = ".".join(
@@ -32,8 +49,10 @@ def technical_text(draw: st.DrawFn) -> str:
         prefix = draw(st.sampled_from(("date", "expires on", "until", "since")))
         value = draw(st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)))
         return prefix + draw(COMPARISONS) + value.isoformat()
-    if kind in {"ip", "cidr"}:
+    if kind in {"ip", "cidr", "port"}:
         address = f"192.0.2.{draw(st.integers(1, 254))}"
+        if kind == "port":
+            return f"IP {address}:{draw(st.integers(1, 65535))}"
         return f"IP {address}" if kind == "ip" else f"network {address}/{draw(st.integers(0, 32))}"
     if kind == "decimal":
         integer = draw(st.integers(100_000_000, 999_999_999))
@@ -77,6 +96,109 @@ def test_technical_exception_never_exempts_the_whole_unit(
     result = check_text(technical + separator + sensitive, budgets=BUDGETS, publication=publication)
     assert not result.admitted
     assert result.reason in {"secret", "pii"}
+
+
+def display_representation(text: str, kind: str) -> str:
+    if kind == "escaped":
+        return html.escape(text, quote=False)
+    if kind == "double-escaped":
+        return html.escape(html.escape(text, quote=False), quote=False)
+    if kind == "entities":
+        return "".join(f"&#{ord(character)};" for character in text)
+    if kind == "markdown":
+        return f"**{text}**"
+    if kind == "html":
+        return f"<span>{html.escape(text)}</span>"
+    return text
+
+
+REPRESENTATIONS = st.sampled_from(
+    ("plain", "escaped", "double-escaped", "entities", "markdown", "html")
+)
+
+
+@given(technical_text().filter(lambda value: ": " not in value), REPRESENTATIONS)
+def test_rendered_technical_values_do_not_become_contacts(value: str, representation: str) -> None:
+    # Pure credential references have a deliberately narrower whole-line grammar;
+    # this property exercises numeric technical syntax in display representations.
+    result = check_text(
+        display_representation(value, representation), budgets=BUDGETS, publication=True
+    )
+    if representation == "html":
+        # Raw HTML is forbidden independently of the technical value within it.
+        assert not result.admitted
+        return
+    assert result.admitted, (value, representation, result.reason, result.detector)
+
+
+@given(
+    technical_text(),
+    st.sampled_from(
+        (
+            "Call +1 202 555 0142",
+            "person@example.invalid",
+            'login_password: "synthetic-secret-value"',
+        )
+    ),
+    REPRESENTATIONS,
+    st.sampled_from(("; ", "\n", " | ")),
+)
+def test_sensitive_additions_survive_display_obfuscation(
+    technical: str, sensitive: str, representation: str, separator: str
+) -> None:
+    result = check_text(
+        technical + separator + display_representation(sensitive, representation),
+        budgets=BUDGETS,
+        publication=True,
+    )
+    assert not result.admitted and result.reason in {"secret", "pii", "laundering"}
+
+
+def test_entity_encoded_credential_is_checked_before_markdown_underscore_removal() -> None:
+    value = display_representation('login_password: "synthetic-secret-value"', "entities")
+    checked = check_text("IP 192.0.2.1; " + value, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "secret" and checked.detector == "decoded"
+
+
+@pytest.mark.parametrize("prefix,value", (("version", "2020.0.10"), ("date", "2020-01-01")))
+@pytest.mark.parametrize("space", ("\u00a0", "\u202f"))
+def test_technical_comparison_with_nonbreaking_spaces_is_not_a_contact(
+    prefix, value, space
+) -> None:
+    text = f"{prefix}{space}<{space}{value}"
+    for publication in (False, True):
+        checked = check_text(text, budgets=BUDGETS, publication=publication)
+        assert checked.admitted and checked.text == text
+        mixed = check_text(
+            text + "; Call +1 202 555 0142", budgets=BUDGETS, publication=publication
+        )
+        assert not mixed.admitted and mixed.reason == "pii"
+
+
+@pytest.mark.parametrize(
+    "value", ('login_password: ""', "'login_password': '{{ service_password }}'")
+)
+@pytest.mark.parametrize("representation", ("entities", "escaped", "double-escaped"))
+def test_encoded_pure_references_keep_the_exact_no_value_exception(
+    value: str, representation: str
+) -> None:
+    checked = check_text(
+        display_representation(value, representation), budgets=BUDGETS, publication=True
+    )
+    assert checked.admitted
+
+
+@pytest.mark.parametrize(
+    ("text", "detector"),
+    (("opaque-**sentinel**-123", "displayed"), ("<!-- OPAQUE-SENTINEL-123 -->safe", "source")),
+)
+def test_decoded_check_preserves_later_display_and_hidden_source_checks(
+    monkeypatch: pytest.MonkeyPatch, text: str, detector: str
+) -> None:
+    sentinel = "opaque" + "-sentinel-123"
+    monkeypatch.setenv("OCR_LLM_TOKEN", sentinel)
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "secret" and checked.detector == detector
 
 
 @given(technical_text(), st.sampled_from(("\x00", "\x1b", "\u202e", "\u200b", "\ud800")))
