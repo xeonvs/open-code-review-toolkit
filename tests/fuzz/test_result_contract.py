@@ -5,16 +5,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+from tests.fuzz.strategies import json_values
 from tests.test_result_contract import manifest_result
 
-JSON_VALUE = st.one_of(
-    st.none(),
-    st.booleans(),
-    st.integers(),
-    st.text(max_size=24),
-    st.lists(st.integers(), max_size=3),
-    st.dictionaries(st.text(max_size=8), st.integers(), max_size=3),
-)
+JSON_VALUE = json_values()
 
 
 @given(

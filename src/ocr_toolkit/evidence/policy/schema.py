@@ -93,7 +93,10 @@ def validate_policy_record(kind: str, value: object) -> None:
             not any(matches_scope(scope, path) for scope in scopes) for path in matched_paths
         ):
             raise ValueError("accepted-decision matched path is outside its scopes")
-        if fact["applicability"] in {"invalid", "not_applicable"} and matched_paths:
+        applicability = fact["applicability"]
+        if not isinstance(applicability, str):
+            raise ValueError("accepted-decision state is invalid")
+        if applicability in {"invalid", "not_applicable"} and matched_paths:
             raise ValueError("inapplicable accepted decision cannot contain matched paths")
         if fact["applicability"] == "applicable" and scopes and not matched_paths:
             raise ValueError("scoped applicable decision must contain a matched path")
@@ -150,7 +153,10 @@ def validate_policy_record(kind: str, value: object) -> None:
             raise ValueError("guidance path is invalid") from exc
         if fact["document_type"] != document_type or fact["scope"] != scope:
             raise ValueError("guidance document type or scope is inconsistent")
-        if fact["applicability"] not in {"applicable", "not_applicable"}:
+        if not isinstance(fact["applicability"], str) or fact["applicability"] not in {
+            "applicable",
+            "not_applicable",
+        }:
             raise ValueError("guidance applicability is invalid")
         _strings(fact["matched_paths"], label="guidance matched paths", limit=64)
         matched_paths = tuple(fact["matched_paths"])  # type: ignore[arg-type]
