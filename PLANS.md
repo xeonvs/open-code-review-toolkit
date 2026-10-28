@@ -1,5 +1,181 @@
 # Execution Plans
 
+## Active Plan: Toolkit 0.14.0 range identity, typed diagrams, DLP qualification and Python 3.15
+
+plan_schema_version: 2
+Status: active
+Owner: root
+Last Updated: 2026-10-28
+Release classification: release-required, target v0.14.0; bounded BL-019 testing and fixture maintenance are accompanying no-release work within the same delivery objective.
+
+### Goal
+
+Implement issues #272 and #273, strengthen DLP and its adversarial tests, qualify Python 3.15, and publish v0.14.0 through the protected feature and release paths. Stable publication, immutable receipt readback, issue/milestone closure, site refresh and synchronized clean main are required to complete the user-facing delivery objective.
+
+### Plan Origin
+
+`plan_mode_approved`
+
+### Requested Scope
+
+Bind evidence, native execution, admitted results, coverage, reporting, receipts and publication to one immutable effective Git range. Add one optional typed flowchart or sequence diagram through the existing native OCR invocation and toolkit MCP transport. Promote only a bounded Hypothesis slice of BL-019, prioritize technical-value DLP false positives and rare rejection branches, improve weak module coverage, and replace country-identifying telephone fixtures with reserved fictional numbers. Add official Python 3.15 support with narrowly required dependency and CI updates.
+
+The first signed push contains the complete plan and its lifecycle pointer plus one separately reviewed dev-lock security correction, and opens a draft PR. This narrow initial-push exception addresses the mandatory dependency audit finding for msgpack 1.2.2; the approved correction is 1.2.3 and changes no product runtime dependency. Continue development locally with logical signed commits and self-review before every commit; amend unpublished commits where useful. Before the final feature push, perform aggregate semantic self-review, one aggregate Codex Security diff scan, fix its findings, and perform at most two successful local self-reviews through the toolkit with native ChatGPT authentication and explicit diagram generation. Failed review attempts do not consume that two-run allowance. Ordinary fixes and documentation changes do not trigger another aggregate security scan.
+
+### Requirement Traceability
+
+| Requirement | Outcome | Queue | Status |
+| --- | --- | --- | --- |
+| REQ-001 | Resolve and prove the exact supported range before range-dependent evidence; reject sibling, unrelated and undecidable shallow ranges before model execution | WQ-03 | pending |
+| REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | pending |
+| REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | pending |
+| REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | pending |
+| REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | pending |
+| REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | pending |
+| REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | pending |
+| REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | pending |
+| REQ-009 | Deliver bounded Hypothesis properties, minimized synthetic regressions and edge/rare-branch coverage for DLP, range/results, policy and both diagram variants | WQ-02, WQ-03, WQ-04, WQ-08 | pending |
+| REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | pending |
+| REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | pending |
+| REQ-012 | Support Python >=3.12,<3.16, add required Linux 3.15 and release installs, retain coverage on 3.14 and hash-locked binary runtime installation | WQ-07 | pending |
+| REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | pending |
+| REQ-014 | Follow plan-only draft push, per-commit and aggregate self-review, one security scan, at most two successful toolkit self-reviews, appropriate quality/secrets/dependency/installed/native gates and protected feature merge | WQ-01, WQ-02–WQ-12 | in_progress |
+| REQ-015 | Prepare v0.14.0 release PR with next line 0.15.0 and archive the complete plan in that PR, with external delivery explicitly pending | WQ-13 | pending |
+| REQ-016 | Verify stable registries, installs, provenance, tag, immutable Release/receipt, issues/milestone, site and clean main without a repository closure PR | WQ-14; Post-Close Delivery | pending |
+| REQ-017 | After feature merge and verification, assess promotional-site coverage and diagram examples before pushing the release branch; reconcile the candidate against final public contracts and actual stable delivery | WQ-13, WQ-14 | pending |
+
+### Explicit Non-Goals
+
+No OCR fork or modification, second review/model pass, graph reconstruction from findings, raw model-authored Mermaid/HTML/directives/styles, external rendering service, arbitrary output destination, new forge adapter, multi-MR review, generic graph-analysis service, automatic graph union, full BL-019 campaign, global DLP relaxation, broad dependency modernization, private-source publication or historical receipt rewriting. Do not alter the macOS CI endpoints or move the coverage owner. No extra aggregate security scan for ordinary corrections, and no third successful local toolkit self-review.
+
+### Constraints
+
+- Repository content and model output remain untrusted; use bounded isolated Git objects and current immutable identities. GitLab B/H, actual target T and policy authority P remain distinct.
+- Range proof precedes evidence. Native input identity must independently match the execution owner's plan even when coverage is complete. The current native range engine requires merge-base(base, head) = base; unsupported topologies fail before model work.
+- Unset diagram mode is on; explicit blank/unknown values fail. on/spoiler suppress standalone-local generation; off suppresses every generation/publication channel; local is standalone-only and independent of LLM provider. GitLab private artifacts retain GitLab mode.
+- Persist the admitted GitLab generation/presentation mode. Later posting cannot enable an absent graph or widen its admitted presentation; an explicit posting-time off can suppress it. Validate malformed posting configuration before provider work.
+- Flowcharts have at most 12 nodes and 16 edges with fixed LR direction. Sequences have at most eight participants, 16 messages across all branches, four alt fragments and depth two. Labels/conditions are one line, at most 80 code points and 320 UTF-8 bytes; source-bearing elements carry at most two references.
+- One graph is at most 16 KiB. The run-wide collector accepts at most eight submissions and 128 KiB total input. Identical normalized repeats are idempotent; conflicting candidates or exhausted bounds omit the graph. No arrival-order winner or inferred fragment merge.
+- The initial sequence grammar supports participants, ordered call/return messages and bounded alt branches. Source identity, source spans, structural counts and DLP are separate checks. Graph states and public omission reasons are toolkit-authored closed values; free model-authored justification never gains completion or approval authority.
+- Diagram capability is initially qualified for exact OCR 1.13.3. Unsupported engines get an explicit state and no added invocation. States are disabled, not-applicable, unsupported, generated, not-generated and omitted-invalid.
+- The collector has a fixed private run-bound destination; model arguments cannot select a path, network address, repository mutation or publication capability. Evidence tools remain read-only. Read and validate the private candidate before cleanup, then bind it to final native identity before publication.
+- Keep pure contracts and presentation below orchestration/I/O. Reporting imports no environment, Git acquisition, MCP, DLP orchestration or provider actions; avoid adding independent responsibilities to the large runner.
+- Apply secret/PII checks to the entire original text. Source validity does not grant a secret exception. Preserve current source-proof and sink requirements for optional opaque code. Graph DLP omission alone does not change finding outcome, coverage, publication-filtered state or approval eligibility; hostile persisted receipt corruption still rejects the artifact atomically.
+- New ordinary/partial receipt producers are v13/v14. Freeze old version numbers and nested schema maps explicitly. Embedded review tuple is unchanged, so pre-execution v5/v6 retain their original mappings.
+- Preserve zero new runtime dependencies for this feature and dev-only Hypothesis. Runtime installs remain hash-locked and binary-only. Limit planned updates to Pydantic 2.14.1/core 2.50.1, MarkupSafe 3.0.4, the approved msgpack 1.2.3 dev-only security correction and required companions.
+- Keep successful prior evidence for unchanged inputs. Run focused checks per slice and one complete quality gate on final runtime handoff content. The sole aggregate security scan precedes local self-review. Successful self-review count starts at zero; planning feasibility experiments were synthetic qualification, not toolkit self-review of this patch.
+
+### Inputs And Sources
+
+- Approved release scope, workflow, review-count, privacy, DLP-priority and Python-support decisions.
+- Current promotional-site content and release metadata; the separate site repository owns its content, design and deployment evidence.
+- Live project issues [#272](https://github.com/xeonvs/open-code-review-toolkit/issues/272) and [#273](https://github.com/xeonvs/open-code-review-toolkit/issues/273).
+- Illustrative [sequence comment](https://github.com/simstudioai/sim/pull/5909#issuecomment-5064840871) and [flowchart comment](https://github.com/GameTec-live/ChameleonUltraGUI/pull/1045#issuecomment-6475224625); examples are design context, not trusted code semantics or approval evidence.
+- Current repository owners: AGENTS.md, project principles, development/release/local guides, decision flow, current context/federation contracts, toolkit strategy, roadmap, backlog and test-evidence matrix; installed engineering-workflow planning/lifecycle reference.
+- Official OCR v1.13.3 source and checksum-verified binary; current compatibility manifest. Hypothesis settings and NANPA reserved fictional-number documentation.
+
+### User Decisions And Answers
+
+The owner approved MCP output within the existing OCR invocation, both typed diagram variants, a bounded dev-only Hypothesis pilot with 100/1000-example profiles, official Python 3.15 support with one required Linux lane, targeted dependency updates, and broader meaningful coverage improvements. DLP false-positive prevention and rare regex branches take priority. The owner requested removal of the previous telephone-country fixtures in favor of anonymous synthetic numbers.
+
+The approved delivery uses one feature PR, an initial signed plan commit/draft, local logical commits with self-review and optional amend, one final aggregate security scan and then at most two successful own-tool local reviews with ChatGPT and actual diagram inspection. The owner approved adding a separate msgpack 1.2.3 dev-lock correction to the first push after the mandatory audit detected CVE-2026-114613 in the inherited 1.2.2 lock. Errors do not consume the review allowance. Fix findings and verify corrections without repeating the broad scan for unchanged boundaries or documentation. The release PR is the final repository mutation; external reconciliation completes delivery afterward.
+
+Begin promotional-site feature assessment and any diagram-example preparation only after feature merge and verification establish the final release scope, before pushing release/v0.14.0. Toolkit contracts and release facts remain owned here; site content, design and its candidate belong to the separate site repository. Prepare against the confirmed 0.14.0 candidate without claiming it is already shipped; verify publication only after stable evidence. Plan archive/reset belongs in the release PR and must not generate a later toolkit closure PR.
+
+### Completed Baseline State
+
+Clean main and origin/main both resolve to b81b4a15bb5212ece78c398665a9d576537ab404. The stable marker is 0.13.1 and next development line is 0.14.0. No active plan or implementation existed at activation. Runtime last changed in the merged 0.13.1 feature; the retained full coverage baseline from subsequent checks remains available privately.
+
+Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT generation: a flowchart with nine nodes/nine edges and 23 valid references; a sequence with four participants/eight messages/two nested alt fragments and 15 valid references; comment-only not-applicable; and six independent candidates from six native groups in one run. Native runs completed with no tool failures. Temporary validation exercised existing Git/DLP owners, not yet-written production graph admission. Technical comparison false positives were minimized to version < 2020.1.10 and date < 2020-01-01; mixed sensitive additions remained rejected. Python 3.15 passed 116 existing result/reporting/auth tests with trial dependencies; binary runtime resolution passed for Darwin arm64 and Linux amd64. Private credentials were linked through the existing owner and never copied; all temporary auth links were removed.
+
+### Current Work Queue
+
+| Queue | Requirements | Exit evidence | Status |
+| --- | --- | --- | --- |
+| WQ-01 | REQ-013, REQ-014 | Reviewed complete plan/lifecycle pointer and separate approved msgpack dev-lock correction, initial signed push, draft PR, v0.14.0 issue tracking and #273 expansion | in_progress |
+| WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | pending |
+| WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | pending |
+| WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | pending |
+| WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | pending |
+| WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | pending |
+| WQ-07 | REQ-012 | Python 3.15 metadata/lock/required CI/install matrices and clean artifact checks; self-reviewed commit | pending |
+| WQ-08 | REQ-009, REQ-010 | Weak-module coverage floors, rare semantic branches, minimized corpus and touched-module comparison | pending |
+| WQ-09 | REQ-013, REQ-014 | Public owners, decision flow, evidence matrix, backlog/strategy status, changelog and aggregate self-review | pending |
+| WQ-10 | REQ-014 | Exactly one aggregate Codex Security diff scan; findings classified/fixed with scoped regression evidence | pending |
+| WQ-11 | REQ-014 | Own-tool ChatGPT local review with graph, findings/failed-read inspection, at most two successful runs and scoped corrections | pending |
+| WQ-12 | REQ-014 | Final quality and pre-push gates, finished feature push, protected checks/merge and development TestPyPI readback | pending |
+| WQ-13 | REQ-015, REQ-017 | Signed release/v0.14.0 candidate, confirmed site-contract handoff before release push, 0.14.0/0.15.0 markers, authorization/notes/pins, checked archive and protected release handoff | pending |
+| WQ-14 | REQ-016, REQ-017 | Stable external publication/readback, promotional-site reconciliation and clean synchronized main; no repository closure PR | pending |
+
+### Locked Decisions
+
+Use a provider-neutral closed immutable range contract with Git acquisition at its existing boundary. Normalize supported local commit requests to the current first-parent range rather than introduce a new range-mode switch. Keep the GitLab authority tuple unchanged.
+
+Use an optional tagged flowchart/sequence union and a fixed output capability in the existing toolkit stdio transport. Keep collection, admission, pure formatting and provider publication as separate responsibilities. A graph describes a bounded model-proposed summary, not exhaustive execution coverage, test execution, confidence or merge permission. Conflicting groups safely omit it. Source references and branch budgets are checked independently of the model's completion claim.
+
+Reuse DLP and its explicit enablement contract; correct narrow technical contexts rather than weaken detectors globally. Properties compare safe technical forms and mixed sensitive forms. The bounded BL-019 slice is promoted, while the remaining campaign retains explicit activation conditions and resume action.
+
+### Verification
+
+- Range: ancestor/equal/commit/merge-parent/empty/sibling/unrelated/shallow, hostile Git controls, missing/foreign manifests and exact base/head/range mismatch through the real launcher/parser/admission boundary; GitLab B/H/T/P and gitlink/selection regressions.
+- Diagrams: full configuration matrix before acquisition, pure union validation, byte/code-point/line/count boundaries, dangling/duplicate identities, invalid references, nested/global sequence limits, stale and hostile persistence, canonical repeat/conflict/budget behavior, absence on failed/unadmitted runs, safe Mermaid/text and expanded/collapsed delivery.
+- DLP: safe technical grammars and comparison forms, true secret/PII with mixed additions, Unicode/control/markup encodings, pure credentials references, optional source-proven code and whole-unit graph omission without changing findings/approval.
+- Boundary map: runner resolves range -> collector/store/bootstrap -> native launcher and shared MCP -> private graph snapshot before cleanup -> final manifest/range/DLP admission -> closed result/receipt and pure report -> local Markdown or fresh GitLab post. Negative/mixed fixtures cross each changed real owner; external collaborators alone may be replaced.
+- Tests/coverage: focused regression suites and Hypothesis CI/local profiles; final repository quality matrix and existing risk-group floors, plus REQ-010 module floors; record semantic regex-family coverage separately.
+- Compatibility/install: locked metadata/dependencies, supported Python 3.12–3.15 CI and receipt matrix, unchanged Python 3.14 coverage ownership, clean wheel/sdist installs and real MCP/schema behavior outside the checkout with hostile shadow packages/private permissions.
+- Review/delivery: self-review each commit and aggregate diff, pinned staged/tree/history secret gates and dependency audit, one security diff scan, <=2 successful own-tool ChatGPT reviews, feature/release protected CI, development publication and independent stable external reconciliation.
+
+### Latest Validation Results
+
+Pre-implementation feasibility and source-smoke evidence is summarized in Completed Baseline State. Plan semantic review, plan-lifecycle, instruction-contract, public-content privacy, whitespace and staged secret checks pass. The initial dependency audit rejected inherited dev-only msgpack 1.2.2 (CVE-2026-114613); the approved isolated 1.2.3 correction passes the same audit with no known vulnerabilities. A structured lock comparison confirms no other package or lock metadata changed. Promotional-site preparation is deferred until feature merge and verification, before release-branch push. No runtime implementation, final quality gate, security scan, own-tool patch self-review, feature/release PR, new publication or issue closure has occurred. Successful local self-review count: 0 of 2. Aggregate security scan count: 0 of 1.
+
+### Risks And Recovery
+
+Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
+
+Keep private run artifacts run-bound and atomically validated, read the candidate before cleanup, close owned processes and remove temporary auth links without changing persistent native registration. On a failed check inspect the owning evidence and correct the narrow cause; reuse applicable unchanged evidence. Do not overwrite unrelated work or rewrite pushed history. Stop publication on failed protected/security/dependency or immutable-artifact evidence. Recover release delivery only through the existing identity-bound authorizer/receipt path.
+
+### Resume Point
+
+WQ-01: validate the approved isolated msgpack 1.2.3 dev-lock correction, reconcile this plan in its unpublished plan commit, create the separate self-reviewed security-maintenance commit, pass pre-push gates, push the feature branch and open its draft PR. Runtime implementation starts after that initial draft exists. Promotional-site preparation remains deferred to WQ-13.
+
+### Plan Fidelity Check
+
+- [x] Approved outcomes, limits, workflow and privacy constraints are represented by stable requirements.
+- [x] Every requirement maps to an ordered queue item and acceptance evidence.
+- [x] Native feasibility is distinguished from production admission and final review evidence.
+- [x] Pure contracts, acquisition, MCP output, DLP, reporting and publication ownership are explicit.
+- [x] Non-goals, rollback/failure behavior, review counts and exact resume action are explicit.
+- [x] Repository closure and mandatory external delivery are distinct.
+
+### Reconciliation Check
+
+- [x] Baseline repository and remote main are clean and synchronized.
+- [x] Current plan replaces no active work and retains recent completed-plan links.
+- [x] Current issue/backlog intent is reconciled with current implementation and approved additions.
+- [ ] Final implementation, public status, backlog, checks and issue tracking agree.
+- [ ] Final release archive/index and external delivery handoff agree.
+
+### Closure Gate
+
+- [ ] All in-scope repository requirements/queue items are done or explicitly transferred at the release boundary.
+- [ ] Applicable final-content tests, coverage, formatting, secrets, dependencies and installed/native boundary evidence pass.
+- [ ] Per-commit/aggregate self-review, one security scan and bounded local self-review corrections are complete.
+- [ ] Feature PR merge and development publication are verified.
+- [ ] Release candidate, version/epoch/authorization/pins/changelog/notes are reviewed and validated.
+- [ ] Checked plan lifecycle archives this full plan in the release PR, updates indexes and clears the active pointer.
+- [ ] Publication/readback remain truthfully pending as required Post-Close Delivery at repository closure.
+
+### Post-Close Delivery
+
+Required after the release PR archives repository work: pass protected release checks and merge; monitor stable TestPyPI/PyPI publication, artifact equality, supported-Python installs, provenance/attestations, annotated tag, immutable GitHub Release and receipt; independently read back tracked issues/milestone and Actions-owned receipts, site notification/current version, and clean synchronized main. WQ-14/REQ-016 transfer outside the repository plan only at that release boundary, without cancelling the overall delivery objective. No post-release repository closure PR.
+
+The separately owned site candidate and relevant 0.14.0 feature/example content remain part of REQ-017 external coordination. Do not equate an automated version notification with completion of its content assessment. Keep its actual state and exact next action explicit at handoff; unresolved required site delivery is not silently marked complete.
+
+### Handoff Notes
+
+Keep operational state here, not in per-command receipts or duplicate logs. Use bounded native CLI output and private logs only where needed for volume/recovery. Preserve exact review counts, scanned range, corrections and remaining action before context loss. No subagents are authorized by this plan; keep execution with root unless the owner explicitly requests delegation.
+
 ## Recently Completed
 
 - [x] 2026-10-25: Completed Two-day GitHub Actions retention; [full archived plan](docs/engineering/execution_history/plans/2026-10-25-two-day-github-actions-retention.md).
