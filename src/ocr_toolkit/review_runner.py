@@ -95,6 +95,7 @@ from ocr_toolkit.evidence.review_context import (
     merge_request_context_record,
     parse_review_context_mode,
 )
+from ocr_toolkit.evidence.review_range import resolve_review_range
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
@@ -174,6 +175,7 @@ from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_identity import validate_detached_merge_request_pipeline
 from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
+from ocr_toolkit.review_range import ReviewRange, admit_native_range
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -1733,6 +1735,7 @@ def _finalize_ocr_result(
     private_diagnostics: bool = False,
     projection: GitlinkProjection | None = None,
     selected_diff: tuple[RawDiffEntry, ...] = (),
+    expected_range: ReviewRange | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1744,6 +1747,15 @@ def _finalize_ocr_result(
     report: ReviewReport | None = None
     source_reader = GitRepositoryReader(Path.cwd())
     source_cache: dict[str, str | None] = {}
+    if expected_range is not None and (
+        expected_range.head != identity.source_sha
+        or (
+            identity.target_protection != "local"
+            and (identity.diff_base_sha, identity.diff_head_sha)
+            != (expected_range.base, expected_range.head)
+        )
+    ):
+        raise ReviewRunnerError("review range disagrees with the execution identity")
 
     def read_reviewed_head(path: str) -> str | None:
         if path not in source_cache:
@@ -1773,6 +1785,14 @@ def _finalize_ocr_result(
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
+        admitted_range = None
+        if expected_range is not None:
+            try:
+                admitted_range = admit_native_range(payload, expected_range)
+            except OcrResultContractError as exc:
+                raise ReviewRunnerError(
+                    "OCR native manifest did not prove the review range"
+                ) from exc
         if projection is not None:
             try:
                 qualify_gitlink_manifest(projection, selected_diff, payload)
@@ -1860,6 +1880,7 @@ def _finalize_ocr_result(
                         mcp.get("federation") if isinstance(mcp, dict) else None,
                         enrichment.legacy_policy if enrichment is not None else False,
                         effective_coverage,
+                        review_range=admitted_range,
                     ),
                     reviewed_sha=identity.source_sha,
                 )
@@ -1995,7 +2016,8 @@ def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
     """Resolve both OCR and evidence collection to one immutable commit pair."""
 
     reader = GitRepositoryReader(Path.cwd())
-    return ReviewRefs(reader.resolve_commit(refs.base), reader.resolve_commit(refs.head))
+    resolved = resolve_review_range(reader, refs.base, refs.head)
+    return ReviewRefs(resolved.base, resolved.head)
 
 
 def _reject_owned_review_options(args: list[str]) -> None:
@@ -3307,7 +3329,9 @@ def _run_evidence_review(
     try:
         refs = _immutable_review_refs(_review_refs(ocr_args))
     except RepositoryEvidenceError as exc:
-        raise ReviewRunnerError("immutable review refs could not be resolved") from exc
+        raise ReviewRunnerError(
+            "immutable review range could not be proved: " + redact_sensitive(str(exc))
+        ) from exc
     state.reviewed_sha = refs.head
     if not state.local and not is_merge_request_environment(os.environ):
         _record_unavailable_review_identity(artifacts, refs)
@@ -3588,6 +3612,7 @@ def _run_evidence_review(
                         forbidden=forbidden,
                         dlp_enabled=dlp_enabled,
                         toolkit_advisory=background_qualification.advisory,
+                        expected_range=ReviewRange(refs.base, refs.head),
                         **(
                             {
                                 "projection": projection,

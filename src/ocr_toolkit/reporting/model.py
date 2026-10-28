@@ -18,6 +18,7 @@ from ocr_toolkit.reporting.usage import (
 )
 from ocr_toolkit.repository_coverage import RepositoryCoverage
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
+from ocr_toolkit.review_range import ReviewRange
 
 FailureStage = Literal[
     "configuration",
@@ -49,6 +50,7 @@ class ExecutionFacts:
     federation: dict[str, Any] | None = None
     legacy_policy: bool = False
     repository_coverage: RepositoryCoverage | None = None
+    review_range: ReviewRange | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +71,7 @@ class ReviewReport:
     failure_stage: FailureStage | None = None
     repository_coverage: RepositoryCoverage | None = None
     gitlink_unqualified: bool = False
+    review_range: ReviewRange | None = None
 
 
 def report_from_result(
@@ -78,6 +81,8 @@ def report_from_result(
 
     if reviewed_sha and re.fullmatch(r"[0-9a-f]{40}", reviewed_sha) is None:
         raise OcrResultContractError("report reviewed commit is not an immutable SHA")
+    if execution.review_range is not None and execution.review_range.head != reviewed_sha:
+        raise OcrResultContractError("report range disagrees with its reviewed commit")
     comments = result.get("comments", [])
     warnings = result.get("warnings", [])
     if not isinstance(comments, list) or any(not isinstance(item, dict) for item in comments):
@@ -118,6 +123,7 @@ def report_from_result(
         publication=deepcopy(execution.publication),
         advisory=execution.advisory,
         repository_coverage=execution.repository_coverage,
+        review_range=execution.review_range,
     )
 
 

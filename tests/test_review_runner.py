@@ -3984,6 +3984,10 @@ def test_review_refs_are_resolved_before_evidence_and_ocr(
         def resolve_commit(self, ref: str) -> str:
             return {"target": "a" * 40, "source": "b" * 40}[ref]
 
+        def is_ancestor(self, base: str, head: str) -> bool:
+            assert (base, head) == ("a" * 40, "b" * 40)
+            return True
+
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(review_runner, "GitRepositoryReader", Reader)
 

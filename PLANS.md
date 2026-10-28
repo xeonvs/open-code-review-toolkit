@@ -26,9 +26,9 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Resolve and prove the exact supported range before range-dependent evidence; reject sibling, unrelated and undecidable shallow ranges before model execution | WQ-03 | pending |
-| REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | pending |
-| REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | pending |
+| REQ-001 | Resolve and prove the exact supported range before range-dependent evidence; reject sibling, unrelated and undecidable shallow ranges before model execution | WQ-03 | done |
+| REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | in_progress |
+| REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | in_progress |
 | REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | pending |
 | REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | pending |
 | REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | pending |
@@ -97,7 +97,7 @@ Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT gen
 | --- | --- | --- | --- |
 | WQ-01 | REQ-013, REQ-014 | Reviewed complete plan/lifecycle pointer and separate approved msgpack dev-lock correction, initial signed push, draft PR, v0.14.0 issue tracking and #273 expansion | done |
 | WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | done |
-| WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | pending |
+| WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | done |
 | WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | pending |
 | WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | pending |
 | WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | pending |
@@ -136,6 +136,8 @@ Plan/lifecycle, instruction, public-content privacy and staged secret checks pas
 
 Scorecard alert #16 was read through the provider API: its current main-bound finding is GHSA-j586-36cw-2gc2/CVE-2026-114613 in msgpack <1.2.3, matching the already corrected dev-lock package. Its finding remains open on baseline main until the correction is merged and a new main Scorecard analysis is read back; no dismissal is authorized or needed.
 
+The range slice separates pure immutable identity/native admission from isolated Git topology proof. Real repositories exercise ancestor/equal/merge-first-parent, sibling/unrelated/reverse/shallow and replacement/graft cases through the launcher. Complete coverage cannot substitute for any native endpoint or exact-range field. Gitlink admission reuses the same validator; local and GitLab execution identities are independently reconciled. Legacy output carries no confirmed range in the admitted report model. The focused runner/gitlink/range suite passes 313 tests (ten environment-gated installed OCR cases skipped); reporting and added range handoff checks also pass. Receipt/rendering integration and real installed/native diagram handoffs remain pending in WQ-05/WQ-06.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -144,7 +146,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-WQ-03: prove the supported immutable ancestor range before evidence, share a pure native-input identity validator with gitlink admission, and exercise production launcher/admission regressions. WQ-02 is locally complete; no further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
+WQ-04: implement the closed typed diagram variants, bounded run-wide collector and hostile/property tests. WQ-02/WQ-03 are locally complete; range consumers/receipts and installed/native handoffs remain in WQ-05/WQ-06. No further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
 
 ### Plan Fidelity Check
 
