@@ -20,6 +20,15 @@ SENSITIVE_NAMED_KEY_PATTERN = (
     r"(?:[A-Za-z0-9]+[_.-])*token)"
 )
 
+_SECRET_ASSIGNMENT_KEY_PATTERN = (
+    rf'(?:"{SENSITIVE_NAMED_KEY_PATTERN}"|'
+    rf"'{SENSITIVE_NAMED_KEY_PATTERN}'|\b{SENSITIVE_NAMED_KEY_PATTERN})"
+)
+_UNTERMINATED_SECRET_RE = re.compile(
+    rf"(?im)({_SECRET_ASSIGNMENT_KEY_PATTERN}[ \t]*[:=][ \t]*)"
+    r"(?P<quote>[\"'])(?:\\[^\r\n]|(?!(?P=quote))[^\\\r\n])+(?:\\)?(?=\r?$)"
+)
+
 
 SENSITIVE_ENV_NAMES = (
     "OCR_LLM_TOKEN",
@@ -208,15 +217,19 @@ def redact_sensitive(text: str) -> str:
     # failure diagnostics. Handle quoted values before unquoted values so
     # spaces inside `password="..."` are not leaked.
     redacted = re.sub(
-        rf'(?i)\b({SENSITIVE_NAMED_KEY_PATTERN})(\s*[:=]\s*)"(?:[^"\\]|\\.)*"',
+        rf'(?i)({_SECRET_ASSIGNMENT_KEY_PATTERN})(\s*[:=]\s*)"(?:[^"\\]|\\.)*"',
         r'\1\2"***"',
         redacted,
     )
     redacted = re.sub(
-        rf"(?i)\b({SENSITIVE_NAMED_KEY_PATTERN})(\s*[:=]\s*)'(?:[^'\\]|\\.)*'",
+        rf"(?i)({_SECRET_ASSIGNMENT_KEY_PATTERN})(\s*[:=]\s*)'(?:[^'\\]|\\.)*'",
         r"\1\2'***'",
         redacted,
     )
+    # Truncated logs or model strings can lose the closing quote without losing
+    # the credential. Require an exact named key and stay on that value's line;
+    # the disjoint escape/non-escape alternatives also bound near-match work.
+    redacted = _UNTERMINATED_SECRET_RE.sub(r"\1\g<quote>***", redacted)
     redacted = re.sub(
         rf"(?i)\b({SENSITIVE_NAMED_KEY_PATTERN})(\s*[:=]\s*)[^\"'\s,;&]+",
         r"\1\2***",

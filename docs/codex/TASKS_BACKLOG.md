@@ -103,7 +103,8 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Priority:** medium
 - **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
-- **Activation trigger:** Not met: named targets, bounded CI resources, corpus ownership, and backend criteria across Python 3.12-3.14 are not agreed.
+- **Promoted slice:** The bounded DLP-first Hypothesis pilot for toolkit 0.14.0 is active in [PLANS.md](../../PLANS.md). It also covers result/range, policy and typed diagram boundaries, using synthetic seeds and minimized regression tests; it is not the full native fuzzing campaign.
+- **Activation trigger:** The remaining campaign needs selected additional targets, bounded CI resources, corpus ownership and a backend qualified across supported Python versions. Resume by assessing that remaining scope against the completed pilot evidence.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
 - **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus policy parsers, handle codec, CI-outcome/store readback, federation admission and hostile upstream responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.

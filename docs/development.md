@@ -154,6 +154,13 @@ Use periodic polling only when no completion notification or persistent waiter e
 <!-- ew:invariant id="development.boundary-validation" -->
 ## Local validation
 
+Bounded property tests live in `tests/fuzz/`. The default `ocr-ci` Hypothesis
+profile runs 100 reproducible examples per property with no persistent database;
+`uv run --no-sync pytest tests/fuzz --hypothesis-profile=ocr-local` selects 1000.
+Keep generated inputs synthetic and retain minimized failures as ordinary
+regressions. The pilot exercises parser and DLP invariants, not live providers or
+model quality.
+
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 
 - parser changes exercise the semantic grammar and bounded degradation;

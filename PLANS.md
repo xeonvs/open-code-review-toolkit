@@ -33,16 +33,17 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 | REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | pending |
 | REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | pending |
 | REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | pending |
-| REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | pending |
-| REQ-009 | Deliver bounded Hypothesis properties, minimized synthetic regressions and edge/rare-branch coverage for DLP, range/results, policy and both diagram variants | WQ-02, WQ-03, WQ-04, WQ-08 | pending |
+| REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | in_progress |
+| REQ-009 | Deliver bounded Hypothesis properties, minimized synthetic regressions and edge/rare-branch coverage for DLP, range/results, policy and both diagram variants | WQ-02, WQ-03, WQ-04, WQ-08 | in_progress |
 | REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | pending |
-| REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | pending |
+| REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | done |
 | REQ-012 | Support Python >=3.12,<3.16, add required Linux 3.15 and release installs, retain coverage on 3.14 and hash-locked binary runtime installation | WQ-07 | pending |
-| REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | pending |
+| REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | in_progress |
 | REQ-014 | Follow plan-only draft push, per-commit and aggregate self-review, one security scan, at most two successful toolkit self-reviews, appropriate quality/secrets/dependency/installed/native gates and protected feature merge | WQ-01, WQ-02–WQ-12 | in_progress |
 | REQ-015 | Prepare v0.14.0 release PR with next line 0.15.0 and archive the complete plan in that PR, with external delivery explicitly pending | WQ-13 | pending |
 | REQ-016 | Verify stable registries, installs, provenance, tag, immutable Release/receipt, issues/milestone, site and clean main without a repository closure PR | WQ-14; Post-Close Delivery | pending |
 | REQ-017 | After feature merge and verification, assess promotional-site coverage and diagram examples before pushing the release branch; reconcile the candidate against final public contracts and actual stable delivery | WQ-13, WQ-14 | pending |
+| REQ-018 | Verify Scorecard alert #16 readback after the msgpack correction reaches main; do not dismiss the real finding manually or claim closure from a feature-only audit | WQ-12, WQ-14 | pending |
 
 ### Explicit Non-Goals
 
@@ -86,14 +87,16 @@ Begin promotional-site feature assessment and any diagram-example preparation on
 
 Clean main and origin/main both resolve to b81b4a15bb5212ece78c398665a9d576537ab404. The stable marker is 0.13.1 and next development line is 0.14.0. No active plan or implementation existed at activation. Runtime last changed in the merged 0.13.1 feature; the retained full coverage baseline from subsequent checks remains available privately.
 
+Feature branch codex/toolkit-0.14.0 was created from that baseline. Initial signed commits d792463 (plan/lifecycle pointer) and ef4601c (approved isolated msgpack dev-lock correction) are pushed in draft PR [#274](https://github.com/xeonvs/open-code-review-toolkit/pull/274). Existing open milestone 0.14.0 (#23) tracks #272/#273, and #273 now contains the agreed typed flow/sequence contracts and acceptance matrix. No further feature push is allowed before final local delivery gates.
+
 Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT generation: a flowchart with nine nodes/nine edges and 23 valid references; a sequence with four participants/eight messages/two nested alt fragments and 15 valid references; comment-only not-applicable; and six independent candidates from six native groups in one run. Native runs completed with no tool failures. Temporary validation exercised existing Git/DLP owners, not yet-written production graph admission. Technical comparison false positives were minimized to version < 2020.1.10 and date < 2020-01-01; mixed sensitive additions remained rejected. Python 3.15 passed 116 existing result/reporting/auth tests with trial dependencies; binary runtime resolution passed for Darwin arm64 and Linux amd64. Private credentials were linked through the existing owner and never copied; all temporary auth links were removed.
 
 ### Current Work Queue
 
 | Queue | Requirements | Exit evidence | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-013, REQ-014 | Reviewed complete plan/lifecycle pointer and separate approved msgpack dev-lock correction, initial signed push, draft PR, v0.14.0 issue tracking and #273 expansion | in_progress |
-| WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | pending |
+| WQ-01 | REQ-013, REQ-014 | Reviewed complete plan/lifecycle pointer and separate approved msgpack dev-lock correction, initial signed push, draft PR, v0.14.0 issue tracking and #273 expansion | done |
+| WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | done |
 | WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | pending |
 | WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | pending |
 | WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | pending |
@@ -103,9 +106,9 @@ Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT gen
 | WQ-09 | REQ-013, REQ-014 | Public owners, decision flow, evidence matrix, backlog/strategy status, changelog and aggregate self-review | pending |
 | WQ-10 | REQ-014 | Exactly one aggregate Codex Security diff scan; findings classified/fixed with scoped regression evidence | pending |
 | WQ-11 | REQ-014 | Own-tool ChatGPT local review with graph, findings/failed-read inspection, at most two successful runs and scoped corrections | pending |
-| WQ-12 | REQ-014 | Final quality and pre-push gates, finished feature push, protected checks/merge and development TestPyPI readback | pending |
+| WQ-12 | REQ-014, REQ-018 | Final quality and pre-push gates, finished feature push, protected checks/merge, Scorecard alert #16 and development TestPyPI readback | pending |
 | WQ-13 | REQ-015, REQ-017 | Signed release/v0.14.0 candidate, confirmed site-contract handoff before release push, 0.14.0/0.15.0 markers, authorization/notes/pins, checked archive and protected release handoff | pending |
-| WQ-14 | REQ-016, REQ-017 | Stable external publication/readback, promotional-site reconciliation and clean synchronized main; no repository closure PR | pending |
+| WQ-14 | REQ-016, REQ-017, REQ-018 | Stable external publication/readback, Scorecard/site reconciliation and clean synchronized main; no repository closure PR | pending |
 
 ### Locked Decisions
 
@@ -127,7 +130,11 @@ Reuse DLP and its explicit enablement contract; correct narrow technical context
 
 ### Latest Validation Results
 
-Pre-implementation feasibility and source-smoke evidence is summarized in Completed Baseline State. Plan semantic review, plan-lifecycle, instruction-contract, public-content privacy, whitespace and staged secret checks pass. The initial dependency audit rejected inherited dev-only msgpack 1.2.2 (CVE-2026-114613); the approved isolated 1.2.3 correction passes the same audit with no known vulnerabilities. A structured lock comparison confirms no other package or lock metadata changed. Promotional-site preparation is deferred until feature merge and verification, before release-branch push. No runtime implementation, final quality gate, security scan, own-tool patch self-review, feature/release PR, new publication or issue closure has occurred. Successful local self-review count: 0 of 2. Aggregate security scan count: 0 of 1.
+The DLP slice now preserves parsed version/date comparisons, including encoded comparison operators, without exempting mixed sensitive content. The bounded properties also found a truncated quoted-credential gap; exact quoted keys and missing closing quotes are now handled while pure empty/template assignments remain admissible. The focused suite passes 276 tests and eight subtests; DLP branch coverage remains 97%. The extended profile passes up to 1000 examples per property (finite character-budget cases exhaust at 364). Repository-wide formatting, scoped lint and runtime typing pass. Reserved fictional telephone fixtures replace all prior country-specific values in tests/examples. Semantic self-review covers whole-unit checks, representation normalization, exact no-value grammar, regex near matches and unrelated diff risk.
+
+Plan/lifecycle, instruction, public-content privacy and staged secret checks passed for the initial signed push. The inherited dev-only msgpack 1.2.2 audit finding is corrected to 1.2.3 in its own commit; the same audit passes with no known vulnerabilities, and its isolated lock comparison contains no other change. Draft feature PR #274 is open. Promotional-site preparation remains deferred until feature merge and verification, before release-branch push. Final quality, aggregate security scan, own-tool patch self-review, release PR, new publication and issue closure remain pending. Successful local self-review count: 0 of 2. Aggregate security scan count: 0 of 1.
+
+Scorecard alert #16 was read through the provider API: its current main-bound finding is GHSA-j586-36cw-2gc2/CVE-2026-114613 in msgpack <1.2.3, matching the already corrected dev-lock package. Its finding remains open on baseline main until the correction is merged and a new main Scorecard analysis is read back; no dismissal is authorized or needed.
 
 ### Risks And Recovery
 
@@ -137,7 +144,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-WQ-01: validate the approved isolated msgpack 1.2.3 dev-lock correction, reconcile this plan in its unpublished plan commit, create the separate self-reviewed security-maintenance commit, pass pre-push gates, push the feature branch and open its draft PR. Runtime implementation starts after that initial draft exists. Promotional-site preparation remains deferred to WQ-13.
+WQ-03: prove the supported immutable ancestor range before evidence, share a pure native-input identity validator with gitlink admission, and exercise production launcher/admission regressions. WQ-02 is locally complete; no further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
 
 ### Plan Fidelity Check
 

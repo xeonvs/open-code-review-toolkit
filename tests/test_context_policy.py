@@ -436,7 +436,7 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
     assert check_text("ééééé", budgets=budgets).reason == "limit"
     assert check_text("a\nb", budgets=budgets).reason == "limit"
     email = check_text("dev@example.invalid", budgets=TextBudgets(100, 200, 2))
-    phone = check_text("Call +420 123 456 789", budgets=TextBudgets(100, 200, 2))
+    phone = check_text("Call +1 202 555 0142", budgets=TextBudgets(100, 200, 2))
     technical_id = check_text(
         "12345678-1234-5678-1234-123456789012",
         budgets=TextBudgets(100, 200, 2),
@@ -508,11 +508,11 @@ def test_proven_technical_numbers_and_no_value_assignments_are_admitted(value: s
 @pytest.mark.parametrize(
     "value,reason",
     [
-        ("Call +420 123 456 789", "pii"),
-        ("Call +420.123.456.789", "pii"),
+        ("Call +1 202 555 0142", "pii"),
+        ("Call +1.202.555.0142", "pii"),
         ("Call 123.45.67.89", "pii"),
         ("123.45.67.89", "pii"),
-        ("Use 192.0.2.128/25; call +420.123.456.789", "pii"),
+        ("Use 192.0.2.128/25; call +1.202.555.0142", "pii"),
         ("allow 192.0.2.999/25", "pii"),
         ("allow 192.0.2.128/33", "pii"),
         ("listen 127.0.0.1:99999", "pii"),
@@ -598,7 +598,7 @@ def test_federation_ingress_admits_technical_numbers_but_rejects_mixed_pii() -> 
     )
     with pytest.raises(FederationError, match="dlp_rejected"):
         check_dlp(
-            {"summary": "Use 192.0.2.128/25; call +420.123.456.789"},
+            {"summary": "Use 192.0.2.128/25; call +1.202.555.0142"},
             matcher,
             boundary="result",
         )
@@ -615,7 +615,7 @@ def test_opaque_code_relaxes_only_literal_tag_syntax(value: str) -> None:
     "value,reason",
     [
         ("<Widget />\ncontact@example.invalid", "pii"),
-        ("<Widget />\nCall +420 123 456 789", "pii"),
+        ("<Widget />\nCall +1 202 555 0142", "pii"),
         ("<Widget />\nlogin_password: 'synthetic-secret-value'", "secret"),
         ("<Widget />\n<!-- hidden -->", "laundering"),
         ("&lt;Widget /&gt;", "laundering"),

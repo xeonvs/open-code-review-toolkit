@@ -25,14 +25,19 @@ EMAIL_RE = re.compile(
 )
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?[1-9][\d .()/-]{7,24}\d)(?!\w)")
 PURE_CREDENTIAL_ASSIGNMENT_RE = re.compile(
-    rf"(?im)^[ \t]*{SENSITIVE_NAMED_KEY_PATTERN}[ \t]*:[ \t]*"
+    rf"(?im)^[ \t]*(?:(?P<key_quote>['\"]){SENSITIVE_NAMED_KEY_PATTERN}"
+    rf"(?P=key_quote)|{SENSITIVE_NAMED_KEY_PATTERN})[ \t]*:[ \t]*"
     r"(?:(?P<quote>['\"])\{\{[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\}\}(?P=quote)|"
     r"(?P<empty>\"\"|''))[ \t]*$"
 )
 ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
-VERSION_CONTEXT_RE = re.compile(r"(?i)\b(?:version|release|build|pin)[ \t]+(?:v)?$")
+_TECHNICAL_SEPARATOR = r"(?:[ \t]+|[ \t]*(?:[<>]=?|[=!]=|=|[≤≥≠])[ \t]*)"
+VERSION_CONTEXT_RE = re.compile(
+    rf"(?i)\b(?:version|release|build|pin){_TECHNICAL_SEPARATOR}(?:v)?$"
+)
 DATE_CONTEXT_RE = re.compile(
-    r"(?i)\b(?:date|dated|on|since|until|before|after|expires)(?:[ \t]+on)?[ \t]+$"
+    rf"(?i)\b(?:date|dated|on|since|until|before|after|expires)"
+    rf"(?:[ \t]+on)?{_TECHNICAL_SEPARATOR}$"
 )
 IP_CONTEXT_RE = re.compile(
     r"(?i)(?:\b|_)(?:ipv4|ip|cidr|subnet|address|host|loginhost|listen|allow|network)\b"
@@ -146,14 +151,17 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
             return bool(IP_CONTEXT_RE.search(before[-96:]))
     except ValueError:
         pass
-    if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(before[-32:]):
+    # Only the bounded technical prefix is decoded: other representations and
+    # the complete unit still pass all secret, contact and laundering checks.
+    technical_prefix = _html_decode(before[-64:])
+    if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(technical_prefix):
         try:
             date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
         except ValueError:
             return False
         return True
     if re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", candidate):
-        return bool(VERSION_CONTEXT_RE.search(before[-32:]))
+        return bool(VERSION_CONTEXT_RE.search(technical_prefix))
     if re.fullmatch(r"\d+\.\d+", candidate):
         return bool(
             re.search(r"(?i)\bdecimal\([ \t]*['\"]$", before[-32:])

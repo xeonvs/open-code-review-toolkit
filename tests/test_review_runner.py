@@ -2013,7 +2013,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         'private con<span data-x="' + "x" * 600 + '">text</span> sentence',
         "Contact synthetic@example.invalid.",
         "Contact synthetic&#64;example.invalid.",
-        "+420<span>123</span>456789",
+        "+1<span>202</span>5550142",
         "ghp_abcdefghij<span>klmnop</span>qrstuvwxyz123456",
         "See [hidden](https://example.invalid/path).",
         "See [hidden](&#x68;ttps://example.invalid/path).",
