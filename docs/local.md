@@ -177,6 +177,12 @@ flowchart LR
 
 ### Evidence and external tools
 
+Set `OCR_REVIEW_DIAGRAM_MODE=local` to request one optional flowchart or sequence
+summary in the private report. Unset/`on`, `spoiler` and `off` do not request a
+standalone diagram. [Diagram modes, bounds and failure behavior](diagrams.md)
+also describe the Mermaid and complete text output. Diagram errors leave the
+review and findings usable.
+
 The mandatory repository-evidence MCP remains enabled. Registry validation and
 the toolkit's self-query do not substitute for the review's completed evidence
 summary call: the result's claimed usage must reconcile with the real action

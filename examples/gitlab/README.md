@@ -17,6 +17,20 @@ threads. A gitlink-only diff starts no model review and posts an advisory
 status; set the existing `OCR_STRICT_POSTING=true` only if that advisory should
 fail the job. No extra CI variable or MCP capability is needed.
 
+Starting with toolkit 0.14.0, unset `OCR_REVIEW_DIAGRAM_MODE` requests one
+expanded flowchart or sequence summary in GitLab. To collapse it, add this to
+the main pipeline's variables (use `off` to suppress it):
+
+```yaml
+variables:
+  OCR_REVIEW_DIAGRAM_MODE: "spoiler"
+```
+
+This selector is independent of the context recipes below. Missing or failed
+diagrams leave findings, coverage and approval unchanged. `local` is reserved
+for standalone private reports and is invalid in GitLab. See the
+[mode table, examples and bounds](../../docs/diagrams.md).
+
 | Mode | Recipe | MR text admitted | External access | Automatic approval |
 | --- | --- | --- | --- | --- |
 | Identity only | [`modes/identity-only.gitlab-ci.yml`](modes/identity-only.gitlab-ci.yml) | None | None | May remain enabled |

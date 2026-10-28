@@ -66,3 +66,36 @@ def admit_native_range(result: Mapping[str, object], expected: ReviewRange) -> R
                 f"native range manifest input.{field} disagrees with review"
             )
     return expected
+
+
+def range_payload(review_range: ReviewRange | None) -> dict[str, object]:
+    """Serialize proven identity or an explicit absence of native proof."""
+
+    return {
+        "schema": "ocr.review-range/v1",
+        "state": "verified" if review_range is not None else "unverified",
+        "base_sha": review_range.base if review_range is not None else None,
+        "head_sha": review_range.head if review_range is not None else None,
+        "exact_range": review_range.exact_range if review_range is not None else None,
+    }
+
+
+def parse_range_payload(value: object) -> ReviewRange | None:
+    """Revalidate hostile persisted range facts without consulting Git."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"schema", "state", "base_sha", "head_sha", "exact_range"}
+        or value["schema"] != "ocr.review-range/v1"
+    ):
+        raise OcrResultContractError("persisted review range shape is invalid")
+    if value["state"] == "unverified" and all(
+        value[field] is None for field in ("base_sha", "head_sha", "exact_range")
+    ):
+        return None
+    if value["state"] != "verified":
+        raise OcrResultContractError("persisted review range state is invalid")
+    review_range = ReviewRange(value["base_sha"], value["head_sha"])
+    if value["exact_range"] != review_range.exact_range:
+        raise OcrResultContractError("persisted review range exact endpoints disagree")
+    return review_range

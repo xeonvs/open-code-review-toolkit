@@ -7,6 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
+from ocr_toolkit.diagrams.contracts import DiagramResult
 from ocr_toolkit.ocr_result import OcrToolkitAdvisory
 from ocr_toolkit.reporting.dlp import admission_dlp_state, admitted_outcome_for_summary
 from ocr_toolkit.reporting.metadata import format_token_usage_summary
@@ -51,6 +52,7 @@ class ExecutionFacts:
     legacy_policy: bool = False
     repository_coverage: RepositoryCoverage | None = None
     review_range: ReviewRange | None = None
+    diagram: DiagramResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +74,7 @@ class ReviewReport:
     repository_coverage: RepositoryCoverage | None = None
     gitlink_unqualified: bool = False
     review_range: ReviewRange | None = None
+    diagram: DiagramResult | None = None
 
 
 def report_from_result(
@@ -124,6 +127,7 @@ def report_from_result(
         advisory=execution.advisory,
         repository_coverage=execution.repository_coverage,
         review_range=execution.review_range,
+        diagram=execution.diagram,
     )
 
 

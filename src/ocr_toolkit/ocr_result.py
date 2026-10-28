@@ -21,9 +21,9 @@ MAX_RESULT_BYTES_HARD_LIMIT = 20_000_000
 TOOLKIT_RESULT_KEY = "_ocr_toolkit"
 TOOLKIT_PRIVATE_DIAGNOSTIC_KEY = "_ocr_toolkit_private_diagnostic"
 TOOLKIT_GITLINK_SELECTION_KEY = "_ocr_toolkit_gitlink_selection"
-TOOLKIT_RESULT_SCHEMA_VERSION = 11
-PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION = 12
-HISTORICAL_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({9, 10})
+TOOLKIT_RESULT_SCHEMA_VERSION = 13
+PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION = 14
+HISTORICAL_TOOLKIT_RESULT_SCHEMA_VERSIONS = frozenset({9, 10, 11, 12})
 SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS = HISTORICAL_TOOLKIT_RESULT_SCHEMA_VERSIONS | {
     TOOLKIT_RESULT_SCHEMA_VERSION,
     PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -55,6 +55,7 @@ PUBLIC_REVIEW_TOOL_CALL_NAMES = frozenset(
         "ocr_toolkit_evidence",
         "ocr_toolkit_evidence_coverage",
         "ocr_toolkit_evidence_search",
+        "ocr_toolkit_review_diagram",
         "task_done",
     }
 )
@@ -318,6 +319,8 @@ def _decode_result(data: bytes) -> Any:
             for key, value in pairs:
                 if key == TOOLKIT_ADVISORY_KEY and key in result:
                     raise OcrResultMalformed("OCR result repeats the reserved toolkit advisory")
+                if key in result:
+                    raise OcrResultMalformed("OCR result repeats a JSON field")
                 result[key] = value
             return result
 
@@ -332,9 +335,30 @@ def load_ocr_result(path: Path) -> Any:
     descriptor = _open_result(path)
     try:
         try:
-            return sanitize_ocr_value(
-                _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
-            )
+            raw = _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
+            sanitized = sanitize_ocr_value(raw)
+            metadata = raw.get(TOOLKIT_RESULT_KEY) if isinstance(raw, dict) else None
+            if (
+                isinstance(metadata, dict)
+                and type(metadata.get("schema_version")) is int
+                and metadata["schema_version"] in {13, 14}
+            ):
+                from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
+
+                if not toolkit_receipt_is_valid(metadata):
+                    raise OcrResultMalformed("OCR toolkit receipt is invalid")
+                scalar_metadata = {
+                    key: value for key, value in metadata.items() if key != "diagram"
+                }
+                if scalar_metadata != sanitize_ocr_value(scalar_metadata):
+                    raise OcrResultMalformed("OCR toolkit receipt changed during redaction")
+                # Preserve the exact canonical optional candidate. Generic
+                # redaction could turn a legitimate empty/template credential
+                # into a different branch condition. The publication owner
+                # revalidates the entire original diagram text and source proof,
+                # omitting the whole optional channel on admission failure.
+                sanitized[TOOLKIT_RESULT_KEY] = metadata
+            return sanitized
         except RecursionError as exc:
             raise OcrResultMalformed(str(exc)) from exc
     finally:

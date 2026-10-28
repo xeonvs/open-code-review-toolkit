@@ -303,13 +303,13 @@ def test_public_docs_describe_current_context_and_federation_boundaries() -> Non
         "ocr.context-store/v2",
         "context_list",
         "context_get",
-        "receipt v11",
+        "receipt v13",
         "no migration path",
         "semantic paraphrase",
     ):
         assert contract in normalized_bounded
     for document in (configuration, gitlab, operations, security):
-        assert "receipt v11" in document
+        assert "receipt v13" in document
         assert "review-context.md" in document
     for document in (configuration, operations, security):
         assert "OCR_DLP_ENABLED" in document

@@ -22,10 +22,18 @@ from ocr_toolkit.context.mcp import (
     tool_definitions,
 )
 from ocr_toolkit.context.store import ContextStore
+from ocr_toolkit.diagrams.collector import DiagramCollector
+from ocr_toolkit.diagrams.lifecycle import diagram_warning
+from ocr_toolkit.diagrams.mcp import (
+    DIAGRAM_TOOL_NAME,
+    call_diagram_tool,
+    optional_diagram_tool_definition,
+)
 from ocr_toolkit.evidence.actions import UNATTRIBUTED_ACTION, record_action
 from ocr_toolkit.evidence.model import CoverageRecord, EvidenceDelta, EvidenceRecord, RefRole
 from ocr_toolkit.evidence.policy.schema import is_legacy_policy_value
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
+from ocr_toolkit.review_range import ReviewRange
 
 TOOL_NAME = "ocr_toolkit_evidence"
 SEARCH_TOOL_NAME = "ocr_toolkit_evidence_search"
@@ -755,6 +763,9 @@ def handle_request(
     context_store: ContextStore | None = None,
     *,
     action_receipt_path: Path | None = None,
+    diagram_collector: DiagramCollector | None = None,
+    diagram_output_enabled: bool = False,
+    request_bytes: int | None = None,
 ) -> dict[str, object] | None:
     """Handle one validated JSON-RPC request or notification."""
 
@@ -788,11 +799,20 @@ def handle_request(
         tools = evidence_tool_definitions()
         if context_store is not None:
             tools.extend(tool_definitions())
+        if diagram_output_enabled or diagram_collector is not None:
+            tools.append(optional_diagram_tool_definition())
         return _success(request_id, {"tools": tools})
     if method == "tools/call":
         if not isinstance(params, dict):
             return _error(request_id, -32602, "Invalid tool call")
         name = params.get("name")
+        if (diagram_output_enabled or diagram_collector is not None) and name == DIAGRAM_TOOL_NAME:
+            return _success(
+                request_id,
+                call_diagram_tool(
+                    diagram_collector, params.get("arguments", {}), request_bytes=request_bytes
+                ),
+            )
         if isinstance(name, str) and name in {TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME}:
             arguments = params.get("arguments", {})
             if name == TOOL_NAME:
@@ -865,6 +885,8 @@ def serve(
     context_path: Path | None = None,
     context_run_id: str = "",
     context_policy_digest: str = "",
+    diagram_path: Path | None = None,
+    diagram_run_id: str = "",
 ) -> int:
     """Serve newline-delimited MCP JSON-RPC until the client closes stdin."""
 
@@ -885,6 +907,18 @@ def serve(
         except (OSError, ValueError) as exc:
             print(f"Cannot load context store: {exc}", file=sys.stderr)
             return 2
+    diagram_collector = None
+    if diagram_path is not None:
+        try:
+            if store.base is None or store.head is None:
+                raise ValueError("diagram refs unavailable")
+            diagram_collector = DiagramCollector(
+                diagram_path,
+                diagram_run_id,
+                ReviewRange(store.base.commit_sha, store.head.commit_sha),
+            )
+        except Exception:
+            diagram_warning()
     for line in _bounded_lines(stdin):
         has_request_id = True
         if not line or len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
@@ -901,6 +935,9 @@ def serve(
                     request,
                     context_store,
                     action_receipt_path=action_receipt_path,
+                    diagram_collector=diagram_collector,
+                    diagram_output_enabled=diagram_path is not None,
+                    request_bytes=len(line.encode("utf-8")),
                 )
         if response is None or not has_request_id:
             continue

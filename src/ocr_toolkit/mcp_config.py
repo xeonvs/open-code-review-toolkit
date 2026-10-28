@@ -5,13 +5,15 @@ from __future__ import annotations
 import os
 import sys
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ocr_toolkit.common.redaction import redact_sensitive
 from ocr_toolkit.config_writer import OCRConfigError, read_ocr_config, update_ocr_config
 from ocr_toolkit.context.mcp import GET_TOOL as CONTEXT_GET_TOOL
 from ocr_toolkit.context.mcp import LIST_TOOL as CONTEXT_LIST_TOOL
+from ocr_toolkit.diagrams.lifecycle import diagram_warning
+from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
 from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
 from ocr_toolkit.federation.contracts import FederationError, ServerSpec
 from ocr_toolkit.federation.registry import parse_registry
@@ -84,6 +86,7 @@ def compose_mcp_servers(
     context: MCPContextConfig | None = None,
     allow_external: bool = True,
     gateway: Any = None,
+    diagram_run_id: str = "",
 ) -> MCPComposition:
     """Expose mandatory evidence and only a ready governed federation relay."""
 
@@ -167,12 +170,40 @@ def compose_mcp_servers(
                     f"MCP tool name {tool!r} is declared by both {owner!r} "
                     f"and {capability.server!r}"
                 )
-    return MCPComposition(
+    composition = MCPComposition(
         payload=payload,
         capabilities=tuple(capabilities),
         external_servers=tuple(servers),
         secret_values=tuple(secret_values),
     )
+    if not diagram_run_id:
+        return composition
+    try:
+        return with_diagram_output(composition, diagram_run_id)
+    except Exception:
+        diagram_warning()
+        return composition
+
+
+def with_diagram_output(composition: MCPComposition, run_id: str) -> MCPComposition:
+    """Augment an already valid registry without mutating mandatory inputs."""
+
+    if len(run_id) != 32 or any(c not in "0123456789abcdef" for c in run_id):
+        raise MCPConfigError("internal diagram run identity is invalid")
+    if any(DIAGRAM_TOOL_NAME in capability.tools for capability in composition.capabilities):
+        raise MCPConfigError("diagram tool is already declared")
+    payload = dict(composition.payload)
+    builtin = dict(payload[BUILTIN_EVIDENCE_SERVER])
+    builtin["args"] = [*builtin["args"], "--diagram-run-id", run_id]
+    builtin["tools"] = [*builtin["tools"], DIAGRAM_TOOL_NAME]
+    payload[BUILTIN_EVIDENCE_SERVER] = builtin
+    capabilities = tuple(
+        replace(capability, tools=(*capability.tools, DIAGRAM_TOOL_NAME))
+        if capability.builtin and capability.server == BUILTIN_EVIDENCE_SERVER
+        else capability
+        for capability in composition.capabilities
+    )
+    return replace(composition, payload=payload, capabilities=capabilities)
 
 
 def build_mcp_composition(
@@ -181,6 +212,7 @@ def build_mcp_composition(
     context: MCPContextConfig | None = None,
     allow_external: bool = True,
     gateway: Any = None,
+    diagram_run_id: str = "",
 ) -> MCPComposition:
     return compose_mcp_servers(
         parse_mcp_servers(profile=profile),
@@ -188,6 +220,7 @@ def build_mcp_composition(
         context=context,
         allow_external=allow_external,
         gateway=gateway,
+        diagram_run_id=diagram_run_id,
     )
 
 

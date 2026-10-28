@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from typing import Protocol
 
 from ocr_toolkit.common.markdown import inline_code
+from ocr_toolkit.diagrams.contracts import DIAGRAM_TOOL_NAME
 from ocr_toolkit.evidence.store import EvidenceStore
 
 
@@ -99,6 +100,15 @@ def render_bootstrap(
     )
     external = [capability for capability in capabilities if not capability.builtin]
     navigation = []
+    diagram_available = any(DIAGRAM_TOOL_NAME in capability.tools for capability in capabilities)
+    if diagram_available and store.base is not None and store.head is not None:
+        navigation.append(
+            "Optional diagram requested: submit one self-contained typed flowchart or sequence "
+            f"through `{DIAGRAM_TOOL_NAME}` for base_sha={store.base.commit_sha}, "
+            f"head_sha={store.head.commit_sha}. Inspect the full range, never submit a group fragment. "
+            "Use not-applicable without a diagram when no behavioral summary is useful. "
+            "The diagram never changes findings, coverage, or approval; raw Mermaid is forbidden."
+        )
     if mr_context is not None:
         navigation.extend(
             (
@@ -209,7 +219,12 @@ def render_bootstrap(
                 continue
             marker = " (built-in)" if capability.builtin else ""
             if capability.builtin and capability.server == "ocr_toolkit_evidence":
-                lines.append(f"- {inline_code(capability.server)}{marker}: fixed read-only tools")
+                description = (
+                    "read-only evidence/context; optional private diagram output"
+                    if diagram_available
+                    else "fixed read-only tools"
+                )
+                lines.append(f"- {inline_code(capability.server)}{marker}: {description}")
                 continue
             tool_names = ", ".join(inline_code(tool) for tool in capability.tools)
             lines.append(

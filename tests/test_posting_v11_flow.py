@@ -1,4 +1,4 @@
-"""Publication and approval boundaries for the exact v11 GitLab review identity."""
+"""Current publication/approval and frozen pre-execution GitLab identity boundaries."""
 
 from __future__ import annotations
 
@@ -32,12 +32,13 @@ from ocr_toolkit.providers.gitlab import (
 )
 from ocr_toolkit.result_contract import ReviewOutcome
 from ocr_toolkit.review_receipt import ReceiptReviewIdentity, validated_review_identity
-from tests.support import gitlab_config, review_receipt_v8
+from tests.support import gitlab_config, native_range_input, review_receipt_v8
 from tests.test_review_receipt_v11 import _receipt_v11
+from tests.test_review_receipt_v13 import CURRENT_RANGE, _receipt_v13
 
 
 def _identity(*, unprotected: bool = False) -> ReceiptReviewIdentity:
-    receipt = _receipt_v11(target_protection="unprotected" if unprotected else "protected")
+    receipt = _receipt_v13(target_protection="unprotected" if unprotected else "protected")
     identity = validated_review_identity(receipt)
     assert identity is not None
     return identity
@@ -56,13 +57,32 @@ def _outcome(kind: str) -> ReviewOutcome:
 
 
 def _result(kind: str, *, comments: bool = False) -> dict[str, Any]:
+    terminal = "failed" if kind == "failed" else "partial" if kind == "partial" else "complete"
+    selected = [{"item_id": "first"}]
+    if kind == "partial":
+        selected.append({"item_id": "second"})
     return {
-        "status": "failed" if kind == "failed" else "complete",
+        "status": terminal,
         "comments": (
             [{"path": "module.py", "line": 1, "content": "Review this line."}] if comments else []
         ),
         "warnings": [],
-        "_ocr_toolkit": _receipt_v11(),
+        "manifest": {
+            "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
+            "terminal_state": terminal,
+            "input": native_range_input(CURRENT_RANGE.base, CURRENT_RANGE.head),
+            "coverage": {
+                "selected": selected,
+                "completed": selected[:1] if kind != "failed" else [],
+                "reused": [],
+                "failed": [{**selected[-1], "classification": "provider"}]
+                if kind in ("failed", "partial")
+                else [],
+                "waived": [],
+            },
+        },
+        "_ocr_toolkit": _receipt_v13(),
     }
 
 
@@ -308,7 +328,7 @@ def test_v11_findings_use_exact_receipt_diff_tuple_and_protected_anchor(
 ) -> None:
     """Inline positions use the reviewed B/start/H, even when B differs from T."""
 
-    receipt = _receipt_v11(target_protection="unprotected")
+    receipt = _receipt_v13(target_protection="unprotected")
     identity = validated_review_identity(receipt)
     assert identity is not None
     observed_refs: list[dict[str, str]] = []
@@ -365,7 +385,7 @@ def test_v11_no_findings_summary_uses_protected_anchor(
 ) -> None:
     """A clean fallback still explains target protection and immutable authority."""
 
-    receipt = _receipt_v11(target_protection="unprotected")
+    receipt = _receipt_v13(target_protection="unprotected")
     notes: list[str] = []
     monkeypatch.setattr(workflow, "parse_result_outcome", lambda _result: _outcome("clean"))
     monkeypatch.setattr(

@@ -2,7 +2,7 @@
 
 This file contains implementation-ready future work derived from the [toolkit strategy](../engineering/toolkit_strategy.md) and ordered by the [roadmap](../../ROADMAP.md). Active repository work belongs in `PLANS.md`; roadmap outcomes are intentionally not repeated here.
 
-Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Release classification is an expectation to be confirmed when work is activated. Completed work is reflected in the roadmap and stable execution-history archive rather than retained as future backlog.
+Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`; a temporary `promoted` entry points only to its active plan. Release classification is an expectation to be confirmed when work is activated. Completed work is reflected in the roadmap and stable execution-history archive rather than retained as future backlog.
 
 ## Existing backlog reconciliation
 
@@ -23,7 +23,7 @@ private failure arguments add no telemetry exporter or model-profile capability.
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
 | M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
 | OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
-| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established context and federation parsers, handles, schemas, and hostile upstream responses in its candidate inventory. |
+| Native fuzzing campaign | Promoted to active release work | The owner activated all of BL-019 for 0.14.0 on the existing bounded Hypothesis backend; [PLANS.md](../../PLANS.md) owns execution and closure. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion, snapshot, and protected same-revision CI-outcome capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
@@ -99,14 +99,14 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 
 ### BL-019: Run a native fuzzing campaign
 
-- **Status:** parked
+- **Status:** promoted to [active 0.14.0 plan](../../PLANS.md)
 - **Priority:** medium
 - **Roadmap theme:** M8 Later and conditional work
 - **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
-- **Promoted slice:** The bounded DLP-first Hypothesis pilot for toolkit 0.14.0 is active in [PLANS.md](../../PLANS.md). It also covers result/range, policy and typed diagram boundaries, using synthetic seeds and minimized regression tests; it is not the full native fuzzing campaign.
-- **Activation trigger:** The remaining campaign needs selected additional targets, bounded CI resources, corpus ownership and a backend qualified across supported Python versions. Resume by assessing that remaining scope against the completed pilot evidence.
+- **Activation:** The owner authorized completing the whole campaign in 0.14.0 after the Hypothesis pilot found defects. [PLANS.md](../../PLANS.md) owns the remaining target matrix, checks and closure.
+- **Engine and corpus:** Dev-only Hypothesis; bounded synthetic generators in `tests/fuzz/`, 100 examples per property in normal Python CI and 1000 under independent explicit local seeds. Component regression tests own minimized failures; supported-Python qualification is required. The implemented DLP/result/range/policy/diagram slice is the foundation.
 - **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
-- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus policy parsers, handle codec, CI-outcome/store readback, federation admission and hostile upstream responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
+- **Scoped deliverables:** Current evidence/MCP/result/GitLab/registry parsers, policy, context handles, CI-outcome/store readback, federation admission and hostile upstream responses; source, wire and persistence invariants with minimized regression replay. The active plan records the concrete owners and claim limits.
 - **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
 - **Exclusions:** Unbounded CI, production data, blanket fuzzing, or a runtime dependency.
 - **Validation:** Reproducible smoke campaign and minimized-corpus replay.

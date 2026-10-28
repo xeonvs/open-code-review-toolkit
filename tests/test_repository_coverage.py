@@ -50,9 +50,11 @@ from ocr_toolkit.review_receipt import (
     receipt_review_identity,
     toolkit_receipt_is_valid,
 )
-from tests.support import gitlab_config
+from tests.support import gitlab_config, native_range_input
 from tests.test_gitlinks import _fixture, _gitlink_only_fixture, _mixed_fixture, _move_fixture
+from tests.test_result_contract import manifest_result
 from tests.test_review_receipt_v11 import _receipt_v11
+from tests.test_review_receipt_v13 import CURRENT_RANGE, _receipt_v13
 from tests.test_review_runner import (
     BUILTIN_EVIDENCE_TOOLS,
     DEFAULT_IDENTITY,
@@ -295,6 +297,7 @@ def test_post_rebuilds_native_partial_coverage_and_rejects_tampering(
         "comments": [],
         "manifest": {
             "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
             "terminal_state": "complete",
             "input": {
                 "mode": "range",
@@ -540,7 +543,7 @@ def test_partial_effective_cleanup_keeps_old_findings_and_discussions(
 ) -> None:
     identity = replace(
         receipt_review_identity(_receipt_v11()),  # type: ignore[arg-type]
-        schema_version=12,
+        schema_version=14,
     )
     previous = BotCommentRefs(
         plain_note_ids=[11],
@@ -569,21 +572,27 @@ def test_partial_effective_cleanup_keeps_old_findings_and_discussions(
 def test_partial_post_rejects_unproven_coverage_before_gitlab_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    receipt = _receipt_v11()
-    receipt["schema_version"] = 12
+    receipt = _receipt_v13()
+    receipt["schema_version"] = 14
     receipt["repository_coverage"] = _coverage()
     assert toolkit_receipt_is_valid(receipt)
-    monkeypatch.setattr(
-        workflow,
-        "verified_partial_repository_coverage",
-        lambda *_args: (_ for _ in ()).throw(RepositoryEvidenceError("synthetic mismatch")),
-    )
+    seen = []
+
+    def reject(*_args):
+        seen.append("coverage")
+        raise RepositoryEvidenceError("synthetic mismatch")
+
+    monkeypatch.setattr(workflow, "verified_partial_repository_coverage", reject)
     monkeypatch.setattr(
         workflow,
         "collect_previous_bot_comment_refs",
         lambda *_args: pytest.fail("GitLab must not be read for unproven coverage"),
     )
-    assert workflow.post_results(gitlab_config(), {"_ocr_toolkit": receipt}) == 1
+    result = manifest_result("complete", selected=["a"], completed=["a"])
+    result["manifest"]["input"] = native_range_input(CURRENT_RANGE.base, CURRENT_RANGE.head)
+    result["_ocr_toolkit"] = receipt
+    assert workflow.post_results(gitlab_config(), result) == 1
+    assert seen == ["coverage"]
 
 
 def test_v12_identity_uses_current_publication_freshness(

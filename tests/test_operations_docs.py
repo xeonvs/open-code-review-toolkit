@@ -349,7 +349,7 @@ def test_canonical_decision_flow_has_stable_palette_and_runtime_boundaries() -> 
         "not a local-mode exception",
         "not an automatic-approval feature",
         "publication owns review-signal delivery",
-        "receipt v11",
+        "receipt v13",
         "OCR_REVIEW_PROGRESS",
         "Blocking pipe or unavailable",
         "Review continues unchanged",
@@ -533,8 +533,8 @@ def test_context_receipt_and_mcp_profile_contracts_are_public() -> None:
         assert "`metadata`" in document
         assert "`enriched`" in document
     assert 'OCR_REVIEW_CONTEXT_MODE: "off"' in example
-    assert "receipt v11" in configuration
-    assert "v1-v8 remains unsupported" in configuration
+    assert "receipt v13" in configuration
+    assert "v1-v8 results remain unsupported" in configuration
     assert "v1-v8 remains unsupported" in operations
     assert "complete `metadata` context" in operations.lower()
     assert "mandatory internal evidence MCP is unreplaceable" in configuration
@@ -565,7 +565,7 @@ def test_builtin_search_coverage_and_receipt_v11_boundaries_are_public() -> None
         "absence_authoritative=true",
         "Stop once the required evidence is sufficient",
         "action receipt v3",
-        "Receipt v11",
+        "Receipt v13",
     ):
         assert phrase in configuration
     assert "DLP-admitted store" in security
@@ -680,7 +680,7 @@ def test_unprotected_target_contract_is_complete_and_fail_closed() -> None:
         assert "required" in document
         assert "unprotected" in document
     for document in (configuration, gitlab, security, bounded):
-        assert "receipt v11" in document
+        assert "receipt v13" in document
     for phrase in (
         "Explicit empty strings",
         "context `off` or bounded `metadata`",

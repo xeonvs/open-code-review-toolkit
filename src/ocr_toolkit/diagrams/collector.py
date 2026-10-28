@@ -226,16 +226,22 @@ class DiagramCollector:
         # MCP already bounds the wire request. This additional cap also applies
         # when an in-process caller supplies an unserializable or oversized value.
         try:
-            size = len(bounded_json(value, limit=MAX_SUBMISSION_BYTES))
+            canonical_size = len(bounded_json(value, limit=MAX_SUBMISSION_BYTES))
         except DiagramError:
-            size = MAX_SUBMISSION_BYTES + 1
+            canonical_size = None
         if input_bytes is not None:
-            if type(input_bytes) is not int or input_bytes < size:
+            if (
+                type(input_bytes) is not int
+                or input_bytes <= 0
+                or (canonical_size is not None and input_bytes < canonical_size)
+            ):
                 raise DiagramError("diagram wire byte count is invalid")
             # The transport supplies the original request length, including
             # whitespace/escaping. Compact normalization cannot shrink away the
             # run-wide input budget. This value is never a model argument.
             size = input_bytes
+        else:
+            size = canonical_size if canonical_size is not None else MAX_SUBMISSION_BYTES + 1
         with self._locked() as (parent, name):
             previous = self._read(parent, name)
             count = min(previous.submissions + 1, MAX_SUBMISSIONS + 1)

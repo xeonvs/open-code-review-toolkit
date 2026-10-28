@@ -25,6 +25,8 @@ class EvidenceArtifacts:
     action_receipt: Path
     action_receipt_lock: Path
     dlp_decisions: Path
+    diagram: Path
+    diagram_lock: Path
 
 
 def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
@@ -43,6 +45,8 @@ def repository_artifacts(root: Path | None = None) -> EvidenceArtifacts:
         action_receipt=directory / "evidence-actions.json",
         action_receipt_lock=directory / ".evidence-actions.json.lock",
         dlp_decisions=directory / "private-dlp-decisions.json",
+        diagram=directory / "diagram.json",
+        diagram_lock=directory / ".diagram.json.lock",
     )
 
 

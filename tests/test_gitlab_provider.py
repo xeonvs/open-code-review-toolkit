@@ -1414,6 +1414,9 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         f"#!{sys.executable}\n"
         "import json, os, pathlib, subprocess, sys\n"
         "args = sys.argv[1:]\n"
+        "if args == ['--version']:\n"
+        "    print('Open Code Review v1.13.2')\n"
+        "    raise SystemExit(0)\n"
         "assert args[0] == 'review'\n"
         "def option(name):\n"
         "    index = args.index(name)\n"
@@ -1462,7 +1465,13 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
         "assert len(context) == 1\n"
         "assert context[0]['value']['fields']['description']['value'] == "
         "'The broad rollout is intentional.'\n"
-        "print(json.dumps({'status':'success','comments':[],"
+        "native_input = {'mode':'range','requested_from':base,'requested_head':head,"
+        "'resolved_base':base,'resolved_head':head,'exact_range':base+'..'+head}\n"
+        "coverage = {'selected':[{'item_id':'app.py'}], 'completed':[{'item_id':'app.py'}],"
+        "'reused':[], 'failed':[], 'waived':[]}\n"
+        "print(json.dumps({'status':'complete','comments':[],"
+        "'manifest':{'schema_version':'ocr.run-manifest/v1','operation':'review',"
+        "'terminal_state':'complete','input':native_input,'coverage':coverage},"
         "'tool_calls':{'total':3,'by_tool':{'ocr_toolkit_evidence':3}}}, "
         "sort_keys=True))\n",
         encoding="utf-8",
@@ -1524,7 +1533,23 @@ def test_evidence_review_crosses_provider_git_store_mcp_and_subprocess_boundarie
     assert _git(checkout, "status", "--short") == ""
     payload = json.loads(result.read_text(encoding="utf-8"))
     assert payload["_ocr_toolkit"] == {
-        "schema_version": 11,
+        "schema_version": 13,
+        "range": {
+            "schema": "ocr.review-range/v1",
+            "state": "verified",
+            "base_sha": base,
+            "head_sha": head,
+            "exact_range": f"{base}..{head}",
+        },
+        "diagram": {
+            "schema": "ocr.review-diagram/v1",
+            "mode": "on",
+            "state": "unsupported",
+            "reason": "none",
+            "calls": 0,
+            "failed_calls": 0,
+            "submission": None,
+        },
         "review": {
             "source_sha": head,
             "diff_base_sha": base,

@@ -4,6 +4,22 @@ The toolkit bridges repository and forge content, OCR and its LLM provider,
 operator configuration, governed MCP upstreams, CI secrets, and publication APIs.
 No input becomes safe merely because a trusted pipeline acquired it.
 
+One runner-owned immutable B/H range is proved before range-dependent evidence
+and independently matched to native requested/resolved/exact-range fields at
+admission. Complete coverage does not prove range identity. Current result
+receipts v13/v14 bind that claim; frozen v9-v12 remain historical readback and
+pre-execution v5/v6 keep their unchanged embedded review tuples.
+
+The optional [typed diagram](diagrams.md) has a separate run-bound private output
+collector. It accepts no destination or provider-write authority. Whole-unit DLP
+checks original labels, conditions and paths alongside immutable source validation;
+loss of a sensitive condition omits the complete candidate. The renderer accepts
+only admitted types and owns all Mermaid syntax. Optional construction, MCP,
+source, cleanup and rendering faults cannot change review health or authorize an
+action. This recovery does not bypass mandatory evidence/range gates or atomic
+rejection of a malformed persisted result. Only validated fixed output-tool
+failures can be excluded from approval's auxiliary-read failure count.
+
 ## Threat model
 
 Protected assets include immutable review identities (source H, current MR diff,
@@ -47,7 +63,7 @@ attributes remain input-bound across review and posting.
 Type transitions, ambiguous moves, unsafe configuration, unknown diagnostics,
 drift, reuse, or mismatched manifest evidence stop the review. Neither the
 internal evidence MCP nor an external MCP server can grant review coverage for
-a skipped gitlink or authorize a finding about its contents. A v12 receipt
+a skipped gitlink or authorize a finding about its contents. A v14 receipt
 states path-free partial repository coverage and blocks automatic approval and
 old finding-thread cleanup; the native OCR manifest retains its own meaning.
 `post` independently rechecks the original Git trees and selected native work
@@ -66,7 +82,7 @@ retargeting, default-branch or protection changes, stale diff versions,
 cross-job handoff replacement, and policy object replacement. It requires
 authenticated same-project IDs and bounded provider/Git reads; a locally
 available SHA or CI declaration alone is
-not authority. A forged persisted receipt cannot fill missing v11 authority
+not authority. A forged persisted receipt cannot fill missing v13 authority
 fields from older versions. Configured federation still carries
 confused-deputy and object/tenant authorization risk: DLP and origin checks do
 not repair an overprivileged upstream service. These controls do not secure an
@@ -104,7 +120,7 @@ and OCR-session retention.
 The content-free `ocr.federation/v2` receipt records closed per-alias counts,
 argument/result DLP gate and reason counts, and cleanup state. Legacy v1
 receipts remain readable but do not identify the rejection boundary or reason.
-Receipt v11 reconciles OCR attempts independently with gateway
+Receipt v13 reconciles OCR attempts independently with gateway
 attempts and terminal outcomes. Used advisory tools, known denied/failed calls,
 or accounting mismatch make the run comment-only. Missing, malformed,
 unfinalized or cleanup-uncertain federation evidence blocks normal publication.
@@ -174,7 +190,7 @@ rejection: `forge_discussions`, `remediation_threads`, `ci_outcomes`,
 `external_context`, `operator_secret`, or `other`. Each rejected item counts each
 matching class once. Counts may overlap and need not sum to total omitted items.
 Rejected text is not retained or reprocessed later to infer attribution.
-`ocr.publication-dlp-signal/v4`, Technical details and receipt v11 expose only
+`ocr.publication-dlp-signal/v4`, Technical details and receipt v13 expose only
 bounded states and counts. Publication `ocr.publication/v2` separates omitted
 public fields and reasons from private-only sanitized fields and reasons; OCR
 coverage and provider posting counts remain independent.
@@ -207,13 +223,13 @@ coverage and provider posting counts remain independent.
   toolkit artifacts. GitLab rejects this option before auth-store access.
 - Automatic approval binds exact source, actual target/diff, policy authority,
   protection and author identity, skips self-approval, and accepts only exact
-  receipt v11 with enabled DLP and every existing eligibility gate satisfied.
+  receipt v13 with enabled DLP and every existing eligibility gate satisfied.
   The toolkit never removes an existing approval; a prior bot approval may
   remain after retargeting under GitLab's approval-reset policy.
 - Provider identity, diff, authority and lifecycle are revalidated before normal
   publication and again before an eligible approval. Code-tuple movement and
   changed or unverifiable authority stop the write. Only a proven same protected
-  default-policy branch fast-forward may finish against captured P. A v11 result
+  default-policy branch fast-forward may finish against captured P. A v13 result
   whose MR became terminal is not newly published; the prior review remains.
 - Ambiguous inline creates use one author-bound readback without retry. Rollback deletes only recorded IDs absent from the baseline; marker text cannot claim
   ownership of another note.

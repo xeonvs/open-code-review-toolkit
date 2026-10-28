@@ -120,9 +120,9 @@ this receipt. Historical v1 receipts remain readable, but their aggregate
 `dlp_rejected` count cannot identify a gate or reason and must not be
 retrospectively attributed.
 
-Toolkit receipt v11 binds federation reconciliation to the authenticated
-B/H/T/P review identity. Its v0.12/v10 predecessor remains historical
-readback data and cannot authorize a new current-result publication. External
+Toolkit receipt v13/v14 binds federation reconciliation to the authenticated
+B/H/T/P review identity and independently admitted native range. Frozen v9-v12
+remain historical readback and cannot authorize a current-result publication. External
 gateway counts cannot prove source, target or protected-policy freshness;
 those checks occur separately before provider writes.
 
@@ -166,7 +166,7 @@ federation ingress/egress DLP plus publication DLP only. Schema, size, time,
 origin, identity, evidence, cleanup and posting-transaction gates remain active.
 
 Disabled mode emits a prominent private warning and bounded Technical-details
-warning, records the effective state in current receipt v11, and is always comment-only.
+warning, records the effective state in current receipt v13/v14, and is always comment-only.
 It may expose sensitive material through service/model egress, local Markdown or
 GitLab publication, and later re-enablement cannot retract prior disclosure.
 Operators should diagnose locally with `--preserve-private-artifacts` before this

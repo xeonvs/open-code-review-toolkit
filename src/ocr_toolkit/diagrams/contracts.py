@@ -12,6 +12,7 @@ from ocr_toolkit.result_contract import OcrResultContractError
 from ocr_toolkit.review_range import ReviewRange
 
 MAX_DIAGRAM_BYTES = 16 * 1024
+DIAGRAM_TOOL_NAME = "ocr_toolkit_review_diagram"
 MAX_SUBMISSIONS = 8
 MAX_SUBMISSION_BYTES = 128 * 1024
 MAX_LABEL_CHARS = 80
@@ -131,6 +132,8 @@ class DiagramResult:
     state: DiagramState
     reason: DiagramReason = "none"
     submission: DiagramSubmission | None = None
+    calls: int = 0
+    failed_calls: int = 0
 
 
 def _object(value: object, keys: set[str]) -> dict[str, object]:

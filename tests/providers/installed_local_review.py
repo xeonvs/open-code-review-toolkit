@@ -9,7 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
-from itertools import product
+from itertools import chain, product
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +28,9 @@ def rpc(process: subprocess.Popen[str], request: dict[str, Any]) -> dict[str, An
 def peer(mode: str) -> int:
     """Stand in for OCR only; evidence and action attribution remain real."""
 
+    if "--version" in sys.argv:
+        print("ocr version 1.13.3")
+        return 0
     if "--preview" in sys.argv:
         return 0
     config = json.loads((Path.home() / ".opencodereview" / "config.json").read_text())
@@ -67,6 +70,57 @@ def peer(mode: str) -> int:
                 },
             )
             assert summary.get("isError") is not True
+            if mode.startswith("diagram-"):
+                facts = json.loads(summary["content"][0]["text"])
+                reference = [{"path": "app.py", "start_line": 1, "end_line": 1}]
+                graph = (
+                    {
+                        "kind": "flowchart",
+                        "nodes": [
+                            {
+                                "id": "read",
+                                "kind": "step",
+                                "label": "Read request",
+                                "references": reference,
+                            }
+                        ],
+                        "edges": [],
+                    }
+                    if mode == "diagram-flow"
+                    else {
+                        "kind": "sequence",
+                        "participants": [{"id": "api", "label": "API", "references": reference}],
+                        "steps": [
+                            {
+                                "kind": "message",
+                                "source": "api",
+                                "target": "api",
+                                "message_type": "call",
+                                "label": "Read request",
+                                "references": reference,
+                            }
+                        ],
+                    }
+                )
+                output = rpc(
+                    process,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 4,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "ocr_toolkit_review_diagram",
+                            "arguments": {
+                                "state": "generated",
+                                "base_sha": facts["base"],
+                                "head_sha": facts["head"],
+                                "diagram": graph,
+                            },
+                        },
+                    },
+                )
+                assert output.get("isError") is not True
+                assert json.loads(output["content"][0]["text"]) == {"state": "received"}
         finally:
             process.communicate(timeout=10)
             assert process.returncode == 0
@@ -111,42 +165,65 @@ def peer(mode: str) -> int:
     finally:
         process.communicate(timeout=10)
         assert process.returncode == 0
-    print(
-        json.dumps(
-            {
-                "status": {
-                    "warning": "completed_with_warnings",
-                    "partial": "completed_with_errors",
-                    "budget": "budget_exceeded",
-                }.get(mode, "success"),
-                "comments": []
-                if mode in {"clean", "warning"}
-                else [
-                    {"path": "app.py", "line": 1, "content": "Check the boundary."},
-                    *(
-                        [
-                            {
-                                "path": "app.py",
-                                "line": 1,
-                                "content": "Contact synthetic@example.invalid",
-                            }
-                        ]
-                        if mode == "filtered"
-                        else []
-                    ),
-                ],
-                "warnings": ["Some context was unavailable."] if mode == "warning" else [],
-                "summary": {"budget_exceeded": mode == "budget"},
-                "tool_calls": {
-                    "total": 2,
-                    "by_tool": {
-                        "ocr_toolkit_evidence": 1,
-                        "synthetic_context__echo": 1,
-                    },
+    payload = {
+        "status": {
+            "warning": "completed_with_warnings",
+            "partial": "completed_with_errors",
+            "budget": "budget_exceeded",
+        }.get(mode, "success"),
+        "comments": []
+        if mode in {"clean", "warning"}
+        else [
+            {"path": "app.py", "line": 1, "content": "Check the boundary."},
+            *(
+                [
+                    {
+                        "path": "app.py",
+                        "line": 1,
+                        "content": "Contact synthetic@example.invalid",
+                    }
+                ]
+                if mode == "filtered"
+                else []
+            ),
+        ],
+        "warnings": ["Some context was unavailable."] if mode == "warning" else [],
+        "summary": {"budget_exceeded": mode == "budget"},
+        "tool_calls": {
+            "total": 3 if mode.startswith("diagram-") else 2,
+            "by_tool": {
+                "ocr_toolkit_evidence": 1,
+                "synthetic_context__echo": 1,
+                **({"ocr_toolkit_review_diagram": 1} if mode.startswith("diagram-") else {}),
+            },
+        },
+    }
+    if mode.startswith("diagram-"):
+        base, head = facts["base"], facts["head"]
+        payload.update(
+            status="complete",
+            manifest={
+                "schema_version": "ocr.run-manifest/v1",
+                "operation": "review",
+                "terminal_state": "complete",
+                "input": {
+                    "mode": "range",
+                    "requested_from": base,
+                    "requested_head": head,
+                    "resolved_base": base,
+                    "resolved_head": head,
+                    "exact_range": f"{base}..{head}",
                 },
-            }
+                "coverage": {
+                    "selected": [{"item_id": "app.py"}],
+                    "completed": [{"item_id": "app.py"}],
+                    "reused": [],
+                    "failed": [],
+                    "waived": [],
+                },
+            },
         )
-    )
+    print(json.dumps(payload))
     if mode == "process-signaled":
         sys.stdout.flush()
         os.kill(os.getpid(), signal.SIGTERM)
@@ -267,20 +344,23 @@ def main(root: Path, cli: Path) -> int:
         ),
     }
     baselines: dict[str, tuple[int, str, bytes | None]] = {}
-    for mode, (debug, progress) in product(
-        (
-            "verified",
-            "clean",
-            "warning",
-            "partial",
-            "budget",
-            "forged",
-            "filtered",
-            "process-failed",
-            "process-signaled",
-            "parent-signaled",
+    for mode, (debug, progress) in chain(
+        product(
+            (
+                "verified",
+                "clean",
+                "warning",
+                "partial",
+                "budget",
+                "forged",
+                "filtered",
+                "process-failed",
+                "process-signaled",
+                "parent-signaled",
+            ),
+            ((False, False), (False, True), (True, False), (True, True)),
         ),
-        ((False, False), (False, True), (True, False), (True, True)),
+        (("diagram-flow", (False, False)), ("diagram-sequence", (False, False))),
     ):
         launcher = binary_directory / "ocr"
         launcher.write_text(
@@ -311,7 +391,11 @@ def main(root: Path, cli: Path) -> int:
                 head,
             ],
             cwd=repository,
-            env={**environment, "OCR_REVIEW_PROGRESS": str(progress).lower()},
+            env={
+                **environment,
+                "OCR_REVIEW_PROGRESS": str(progress).lower(),
+                "OCR_REVIEW_DIAGRAM_MODE": "local" if mode.startswith("diagram-") else "on",
+            },
             capture_output=True,
             text=True,
             timeout=45,
@@ -325,6 +409,10 @@ def main(root: Path, cli: Path) -> int:
             assert "synthetic_context" in completed.stdout
             assert head in completed.stdout
             assert result.stat().st_mode & 0o777 == 0o600
+            if mode.startswith("diagram-"):
+                assert "Change diagram: `generated`" in completed.stdout
+                assert "```mermaid" in completed.stdout and "Text equivalent:" in completed.stdout
+                assert payload["manifest"]["input"]["resolved_head"] == head
         else:
             assert completed.returncode == (
                 256 - signal.SIGTERM if mode == "process-signaled" else 2
@@ -403,6 +491,7 @@ def main(root: Path, cli: Path) -> int:
                 "ci_identity_ignored": True,
                 "debug_parity": True,
                 "progress_parity": True,
+                "diagrams": True,
             }
         )
     )

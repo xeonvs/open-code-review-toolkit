@@ -38,7 +38,8 @@ from ocr_toolkit.providers.gitlab import (
 )
 from ocr_toolkit.reporting.dlp import publication_dlp_state
 from ocr_toolkit.result_contract import parse_result_outcome
-from tests.support import gitlab_config, patched_attr, patched_env
+from ocr_toolkit.review_range import ReviewRange
+from tests.support import gitlab_config, native_range_input, patched_attr, patched_env
 from tests.test_context_broker import ci_outcome
 from tests.test_context_policy import ci_policy_value, encoded_policy, remediation_policy_value
 
@@ -749,6 +750,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         identity,
         safe_enrichment,
         SUMMARY_ACTION_COUNTS,
+        review_range=ReviewRange("c" * 40, "a" * 40),
     )
     metadata["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
     metadata["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
@@ -784,6 +786,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             identity,
             changed,
             SUMMARY_ACTION_COUNTS,
+            review_range=ReviewRange("c" * 40, "a" * 40),
         )
         blocked["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
         blocked["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
@@ -911,7 +914,23 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 11,
+        "schema_version": 13,
+        "range": {
+            "schema": "ocr.review-range/v1",
+            "state": "unverified",
+            "base_sha": None,
+            "head_sha": None,
+            "exact_range": None,
+        },
+        "diagram": {
+            "schema": "ocr.review-diagram/v1",
+            "mode": "off",
+            "state": "disabled",
+            "reason": "none",
+            "calls": 0,
+            "failed_calls": 0,
+            "submission": None,
+        },
         "review": {
             "source_sha": "a" * 40,
             "diff_base_sha": "c" * 40,
@@ -1919,7 +1938,23 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 11,
+        "schema_version": 13,
+        "range": {
+            "schema": "ocr.review-range/v1",
+            "state": "unverified",
+            "base_sha": None,
+            "head_sha": None,
+            "exact_range": None,
+        },
+        "diagram": {
+            "schema": "ocr.review-diagram/v1",
+            "mode": "off",
+            "state": "disabled",
+            "reason": "none",
+            "calls": 0,
+            "failed_calls": 0,
+            "submission": None,
+        },
         "review": {
             "source_sha": "a" * 40,
             "diff_base_sha": "c" * 40,
@@ -2277,6 +2312,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
                     "schema_version": "ocr.run-manifest/v1",
                     "operation": "review",
                     "terminal_state": "complete",
+                    "input": native_range_input("c" * 40, "a" * 40),
                     "coverage": {
                         "selected": [{"item_id": "synthetic-item"}],
                         "completed": [{"item_id": "synthetic-item"}],
@@ -2305,6 +2341,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
         SUMMARY_ACTION_COUNTS,
         forbidden=(),
         toolkit_advisory=advisory,
+        expected_range=ReviewRange("c" * 40, "a" * 40),
     )
 
     persisted = json.loads(result.read_text(encoding="utf-8"))
@@ -2790,6 +2827,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             },
         },
     }
+    base_payload["manifest"]["input"] = native_range_input("c" * 40, "a" * 40)
     baseline_projection = review_runner._canonical_result_projection(base_payload)
 
     for name, groups, expected_state in (
@@ -2823,6 +2861,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             None,
             SUMMARY_ACTION_COUNTS,
             forbidden=(),
+            expected_range=ReviewRange("c" * 40, "a" * 40),
         )
 
         persisted = json.loads(result.read_text(encoding="utf-8"))
@@ -5000,6 +5039,8 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
         artifacts.action_receipt,
         artifacts.action_receipt_lock,
         artifacts.dlp_decisions,
+        artifacts.diagram,
+        artifacts.diagram_lock,
     )
     for path in (*ephemeral, artifacts.pre_execution_status):
         path.write_text("private", encoding="utf-8")
