@@ -29,9 +29,9 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 | REQ-001 | Resolve and prove the exact supported range before range-dependent evidence; reject sibling, unrelated and undecidable shallow ranges before model execution | WQ-03 | done |
 | REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | in_progress |
 | REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | in_progress |
-| REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | pending |
-| REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | pending |
-| REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | pending |
+| REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | in_progress |
+| REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | in_progress |
+| REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | in_progress |
 | REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | pending |
 | REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | in_progress |
 | REQ-009 | Deliver bounded Hypothesis properties, minimized synthetic regressions and edge/rare-branch coverage for DLP, range/results, policy and both diagram variants | WQ-02, WQ-03, WQ-04, WQ-08 | in_progress |
@@ -98,7 +98,7 @@ Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT gen
 | WQ-01 | REQ-013, REQ-014 | Reviewed complete plan/lifecycle pointer and separate approved msgpack dev-lock correction, initial signed push, draft PR, v0.14.0 issue tracking and #273 expansion | done |
 | WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | done |
 | WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | done |
-| WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | pending |
+| WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | done |
 | WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | pending |
 | WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | pending |
 | WQ-07 | REQ-012 | Python 3.15 metadata/lock/required CI/install matrices and clean artifact checks; self-reviewed commit | pending |
@@ -138,6 +138,8 @@ Scorecard alert #16 was read through the provider API: its current main-bound fi
 
 The range slice separates pure immutable identity/native admission from isolated Git topology proof. Real repositories exercise ancestor/equal/merge-first-parent, sibling/unrelated/reverse/shallow and replacement/graft cases through the launcher. Complete coverage cannot substitute for any native endpoint or exact-range field. Gitlink admission reuses the same validator; local and GitLab execution identities are independently reconciled. Legacy output carries no confirmed range in the admitted report model. The focused runner/gitlink/range suite passes 313 tests (ten environment-gated installed OCR cases skipped); reporting and added range handoff checks also pass. Receipt/rendering integration and real installed/native diagram handoffs remain pending in WQ-05/WQ-06.
 
+Closed flow/sequence contracts and the private run-bound collector are locally implemented. Tests cover ordered nested alternatives and aggregate budgets, normalized duplicates, conflicts in either arrival order, eight concurrent cross-process submissions, raw wire byte accounting, exact hostile readback, unsafe file types, bounded lock contention and atomic-write failure cleanup. The focused slice passes 128 checks with 99% contract, 98% collector and 93% private-filesystem branch coverage; both diagram properties also pass the 1000-example profile. Existing local artifact/debug regressions pass. Semantic review additionally preserves staged/unstaged/untracked checkout data and default output-parent behavior. MCP, source/DLP admission, receipt and renderer activation remain pending; structural/source validity must not be described as proof of behavior.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -146,7 +148,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-WQ-04: implement the closed typed diagram variants, bounded run-wide collector and hostile/property tests. WQ-02/WQ-03 are locally complete; range consumers/receipts and installed/native handoffs remain in WQ-05/WQ-06. No further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
+WQ-05/WQ-06: wire the fixed optional MCP output capability, early mode/capability selection, snapshot-before-cleanup and source/DLP/native admission, then activate v13/v14 receipts and pure renderers together. WQ-02–WQ-04 are locally complete. Validate real protocol and installed/native handoffs before claiming the feature works end to end. No further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
 
 ### Plan Fidelity Check
 
