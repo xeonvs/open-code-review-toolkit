@@ -1775,18 +1775,23 @@ def _finalize_ocr_result(
     ):
         raise ReviewRunnerError("review range disagrees with the execution identity")
 
+    def read_source(path: str) -> str | None:
+        """Read immutable text without sharing optional-channel failure state."""
+
+        try:
+            blob = source_reader.read_blob(identity.source_sha, path)
+            return blob.decode("utf-8") if blob is not None else None
+        except (
+            RepositoryEvidenceError,
+            UnicodeDecodeError,
+            OSError,
+            subprocess.TimeoutExpired,
+        ):
+            return None
+
     def read_reviewed_head(path: str) -> str | None:
         if path not in source_cache:
-            try:
-                blob = source_reader.read_blob(identity.source_sha, path)
-                source_cache[path] = blob.decode("utf-8") if blob is not None else None
-            except (
-                RepositoryEvidenceError,
-                UnicodeDecodeError,
-                OSError,
-                subprocess.TimeoutExpired,
-            ):
-                source_cache[path] = None
+            source_cache[path] = read_source(path)
         return source_cache[path]
 
     def code_proof(comment: dict[str, object]) -> OpaqueCodeProof:
@@ -1847,7 +1852,7 @@ def _finalize_ocr_result(
                 review_range=admitted_range,
                 calls=calls,
                 failed_calls=failed,
-                read_source=read_reviewed_head,
+                read_source=read_source,
                 forbidden_matcher=ForbiddenMatcher.compile(forbidden),
                 dlp_enabled=dlp_enabled,
             )

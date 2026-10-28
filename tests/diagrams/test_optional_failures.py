@@ -6,6 +6,7 @@ import io
 import json
 from dataclasses import replace
 from pathlib import Path
+from subprocess import TimeoutExpired
 
 import pytest
 
@@ -16,18 +17,113 @@ from ocr_toolkit.diagrams.lifecycle import DiagramExecution
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.evidence.mcp import handle_request, serve
+from ocr_toolkit.evidence.repository import GitRepositoryReader
+from ocr_toolkit.mcp_config import MCPCapability, MCPComposition
 from ocr_toolkit.posting import formatting
 from ocr_toolkit.providers.local import local_summary
 from ocr_toolkit.reporting import diagram as rendering
 from ocr_toolkit.reporting.model import report_from_result
+from ocr_toolkit.review_range import ReviewRange
 from tests.diagrams.support import REVIEW_RANGE, flow_submission
 from tests.diagrams.test_admission_reporting import admitted
 from tests.reporting.test_local import execution_facts
 from tests.test_evidence_mcp import _store
+from tests.test_evidence_repository import git
+from tests.test_review_range import native_result
+from tests.test_review_runner import BUILTIN_EVIDENCE_TOOLS, LOCAL_IDENTITY, SUMMARY_ACTION_COUNTS
 
 
 def fail(*_args, **_kwargs):
     raise RuntimeError("synthetic optional failure; never publish this diagnostic")
+
+
+@pytest.mark.parametrize("failure", ("io", "missing", "unicode", "timeout"))
+def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
+    tmp_path, monkeypatch, failure
+):
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q")
+    source = root / "app.py"
+    source.write_text("List<Entry> value;\none\ntwo\n")
+    git(root, "add", "app.py")
+    git(root, "commit", "-qm", "base")
+    base = git(root, "rev-parse", "HEAD")
+    source.write_text("List<Entry> value;\nchanged\ntwo\n")
+    git(root, "add", "app.py")
+    git(root, "commit", "-qm", "head")
+    head = git(root, "rev-parse", "HEAD")
+    review_range = ReviewRange(base, head)
+    artifacts = repository_artifacts(root)
+    prepare_artifact_directory(artifacts)
+    execution = DiagramExecution.prepare(
+        "local",
+        local=True,
+        native_version="1.13.3",
+        review_range=review_range,
+        path=artifacts.diagram,
+    )
+    candidate = flow_submission()
+    candidate.update(base_sha=base, head_sha=head)
+    execution.collector.submit(candidate)
+    execution.capture()
+    comment = {
+        "path": "app.py",
+        "line": 1,
+        "content": "Update the declaration.",
+        "existing_code": "List<Entry> value;",
+        "suggestion_code": "List<Node> value;",
+    }
+    payload = native_result(review_range)
+    payload.update(
+        comments=[comment],
+        tool_calls={"total": 2, "by_tool": {"ocr_toolkit_evidence": 1, mcp.DIAGRAM_TOOL_NAME: 1}},
+    )
+    result = tmp_path / "review.json"
+    result.write_text(json.dumps(payload))
+    composition = MCPComposition(
+        {},
+        (
+            MCPCapability(
+                "ocr_toolkit_evidence", (*BUILTIN_EVIDENCE_TOOLS, mcp.DIAGRAM_TOOL_NAME), True
+            ),
+        ),
+        (),
+        (),
+    )
+    read_blob = GitRepositoryReader.read_blob
+    calls = []
+
+    def transient(reader, sha, path):
+        calls.append((sha, path))
+        if len(calls) == 1:
+            if failure == "missing":
+                return None
+            if failure == "unicode":
+                return b"\xff"
+            if failure == "timeout":
+                raise TimeoutExpired("git", 1)
+            raise OSError("synthetic optional source read failure")
+        return read_blob(reader, sha, path)
+
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(GitRepositoryReader, "read_blob", transient)
+    reports = []
+    _, filtered, publication = review_runner._finalize_ocr_result(
+        result,
+        composition,
+        replace(LOCAL_IDENTITY, source_sha=head),
+        None,
+        SUMMARY_ACTION_COUNTS,
+        forbidden=(),
+        expected_range=review_range,
+        diagram_execution=execution,
+        report_consumer=reports.append,
+    )
+    assert not filtered and publication["state"] == "passed"
+    assert reports[0].comments == (comment,) and reports[0].diagram.state == "omitted-invalid"
+    assert reports[0].outcome.status == "complete"
+    assert calls == [(head, "app.py"), (head, "app.py")]
 
 
 @pytest.fixture

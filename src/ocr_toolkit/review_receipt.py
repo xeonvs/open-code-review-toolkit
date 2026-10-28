@@ -401,6 +401,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     mode = context.get("mode")
     state = context.get("state")
+    if not isinstance(mode, str) or not isinstance(state, str):
+        return invalid
     classes = context.get("classes")
     expected_classes = {
         "off": [],
@@ -426,6 +428,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             not isinstance(source, str)
             or not source
             or len(source) > 256
+            or not isinstance(source_state, str)
             or source_state not in {"complete", "partial", "unavailable", "mutated"}
             for source, source_state in per_source.items()
         )
@@ -495,6 +498,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             not isinstance(server, str)
             or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
             or server in servers
+            or not isinstance(transport, str)
             or transport not in {"builtin", "stdio", "remote"}
             or not isinstance(tools, list)
             or not 1 <= len(tools) <= MAX_TOOLKIT_MCP_TOOLS_PER_SERVER
@@ -604,6 +608,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         publication_state is None
         or not isinstance(tool_execution, dict)
         or set(tool_execution) != {"state", "failed"}
+        or not isinstance(failure_state, str)
         or failure_state not in {"absent", "invalid", "conflicting", "verified"}
         or (
             failure_state == "verified"

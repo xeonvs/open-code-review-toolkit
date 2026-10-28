@@ -23,6 +23,14 @@ from tests.test_review_receipt_v11 import _clean_outcome, _receipt_v11
 
 CURRENT_RANGE = ReviewRange("c" * 40, "a" * 40)
 
+RECEIPT_ENUM_PATHS = (
+    ("context", "mode"),
+    ("context", "state"),
+    ("context", "per_source", "forge_ci"),
+    ("mcp", "capabilities", 0, "transport"),
+    ("tool_execution", "state"),
+)
+
 
 def _receipt_v13(
     *, verified: bool = True, diagram: DiagramResult | None = None, **kwargs: Any
@@ -53,6 +61,17 @@ def generated_diagram(*, sequence: bool = False, mode="on") -> DiagramResult:
         submission=parse_submission(payload, expected_range=CURRENT_RANGE),
         calls=1,
     )
+
+
+@pytest.mark.parametrize("path", RECEIPT_ENUM_PATHS)
+@pytest.mark.parametrize("value", ([], {}))
+def test_non_string_receipt_enums_are_invalid_without_incidental_type_errors(path, value):
+    receipt = _receipt_v13()
+    parent = receipt
+    for part in path[:-1]:
+        parent = parent[part]
+    parent[path[-1]] = value
+    assert not toolkit_receipt_is_valid(receipt)
 
 
 @pytest.mark.parametrize(
