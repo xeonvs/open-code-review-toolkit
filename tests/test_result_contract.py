@@ -9,6 +9,69 @@ import pytest
 from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda result: result.update(status=None),
+        lambda result: result.update(status=""),
+        lambda result: result.update(summary=[]),
+        lambda result: result.update(summary={"budget_exceeded": 1}),
+        lambda result: result.update(manifest=[]),
+        lambda result: result["manifest"].update(schema_version="future"),
+        lambda result: result["manifest"].update(operation="summary"),
+        lambda result: result["manifest"].update(coverage=[]),
+        lambda result: result["manifest"]["coverage"].update(selected=None),
+        lambda result: result["manifest"]["coverage"].update(selected=[{}] * 10_001),
+        lambda result: result["manifest"]["coverage"].update(selected=[None]),
+        lambda result: result["manifest"]["coverage"].update(selected=[{"item_id": ""}]),
+        lambda result: result["manifest"]["coverage"].update(selected=[{"item_id": "a b"}]),
+        lambda result: result["manifest"]["coverage"].update(selected=[{"item_id": "a" * 257}]),
+        lambda result: result["manifest"]["coverage"]["selected"].append({"item_id": "a"}),
+        lambda result: result["manifest"]["coverage"].update(completed=[]),
+        lambda result: result["manifest"].update(run_failure="unknown"),
+    ],
+)
+def test_malformed_native_boundary_fields_raise_closed_contract_errors(mutation: Any) -> None:
+    """Exercise hostile types, record budgets, identities and exact partitions."""
+
+    result = manifest_result("complete", selected=["a"], completed=["a"])
+    mutation(result)
+    with pytest.raises(OcrResultContractError):
+        parse_result_outcome(result)
+
+
+@pytest.mark.parametrize("reason", (None, "", "   ", "x" * 2001))
+def test_waived_items_require_a_bounded_nonempty_reason(reason: object) -> None:
+    result = manifest_result("complete", selected=["a"], waived=["a"])
+    result["manifest"]["coverage"]["waived"][0]["reason"] = reason
+    with pytest.raises(OcrResultContractError, match="reason"):
+        parse_result_outcome(result)
+
+
+def test_terminal_state_must_match_derived_coverage_even_when_outer_status_agrees() -> None:
+    result = manifest_result("partial", selected=["a"], completed=["a"])
+    with pytest.raises(OcrResultContractError, match="disagrees with coverage"):
+        parse_result_outcome(result)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        {"status": "unknown"},
+        {"status": "budget_exceeded"},
+        {"status": "success", "summary": {"budget_exceeded": True}},
+    ),
+)
+def test_legacy_status_and_budget_contracts_cannot_be_truthy_guesses(payload) -> None:
+    with pytest.raises(OcrResultContractError):
+        parse_result_outcome(payload)
+
+
+def test_legacy_default_has_no_manifest_coverage_claim() -> None:
+    outcome = parse_result_outcome({"summary": None})
+    assert outcome.status == "success" and outcome.coverage_summary == ""
+
+
 def manifest_result(
     status: str,
     *,

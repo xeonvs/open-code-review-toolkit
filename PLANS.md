@@ -32,10 +32,10 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 | REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | in_progress |
 | REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | in_progress |
 | REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | in_progress |
-| REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | pending |
+| REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | in_progress |
 | REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | in_progress |
 | REQ-009 | Deliver bounded Hypothesis properties, minimized synthetic regressions and edge/rare-branch coverage for DLP, range/results, policy and both diagram variants | WQ-02, WQ-03, WQ-04, WQ-08 | in_progress |
-| REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | pending |
+| REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | in_progress |
 | REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | done |
 | REQ-012 | Support Python >=3.12,<3.16, add required Linux 3.15 and release installs, retain coverage on 3.14 and hash-locked binary runtime installation | WQ-07 | pending |
 | REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | in_progress |
@@ -65,6 +65,8 @@ No OCR fork or modification, second review/model pass, graph reconstruction from
 - New ordinary/partial receipt producers are v13/v14. Freeze old version numbers and nested schema maps explicitly. Embedded review tuple is unchanged, so pre-execution v5/v6 retain their original mappings.
 - Preserve zero new runtime dependencies for this feature and dev-only Hypothesis. Runtime installs remain hash-locked and binary-only. Limit planned updates to Pydantic 2.14.1/core 2.50.1, MarkupSafe 3.0.4, the approved msgpack 1.2.3 dev-only security correction and required companions.
 - Keep successful prior evidence for unchanged inputs. Run focused checks per slice and one complete quality gate on final runtime handoff content. The sole aggregate security scan precedes local self-review. Successful self-review count starts at zero; planning feasibility experiments were synthetic qualification, not toolkit self-review of this patch.
+- Every diagram-only preparation, output registration/call, snapshot, admission or rendering failure is advisory: continue the review without the graph and emit at most a bounded closed warning. Validated failures of the fixed optional output tool do not become failures of evidence tools or approval blockers. Keep hostile persisted-envelope/schema rejection atomic and retain mandatory range/evidence gates.
+- Increase fuzzing variation within the activated targets: malformed types and interacting states, Unicode/encoded representations, collector transitions, persisted round-trips and policy schemas. Keep 100/1000 examples per property; use independent explicit seeds for extended local qualification and save minimized synthetic regressions. The full BL-019 campaign remains inactive.
 
 ### Inputs And Sources
 
@@ -80,6 +82,8 @@ No OCR fork or modification, second review/model pass, graph reconstruction from
 The owner approved MCP output within the existing OCR invocation, both typed diagram variants, a bounded dev-only Hypothesis pilot with 100/1000-example profiles, official Python 3.15 support with one required Linux lane, targeted dependency updates, and broader meaningful coverage improvements. DLP false-positive prevention and rare regex branches take priority. The owner requested removal of the previous telephone-country fixtures in favor of anonymous synthetic numbers.
 
 The approved delivery uses one feature PR, an initial signed plan commit/draft, local logical commits with self-review and optional amend, one final aggregate security scan and then at most two successful own-tool local reviews with ChatGPT and actual diagram inspection. The owner approved adding a separate msgpack 1.2.3 dev-lock correction to the first push after the mandatory audit detected CVE-2026-114613 in the inherited 1.2.2 lock. Errors do not consume the review allowance. Fix findings and verify corrections without repeating the broad scan for unchanged boundaries or documentation. The release PR is the final repository mutation; external reconciliation completes delivery afterward.
+
+During implementation the owner emphasized preservation of both reused and temporary repositories, required review continuation for all optional diagram construction/MCP errors, and requested more varied fuzzing in this release after minimized result-parser failures confirmed value beyond DLP. Apply these clarifications within the existing bounded pilot and immutable-data boundaries.
 
 Begin promotional-site feature assessment and any diagram-example preparation only after feature merge and verification establish the final release scope, before pushing release/v0.14.0. Toolkit contracts and release facts remain owned here; site content, design and its candidate belong to the separate site repository. Prepare against the confirmed 0.14.0 candidate without claiming it is already shipped; verify publication only after stable evidence. Plan archive/reset belongs in the release PR and must not generate a later toolkit closure PR.
 
@@ -99,10 +103,10 @@ Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT gen
 | WQ-02 | REQ-008, REQ-009, REQ-011 | DLP comparison corrections, bounded Hypothesis profiles/properties, anonymous fixtures, focused checks and self-reviewed commit | done |
 | WQ-03 | REQ-001–REQ-003, REQ-009 | Immutable range contract/resolution/admission and production-launcher regression tests; self-reviewed commit | done |
 | WQ-04 | REQ-004–REQ-006, REQ-009 | Typed diagram contracts, bounded collector, duplicate/conflict semantics and hostile tests; self-reviewed commit | done |
-| WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | pending |
-| WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | pending |
+| WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | in_progress |
+| WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | in_progress |
 | WQ-07 | REQ-012 | Python 3.15 metadata/lock/required CI/install matrices and clean artifact checks; self-reviewed commit | pending |
-| WQ-08 | REQ-009, REQ-010 | Weak-module coverage floors, rare semantic branches, minimized corpus and touched-module comparison | pending |
+| WQ-08 | REQ-009, REQ-010 | Weak-module coverage floors, rare semantic branches, minimized corpus and touched-module comparison | in_progress |
 | WQ-09 | REQ-013, REQ-014 | Public owners, decision flow, evidence matrix, backlog/strategy status, changelog and aggregate self-review | pending |
 | WQ-10 | REQ-014 | Exactly one aggregate Codex Security diff scan; findings classified/fixed with scoped regression evidence | pending |
 | WQ-11 | REQ-014 | Own-tool ChatGPT local review with graph, findings/failed-read inspection, at most two successful runs and scoped corrections | pending |
@@ -140,6 +144,10 @@ The range slice separates pure immutable identity/native admission from isolated
 
 Closed flow/sequence contracts and the private run-bound collector are locally implemented. Tests cover ordered nested alternatives and aggregate budgets, normalized duplicates, conflicts in either arrival order, eight concurrent cross-process submissions, raw wire byte accounting, exact hostile readback, unsafe file types, bounded lock contention and atomic-write failure cleanup. The focused slice passes 128 checks with 99% contract, 98% collector and 93% private-filesystem branch coverage; both diagram properties also pass the 1000-example profile. Existing local artifact/debug regressions pass. Semantic review additionally preserves staged/unstaged/untracked checkout data and default output-parent behavior. MCP, source/DLP admission, receipt and renderer activation remain pending; structural/source validity must not be described as proof of behavior.
 
+Expanded result-contract properties minimized three uncaught enum-type errors to an empty list in terminal state, item failure classification and run failure classification. The parser now rejects them through OcrResultContractError; six ordinary minimized list/object regressions remain in the synthetic corpus. Focused contracts pass 52 checks with 99% result-contract branch coverage, and the 1000-example property profile passes. Valid native/legacy vocabularies and the absence of a legacy coverage claim are retained.
+
+WQ-05/WQ-06 activation is in the working tree, not ready for handoff: fixed MCP output, source/DLP admission, v13/v14 metadata and report consumers are being reconciled. Fault-injection checks cover schema/binding/collector/admission/rendering continuation; current/historical receipt unit checks pass. A larger checkpoint passed 646 tests and 205 subtests with ten installed-environment skips, but retained ten failures around current fixture migration, native range proof and partial coverage. Those failures remain open until reconciled with the real producers; this checkpoint is not a green final gate. Real stdio/native and clean installed diagram handoffs remain pending. No additional push or aggregate scan/self-review has run.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -148,7 +156,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-WQ-05/WQ-06: wire the fixed optional MCP output capability, early mode/capability selection, snapshot-before-cleanup and source/DLP/native admission, then activate v13/v14 receipts and pure renderers together. WQ-02–WQ-04 are locally complete. Validate real protocol and installed/native handoffs before claiming the feature works end to end. No further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
+Continue WQ-05/WQ-06: reconcile the ten checkpoint failures without rewriting frozen historical fixtures; test canonical diagram persistence without condition redaction, optional output-failure approval neutrality and all real producer-consumer handoffs. Complete real stdio/qualified native/installed integration before committing activation. Expand WQ-08 strategy variation (policy, representations, state transitions and round-trips) and finish remaining coverage floors. WQ-02–WQ-04 and the narrow result-enum correction are locally complete. No further feature push until final gates. Promotional-site preparation remains deferred to WQ-13.
 
 ### Plan Fidelity Check
 

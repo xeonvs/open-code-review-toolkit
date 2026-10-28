@@ -148,7 +148,7 @@ def _validate_failure_records(records: list[Mapping[str, Any]]) -> bool:
     budget_failure = False
     for index, record in enumerate(records):
         classification = record.get("classification")
-        if classification not in FAILURE_CLASSES:
+        if not isinstance(classification, str) or classification not in FAILURE_CLASSES:
             raise OcrResultContractError(
                 f"field 'manifest.coverage.failed[{index}].classification' is unsupported"
             )
@@ -177,7 +177,7 @@ def _manifest_outcome(
     if manifest.get("operation") != "review":
         raise OcrResultContractError("field 'manifest.operation' must be 'review'")
     terminal_state = manifest.get("terminal_state")
-    if terminal_state not in MANIFEST_OUTCOMES:
+    if not isinstance(terminal_state, str) or terminal_state not in MANIFEST_OUTCOMES:
         raise OcrResultContractError("field 'manifest.terminal_state' is unsupported")
     if status != terminal_state:
         raise OcrResultContractError("fields 'status' and 'manifest.terminal_state' disagree")
@@ -210,7 +210,8 @@ def _manifest_outcome(
     if run_failure is not None:
         if not isinstance(run_failure, Mapping):
             raise OcrResultContractError("field 'manifest.run_failure' must be an object")
-        if run_failure.get("classification") not in RUN_FAILURE_CLASSES:
+        classification = run_failure.get("classification")
+        if not isinstance(classification, str) or classification not in RUN_FAILURE_CLASSES:
             raise OcrResultContractError(
                 "field 'manifest.run_failure.classification' is unsupported"
             )
