@@ -37,6 +37,24 @@ DIFF_START_SHA = "d" * 40
 POLICY_SHA = "e" * 40
 
 
+@pytest.mark.parametrize("state", ([], {}, True, None))
+def test_lifecycle_enum_rejects_hostile_types_through_provider_error(state) -> None:
+    document = {
+        "target_project_id": 1,
+        "source_project_id": 1,
+        "iid": 2,
+        "sha": SOURCE_SHA,
+        "state": state,
+    }
+    with pytest.raises(gitlab.GitLabProviderError, match="lifecycle state"):
+        gitlab.parse_merge_request_lifecycle(
+            document,
+            expected_project_id="1",
+            expected_merge_request_iid="2",
+            expected_head=SOURCE_SHA,
+        )
+
+
 def _setup_identity(base: str, head: str, policy: str) -> ReviewIdentity:
     """Supply a complete authenticated-shaped tuple to direct setup-helper probes."""
 

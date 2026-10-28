@@ -54,6 +54,24 @@ def payload(hashes: dict[str, str]) -> dict[str, Any]:
     }
 
 
+@pytest.mark.parametrize("value", (None, [], True, 1, "metadata"))
+def test_registry_json_root_is_a_closed_format_error(value) -> None:
+    for parser in (preview.classify_index, preview.artifact_manifest):
+        with pytest.raises(preview.PreviewError, match="JSON object"):
+            parser(value, "0.1.0a3", expected_hashes("0.1.0a3"))
+    with pytest.raises(preview.PreviewError, match="must be an object"):
+        preview.pypi_release_json_manifest(value, "0.11.1", expected_hashes("0.11.1"))
+
+
+@pytest.mark.parametrize("filename", ([], {}))
+def test_unhashable_registry_filename_cannot_escape_manifest_validation(filename) -> None:
+    hashes = expected_hashes("0.1.0a3")
+    document = payload(hashes)
+    document["files"][0]["filename"] = filename
+    with pytest.raises(preview.PreviewError, match="incomplete"):
+        preview.artifact_manifest(document, "0.1.0a3", hashes)
+
+
 def test_run_number_maps_directly_to_development_version() -> None:
     assert preview.development_version(1, "0.2.0") == "0.2.0.dev1"
     assert preview.development_version(41, "0.2.0") == "0.2.0.dev41"
@@ -268,7 +286,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert workflow.count("verify_registry_artifacts.sh") == 3
     assert workflow.count("artifact-hashes.json release.yml") == 3
     assert workflow.count("release.yml runtime-requirements.txt") == 3
-    assert workflow.count('python: ["3.12", "3.13", "3.14"]') == 2
+    assert workflow.count('python: ["3.12", "3.13", "3.14", "3.15"]') == 2
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
     assert "python scripts/github_release_api.py publish" in workflow
@@ -338,14 +356,15 @@ def test_ci_matrix_covers_supported_python_minors_and_os_boundaries() -> None:
     assert "UV_PYTHON: ${{ matrix.python }}" in workflow
     assert "uv sync --locked --python 3.12" in workflow
     assert 'uv sync --locked --python "${{ matrix.python }}"' in workflow
-    assert workflow.count("advisory: false") == 2
+    assert workflow.count("advisory: false") == 3
     assert workflow.count("advisory: true") == 2
-    assert workflow.count("os: ubuntu-latest") == 2
+    assert workflow.count("os: ubuntu-latest") == 3
     assert workflow.count("os: macos-latest") == 2
     assert workflow.count('python: "3.12"') == 1
     assert workflow.count('python: "3.13"') == 1
     assert workflow.count('python: "3.14"') == 2
-    for unsupported in ("3.10", "3.11", "3.15"):
+    assert workflow.count('python: "3.15"') == 1
+    for unsupported in ("3.10", "3.11"):
         assert f'python: "{unsupported}"' not in workflow
 
 

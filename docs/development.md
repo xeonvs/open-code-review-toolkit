@@ -161,6 +161,13 @@ Keep generated inputs synthetic and retain minimized failures as ordinary
 regressions. The campaign exercises parser, protocol, persistence and DLP invariants, not live providers or
 model quality.
 
+BL-019's selected campaign is complete. Evidence models/store, internal/context
+MCP, handle/cursor isolation, GitLab CI projection, federation admission/wire and
+receipt reconciliation, and distribution registry metadata join the original
+DLP/result/range/policy/diagram families. The matching component regression
+suite owns each minimized synthetic failure; supported-Python replay and claim
+limits are recorded in the [test evidence matrix](engineering/test_evidence_matrix.md#v0140-range-diagrams-and-bounded-fuzzing).
+
 Vary input structure as well as counts: scalar types, nested objects/arrays,
 Unicode and encoded display representations, collector transition sequences,
 global budgets across sequence alternatives, and exact persisted round-trips.

@@ -19,11 +19,18 @@ This matrix records what the repository test suite proves and, equally important
 | Real native producer through MCP and cleanup | checksum-qualified OCR 1.13.3; runner; isolated evidence stdio server | Opt-in `test_native.py` exercises both formats, no candidate, off, stale candidate, conflict, failed output I/O and failed startup; manifest remains complete and checkout HEAD/index/staged/unstaged/untracked bytes remain unchanged | Local model peer controls tool calls; this proves transport/composition rather than natural model choice |
 | Installed delivery | installed CLI, MCP, receipt admission and local provider | `test_installed_policy_e2e.py` builds direct wheel and sdist-derived wheel; installed local peer delivers both Mermaid/text variants with hostile import/PATH conditions and private artifacts; Python 3.15 passes | Controlled OCR peer is beyond the installed launcher; actual OCR proof is separate |
 | Optional error isolation and exact persistence | lifecycle, admission, reporting and post consumers | Fault injection keeps mandatory evidence/findings/outcome usable; whole-unit DLP omits sensitive diagrams; current/historical receipt tests reject corrupt envelopes and preserve empty/template branch conditions byte-for-byte | Malformed persisted artifacts still reject atomically; diagrams do not prove approval eligibility |
-| DLP and closed parser variations | `context.dlp`, result/range, policy and diagram contracts | 100-example CI / 1000-example local Hypothesis profiles, independent explicit seeds, minimized synthetic enum/encoded-credential/surrogate regressions and representations/state/round-trip properties | Initial families proven; the full BL-019 expansion and supported-Python replay are active-plan gates |
+| Full bounded BL-019 campaign | `context.dlp`, result/range, policy/diagrams, evidence models/store, internal/context MCP, GitLab payload/CI projection, federation registry/schema/admission/wire/receipt, distribution registry metadata | `tests/fuzz/`: 100-example default profile replayed on Python 3.12–3.15; 1000-example profile on 3.14/3.15 with independent seeds 31514/31515; minimized failures retained in ordinary component suites | Finite strategies may exhaust before the example limit; no live-service, model-quality or exhaustive-input claim |
+| Corpus ownership and discovered regressions | Shared generators in `tests/fuzz/strategies.py`; each property module and corresponding component regression suite | Technical/encoded DLP, malformed enums, exact range/diagram identity, canonical record/delta IDs, hostile duplicate-key and Unicode persistence, handle/cursor/lifetime isolation, MCP request/response budgets and recovery, federation counter conservation and registry identity/origin laws | Parser and policy properties retain their own limits; real TLS/stdio/installed boundary evidence remains separate |
 | Weak runtime branches | GitLab CI acquisition, policy schema, private filesystem, reporting usage and result contracts | Real TLS bounds/redirect/credential cases, malformed schemas, unsafe filesystem and exact counter tests; independent quality floors of 85%, result 90% | Coverage does not replace semantic regex alternatives or live provider qualification |
 
 Production own-tool/model qualification and protected stable publication are
 separate active-plan gates; the deterministic evidence above does not claim them.
+
+BL-019 is complete as the bounded campaign selected for this release. The
+generators and minimized synthetic corpus remain normal CI work, owned by the
+component suites; future protocol changes extend the matching family. No second
+fuzzing engine, production-data corpus or unbounded background campaign is part
+of this result.
 
 ## v0.6.1 requirement-to-evidence audit
 

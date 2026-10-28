@@ -5,7 +5,7 @@
 plan_schema_version: 2
 Status: active
 Owner: root
-Last Updated: 2026-10-28
+Last Updated: 2026-10-29
 Release classification: release-required, target v0.14.0; bounded BL-019 testing and fixture maintenance are accompanying no-release work within the same delivery objective.
 
 ### Goal
@@ -27,14 +27,14 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
 | REQ-001 | Resolve and prove the exact supported range before range-dependent evidence; reject sibling, unrelated and undecidable shallow ranges before model execution | WQ-03 | done |
-| REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | in_progress |
-| REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | in_progress |
-| REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | in_progress |
-| REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | in_progress |
-| REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | in_progress |
-| REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | in_progress |
-| REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | in_progress |
-| REQ-009 | Complete BL-019 with bounded Hypothesis properties and minimized synthetic regressions for DLP, result/range, policy/diagrams, evidence/MCP, GitLab/registry metadata, context handles/store/CI outcomes and federation admission/upstream responses; qualify supported Python and retain corpus ownership | WQ-02, WQ-03, WQ-04, WQ-08 | in_progress |
+| REQ-002 | Independently validate final native manifest identity, preserve ancestor/commit/empty/selection/gitlink semantics, and forbid unverified legacy range claims | WQ-03, WQ-05 | done |
+| REQ-003 | Preserve independent GitLab diff, actual-target and policy identities and bind result/report/coverage/anchors to the admitted range | WQ-03, WQ-06 | done |
+| REQ-004 | Implement the exact on/off/spoiler/local configuration matrix with early invalid-value and GitLab-local rejection | WQ-04, WQ-05 | done |
+| REQ-005 | Support bounded typed flowchart and sequence variants, immutable source references, safe deterministic Mermaid and text, and explicit optional states | WQ-04, WQ-06 | done |
+| REQ-006 | Receive diagram output in the same OCR run through an isolated fixed toolkit MCP capability; reconcile run-wide duplicates/conflicts and cleanup without a second model pass | WQ-04, WQ-05 | done |
+| REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | done |
+| REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | done |
+| REQ-009 | Complete BL-019 with bounded Hypothesis properties and minimized synthetic regressions for DLP, result/range, policy/diagrams, evidence/MCP, GitLab/registry metadata, context handles/store/CI outcomes and federation admission/upstream responses; qualify supported Python and retain corpus ownership | WQ-02, WQ-03, WQ-04, WQ-08 | done |
 | REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | in_progress |
 | REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | done |
 | REQ-012 | Support Python >=3.12,<3.16, add required Linux 3.15 and release installs, retain coverage on 3.14 and hash-locked binary runtime installation | WQ-07 | pending |
@@ -174,6 +174,8 @@ WQ-05/WQ-06 are implemented locally: fixed MCP output, snapshot-before-cleanup, 
 
 Python 3.15 passes 631 source/contract checks and clean direct-wheel/sdist-derived-wheel integration (three checks), including both diagram types through the installed CLI under hostile import/PATH conditions. The lock changes only Pydantic 2.14.1/core 2.50.1 and MarkupSafe 3.0.4; runtime installation remains hash-locked and binary-only. The Linux 3.15 job and both release-install matrices are implemented; the protected-check ruleset addition is deferred to the final feature-push/CI handoff so unrelated current PRs are not blocked by a job absent on main. Coverage ownership remains 3.14. Focused GitLab CI acquisition reaches 90% and reporting usage 93%, with independent local/hosted module floors added. Public configuration, local/GitLab/security contracts and the decision flow describe optional-only diagram failure recovery and frozen pre-execution tuples. Final full quality, aggregate security scan and own-tool real-model patch review remain pending. No additional push has run; scan count is 0 of 1 and successful own-tool review count is 0 of 2.
 
+The expanded BL-019 campaign now covers every selected family in the verification matrix, including valid round-trips, nested hostile shapes, origin/identity laws, counter conservation and multi-message protocol recovery. The complete 190-check property suite passes the default profile on Python 3.12–3.15 and extended 1000-example profiles under independent seeds 31514 (3.14) and 31515 (3.15). Minimized findings add ordinary regressions for pre-creation handles, invalid-Unicode context state, unhashable CI/lifecycle states, duplicate evidence JSON fields, unsafe MCP correlation IDs, oversized error responses and malformed registry metadata. The focused existing component/TLS/stdio regression set passes 351 checks with two environment-gated native cases skipped. BL-019 is removed from the inactive backlog; corpus ownership and claim limits remain in the development guide and test evidence matrix. Full final quality, the one security scan and actual own-tool model review are still pending.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -182,7 +184,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-Finish local commits for the implemented diagram activation and Python 3.15 after scoped review/staged secret scans. Complete the newly authorized remaining BL-019 families (evidence/MCP; GitLab/registry metadata; context handles/store/CI outcomes; federation admission/upstream responses), record minimized regressions and supported-Python replay, then close its backlog point. Finish coverage/public-contract reconciliation and aggregate module/handoff review before exactly one aggregate Codex Security diff scan and at most two successful own-tool ChatGPT local patch reviews with diagram inspection. Final full quality/pre-push gates, protected 3.15 context and feature CI/merge/development publication follow. No further feature push before those local gates. Site work remains WQ-13, after feature merge and before release-branch push.
+Commit the completed BL-019 campaign and minimized fixes after semantic review, format/lifecycle guards and staged secret scan. Finish aggregate module/handoff and public-contract review before exactly one aggregate Codex Security diff scan and at most two successful own-tool ChatGPT local patch reviews with diagram inspection. Final full quality/pre-push gates, protected 3.15 context and feature CI/merge/development publication follow. No further feature push before those local gates. Site work remains WQ-13, after feature merge and before release-branch push.
 
 ### Plan Fidelity Check
 

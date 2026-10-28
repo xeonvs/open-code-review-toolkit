@@ -772,6 +772,14 @@ def handle_request(
     if not isinstance(raw, dict) or raw.get("jsonrpc") != "2.0":
         return _error(None, -32600, "Invalid Request")
     request_id = raw.get("id", _MISSING_REQUEST_ID)
+    if request_id is not _MISSING_REQUEST_ID and request_id is not None:
+        if type(request_id) not in (str, int):
+            return _error(None, -32600, "Invalid Request")
+        if isinstance(request_id, str):
+            try:
+                request_id.encode("utf-8")
+            except UnicodeError:
+                return _error(None, -32600, "Invalid Request")
     method = raw.get("method")
     params = raw.get("params", {})
     if isinstance(method, str) and method.startswith("notifications/") and "id" not in raw:
@@ -947,6 +955,8 @@ def serve(
             if not isinstance(safe_id, (str, int)) or isinstance(safe_id, bool):
                 safe_id = None
             serialized = json.dumps(_error(safe_id, -32603, "Response exceeds the byte limit"))
+            if len(serialized.encode("utf-8")) > MAX_RESPONSE_BYTES:
+                serialized = json.dumps(_error(None, -32603, "Response exceeds the byte limit"))
         stdout.write(serialized + "\n")
         stdout.flush()
     return 0

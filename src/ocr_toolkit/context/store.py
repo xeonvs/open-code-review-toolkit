@@ -98,9 +98,17 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _canonical(value: object) -> bytes:
-    return (
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
-    ).encode("utf-8")
+    """Encode finite UTF-8 state without leaking JSON/Unicode implementation errors."""
+
+    try:
+        return (
+            json.dumps(
+                value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (ValueError, TypeError, RecursionError, UnicodeError) as exc:
+        raise ContextStoreError("context store is not finite UTF-8 JSON") from exc
 
 
 def _mint(token_bytes: Callable[[int], bytes]) -> str:
@@ -285,8 +293,11 @@ def _ci_outcome_projection(value: object) -> Mapping[str, object]:
     requirement = item.get("requirement")
     origin = item.get("origin")
     if (
-        status not in CI_OUTCOME_STATUSES
+        not isinstance(status, str)
+        or status not in CI_OUTCOME_STATUSES
+        or not isinstance(requirement, str)
         or requirement not in CI_OUTCOME_REQUIREMENTS
+        or not isinstance(origin, str)
         or origin not in CI_OUTCOME_ORIGINS
     ):
         raise ContextStoreError("CI outcome state is invalid")
@@ -708,6 +719,8 @@ class ContextStore:
             or created_at < 0
             or expiry <= created_at
             or expiry - created_at > MAX_STORE_LIFETIME_SECONDS
+            or type(now) is not int
+            or now < created_at
             or now >= expiry
         ):
             raise ContextStoreError("context store is expired or has an invalid lifetime")
@@ -748,9 +761,12 @@ class ContextStore:
         """Resolve one exact minted handle only within its bound run and lifetime."""
 
         if (
-            HANDLE_RE.fullmatch(handle) is None
+            not isinstance(handle, str)
+            or HANDLE_RE.fullmatch(handle) is None
             or run_id != self.run_id
             or policy_digest != self.policy_digest
+            or type(now) is not int
+            or now < self.created_at
             or now >= self.expiry
         ):
             raise ContextStoreError("context handle is unavailable")

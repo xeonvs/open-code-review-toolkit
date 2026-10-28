@@ -144,6 +144,31 @@ def commit(path: Path, **kwargs: object) -> ContextStore:
     return ContextStore.commit(path, **parameters)  # type: ignore[arg-type]
 
 
+def test_context_lifetime_starts_at_creation_in_both_readback_and_handle_resolution(
+    tmp_path,
+) -> None:
+    target = tmp_path / "context.json"
+    store = commit(target)
+    with pytest.raises(ContextStoreError, match="lifetime"):
+        ContextStore.read(
+            target, expected_run_id=RUN_ID, expected_policy_digest=POLICY_DIGEST, now=99
+        )
+    with pytest.raises(ContextStoreError, match="unavailable"):
+        store.get(store.records[0].handle, run_id=RUN_ID, policy_digest=POLICY_DIGEST, now=99)
+
+
+def test_context_readback_rejects_escaped_surrogate_through_its_closed_error(tmp_path) -> None:
+    target = tmp_path / "context.json"
+    commit(target)
+    document = json.loads(target.read_text())
+    document["completeness"] = "\ud800"
+    target.write_text(json.dumps(document, ensure_ascii=True))
+    with pytest.raises(ContextStoreError, match="finite UTF-8 JSON"):
+        ContextStore.read(
+            target, expected_run_id=RUN_ID, expected_policy_digest=POLICY_DIGEST, now=150
+        )
+
+
 def rewrite_hostile_store(path: Path, payload: dict[str, object]) -> None:
     body = dict(payload)
     body.pop("digest", None)
@@ -154,6 +179,20 @@ def rewrite_hostile_store(path: Path, payload: dict[str, object]) -> None:
     ).hexdigest()
     path.write_text(json.dumps(payload), encoding="utf-8")
     os.chmod(path, 0o600)
+
+
+@pytest.mark.parametrize("field", ("status", "requirement", "origin"))
+@pytest.mark.parametrize("value", ([], {}, True, None))
+def test_context_readback_rejects_non_string_ci_states(tmp_path, field, value) -> None:
+    target = tmp_path / "context.json"
+    commit(target, records=[ci_pending()])
+    document = json.loads(target.read_text())
+    document["records"][0]["projections"]["model"]["ci_outcome"][field] = value
+    rewrite_hostile_store(target, document)
+    with pytest.raises(ContextStoreError, match="CI outcome state"):
+        ContextStore.read(
+            target, expected_run_id=RUN_ID, expected_policy_digest=POLICY_DIGEST, now=150
+        )
 
 
 def test_context_store_commits_owner_only_and_resolves_only_minted_handle(tmp_path: Path) -> None:
