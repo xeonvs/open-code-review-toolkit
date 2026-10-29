@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from ocr_toolkit import cli, provider_config
+from ocr_toolkit import cli, provider_config, review_runner
 from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.preflight import validate_ocr_binary
@@ -34,6 +34,7 @@ from tests.test_evidence_repository import git
         "conflict",
         "call-failure",
         "startup-failure",
+        "probe-failure",
         "off",
     ),
 )
@@ -89,7 +90,9 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
                 repath(child)
 
     repath(candidate)
-    submissions = [] if case in ("absent", "off", "startup-failure") else [candidate]
+    submissions = (
+        [] if case in ("absent", "off", "startup-failure", "probe-failure") else [candidate]
+    )
     if case == "invalid":
         candidate["base_sha"] = "0" * 40
     if case == "not-applicable":
@@ -179,10 +182,23 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
     monkeypatch.setenv("OCR_LLM_TOKEN", "synthetic-token")
     monkeypatch.setenv("OCR_LLM_MODEL", "synthetic-model")
     monkeypatch.setenv("OCR_LLM_PROTOCOL", "openai")
+    monkeypatch.setenv("OCR_LLM_AUTH_MODE", "api-key")
     monkeypatch.setenv("OCR_TELEMETRY_ENABLED", "false")
     monkeypatch.setenv("OCR_REVIEW_CONTEXT_MODE", "off")
     monkeypatch.setenv("OCR_REVIEW_PROGRESS", "false")
     monkeypatch.setenv("OCR_REVIEW_DIAGRAM_MODE", "off" if case == "off" else "local")
+    resolutions = 0
+    resolve_binary = review_runner._resolve_ocr_binary
+
+    def transient_resolution():
+        nonlocal resolutions
+        resolutions += 1
+        if resolutions == 1:
+            raise review_runner.ReviewRunnerError("synthetic optional executable lookup failure")
+        return resolve_binary()
+
+    if case == "probe-failure":
+        monkeypatch.setattr(review_runner, "_resolve_ocr_binary", transient_resolution)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), DiagramPeer)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
@@ -239,11 +255,15 @@ def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
         if case == "absent"
         else "not-applicable"
         if case == "not-applicable"
+        else "unsupported"
+        if case == "probe-failure"
         else "omitted-invalid"
     )
     assert f"Change diagram: `{expected}`" in markdown
     assert ("```mermaid" in markdown) == (expected == "generated")
-    assert DiagramPeer.output_visible == (case not in ("off", "startup-failure"))
+    assert DiagramPeer.output_visible == (case not in ("off", "startup-failure", "probe-failure"))
+    if case == "probe-failure":
+        assert resolutions >= 2
     if submissions:
         assert DiagramPeer.output_responses
     assert tuple(path.read_bytes() for path in preserved) == before

@@ -5109,6 +5109,11 @@ def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Pat
         patched_attr(review_runner, "_write_isolated_runtime_config", capture_config),
         patched_attr(
             review_runner,
+            "_resolve_ocr_binary",
+            lambda: pytest.fail("retention denial must precede optional binary probing"),
+        ),
+        patched_attr(
+            review_runner,
             "_prepare_policy_context",
             lambda *_args: (
                 review_runner.ReviewIdentity(

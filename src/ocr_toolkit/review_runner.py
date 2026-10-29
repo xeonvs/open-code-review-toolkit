@@ -3442,16 +3442,6 @@ def _run_evidence_review(
     try:
         try:
             state.enter("configuration")
-            if diagram_requested(state.diagram_mode, local=state.local) and native_version is None:
-                native_binary = native_binary or _resolve_ocr_binary()
-                try:
-                    native_version = preflight.validate_ocr_binary(
-                        executable=native_binary, announce=False
-                    )
-                except Exception:
-                    # Capability probing is optional; mandatory native preview
-                    # and gitlink qualification retain their existing gates.
-                    diagram_warning()
             _write_isolated_runtime_config(
                 **({"debug": state.debug} if state.debug is not None else {}),
                 **({"local": True} if native_store is not None else {}),
@@ -3514,6 +3504,16 @@ def _run_evidence_review(
                     facts={"diagnostic_count": diagnostic_count},
                 )
             state.enter("mcp-preflight")
+            if diagram_requested(state.diagram_mode, local=state.local) and native_version is None:
+                try:
+                    native_binary = native_binary or _resolve_ocr_binary()
+                    native_version = preflight.validate_ocr_binary(
+                        executable=native_binary, announce=False
+                    )
+                except Exception:
+                    # Identity/retention authorization precedes optional probes.
+                    # Mandatory native preview and gitlink gates stay independent.
+                    diagram_warning()
             diagram_execution = DiagramExecution.prepare(
                 state.diagram_mode,
                 local=state.local,
