@@ -326,6 +326,24 @@ It preserves older snapshots and freezes the 1.11.7 pre-Rego epoch. The current
 recommended candidate is indexed by `compatibility/ocr-support.json`; its exact
 qualification evidence is linked there.
 
+## v0.14.2 compact context, presentation and DLP evidence
+
+| Boundary | Production owner and entry point | Evidence | Claim limit |
+| --- | --- | --- | --- |
+| Protected bootstrap and unchanged full evidence | `evidence.project.render_bootstrap` and production evidence MCP | `test_evidence_bootstrap.py` covers 40 supported profiles, distinct/missing/equal ref roles, 513 admitted records, oversized inventories and UTF-8 clipping with both required ends retained; extended `test_bootstrap_reporting.py` properties vary routing and aliases | Full MCP records/counts remain independently asserted; presentation tests do not prove model behavior |
+| Real native grouped and federated routing | Qualified OCR 1.13.3 -> production stdio MCP -> admission/cleanup | 18 `test_native_context.py` cases retrieve framework/runtime and locked dependency facts, inspect cross-group changes and preserve staged/unstaged/untracked work; `test_ocr_qualification.py` preserves intent-to-federation routing under forced clipping | Controlled model peers prove native/toolkit handoffs, not natural model choice or diagram semantics |
+| Mermaid-only reporting and exact human range | Shared pure renderer -> local/GitLab adapters and clean installed artifacts | Diagram/admission, reporting properties and installed wheel/sdist suites cover both variants, modes, malformed labels, legacy/different identities and optional faults; technical edge conditions are checked against independent literal expected strings | Formatting preserves an admitted model; mechanical source references do not prove semantic correctness |
+| Technical DLP versus contacts | `context.dlp.check_text` -> runner publication projection | Extended DLP/network generators mix raw/encoded comparison operators, Unicode forms, dates/versions, IPv4/CIDR/dotted masks, IPv6 and mapped addresses, malformed neighbors, controls and contacts; minimized regressions preserve Mermaid, mapped-CIDR and long-mask false positives; producer tests verify findings survive while mixed secrets/contacts are omitted | Network exceptions require a complete token of at most 64 characters parsed by `ipaddress`; DLP is not a general network-configuration validator |
+
+The first actual ChatGPT review of `3c483ae1..4326742` completed 25/25 selected
+files, made one diagram submission and produced an admitted nine-node flowchart.
+Its complete native trace confirms repository Rules at the matching file groups,
+cross-group source reads by the diagram owner and no failed source/tool responses.
+One valid independent-condition test finding was hidden by the reproduced Mermaid
+DLP false positive; both are corrected and the original finding now survives the
+real publication projection. This first run is diagnostic evidence; final
+acceptance of the corrective runtime head is a separate required gate.
+
 ## v0.13.0 / #264 protected-policy authority evidence
 
 The v0.12.x receipt-v10 and evidence-v4 rows above are historical evidence for
