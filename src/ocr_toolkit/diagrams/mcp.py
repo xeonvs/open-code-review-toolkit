@@ -164,6 +164,27 @@ def call_diagram_tool(
         }
 
 
+def diagram_status(collector: DiagramCollector | None) -> dict[str, str]:
+    """Expose closed run-owned submission state without candidate text or authority."""
+
+    state = "unavailable"
+    if collector is not None:
+        try:
+            snapshot = collector.read()
+            state = (
+                "omitted-invalid"
+                if snapshot.reason != "none"
+                else "received"
+                if snapshot.candidate is not None
+                else "pending"
+            )
+        except Exception:
+            # This optional read must not turn a valid evidence summary into an
+            # error or leak collector contents into an untrusted model context.
+            diagram_warning()
+    return {"state": state}
+
+
 def optional_diagram_tool_definition() -> dict[str, object]:
     """Keep evidence registration usable if optional schema construction fails."""
 

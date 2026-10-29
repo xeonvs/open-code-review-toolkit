@@ -4,7 +4,10 @@ With `review --local --debug-dir`, a private observer records these same checks;
 it does not add an execution or admission branch. Raw output is captured before
 finalization, safe output only after admission, and the journal records cleanup
 and successful or failed report delivery. See [local debug bundles](local.md#private-debug-bundle)
-for bounds, missing artifacts and incomplete journal semantics. Local report and
+for bounds, missing artifacts and incomplete journal semantics. The actual
+bootstrap, private diagram collector and run-bound native task/tool projection
+are captured before isolated-session cleanup. Their raw content never enters
+result admission or provider publication. Local report and
 debug delivery pin their private parent directory before creating entries, so a
 same-user replacement of a visible ancestor cannot redirect a retained artifact.
 

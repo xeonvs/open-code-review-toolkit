@@ -10,6 +10,30 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.1 corrective diagram and debug qualification
+
+The corrective runtime at `b3c0029` passes the complete quality gate: 3153 tests,
+357 subtests and 88.37% total coverage, with every component floor satisfied.
+Its one correction-diff Codex Security scan covers all six changed runtime files
+and supporting changed files with zero findings and no deferred security work.
+
+An actual native ChatGPT `gpt-6.1-sol/high` review of `b81b4a1..eed522b` completes
+53/53 selected files with zero findings and one admitted flowchart submission.
+The output group receives diffs of eight runtime files and `pyproject.toml` from other groups before its
+call; its nine-node/nine-edge normal GitLab publication flow is checked against
+source and the complete private Mermaid/text. The private debug projection
+retains all 317 native records without truncation, source change or omission;
+cleanup, DLP and report delivery pass. This proves positive model delivery for
+that reviewed candidate, not exhaustive graph semantics or live GitLab writes.
+
+The run uses aggregate budget zero and has no budget/tool/context-exhaustion
+warning. The 2172-character background recommendation is assessed separately:
+all 50 main requests contain the complete bootstrap and no compression occurs.
+One bounded search and an auxiliary read of the installed-test helper reach
+their display caps; targeted source reads, the selected diff and inspection of
+the mostly unchanged helper tail close those context questions. These
+observations do not turn zero failed-tool counts into a blanket source-read proof.
+
 ## v0.14.0 range, diagrams and bounded fuzzing
 
 | Boundary | Production owner and entry point | Evidence and observable result | Claim limit |
@@ -17,7 +41,7 @@ This matrix records what the repository test suite proves and, equally important
 | Immutable range before evidence and final admission | `evidence.review_range.resolve_review_range`; runner; pure `review_range.admit_native_range` | `test_review_range.py`, actual Git topology/hostile-control and reused-checkout tests, controlled native identities, gitlink/selection regressions | Source proof is mechanical; unsupported/shallow topology never becomes a confirmed range claim |
 | Typed grammar and run collector | `diagrams.contracts`, `diagrams.collector` | `tests/diagrams/` and `tests/fuzz/`: nested/global limits, malformed types/Unicode, normalized repeats, sticky conflict/budget omission, concurrent real processes, private hostile readback | No semantic graph correctness claim |
 | Real native producer through MCP and cleanup | checksum-qualified OCR 1.13.3; runner; isolated evidence stdio server | Opt-in `test_native.py` exercises both formats, no candidate, off, stale candidate, conflict, failed output I/O, failed startup and failed optional executable lookup; manifest remains complete and checkout HEAD/index/staged/unstaged/untracked bytes remain unchanged | Local model peer controls tool calls; this proves transport/composition rather than natural model choice |
-| Actual own-tool model review | Runner, OCR 1.13.3 and native ChatGPT gpt-6.1-sol/high | Two complete immutable-range reviews, 46/46 native items and zero auxiliary failures each; the second has no budget warnings and its release-matrix finding is fixed with authorized-checkout payload regressions | Both natural-model runs submitted no optional diagram; positive graph delivery is the separate controlled native/installed evidence above |
+| Historical v0.14.0 own-tool model reviews | Runner, OCR 1.13.3 and native ChatGPT gpt-6.1-sol/high | Two native-complete immutable-range reviews, 46/46 items and zero recorded auxiliary failures each; the first has budget warnings, the second has none and its release-matrix finding is fixed with authorized-checkout payload regressions | The first does not satisfy the current engineering acceptance rule; neither submitted a diagram. Controlled native/installed tests prove transport separately and do not close positive natural-model diagram acceptance |
 | Installed delivery | installed CLI, MCP, receipt admission and local provider | `test_installed_policy_e2e.py` builds direct wheel and sdist-derived wheel; installed local peer delivers both Mermaid/text variants with hostile import/PATH conditions and private artifacts; Python 3.15 passes | Controlled OCR peer is beyond the installed launcher; actual OCR proof is separate |
 | Optional error isolation and exact persistence | lifecycle, admission, reporting and post consumers | Fault injection keeps mandatory evidence/findings/outcome usable; transient optional source-read failures cannot populate the finding-proof cache; whole-unit DLP omits sensitive diagrams; current/historical receipt tests reject corrupt envelopes and preserve empty/template branch conditions byte-for-byte | Malformed persisted artifacts still reject atomically; diagrams do not prove approval eligibility |
 | Full bounded BL-019 campaign | `context.dlp`, result/range, policy/diagrams, evidence models/store, internal/context MCP, GitLab payload/CI projection, federation registry/schema/admission/wire/receipt, distribution registry metadata | `tests/fuzz/`: 100-example default profile replayed on Python 3.12–3.15; 1000-example profile on 3.14/3.15 with independent seeds 31514/31515; minimized failures retained in ordinary component suites | Finite strategies may exhaust before the example limit; no live-service, model-quality or exhaustive-input claim |
@@ -273,7 +297,17 @@ Every top-level test module is classified below. A module can contain more than 
 
 The local debug boundary is exercised by `tests/test_review_debug.py` through
 real private files, descriptor-pinned directories, atomic journal publication,
-capture bounds and hostile targets. DLP observer tests compare both the complete
+capture bounds and hostile targets. `tests/test_review_trace.py` and its bounded
+fuzz properties exercise run/range/chain identity, source and whole-record output
+caps, hostile filesystem objects, malformed types/Unicode and exclusion of native
+replay/reasoning fields. `tests/diagrams/test_native_context.py` crosses the actual
+qualified native process, MCP, trace capture and cleanup with a controlled model
+for combined, per-file and fallback grouping, fresh rounds, renamed/deleted/filtered
+files and unchanged staged/unstaged/untracked work. Cases cover both diagram
+formats, cross-group reads and a single submission; absent or error-text source responses
+preserve findings. These controlled-model cases prove wiring, not natural model
+choice, source-context sufficiency or semantic graph correctness.
+DLP observer tests compare both the complete
 projection and the number of production checks, proving no diagnostic rescan.
 The installed wheel/sdist scenario compares normal/debug exit codes, JSON and
 Markdown for clean, finding, warning, partial, budget, DLP-filtered, forged-use

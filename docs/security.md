@@ -221,6 +221,12 @@ coverage and provider posting counts remain independent.
   private auth directory through a link in that home. Persistent host/account
   state, refresh and locking stay OCR-owned; credentials are not copied into
   toolkit artifacts. GitLab rejects this option before auth-store access.
+- Explicit local `--debug-dir` retains a bounded private projection of this
+  run's native task/tool history, bootstrap and diagram candidate before normal
+  session cleanup. Those raw diagnostics can contain confidential or DLP-rejected
+  text; they are not publication input. Separate auth/config files, opaque
+  provider replay and native reasoning fields are excluded. See the
+  [debug containment contract](local.md#private-debug-bundle).
 - Automatic approval binds exact source, actual target/diff, policy authority,
   protection and author identity, skips self-approval, and accepts only exact
   receipt v13 with enabled DLP and every existing eligibility gate satisfied.

@@ -27,7 +27,7 @@ starting the model.
 ocr-ci preflight --local
 review_dir=$(mktemp -d)
 review_dir=$(cd "$review_dir" && pwd -P)
-ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD
+ocr-ci review --local --result "$review_dir/review.json" --stderr "$review_dir/review.stderr" --report "$review_dir/review.md" -- --commit HEAD --max-tokens-budget 0
 ```
 
 Keep all three output paths in that new private directory. Resolve its physical
@@ -44,8 +44,25 @@ could limit the conclusion. For each failed `file_read`, compare its path and
 range with the reviewed tree and decide whether the missed context bears on
 the changed code or a finding. A native complete manifest proves selected-file
 completion, not that every auxiliary read succeeded; resolve a material gap
-before accepting the local review. Preserve these artifacts until findings are
-fixed and the corrected head has been reviewed.
+before accepting the local review. Native tools can also return an error as
+ordinary text without incrementing the failed-call counter, so inspect the
+actual response when a required source read is uncertain. Preserve these
+artifacts until findings are fixed and the corrected head has been reviewed.
+
+For engineering or release acceptance, use `--max-tokens-budget 0` to avoid an
+operator-imposed aggregate ceiling. A budget-exhaustion warning makes that
+acceptance check unsuccessful even if OCR's grace round leaves a native
+`complete` manifest. A deliberately capped exploratory run may retain useful
+findings; its zero-finding result is not a substitute for accepted qualification.
+This is an engineering acceptance rule, not a change to the CLI's native status
+or the product's partial-result handling.
+
+When a task requires positive diagram qualification, inspect an actual
+model-generated, admitted diagram and its complete private Mermaid/text output.
+`not-generated`, `not-applicable` and synthetic model responses do not prove
+that positive capability. Ordinary user reviews still continue without a
+diagram. The [development acceptance procedure](development.md#local-validation)
+owns the required distinction between those claims.
 
 For a range, replace `--commit HEAD` with `--from BASE --to HEAD`. Both ends are
 resolved to immutable commits before execution. Working-tree snapshots, repository
@@ -266,13 +283,37 @@ diagnostics to a different directory.
 | `raw-stderr.log` | Original OCR diagnostic stream | 2,000,000 |
 | `safe-result.json` | Successfully finalized JSON, if available | 20,000,000 |
 | `summary.md` | Admitted report or closed failure summary | 20,000,000 |
+| `bootstrap.md` | Exact toolkit background supplied to OCR | 65,536 |
+| `diagram.json` | Run collector state and private submitted candidate before cleanup | 20,000 |
+| `native-trace.jsonl` | Projected native task messages, model text/tool calls, tool responses and completion checkpoints | 20,000,000 |
 | `journal.json` | Actual phase observations and value-free DLP decisions | 1,000,000 |
 
-Raw files can contain rejected confidential content. Do not upload the bundle
-as a public CI artifact. No environment dump, authentication token, full runtime
-configuration or OCR session is copied into it. Configuration observations name
+Raw files, bootstrap, candidates and trace text can contain confidential content
+or values rejected by DLP. Do not upload the bundle as a public CI artifact.
+The toolkit does not copy the environment, authentication store, runtime
+configuration, opaque provider replay or native reasoning fields. This is a
+selected diagnostic projection, not a complete OCR session export or a resumable
+session. Configuration observations name
 the selected protocol, language, review effort and logging flags; the model
 selection is represented by a SHA-256 fingerprint, not provider acceptance.
+
+Journal schema `ocr.toolkit-debug/v2` adds these artifacts. The trace uses
+`ocr.native-trace/v1` and reads only this run's isolated session HOME. Before
+retaining records it checks the private file, session identity, immutable range,
+repository and record chain. It accepts one unambiguous native session, reads at
+most 32,000,000 source bytes, 10,000 records and 4,000,000 bytes per record, and
+retains only whole JSONL records within its output limit. Unsupported or malformed
+records, interrupted sessions, limits and changing sources produce explicit
+degraded/unavailable capture metadata. Diagnostic failure does not change the
+admitted review or stop cleanup.
+
+Use task type and group path to follow grouping, each fresh main-review round,
+cross-group reads and optional diagram submission. A native `ok: true` tool
+record may contain an error in its text response; inspect both. The trace does
+not include request tool schemas or prove that a model used all available context.
+Ordinary native session files and the isolated authentication link are still
+removed after capture. Keep only the requested private bundle until diagnosis
+finishes; never use its raw records as posting or approval input.
 
 The journal records passed, failed, degraded and not-run checks at their execution
 owners. Passing a collection phase does not imply complete repository coverage;

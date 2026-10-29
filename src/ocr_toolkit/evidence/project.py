@@ -103,11 +103,14 @@ def render_bootstrap(
     diagram_available = any(DIAGRAM_TOOL_NAME in capability.tools for capability in capabilities)
     if diagram_available and store.base is not None and store.head is not None:
         navigation.append(
-            "Optional diagram requested: submit one self-contained typed flowchart or sequence "
-            f"through `{DIAGRAM_TOOL_NAME}` for base_sha={store.base.commit_sha}, "
-            f"head_sha={store.head.commit_sha}. Inspect the full range, never submit a group fragment. "
-            "Use not-applicable without a diagram when no behavioral summary is useful. "
-            "The diagram never changes findings, coverage, or approval; raw Mermaid is forbidden."
+            "Diagram: only the group containing the lexically first non-deleted path in "
+            "<review_files> + <other_changed_files> submits. In main review, if summary's "
+            "diagram_output.state=pending, inspect the change inventory and read related "
+            "cross-group diffs with file_read_diff. "
+            f"Call `{DIAGRAM_TOOL_NAME}` once before task_done: one coherent flowchart/sequence "
+            "or not-applicable. Private output only; no full-coverage claim. If status is not "
+            "pending or context/tools are insufficient, skip and finish review. "
+            f"base_sha={store.base.commit_sha}, head_sha={store.head.commit_sha}."
         )
     if mr_context is not None:
         navigation.extend(
