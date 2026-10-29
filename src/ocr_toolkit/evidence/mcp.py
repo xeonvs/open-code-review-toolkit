@@ -27,6 +27,7 @@ from ocr_toolkit.diagrams.lifecycle import diagram_warning
 from ocr_toolkit.diagrams.mcp import (
     DIAGRAM_TOOL_NAME,
     call_diagram_tool,
+    diagram_status,
     optional_diagram_tool_definition,
 )
 from ocr_toolkit.evidence.actions import UNATTRIBUTED_ACTION, record_action
@@ -853,6 +854,29 @@ def handle_request(
                     record_action(action_receipt_path, action, completed=True)
                 except (OSError, ValueError):
                     pass
+            if (
+                name == TOOL_NAME
+                and action == "summary"
+                and (diagram_output_enabled or diagram_collector is not None)
+            ):
+                # This optional metadata is not an evidence record or a
+                # completeness claim. Preserve the ordinary summary if adding
+                # it fails or would exceed the actual wire-response budget.
+                try:
+                    content = result.get("content")
+                    if isinstance(content, list) and len(content) == 1:
+                        payload = json.loads(content[0]["text"])
+                        payload["diagram_output"] = diagram_status(diagram_collector)
+                        augmented = _text_result(payload)
+                        wire = json.dumps(
+                            _success(request_id, augmented),
+                            separators=(",", ":"),
+                            ensure_ascii=False,
+                        ).encode("utf-8")
+                        if len(wire) <= MAX_RESPONSE_BYTES:
+                            result = augmented
+                except Exception:
+                    diagram_warning()
             return _success(request_id, result)
         if context_store is not None and isinstance(name, str) and name in {LIST_TOOL, GET_TOOL}:
             try:

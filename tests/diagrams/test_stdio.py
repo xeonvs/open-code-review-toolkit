@@ -78,6 +78,8 @@ def test_actual_sdk_output_and_evidence_keep_separate_authority(tmp_path: Path, 
                 assert peer.protocol_version == "2025-11-25"
                 listing = await peer.list_tools()
                 assert DIAGRAM_TOOL_NAME in {tool.name for tool in listing.tools}
+                pending = await peer.call_tool("ocr_toolkit_evidence", {"action": "summary"})
+                assert json.loads(pending.content[0].text)["diagram_output"] == {"state": "pending"}
                 response = await peer.call_tool(DIAGRAM_TOOL_NAME, payload)
                 assert not response.is_error
                 assert json.loads(response.content[0].text) == {"state": "received"}
@@ -85,11 +87,19 @@ def test_actual_sdk_output_and_evidence_keep_separate_authority(tmp_path: Path, 
                 assert not summary.is_error
                 facts = json.loads(summary.content[0].text)
                 assert (facts["base"], facts["head"]) == (base, head)
+                assert facts["diagram_output"] == {"state": "received"}
+            # OCR starts fresh round conversations; a fresh MCP process sees
+            # run-owned collection state without any previous model messages.
+            async with client(root, collector) as peer:
+                summary = await peer.call_tool("ocr_toolkit_evidence", {"action": "summary"})
+                assert json.loads(summary.content[0].text)["diagram_output"] == {
+                    "state": "received"
+                }
 
     asyncio.run(exercise())
     assert collector.read().candidate is not None
     actions = read_action_receipt(repository_artifacts(root).action_receipt)
-    assert actions["completed"]["summary"] == actions["attempted"]["summary"] == 1
+    assert actions["completed"]["summary"] == actions["attempted"]["summary"] == 3
     assert tuple(path.read_bytes() for path in metadata_paths) == before
 
 
@@ -109,6 +119,9 @@ def test_actual_sdk_can_read_evidence_after_optional_private_io_failure(tmp_path
                 assert json.loads(response.content[0].text)["state"] == "omitted-invalid"
                 summary = await peer.call_tool("ocr_toolkit_evidence", {"action": "summary"})
                 assert not summary.is_error and "records" in json.loads(summary.content[0].text)
+                assert json.loads(summary.content[0].text)["diagram_output"] == {
+                    "state": "unavailable"
+                }
 
     asyncio.run(exercise())
 
@@ -128,6 +141,7 @@ def test_disabled_output_is_absent_from_the_real_protocol_inventory(tmp_path: Pa
                 assert DIAGRAM_TOOL_NAME not in {tool.name for tool in listing.tools}
                 summary = await peer.call_tool("ocr_toolkit_evidence", {"action": "summary"})
                 assert not summary.is_error
+                assert "diagram_output" not in json.loads(summary.content[0].text)
 
     asyncio.run(exercise())
     assert not artifacts.diagram.exists() and not artifacts.diagram_lock.exists()

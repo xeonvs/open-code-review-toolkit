@@ -53,6 +53,22 @@ or publication action. Existing evidence/context tools keep their read-only
 behavior. Raw Mermaid, HTML, directives and styling are not accepted; the
 toolkit renders identifiers, arrows, escaping and text deterministically.
 
+The toolkit background explicitly requests output during native main review.
+Only the group containing the lexically first selected non-deleted path is asked
+to submit. This selects an output executor, not the diagram's source scope: it
+must inspect the global inventory and relevant immutable cross-group diffs with
+the existing native reader. Other groups keep their independent finding reviews.
+The diagram describes one coherent changed flow; it does not assert complete
+repository coverage. Insufficient source context leaves the optional output absent.
+
+When output is enabled, the mandatory evidence summary also exposes a closed
+`diagram_output.state`: `pending`, `received`, `omitted-invalid` or `unavailable`.
+Fresh review rounds can check that state before submitting. It contains no
+candidate text or source references, makes no admission/publication claim, and
+does not consume a submission. An optional status-read fault leaves mandatory
+evidence usable. Unexpected submissions still face the same conflict and budget
+rules; the collector never picks a winner among competing candidates.
+
 Limits apply to the whole candidate:
 
 - Flowchart: fixed `LR`, at most 12 nodes and 16 edges.

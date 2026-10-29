@@ -193,7 +193,24 @@ Select checks from the changed boundary rather than from an ever-growing generic
   alone is not compatibility evidence.
 
 Keep a completed security or local OCR review tied to its exact reviewed range.
-After fixing its findings, use focused regression tests and a scoped self-review
+For an actual own-tool engineering acceptance run, pass
+`--max-tokens-budget 0`; a positive ceiling is for explicitly bounded exploration.
+Treat budget, tool-round or context-exhaustion warnings as an unsuccessful
+acceptance check even when the native manifest is `complete`. Assess other
+warnings and required auxiliary reads for material gaps; zero failed-call
+counts alone do not prove every source response was valid. Keep the native
+terminal state and the engineering acceptance decision distinct, and do not
+silently reset an owner-imposed run allowance by relabelling a completed run.
+
+A positive diagram acceptance claim requires an actual model call through the
+production output tool, successful admission and inspection of private Mermaid
+and equivalent text. Check the graph's source context across relevant native
+groups, not just its paths/lines or a complete finding manifest. Grouping and
+group-local plans do not provide a global semantic summary. Controlled-model
+integration tests prove wiring separately; optional omission remains valid
+product behavior but does not satisfy that positive acceptance requirement.
+
+After fixing review findings, use focused regression tests and a scoped self-review
 of the correction. Start another full review only when the earlier result was
 incomplete or a materially new risk boundary is outside its coverage; record
 that gap and the intended range before launch. Run the complete quality gate
