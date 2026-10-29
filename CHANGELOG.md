@@ -1,3 +1,23 @@
+## 0.14.0 - 2026-10-29
+
+### 🚀 Features
+
+- Reviews can include one optional, bounded flowchart or sequence diagram with checked source locations and a complete text equivalent. `OCR_REVIEW_DIAGRAM_MODE` controls GitLab expanded/collapsed delivery and explicit private local generation. Diagram failures omit only that optional output, preserving findings, coverage and approval decisions. ([#273](https://github.com/xeonvs/open-code-review-toolkit/issues/273))
+- Support Python 3.15 with a required Linux test lane and release installation checks, retaining Python 3.14 coverage ownership. Derive release verification lanes from the authorized package's Python bounds so historical recovery keeps its original support range. Complete the bounded dev-only Hypothesis campaign across DLP, evidence/result/range contracts, policy/diagrams, MCP/context, GitLab CI, federation and registry metadata, and enforce individual coverage floors for previously weak runtime modules. ([#274](https://github.com/xeonvs/open-code-review-toolkit/issues/274))
+
+### 🐛 Bug Fixes
+
+- Review execution proves the supported immutable ancestor range before evidence collection and rejects native manifests whose input identity differs from that range, independently of reported file coverage. ([#272](https://github.com/xeonvs/open-code-review-toolkit/issues/272))
+- Technical release-version and date comparisons, including encoded comparison operators and nonbreaking spaces, remain visible through DLP while mixed contact values and credentials still receive whole-unit checks. Truncated quoted credentials remain redacted when the closing quote is missing. Entity-encoded credential names are checked before Markdown normalization, preserving exact empty/template references. ([#273](https://github.com/xeonvs/open-code-review-toolkit/issues/273))
+- Malformed native result and structured-policy enum values now produce bounded contract errors instead of uncaught parser exceptions.
+
+  Reject malformed CI/lifecycle states, non-finite or invalid-Unicode context stores and ambiguous duplicate evidence fields through their closed parser errors. Bind context handles to their creation time, keep MCP errors within response byte limits and recover after invalid request IDs, and reject malformed distribution registry metadata without incidental type errors.
+
+  Isolate optional diagram source-read failures from finding code proof, and reject malformed persisted receipt states through the normal invalid-artifact path.
+
+  Keep range-preflight errors free of private Git diagnostics while distinguishing insufficient shallow history. ([#274](https://github.com/xeonvs/open-code-review-toolkit/issues/274))
+
+
 ## 0.13.1 - 2026-10-23
 
 ### 🚀 Features

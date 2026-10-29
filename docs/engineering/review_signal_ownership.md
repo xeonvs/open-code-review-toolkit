@@ -54,5 +54,7 @@ bounded failure-only operator line does not reopen that conclusion.
 
 No safe stable objective currently supports automatic profile routing or a
 generic review-quality score. BL-016 remains parked, BL-018 remains conditional
-on an owner-approved objective and representative evidence, and BL-019 and
-BL-020 retain their existing activation requirements.
+on an owner-approved objective and representative evidence, and BL-020 retains
+its existing activation requirements. The bounded Hypothesis campaign from
+BL-019 is complete; its properties and minimized regressions remain owned by
+the component test suites.
