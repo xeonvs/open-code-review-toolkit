@@ -97,6 +97,7 @@ from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
+    ShallowAncestryUnavailable,
     normalize_repo_path,
 )
 from ocr_toolkit.evidence.review_context import (
@@ -3395,9 +3396,15 @@ def _run_evidence_review(
     state.enter("identity")
     try:
         refs = _immutable_review_refs(_review_refs(ocr_args))
+    except ShallowAncestryUnavailable as exc:
+        raise ReviewRunnerError(
+            "immutable review range could not be proved in a shallow repository; "
+            "fetch sufficient history before review"
+        ) from exc
     except RepositoryEvidenceError as exc:
         raise ReviewRunnerError(
-            "immutable review range could not be proved: " + redact_sensitive(str(exc))
+            "immutable review range could not be proved; require resolvable commits "
+            "with base an ancestor of head"
         ) from exc
     state.reviewed_sha = refs.head
     effective_range = ReviewRange(refs.base, refs.head)

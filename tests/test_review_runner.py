@@ -435,7 +435,7 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
         artifacts.context_store,
         expected_run_id=context_config.run_id,
         expected_policy_digest=context_config.policy_digest,
-        now=0,
+        now=150,
     )
     assert [record.resource_class for record in restored.records] == ["ci_outcome"]
     assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
@@ -529,6 +529,7 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
     anchor_state: str,
     completeness: str,
 ) -> None:
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
     identity = enriched_identity()
     discussion = SimpleNamespace(
         thread=0,
@@ -598,7 +599,7 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
         artifacts.context_store,
         expected_run_id=context_config.run_id,
         expected_policy_digest=context_config.policy_digest,
-        now=0,
+        now=150,
     )
     assert [record.resource_class for record in restored.records] == [
         "issue",

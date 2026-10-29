@@ -276,13 +276,16 @@ def test_local_context_rejected_before_preflight_io_or_review_artifacts(
     assert "Traceback" not in output.err
 
 
+@pytest.mark.parametrize(
+    "error_type", (review_runner.RepositoryEvidenceError, review_runner.ShallowAncestryUnavailable)
+)
 def test_local_invalid_ref_has_closed_identity_failure(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], error_type
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
     def reject_refs(_refs: review_runner.ReviewRefs) -> review_runner.ReviewRefs:
-        raise review_runner.RepositoryEvidenceError("private repository diagnostic")
+        raise error_type("private repository diagnostic")
 
     monkeypatch.setattr(review_runner, "_immutable_review_refs", reject_refs)
     assert (
@@ -303,7 +306,7 @@ def test_local_invalid_ref_has_closed_identity_failure(
     )
     output = capsys.readouterr()
     assert "Stopped at: `identity`" in output.out
-    assert "immutable review refs could not be resolved" in output.err
+    assert "immutable review range could not be proved" in output.err
     assert "private repository diagnostic" not in output.err + output.out
     assert "Traceback" not in output.err
 
