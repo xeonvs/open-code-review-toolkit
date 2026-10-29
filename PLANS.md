@@ -34,7 +34,7 @@ Follow the usual signed plan/draft feature PR, local implementation and per-comm
 | REQ-006 | Reconcile resulting evidence and correction classification; do not release artifacts for documentation-only work | WQ-06, WQ-07 | pending |
 | REQ-007 | Qualify complete selection/group/round/context handoffs before choosing an actionable output-call protocol; preserve cross-group context, conflict/budget/DLP and optional-only failure behavior | WQ-02, WQ-03 | in_progress |
 | REQ-008 | Treat budget-exhaustion warnings as unsuccessful local engineering acceptance and default own-tool qualification to unlimited aggregate tokens | WQ-03 | done |
-| REQ-009 | Validate actual prompt/MCP/collector/report handoffs, repeated rounds and non-owner groups; complete final quality and one security scan of the correction diff | WQ-03, WQ-04 | pending |
+| REQ-009 | Validate actual prompt/MCP/collector/report handoffs, repeated rounds and non-owner groups; complete final quality and one security scan of the correction diff | WQ-03, WQ-04 | done |
 | REQ-010 | Reconcile public contracts, decision flow, evidence matrix, changelog and inactive backlog only where changed; preserve historical facts | WQ-03, WQ-06 | pending |
 | REQ-011 | Complete protected feature/development verification and conditional v0.14.1 release PR with full plan archival/reset and no later closure PR | WQ-06, WQ-07 | pending |
 | REQ-012 | Verify stable receipts/registries/installs/tag, issue/milestone, site update and synchronized clean main after a required release | WQ-08; Post-Close Delivery | pending |
@@ -84,9 +84,9 @@ The original first review completed 46/46 selected items with four aggregate-bud
 | --- | --- | --- | --- |
 | WQ-01 | REQ-001, REQ-002 | Source/artifact diagnosis, binary checksum, model discovery, local preflight and reviewed initial plan/draft | done |
 | WQ-02 | REQ-007 | Complete source/controlled-native analysis of selection, grouping, group-local plans/main, cross-group context, compression, rounds, failures and aggregation; reviewed design decision | done |
-| WQ-03 | REQ-007, REQ-008, REQ-009, REQ-010, REQ-013 | Scoped request/status and bounded native-trace implementation, instructions/public docs, real boundary regressions and self-reviewed logical commits | in_progress |
-| WQ-04 | REQ-009, REQ-013 | Aggregate self-review, final quality/installed/native checks and one correction-diff security scan | pending |
-| WQ-05 | REQ-002, REQ-003, REQ-004, REQ-005, REQ-013 | Actual own-tool run within the current allowance, exact source/trace/result/graph assessment and focused correction validation | pending |
+| WQ-03 | REQ-007, REQ-008, REQ-009, REQ-010, REQ-013 | Scoped request/status and bounded native-trace implementation, instructions/public docs, real boundary regressions and self-reviewed logical commits | done |
+| WQ-04 | REQ-009, REQ-013 | Aggregate self-review, final quality/installed/native checks and one correction-diff security scan | done |
+| WQ-05 | REQ-002, REQ-003, REQ-004, REQ-005, REQ-013 | Actual own-tool run within the current allowance, exact source/trace/result/graph assessment and focused correction validation | in_progress |
 | WQ-06 | REQ-006, REQ-010, REQ-011 | Final feature push, protected CI/merge, development publication and final site-contract handoff | pending |
 | WQ-07 | REQ-006, REQ-011 | Conditional v0.14.1 markers/authorization/notes/pins and plan archive/reset in release PR, or no-release documentation delivery | pending |
 | WQ-08 | REQ-012 | Required stable external readback, issue/milestone/site reconciliation and clean main without another closure PR | pending |
@@ -134,7 +134,11 @@ The request/status correction preserves pure evidence summaries, stored records 
 
 Debug v2 now captures bootstrap, collector and a run-bound native task/tool projection before ordinary cleanup. Seventy-nine trace/debug/property tests pass for identity, record chain, private filesystem hostility, malformed input, bounds, source changes and advisory capture failure. Two extended 1000-example Hypothesis properties also pass; focused owner coverage is 96% for trace and 93% for debug. Actual native records exposed two format differences, now corrected and retained as synthetic regressions: response calls are flattened, while files_reviewed is a list. Native identifiers are compared with private raw output because final DLP may redact them. No DLP rule was relaxed.
 
-The final focused debug/docs/protocol replay passes 123 checks. Clean direct-wheel and sdist-derived-wheel installs pass all three package-boundary tests, including normal/debug parity and missing-trace advisory behavior. Request/status is signed locally as 077a88a after semantic self-review, formatting and staged secret scan; debug and grouped trace regressions form the next reviewed slice. Full quality, aggregate self-review and the single correction-diff security scan remain pending. No real-model acceptance claim exists yet.
+The final focused debug/docs/protocol replay passes 123 checks. Clean direct-wheel and sdist-derived-wheel installs pass all three package-boundary tests, including normal/debug parity and missing-trace advisory behavior. Each runtime slice received semantic self-review, formatting and a staged secret scan. No real-model acceptance claim exists yet.
+
+Both runtime slices are now signed locally: 077a88a and b3c0029. Aggregate self-review verified launcher -> native session/MCP -> bounded collector/trace -> cleanup -> admission -> report authority, and found no remaining implementation issue. Full quality at runtime head b3c002962cf15802fca9c53ab2370ac6ff339f2c passes 3153 tests and 357 subtests with 88.37% aggregate coverage and every required component floor. The single correction-diff Codex Security scan of ab2f412..b3c0029 is complete: all six changed runtime files plus 16 supporting changed files reviewed, zero findings, no deferred security work. Static security review does not prove model or live forge behavior.
+
+Actual-model run 1 is ready to launch after the documentation checkpoint: review the original v0.14.0 base b81b4a15bb5212ece78c398665a9d576537ab404 through the clean current corrective head, recording exact endpoints before execution. Use the same qualified OCR 1.13.3, native ChatGPT gpt-6.1-sol/high, diagram local, aggregate budget zero and a fresh physical private debug bundle. Structural auth preflight passes. Model discovery must confirm reachability before launch. No actual-model run has started and the allowance remains zero of four.
 
 ### Risks And Recovery
 
@@ -142,7 +146,7 @@ Do not turn optional product behavior into a false acceptance claim. A repeated 
 
 ### Resume Point
 
-WQ-04: finish logical debug commit after self-review, then run aggregate quality/security before actual-model qualification. Preserve the source trace and assess real graph transitions; runtime correction requires v0.14.1. Current corrective model count is zero of four.
+WQ-05: execute the prepared actual-model review after the documentation checkpoint and model discovery; inspect raw/native and admitted outcomes, every warning/finding/required source read, actual output calls, source context and private Mermaid/text. Fix confirmed issues with focused regression tests and self-review. Do not repeat the completed general security scan. Runtime correction requires v0.14.1; current corrective successful-model count is zero of four.
 
 ### Plan Fidelity Check
 
