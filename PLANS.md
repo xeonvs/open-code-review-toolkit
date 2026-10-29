@@ -188,6 +188,8 @@ Final runtime head da4c8bc3 passes the complete quality gate: 3048 tests, 22 ski
 
 Finished feature a0077225 is pushed to PR #274; GitHub verifies all 15 commit signatures. The protected-main ruleset now additionally requires test-ubuntu-latest-py3.15 with the same Actions integration as existing test lanes; independent readback confirms every other rule, bypass actor and condition is unchanged. Security/build/quality checks pass, but all six test jobs on this first head fail only the same retention test: optional diagram version discovery resolved OCR before rejecting forbidden GitLab private retention, exposing host-binary availability. The correction moves optional probing after identity/retention authorization and contains binary lookup inside its advisory exception boundary. A host-independent regression prohibits that early probe; an added real-native transient-resolution case proves normal review completion with unsupported diagram output and unchanged checkout. The focused set passes 293 checks and all 11 qualified native cases. Repeat full quality on the corrected runtime head before the CI-fix push. No new aggregate security or own-tool review is authorized or run.
 
+Corrected runtime d277469 passes the repeated complete quality gate: 3053 tests, 23 environment-gated skips and 357 subtests, 88% total coverage, all risk groups and independent module floors, formatting, lint, typing and Bandit. The dependency audit is again clean for the unchanged lock. The CI correction is ready for a signed, non-rewriting follow-up push and exact-head protected CI readback. All remaining work is feature merge/development publication, release preparation with plan archival, and required external delivery.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -196,7 +198,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-Commit the reviewed optional-probe ordering/containment correction after format/lifecycle guards and staged secret scan. Repeat full quality on this runtime head, refresh applicable secret guards and push the CI fix to PR #274 without rewriting pushed history. Verify every protected check, including registered 3.15, before merge and development publication readback. The aggregate security scan and both successful own-tool allowances are exhausted; use focused tests and semantic review for ordinary corrections. Site work remains WQ-13, after feature merge and before release-branch push.
+Commit the documentation-only validation checkpoint after lifecycle/privacy/staged guards, refresh applicable tree/history guards and push the reviewed CI fix to PR #274 without rewriting pushed history. Verify every protected check, including registered 3.15, before merge and development publication readback. The aggregate security scan and both successful own-tool allowances are exhausted; use focused tests and semantic review for ordinary corrections. Site work remains WQ-13, after feature merge and before release-branch push.
 
 ### Plan Fidelity Check
 
@@ -233,7 +235,7 @@ The separately owned site candidate and relevant 0.14.0 feature/example content 
 
 ### Handoff Notes
 
-Keep operational state here, not in per-command receipts or duplicate logs. Use bounded native CLI output and private logs only where needed for volume/recovery. Preserve exact review counts, scanned range, corrections and remaining action before context loss. No subagents are authorized by this plan; keep execution with root unless the owner explicitly requests delegation.
+Keep operational state here, not in per-command receipts or duplicate logs. Use bounded native CLI output and private logs only where needed for volume/recovery. Preserve exact review counts, scanned range, corrections and remaining action before context loss. Root owns implementation and release actions. The single security scan used its skill-authorized read-only preflight, independent architecture and disjoint discovery workers; this does not introduce general implementation delegation.
 
 ## Recently Completed
 
