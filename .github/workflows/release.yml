@@ -193,6 +193,7 @@ jobs:
       tag: ${{ steps.validate.outputs.tag }}
       testpypi-state: ${{ steps.registry.outputs.testpypi-state }}
       pypi-state: ${{ steps.registry.outputs.pypi-state }}
+      python-minors: ${{ steps.supported-python.outputs.python-minors }}
       version: ${{ steps.validate.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -233,6 +234,18 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "source-date-epoch=${SOURCE_DATE_EPOCH}" >> "${GITHUB_OUTPUT}"
+      - id: supported-python
+        name: Read Python support from the authorized release checkout
+        run: |
+          uv run --no-sync python - >> "${GITHUB_OUTPUT}" <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+          from scripts.release_receipt import supported_python_minors
+
+          metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          print("python-minors=" + json.dumps(supported_python_minors(metadata)))
+          PY
       - run: uv run --no-sync pip-audit --skip-editable
       - name: Build deterministic release artifacts
         env:
@@ -388,7 +401,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13", "3.14", "3.15"]
+        python: ${{ fromJSON(needs.build.outputs.python-minors) }}
     permissions:
       contents: read
     steps:
@@ -440,7 +453,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13", "3.14", "3.15"]
+        python: ${{ fromJSON(needs.build.outputs.python-minors) }}
     permissions:
       contents: read
     steps:

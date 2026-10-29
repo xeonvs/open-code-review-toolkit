@@ -112,6 +112,52 @@ def test_supported_python_minors_come_from_canonical_project_metadata() -> None:
         receipt.supported_python_minors({"project": {"requires-python": ">=3.12"}})
 
 
+@pytest.mark.parametrize(
+    "requires,expected",
+    (
+        (">=3.12,<3.15", ["3.12", "3.13", "3.14"]),
+        (">=3.12,<3.16", ["3.12", "3.13", "3.14", "3.15"]),
+        (">=3.12", None),
+    ),
+)
+def test_release_matrix_payload_reads_authorized_checkout_including_historical_bounds(
+    tmp_path: Path, requires: str, expected: list[str] | None
+) -> None:
+    import subprocess
+
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+    steps = jobs["build"]["steps"]
+    step = next(value for value in steps if value.get("id") == "supported-python")
+    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    assert steps[0]["with"]["ref"] == "${{ needs.authorize.outputs.commit }}"
+    assert '>> "${GITHUB_OUTPUT}"' in step["run"]
+    for job in ("verify-testpypi", "verify-pypi"):
+        assert jobs[job]["strategy"]["matrix"]["python"] == (
+            "${{ fromJSON(needs.build.outputs.python-minors) }}"
+        )
+    # Exercise the exact workflow payload with files from an authorized checkout,
+    # rather than importing metadata from the workflow's newer source tree.
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "release_receipt.py").write_bytes(SCRIPT.read_bytes())
+    (tmp_path / "pyproject.toml").write_text(f'[project]\nrequires-python = "{requires}"\n')
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    if expected is None:
+        assert completed.returncode != 0 and "python-minors=" not in completed.stdout
+    else:
+        assert completed.returncode == 0, completed.stderr
+        assert json.loads(completed.stdout.removeprefix("python-minors=")) == expected
+
+
 def test_existing_receipt_recovery_ignores_new_run_but_rejects_delivery_drift() -> None:
     payload = build_receipt(run_id=555, run_attempt=3)
     receipt.validate_receipt(
@@ -369,7 +415,8 @@ def test_issue_receipt_rejects_duplicate_wrong_body_or_incompatible_issue_state(
 def test_release_workflow_builds_reads_back_and_recovers_the_receipt() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert workflow.count('python: ["3.12", "3.13", "3.14", "3.15"]') == 2
+    assert workflow.count("python: ${{ fromJSON(needs.build.outputs.python-minors) }}") == 2
+    assert "python-minors: ${{ steps.supported-python.outputs.python-minors }}" in workflow
     assert "verify_registry_provenance.py" in (
         ROOT / "scripts" / "verify_registry_artifacts.sh"
     ).read_text(encoding="utf-8")

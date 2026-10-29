@@ -286,7 +286,7 @@ def test_production_release_verifies_reviewed_registry_artifacts() -> None:
     assert workflow.count("verify_registry_artifacts.sh") == 3
     assert workflow.count("artifact-hashes.json release.yml") == 3
     assert workflow.count("release.yml runtime-requirements.txt") == 3
-    assert workflow.count('python: ["3.12", "3.13", "3.14", "3.15"]') == 2
+    assert workflow.count("python: ${{ fromJSON(needs.build.outputs.python-minors) }}") == 2
     assert "python scripts/github_release_api.py ensure" in workflow
     assert "python scripts/github_release_api.py upload" in workflow
     assert "python scripts/github_release_api.py publish" in workflow
