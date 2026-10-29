@@ -27,18 +27,18 @@ Follow the usual signed plan/draft feature PR, local implementation and per-comm
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
 | REQ-001 | Preserve published v0.14.0 identity and truthful prior evidence; no retroactive reclassification of the earlier successful runs | WQ-01 | done |
-| REQ-002 | Verify qualified OCR, auth/model readiness, physical private artifact paths and supported flags before the additional review | WQ-01, WQ-05 | in_progress |
-| REQ-003 | Execute the reviewed range through the corrective candidate with diagram local, ChatGPT high and unlimited aggregate tokens, within the owner's current successful-run allowance | WQ-05 | pending |
-| REQ-004 | Inspect terminal result, range, complete coverage, warnings, findings and failed auxiliary reads; classify and verify any findings separately | WQ-05 | pending |
-| REQ-005 | Require actual real-model submission, admitted graph, source references and private Mermaid/text before claiming the graph acceptance gap closed | WQ-05 | pending |
-| REQ-006 | Reconcile resulting evidence and correction classification; do not release artifacts for documentation-only work | WQ-06, WQ-07 | pending |
-| REQ-007 | Qualify complete selection/group/round/context handoffs before choosing an actionable output-call protocol; preserve cross-group context, conflict/budget/DLP and optional-only failure behavior | WQ-02, WQ-03 | in_progress |
+| REQ-002 | Verify qualified OCR, auth/model readiness, physical private artifact paths and supported flags before the additional review | WQ-01, WQ-05 | done |
+| REQ-003 | Execute the reviewed range through the corrective candidate with diagram local, ChatGPT high and unlimited aggregate tokens, within the owner's current successful-run allowance | WQ-05 | done |
+| REQ-004 | Inspect terminal result, range, complete coverage, warnings, findings and failed auxiliary reads; classify and verify any findings separately | WQ-05 | done |
+| REQ-005 | Require actual real-model submission, admitted graph, source references and private Mermaid/text before claiming the graph acceptance gap closed | WQ-05 | done |
+| REQ-006 | Reconcile resulting evidence and correction classification; do not release artifacts for documentation-only work | WQ-06, WQ-07 | in_progress |
+| REQ-007 | Qualify complete selection/group/round/context handoffs before choosing an actionable output-call protocol; preserve cross-group context, conflict/budget/DLP and optional-only failure behavior | WQ-02, WQ-03 | done |
 | REQ-008 | Treat budget-exhaustion warnings as unsuccessful local engineering acceptance and default own-tool qualification to unlimited aggregate tokens | WQ-03 | done |
 | REQ-009 | Validate actual prompt/MCP/collector/report handoffs, repeated rounds and non-owner groups; complete final quality and one security scan of the correction diff | WQ-03, WQ-04 | done |
-| REQ-010 | Reconcile public contracts, decision flow, evidence matrix, changelog and inactive backlog only where changed; preserve historical facts | WQ-03, WQ-06 | pending |
+| REQ-010 | Reconcile public contracts, decision flow, evidence matrix, changelog and inactive backlog only where changed; preserve historical facts | WQ-03, WQ-06 | in_progress |
 | REQ-011 | Complete protected feature/development verification and conditional v0.14.1 release PR with full plan archival/reset and no later closure PR | WQ-06, WQ-07 | pending |
 | REQ-012 | Verify stable receipts/registries/installs/tag, issue/milestone, site update and synchronized clean main after a required release | WQ-08; Post-Close Delivery | pending |
-| REQ-013 | Extend local debug capture with bounded run-bound native task/tool trace and actual toolkit inputs before cleanup, without credential/config/opaque-provider capture or new review authority | WQ-03, WQ-04, WQ-05 | in_progress |
+| REQ-013 | Extend local debug capture with bounded run-bound native task/tool trace and actual toolkit inputs before cleanup, without credential/config/opaque-provider capture or new review authority | WQ-03, WQ-04, WQ-05 | done |
 
 ### Explicit Non-Goals
 
@@ -49,7 +49,7 @@ No tag, distribution, immutable Release or receipt rewriting; no automatic new v
 - The published baseline is immutable b81b4a15bb5212ece78c398665a9d576537ab404..ab2f412600042df56093a9281cb310d2b6780258. The corrective-delivery objective extends the final acceptance head to the finished correction so the authorized checks cover the fix as well. Record exact SHA endpoints before each launch.
 - Use checksum-verified native OCR 1.13.3 and the existing toolkit launcher, MCP output collector, admission, cleanup and report path. The actual acceptance run uses no test doubles or ad-hoc prompt injection; focused deterministic tests may replace only the far-side model.
 - Use `OCR_REVIEW_DIAGRAM_MODE=local`, explicit ChatGPT model/high and native `--max-tokens-budget 0`. This aggregate default is already unlimited in the public GitLab example; do not conflate it with per-request completion or per-group context limits.
-- The owner expanded the current corrective-work allowance to four successful actual-model reviews; none has started. Infrastructure or failed attempts require terminal evidence before any retry and do not become successful acceptance. Preserve each native terminal state and engineering acceptance decision separately.
+- The owner expanded the current corrective-work allowance to four successful actual-model reviews; one is complete and accepted. Infrastructure or failed attempts require terminal evidence before any retry and do not become successful acceptance. Preserve each native terminal state and engineering acceptance decision separately.
 - Keep credentials in the native private registration. Use the normal isolated session/link lifecycle; never read or copy credential contents. Outputs remain in a fresh physical private directory outside tracked source.
 - Preserve checkout HEAD, index and unrelated files. Reporting and cleanup failures, incomplete native state, warnings and material failed auxiliary reads must be assessed before completion claims.
 - Optional diagram absence never changes the user's finding outcome or approval contract. That runtime rule does not waive this separate graph acceptance criterion.
@@ -86,9 +86,9 @@ The original first review completed 46/46 selected items with four aggregate-bud
 | WQ-02 | REQ-007 | Complete source/controlled-native analysis of selection, grouping, group-local plans/main, cross-group context, compression, rounds, failures and aggregation; reviewed design decision | done |
 | WQ-03 | REQ-007, REQ-008, REQ-009, REQ-010, REQ-013 | Scoped request/status and bounded native-trace implementation, instructions/public docs, real boundary regressions and self-reviewed logical commits | done |
 | WQ-04 | REQ-009, REQ-013 | Aggregate self-review, final quality/installed/native checks and one correction-diff security scan | done |
-| WQ-05 | REQ-002, REQ-003, REQ-004, REQ-005, REQ-013 | Actual own-tool run within the current allowance, exact source/trace/result/graph assessment and focused correction validation | in_progress |
-| WQ-06 | REQ-006, REQ-010, REQ-011 | Final feature push, protected CI/merge, development publication and final site-contract handoff | pending |
-| WQ-07 | REQ-006, REQ-011 | Conditional v0.14.1 markers/authorization/notes/pins and plan archive/reset in release PR, or no-release documentation delivery | pending |
+| WQ-05 | REQ-002, REQ-003, REQ-004, REQ-005, REQ-013 | Actual own-tool run within the current allowance, exact source/trace/result/graph assessment and focused correction validation | done |
+| WQ-06 | REQ-006, REQ-010, REQ-011 | Final feature push, protected CI/merge, development publication and final site-contract handoff | in_progress |
+| WQ-07 | REQ-006, REQ-011 | v0.14.1 markers/authorization/notes/pins and plan archive/reset in release PR | pending |
 | WQ-08 | REQ-012 | Required stable external readback, issue/milestone/site reconciliation and clean main without another closure PR | pending |
 
 ### Locked Decisions
@@ -109,7 +109,7 @@ Source facts at immutable OCR 1.13.3:
 | --- | --- | --- |
 | Explicit tool call in every group | Competing candidates and repeated rounds can exhaust or invalidate the collector | rejected |
 | One owner using only its initial group prompt | Other-file metadata is insufficient for behavior/interactions | rejected |
-| One owner using the global inventory, existing immutable cross-group reads and shared status | Actual native access/round behavior is proved; acceptance still requires inspecting real relevant responses and source semantics within limits | chosen for narrow implementation; actual-model qualification pending |
+| One owner using the global inventory, existing immutable cross-group reads and shared status | Actual native access/round behavior is proved; every acceptance claim still requires inspecting real relevant responses and source semantics within limits | implemented and qualified for the recorded actual-model candidate |
 | Automatic union of per-group graph fragments | Structural merging cannot prove semantic consistency or complete interactions | rejected under existing constraints |
 | Separate whole-range summary model phase or forced global review group | Changes the approved model-pass/engine contract | not authorized |
 
@@ -124,7 +124,7 @@ Source facts at immutable OCR 1.13.3:
 
 ### Latest Validation Results
 
-The qualified OCR 1.13.3 binary matches SHA-256 fa9b8530c0a35e6106a9ab2e81c21d98ef26d3f31c1f39ad3ef4c2528047c4f4. Native discovery lists gpt-6.1-sol; ChatGPT preflight passes with API-only variables removed. Signed plan d7daf8d is pushed in draft PR #276 after lifecycle/instruction, formatting, secret and dependency guards. Current corrective actual-model count is zero of four.
+The qualified OCR 1.13.3 binary matches SHA-256 fa9b8530c0a35e6106a9ab2e81c21d98ef26d3f31c1f39ad3ef4c2528047c4f4. Native discovery lists gpt-6.1-sol; ChatGPT preflight passes with API-only variables removed. Signed plan d7daf8d is pushed in draft PR #276 after lifecycle/instruction, formatting, secret and dependency guards. Current corrective successful-model count is one of four.
 
 Issue #277 tracks corrective delivery in milestone v0.14.1. It remains open until the protected release workflow verifies its immutable receipt; feature/release PR prose must not close it early.
 
@@ -134,11 +134,13 @@ The request/status correction preserves pure evidence summaries, stored records 
 
 Debug v2 now captures bootstrap, collector and a run-bound native task/tool projection before ordinary cleanup. Seventy-nine trace/debug/property tests pass for identity, record chain, private filesystem hostility, malformed input, bounds, source changes and advisory capture failure. Two extended 1000-example Hypothesis properties also pass; focused owner coverage is 96% for trace and 93% for debug. Actual native records exposed two format differences, now corrected and retained as synthetic regressions: response calls are flattened, while files_reviewed is a list. Native identifiers are compared with private raw output because final DLP may redact them. No DLP rule was relaxed.
 
-The final focused debug/docs/protocol replay passes 123 checks. Clean direct-wheel and sdist-derived-wheel installs pass all three package-boundary tests, including normal/debug parity and missing-trace advisory behavior. Each runtime slice received semantic self-review, formatting and a staged secret scan. No real-model acceptance claim exists yet.
+The final focused debug/docs/protocol replay passes 123 checks. Clean direct-wheel and sdist-derived-wheel installs pass all three package-boundary tests, including normal/debug parity and missing-trace advisory behavior. Each runtime slice received semantic self-review, formatting and a staged secret scan.
 
 Both runtime slices are now signed locally: 077a88a and b3c0029. Aggregate self-review verified launcher -> native session/MCP -> bounded collector/trace -> cleanup -> admission -> report authority, and found no remaining implementation issue. Full quality at runtime head b3c002962cf15802fca9c53ab2370ac6ff339f2c passes 3153 tests and 357 subtests with 88.37% aggregate coverage and every required component floor. The single correction-diff Codex Security scan of ab2f412..b3c0029 is complete: all six changed runtime files plus 16 supporting changed files reviewed, zero findings, no deferred security work. Static security review does not prove model or live forge behavior.
 
-Actual-model run 1 is ready to launch after the documentation checkpoint: review the original v0.14.0 base b81b4a15bb5212ece78c398665a9d576537ab404 through the clean current corrective head, recording exact endpoints before execution. Use the same qualified OCR 1.13.3, native ChatGPT gpt-6.1-sol/high, diagram local, aggregate budget zero and a fresh physical private debug bundle. Structural auth preflight passes. Model discovery must confirm reachability before launch. No actual-model run has started and the allowance remains zero of four.
+Actual-model run 1 completes and is accepted on b81b4a15bb5212ece78c398665a9d576537ab404..eed522bb83aaeb96a5d32374850f60059e828796 through qualified OCR 1.13.3 and native ChatGPT gpt-6.1-sol/high, diagram local, aggregate budget zero. Model discovery and auth preflight pass. Terminal coverage is 53 selected/completed, zero reused/failed/waived; zero findings and 150 tools with no registered failures. Total native usage is 1554622 tokens (1535420 input, 19202 output), elapsed 2m52s. One output call yields an admitted nine-node/nine-edge flowchart of the normal GitLab publication path, with inspected immutable source references and complete private Mermaid/text.
+
+The actual output group receives eight relevant cross-group runtime diffs plus pyproject.toml before submission; the final source-bearing request retains those complete responses. All 50 main requests contain the full bootstrap, and no compression occurs. The 2172-character recommendation is accepted without a material delivery gap. A bounded search reaches 100 matches, and one auxiliary helper read returns lines 1-500 rather than requested 1-510; targeted source reads, the selected diff and inspection of the mostly unchanged CLI tail resolve the needed context. There are no budget/tool/context-exhaustion warnings or unavailable required source responses. The debug bundle retains all 317 native records (7213620 bytes), with no truncation, omission or source change; cleanup, DLP and report delivery pass, and the tracked checkout remains clean. The successful corrective-run counter is one of four. No model finding requires a code fix or another full run. The dependency audit checks 96 packages with no known vulnerabilities.
 
 ### Risks And Recovery
 
@@ -146,7 +148,7 @@ Do not turn optional product behavior into a false acceptance claim. A repeated 
 
 ### Resume Point
 
-WQ-05: execute the prepared actual-model review after the documentation checkpoint and model discovery; inspect raw/native and admitted outcomes, every warning/finding/required source read, actual output calls, source context and private Mermaid/text. Fix confirmed issues with focused regression tests and self-review. Do not repeat the completed general security scan. Runtime correction requires v0.14.1; current corrective successful-model count is zero of four.
+WQ-06: self-review and commit the final evidence/status documentation, run pre-push secret guards, push the completed feature branch, verify protected CI and merge/development publication. Coordinate the site only after feature verification and before the release-branch push. Then deliver v0.14.1 with plan archival/reset in its release PR. The completed security scan and accepted one-of-four model review remain tied to their exact ranges; documentation-only updates need focused guards.
 
 ### Plan Fidelity Check
 
@@ -160,12 +162,12 @@ WQ-05: execute the prepared actual-model review after the documentation checkpoi
 
 - [x] Current main/tag state and retained results agree with the baseline.
 - [x] Prior acceptance overclaim is acknowledged without changing historical artifacts.
-- [ ] Final additional-run result and acceptance/correction disposition agree.
+- [x] Final additional-run result and acceptance/correction disposition agree.
 
 ### Closure Gate
 
-- [ ] The authorized run has terminal evidence and every result/finding/failed-read assessment is complete.
-- [ ] Real-model diagram acceptance is proved, or a genuine remaining gap is explicitly retained as unfinished work.
+- [x] The authorized run has terminal evidence and every result/finding/failed-read assessment is complete.
+- [x] Real-model diagram acceptance is proved, or a genuine remaining gap is explicitly retained as unfinished work.
 - [ ] Repository state, private cleanup, evidence and next action agree with the final disposition.
 - [ ] Required feature/release delivery is complete or truthfully transferred to Post-Close Delivery at the release-PR boundary.
 

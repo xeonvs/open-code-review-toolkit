@@ -10,6 +10,30 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.1 corrective diagram and debug qualification
+
+The corrective runtime at `b3c0029` passes the complete quality gate: 3153 tests,
+357 subtests and 88.37% total coverage, with every component floor satisfied.
+Its one correction-diff Codex Security scan covers all six changed runtime files
+and supporting changed files with zero findings and no deferred security work.
+
+An actual native ChatGPT `gpt-6.1-sol/high` review of `b81b4a1..eed522b` completes
+53/53 selected files with zero findings and one admitted flowchart submission.
+The output group receives diffs of eight runtime files and `pyproject.toml` from other groups before its
+call; its nine-node/nine-edge normal GitLab publication flow is checked against
+source and the complete private Mermaid/text. The private debug projection
+retains all 317 native records without truncation, source change or omission;
+cleanup, DLP and report delivery pass. This proves positive model delivery for
+that reviewed candidate, not exhaustive graph semantics or live GitLab writes.
+
+The run uses aggregate budget zero and has no budget/tool/context-exhaustion
+warning. The 2172-character background recommendation is assessed separately:
+all 50 main requests contain the complete bootstrap and no compression occurs.
+One bounded search and an auxiliary read of the installed-test helper reach
+their display caps; targeted source reads, the selected diff and inspection of
+the mostly unchanged helper tail close those context questions. These
+observations do not turn zero failed-tool counts into a blanket source-read proof.
+
 ## v0.14.0 range, diagrams and bounded fuzzing
 
 | Boundary | Production owner and entry point | Evidence and observable result | Claim limit |
