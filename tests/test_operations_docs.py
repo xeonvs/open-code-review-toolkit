@@ -252,8 +252,7 @@ def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> Non
         "concludes `no-new-layer`",
         "BL-016 remains parked",
         "BL-018 remains conditional",
-        "BL-019 and",
-        "BL-020 retain",
+        "BL-020 retains",
     ):
         assert phrase in audit
     assert "Review measurement gaps (BL-017) | Completed and removed" in backlog
