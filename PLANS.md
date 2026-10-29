@@ -35,10 +35,10 @@ The first signed push contains the complete plan and its lifecycle pointer plus 
 | REQ-007 | Introduce explicit receipt v13/v14 production/readback while preserving frozen v9-v12 and pre-execution v5/v6 meanings | WQ-06 | done |
 | REQ-008 | Keep graph DLP and omission separate from finding outcome and approval; correct narrowly proven technical comparison false positives without bypassing whole-unit checks | WQ-02, WQ-05, WQ-06 | done |
 | REQ-009 | Complete BL-019 with bounded Hypothesis properties and minimized synthetic regressions for DLP, result/range, policy/diagrams, evidence/MCP, GitLab/registry metadata, context handles/store/CI outcomes and federation admission/upstream responses; qualify supported Python and retain corpus ownership | WQ-02, WQ-03, WQ-04, WQ-08 | done |
-| REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | in_progress |
+| REQ-010 | Raise GitLab CI acquisition, policy schema, private filesystem and reporting usage coverage to at least 85%, result contract to at least 90%, and preserve high existing touched-module results | WQ-08 | done |
 | REQ-011 | Replace all existing country-specific telephone fixtures with reserved +1 202 555 01xx examples while preserving each obfuscation/rejection case | WQ-02 | done |
 | REQ-012 | Support Python >=3.12,<3.16, add required Linux 3.15 and release installs, retain coverage on 3.14 and hash-locked binary runtime installation | WQ-07 | in_progress |
-| REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | in_progress |
+| REQ-013 | Reconcile #273, BL-019, public contracts, decision flow, evidence matrix, changelog and release documentation with the final implementation | WQ-01, WQ-09 | done |
 | REQ-014 | Follow plan-only draft push, per-commit and aggregate self-review, one security scan, at most two successful toolkit self-reviews, appropriate quality/secrets/dependency/installed/native gates and protected feature merge | WQ-01, WQ-02–WQ-12 | in_progress |
 | REQ-015 | Prepare v0.14.0 release PR with next line 0.15.0 and archive the complete plan in that PR, with external delivery explicitly pending | WQ-13 | pending |
 | REQ-016 | Verify stable registries, installs, provenance, tag, immutable Release/receipt, issues/milestone, site and clean main without a repository closure PR | WQ-14; Post-Close Delivery | pending |
@@ -108,11 +108,11 @@ Planning experiments proved native OCR 1.13.3 MCP transport and real ChatGPT gen
 | WQ-05 | REQ-002, REQ-004, REQ-006, REQ-008 | MCP/bootstrap/native/final-admission/cleanup wiring and real-protocol plus qualified native integration | done |
 | WQ-06 | REQ-003, REQ-005, REQ-007, REQ-008 | Receipt v13/v14, frozen old readback, pure report/renderers, local/GitLab presentation and publication tests | done |
 | WQ-07 | REQ-012 | Python 3.15 metadata/lock/required CI/install matrices and clean artifact checks; self-reviewed commit | in_progress |
-| WQ-08 | REQ-009, REQ-010 | Full bounded BL-019 target matrix, minimized corpus and replay across supported Python, weak-module floors and semantic branch comparison; close backlog point after evidence | in_progress |
+| WQ-08 | REQ-009, REQ-010 | Full bounded BL-019 target matrix, minimized corpus and replay across supported Python, weak-module floors and semantic branch comparison; close backlog point after evidence | done |
 | WQ-09 | REQ-013, REQ-014 | Public owners, decision flow, evidence matrix, backlog/strategy status, changelog and aggregate self-review | done |
 | WQ-10 | REQ-014 | Exactly one aggregate Codex Security diff scan; findings classified/fixed with scoped regression evidence | done |
 | WQ-11 | REQ-014 | Own-tool ChatGPT local review with graph, findings/failed-read inspection, at most two successful runs and scoped corrections | done |
-| WQ-12 | REQ-014, REQ-018 | Final quality and pre-push gates, finished feature push, protected checks/merge, Scorecard alert #16 and development TestPyPI readback | pending |
+| WQ-12 | REQ-014, REQ-018 | Final quality and pre-push gates, finished feature push, protected checks/merge, Scorecard alert #16 and development TestPyPI readback | in_progress |
 | WQ-13 | REQ-015, REQ-017 | Signed release/v0.14.0 candidate, confirmed site-contract handoff before release push, 0.14.0/0.15.0 markers, authorization/notes/pins, checked archive and protected release handoff | pending |
 | WQ-14 | REQ-016, REQ-017, REQ-018 | Stable external publication/readback, Scorecard/site reconciliation and clean synchronized main; no repository closure PR | pending |
 
@@ -184,6 +184,8 @@ Both allowed own-tool ChatGPT reviews are complete for b81b4a15..68a1273c using 
 
 The first complete quality attempt ran 3041 passing tests, 22 skipped and 357 passing subtests, with 88.01% total coverage, but failed six checks. Five enrichment tests used now=0 before their synthetic store birth; their clocks/readback now agree at 150. The identity-diagnostic regression also exposed forwarding of arbitrary Git exception text: public errors are now closed and shallow-history guidance uses the existing typed exception without copying its payload. Scoped provider/runner/range checks pass 294 tests; both generic and shallow error types retain explicit private-diagnostic non-disclosure controls. Dependency audit, tree/history secret, instruction and lifecycle gates pass. Repeat the full quality gate after these corrections; no feature push has occurred.
 
+Final runtime head da4c8bc3 passes the complete quality gate: 3048 tests, 22 skipped, 357 subtests; Ruff, typing, Bandit, total coverage and every risk-group/module floor pass. GitLab CI acquisition is 93%, policy schema 97%, private filesystem 93%, reporting usage 97%, result contract 99%. Five additive output-composition checks preserve mandatory inputs/external authority and reject invalid or duplicate run bindings; together with ten qualified native cases, the focused coverage append passes 39 checks, raises MCP composition to 91% and runner coverage to 85%, with total coverage 88%. Runtime content is unchanged by this final additive test/documentation checkpoint, so the completed full gate remains applicable. Clean Python 3.15 wheel/sdist qualification, supported-Python property replay, dependency audit and secret/lifecycle/instruction gates are retained for unchanged inputs. Security and own-tool review allowances remain exhausted at 1/1 and 2/2. Final feature push, protected 3.15 registration, remote CI/merge and all stable delivery remain pending.
+
 ### Risks And Recovery
 
 Treat missing or contradictory range evidence as a pre-model or admission failure; preserve the existing failure/report semantics without an unverified clean result. Unsupported native diagram capability and model omission remain explicit optional states. Conflict, DLP loss of a necessary condition, stale references or graph budgets omit the entire graph without changing finding health.
@@ -192,7 +194,7 @@ Keep private run artifacts run-bound and atomically validated, read the candidat
 
 ### Resume Point
 
-Commit the reviewed closed identity diagnostics and corrected test clocks after format/lifecycle guards and staged secret scan. Repeat the complete quality gate on final runtime content, then remaining pre-push guards, add the protected 3.15 context at the feature-push handoff, push the complete feature and verify protected CI/merge/development publication. The aggregate security scan and both successful own-tool allowances are exhausted; use focused tests and semantic review for ordinary corrections. No further feature push before the local gates. Site work remains WQ-13, after feature merge and before release-branch push.
+Commit the reviewed additive output-composition tests and final validation checkpoint after format/lifecycle guards and staged secret scan. Refresh unchanged-input tree/history guards, push the finished feature, register the protected 3.15 check, update the feature PR and verify protected CI/merge/development publication. The aggregate security scan and both successful own-tool allowances are exhausted; use focused tests and semantic review for ordinary corrections. Site work remains WQ-13, after feature merge and before release-branch push.
 
 ### Plan Fidelity Check
 

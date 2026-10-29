@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 from subprocess import TimeoutExpired
@@ -250,6 +251,49 @@ def test_output_registration_fault_keeps_the_original_composition(
     monkeypatch.setattr(mcp_config, "with_diagram_output", fail)
     actual = mcp_config.compose_mcp_servers([], diagram_run_id="c" * 32)
     assert actual == base and mcp.DIAGRAM_TOOL_NAME not in actual.capabilities[0].tools
+
+
+def test_output_binding_preserves_external_authority_and_cannot_mutate_mandatory_config(
+    monkeypatch,
+):
+    monkeypatch.setattr(mcp_config, "read_ocr_config", lambda: {})
+    base = mcp_config.compose_mcp_servers([])
+    peer = {"command": "/trusted/relay", "args": [], "tools": ["docs__lookup"]}
+    external = MCPCapability("docs", ("docs__lookup",))
+    base = replace(
+        base,
+        payload={**base.payload, "docs": peer},
+        capabilities=(*base.capabilities, external),
+        secret_values=("masked",),
+    )
+    original = deepcopy(base.payload)
+    actual = mcp_config.with_diagram_output(base, "c" * 32)
+    builtin = actual.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]
+    assert builtin["args"][-2:] == ["--diagram-run-id", "c" * 32]
+    assert builtin["tools"] == [
+        *base.payload[mcp_config.BUILTIN_EVIDENCE_SERVER]["tools"],
+        mcp.DIAGRAM_TOOL_NAME,
+    ]
+    assert actual.capabilities[0].tools == (*base.capabilities[0].tools, mcp.DIAGRAM_TOOL_NAME)
+    assert actual.capabilities[1:] == (external,) and actual.payload["docs"] == peer
+    assert actual.secret_values == base.secret_values
+    assert actual.external_servers == base.external_servers
+    assert base.payload == original
+    builtin["args"].append("changed")
+    builtin["tools"].append("changed")
+    assert base.payload == original
+    with pytest.raises(mcp_config.MCPConfigError, match="already declared"):
+        mcp_config.with_diagram_output(actual, "d" * 32)
+
+
+@pytest.mark.parametrize("run_id", ("", "a" * 31, "a" * 33, "g" * 32))
+def test_invalid_output_binding_cannot_mutate_the_mandatory_configuration(monkeypatch, run_id):
+    monkeypatch.setattr(mcp_config, "read_ocr_config", lambda: {})
+    base = mcp_config.compose_mcp_servers([])
+    original = deepcopy(base.payload)
+    with pytest.raises(mcp_config.MCPConfigError, match="run identity"):
+        mcp_config.with_diagram_output(base, run_id)
+    assert base.payload == original
 
 
 def test_bad_diagram_binding_keeps_the_real_evidence_server_running(tmp_path: Path) -> None:
