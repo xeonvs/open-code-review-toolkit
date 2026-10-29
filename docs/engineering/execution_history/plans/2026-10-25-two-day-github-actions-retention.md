@@ -107,5 +107,5 @@ The two-day GitHub setting and historical cleanup are already complete. The pend
 
 ## Recently Completed
 
-- [x] 2026-10-23: Completed Toolkit 0.13.1 partial review of changes containing gitlinks; [full archived plan](docs/engineering/execution_history/plans/2026-10-23-toolkit-0-13-1-partial-review-of-changes-containing-gitlinks.md).
-- [x] 2026-10-23: Completed Toolkit 0.13.0 protected default-policy fallback for single-MR review; [full archived plan](docs/engineering/execution_history/plans/2026-10-23-toolkit-0-13-0-protected-default-policy-fallback-for-single-mr-review.md).
+- [x] 2026-10-23: Completed Toolkit 0.13.1 partial review of changes containing gitlinks; [full archived plan](2026-10-23-toolkit-0-13-1-partial-review-of-changes-containing-gitlinks.md).
+- [x] 2026-10-23: Completed Toolkit 0.13.0 protected default-policy fallback for single-MR review; [full archived plan](2026-10-23-toolkit-0-13-0-protected-default-policy-fallback-for-single-mr-review.md).
