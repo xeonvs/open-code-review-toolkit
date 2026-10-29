@@ -1,3 +1,18 @@
+## 0.14.1 - 2026-10-29
+
+### 🚀 Features
+
+- Extend `ocr-ci review --local --debug-dir` with private bootstrap, diagram collector and bounded native task/tool trace capture before cleanup. The journal advances to `ocr.toolkit-debug/v2`; `native-trace.jsonl` uses `ocr.native-trace/v1` and excludes authentication stores, runtime configuration, opaque provider replay and native reasoning fields. ([#277](https://github.com/xeonvs/open-code-review-toolkit/issues/277))
+
+### 🐛 Bug Fixes
+
+- Make the optional diagram request explicit during grouped native review, with one output coordinator, relevant cross-group source reads and shared submission state across fresh rounds; missing or failed diagrams still leave findings usable. ([#277](https://github.com/xeonvs/open-code-review-toolkit/issues/277))
+
+### 📖 Documentation
+
+- Require `--max-tokens-budget 0` for local engineering acceptance and reject budget-exhaustion warnings even with a complete native manifest; positive diagram qualification also requires an actual model submission and inspection of its source context and private Mermaid/text. ([#277](https://github.com/xeonvs/open-code-review-toolkit/issues/277))
+
+
 ## 0.14.0 - 2026-10-29
 
 ### 🚀 Features
