@@ -21,9 +21,12 @@ an admitted diagram with `off`, or collapse an admitted `on` diagram with
 `spoiler`; it cannot enable a diagram that review did not request.
 
 For example, add `OCR_REVIEW_DIAGRAM_MODE=local` to the environment of the
-[local review command](local.md). Its private Markdown contains both a Mermaid
-fence and a complete text equivalent. GitLab uses the same admitted model with
-expanded or collapsed presentation. No external rendering service is required.
+[local review command](local.md). Its private Markdown contains a Mermaid fence.
+GitLab uses the same admitted model with expanded or collapsed presentation.
+Neither report appends a textual node, message or edge listing. Source references
+remain in the typed candidate and GitLab receipt; an explicit private debug
+bundle retains the submitted candidate in `diagram.json`.
+No external rendering service is required.
 
 The two summary forms look like these simplified examples:
 
@@ -51,9 +54,16 @@ The fixed internal `ocr_toolkit_review_diagram` MCP tool accepts typed data into
 one private run collector. The model selects no output path, network destination
 or publication action. Existing evidence/context tools keep their read-only
 behavior. Raw Mermaid, HTML, directives and styling are not accepted; the
-toolkit renders identifiers, arrows, escaping and text deterministically.
+toolkit renders identifiers, arrows and labels deterministically.
 
 The toolkit background explicitly requests output during native main review.
+Its protected opening contains the required evidence call, one immutable-ref
+block and review navigation. Each distinct SHA appears once in that block;
+equal roles use `same commit as base`, `head` or `policy` without changing
+their trust or authority. Diagram arguments use the base/head values from this
+block. The optional diagram request follows the evidence overview at the end.
+Clipping preserves both the required opening and this closing instruction, or
+rejects an insufficient bound.
 Only the group containing the lexically first selected non-deleted path is asked
 to submit. This selects an output executor, not the diagram's source scope: it
 must inspect the global inventory and relevant immutable cross-group diffs with

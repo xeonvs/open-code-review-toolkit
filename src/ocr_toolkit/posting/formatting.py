@@ -782,20 +782,17 @@ def summarize_result(
         lines.extend(["", publication_dlp_details])
 
     technical: list[str] = []
-    technical.extend(range_details(review_range))
+    technical.extend(range_details(review_range, reviewed_sha=reviewed_sha))
     diagram_state_index = None
     if admitted_diagram is not None:
         diagram_state_index = len(technical)
         technical.append(f"- Change diagram: {inline_code(admitted_diagram.state)}")
-    if reviewed_sha:
-        technical.append(f"- Reviewed commit: {_inline_code(reviewed_sha)}")
     if mr_head_sha and mr_head_sha != reviewed_sha:
         technical.append(f"- MR head commit: {_inline_code(mr_head_sha)}")
     if merge_request_lifecycle:
         technical.append(
             "- Merge request lifecycle at publication: "
-            f"`{merge_request_lifecycle}`; result remains bound to reviewed commit "
-            f"{_inline_code(reviewed_sha)}"
+            f"`{merge_request_lifecycle}`; result remains bound to its reviewed revision"
         )
     technical.append(
         f"- Posting: {inline_count} inline, {fallback_count} fallback, {omitted_count} posting-stage omitted"

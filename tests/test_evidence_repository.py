@@ -270,7 +270,7 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert store.base and store.base.commit_sha == base_sha
     assert store.head and store.head.commit_sha == head_sha
     assert any(record.kind == "repository.change_category" for record in store.records)
-    assert bootstrap.startswith("# Required evidence\n")
+    assert bootstrap.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
     instruction = bootstrap.index("ocr_toolkit_evidence(action=summary)")
     assert instruction < bootstrap.index(base_sha)
     assert "Prior/filter-surviving findings remain unverified" in bootstrap
@@ -285,8 +285,8 @@ def test_collector_and_projections_keep_typed_facts_queryable(
     assert "action=list" in bootstrap
     assert "action=get" in bootstrap
     assert "changed.txt" not in bootstrap
-    assert DEFAULT_BOOTSTRAP_MAX_CHARS == 2_300
-    assert len(bootstrap) <= 2_300
+    assert DEFAULT_BOOTSTRAP_MAX_CHARS == 3_000
+    assert len(bootstrap) <= DEFAULT_BOOTSTRAP_MAX_CHARS
     assert serialized == store.to_json()
 
 
@@ -506,12 +506,12 @@ def test_bootstrap_truncation_is_explicit() -> None:
     """Never make compact-output clipping indistinguishable from complete coverage."""
 
     store = EvidenceStore(diagnostics=["x" * 900])
-    bootstrap = render_bootstrap(store, max_chars=400, max_bytes=1024)
+    bootstrap = render_bootstrap(store, max_chars=1000, max_bytes=1400)
 
-    assert len(bootstrap) <= 400
-    assert len(bootstrap.encode("utf-8")) <= 1024
-    assert "bootstrap truncated" in bootstrap
-    assert bootstrap.startswith("# Required evidence\n")
+    assert len(bootstrap) <= 1000
+    assert len(bootstrap.encode("utf-8")) <= 1400
+    assert "Optional " in bootstrap and "truncated" in bootstrap
+    assert bootstrap.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
     assert "ocr_toolkit_evidence(action=summary)" in bootstrap
     assert "zero model calls fail" in bootstrap
     assert "Prior/filter-surviving findings remain unverified" in bootstrap
@@ -941,13 +941,15 @@ def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> 
         )
     )
 
-    bootstrap = render_bootstrap(store, max_chars=1_300)
+    bootstrap = render_bootstrap(store, max_chars=1_600)
 
     assert "`` services/`review text`/AGENTS.md ``" in bootstrap
     assert "`` services/`review text`/** ``" in bootstrap
-    clipped = render_bootstrap(store, max_chars=256)
+    clipped = render_bootstrap(store, max_chars=1000)
     assert clipped.startswith(MANDATORY_EVIDENCE_INSTRUCTION)
-    assert clipped.endswith("> Bootstrap truncated.\n")
-    assert len(clipped) <= 256
+    assert "truncated" in clipped
+    assert len(clipped) <= 1000
     assert len(clipped.encode("utf-8")) <= 1024
     assert not any(line.count("``") == 1 for line in clipped.splitlines())
+    with pytest.raises(ValueError, match="preserve required evidence navigation"):
+        render_bootstrap(store, max_chars=256)

@@ -47,6 +47,13 @@ def test_native_group_context_and_rounds(
     for index, path in enumerate(paths):
         (root / path).write_text(f"# BASE_{index}\n{stable}def value():\n    return 1\n")
     (root / "removed.py").write_text("# REMOVED_CONTEXT\ndef old():\n    return 1\n")
+    (root / "pyproject.toml").write_text(
+        '[project]\nname="synthetic"\nversion="1.0.0"\n'
+        'requires-python=">=3.12"\ndependencies=["Jinja2>=3.1"]\n'
+    )
+    (root / "pylock.toml").write_text(
+        'lock-version="1.0"\n[[packages]]\nname="jinja2"\nversion="3.1.6"\n'
+    )
     git(root, "add", ".")
     git(root, "commit", "-qm", "base")
     base = git(root, "rev-parse", "HEAD")
@@ -185,6 +192,21 @@ def test_native_group_context_and_rounds(
                     for message in messages
                     for tool in message.get("tool_calls", [])
                 }
+                domain_kinds = ("framework.detected", "dependency.locked", "runtime.declared")
+                queries = {
+                    call["id"]: json.loads(call["function"]["arguments"])
+                    for message in messages
+                    for call in message.get("tool_calls", [])
+                    if call["function"]["name"] == "ocr_toolkit_evidence"
+                }
+                queried = {query.get("kind") for query in queries.values()}
+                for response in results:
+                    kind = queries.get(response.get("tool_call_id"), {}).get("kind")
+                    if kind in domain_kinds:
+                        type(self).observations.append(
+                            {"kind": kind, "evidence": json.loads(response["content"])}
+                        )
+                remaining = [kind for kind in domain_kinds if kind not in queried]
                 if len(results) == 2:
                     type(self).observations.append(
                         {"own": own, "diff_result": results[-1].get("content", "")}
@@ -193,7 +215,12 @@ def test_native_group_context_and_rounds(
                         type(self).observations.append(
                             {"repeat_diagram_state": summary["diagram_output"]["state"], "own": own}
                         )
-                if (
+                if remaining:
+                    name, arguments = (
+                        "ocr_toolkit_evidence",
+                        {"action": "list", "kind": remaining[0], "ref": "head"},
+                    )
+                elif (
                     diagram_kind is not None
                     and not missing_context
                     and min(selected) in own
@@ -325,6 +352,20 @@ def test_native_group_context_and_rounds(
     assert any(row["type"] == "llm_request" and row["taskType"] == "main_task" for row in trace)
     assert any(row["type"] == "tool_call" and row["tool_name"] == "file_read_diff" for row in trace)
     assert "cross-group diffs" in (debug / "bootstrap.md").read_text()
+    bootstrap = (debug / "bootstrap.md").read_text()
+    assert bootstrap.count(base) == bootstrap.count(head) == 1
+    assert "same commit as base" in bootstrap
+    assert bootstrap.index("## Optional change diagram") > bootstrap.index("## Evidence coverage")
+    assert "frameworks/runtimes" in bootstrap and "declared/locked dependency versions" in bootstrap
+    by_kind = {
+        item["kind"]: item["evidence"] for item in ContextPeer.observations if "evidence" in item
+    }
+    for kind in ("framework.detected", "dependency.locked", "runtime.declared"):
+        assert by_kind[kind]["records"]
+    assert "jinja2" in str(by_kind["framework.detected"]).lower()
+    assert "3.1.6" in str(by_kind["dependency.locked"])
+    assert ">=3.12" in str(by_kind["runtime.declared"])
+    assert "Text equivalent:" not in report.read_text()
     generated = diagram_kind is not None and not missing_context
     assert json.loads((debug / "diagram.json").read_text())["submissions"] == int(generated)
     assert ("```mermaid" in report.read_text()) == generated
@@ -332,7 +373,13 @@ def test_native_group_context_and_rounds(
         f"Change diagram: `{'generated' if generated else 'not-generated'}`" in report.read_text()
     )
     if generated:
-        assert "a_first.py:L9" in report.read_text() and "b_second.py:L9" in report.read_text()
+        private_candidate = (debug / "diagram.json").read_text()
+        assert "a_first.py" in private_candidate and "b_second.py" in private_candidate
+        assert "First helper" in report.read_text() and "Second helper" in report.read_text()
+        diagram_section = (
+            report.read_text().split("### Change flow", 1)[1].split("### Technical details", 1)[0]
+        )
+        assert "a_first.py:L9" not in diagram_section
         assert any(
             row["type"] == "tool_call" and row["tool_name"] == DIAGRAM_TOOL_NAME for row in trace
         )

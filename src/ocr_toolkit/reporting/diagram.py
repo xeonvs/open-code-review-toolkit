@@ -1,4 +1,4 @@
-"""Deterministic Mermaid and text from admitted typed models; no acquisition."""
+"""Deterministic Mermaid and range details from admitted models; no acquisition."""
 
 from __future__ import annotations
 
@@ -10,10 +10,8 @@ from ocr_toolkit.diagrams.contracts import (
     Diagram,
     DiagramResult,
     Flowchart,
-    SequenceAlt,
     SequenceMessage,
     SequenceStep,
-    SourceReference,
 )
 from ocr_toolkit.review_range import ReviewRange
 
@@ -84,60 +82,6 @@ def diagram_mermaid(diagram: Diagram) -> str:
     return "\n".join(lines)
 
 
-def _references(references: tuple[SourceReference, ...]) -> str:
-    locations = []
-    for reference in references:
-        line = (
-            str(reference.start_line)
-            if reference.start_line == reference.end_line
-            else f"{reference.start_line}-{reference.end_line}"
-        )
-        locations.append(inline_code(f"{reference.path}:L{line}", escape_controls=True))
-    return " (" + ", ".join(locations) + ")" if locations else ""
-
-
-def diagram_text(diagram: Diagram) -> str:
-    """Keep the complete text equivalent and all evidence locations readable."""
-
-    if isinstance(diagram, Flowchart):
-        labels = {node.identifier: node.label for node in diagram.nodes}
-        lines = [
-            f"- {inline_code(node.label)} [{node.kind}]" + _references(node.references)
-            for node in diagram.nodes
-        ]
-        for edge in diagram.edges:
-            condition = f"; when {inline_code(edge.condition)}" if edge.condition else ""
-            lines.append(
-                f"- {inline_code(labels[edge.source])} → {inline_code(labels[edge.target])}{condition}"
-                + _references(edge.references)
-            )
-        return "\n".join(lines)
-    labels = {participant.identifier: participant.label for participant in diagram.participants}
-    lines = [
-        f"- Participant {inline_code(participant.label)}" + _references(participant.references)
-        for participant in diagram.participants
-    ]
-
-    def steps(items: tuple[SequenceStep, ...], depth: int) -> None:
-        prefix = "  " * depth + "- "
-        for item in items:
-            if isinstance(item, SequenceMessage):
-                lines.append(
-                    f"{prefix}{inline_code(labels[item.source])} → {inline_code(labels[item.target])} ({item.message_type}): {inline_code(item.label)}"
-                    + _references(item.references)
-                )
-            elif isinstance(item, SequenceAlt):
-                for index, branch in enumerate(item.branches):
-                    lines.append(
-                        f"{prefix}{'If' if index == 0 else 'Alternatively'} {inline_code(branch.condition)}:"
-                        + _references(branch.references)
-                    )
-                    steps(branch.steps, depth + 1)
-
-    steps(diagram.steps, 0)
-    return "\n".join(lines)
-
-
 def diagram_section(result: DiagramResult, *, collapsed: bool = False) -> str:
     """Apply presentation only after the adapter admits/suppresses a diagram."""
 
@@ -148,22 +92,23 @@ def diagram_section(result: DiagramResult, *, collapsed: bool = False) -> str:
     ):
         return ""
     diagram = result.submission.diagram
-    content = f"{BOUNDED_SUMMARY}\n\n{markdown_code_block('mermaid', diagram_mermaid(diagram))}\n\nText equivalent:\n\n{diagram_text(diagram)}"
+    content = f"{BOUNDED_SUMMARY}\n\n{markdown_code_block('mermaid', diagram_mermaid(diagram))}"
     if collapsed:
         return "<details><summary>Change flow</summary>\n\n" + content + "\n\n</details>"
     return "### Change flow\n\n" + content
 
 
-def range_details(review_range: ReviewRange | None) -> tuple[str, ...]:
+def range_details(review_range: ReviewRange | None, *, reviewed_sha: str = "") -> tuple[str, ...]:
     """Do not turn requested endpoints or legacy output into a confirmed range."""
 
-    if review_range is None:
-        return ("- Effective Git range: unverified",)
-    return (
-        f"- Reviewed base: {inline_code(review_range.base)}",
-        f"- Reviewed head: {inline_code(review_range.head)}",
-        f"- Effective Git range: {inline_code(review_range.exact_range)}",
-    )
+    lines = [
+        f"- Effective Git range: {inline_code(review_range.exact_range)}"
+        if review_range is not None
+        else "- Effective Git range: unverified"
+    ]
+    if reviewed_sha and (review_range is None or reviewed_sha != review_range.head):
+        lines.append(f"- Reviewed commit: {inline_code(reviewed_sha, escape_controls=True)}")
+    return tuple(lines)
 
 
 def prepare_diagram_section(
