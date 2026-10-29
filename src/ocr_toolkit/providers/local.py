@@ -14,6 +14,8 @@ from ocr_toolkit.common.filesystem import (
     same_file_identity,
 )
 from ocr_toolkit.common.markdown import inline_code, markdown_code_block
+from ocr_toolkit.diagrams.lifecycle import diagram_warning
+from ocr_toolkit.reporting.diagram import prepare_diagram_section, range_details
 from ocr_toolkit.reporting.dlp import admission_dlp_state, format_dlp_admission
 from ocr_toolkit.reporting.metadata import finding_metadata, format_ocr_core_advisory
 from ocr_toolkit.reporting.model import ReviewReport
@@ -62,9 +64,17 @@ def local_summary(report: ReviewReport) -> str:
             ]
         )
     lines.extend(report_sections(report.comments, report.diagnostics, report.warnings))
+    diagram, section, diagram_failed = prepare_diagram_section(report.diagram)
+    if diagram_failed:
+        diagram_warning()
+    if section:
+        lines.extend(["", section])
     lines.extend(["", "### Technical details", "", "- Output: local Markdown"])
     if report.reviewed_sha:
         lines.append(f"- Reviewed commit: {inline_code(report.reviewed_sha, escape_controls=True)}")
+    lines.extend(range_details(report.review_range))
+    if diagram is not None:
+        lines.append(f"- Change diagram: {inline_code(diagram.state)}")
     if report.outcome.coverage_summary:
         lines.append(f"- {report.outcome.coverage_summary}")
     for detail in (

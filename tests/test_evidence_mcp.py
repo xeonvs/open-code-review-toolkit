@@ -26,6 +26,7 @@ from ocr_toolkit.evidence.actions import read_action_receipt, record_action
 from ocr_toolkit.evidence.mcp import (
     COVERAGE_TOOL_NAME,
     MAX_REQUEST_BYTES,
+    MAX_RESPONSE_BYTES,
     PROTOCOL_VERSION,
     SEARCH_TOOL_NAME,
     SUPPORTED_PROTOCOL_VERSIONS,
@@ -37,6 +38,59 @@ from ocr_toolkit.evidence.mcp import (
 )
 
 SHA = "a" * 40
+
+
+@pytest.mark.parametrize("request_id", ("\ud800", True, [], {}, 1.5))
+def test_invalid_rpc_identity_cannot_echo_unsafe_text_or_count_as_model_evidence(
+    tmp_path, request_id
+) -> None:
+    receipt = tmp_path / "actions.json"
+    response = handle_request(
+        _store(),
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"action": "summary"}},
+        },
+        action_receipt_path=receipt,
+    )
+    assert response["id"] is None and response["error"]["code"] == -32600
+    assert json.dumps(response, ensure_ascii=False).encode()
+    assert not receipt.exists()
+
+
+def test_escaped_surrogate_rpc_id_does_not_break_the_next_protocol_request(tmp_path) -> None:
+    target = tmp_path / "evidence.json"
+    _store().write(target)
+    requests = [
+        {"jsonrpc": "2.0", "id": "\ud800", "method": "ping"},
+        {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+    ]
+    output = io.StringIO()
+    assert (
+        serve(target, io.StringIO("".join(json.dumps(value) + "\n" for value in requests)), output)
+        == 0
+    )
+    replies = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert output.getvalue().encode() and len(replies) == 2
+    assert replies[0]["id"] is None and replies[1]["id"] == 2 and replies[1]["result"] == {}
+
+
+def test_response_limit_also_bounds_fallback_error_and_preserves_next_request(tmp_path) -> None:
+    target = tmp_path / "evidence.json"
+    _store().write(target)
+    requests = [
+        {"jsonrpc": "2.0", "id": "x" * (MAX_REQUEST_BYTES - 100), "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+    ]
+    output = io.StringIO()
+    assert serve(target, io.StringIO("".join(json.dumps(v) + "\n" for v in requests)), output) == 0
+    lines = output.getvalue().splitlines()
+    assert len(lines) == 2 and all(len(line.encode()) <= MAX_RESPONSE_BYTES for line in lines)
+    assert json.loads(lines[0])["id"] is None
+    assert json.loads(lines[0])["error"]["code"] == -32603
+    assert json.loads(lines[1]) == {"jsonrpc": "2.0", "id": 2, "result": {}}
 
 
 def _store(count: int = 3) -> EvidenceStore:

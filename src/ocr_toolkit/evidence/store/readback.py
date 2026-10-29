@@ -58,6 +58,17 @@ class ReadbackStore(Protocol):
 StoreT = TypeVar("StoreT", bound=ReadbackStore)
 
 
+def _unique_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject ambiguous persisted object fields at every nesting level."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise EvidenceStoreError("evidence store contains duplicate JSON keys")
+        result[key] = value
+    return result
+
+
 def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> StoreT:
     """Read and strictly validate an untrusted serialized store."""
 
@@ -67,7 +78,7 @@ def read_store(path: Path, factory: Callable[[EvidenceStoreLimits], StoreT]) -> 
     if len(raw_bytes) > hard_read_limit:
         raise EvidenceStoreError("evidence store exceeds the hard read limit")
     try:
-        raw = json.loads(raw_bytes)
+        raw = json.loads(raw_bytes, object_pairs_hook=_unique_pairs)
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise EvidenceStoreError("evidence store is not valid bounded JSON") from exc
     if not isinstance(raw, dict):

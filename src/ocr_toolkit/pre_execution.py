@@ -16,7 +16,8 @@ from ocr_toolkit.review_receipt import ReceiptReviewIdentity, _parse_review_iden
 
 STATUS_SCHEMA = "ocr.pre-execution-status/v5"
 GITLINK_STATUS_SCHEMA = "ocr.pre-execution-status/v6"
-# v5 embeds the frozen v11 review tuple; a new receipt shape needs a new status schema.
+# v5/v6 embed frozen v11/v12 review tuples. Only a changed embedded tuple needs
+# a new status schema; independent result range/diagram fields do not change it.
 STATUS_REVIEW_RECEIPT_VERSION = 11
 GITLINK_STATUS_REVIEW_RECEIPT_VERSION = 12
 PROTECTED_TARGET_RULE_PATH_PENDING = "protected_target_rule_path_pending"

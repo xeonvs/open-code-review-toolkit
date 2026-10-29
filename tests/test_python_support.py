@@ -6,7 +6,7 @@ import tomllib
 
 from tests.support import PROJECT_ROOT
 
-SUPPORTED_PYTHON = ("3.12", "3.13", "3.14")
+SUPPORTED_PYTHON = ("3.12", "3.13", "3.14", "3.15")
 
 
 def test_project_metadata_declares_the_supported_python_range() -> None:
@@ -16,7 +16,7 @@ def test_project_metadata_declares_the_supported_python_range() -> None:
         "project"
     ]
 
-    assert metadata["requires-python"] == ">=3.12,<3.15"
+    assert metadata["requires-python"] == ">=3.12,<3.16"
     python_classifiers = {
         classifier.rsplit(" :: ", 1)[-1]
         for classifier in metadata["classifiers"]

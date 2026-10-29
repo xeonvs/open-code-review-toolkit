@@ -2,7 +2,7 @@
 
 This file contains implementation-ready future work derived from the [toolkit strategy](../engineering/toolkit_strategy.md) and ordered by the [roadmap](../../ROADMAP.md). Active repository work belongs in `PLANS.md`; roadmap outcomes are intentionally not repeated here.
 
-Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`. Release classification is an expectation to be confirmed when work is activated. Completed work is reflected in the roadmap and stable execution-history archive rather than retained as future backlog.
+Statuses are `ready`, `planned`, `parked`, `conditional`, or `owner action`; a temporary `promoted` entry points only to its active plan. Release classification is an expectation to be confirmed when work is activated. Completed work is reflected in the roadmap and stable execution-history archive rather than retained as future backlog.
 
 ## Existing backlog reconciliation
 
@@ -23,7 +23,7 @@ private failure arguments add no telemetry exporter or model-profile capability.
 | M4 project guidance (BL-015) | Completed and removed | Immutable target guidance has bounded discovery, deterministic applicability/precedence, changed-guidance exclusion, and full text through the built-in evidence MCP. |
 | M4 milestone closure | Completed | Stable v0.6.0 and protected-target identity readback establish M4 without making later context enrichment part of it. |
 | OpenSSF Best Practices publication (BL-022) | Completed historically and not reused | The stable execution history records the passing badge publication and closure; the next identifier is BL-023. |
-| Native fuzzing campaign | Retained and revised | BL-019 keeps its activation requirements and includes the established context and federation parsers, handles, schemas, and hostile upstream responses in its candidate inventory. |
+| Native fuzzing campaign (BL-019) | Completed in the 0.14.0 implementation; release delivery pending | Bounded Hypothesis targets and minimized regressions are retained in `tests/fuzz/` and component suites; the [test evidence matrix](../engineering/test_evidence_matrix.md#v0140-range-diagrams-and-bounded-fuzzing) records supported-Python replay and claim limits. |
 | File-based user configuration | Retained and clarified | BL-020 remains parked; M5 owns only its narrow protected-target context/DLP policy, not a general configuration framework. |
 | Additional provider adapters | Retained and clarified | BL-021 remains conditional; future forge parity includes discussion, snapshot, and protected same-revision CI-outcome capabilities without blocking GitLab-first M5. |
 | M5 bounded review-context enrichment (BL-023) | Completed and removed | The v0.7.0 release establishes the protected policy, GitLab discussion, broker/store/handle, fixed context-tool, containment, publication-DLP, receipt, setup-diagnostic, and CI-uncertainty boundaries tracked by #107-#111. The complete plan and release checkpoint are preserved in the execution-history archive. |
@@ -96,20 +96,6 @@ Provider/network telemetry remains outside M1 and M5. OCR owns token, cost, budg
 - **Validation:** Pack fixtures plus common evidence/bootstrap/MCP contracts.
 - **Upstream overlap:** OCR language allowlists and review rules are review-engine capabilities; Handlebars/Mustache selection improves review coverage but does not supply a framework evidence contract or activate an evidence pack.
 - **Release classification expectation:** `release-required`.
-
-### BL-019: Run a native fuzzing campaign
-
-- **Status:** parked
-- **Priority:** medium
-- **Roadmap theme:** M8 Later and conditional work
-- **Dependencies:** Stable evidence/MCP parser interfaces from M1; M5 targets enter the inventory only after their contracts exist.
-- **Activation trigger:** Not met: named targets, bounded CI resources, corpus ownership, and backend criteria across Python 3.12-3.14 are not agreed.
-- **Goal:** Find crashes and invariant violations at untrusted evidence, MCP, result, GitLab payload, registry-metadata, and M5 parser/protocol boundaries.
-- **Scoped deliverables:** Candidate targets include current evidence/MCP/result/GitLab/registry parsers plus policy parsers, handle codec, CI-outcome/store readback, federation admission and hostile upstream responses. Select a bounded backend, synthetic seeds, corpus ownership, minimization, and regression policy before activation.
-- **Acceptance criteria:** Targets are deterministic and bounded, minimized failures become tests, corpora contain no repository/provider secrets, and ownership is explicit.
-- **Exclusions:** Unbounded CI, production data, blanket fuzzing, or a runtime dependency.
-- **Validation:** Reproducible smoke campaign and minimized-corpus replay.
-- **Release classification expectation:** `no-release`, except user-visible fixes found by it.
 
 ### BL-020: Design file-based non-secret configuration
 

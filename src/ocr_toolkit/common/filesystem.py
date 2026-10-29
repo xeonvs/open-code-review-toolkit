@@ -21,13 +21,13 @@ def fsync_directory(descriptor: int) -> None:
             raise
 
 
-def open_private_parent_directory(path: Path) -> tuple[int, str]:
+def open_private_parent_directory(path: Path, *, create: bool = True) -> tuple[int, str]:
     """Open a path's parent without following replaceable pathname components.
 
     The returned descriptor pins the parent directory.  Callers must use
     descriptor-relative operations and close it themselves; returning an
     absolute pathname would reintroduce the ancestor replacement race this
-    helper avoids.
+    helper avoids. Callers reading existing run state may forbid creation.
     """
 
     absolute = path.absolute()
@@ -41,6 +41,8 @@ def open_private_parent_directory(path: Path) -> tuple[int, str]:
             try:
                 child = os.open(component, flags, dir_fd=descriptor)
             except FileNotFoundError:
+                if not create:
+                    raise ValueError("private output parent is unavailable") from None
                 try:
                     os.mkdir(component, mode=0o700, dir_fd=descriptor)
                 except FileExistsError:

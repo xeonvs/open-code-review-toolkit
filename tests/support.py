@@ -14,6 +14,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 HELPER_DIR = PROJECT_ROOT / "examples" / "gitlab"
 
 
+def native_range_input(base: str, head: str) -> dict[str, str]:
+    """Native manifest input for an explicitly normalized immutable range."""
+
+    return {
+        "mode": "range",
+        "requested_from": base,
+        "requested_head": head,
+        "resolved_base": base,
+        "resolved_head": head,
+        "exact_range": f"{base}..{head}",
+    }
+
+
 @contextmanager
 def patched_attr(obj: Any, name: str, value: Any) -> Iterator[None]:
     """Temporarily replace one object attribute."""

@@ -16,6 +16,8 @@ from ocr_toolkit.common.markdown import (
 from ocr_toolkit.common.markdown import (
     inline_code as _inline_code,
 )
+from ocr_toolkit.diagrams.contracts import DiagramResult
+from ocr_toolkit.diagrams.lifecycle import diagram_warning
 from ocr_toolkit.posting.approval import (
     ApprovalResult,
     approval_summary_line,
@@ -48,6 +50,7 @@ from ocr_toolkit.posting.suggestions import (
     SuggestionState,
     safe_repository_path,
 )
+from ocr_toolkit.reporting.diagram import prepare_diagram_section, range_details
 from ocr_toolkit.reporting.metadata import (
     CATEGORY_EMOJI as CATEGORY_EMOJI,
 )
@@ -79,6 +82,7 @@ from ocr_toolkit.reporting.usage import format_verified_mcp_usage
 from ocr_toolkit.reporting.usage import nonnegative_int as nonnegative_int
 from ocr_toolkit.reporting.usage import tool_call_counts_from_items as tool_call_counts_from_items
 from ocr_toolkit.reporting.usage import tool_call_name as tool_call_name
+from ocr_toolkit.review_range import ReviewRange
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid
 
 SHIELDS_BADGE_BASE_URL = "https://img.shields.io/badge"
@@ -715,6 +719,8 @@ def summarize_result(
     reviewer_guide: str = "",
     fallback_reasons: Mapping[str, int] | None = None,
     reviewed_sha: str = "",
+    review_range: ReviewRange | None = None,
+    diagram: DiagramResult | None = None,
     mr_head_sha: str = "",
     outcome_status: str = "success",
     outcome_message: str = "",
@@ -732,6 +738,11 @@ def summarize_result(
     """Build one decision-first summary for every validated OCR outcome."""
 
     use_emoji = post_emoji() if emoji is None else emoji
+    admitted_diagram, diagram_markdown, diagram_failed = prepare_diagram_section(
+        diagram, collapsed=diagram is not None and diagram.mode == "spoiler"
+    )
+    if diagram_failed:
+        diagram_warning()
     diagnostics = coverage_diagnostics or CoverageDiagnostics((), 0, 0, 0, 0)
     outcome_line = _review_outcome_line(
         total=total,
@@ -771,6 +782,11 @@ def summarize_result(
         lines.extend(["", publication_dlp_details])
 
     technical: list[str] = []
+    technical.extend(range_details(review_range))
+    diagram_state_index = None
+    if admitted_diagram is not None:
+        diagram_state_index = len(technical)
+        technical.append(f"- Change diagram: {inline_code(admitted_diagram.state)}")
     if reviewed_sha:
         technical.append(f"- Reviewed commit: {_inline_code(reviewed_sha)}")
     if mr_head_sha and mr_head_sha != reviewed_sha:
@@ -807,7 +823,25 @@ def summarize_result(
         if summary:
             technical.append(summary)
     technical.append(f"- Review mode: `{post_mode()}`")
-    lines.extend(
-        ["", "<details>", "<summary>Technical details</summary>", "", *technical, "", "</details>"]
-    )
-    return "\n".join(lines)
+
+    def technical_lines() -> list[str]:
+        return [
+            "",
+            "<details>",
+            "<summary>Technical details</summary>",
+            "",
+            *technical,
+            "",
+            "</details>",
+        ]
+
+    if diagram_markdown:
+        candidate = "\n".join([*lines, "", diagram_markdown, *technical_lines()])
+        # Reserve the existing 1000-character/byte envelope for immutable note
+        # and transaction markers. Never let the note limiter cut a condition.
+        if max(len(candidate), len(candidate.encode("utf-8"))) <= FALLBACK_NOTE_CHUNK_BUDGET:
+            return candidate
+        if diagram_state_index is not None:
+            technical[diagram_state_index] = "- Change diagram: `omitted-invalid` (note budget)"
+        diagram_warning()
+    return "\n".join([*lines, *technical_lines()])

@@ -27,6 +27,10 @@ run_coverage_gate() {
   run_logged_command "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80"
   run_logged_command "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp.py,src/ocr_toolkit/posting/approval.py --fail-under=85"
   run_logged_command "coverage report --include=src/ocr_toolkit/mcp_config.py,src/ocr_toolkit/providers/gitlab.py,src/ocr_toolkit/providers/gitlab_context.py,src/ocr_toolkit/providers/gitlab_discussions.py,src/ocr_toolkit/providers/gitlab_remediation.py,src/ocr_toolkit/context/policy.py,src/ocr_toolkit/result_contract.py --fail-under=85"
+  run_logged_command "coverage report --include=src/ocr_toolkit/result_contract.py --fail-under=90"
+  for coverage_module in providers/gitlab_ci evidence/policy/schema common/filesystem reporting/usage; do
+    run_logged_command "coverage report --include=src/ocr_toolkit/$coverage_module.py --fail-under=85"
+  done
 }
 
 # An interrupted editable install can leave dist-info without RECORD. uv then

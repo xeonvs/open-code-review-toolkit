@@ -650,6 +650,7 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
         "comments": [],
         "manifest": {
             "schema_version": "ocr.run-manifest/v1",
+            "operation": "review",
             "terminal_state": "complete",
             "input": {
                 "mode": "range",

@@ -55,11 +55,13 @@ from ocr_toolkit.review_identity import (
 )
 from tests.support import (
     gitlab_config,
+    native_range_input,
     patched_attr,
     patched_env,
     review_receipt_v8,
 )
 from tests.test_review_receipt_v11 import _receipt_v11
+from tests.test_review_receipt_v13 import _receipt_v13
 
 
 def failed_receipt_v11() -> dict[str, Any]:
@@ -984,7 +986,7 @@ class PostingIdentityTests(unittest.TestCase):
 
         inline_bodies: list[str] = []
         notes: list[tuple[str, str]] = []
-        receipt = _receipt_v11()
+        receipt = _receipt_v13()
         receipt["tool_execution"] = {"state": "invalid", "failed": None}
         result_data = {
             "status": "complete",
@@ -1007,6 +1009,7 @@ class PostingIdentityTests(unittest.TestCase):
                 "schema_version": "ocr.run-manifest/v1",
                 "operation": "review",
                 "terminal_state": "complete",
+                "input": native_range_input("c" * 40, "a" * 40),
                 "coverage": {
                     "selected": [{"item_id": "synthetic-item"}],
                     "completed": [{"item_id": "synthetic-item"}],
@@ -1515,7 +1518,7 @@ class PostingIdentityTests(unittest.TestCase):
                     "comments": [old, new],
                     "warnings": [],
                     "_ocr_toolkit": {
-                        **_receipt_v11(),
+                        **_receipt_v13(),
                         "publication": {
                             "schema": "ocr.publication/v2",
                             **publication,

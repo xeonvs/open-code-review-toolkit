@@ -17,6 +17,8 @@ from ocr_toolkit.common.git import read_only_git_prefix
 from ocr_toolkit.evidence.gitlinks import GitlinkInputPlan
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
 from ocr_toolkit.ocr_result import TOOLKIT_GITLINK_SELECTION_KEY
+from ocr_toolkit.result_contract import OcrResultContractError
+from ocr_toolkit.review_range import ReviewRange, admit_native_range
 
 _SAFE_CONFIG_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,127}\Z")
 _RAW_HEADER = re.compile(
@@ -683,19 +685,14 @@ def qualify_gitlink_manifest(
         raise RepositoryEvidenceError("OCR gitlink result lacks the qualified manifest")
     if result.get("status") != "complete" or manifest.get("terminal_state") != "complete":
         raise RepositoryEvidenceError("OCR gitlink result is not native complete")
+    try:
+        admit_native_range(result, ReviewRange(projection.plan.base_sha, projection.plan.head_sha))
+    except OcrResultContractError as exc:
+        raise RepositoryEvidenceError(
+            "OCR gitlink manifest has a different review identity"
+        ) from exc
     native_input = manifest.get("input")
-    if not isinstance(native_input, dict) or any(
-        native_input.get(key) != value
-        for key, value in (
-            ("mode", "range"),
-            ("requested_from", projection.plan.base_sha),
-            ("requested_head", projection.plan.head_sha),
-            ("resolved_base", projection.plan.base_sha),
-            ("resolved_head", projection.plan.head_sha),
-            ("exact_range", f"{projection.plan.base_sha}..{projection.plan.head_sha}"),
-        )
-    ):
-        raise RepositoryEvidenceError("OCR gitlink manifest has a different review identity")
+    assert isinstance(native_input, dict)
     execution = manifest.get("execution")
     if not isinstance(execution, dict) or execution.get("ocr_version") != "v1.13.3":
         raise RepositoryEvidenceError("OCR gitlink manifest has an unsupported binary version")

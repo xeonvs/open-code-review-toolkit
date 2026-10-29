@@ -38,7 +38,8 @@ from ocr_toolkit.providers.gitlab import (
 )
 from ocr_toolkit.reporting.dlp import publication_dlp_state
 from ocr_toolkit.result_contract import parse_result_outcome
-from tests.support import gitlab_config, patched_attr, patched_env
+from ocr_toolkit.review_range import ReviewRange
+from tests.support import gitlab_config, native_range_input, patched_attr, patched_env
 from tests.test_context_broker import ci_outcome
 from tests.test_context_policy import ci_policy_value, encoded_policy, remediation_policy_value
 
@@ -434,7 +435,7 @@ def test_enrichment_admits_provider_neutral_ci_without_approval_authority(
         artifacts.context_store,
         expected_run_id=context_config.run_id,
         expected_policy_digest=context_config.policy_digest,
-        now=0,
+        now=150,
     )
     assert [record.resource_class for record in restored.records] == ["ci_outcome"]
     assert "pipeline_id" not in artifacts.context_store.read_text(encoding="utf-8")
@@ -528,6 +529,7 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
     anchor_state: str,
     completeness: str,
 ) -> None:
+    monkeypatch.setattr(review_runner.time, "time", lambda: 150)
     identity = enriched_identity()
     discussion = SimpleNamespace(
         thread=0,
@@ -597,7 +599,7 @@ def test_enrichment_composes_one_provider_snapshot_without_remediation_reference
         artifacts.context_store,
         expected_run_id=context_config.run_id,
         expected_policy_digest=context_config.policy_digest,
-        now=0,
+        now=150,
     )
     assert [record.resource_class for record in restored.records] == [
         "issue",
@@ -749,6 +751,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
         identity,
         safe_enrichment,
         SUMMARY_ACTION_COUNTS,
+        review_range=ReviewRange("c" * 40, "a" * 40),
     )
     metadata["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
     metadata["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
@@ -784,6 +787,7 @@ def test_safe_mr_and_enrichment_data_preserve_auto_approval_but_remediation_does
             identity,
             changed,
             SUMMARY_ACTION_COUNTS,
+            review_range=ReviewRange("c" * 40, "a" * 40),
         )
         blocked["schema_version"] = ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION
         blocked["publication"] = {"schema": "ocr.publication/v2", "state": "passed"}
@@ -911,7 +915,23 @@ def test_ocr_result_requires_builtin_mcp_usage_for_completed_review(tmp_path: Pa
         result, composition, DEFAULT_IDENTITY, evidence_action_counts=counts
     ) == {"ocr_toolkit_evidence": 2}
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 11,
+        "schema_version": 13,
+        "range": {
+            "schema": "ocr.review-range/v1",
+            "state": "unverified",
+            "base_sha": None,
+            "head_sha": None,
+            "exact_range": None,
+        },
+        "diagram": {
+            "schema": "ocr.review-diagram/v1",
+            "mode": "off",
+            "state": "disabled",
+            "reason": "none",
+            "calls": 0,
+            "failed_calls": 0,
+            "submission": None,
+        },
         "review": {
             "source_sha": "a" * 40,
             "diff_base_sha": "c" * 40,
@@ -1919,7 +1939,23 @@ def test_ocr_result_receipt_blocks_approval_when_mr_context_was_admitted(
     )
 
     assert json.loads(result.read_text(encoding="utf-8"))["_ocr_toolkit"] == {
-        "schema_version": 11,
+        "schema_version": 13,
+        "range": {
+            "schema": "ocr.review-range/v1",
+            "state": "unverified",
+            "base_sha": None,
+            "head_sha": None,
+            "exact_range": None,
+        },
+        "diagram": {
+            "schema": "ocr.review-diagram/v1",
+            "mode": "off",
+            "state": "disabled",
+            "reason": "none",
+            "calls": 0,
+            "failed_calls": 0,
+            "submission": None,
+        },
         "review": {
             "source_sha": "a" * 40,
             "diff_base_sha": "c" * 40,
@@ -2013,7 +2049,7 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         'private con<span data-x="' + "x" * 600 + '">text</span> sentence',
         "Contact synthetic@example.invalid.",
         "Contact synthetic&#64;example.invalid.",
-        "+420<span>123</span>456789",
+        "+1<span>202</span>5550142",
         "ghp_abcdefghij<span>klmnop</span>qrstuvwxyz123456",
         "See [hidden](https://example.invalid/path).",
         "See [hidden](&#x68;ttps://example.invalid/path).",
@@ -2277,6 +2313,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
                     "schema_version": "ocr.run-manifest/v1",
                     "operation": "review",
                     "terminal_state": "complete",
+                    "input": native_range_input("c" * 40, "a" * 40),
                     "coverage": {
                         "selected": [{"item_id": "synthetic-item"}],
                         "completed": [{"item_id": "synthetic-item"}],
@@ -2305,6 +2342,7 @@ def test_background_preview_advisory_is_atomically_finalized_without_blocking_ap
         SUMMARY_ACTION_COUNTS,
         forbidden=(),
         toolkit_advisory=advisory,
+        expected_range=ReviewRange("c" * 40, "a" * 40),
     )
 
     persisted = json.loads(result.read_text(encoding="utf-8"))
@@ -2790,6 +2828,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             },
         },
     }
+    base_payload["manifest"]["input"] = native_range_input("c" * 40, "a" * 40)
     baseline_projection = review_runner._canonical_result_projection(base_payload)
 
     for name, groups, expected_state in (
@@ -2823,6 +2862,7 @@ def test_review_groups_remain_private_and_cannot_change_approval(tmp_path: Path)
             None,
             SUMMARY_ACTION_COUNTS,
             forbidden=(),
+            expected_range=ReviewRange("c" * 40, "a" * 40),
         )
 
         persisted = json.loads(result.read_text(encoding="utf-8"))
@@ -3984,6 +4024,10 @@ def test_review_refs_are_resolved_before_evidence_and_ocr(
         def resolve_commit(self, ref: str) -> str:
             return {"target": "a" * 40, "source": "b" * 40}[ref]
 
+        def is_ancestor(self, base: str, head: str) -> bool:
+            assert (base, head) == ("a" * 40, "b" * 40)
+            return True
+
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(review_runner, "GitRepositoryReader", Reader)
 
@@ -4996,6 +5040,8 @@ def test_ordinary_cleanup_removes_all_ephemeral_inputs_but_keeps_static_status(
         artifacts.action_receipt,
         artifacts.action_receipt_lock,
         artifacts.dlp_decisions,
+        artifacts.diagram,
+        artifacts.diagram_lock,
     )
     for path in (*ephemeral, artifacts.pre_execution_status):
         path.write_text("private", encoding="utf-8")
@@ -5061,6 +5107,11 @@ def test_gitlab_private_artifact_request_cleans_session_before_ocr(tmp_path: Pat
         ),
         patched_attr(review_runner, "repository_artifacts", lambda: artifacts),
         patched_attr(review_runner, "_write_isolated_runtime_config", capture_config),
+        patched_attr(
+            review_runner,
+            "_resolve_ocr_binary",
+            lambda: pytest.fail("retention denial must precede optional binary probing"),
+        ),
         patched_attr(
             review_runner,
             "_prepare_policy_context",

@@ -275,7 +275,7 @@ def test_redaction_expansion_omits_complete_field_instead_of_storing_a_prefix() 
 def test_metadata_dlp_omits_pii_across_text_and_label_fields() -> None:
     context = _context(
         title="Contact reviewer@example.invalid",
-        description="Call +420 123 456 789 before release",
+        description="Call +1 202 555 0142 before release",
         labels=["safe-label", "owner@example.invalid"],
         source_branch="feature/validated-context",
     )
@@ -293,7 +293,7 @@ def test_metadata_dlp_omits_pii_across_text_and_label_fields() -> None:
     }
     assert context.state == "degraded"
     assert "reviewer@example.invalid" not in repr(context)
-    assert "+420 123 456 789" not in repr(context)
+    assert "+1 202 555 0142" not in repr(context)
 
 
 def test_hostile_persisted_context_revalidates_schema_provenance_sha_and_redaction(

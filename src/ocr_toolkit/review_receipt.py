@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ocr_toolkit.diagrams.contracts import DIAGRAM_TOOL_NAME, DiagramError
+from ocr_toolkit.diagrams.persistence import parse_diagram_payload
 from ocr_toolkit.evidence.actions import ACTION_RECEIPT_BUCKETS, EVIDENCE_ACTIONS
 from ocr_toolkit.evidence.invocation import MAX_CI_IDENTIFIER_CHARS
 from ocr_toolkit.evidence.mcp import COVERAGE_TOOL_NAME, SEARCH_TOOL_NAME, TOOL_NAME
@@ -13,7 +15,6 @@ from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_TOOLS_PER_SERVER,
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     MAX_TOOLKIT_MCP_USAGE_SERVERS,
-    PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
     SUPPORTED_TOOLKIT_RESULT_SCHEMA_VERSIONS,
     TOOLKIT_MCP_SERVER_NAME_RE,
 )
@@ -23,23 +24,32 @@ from ocr_toolkit.reporting.dlp import (
 )
 from ocr_toolkit.reporting.federation import valid_reconciliation
 from ocr_toolkit.repository_coverage import RepositoryCoverageError, parse_repository_coverage
+from ocr_toolkit.result_contract import OcrResultContractError
+from ocr_toolkit.review_range import parse_range_payload
 
 INVALID_APPROVAL_RECEIPT_REASON = "the review-time approval receipt is missing or invalid"
 # Keep historical wire shapes explicit; changing the current producer version
 # must never reinterpret a persisted v11 receipt as a future format.
 RECEIPT_V11 = 11
-RECEIPT_V12 = PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION
+RECEIPT_V12 = 12
+RECEIPT_V13 = 13
+RECEIPT_V14 = 14
+SUPPORTED_REVIEW_TUPLE_VERSIONS = frozenset({11, 12, 13, 14})
 _FEDERATION_SCHEMA_BY_RECEIPT_VERSION = {
     9: "ocr.federation/v1",
     10: "ocr.federation/v2",
     RECEIPT_V11: "ocr.federation/v2",
     RECEIPT_V12: "ocr.federation/v2",
+    RECEIPT_V13: "ocr.federation/v2",
+    RECEIPT_V14: "ocr.federation/v2",
 }
 _PUBLICATION_SCHEMA_BY_RECEIPT_VERSION = {
     9: None,
     10: "ocr.publication/v2",
     RECEIPT_V11: "ocr.publication/v2",
     RECEIPT_V12: "ocr.publication/v2",
+    RECEIPT_V13: "ocr.publication/v2",
+    RECEIPT_V14: "ocr.publication/v2",
 }
 UNPROTECTED_APPROVAL_REASON = (
     "the GitLab target branch was unprotected; limited reviews are comment-only"
@@ -243,7 +253,9 @@ def _parse_review_identity(review: Any, receipt_version: int) -> ReceiptReviewId
             schema_version=receipt_version,
             policy_sha=review["policy_sha"],
         )
-    if receipt_version not in {RECEIPT_V11, RECEIPT_V12} or set(review) not in {
+    if receipt_version not in {RECEIPT_V11, RECEIPT_V12, RECEIPT_V13, RECEIPT_V14} or set(
+        review
+    ) not in {
         _V11_REVIEW_KEYS,
         _V11_REVIEW_KEYS | {"ci_job_id"},
     }:
@@ -340,14 +352,30 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             "tool_execution",
             "cleanup",
         }
-        | ({"repository_coverage"} if receipt_version == RECEIPT_V12 else set())
+        | ({"repository_coverage"} if receipt_version in {RECEIPT_V12, RECEIPT_V14} else set())
+        | ({"range", "diagram"} if receipt_version in {RECEIPT_V13, RECEIPT_V14} else set())
     ):
         return invalid
 
     review_identity = _parse_review_identity(toolkit_metadata.get("review"), receipt_version)
     if review_identity is None:
         return invalid
-    if receipt_version == RECEIPT_V12:
+    current_range = None
+    diagram = None
+    if receipt_version in {RECEIPT_V13, RECEIPT_V14}:
+        try:
+            current_range = parse_range_payload(toolkit_metadata["range"])
+            diagram = parse_diagram_payload(toolkit_metadata["diagram"], review_range=current_range)
+        except (OcrResultContractError, DiagramError):
+            return invalid
+        if receipt_version == RECEIPT_V14 and current_range is None:
+            return invalid
+        if current_range is not None and (current_range.base, current_range.head) != (
+            review_identity.diff_base_sha,
+            review_identity.source_sha,
+        ):
+            return invalid
+    if receipt_version in {RECEIPT_V12, RECEIPT_V14}:
         try:
             parse_repository_coverage(
                 toolkit_metadata["repository_coverage"], required_state="partial"
@@ -373,6 +401,8 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return invalid
     mode = context.get("mode")
     state = context.get("state")
+    if not isinstance(mode, str) or not isinstance(state, str):
+        return invalid
     classes = context.get("classes")
     expected_classes = {
         "off": [],
@@ -398,6 +428,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             not isinstance(source, str)
             or not source
             or len(source) > 256
+            or not isinstance(source_state, str)
             or source_state not in {"complete", "partial", "unavailable", "mutated"}
             for source, source_state in per_source.items()
         )
@@ -446,6 +477,17 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
     external = False
     builtin_server = TOOL_NAME
     builtin_tools = [TOOL_NAME, SEARCH_TOOL_NAME, COVERAGE_TOOL_NAME]
+    if mode == "enriched":
+        builtin_tools.extend(("context_list", "context_get"))
+    builtin_tool_options = [builtin_tools]
+    if diagram is not None and diagram.state not in {"disabled", "unsupported"}:
+        if not (
+            diagram.state == "omitted-invalid"
+            and diagram.reason == "unavailable"
+            and diagram.calls == 0
+        ):
+            builtin_tool_options = []
+        builtin_tool_options.append([*builtin_tools, DIAGRAM_TOOL_NAME])
     for capability in capabilities:
         if not isinstance(capability, dict) or set(capability) != {"server", "transport", "tools"}:
             return invalid
@@ -456,6 +498,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             not isinstance(server, str)
             or TOOLKIT_MCP_SERVER_NAME_RE.fullmatch(server) is None
             or server in servers
+            or not isinstance(transport, str)
             or transport not in {"builtin", "stdio", "remote"}
             or not isinstance(tools, list)
             or not 1 <= len(tools) <= MAX_TOOLKIT_MCP_TOOLS_PER_SERVER
@@ -466,15 +509,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
             or len(set(tools)) != len(tools)
             or any(tool in tool_owners for tool in tools)
             or (server == builtin_server) != (transport == "builtin")
-            or (
-                server == builtin_server
-                and tools
-                != (
-                    [*builtin_tools, "context_list", "context_get"]
-                    if mode == "enriched"
-                    else builtin_tools
-                )
-            )
+            or (server == builtin_server and tools not in builtin_tool_options)
         ):
             return invalid
         servers.add(server)
@@ -544,7 +579,10 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         or not 0 <= evidence_calls <= MAX_TOOLKIT_MCP_USAGE_COUNT
         or used is not (evidence_completed > 0)
         or (mandatory and not used)
-        or usage.get(builtin_server, 0) != evidence_calls + sum(context_usage.values())
+        or usage.get(builtin_server, 0)
+        != evidence_calls
+        + sum(context_usage.values())
+        + (diagram.calls if diagram is not None else 0)
         or not _valid_evidence_actions(evidence_actions, evidence_calls, mandatory=mandatory)
     ):
         return invalid
@@ -570,6 +608,7 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         publication_state is None
         or not isinstance(tool_execution, dict)
         or set(tool_execution) != {"state", "failed"}
+        or not isinstance(failure_state, str)
         or failure_state not in {"absent", "invalid", "conflicting", "verified"}
         or (
             failure_state == "verified"
@@ -581,6 +620,13 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         )
         or (failure_state != "verified" and failed_tools is not None)
         or cleanup != {"result": "passed"}
+    ):
+        return invalid
+    validated_failed = failed_tools if type(failed_tools) is int else 0
+    if (
+        diagram is not None
+        and diagram.failed_calls > 0
+        and (failure_state != "verified" or diagram.failed_calls > validated_failed)
     ):
         return invalid
     if not dlp["enabled"]:
@@ -605,7 +651,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return "publication DLP filtered the complete review result"
     if failure_state in {"invalid", "conflicting"}:
         return "OCR tool failure diagnostics were malformed or contradictory"
-    if failure_state == "verified" and failed_tools:
+    if failure_state == "verified" and validated_failed > (
+        diagram.failed_calls if diagram is not None else 0
+    ):
         return "one or more OCR tool calls failed"
     if context.get("state") == "degraded" or required_degraded:
         return "the selected review context was degraded"
@@ -613,7 +661,9 @@ def automatic_approval_metadata_reason(toolkit_metadata: Any) -> str:
         return "mutable review context was admitted"
     if external and federation["state"] == "degraded":
         return "external MCP use was advisory, incomplete or accounting-mismatched"
-    if receipt_version == RECEIPT_V12:
+    if receipt_version in {RECEIPT_V13, RECEIPT_V14} and current_range is None:
+        return "native review range identity was not verified"
+    if receipt_version in {RECEIPT_V12, RECEIPT_V14}:
         return "changed Git submodule pointers were not reviewed; automatic approval is unavailable"
     return ""
 

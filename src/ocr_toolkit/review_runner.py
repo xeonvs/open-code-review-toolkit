@@ -52,6 +52,16 @@ from ocr_toolkit.context.store import (
     ContextStoreError,
     PendingContextRecord,
 )
+from ocr_toolkit.diagrams.contracts import (
+    DiagramError,
+    DiagramMode,
+    DiagramResult,
+    diagram_requested,
+    parse_diagram_mode,
+)
+from ocr_toolkit.diagrams.lifecycle import DiagramExecution, diagram_warning
+from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
+from ocr_toolkit.diagrams.persistence import diagram_payload
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
@@ -87,6 +97,7 @@ from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
+    ShallowAncestryUnavailable,
     normalize_repo_path,
 )
 from ocr_toolkit.evidence.review_context import (
@@ -95,6 +106,7 @@ from ocr_toolkit.evidence.review_context import (
     merge_request_context_record,
     parse_review_context_mode,
 )
+from ocr_toolkit.evidence.review_range import resolve_review_range
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
@@ -174,6 +186,7 @@ from ocr_toolkit.result_usage import normalize_token_usage, token_usage_mapping
 from ocr_toolkit.review_debug import DebugBundle, DebugStatus
 from ocr_toolkit.review_identity import validate_detached_merge_request_pipeline
 from ocr_toolkit.review_progress import ReviewProgress, progress_enabled
+from ocr_toolkit.review_range import ReviewRange, admit_native_range, range_payload
 from ocr_toolkit.review_receipt import toolkit_receipt_is_valid, verified_evidence_actions
 
 STDERR_PROBE_BYTES = 64 * 1024
@@ -410,6 +423,7 @@ class ReviewRunState:
     progress: ReviewProgress | None = None
     repository_coverage: RepositoryCoverage | None = None
     gitlink_unqualified: bool = False
+    diagram_mode: DiagramMode = "on"
 
     def enter(self, stage: FailureStage) -> None:
         """Enter a real execution phase and notify the optional progress observer."""
@@ -597,6 +611,8 @@ def _review_receipt(
     evidence_action_counts: dict[str, dict[str, int]] | None = None,
     *,
     dlp_enabled: bool = True,
+    review_range: ReviewRange | None = None,
+    diagram: DiagramResult | None = None,
 ) -> dict[str, object]:
     """Return a closed privacy-safe receipt tied to review-time facts."""
 
@@ -811,6 +827,8 @@ def _review_receipt(
             "failed": failure_telemetry.failed if failure_state == "verified" else None,
         },
         "cleanup": {"result": "passed"},
+        "range": range_payload(review_range),
+        "diagram": diagram_payload(diagram or DiagramResult("off", "disabled")),
     }
 
 
@@ -1733,6 +1751,8 @@ def _finalize_ocr_result(
     private_diagnostics: bool = False,
     projection: GitlinkProjection | None = None,
     selected_diff: tuple[RawDiffEntry, ...] = (),
+    expected_range: ReviewRange | None = None,
+    diagram_execution: DiagramExecution | None = None,
 ) -> tuple[dict[str, int], bool, dict[str, object]]:
     """Validate, DLP-project, and receipt-bind one result in one atomic read/replace."""
 
@@ -1744,14 +1764,35 @@ def _finalize_ocr_result(
     report: ReviewReport | None = None
     source_reader = GitRepositoryReader(Path.cwd())
     source_cache: dict[str, str | None] = {}
+    if expected_range is None and projection is not None:
+        expected_range = ReviewRange(projection.plan.base_sha, projection.plan.head_sha)
+    if expected_range is not None and (
+        expected_range.head != identity.source_sha
+        or (
+            identity.target_protection != "local"
+            and (identity.diff_base_sha, identity.diff_head_sha)
+            != (expected_range.base, expected_range.head)
+        )
+    ):
+        raise ReviewRunnerError("review range disagrees with the execution identity")
+
+    def read_source(path: str) -> str | None:
+        """Read immutable text without sharing optional-channel failure state."""
+
+        try:
+            blob = source_reader.read_blob(identity.source_sha, path)
+            return blob.decode("utf-8") if blob is not None else None
+        except (
+            RepositoryEvidenceError,
+            UnicodeDecodeError,
+            OSError,
+            subprocess.TimeoutExpired,
+        ):
+            return None
 
     def read_reviewed_head(path: str) -> str | None:
         if path not in source_cache:
-            try:
-                blob = source_reader.read_blob(identity.source_sha, path)
-                source_cache[path] = blob.decode("utf-8") if blob is not None else None
-            except (RepositoryEvidenceError, UnicodeDecodeError):
-                source_cache[path] = None
+            source_cache[path] = read_source(path)
         return source_cache[path]
 
     def code_proof(comment: dict[str, object]) -> OpaqueCodeProof:
@@ -1773,6 +1814,14 @@ def _finalize_ocr_result(
         warnings = payload.get("warnings", [])
         if not isinstance(warnings, list):
             raise OcrResultMalformed("OCR result warnings must be a list")
+        admitted_range = None
+        if expected_range is not None:
+            try:
+                admitted_range = admit_native_range(payload, expected_range)
+            except OcrResultContractError as exc:
+                raise ReviewRunnerError(
+                    "OCR native manifest did not prove the review range"
+                ) from exc
         if projection is not None:
             try:
                 qualify_gitlink_manifest(projection, selected_diff, payload)
@@ -1788,7 +1837,27 @@ def _finalize_ocr_result(
             enrichment,
             evidence_action_counts,
             dlp_enabled=dlp_enabled,
+            review_range=admitted_range,
         )
+        admitted_diagram = DiagramResult("off", "disabled")
+        if diagram_execution is not None:
+            raw_tools = payload.get("tool_calls")
+            raw_counts = raw_tools.get("by_tool", {}) if isinstance(raw_tools, dict) else {}
+            calls = raw_counts.get(DIAGRAM_TOOL_NAME, 0) if isinstance(raw_counts, dict) else 0
+            failed = (
+                failure_telemetry.by_tool.get(DIAGRAM_TOOL_NAME, 0)
+                if failure_telemetry.valid
+                else 0
+            )
+            admitted_diagram = diagram_execution.finish(
+                review_range=admitted_range,
+                calls=calls,
+                failed_calls=failed,
+                read_source=read_source,
+                forbidden_matcher=ForbiddenMatcher.compile(forbidden),
+                dlp_enabled=dlp_enabled,
+            )
+            metadata["diagram"] = diagram_payload(admitted_diagram)
         if state is not None:
             evidence = metadata.get("evidence")
             actions = evidence.get("actions") if isinstance(evidence, dict) else None
@@ -1860,6 +1929,8 @@ def _finalize_ocr_result(
                         mcp.get("federation") if isinstance(mcp, dict) else None,
                         enrichment.legacy_policy if enrichment is not None else False,
                         effective_coverage,
+                        review_range=admitted_range,
+                        diagram=admitted_diagram,
                     ),
                     reviewed_sha=identity.source_sha,
                 )
@@ -1995,7 +2066,8 @@ def _immutable_review_refs(refs: ReviewRefs) -> ReviewRefs:
     """Resolve both OCR and evidence collection to one immutable commit pair."""
 
     reader = GitRepositoryReader(Path.cwd())
-    return ReviewRefs(reader.resolve_commit(refs.base), reader.resolve_commit(refs.head))
+    resolved = resolve_review_range(reader, refs.base, refs.head)
+    return ReviewRefs(resolved.base, resolved.head)
 
 
 def _reject_owned_review_options(args: list[str]) -> None:
@@ -3045,8 +3117,19 @@ def _remove_ephemeral_review_artifacts(artifacts: EvidenceArtifacts) -> None:
             remove_private_artifact(path)
         except OSError as exc:
             cleanup_error = cleanup_error or exc
+    _remove_optional_diagram_artifacts(artifacts)
     if cleanup_error is not None:
         raise cleanup_error
+
+
+def _remove_optional_diagram_artifacts(artifacts: EvidenceArtifacts) -> None:
+    """Optional output cleanup must not change mandatory review delivery."""
+
+    for path in (artifacts.diagram, artifacts.diagram_lock):
+        try:
+            remove_private_artifact(path)
+        except Exception:
+            diagram_warning()
 
 
 def run_evidence_review(
@@ -3066,6 +3149,12 @@ def run_evidence_review(
     local_input_error: ReviewRunnerError | None = None
     review_lock = ExitStack()
     try:
+        try:
+            state.diagram_mode = parse_diagram_mode(
+                os.environ.get("OCR_REVIEW_DIAGRAM_MODE"), local=local
+            )
+        except DiagramError as exc:
+            raise ReviewRunnerError(str(exc)) from exc
         if local:
             # Local-only context refusal precedes even private artifact I/O.
             try:
@@ -3303,12 +3392,22 @@ def _run_evidence_review(
         remove_private_artifact(artifacts.dlp_decisions)
     except OSError as exc:
         raise ReviewRunnerError("OCR private pre-execution state is unsafe") from exc
+    _remove_optional_diagram_artifacts(artifacts)
     state.enter("identity")
     try:
         refs = _immutable_review_refs(_review_refs(ocr_args))
+    except ShallowAncestryUnavailable as exc:
+        raise ReviewRunnerError(
+            "immutable review range could not be proved in a shallow repository; "
+            "fetch sufficient history before review"
+        ) from exc
     except RepositoryEvidenceError as exc:
-        raise ReviewRunnerError("immutable review refs could not be resolved") from exc
+        raise ReviewRunnerError(
+            "immutable review range could not be proved; require resolvable commits "
+            "with base an ancestor of head"
+        ) from exc
     state.reviewed_sha = refs.head
+    effective_range = ReviewRange(refs.base, refs.head)
     if not state.local and not is_merge_request_environment(os.environ):
         _record_unavailable_review_identity(artifacts, refs)
         raise ReviewRunnerError(
@@ -3338,6 +3437,7 @@ def _run_evidence_review(
     gateway = None
     federation_forbidden: tuple[str, ...] = ()
     preserve_authorized = False
+    diagram_execution: DiagramExecution | None = None
     previous_handlers = _install_termination_handlers()
     try:
         try:
@@ -3404,6 +3504,23 @@ def _run_evidence_review(
                     facts={"diagnostic_count": diagnostic_count},
                 )
             state.enter("mcp-preflight")
+            if diagram_requested(state.diagram_mode, local=state.local) and native_version is None:
+                try:
+                    native_binary = native_binary or _resolve_ocr_binary()
+                    native_version = preflight.validate_ocr_binary(
+                        executable=native_binary, announce=False
+                    )
+                except Exception:
+                    # Identity/retention authorization precedes optional probes.
+                    # Mandatory native preview and gitlink gates stay independent.
+                    diagram_warning()
+            diagram_execution = DiagramExecution.prepare(
+                state.diagram_mode,
+                local=state.local,
+                native_version=native_version,
+                review_range=effective_range,
+                path=artifacts.diagram,
+            )
             profile = "gitlab_mr" if identity.mr_author_id is not None else "local"
             servers = mcp_config.parse_mcp_servers(profile=profile)
             if servers and identity.limited_unprotected:
@@ -3423,7 +3540,16 @@ def _run_evidence_review(
                 context=context_config,
                 allow_external=not identity.limited_unprotected,
                 **({"gateway": gateway} if gateway is not None else {}),
+                **(
+                    {"diagram_run_id": diagram_execution.collector.run_id}
+                    if diagram_execution.collector is not None
+                    else {}
+                ),
             )
+            if diagram_execution.collector is not None and not any(
+                DIAGRAM_TOOL_NAME in capability.tools for capability in composition.capabilities
+            ):
+                diagram_execution.unavailable()
             bootstrap = render_bootstrap(
                 store,
                 capabilities=composition.capabilities,
@@ -3548,6 +3674,8 @@ def _run_evidence_review(
                 state.progress.phase("cleanup")
             if exit_code == 0:
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
+                if diagram_execution is not None:
+                    diagram_execution.capture()
             if not preserve_authorized:
                 try:
                     _remove_ephemeral_review_artifacts(artifacts)
@@ -3588,6 +3716,8 @@ def _run_evidence_review(
                         forbidden=forbidden,
                         dlp_enabled=dlp_enabled,
                         toolkit_advisory=background_qualification.advisory,
+                        expected_range=effective_range,
+                        diagram_execution=diagram_execution,
                         **(
                             {
                                 "projection": projection,

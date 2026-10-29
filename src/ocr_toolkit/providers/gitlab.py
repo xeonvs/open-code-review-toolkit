@@ -296,7 +296,7 @@ def parse_merge_request_lifecycle(
         raise GitLabProviderError("GitLab returned a different merge request")
     if source_sha != expected_head:
         raise GitLabMergeRequestStale(expected_project_id, expected_merge_request_iid)
-    if state not in {"opened", "merged", "closed"}:
+    if not isinstance(state, str) or state not in {"opened", "merged", "closed"}:
         raise GitLabProviderError("GitLab returned an invalid merge-request lifecycle state")
     return GitLabMergeRequestLifecycle(
         project_id=expected_project_id,

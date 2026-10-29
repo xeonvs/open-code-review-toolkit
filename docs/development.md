@@ -16,7 +16,7 @@ uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
 
-For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests run source and contract tests on all five supported OS/Python combinations. The expensive clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python 3.12 job; the separate required build job smoke-tests both distribution paths. The four matrix jobs start alongside Python 3.12 rather than waiting for it. The three Linux jobs are release-blocking, with Ubuntu on the newest supported Python as the sole coverage owner. The two macOS endpoint jobs are best-effort compatibility diagnostics: they continue to run and remain visible for follow-up, but a platform-only failure does not block a Linux-priority release. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
+For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests run source and contract tests on all six supported OS/Python combinations. The expensive clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python 3.12 job; the separate required build job smoke-tests both distribution paths. The five matrix jobs start alongside Python 3.12 rather than waiting for it. The four Linux jobs are release-blocking, with Ubuntu on Python 3.14 as the sole coverage owner. The two macOS endpoint jobs are best-effort compatibility diagnostics: they continue to run and remain visible for follow-up, but a platform-only failure does not block a Linux-priority release. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
 
 Runtime code must remain compatible with the Python range and runtime dependencies declared in `pyproject.toml`; `uv.lock` owns the resolved dependency set. Tests must use synthetic data; public examples must use safe placeholder hosts and credentials while describing the real operating behavior rather than labelling the feature itself as synthetic. User-visible changes require a fragment in `changelog.d/`.
 Repository-only qualification tools and evidence live under `scripts/` and `compatibility/`; they are excluded from both published distributions. Validate the manifest with `PYTHONPATH=src python scripts/ocr_compat.py validate`.
@@ -154,6 +154,30 @@ Use periodic polling only when no completion notification or persistent waiter e
 <!-- ew:invariant id="development.boundary-validation" -->
 ## Local validation
 
+Bounded property tests live in `tests/fuzz/`. The default `ocr-ci` Hypothesis
+profile runs 100 reproducible examples per property with no persistent database;
+`uv run --no-sync pytest tests/fuzz --hypothesis-profile=ocr-local` selects 1000.
+Keep generated inputs synthetic and retain minimized failures as ordinary
+regressions. The campaign exercises parser, protocol, persistence and DLP invariants, not live providers or
+model quality.
+
+BL-019's selected campaign is complete. Evidence models/store, internal/context
+MCP, handle/cursor isolation, GitLab CI projection, federation admission/wire and
+receipt reconciliation, and distribution registry metadata join the original
+DLP/result/range/policy/diagram families. The matching component regression
+suite owns each minimized synthetic failure; supported-Python replay and claim
+limits are recorded in the [test evidence matrix](engineering/test_evidence_matrix.md#v0140-range-diagrams-and-bounded-fuzzing).
+
+Vary input structure as well as counts: scalar types, nested objects/arrays,
+Unicode and encoded display representations, collector transition sequences,
+global budgets across sequence alternatives, and exact persisted round-trips.
+Extended local qualification uses independent explicit `--hypothesis-seed`
+values; preserve successful evidence while the tested inputs are unchanged.
+Result contracts have a 90% coverage floor; GitLab CI acquisition, policy schema,
+private filesystem and reporting usage each have an independent 85% floor.
+For regexes, review the semantic alternatives too: line coverage cannot prove
+that every encoded representation or boundary is exercised.
+
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 
 - parser changes exercise the semantic grammar and bounded degradation;
@@ -200,11 +224,12 @@ Apply the [cohesive-module invariant](engineering/project_principles.md#product-
 
 ## Review reporting and provider adapters
 
-`ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION` owns ordinary receipt v11;
+`ocr_result.TOOLKIT_RESULT_SCHEMA_VERSION` owns ordinary receipt v13;
 `PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION` owns the qualified gitlink partial
-receipt v12. Posting and freshness accept the exact current form for each
-route; automatic approval accepts only eligible v11. The v9/v10 readback
-rules, v11/v12 tuple parser, and pre-execution status v5/v6 are separate
+receipt v14. Posting accepts the exact current form for each result route;
+automatic approval accepts only eligible v13 with verified native range.
+The frozen v9-v12 result readback rules, shared tuple parser, and pre-execution
+status v5/v6 with unchanged embedded v11/v12 tuples are separate
 version-specific contracts. When a new receipt version is introduced, preserve
 prior wire meanings, implement its parser and nested-schema mapping explicitly,
 and version the private pre-execution status if its embedded review tuple changes. Verify
@@ -214,7 +239,8 @@ closed rather than silently treating the new shape as the old one.
 
 `reporting/` owns provider-neutral report data and pure presentation: `model.py`
 snapshots admitted results and execution-owner facts, `outcome.py` describes
-review health separately from finding delivery, `result.py` normalizes coverage
+review health separately from finding delivery, `diagram.py` renders admitted
+typed summaries without I/O, and `result.py` normalizes coverage
 and warnings, and `metadata.py`, `usage.py`, `dlp.py`, `sections.py`, and `text.py`
 own their respective pure calculations. Shared reporting must not import posting,
 forge acquisition, forge receipts, environment configuration or provider actions.

@@ -7,7 +7,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/xeonvs/open-code-review-toolkit/badge)](https://securityscorecards.dev/viewer/?uri=github.com/xeonvs/open-code-review-toolkit)
 [![CodeQL](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/xeonvs/open-code-review-toolkit/actions/workflows/codeql.yml)
 
-Open Code Review Toolkit is an unofficial review control and integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review), with GitLab CI and standalone local providers. It provides bounded repository evidence, a compact review bootstrap, a built-in read-only MCP server, environment-driven OCR configuration, preflight validation, local Markdown reports, and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
+Open Code Review Toolkit is an unofficial review control and integration layer for [Alibaba Open Code Review](https://github.com/alibaba/open-code-review), with GitLab CI and standalone local providers. It provides bounded repository evidence, immutable review ranges, a compact review bootstrap, built-in evidence MCP, environment-driven OCR configuration, preflight validation, local Markdown reports, [optional change diagrams](docs/diagrams.md), and safe GitLab merge-request posting. It does **not** bundle or download the `ocr` binary.
 
 [Explore the toolkit site](https://open-code-review-toolkit.pages.dev/) for a quick overview, demo video, and latest release notes.
 
@@ -16,7 +16,7 @@ Open Code Review Toolkit is an unofficial review control and integration layer f
 
 ## Install
 
-Python 3.12 through 3.14 is supported. Install the toolkit CLI in an isolated tool
+Python 3.12 through 3.15 is supported. Install the toolkit CLI in an isolated tool
 environment:
 
 ```console

@@ -62,6 +62,8 @@ def _validate_local_hashes(version: str, expected_hashes: dict[str, str]) -> Non
 def classify_index(payload: dict[str, Any], version: str, expected_hashes: dict[str, str]) -> str:
     """Return publish/already-published or fail on a conflicting artifact set."""
 
+    if not isinstance(payload, dict):
+        raise PreviewError("PEP 691 response must be a JSON object")
     names = expected_filenames(version)
     _validate_local_hashes(version, expected_hashes)
 
@@ -112,6 +114,8 @@ def artifact_manifest(
 ) -> list[dict[str, str]]:
     """Return validated immutable download metadata for one complete release."""
 
+    if not isinstance(payload, dict):
+        raise PreviewError("PEP 691 response must be a JSON object")
     if artifact_host not in ALLOWED_ARTIFACT_HOSTS:
         raise PreviewError(f"unsupported artifact host: {artifact_host}")
     expected_provenance_host = provenance_host or (
@@ -128,9 +132,11 @@ def artifact_manifest(
 
     manifest: dict[str, dict[str, str]] = {}
     for item in files:
-        if not isinstance(item, dict) or item.get("filename") not in names:
+        if not isinstance(item, dict):
             continue
-        filename = item["filename"]
+        filename = item.get("filename")
+        if not isinstance(filename, str) or filename not in names:
+            continue
         hashes = item.get("hashes")
         digest = hashes.get("sha256") if isinstance(hashes, dict) else None
         url = item.get("url")
@@ -195,6 +201,8 @@ def pypi_release_json_manifest(
 
     if version != "0.11.1":
         raise PreviewError("PyPI release JSON recovery is limited to v0.11.1")
+    if not isinstance(payload, dict):
+        raise PreviewError("PyPI release JSON must be an object")
     _validate_local_hashes(version, expected_hashes)
     info = payload.get("info")
     if not isinstance(info, dict) or info.get("name") != PACKAGE or info.get("version") != version:

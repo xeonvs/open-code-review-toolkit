@@ -73,6 +73,21 @@ def coverage(
     )
 
 
+@pytest.mark.parametrize("nested", (False, True))
+def test_store_rejects_duplicate_json_fields_even_when_values_and_ids_match(
+    tmp_path, nested
+) -> None:
+    store = EvidenceStore()
+    assert store.add(record({"name": "synthetic", "version": "1.0"}))
+    wire = json.dumps(store.to_dict(), separators=(",", ":"))
+    token = '"version":"1.0"' if nested else f'"schema_version":{store.to_dict()["schema_version"]}'
+    assert token in wire
+    target = tmp_path / "ambiguous.json"
+    target.write_text(wire.replace(token, token + "," + token, 1))
+    with pytest.raises(EvidenceStoreError, match="duplicate JSON keys"):
+        EvidenceStore.read(target)
+
+
 def test_record_id_is_canonical_and_content_addressed() -> None:
     """Keep identities stable across mapping order and sensitive to origin."""
 

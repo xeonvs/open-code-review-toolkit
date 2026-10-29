@@ -33,6 +33,7 @@ RUNTIME_DEFAULTS = {
     "OCR_ANTHROPIC_DISABLE_THINKING": "false",
     "OCR_REVIEW_LANGUAGE": "English",
     "OCR_REVIEW_EFFORT": "medium",
+    "OCR_REVIEW_DIAGRAM_MODE": "on",
     "OCR_REVIEW_PROGRESS": "Empty / `false`",
     "OCR_LLM_VALIDATE_MODEL": "false",
     "OCR_LLM_MODELS_URL": "Derived from `OCR_LLM_URL`",

@@ -1,6 +1,11 @@
 # Releases
 
 Production versions come from SCM tags through hatch-vcs. The tracked `.release-version` and `.release-source-date-epoch` files authorize one reproducible stable build, while `.next-version` defines the next TestPyPI development line. Public interfaces may evolve before 1.0, but every user-visible 0.x change still requires a Towncrier fragment.
+
+Both registry installation matrices are derived from `requires-python` in the
+authorized release checkout, using the same supported-minor parser as the
+receipt. A recovery dispatch therefore retains the original release's Python
+bounds even when the current workflow supports a newer minor.
 OCR compatibility updates may be prepared mechanically only after the [qualification policy](compatibility.md) returns `automatic-safe`; this never replaces the protected feature and stable-release PR gates.
 
 The toolkit release version remains single-sourced from VCS tags and is read at runtime through `ocr_toolkit.__version__`. Schema, wire-protocol, fixture, and qualified-upstream versions are independent compatibility contracts and use explicitly named constants rather than duplicated toolkit release literals.

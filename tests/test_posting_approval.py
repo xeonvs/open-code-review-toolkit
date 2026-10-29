@@ -23,8 +23,8 @@ from ocr_toolkit.posting.payloads import build_marked_note_body
 from ocr_toolkit.posting.snapshot import BotCommentRefs
 from ocr_toolkit.result_contract import ReviewOutcome
 from ocr_toolkit.review_receipt import receipt_review_identity, validated_review_identity
-from tests.support import cleared_env, gitlab_config, patched_attr, patched_env
-from tests.test_review_receipt_v11 import _receipt_v11
+from tests.support import cleared_env, gitlab_config, native_range_input, patched_attr, patched_env
+from tests.test_review_receipt_v13 import CURRENT_RANGE, _receipt_v13
 
 
 def complete_outcome() -> ReviewOutcome:
@@ -159,10 +159,10 @@ def receipt_v8(
     }
 
 
-def publishable_receipt_v11(*, target_protection: str = "protected") -> dict[str, Any]:
+def publishable_receipt_current(*, target_protection: str = "protected") -> dict[str, Any]:
     """Use a current exact-boundary receipt for result-driven posting tests."""
 
-    return _receipt_v11(
+    return _receipt_v13(
         target_protection=target_protection,
         protection_mode="unprotected" if target_protection == "unprotected" else "auto",
     )
@@ -177,7 +177,7 @@ def execute_current_approval(
 ) -> gitlab_approval.ApprovalExecution:
     """Exercise the adapter with a fully validated current receipt boundary."""
 
-    receipt = publishable_receipt_v11()
+    receipt = publishable_receipt_current()
     receipt["review"]["mr_author_id"] = author_id
     identity = validated_review_identity(receipt)
     assert identity is not None
@@ -1147,7 +1147,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_valid_receipt_binds_advisory_without_changing_summary_or_approval_inputs(self) -> None:
         """Publish one closed advisory in Technical details with ordinary clean status."""
 
-        receipt = publishable_receipt_v11()
+        receipt = publishable_receipt_current()
         self.assertTrue(approval.toolkit_receipt_is_valid(receipt))
         notes: list[str] = []
 
@@ -1177,6 +1177,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                     "manifest": {
                         "schema_version": "ocr.run-manifest/v1",
                         "operation": "review",
+                        "input": native_range_input(CURRENT_RANGE.base, CURRENT_RANGE.head),
                         "terminal_state": "complete",
                         "coverage": {
                             "selected": [{"item_id": "synthetic-item"}],
@@ -1246,7 +1247,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         summary: dict[str, bool],
         comments: list[dict[str, Any]],
     ) -> None:
-        receipt = publishable_receipt_v11(target_protection="unprotected")
+        receipt = publishable_receipt_current(target_protection="unprotected")
         if status in {"skipped", "failed"}:
             receipt["evidence"] = {
                 "mandatory": False,
@@ -1289,6 +1290,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             "manifest": {
                 "schema_version": "ocr.run-manifest/v1",
                 "operation": "review",
+                "input": native_range_input(CURRENT_RANGE.base, CURRENT_RANGE.head),
                 "terminal_state": manifest_state,
                 "coverage": {
                     "selected": selected,
@@ -1356,7 +1358,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     ) -> None:
         """Render scenario B without inventing partial coverage or a failed item."""
 
-        receipt = publishable_receipt_v11(target_protection="unprotected")
+        receipt = publishable_receipt_current(target_protection="unprotected")
         receipt["publication"] = {
             "schema": "ocr.publication/v2",
             "state": "publication-filtered",
@@ -1467,7 +1469,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
     def test_private_sanitized_review_keeps_tool_and_token_activity_visible(self) -> None:
         """Keep independent numeric activity lines after private-only sanitization."""
 
-        receipt = publishable_receipt_v11()
+        receipt = publishable_receipt_current()
         receipt["publication"] = {
             "schema": "ocr.publication/v2",
             "state": "private-sanitized",
@@ -1511,6 +1513,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
                     "manifest": {
                         "schema_version": "ocr.run-manifest/v1",
                         "operation": "review",
+                        "input": native_range_input(CURRENT_RANGE.base, CURRENT_RANGE.head),
                         "terminal_state": "complete",
                         "coverage": {
                             "selected": [{"item_id": "safe-item"}],

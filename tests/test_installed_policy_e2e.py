@@ -321,6 +321,7 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             "ci_identity_ignored": True,
             "debug_parity": True,
             "progress_parity": True,
+            "diagrams": True,
         }
 
 

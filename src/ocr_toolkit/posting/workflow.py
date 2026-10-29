@@ -10,11 +10,22 @@ import subprocess
 import sys
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
 from ocr_toolkit.common.markdown import neutralize_quick_actions
+from ocr_toolkit.context.dlp import ForbiddenMatcher
+from ocr_toolkit.diagrams.admission import admit_candidate
+from ocr_toolkit.diagrams.contracts import (
+    DiagramError,
+    DiagramMode,
+    DiagramResult,
+    parse_diagram_mode,
+)
+from ocr_toolkit.diagrams.lifecycle import diagram_warning
+from ocr_toolkit.diagrams.persistence import parse_diagram_payload
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.evidence.gitlink_projection import (
     make_gitlink_projection,
@@ -151,7 +162,12 @@ from ocr_toolkit.repository_coverage import (
 )
 from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome, parse_result_outcome
 from ocr_toolkit.review_identity import effective_reviewed_sha, full_sha
-from ocr_toolkit.review_receipt import ReceiptReviewIdentity, validated_review_identity
+from ocr_toolkit.review_range import ReviewRange, admit_native_range, parse_range_payload
+from ocr_toolkit.review_receipt import (
+    SUPPORTED_REVIEW_TUPLE_VERSIONS,
+    ReceiptReviewIdentity,
+    validated_review_identity,
+)
 
 # Kept as a module-level compatibility seam for tests and external monkey-patching.
 post_review_note = gitlab_api.post_review_note
@@ -287,7 +303,7 @@ def validate_posting_review_identity(
 ) -> ReviewFreshnessResult:
     """Bind the validated receipt to this job before a current-result write."""
 
-    if identity.schema_version not in CURRENT_POSTING_RECEIPT_VERSIONS:
+    if identity.schema_version not in SUPPORTED_REVIEW_TUPLE_VERSIONS:
         raise ReviewFreshnessUnavailable("receipt_unavailable")
     if (
         identity.project_id != config.project_id
@@ -1038,9 +1054,61 @@ def verified_no_model_repository_coverage(status: PreExecutionStatus) -> Reposit
     return actual
 
 
+def publication_range_and_diagram(
+    result: dict[str, Any], metadata: dict[str, Any], mode: DiagramMode
+) -> tuple[ReviewRange | None, DiagramResult]:
+    """Bind immutable publication facts and isolate optional source/DLP failures."""
+
+    review_range = parse_range_payload(metadata["range"])
+    diagram = parse_diagram_payload(metadata["diagram"], review_range=review_range)
+    if review_range is not None:
+        if "manifest" in result:
+            admit_native_range(result, review_range)
+        elif metadata["publication"].get("state") != "publication-filtered":
+            raise OcrResultContractError("verified range has no native manifest")
+    if mode == "off":
+        return review_range, DiagramResult("off", "disabled")
+    if diagram.mode == "on" and mode == "spoiler":
+        diagram = replace(diagram, mode="spoiler")
+    if diagram.state != "generated":
+        return review_range, diagram
+    try:
+        assert review_range is not None
+        reader = GitRepositoryReader(Path.cwd())
+        cache: dict[str, str | None] = {}
+
+        def source(path: str) -> str | None:
+            if path not in cache:
+                blob = reader.read_blob(review_range.head, path)
+                cache[path] = blob.decode("utf-8") if blob is not None else None
+            return cache[path]
+
+        diagram = admit_candidate(
+            diagram.mode,
+            diagram.submission,
+            review_range=review_range,
+            output_calls=diagram.calls,
+            read_source=source,
+            forbidden_matcher=ForbiddenMatcher.compile(()),
+            dlp_enabled=metadata["dlp"]["enabled"],
+        )
+    except Exception:
+        diagram = replace(diagram, state="omitted-invalid", reason="unavailable", submission=None)
+    if diagram.state == "omitted-invalid":
+        diagram_warning()
+    return review_range, diagram
+
+
 def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     """Post OCR result comments to GitLab and return a process exit code."""
 
+    try:
+        post_diagram_mode = parse_diagram_mode(
+            os.environ.get("OCR_REVIEW_DIAGRAM_MODE"), local=False
+        )
+    except DiagramError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     if config.current_user_id is None:
         print(
             "Cannot resolve current GitLab user; refusing to publish OCR review notes.",
@@ -1080,6 +1148,19 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             file=sys.stderr,
         )
         return 1
+    review_range = None
+    diagram = None
+    if receipt_identity is not None:
+        try:
+            review_range, diagram = publication_range_and_diagram(
+                result, toolkit_metadata, post_diagram_mode
+            )
+        except (OcrResultContractError, DiagramError):
+            print(
+                "Review range or diagram receipt is invalid; previous review preserved.",
+                file=sys.stderr,
+            )
+            return 1
     repository_coverage: RepositoryCoverage | None = None
     if (
         receipt_identity is not None
@@ -1279,6 +1360,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 publication_dlp_details=dlp_details,
                 reviewer_guide=reviewer_guide,
                 reviewed_sha=reviewed_commit,
+                review_range=review_range,
+                diagram=diagram,
                 mr_head_sha=mr_head_sha(),
                 outcome_status=summary_status,
                 outcome_message=outcome_message,
@@ -1510,6 +1593,8 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
             reviewer_guide=reviewer_guide,
             fallback_reasons=fallback_reasons,
             reviewed_sha=reviewed_commit,
+            review_range=review_range,
+            diagram=diagram,
             mr_head_sha=mr_head_sha(),
             outcome_status=summary_status,
             outcome_message=outcome_message,
@@ -2230,6 +2315,11 @@ def main(argv: list[str] | None = None) -> int:
         # review cannot adopt the running review's authenticated status.
         return post_no_handoff_failure()
 
+    try:
+        parse_diagram_mode(os.environ.get("OCR_REVIEW_DIAGRAM_MODE"), local=False)
+    except DiagramError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     config = load_gitlab_config()
     if config is None:
         print(

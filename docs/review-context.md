@@ -137,7 +137,7 @@ Previous review comments are preserved with the actual incomplete publication
 reason. Posting counters describe admitted findings only; DLP omissions are shown
 separately. Publication `ocr.publication/v2` separates public omitted fields and
 reasons from private-only sanitized fields and reasons. The
-`ocr.publication-dlp-signal/v4` marker and receipt v11 carry only closed counts
+`ocr.publication-dlp-signal/v4` marker and receipt v13 carry only closed counts
 and state, never protected content, paths, identifiers, URLs, or raw errors.
 Historical v3 aggregates do not establish this public/private split.
 
@@ -151,13 +151,15 @@ transaction gates remain enforced.
 
 ## Receipt and cleanup
 
-Receipt v11 binds the current MR diff/version and source H, actual target
+Receipt v13 binds the current MR diff/version and source H, actual target
 branch/T/protection, selected policy project/branch/P/protection/mode, context
 mode and per-source state, legacy policy state, DLP mode, stage-aware publication
 accounting, mandatory evidence, governed federation reconciliation, and cleanup.
-It is content-free. Exact v9/v10 receipts remain readable under their original
-policy-equals-target invariant but cannot establish new authority or publish a
-current review; v1-v8 remain unsupported. Ephemeral results have no migration path.
+Context/evidence/federation accounting remains content-free. The separately
+admitted optional typed diagram may carry bounded labels and source references;
+see [diagram admission and delivery](diagrams.md). Exact v9-v12 receipts retain
+their frozen historical invariants but cannot publish a current result; v1-v8
+remain unsupported. Ephemeral results have no migration path.
 
 `OCR_GITLAB_TARGET_PROTECTION_MODE` defaults to `auto`. An unprotected target
 with a verified protected P can use the configured context mode and federation;

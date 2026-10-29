@@ -85,7 +85,7 @@ flowchart TD
     auth -- Yes --> local_auth{Local profile, qualified binary,<br/>native store and config valid?}
     local_auth -- No --> preflight_error[Review blocked before OCR]
     local_auth -- Yes --> native_auth[Isolate runtime config; link only native auth;<br/>OCR owns grant checks and refresh]
-    api --> input{Configuration, immutable refs,<br/>target state, and paths valid?}
+    api --> input{Configuration, immutable B/H and ancestry,<br/>merge-base B, target state and paths valid?}
     native_auth --> input
     input -- No --> preflight_error
     input -- Yes --> profile{Local or GitLab MR?}
@@ -113,7 +113,8 @@ flowchart TD
     target_policy --> acquire[Collect bounded immutable evidence<br/>and optional authorized context]
     unprotected_rules --> acquire
     separate_policy --> acquire
-    acquire --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
+    acquire --> diagram_setup[Prepare optional run collector by mode<br/>and qualified OCR capability;<br/>failure omits only diagram]
+    diagram_setup --> registry[Parse registry v2; freeze schemas/tools;<br/>start bounded federation gateway]
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
     acquire_ok -- Yes --> gitlink_check{Changed gitlink?}
@@ -131,13 +132,15 @@ flowchart TD
     review --> exit{Review exit code}
     exit -- No private handoff (75) --> no_handoff[Job-only failure;<br/>do not read another run's status or contact GitLab]
     exit -- Non-zero --> runtime_error[No normal result publication;<br/>failure remains in job without full review identity]
-    exit -- Zero --> finalize[Enter result finalization]
-    finalize --> core{Result, manifest, identity, cleanup,<br/>action receipt and federation receipt valid?}
+    exit -- Zero --> diagram_snapshot[Snapshot optional candidate before cleanup;<br/>failure becomes omission]
+    diagram_snapshot --> finalize[Enter result finalization]
+    finalize --> core{Result, manifest exact B/H/range,<br/>mandatory cleanup, action and federation receipts valid?}
     core -- No --> rejection_diag[Emit bounded rejection facts;<br/>zero vs unavailable; fixed reason code]
     rejection_diag --> retain_rejected{Authorized local private retention?}
     retain_rejected -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
     retain_rejected -- Yes --> retained_rejected[Owner-only bounded diagnostic envelope;<br/>no receipt, successful report or posting authority]
-    core -- Yes --> diag[Classify additive failed-tool diagnostics]
+    core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>source spans and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
+    diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
     dlp_mode -- true --> dlp[Apply source-proofed code exception,<br/>publication and private-field DLP]
     dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
@@ -159,11 +162,12 @@ flowchart TD
     runtime_error -- Explicit local --> local_failure[Closed failure summary to console;<br/>artifact if destination was accepted]
     integrity_error -- Explicit local --> local_failure
     local_output -- No --> local_handoff[Private JSON handoff only]
-    mode -- GitLab MR --> receipt[Attach exact v11 ordinary or v12 partial receipt:<br/>diff, target T, policy P and CI job]
+    mode -- GitLab MR --> receipt[Attach exact v13 ordinary or v14 partial receipt:<br/>diff, target T, policy P and CI job]
     receipt --> post{Posting input valid at readback?}
     retained_rejected --> posting_error
     post -- No --> posting_error[Job-local publication-policy error;<br/>findings transaction not started]
-    post -- Yes --> live_state{Current MR diff, target T,<br/>policy P and lifecycle valid?}
+    post -- Yes --> diagram_post[Revalidate optional source/DLP and render;<br/>fault omits diagram, findings continue]
+    diagram_post --> live_state{Current MR diff, target T,<br/>policy P and lifecycle valid?}
     live_state -- Invalid, moved or terminal --> posting_error
     live_state -- Open --> transaction[Publish current findings and summary<br/>with bounded readback and rollback]
     transaction --> transaction_ok{All required writes succeed?}
@@ -171,7 +175,7 @@ flowchart TD
     transaction_ok -- Yes --> published{Projection complete?}
     published -- Yes --> success[Review signal published]
     published -- Safe partial --> warning[Safe review subset published;<br/>not a complete public review]
-    published -- Repository partial v12 --> warning
+    published -- Repository partial v14 --> warning
 
     classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
     classDef warning fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px;
@@ -184,7 +188,7 @@ flowchart TD
     class local auxiliary;
     class preflight_error,terminal_strict_error,preview_error,gitlink,preview_unclassified,no_handoff,runtime_error,integrity_error,posting_error error;
     class no_work warning;
-    class start,api,native_auth,terminal_route,target_policy,unprotected_rules,separate_policy,acquire,registry,gitlink_projection,preview,review,finalize,diag,dlp,disabled,publishable,partial,receipt,transaction auxiliary;
+    class start,api,native_auth,terminal_route,target_policy,unprotected_rules,separate_policy,acquire,diagram_setup,registry,gitlink_projection,preview,review,diagram_snapshot,finalize,diagram_admit,diag,dlp,disabled,publishable,partial,receipt,diagram_post,transaction auxiliary;
     class auth,local_auth,input,profile,detached,initial_state,terminal_gate,current_diff,protected,selector,limited,default_policy,acquire_ok,gitlink_check,gitlink_scope,preview_ok,selected,exit,core,dlp_mode,dlp_state,mode,post,live_state,transaction_ok,published decision;
 ```
 
@@ -198,7 +202,7 @@ an advisory v6 status. Note-capable setup and preview statuses carry the complet
 B/H/T/P identity for live revalidation before each write; setup also requires
 the exact captured P. Unclassified preview diagnostics retain only a bounded
 count, never raw stderr. Generic OCR, parse, schema and provider failures
-without a posting-eligible full identity remain in the job. A v11 result whose
+without a posting-eligible full identity remain in the job. A v13 result whose
 MR becomes terminal before posting does not publish a new normal review; the
 pre-execution terminal-status note is a separate path.
 
@@ -217,10 +221,10 @@ publication text and unproved code retain the ordinary HTML restriction; all
 code still crosses the remaining secret, PII, forbidden-value and control
 checks. Publication `ocr.publication/v2` separates public omitted fields and
 reasons from private-only sanitized fields and reasons. The v4 summary signal
-and receipt v11 expose those closed counts without converting OCR coverage or
+and receipt v13 expose those closed counts without converting OCR coverage or
 provider posting counts.
 
-Receipt v12 adds separate path-free effective repository coverage only for a
+Receipt v14 adds separate path-free effective repository coverage only for a
 qualified partial gitlink review. Native OCR `complete` then covers its selected
 ordinary files; it does not claim the skipped pointer or submodule contents.
 Posting independently rebuilds original Git inputs and checks the native
@@ -229,7 +233,7 @@ filters the result, the producer first validates that native manifest and
 passes only a path-free selection proof; posting checks the proof, original
 coverage counts and remaining findings against Git. This route blocks
 automatic approval, old finding-thread deletion, and requested discussion
-resolution even when the native manifest is complete. v11 retains its exact
+resolution even when the native manifest is complete. v13 retains its exact
 ordinary-review meaning.
 
 The core integrity boundary deliberately precedes additive diagnostics. A malformed result,
@@ -276,7 +280,7 @@ flowchart TD
 Valid detail records are bounded, credential-redacted, and control-safe before they reach the
 local stderr or CI job log. Dynamic detail text, paths, and per-tool failure maps never enter the
 finalized result, receipt, merge-request comments, publication-DLP telemetry, or later-action
-inputs. Receipt v11 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
+inputs. Receipt v13 stores only `absent|verified|invalid|conflicting` and a bounded aggregate
 `failed` integer for `verified`; the toolkit action receipt v3 remains authoritative for evidence
 attempts and completions.
 
@@ -301,9 +305,9 @@ flowchart TD
     receipt -- No --> ci_context{GitLab CI MR context?}
     ci_context -- Yes --> schema_error
     ci_context -- No --> direct[Standalone compatible receipt-less posting path]
-    receipt -- Yes --> exact{Exact current v11 or v12 receipt valid?}
+    receipt -- Yes --> exact{Exact current v13 or v14 receipt valid?}
     exact -- No --> schema_error[Job-local publication-policy error]
-    exact -- Yes --> partial_check{v12 partial gitlink receipt?}
+    exact -- Yes --> partial_check{v14 partial gitlink receipt?}
     partial_check -- Yes --> source_proof{Original Git trees, counts and<br/>native selected work match?}
     source_proof -- No --> schema_error
     source_proof -- Yes --> fresh{Current CI job, diff, target<br/>and policy authority valid?}
@@ -318,7 +322,7 @@ flowchart TD
     writes -- No attempt or direct failure --> post_error[Posting failed;<br/>previous review state preserved]
     writes -- Draft publish attempted, partial or unknown --> draft_partial[Stop nonzero; retain attempted notes;<br/>attempt cleanup of unattempted drafts;<br/>preserve prior review]
     writes -- Yes --> public_ok[Review signal published]
-    public_ok --> action{Optional later action eligible?<br/>v12 always ineligible}
+    public_ok --> action{Optional later action eligible?<br/>v14 always ineligible}
     action -- Yes --> fresh_again{Identity and authority<br/>still current before write?}
     fresh_again -- Yes --> action_ok[Review published; later action completed]
     fresh_again -- No --> action_stale[Current publication stops nonzero;<br/>previous review preserved;<br/>published drafts may remain visible]
@@ -326,7 +330,7 @@ flowchart TD
     action_ok --> cleanup{Old-review cleanup<br/>before each mutation}
     action_warn --> cleanup
     cleanup -- Before first mutation, stale --> action_stale
-    cleanup -- All confirmed --> complete[Replacement complete;<br/>v12 preserves prior finding threads]
+    cleanup -- All confirmed --> complete[Replacement complete;<br/>v14 preserves prior finding threads]
     cleanup -- After cleanup starts, drift or unconfirmed write --> cleanup_partial[Stop nonzero; old cleanup partial;<br/>retain current-run comments]
 
     classDef success fill:#d1fae5,stroke:#15803d,color:#14532d,stroke-width:2px;
@@ -357,9 +361,10 @@ base, H its source head, and `B != T` is valid. The code tuple and authority are
 checked before each current-result write and again before an eligible approval. A policy-only
 fast-forward of the same still-protected default branch may finish against
 captured P when ancestry is proved; a changed default, lost protection, rewrite,
-unverifiable ancestry, or moved code tuple stops. Exact v9/v10 receipts remain
-historically readable under their original invariants but cannot authorize a
-new current publication. A detached GitLab CI job without v11 cannot use the
+unverifiable ancestry, or moved code tuple stops. Exact v9-v12 receipts remain
+historically readable under their frozen invariants but cannot authorize a
+new current publication. Pre-execution v5/v6 retain embedded v11/v12 review
+tuples; those tuples still receive freshness checks. A detached GitLab CI job without v13/v14 cannot use the
 standalone direct-posting path; local review stays receipt-less and does not post
 to GitLab. Pre-write checks leave a provider-side race; neither the diagram nor a comment-only
 outcome implies that an earlier bot approval was revoked.
