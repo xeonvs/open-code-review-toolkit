@@ -3458,6 +3458,8 @@ def _run_evidence_review(
             preserve_authorized = _authorize_private_artifact_preservation(
                 identity, requested=preserve_private_artifacts
             )
+            if state.debug is not None:
+                state.debug.bind_native_session(session_home, Path.cwd(), effective_range)
             state.observe(
                 "identity",
                 "passed",
@@ -3560,6 +3562,8 @@ def _run_evidence_review(
                 ),
             )
             write_private_text(artifacts.bootstrap, bootstrap)
+            if state.debug is not None:
+                state.debug.capture("bootstrap.md", artifacts.bootstrap)
             mcp_config.apply_mcp_composition(composition)
             mcp_config.verify_mcp_composition(composition)
             summary = evidence_summary(store)
@@ -3676,6 +3680,9 @@ def _run_evidence_review(
                 evidence_action_counts = read_action_receipt(artifacts.action_receipt)
                 if diagram_execution is not None:
                     diagram_execution.capture()
+            if state.debug is not None:
+                state.debug.capture("diagram.json", artifacts.diagram)
+                state.debug.capture_native_trace()
             if not preserve_authorized:
                 try:
                     _remove_ephemeral_review_artifacts(artifacts)

@@ -448,6 +448,7 @@ def main(root: Path, cli: Path) -> int:
         if debug:
             journal_text = (debug_directory / "journal.json").read_text()
             journal = json.loads(journal_text)
+            assert journal["schema_version"] == "ocr.toolkit-debug/v2"
             assert journal["complete"] is True
             assert journal["phases"]["configuration"]["facts"]["llm_protocol"] == "openai"
             assert journal["phases"]["configuration"]["facts"]["language"] == "English (UK)"
@@ -455,6 +456,10 @@ def main(root: Path, cli: Path) -> int:
             assert journal["phases"]["cleanup"]["status"] == "passed"
             assert journal["phases"]["reporting"]["status"] == "passed"
             assert (debug_directory / "summary.md").read_text() == completed.stdout
+            assert (debug_directory / "bootstrap.md").is_file()
+            # This synthetic native peer does not create session history. Its
+            # missing diagnostic trace must preserve normal/debug parity.
+            assert journal["artifacts"]["native-trace.jsonl"]["status"] == "missing"
             if mode in {"forged", "process-failed", "process-signaled", "parent-signaled"}:
                 stage = "mcp-use" if mode == "forged" else "subprocess"
                 assert journal["phases"][stage]["status"] == "failed"
@@ -476,6 +481,9 @@ def main(root: Path, cli: Path) -> int:
                 "raw-stderr.log",
                 "safe-result.json",
                 "summary.md",
+                "bootstrap.md",
+                "diagram.json",
+                "native-trace.jsonl",
                 "journal.json",
             }
             assert debug_directory.stat().st_mode & 0o777 == 0o700

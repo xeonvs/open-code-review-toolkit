@@ -18,20 +18,33 @@ from ocr_toolkit.common.filesystem import (
     same_file_identity,
 )
 from ocr_toolkit.reporting.model import FailureStage
+from ocr_toolkit.review_range import ReviewRange
+from ocr_toolkit.review_trace import MAX_TRACE_BYTES, NativeTraceSource
 
-DEBUG_SCHEMA = "ocr.toolkit-debug/v1"
+DEBUG_SCHEMA = "ocr.toolkit-debug/v2"
 MAX_DEBUG_JSON_BYTES = 20_000_000
 MAX_DEBUG_STDERR_BYTES = 2_000_000
 MAX_DEBUG_JOURNAL_BYTES = 1_000_000
 MAX_DEBUG_DECISIONS = 1_000
 MAX_DEBUG_TRANSITIONS = 128
 DebugStatus = Literal["passed", "failed", "degraded", "not-run"]
-ArtifactName = Literal["raw-result.json", "raw-stderr.log", "safe-result.json", "summary.md"]
+ArtifactName = Literal[
+    "raw-result.json",
+    "raw-stderr.log",
+    "safe-result.json",
+    "summary.md",
+    "bootstrap.md",
+    "diagram.json",
+    "native-trace.jsonl",
+]
 ARTIFACT_LIMITS: dict[ArtifactName, int] = {
     "raw-result.json": MAX_DEBUG_JSON_BYTES,
     "raw-stderr.log": MAX_DEBUG_STDERR_BYTES,
     "safe-result.json": MAX_DEBUG_JSON_BYTES,
     "summary.md": MAX_DEBUG_JSON_BYTES,
+    "bootstrap.md": 65_536,
+    "diagram.json": 20_000,
+    "native-trace.jsonl": MAX_TRACE_BYTES,
 }
 _SAFE_PATH_FIELDS = frozenset(
     {
@@ -138,6 +151,44 @@ class DebugBundle:
         self.decisions: list[dict[str, object]] = []
         self.omitted_transitions = 0
         self.omitted_decisions = 0
+        self._native_source: NativeTraceSource | None = None
+
+    def bind_native_session(self, home: Path, repository: Path, review_range: ReviewRange) -> None:
+        """Pin this isolated session before execution, without exposing auth/config files."""
+
+        if self._native_source is not None:
+            self._native_source.close()
+            self._native_source = None
+        try:
+            self._native_source = NativeTraceSource(home, repository, review_range)
+        except (OSError, ValueError, RuntimeError):
+            self.artifacts["native-trace.jsonl"] = {
+                "status": "unavailable",
+                "limit_bytes": ARTIFACT_LIMITS["native-trace.jsonl"],
+            }
+
+    def capture_native_trace(self) -> None:
+        """Retain only bounded task/tool fields before ordinary private-session cleanup."""
+
+        name: ArtifactName = "native-trace.jsonl"
+        limit = ARTIFACT_LIMITS[name]
+        if self._native_source is None:
+            # Preserve not-run or a prior binding failure; neither is a missing
+            # session from an execution that successfully bound its source.
+            return
+        try:
+            capture = self._native_source.capture(max_output_bytes=limit)
+            self._write(name, capture.content)
+            self.artifacts[name] = {
+                **capture.facts,
+                "limit_bytes": limit,
+                "captured_bytes": len(capture.content),
+                "sha256_captured": hashlib.sha256(capture.content).hexdigest(),
+            }
+        except FileNotFoundError:
+            self.artifacts[name] = {"status": "missing", "limit_bytes": limit}
+        except (OSError, ValueError, RuntimeError):
+            self.artifacts[name] = {"status": "unavailable", "limit_bytes": limit}
 
     def _validate_directory(self) -> None:
         if self._descriptor < 0 or self._parent_descriptor < 0:
@@ -355,6 +406,9 @@ class DebugBundle:
     def close(self) -> None:
         """Release the pinned directory descriptor exactly once."""
 
+        if self._native_source is not None:
+            self._native_source.close()
+            self._native_source = None
         if self._descriptor >= 0:
             os.close(self._descriptor)
             self._descriptor = -1
