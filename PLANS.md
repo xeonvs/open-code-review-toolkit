@@ -27,13 +27,13 @@ Separate literal source-code interpretation from prose/markup transformations an
 | --- | --- | --- | --- |
 | REQ-001 | Reproduce #282 through source proof, projection and local reporting; keep native analysis and incomplete publication visibly distinct | WQ-01, WQ-03 | in_progress |
 | REQ-002 | Official local-only offline audit CLI for snippets, file sets and Git snapshots, using production DLP and code admission rather than another detector | WQ-02 | done |
-| REQ-003 | Private snapshots/reports/expectations outside source trees; HMAC identities, explicit selections, no target-owned allowlist and no secret-bearing console output | WQ-02, WQ-05 | pending |
-| REQ-004 | Fix confirmed reference-expression and representation false positives without project-specific identifier exceptions, broad source exemptions or weakened literal-secret/PII checks | WQ-03 | pending |
-| REQ-005 | Broader synthetic regression/property matrix, real producer-consumer checks and truthful corpus classification rather than coverage or raw-hit targets | WQ-03, WQ-04 | pending |
-| REQ-006 | One aggregate Security scan, ordinary actual own-tool acceptance with a real PR diagram, then full repeated corpus scans and final quality | WQ-04 | pending |
+| REQ-003 | Private snapshots/reports/expectations outside source trees; HMAC identities, explicit selections, no target-owned allowlist and no secret-bearing console output | WQ-02, WQ-05 | done |
+| REQ-004 | Fix confirmed reference-expression and representation false positives without project-specific identifier exceptions, broad source exemptions or weakened literal-secret/PII checks | WQ-03 | done |
+| REQ-005 | Broader synthetic regression/property matrix, real producer-consumer checks and truthful corpus classification rather than coverage or raw-hit targets | WQ-03, WQ-04 | in_progress |
+| REQ-006 | One aggregate Security scan, ordinary actual own-tool acceptance with a real PR diagram, then full repeated corpus scans and final quality | WQ-04 | in_progress |
 | REQ-007 | Reviewed signed plan-first draft PR, protected feature/development verification, v0.14.3 release PR with full plan archival/reset and external reconciliation | WQ-01, WQ-05, WQ-06 | pending |
 | REQ-008 | Remove all task-owned raw source snapshots and raw spools, verify absence, retain only source-free reports and synthetic regressions | WQ-06 | pending |
-| REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | pending |
+| REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | in_progress |
 
 ### Explicit Non-Goals
 
@@ -69,9 +69,9 @@ A read-only Git-blob audit at the baseline covers 452 UTF-8 files and 121131 non
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
 | WQ-01 | REQ-001, REQ-007 | Materialize and critique full plan, reconcile state, signed first push/draft PR, issue/milestone scope with synthetic examples | done |
-| WQ-02 | REQ-002, REQ-003 | Implement/test private audit CLI, worker, snapshot/expectation/report/compare lifecycle; curate safe source selections and capture complete baseline before changing DLP | in_progress |
-| WQ-03 | REQ-001, REQ-004, REQ-005, REQ-009 | Implement typed source/rendering contexts, structural secret classification and clear two-axis reporting; add synthetic regressions/fuzzing, reconcile coverage guards and update public contracts | pending |
-| WQ-04 | REQ-005, REQ-006, REQ-009 | Aggregate review, one Security scan, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | pending |
+| WQ-02 | REQ-002, REQ-003 | Implement/test private audit CLI, worker, snapshot/expectation/report/compare lifecycle; curate safe source selections and capture complete baseline before changing DLP | done |
+| WQ-03 | REQ-001, REQ-004, REQ-005, REQ-009 | Implement typed source/rendering contexts, structural secret classification and clear two-axis reporting; add synthetic regressions/fuzzing, reconcile coverage guards and update public contracts | done |
+| WQ-04 | REQ-005, REQ-006, REQ-009 | Aggregate review, one Security scan, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | in_progress |
 | WQ-05 | REQ-003, REQ-007 | Final feature PR/diagram push, protected CI/merge and development verification; prepare signed release PR with full checked plan archival | pending |
 | WQ-06 | REQ-007, REQ-008 | Stable external verification, issue/milestone/site and clean main; remove owned raw snapshots/spools and verify cleanup before task completion | pending |
 
@@ -80,6 +80,15 @@ A read-only Git-blob audit at the baseline covers 452 UTF-8 files and 121131 non
 **DLP boundaries.** Keep diagnostic redaction conservative. Publication uses explicit semantic detector decisions, sharing candidate rules rather than inferring a secret from any redactor rewrite. Bind source interpretation to the existing exact-source proof and safe literal renderer. Distinguish prose, fenced source and fixed renderer-owned diagram labels so Markdown-only deletions do not manufacture contacts in literal arithmetic. Keep independent security canonicalization, whole-unit sensitive-value checks and forbidden attribution. No blanket exemption for code or model-chosen context.
 
 Use bounded standard-library syntactic analysis of proven Python source to classify declarations, reference/call/slice/keyword expressions, empty constructions and non-value defaults. Every waived generic candidate must map to the proven syntax and contain no credential literal material. Nonempty literals, embedded values, comments not covered by a valid syntax proof, unknown syntax and unsupported language refinements remain conservative. Other languages retain strict credential handling while receiving the sink-correct literal rendering behavior; this is not a claim of universal language semantics. Parsed technical literal corrections require complete valid grammar and explicit contact priority, not repository-specific names. No new third-party runtime engine is selected: replacing the detector does not solve the proven source/sink mismatch and introduces different precision/recall tradeoffs.
+
+Syntax qualification depends on complete content, never a filename suffix. A
+contradictory interpreter closes refinement; ambiguous standalone data remains
+strict. Any nonempty literal in the published excerpt, including mapping keys,
+disables key waivers because alias/default/factory dataflow is not proved.
+Text-bound contexts remain in memory with a four-file source-analysis cache.
+Audit fast paths must check both prose and literal sinks rather than inferring
+one from the other. Independent security views normalize compatibility Unicode
+before removing markup, while literal arithmetic retains its operators.
 
 **Reporting.** Show native analysis and publication health separately whenever public fields/findings are omitted: analysis complete cannot imply accepted complete publication. Preserve native coverage, retained/omitted counts, partial/budget/failed precedence and private-only sanitization. Diagram-only omission stays optional. Share provider-neutral presentation; provider writes and approval rules remain with their existing owners. Ordinary review exit behavior and persisted identities remain unchanged.
 
@@ -125,7 +134,25 @@ Source provenance is not permission to publish a secret: reject unmapped candida
 
 ### Resume Point
 
-WQ-02: amend the helper's profiled performance correction, then replay both entire preserved corpora and compare exact unit/hit populations before proceeding to WQ-03. One isolated worker is reused per scan, retaining per-file deadlines, request-bound framing, atomic file accounting and cleanup; entirely admitted files also avoid the review execution import. Independent Astra high review found a missing per-request response identity, fixed with fresh nonces and a real delayed-duplicate clean-response regression; its follow-up has no outstanding findings. All 192 focused tests pass; each audit module remains above 90% branch-aware coverage, including worker transport at 97%. The previous complete baselines remain unchanged DLP evidence (121583 units/3582 rejected role units and 19050 units/288 rejected role units). The short native workload (12 files across admitted/rejected/code paths) has identical results and improves from 4.476s with fresh peers to 0.666s with reuse (6.72x). A newly built wheel, hash-locked binary runtime installation, pip check and actual installed audit/worker/cleanup smoke pass outside checkout. Amend this reviewed correction, then perform full replay; if performance or decisions are unsatisfactory, profile the remaining hot path and correct the narrow owner. Core DLP semantics remain unchanged. Coverage reconciliation is WQ-03/04; the single aggregate Security scan and successful real own-tool acceptance runs remain unused. Private corpus details remain outside public artifacts; owned raw snapshots require final verified removal.
+WQ-04: helper commit 75fe7d2 is local. Its preserved baseline at 50b7691 takes
+139.62 seconds for 121583 units and 22.47 seconds for 19050 units, with zero
+decision changes; rejection totals remain untriaged observations. Source-aware
+admission, literal rendering, independent material checks, both-role audit
+evaluation and two-axis reporting are implemented locally. The focused handoff
+suite passed 671 tests and the extended DLP suite passed 382 cases. Independent
+review found escaped national-phone, bare emphasized-phone and mixed
+multiplication-spacing regressions, corrected with real projection cases and an
+extended source replay (114 tests/properties pass). The first full measurement
+found a Git-reader default-budget regression and a stale gate-test count; both
+are corrected with 132 reader/collector/quality tests passing. Result/preflight
+measures about 87% and now has a synchronized 85% floor; posting stays near 82%
+with its 80% floor. New source modules have independent local 90% floors.
+The first full measurement is not final-head acceptance. Complete the single
+aggregate Security scan, actual own-tool acceptance with a real diagram,
+complete post-review corpus comparisons and final quality. Both successful
+own-tool runs remain unused.
+Private corpus details remain outside public artifacts; owned raw snapshots and
+task-owned build/install copies require final verified removal.
 
 ### Plan Fidelity Check
 

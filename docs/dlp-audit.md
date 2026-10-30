@@ -93,9 +93,11 @@ audited working directory.
 
 Every whole file and nonempty line is checked as publication text and as an
 existing-code field. Text uses the ordinary prose contract; only code permits
-horizontal tabs. A raw rejection is replayed through the real immutable
-source-proof and publication-projection owners. Raw admission dominates the
-source interpretation; integration tests protect that relationship. Proof
+horizontal tabs. Both sink interpretations are checked independently. If either rejects, the
+unit is replayed through the real immutable source-proof and publication-projection
+owners. Prose admission is never used to infer code admission; different rendering
+can expose different material. If both strict checks pass, the optional source
+refinement can only relax them. Proof
 eligibility remains bounded by the production code-field contracts. Whole-file
 and line observations are different units; a count is not a false-positive rate.
 The scanner records one primary rejection per role, not every possible match.

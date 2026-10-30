@@ -42,10 +42,8 @@ def review_outcome_line(
             marker, status_text = "⚠️", "Review stopped at token budget"
         elif partial_result:
             marker, status_text = "⚠️", "Review incomplete"
-        elif outcome_status == "publication-filtered":
-            marker, status_text = "⚠️", "Review complete with publication filtering"
-        elif outcome_status == "admission-filtered":
-            marker, status_text = "⚠️", "Review complete with DLP filtering"
+        elif outcome_status == "publication-filtered" or outcome_status == "admission-filtered":
+            marker, status_text = "⚠️", "Analysis complete; output incomplete"
         elif outcome_status in {"warning", "completed_with_warnings"} or warning_count:
             marker, status_text = "⚠️", "Review complete with warnings"
         elif has_finding_state:

@@ -1451,9 +1451,13 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         summary = next(body for title, body in notes if not title and "## Open Code Review" in body)
-        self.assertIn("Review complete with publication filtering — 1 finding published", summary)
+        self.assertIn("Analysis complete; output incomplete — 1 finding published", summary)
         visible = summary.splitlines()
-        status_index = next(index for index, line in enumerate(visible) if "**Review" in line)
+        status_index = next(
+            index
+            for index, line in enumerate(visible)
+            if "**Analysis complete; output incomplete" in line
+        )
         self.assertEqual(visible[status_index + 1], formatting.UNPROTECTED_TARGET_LIMITATION)
         self.assertNotIn("Review incomplete", summary)
         self.assertNotIn("OCR reported partial coverage", summary)

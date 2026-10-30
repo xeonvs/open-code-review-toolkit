@@ -10,6 +10,19 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.3 source interpretation and private audit evidence
+
+| Boundary | Production owner and entry point | Evidence | Claim limit |
+| --- | --- | --- | --- |
+| Source references versus sensitive material | Immutable reader -> `prove_opaque_code` -> `check_text` -> publication projection | `test_dlp_source_semantics.py` checks reference/empty bindings, Unicode positions, stale proofs, docstrings, interpreter contradictions, embedded/default/mapping-key literals, escaped contacts and resource bounds; a real temporary Git repository with only C/JavaScript/JSON crosses the isolated audit worker | Python refinement is bounded syntax analysis, with no filename authority or alias/factory dataflow claim; unknown languages keep strict credential checks |
+| Literal rendering and independent security views | Shared DLP -> code fields and diagram admission | Source-context properties vary operator spacing, compatibility Unicode, HTML/Mermaid entities and markup; inverse cases retain actual configured secrets, credential literals, phone and email protection; minimized regressions include fullwidth markup and escaped national phone separators | Semantic counterexamples complement coverage; this is not a general precision/recall measurement |
+| Private local corpus lifecycle | `ocr-ci dlp-audit` -> descriptor/Git readers -> isolated framed worker -> authenticated state/reports/compare/cleanup | Native peers cover deadlines, full pipes, malformed/stale frames, cancellation/reaping, content-based binary skips, moving originals, hostile persistence and owned cleanup; clean wheel/sdist checks execute the installed command outside checkout | No audited code is imported or executed, no automatic CI corpus scan, and raw-hit counts are not false-positive rates |
+| Analysis versus delivered output | Runner projection -> shared outcome -> local/GitLab adapters | Existing filtered, partial, failed, private-only and approval regression suites preserve coverage/finding counts and render `Analysis complete; output incomplete` for omitted public output | Complete native analysis does not certify complete publication; optional diagram omission alone remains independent |
+
+Extended local source/DLP qualification uses the 1000-example profile with
+explicit independent seeds. Full private corpus comparisons and actual model
+acceptance remain distinct release gates recorded by the active plan.
+
 ## v0.14.2 compact context, presentation and DLP evidence
 
 Final runtime `ddb510c` passes the complete quality gate: 3426 tests, 41 skips

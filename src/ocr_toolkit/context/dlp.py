@@ -14,9 +14,11 @@ from datetime import date
 
 from ocr_toolkit.common.redaction import (
     SENSITIVE_NAMED_KEY_PATTERN,
+    environment_secret_values,
+    has_sensitive_material,
     redact_env_secret_values,
-    redact_sensitive,
 )
+from ocr_toolkit.context.code_text import CodeTextContext, TextSink
 from ocr_toolkit.context.contracts import TextBudgets
 
 EMAIL_RE = re.compile(
@@ -58,6 +60,7 @@ HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
 HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>\n]*>")
 MARKDOWN_ESCAPE_RE = re.compile(r"\\([\\`*{}\[\]()#+\-.!_>~|])")
 MARKDOWN_FORMAT_RE = re.compile(r"[`*_~]")
+NUMERIC_OPERATOR_PREFIX_RE = re.compile(r"[=<>!?:\[(,][ \t]*[+-]?[0-9]+(?:\.[0-9]+)?[ \t]*$")
 DISPLAY_WHITESPACE_RE = re.compile(r"\s+")
 MIN_EXACT_EXCERPT_CHARS = 24
 MAX_EXCERPT_SEARCH_COST = 50_000_000
@@ -278,7 +281,7 @@ def _semantic_secret_text(value: str) -> str:
 def _display_normalize(value: str) -> str:
     """Approximate closed text rendered by common Markdown/HTML constructs."""
 
-    normalized = _html_decode(value)
+    normalized = unicodedata.normalize("NFKC", _html_decode(value))
     normalized = HTML_COMMENT_RE.sub("", normalized)
     normalized = HTML_TAG_RE.sub("", normalized)
     normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
@@ -294,7 +297,7 @@ def _display_normalize(value: str) -> str:
 def _source_normalize(value: str) -> str:
     """Normalize publishable source without discarding hidden HTML source text."""
 
-    normalized = _html_decode(value)
+    normalized = unicodedata.normalize("NFKC", _html_decode(value))
     normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
     normalized = MARKDOWN_FORMAT_RE.sub("", normalized)
     normalized = "".join(
@@ -353,6 +356,8 @@ class ForbiddenMatcher:
     def match_details(self, value: str) -> tuple[str | None, tuple[str, ...]]:
         """Return rejection and aggregate classes without retaining rejected content."""
 
+        if not self.exact:
+            return None, ()
         matched: set[str] = set()
         for normalized in {_display_normalize(value), _source_normalize(value)}:
             comparison_cost = max(1, len(normalized)) * sum(
@@ -402,6 +407,65 @@ def normalize_text(value: object, *, allow_horizontal_tabs: bool = False) -> str
     return normalized.strip()
 
 
+def _literal_normalize(value: str) -> str:
+    """Security canonicalization for a fixed literal sink, preserving operators."""
+
+    normalized = _html_decode(value)
+    normalized = "".join(
+        " " if char.isspace() else "" if _is_display_control(char) else char for char in normalized
+    )
+    return DISPLAY_WHITESPACE_RE.sub(
+        " ", unicodedata.normalize("NFKC", normalized).casefold()
+    ).strip()
+
+
+def _literal_contact_view(value: str, *, visible: bool) -> str:
+    """Deobfuscate contacts without treating unmatched arithmetic stars as markup."""
+
+    normalized = unicodedata.normalize("NFKC", _html_decode(value))
+    if visible:
+        normalized = HTML_COMMENT_RE.sub("", normalized)
+    normalized = HTML_TAG_RE.sub("", normalized)
+    normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
+    # Disjoint delimiter/body characters bound near-match work. Whitespace at a
+    # closing edge is not emphasis: `2 *1024 *1024` keeps its operators.
+    for marker in (r"\*\*", r"\*", "__", "_", "~~", "`"):
+        char = marker.replace("\\", "")[0]
+        excluded = re.escape(char)
+        pattern = (
+            rf"(?<!{excluded}){marker}(?=\S)([^{excluded}\n]*[^\s{excluded}]){marker}(?!{excluded})"
+        )
+
+        def emphasis(match: re.Match[str]) -> str:
+            # Require an expression delimiter as well as numeric operands.
+            # Bare `202 *555* 0114` remains an obfuscated contact, while a
+            # binding such as `size = 2 *1024*1024` keeps literal operators.
+            left = normalized[max(0, match.start() - 32) : match.start()].rstrip()
+            right = normalized[match.end() : match.end() + 32].lstrip()
+            if (
+                char == "*"
+                and NUMERIC_OPERATOR_PREFIX_RE.search(left)
+                and right[:1].isdecimal()
+                and match[1].isdecimal()
+            ):
+                return match[0]
+            return match[1]
+
+        normalized = re.sub(pattern, emphasis, normalized)
+    return _literal_normalize(normalized)
+
+
+def _explicit_contact_phone(value: str) -> bool:
+    for match in PHONE_RE.finditer(value):
+        candidate = match.group(0)
+        prefix = value[max(0, match.start() - 64) : match.start()].rstrip(" \t'\"=:[{(")
+        if (candidate.startswith("+") or PHONE_CONTEXT_RE.search(prefix)) and not _technical_number(
+            value, match
+        ):
+            return True
+    return False
+
+
 def check_text(
     value: object,
     *,
@@ -411,12 +475,14 @@ def check_text(
     forbidden_matcher: ForbiddenMatcher | None = None,
     allow_horizontal_tabs: bool = False,
     allow_opaque_code: bool = False,
+    code_context: CodeTextContext | None = None,
+    sink: TextSink = TextSink.PROSE,
     enabled: bool | None = None,
 ) -> DLPResult:
-    """Apply independent units, redaction, PII, and optional publication checks."""
+    """Check original values independently of proven source roles and sink syntax."""
 
     normalized = normalize_text(value, allow_horizontal_tabs=allow_horizontal_tabs)
-    if normalized is None:
+    if normalized is None or not isinstance(sink, TextSink):
         return DLPResult(False, None, "invalid_text", "type_or_control")
     normalized_bytes = normalized.encode("utf-8")
     if (
@@ -434,83 +500,122 @@ def check_text(
         return DLPResult(False, None, "limit", detector)
     if not (_DLP_ENABLED.get() if enabled is None else enabled):
         return DLPResult(True, normalized, "disabled")
-    # Exact environment values retain priority even when they resemble a reference.
-    if redact_env_secret_values(normalized) != normalized:
+    # One immutable snapshot per admission; later admissions see current env again.
+    secrets = environment_secret_values()
+    if (
+        isinstance(value, str) and redact_env_secret_values(value, values=secrets) != value
+    ) or redact_env_secret_values(normalized, values=secrets) != normalized:
         return DLPResult(False, None, "secret", "normalized")
-    semantic = _semantic_secret_text(normalized)
-    if redact_sensitive(semantic) != semantic:
+    credential = (
+        code_context.credential_view(normalized)
+        if code_context is not None and allow_opaque_code
+        else normalized
+    )
+    semantic = _semantic_secret_text(credential)
+    if has_sensitive_material(normalized, credential_view=semantic, values=secrets):
         return DLPResult(False, None, "secret", "normalized")
+    literal = sink != TextSink.PROSE or allow_opaque_code
+    display_transform = _literal_normalize if literal else _display_normalize
+    source_transform = _literal_normalize if literal else _source_normalize
     decoded = _html_decode(normalized) if publication else normalized
-    decoded_lines = decoded.replace("\r\n", "\n").replace("\r", "\n").strip().count("\n") + 1
-    if decoded_lines > budgets.max_lines:
+    decoded_semantic = _semantic_secret_text(_html_decode(semantic)) if publication else semantic
+    if (
+        decoded.replace("\r\n", "\n").replace("\r", "\n").strip().count("\n") + 1
+        > budgets.max_lines
+    ):
         return DLPResult(False, None, "limit", "lines")
-    displayed = _display_normalize(normalized) if publication else normalized
-    source = _source_normalize(normalized) if publication else normalized
-    # Check decoded keys before Markdown normalization can remove underscores
-    # from credential names. Preserve the exact empty/template grammar at this
-    # representation too; decoding alone does not make a value sensitive.
-    decoded_semantic = _semantic_secret_text(decoded) if publication else semantic
-    if publication and (
-        redact_env_secret_values(decoded) != decoded
-        or redact_sensitive(decoded_semantic) != decoded_semantic
-    ):
-        return DLPResult(False, None, "secret", "decoded")
-    semantic_displayed = _display_normalize(decoded_semantic) if publication else semantic
-    semantic_source = _source_normalize(decoded_semantic) if publication else semantic
-    if publication and (
-        redact_env_secret_values(displayed) != displayed
-        or redact_sensitive(semantic_displayed) != semantic_displayed
-    ):
-        return DLPResult(False, None, "secret", "displayed")
-    if publication and (
-        redact_env_secret_values(source) != source
-        or redact_sensitive(semantic_source) != semantic_source
-    ):
-        return DLPResult(False, None, "secret", "source")
-    # A technical-number exception must not hide another value encoded with the
-    # renderer's decimal syntax. Inspect the complete additional representation,
-    # preserving the original unit and its existing checks/output.
+    displayed = display_transform(normalized) if publication else normalized
+    source = source_transform(normalized) if publication else normalized
+    views = []
+    if publication:
+        views.extend(
+            (
+                ("decoded", decoded, decoded_semantic),
+                ("displayed", displayed, display_transform(decoded_semantic)),
+                ("source", source, source_transform(decoded_semantic)),
+            )
+        )
     mermaid = _mermaid_decode(decoded)
-    mermaid_views: tuple[tuple[str, str, str], ...] = ()
-    if mermaid != decoded:
-        mermaid = _html_decode(mermaid)
-        checked_mermaid = normalize_text(mermaid, allow_horizontal_tabs=allow_horizontal_tabs)
-        if checked_mermaid is None:
+    has_mermaid = mermaid != decoded
+    if has_mermaid:
+        mermaid = normalize_text(_html_decode(mermaid), allow_horizontal_tabs=allow_horizontal_tabs)
+        if mermaid is None:
             return DLPResult(False, None, "invalid_text", "mermaid")
-        mermaid = checked_mermaid
         if mermaid.count("\n") + 1 > budgets.max_lines:
             return DLPResult(False, None, "limit", "lines")
-        if publication and any(_is_display_control(character) for character in mermaid):
+        if publication and any(_is_display_control(char) for char in mermaid):
             return DLPResult(False, None, "laundering", "display_control")
-        semantic_mermaid = _semantic_secret_text(mermaid)
-        mermaid_views = (("mermaid", mermaid, semantic_mermaid),)
+        mermaid_semantic = _semantic_secret_text(_html_decode(_mermaid_decode(decoded_semantic)))
+        views.append(("mermaid", mermaid, mermaid_semantic))
         if publication:
-            mermaid_views += (
+            views.extend(
                 (
-                    "mermaid_displayed",
-                    _display_normalize(mermaid),
-                    _display_normalize(semantic_mermaid),
-                ),
-                ("mermaid_source", _source_normalize(mermaid), _source_normalize(semantic_mermaid)),
+                    (
+                        "mermaid_displayed",
+                        display_transform(mermaid),
+                        display_transform(mermaid_semantic),
+                    ),
+                    (
+                        "mermaid_source",
+                        source_transform(mermaid),
+                        source_transform(mermaid_semantic),
+                    ),
+                )
             )
-        for representation, candidate, secret_view in mermaid_views:
-            if (
-                redact_env_secret_values(candidate) != candidate
-                or redact_sensitive(secret_view) != secret_view
-            ):
-                return DLPResult(False, None, "secret", representation)
-    pii_candidates = (("normalized", normalized),)
-    if publication:
-        pii_candidates += (("decoded", decoded), ("displayed", displayed), ("source", source))
-    pii_candidates += tuple((name, candidate) for name, candidate, _semantic in mermaid_views)
-    for representation, candidate in pii_candidates:
+    security_views = []
+    if publication and literal:
+        literal_views = [("literal", normalized, semantic)]
+        if has_mermaid:
+            literal_views.append(("literal_mermaid", mermaid, mermaid_semantic))
+        for name, candidate, secret_view in literal_views:
+            security_views.extend(
+                (
+                    (
+                        name + "_displayed",
+                        _display_normalize(candidate),
+                        _display_normalize(secret_view),
+                    ),
+                    (
+                        name + "_source",
+                        _source_normalize(candidate),
+                        _source_normalize(secret_view),
+                    ),
+                )
+            )
+    seen_secrets = {(normalized, semantic)}
+    for representation, candidate, secret_view in (*views, *security_views):
+        if (candidate, secret_view) in seen_secrets:
+            continue
+        seen_secrets.add((candidate, secret_view))
+        if has_sensitive_material(candidate, credential_view=secret_view, values=secrets):
+            return DLPResult(False, None, "secret", representation)
+    seen_pii: set[str] = set()
+    for representation, candidate in (
+        ("normalized", normalized),
+        *((name, text) for name, text, _ in views),
+    ):
+        if candidate in seen_pii:
+            continue
+        seen_pii.add(candidate)
         if EMAIL_RE.search(candidate):
             return DLPResult(False, None, "pii", f"email:{representation}")
         if _contains_phone(candidate):
             return DLPResult(False, None, "pii", f"phone:{representation}")
+    # Secret/email deobfuscation remains independent of literal rendering.
+    # Strong contact signals also retain the stricter arbitrary-format sweep.
+    for representation, candidate, _secret_view in security_views:
+        if EMAIL_RE.search(candidate):
+            return DLPResult(False, None, "pii", f"email:{representation}")
+        if _explicit_contact_phone(candidate):
+            return DLPResult(False, None, "pii", f"phone:{representation}")
+    if publication and literal:
+        for candidate in (normalized, mermaid) if has_mermaid else (normalized,):
+            for visible in (True, False):
+                if _contains_phone(_literal_contact_view(candidate, visible=visible)):
+                    return DLPResult(False, None, "pii", "phone:literal_markup")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
     matcher_reason, source_classes = matcher.match_details(normalized)
-    if mermaid_views:
+    if has_mermaid:
         mermaid_reason, mermaid_sources = matcher.match_details(mermaid)
         matcher_reason = matcher_reason or mermaid_reason
         source_classes = tuple(sorted(set(source_classes) | set(mermaid_sources)))
@@ -527,7 +632,7 @@ def check_text(
             else "html_tag"
             if HTML_TAG_RE.search(decoded) and not (allow_opaque_code and decoded == normalized)
             else "display_control"
-            if any(_is_display_control(character) for character in decoded)
+            if any(_is_display_control(char) for char in decoded)
             else None
         )
         if laundering is not None:

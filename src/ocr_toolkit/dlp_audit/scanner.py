@@ -16,8 +16,9 @@ from typing import Any
 
 from ocr_toolkit.common import redaction
 from ocr_toolkit.context import dlp
+from ocr_toolkit.context.code_text import TextSink
 from ocr_toolkit.context.contracts import TextBudgets
-from ocr_toolkit.evidence.opaque_code import prove_opaque_code
+from ocr_toolkit.evidence.opaque_code import SyntaxCache, prove_opaque_code
 
 from .corpus import MAX_FILE, manifest, original_source, read_source, verify_originals
 from .limits import MAX_HIT_BYTES, MAX_HITS, ExecutionLimits
@@ -126,14 +127,23 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
     hits: list[dict[str, Any]] = []
     used = 0
     proven = 0
+    syntax_cache: SyntaxCache = {}
     with dlp.dlp_mode(True):
         for number, value in units:
             raw = dlp.check_text(
                 value, budgets=budgets, publication=True, allow_horizontal_tabs=False, enabled=True
             )
-            if raw.admitted:
-                # Code admission only adds source interpretation to these exact checks.
-                # Integration tests exercise this dominance with the real projection.
+            literal = dlp.check_text(
+                value,
+                budgets=budgets,
+                publication=True,
+                allow_horizontal_tabs=True,
+                sink=TextSink.LITERAL_CODE,
+                enabled=True,
+            )
+            if raw.admitted and literal.admitted:
+                # Both sinks were actually checked. Source proof can only relax
+                # these checks; no inference from prose to literal code is valid.
                 continue
             comment = {
                 "path": item["path"],
@@ -142,7 +152,9 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
                 "content": "Inspect this source excerpt.",
                 "existing_code": value,
             }
-            proof = prove_opaque_code(comment, item["path"], lambda _path: text)
+            proof = prove_opaque_code(
+                comment, item["path"], lambda _path: text, syntax_cache=syntax_cache
+            )
             proven += int(proof.existing_verified)
             checked = dlp.check_text(
                 value,
@@ -150,6 +162,8 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
                 publication=True,
                 allow_horizontal_tabs=True,
                 allow_opaque_code=proof.existing_verified,
+                code_context=proof.existing_context,
+                sink=TextSink.LITERAL_CODE,
                 enabled=True,
             )
             from ocr_toolkit import review_runner

@@ -214,7 +214,7 @@ def test_filtered_result_preserves_original_coverage_and_announces_loss() -> Non
     result = {"status": "completed_with_errors", "comments": [], "warnings": []}
     report = report_from_result(result, execution=facts)
     summary = local_summary(report)
-    assert "Review complete with DLP filtering" in summary
+    assert "Analysis complete; output incomplete" in summary
     assert "selected 2; completed 2" in summary
     assert "omitted 1 finding(s)" in summary
     assert "secret: 1" in summary

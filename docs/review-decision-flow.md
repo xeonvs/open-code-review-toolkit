@@ -145,13 +145,13 @@ flowchart TD
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>source spans and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
     diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
-    dlp_mode -- true --> dlp[Apply source-proofed code exception,<br/>publication and private-field DLP]
+    dlp_mode -- true --> dlp[Check whole original values and literal sinks;<br/>bounded source roles refine credential keys;<br/>publication and private-field DLP]
     dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
     disabled --> publishable
     dlp --> dlp_state{DLP state}
     dlp_state -- passed --> publishable[Complete publishable projection]
     dlp_state -- private-sanitized --> publishable
-    dlp_state -- publication-filtered --> partial[Safe partial projection;<br/>original coverage remains explicit]
+    dlp_state -- publication-filtered --> partial[Safe partial output; analysis stays complete<br/>only when native coverage proves it]
     publishable --> mode{Execution profile}
     partial --> mode
     mode -- Local diagnostic retention --> local[Owner-only marked JSON and inputs retained;<br/>no provider receipt or posting authority]

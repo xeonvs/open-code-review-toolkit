@@ -7,6 +7,7 @@ import unicodedata
 from collections.abc import Callable
 from subprocess import TimeoutExpired
 
+from ocr_toolkit.context.code_text import TextSink
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import HTML_COMMENT_RE, HTML_TAG_RE, ForbiddenMatcher, check_text
 from ocr_toolkit.diagrams.collector import CollectorSnapshot
@@ -141,6 +142,7 @@ def candidate_text_reason(
             budgets=TextBudgets(80, 320, 1),
             publication=True,
             forbidden_matcher=forbidden_matcher,
+            sink=TextSink.DIAGRAM_LABEL,
             enabled=dlp_enabled,
         )
         if not checked.admitted or checked.text != text:

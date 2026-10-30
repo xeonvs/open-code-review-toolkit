@@ -1668,3 +1668,20 @@ def test_worker_transport_budget_launch_and_dead_peer_paths(state, monkeypatch) 
         process.wait()
         assert scanner.supervised(body, 10, worker=owner) == first
         assert owner.process.pid != process.pid
+
+
+def test_audit_does_not_infer_code_pass_from_prose_pass(state, monkeypatch) -> None:
+    from ocr_toolkit.context.code_text import TextSink
+    from ocr_toolkit.context.contracts import TextBudgets
+    from ocr_toolkit.context.dlp import check_text
+
+    value = "x*ｐａｓｓｗｏｒｄ=syntheticShortCredential"  # noqa: RUF001 - distinct sink decisions
+    budgets = TextBudgets(20000, 80000, 300)
+    assert check_text(value, budgets=budgets, publication=True).admitted
+    assert not check_text(
+        value, budgets=budgets, publication=True, sink=TextSink.LITERAL_CODE
+    ).admitted
+    identity = captured(state, value)
+    _, result = run_in_process(state, identity, monkeypatch)
+    assert result["complete"]
+    assert result["hits"] and {hit["role"] for hit in result["hits"]} == {"existing_code"}

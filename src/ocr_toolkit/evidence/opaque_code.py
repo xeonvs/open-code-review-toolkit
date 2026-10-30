@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ocr_toolkit.context.code_text import CodeTextContext
+from ocr_toolkit.evidence.source_syntax import PythonSourceSyntax, analyze_python_source
 from ocr_toolkit.posting.comments import line_number
 from ocr_toolkit.posting.settings import (
     MAX_SUGGESTION_CODE_CHARS,
@@ -24,14 +26,18 @@ from ocr_toolkit.posting.suggestions import (
 
 MAX_PROOF_SOURCE_CHARS = 256_000
 MAX_PROOF_PATH_CHARS = 1_024
+MAX_SYNTAX_CACHE_FILES = 4
+SyntaxCache = dict[str, tuple[str, PythonSourceSyntax | None]]
 
 
 @dataclass(frozen=True, slots=True)
 class OpaqueCodeProof:
-    """Only closed proof facts; no source text, hash, or rejected value."""
+    """Source facts and text-bound in-memory interpretation; never persisted."""
 
     existing_verified: bool = False
     suggestion_verified: bool = False
+    existing_context: CodeTextContext | None = None
+    suggestion_context: CodeTextContext | None = None
 
 
 def _bounded_line(value: Any) -> int:
@@ -49,6 +55,8 @@ def prove_opaque_code(
     comment: dict[str, Any],
     path: str,
     read_head_blob: Callable[[str], str | None],
+    *,
+    syntax_cache: SyntaxCache | None = None,
 ) -> OpaqueCodeProof:
     """Prove code against one exact, bounded range of the reviewed head.
 
@@ -91,18 +99,33 @@ def prove_opaque_code(
     if normalize_replacement(existing) != normalize_replacement(selected):
         return OpaqueCodeProof()
 
+    context = None
+    cached = syntax_cache.get(path) if syntax_cache is not None else None
+    if cached is not None and cached[0] == source:
+        syntax = cached[1]
+    else:
+        syntax = analyze_python_source(source)
+        if syntax_cache is not None:
+            if path not in syntax_cache and len(syntax_cache) >= MAX_SYNTAX_CACHE_FILES:
+                del syntax_cache[next(iter(syntax_cache))]
+            syntax_cache[path] = source, syntax
+    if syntax is not None:
+        context = syntax.context(start, end, existing)
+
     if not suggestion or not suggestion_well_formed:
-        return OpaqueCodeProof(existing_verified=True)
+        return OpaqueCodeProof(existing_verified=True, existing_context=context)
     # A no-op is source-proven too, but cannot smuggle an authored fence into
     # a fallback rendering path. Actionable replacements use the evaluator's
     # stricter shape checks.
     if "```" in suggestion:
-        return OpaqueCodeProof(existing_verified=True)
+        return OpaqueCodeProof(existing_verified=True, existing_context=context)
     try:
         decision = evaluate_suggestion(comment, path, lambda _path: source)
     except (ValueError, TypeError):
-        return OpaqueCodeProof(existing_verified=True)
+        return OpaqueCodeProof(existing_verified=True, existing_context=context)
     return OpaqueCodeProof(
         existing_verified=True,
         suggestion_verified=decision.state in {SuggestionState.ACTIONABLE, SuggestionState.NO_OP},
+        existing_context=context,
+        suggestion_context=context if decision.state == SuggestionState.NO_OP else None,
     )
