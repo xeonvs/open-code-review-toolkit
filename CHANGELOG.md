@@ -1,3 +1,15 @@
+## 0.14.3 - 2026-10-30
+
+### 🚀 Features
+
+- Add local `ocr-ci dlp-audit` commands for private offline DLP corpus scans, exact classifications, complete-population comparisons and verified cleanup of owned source snapshots. ([#283](https://github.com/xeonvs/open-code-review-toolkit/issues/283))
+
+### 🐛 Bug Fixes
+
+- Preserve nonsecret references and numeric operators when exact full-source proof establishes their roles; arbitrary data and unknown syntax keep conservative decisions. Keep independent secret and contact checks, including unmatched markup and configured passphrases after decoding, and distinguish complete analysis from incomplete published output. ([#282](https://github.com/xeonvs/open-code-review-toolkit/issues/282))
+- Clarify the requested diagram handoff across review groups: its owner inspects the full reviewed change and submits independently of finding count. Align the advertised conditional-edge schema with parser reference requirements. Unavailable optional output still preserves the review result. ([#283](https://github.com/xeonvs/open-code-review-toolkit/issues/283))
+
+
 ## 0.14.2 - 2026-10-30
 
 ### 🐛 Bug Fixes
