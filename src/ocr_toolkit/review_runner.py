@@ -31,6 +31,7 @@ from ocr_toolkit.context.broker import (
     prepare_remediation_records,
 )
 from ocr_toolkit.context.ci_outcomes import prepare_ci_outcome_records
+from ocr_toolkit.context.code_text import CodeTextContext, TextSink
 from ocr_toolkit.context.contracts import (
     CI_OUTCOME_MODEL_FIELD,
     ContextContractError,
@@ -92,7 +93,7 @@ from ocr_toolkit.evidence.mcp import (
     call_tool,
     evidence_summary,
 )
-from ocr_toolkit.evidence.opaque_code import OpaqueCodeProof, prove_opaque_code
+from ocr_toolkit.evidence.opaque_code import OpaqueCodeProof, SyntaxCache, prove_opaque_code
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
@@ -839,6 +840,8 @@ def _dlp_reasons(
     matcher: ForbiddenMatcher,
     allow_horizontal_tabs: bool = False,
     allow_opaque_code: bool = False,
+    code_context: CodeTextContext | None = None,
+    sink: TextSink = TextSink.PROSE,
     debug: DebugBundle | None = None,
     path: tuple[object, ...] = (),
     action: str = "detect-sink",
@@ -873,6 +876,8 @@ def _dlp_reasons(
                 forbidden_matcher=matcher,
                 allow_horizontal_tabs=allow_horizontal_tabs,
                 allow_opaque_code=allow_opaque_code,
+                code_context=code_context,
+                sink=sink,
             )
             if not checked.admitted:
                 reasons[checked.reason] += 1
@@ -1201,6 +1206,7 @@ def _safe_publication_comments(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     opaque_fields: frozenset[tuple[int, str]] = frozenset(),
+    code_contexts: dict[tuple[int, str], CodeTextContext] | None = None,
     debug: DebugBundle | None = None,
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
@@ -1225,6 +1231,10 @@ def _safe_publication_comments(
                     isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
                 ),
                 allow_opaque_code=(index, key) in opaque_fields,
+                code_context=(code_contexts or {}).get((index, key)),
+                sink=TextSink.LITERAL_CODE
+                if isinstance(field_value, str) and key in {"existing_code", "suggestion_code"}
+                else TextSink.PROSE,
                 debug=debug,
                 path=("comments", index, key),
                 action="omit-field",
@@ -1535,6 +1545,7 @@ def _publication_projection(
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
     opaque_fields: set[tuple[int, str]] = set()
+    code_contexts: dict[tuple[int, str], CodeTextContext] = {}
     if code_proof is not None and isinstance(payload.get("comments"), list):
         for index, comment in enumerate(payload["comments"]):
             if not isinstance(comment, dict):
@@ -1542,8 +1553,12 @@ def _publication_projection(
             proof = code_proof(comment)
             if proof.existing_verified:
                 opaque_fields.add((index, "existing_code"))
+                if proof.existing_context is not None:
+                    code_contexts[index, "existing_code"] = proof.existing_context
             if proof.suggestion_verified:
                 opaque_fields.add((index, "suggestion_code"))
+                if proof.suggestion_context is not None:
+                    code_contexts[index, "suggestion_code"] = proof.suggestion_context
     verified_opaque_fields = frozenset(opaque_fields)
     sink_reasons: Counter[str] = Counter()
     source_units: dict[tuple[object, ...], set[str]] = {}
@@ -1564,6 +1579,10 @@ def _publication_projection(
                     and sink_path[0] == "comments"
                     and (sink_path[1], sink_path[2]) in verified_opaque_fields
                 ),
+                code_context=code_contexts.get((sink_path[1], sink_path[2]))
+                if len(sink_path) == 3 and sink_path[0] == "comments"
+                else None,
+                sink=TextSink.LITERAL_CODE if allow_horizontal_tabs else TextSink.PROSE,
                 debug=debug,
                 path=sink_path,
                 source_classes=sources,
@@ -1624,6 +1643,7 @@ def _publication_projection(
             budgets=budgets,
             matcher=matcher,
             opaque_fields=verified_opaque_fields,
+            code_contexts=code_contexts,
             debug=debug,
         )
         warnings, omitted_warnings = _safe_publication_warnings(
@@ -1764,6 +1784,7 @@ def _finalize_ocr_result(
     report: ReviewReport | None = None
     source_reader = GitRepositoryReader(Path.cwd())
     source_cache: dict[str, str | None] = {}
+    syntax_cache: SyntaxCache = {}
     if expected_range is None and projection is not None:
         expected_range = ReviewRange(projection.plan.base_sha, projection.plan.head_sha)
     if expected_range is not None and (
@@ -1799,7 +1820,7 @@ def _finalize_ocr_result(
         path = comment.get("path")
         if not isinstance(path, str):
             return OpaqueCodeProof()
-        return prove_opaque_code(comment, path, read_reviewed_head)
+        return prove_opaque_code(comment, path, read_reviewed_head, syntax_cache=syntax_cache)
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report

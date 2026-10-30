@@ -184,14 +184,15 @@ def render_bootstrap(
     required_suffix = ""
     if diagram_available and store.base is not None and store.head is not None:
         required_suffix = (
-            "\n## Optional change diagram\n\n"
-            "After evidence review, only the group owning the lexically first non-deleted "
-            "path in <review_files> + <other_changed_files> submits if "
-            "summary.diagram_output.state=pending. Read relevant cross-group diffs with file_read_diff "
-            "from the global inventory. "
-            f"Call `{DIAGRAM_TOOL_NAME}` once before task_done: summarize the changes or send "
-            "not-applicable, using base_sha/head_sha from refs above. "
-            "Skip without sufficient context/tools.\n"
+            "\n## Requested change diagram\n\n"
+            "This output is requested even with no findings. Only the group containing the "
+            "case-sensitive lexically first non-deleted full path in <review_files> + "
+            "<other_changed_files> owns it (include dotfiles). The owner must inspect relevant "
+            "cross-group diffs with file_read_diff from the global inventory and summarize "
+            "the entire reviewed change. If summary.diagram_output.state=pending, "
+            f"call `{DIAGRAM_TOOL_NAME}` once before task_done with a typed change summary or "
+            "not-applicable, using base_sha/head_sha from refs above. Other groups and already "
+            "received output skip. Omit only if required context or the output tool is unavailable.\n"
         )
     required_prefix = MANDATORY_EVIDENCE_INSTRUCTION + _immutable_review_refs(store)
     if unprotected_target:

@@ -152,8 +152,12 @@ def test_large_evidence_keeps_required_routes_and_does_not_cut_the_mcp_store(tmp
     assert "CI/images/infrastructure" in rendered and "policy/guidance" in rendered
     assert "Only applicable `complete` coverage proves absence" in rendered
     assert "context_list" in rendered and "context_get" in rendered
-    assert "## Optional change diagram" in rendered and "once before task_done" in rendered
-    assert rendered.index("## Optional change diagram") > rendered.index("## Immutable review refs")
+    assert "## Requested change diagram" in rendered and "once before task_done" in rendered
+    assert rendered.index("## Requested change diagram") > rendered.index(
+        "## Immutable review refs"
+    )
+    assert "even with no findings" in rendered and "entire reviewed change" in rendered
+    assert "include dotfiles" in rendered
     assert store.to_dict() == before and evidence_summary(store)["records"] == 513
     response = call_tool(store, {"action": "get", "id": last.id})
     assert f"package-{index}" in str(response)

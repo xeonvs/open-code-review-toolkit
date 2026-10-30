@@ -23,6 +23,21 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["configure"]).command, "configure")
         self.assertEqual(parser.parse_args(["mcp-config"]).command, "mcp-config")
         self.assertEqual(parser.parse_args(["post"]).command, "post")
+        self.assertEqual(
+            parser.parse_args(
+                ["dlp-audit", "--state-dir", "/synthetic", "scan", "--stdin"]
+            ).command,
+            "dlp-audit",
+        )
+
+    def test_invalid_top_level_command_keeps_normal_cli_error(self) -> None:
+        with (
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main(["unknown-command"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("invalid choice", stderr.getvalue())
 
     def test_review_parses_local_private_artifact_preservation(self) -> None:
         parser = cli.build_parser()

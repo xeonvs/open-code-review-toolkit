@@ -16,7 +16,23 @@ uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
 
-For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`. The `coverage` and `check` modes reuse that single branch-aware test run, then enforce scoped floors for result/preflight and GitLab posting transactions at 80%, plus review/context/DLP/approval and MCP/provider/policy/result contracts at 85%; a high combined result cannot hide a weak risk group. Hosted pull requests run source and contract tests on all six supported OS/Python combinations. The expensive clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python 3.12 job; the separate required build job smoke-tests both distribution paths. The five matrix jobs start alongside Python 3.12 rather than waiting for it. The four Linux jobs are release-blocking, with Ubuntu on Python 3.14 as the sole coverage owner. The two macOS endpoint jobs are best-effort compatibility diagnostics: they continue to run and remain visible for follow-up, but a platform-only failure does not block a Linux-priority release. The Bandit gate scans only the supported runtime package at medium-or-higher severity and confidence; tests and synthetic fixtures are intentionally outside that bounded gate.
+For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`.
+
+The `coverage` and `check` modes reuse one branch-aware test run. Result/preflight,
+review/context/DLP/approval and MCP/provider/policy/result groups have 85% floors;
+GitLab posting transactions retain an 80% floor. The latter group measures about
+82%, so raising its threshold requires meaningful tests before changing the gate.
+A high combined result cannot hide a weak group. Hosted pull requests run source
+and contract tests on all six supported OS/Python combinations. The expensive
+clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python
+3.12 job; the separate required build job smoke-tests both distribution paths.
+The five matrix jobs start alongside Python 3.12 rather than waiting for it.
+The four Linux jobs are release-blocking, with Ubuntu on Python 3.14 as the sole
+coverage owner. The two macOS endpoint jobs are best-effort compatibility
+diagnostics: they remain visible for follow-up, but a platform-only failure does
+not block a Linux-priority release. Bandit scans only the supported runtime package
+at medium-or-higher severity and confidence; tests and synthetic fixtures are
+outside that bounded gate.
 
 Runtime code must remain compatible with the Python range and runtime dependencies declared in `pyproject.toml`; `uv.lock` owns the resolved dependency set. Tests must use synthetic data; public examples must use safe placeholder hosts and credentials while describing the real operating behavior rather than labelling the feature itself as synthetic. User-visible changes require a fragment in `changelog.d/`.
 Repository-only qualification tools and evidence live under `scripts/` and `compatibility/`; they are excluded from both published distributions. Validate the manifest with `PYTHONPATH=src python scripts/ocr_compat.py validate`.
@@ -177,6 +193,34 @@ Result contracts have a 90% coverage floor; GitLab CI acquisition, policy schema
 private filesystem and reporting usage each have an independent 85% floor.
 For regexes, review the semantic alternatives too: line coverage cannot prove
 that every encoded representation or boundary is exercised.
+
+Cross transformations and context, rather than only varying strings: configured
+secrets may contain words rewritten by canonicalization; markup may be unpaired
+and contacts unlabelled; ambient secrets may match diagnostic wrapper fields.
+Pair each minimized defect with inverse cases and the actual audit/projection
+handoff. Use work bounds for repeated files/ranges, not just line coverage or
+process-reuse assertions, when checking scanner performance.
+
+Use the local [private DLP audit commands](dlp-audit.md) for offline
+corpus diagnosis and baseline/candidate replay without OCR. Curate private
+inputs before capture, classify exact units without production suppression,
+repeat complete populations after corrections, and remove owned raw snapshots
+after acceptance. Raw-hit counts and coverage percentages are not precision
+or recall measurements. Each audit-helper module has its own branch-aware 90%
+coverage floor in the local quality gate.
+
+Source interpretation is tested at the real immutable-source proof and
+publication projection, including a temporary repository containing only C,
+JavaScript and JSON. Filename changes must not grant syntax authority. Vary
+reference expressions, Unicode columns, docstrings, embedded/default/mapping-key
+literals, stale contexts and parser bounds. Pair proven numeric computation with
+obfuscated phone/email/credential controls and configured-secret Unicode/space
+variants. Exercise configurations, prose, logs and unknown syntax without granting
+authority to an expression merely because it parses. Vary phone tails beyond
+leading-zero fixtures so valid numeric syntax cannot hide a false negative.
+The two source-context modules each have a local 90% branch-aware
+floor. These measures complement semantic counterexamples; they do not establish
+a detector precision or recall rate.
 
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -628,6 +630,57 @@ def test_reader_batches_multiple_blob_reads(tmp_path: Path) -> None:
     assert blobs == {"changed.txt": b"after\n", "moved.txt": b"renamed\n"}
 
 
+@pytest.mark.parametrize(
+    "stage,limit", [("text", 15), ("sizes", 30), ("contents", 30), ("fetch", 60)]
+)
+@pytest.mark.parametrize("bounded", [False, True])
+def test_reader_deadline_covers_all_process_paths(
+    tmp_path, monkeypatch, stage, limit, bounded
+) -> None:
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root)
+    entries = tuple(entry for entry in reader.list_objects(head) if entry.path == "changed.txt")
+    if bounded:
+        reader.deadline = time.monotonic() + 1
+    timeouts = []
+
+    def timeout(command, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    with monkeypatch.context() as patch:
+        patch.setattr(evidence_repository.subprocess, "run", timeout)
+        with pytest.raises((RepositoryEvidenceError, subprocess.TimeoutExpired)):
+            if stage == "text":
+                reader._run(["cat-file", "-t", head])
+            elif stage == "sizes":
+                reader._batch_sizes(entries)
+            elif stage == "contents":
+                reader._batch_contents(entries, (6,))
+            else:
+                reader._fetch_commit(head, depth=1)
+    assert len(timeouts) == 1
+    assert 0 < timeouts[0] <= 1 if bounded else timeouts[0] == limit
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_deadline_reader_still_reads_exact_immutable_blobs(tmp_path) -> None:
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root, deadline=time.monotonic() + 5)
+    entries = tuple(entry for entry in reader.list_objects(head) if entry.path == "changed.txt")
+    assert reader.read_blobs(entries) == {"changed.txt": b"after\n"}
+    reader.deadline = time.monotonic() - 1
+    with pytest.raises(RepositoryEvidenceError, match="deadline"):
+        reader.read_blobs(entries)
+    assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("deadline", [float("nan"), float("inf"), float("-inf")])
+def test_repository_deadline_must_be_finite(tmp_path, deadline) -> None:
+    with pytest.raises(RepositoryEvidenceError, match="finite"):
+        GitRepositoryReader(tmp_path, deadline=deadline)
+
+
 def test_git_environment_removes_object_store_and_replacement_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -953,3 +1006,70 @@ def test_bootstrap_uses_safe_inline_code_and_clips_only_at_line_boundaries() -> 
     assert not any(line.count("``") == 1 for line in clipped.splitlines())
     with pytest.raises(ValueError, match="preserve required evidence navigation"):
         render_bootstrap(store, max_chars=256)
+
+
+@pytest.mark.parametrize("command_timeout", [float("nan"), float("inf"), 0, -1])
+def test_repository_command_timeout_rejects_invalid_value(tmp_path, command_timeout) -> None:
+    with pytest.raises(RepositoryEvidenceError, match="timeout"):
+        GitRepositoryReader(tmp_path, command_timeout=command_timeout)
+
+
+def test_opt_in_slow_host_timeout_covers_git_batches_without_changing_defaults(
+    tmp_path, monkeypatch
+) -> None:
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root, command_timeout=120)
+    assert reader._timeout(15) == 120
+    reader.deadline = time.monotonic() + 1
+    assert 0 < reader._timeout(60) <= 1
+    reader.deadline = None
+    timeouts = []
+    native_run = evidence_repository.subprocess.run
+
+    def recording(*args, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return native_run(*args, **kwargs)
+
+    monkeypatch.setattr(evidence_repository.subprocess, "run", recording)
+    entries = reader.list_objects(head)
+    regular = tuple(entry for entry in entries if entry.mode in {"100644", "100755"})
+    result = reader.read_candidate_blobs(regular, max_total_bytes=1)
+    assert result.blobs == {} and result.diagnostics
+    result = reader.read_candidate_blobs(regular, max_total_bytes=100)
+    assert result.blobs and all(timeout == 120 for timeout in timeouts)
+    for value in (-1, True, 32_000_001):
+        with pytest.raises(RepositoryEvidenceError, match="budget"):
+            reader.read_candidate_blobs(regular, max_total_bytes=value)
+
+
+def test_audit_metadata_is_capped_during_real_git_acquisition(tmp_path, monkeypatch) -> None:
+    root, _base, head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root, command_timeout=10)
+    monkeypatch.setattr(evidence_repository, "MAX_GIT_TEXT_BYTES", 100)
+    with pytest.raises(RepositoryEvidenceError, match="byte limit"):
+        reader.list_objects(head)
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_streamed_git_metadata_timeout_stderr_and_cleanup(tmp_path, monkeypatch) -> None:
+    root, _base, _head = synthetic_repository(tmp_path)
+    reader = GitRepositoryReader(root, command_timeout=10)
+    native_popen = evidence_repository.subprocess.Popen
+    processes = []
+
+    def peer(_command, **kwargs):
+        process = native_popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys,time; sys.stderr.write('x'); sys.stderr.flush(); time.sleep(60)",
+            ],
+            **kwargs,
+        )
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(evidence_repository.subprocess, "Popen", peer)
+    with pytest.raises(RepositoryEvidenceError, match="deadline"):
+        reader._run_streamed(["ls-tree"], timeout=0.1, text=False)
+    assert len(processes) == 1 and processes[0].poll() is not None

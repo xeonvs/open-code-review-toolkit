@@ -52,7 +52,10 @@ suppressed.
 
 Publication reporting keeps three stages separate: OCR manifest coverage,
 publication-DLP projection, and GitLab posting outcomes. A complete OCR run stays
-complete when DLP omits a finding or field. Posting counts describe admitted
+complete when DLP omits a finding or field, while the shared heading becomes
+`Analysis complete; output incomplete`. Native partial, failed and budget-limited
+states take precedence; omission of the optional diagram alone does not change
+publication health. Posting counts describe admitted
 findings; DLP omission totals and their bounded overlapping source-class counts
 are shown separately. Previous comments are preserved with the actual incomplete
 stage reason instead of being replaced by a falsely clean review.

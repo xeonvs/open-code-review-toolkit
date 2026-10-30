@@ -26,7 +26,10 @@ Protected assets include immutable review identities (source H, current MR diff,
 actual target T, and policy authority P), coverage and finding integrity,
 private evidence/context/result/session data, registry and receipts,
 forge/LLM/MCP credentials, external-object confidentiality, and publication and
-approval state.
+approval state. Local audit assets also include selected source snapshots,
+private origin locators, the state authentication key and exact expectations.
+Release assets include protected authorization, distribution bytes, provenance
+and immutable publication receipts.
 
 A contributor can control repository content, merge-request metadata and
 discussion text, including tool-like instructions and crafted references. An MCP
@@ -51,6 +54,18 @@ The main trust transitions are:
 5. OCR output crosses result validation, publication projection, stage-aware DLP,
    cleanup, a versioned review receipt, current-MR freshness checks and the
    provider posting transaction.
+6. An explicit local `dlp-audit` command captures selected immutable Git objects,
+   files or stdin into bounded private state, then passes one file at a time to
+   a trusted installed scanner worker. Corpus input cannot select an executable,
+   import path, output destination or exception policy. This path has no OCR,
+   forge publication or approval capability and is not an automatic CI scan.
+7. Local review delivery crosses independently checked result/stderr paths and
+   a fresh report destination. A pinned parent and exclusive owner-only
+   publication prevent report overwrite or redirection through a replaced path.
+8. Release candidates cross authorization executed from the protected
+   predecessor, exact reviewed commit/tree/check identities, reproducible builds,
+   registry verification and environment-bound publishing. Candidate source
+   cannot supply the policy that authorizes its own privileged publication.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
 For qualified OCR 1.13.3 only, the toolkit compares complete before/after Git
@@ -87,6 +102,35 @@ fields from older versions. Configured federation still carries
 confused-deputy and object/tenant authorization risk: DLP and origin checks do
 not repair an overprivileged upstream service. These controls do not secure an
 untrusted CI job or runner, or an already exposed CI credential.
+
+### Local audit and source interpretation
+
+The [offline audit](dlp-audit.md) treats selected source and persisted state as
+untrusted. State resides outside audited roots and Git worktrees, with physical
+owner-only directories/files, closed bounded documents and authenticated corpus,
+run and expectation identities. Raw snapshots use generated slots and an
+authenticated ownership inventory; metadata-only inputs are revalidated before
+and after evaluation. Cleanup removes only owned snapshot entries and preserves
+original projects. Private manifests retain source locators; diagnostic reports
+omit source snippets and matched values.
+
+The serial worker uses a fixed interpreter/module, isolated Python imports and
+bounded nonce-framed pipes. Deadlines, byte/item limits and kill/reap handling
+bound work and expose omissions. They do not promise an exact RAM ceiling or
+isolation from another process running as the same OS user. The trusted worker
+inherits the operator environment so production configured-secret checks remain
+effective. HMAC keys stored beside private state do not defend against that same
+owner replacing the installation or key. Temporary review HOME likewise does
+not isolate native ChatGPT credentials: the validated original auth directory is
+deliberately linked to preserve OCR's account refresh and locking lifecycle.
+
+Source provenance establishes origin, not confidentiality. Bounded syntax
+refinement never executes audited code and does not waive independent checks on
+original or encoded sensitive material. Audit evaluation always enables production
+DLP, independently of the review-mode switch. Incomplete evaluation cannot become a
+clean audit because no hits were recorded. Exact expectation labels never stop
+scanning, broaden source selection or authorize publication; complete-population
+comparisons remain diagnostic evidence rather than review receipts.
 
 ## Governed federation boundary
 
@@ -171,6 +215,29 @@ is resolved once before acquisition and is shared by local and GitLab execution.
 With DLP enabled, context and federation ingress/egress plus publication sinks
 cross the shared detector. Private retention is checked separately.
 
+Publication classifies sensitive material independently of diagnostic redaction:
+a redactor changing formatting alone does not prove that text contains a secret.
+Literal source can preserve operators only when exact full-source proof establishes
+their computational role. A scalar parsing as an expression is insufficient;
+configuration, documents, logs and diagram labels receive no such authority.
+Independent security views still inspect Markdown/HTML obfuscation, compatibility
+Unicode, configured secret values, credential literals, contacts and forbidden
+source text. Configured values are checked before whitespace/NFC normalization
+as well as afterwards. An exact code match does not exempt sensitive material.
+
+For an exact immutable-source excerpt, bounded full-source Python syntax can
+identify non-value credential names in declarations and reference expressions,
+including `token = "".join(parts)`. Filenames do not authorize this interpretation.
+A contradictory interpreter declaration, ambiguous data or unsupported syntax
+keeps strict credential checks. Any nonempty literal in the published excerpt
+disables credential-name refinement, including dictionary keys and default values: the
+toolkit does not infer dataflow through aliases or factories. Other languages
+and unqualified inputs keep conservative credential and ambiguous-number handling.
+The bounded Python analysis can also identify numeric multiplication operators;
+comments, strings, annotations and templates cannot supply that proof. This
+operator interpretation does not exempt other sensitive material in the excerpt.
+Authored actionable suggestions never inherit an existing-code syntax waiver.
+
 Technical versions, dates and Decimal expressions retain their bounded grammar
 after the renderer's decimal Mermaid escaping, including comparison operators
 and Unicode spaces. DLP inspects one decoded layer as an additional untrusted
@@ -213,6 +280,23 @@ Rejected text is not retained or reprocessed later to infer attribution.
 bounded states and counts. Publication `ocr.publication/v2` separates omitted
 public fields and reasons from private-only sanitized fields and reasons; OCR
 coverage and provider posting counts remain independent.
+
+## Local DLP diagnostics
+
+[`ocr-ci dlp-audit`](dlp-audit.md) evaluates explicitly selected local inputs
+with the production scanner. It is a manually invoked diagnostic command,
+independent of review/provider acquisition and GitLab publication. Audits always
+enable DLP and bind comparisons to the effective known-secret set. Their exit
+status and reports describe scanner expectations; review and approval authority
+remain with the existing review contracts.
+
+Audit state lives outside source roots and Git worktrees with owner-only
+permissions. HMAC identities bind exact inputs and sink roles; annotations
+classify results while every unit is still evaluated. Reports retain metadata
+and local locators, not snippets. Explicit source snapshots store selected bytes
+under the same private ownership and require verified cleanup. Metadata-only
+mode evaluates original bytes in memory and rejects drift during replay. Input
+projects supply neither executable code nor exclusion policy to the audit.
 
 ## Preserved controls
 

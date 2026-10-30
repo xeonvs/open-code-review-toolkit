@@ -5,6 +5,13 @@ findings in a Markdown artifact and the console, without connecting the reposito
 Install the toolkit and its [qualified OCR binary](../compatibility/ocr-support.json),
 then configure the LLM environment described in [configuration.md](configuration.md).
 
+## Offline DLP audits
+
+For local DLP diagnosis, use [the `ocr-ci dlp-audit` commands](dlp-audit.md).
+They scan selected files or immutable Git blobs, produce private reports and
+compare exact runs. They require only the toolkit, without OCR or an LLM, and
+operate independently of the local review/provider configuration.
+
 <!-- ew:invariant id="local-review.preparation" -->
 ## Review preparation
 
@@ -231,6 +238,11 @@ Successful execution still requires result validation and cleanup. DLP is enable
 by default. The
 admitted JSON has no fabricated forge receipt. Filtered findings stay absent from
 the console and safe JSON; omissions and original coverage remain explicit.
+When native analysis is complete but admission or publication omits output, the
+heading says `Analysis complete; output incomplete`, even if every finding
+survives and only an optional code field is removed. Native partial, failed or
+budget-limited analysis retains its own status. Diagram-only omission remains
+optional and does not make finding publication incomplete.
 Legacy results without coverage counts remain unknown, not a fabricated complete
 coverage manifest. A blocked run returns nonzero and prints a closed failure
 summary naming its stage without presenting untrusted findings. An unavailable

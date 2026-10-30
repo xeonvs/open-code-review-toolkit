@@ -20,7 +20,7 @@ from tests.diagrams.support import references
 from tests.test_evidence_repository import git
 
 
-@pytest.mark.parametrize("grouping", ("combined", "singletons", "fallback"))
+@pytest.mark.parametrize("grouping", ("combined", "singletons", "fallback", "configuration"))
 @pytest.mark.parametrize("missing_context", (False, True))
 @pytest.mark.parametrize("diagram_kind", (None, "flowchart", "sequence"))
 def test_native_group_context_and_rounds(
@@ -54,6 +54,10 @@ def test_native_group_context_and_rounds(
     (root / "pylock.toml").write_text(
         'lock-version="1.0"\n[[packages]]\nname="jinja2"\nversion="3.1.6"\n'
     )
+    configuration = root / ".github/workflows/quality.yml"
+    if grouping == "configuration":
+        configuration.parent.mkdir(parents=True)
+        configuration.write_text("name: synthetic\njobs: {}\n")
     git(root, "add", ".")
     git(root, "commit", "-qm", "base")
     base = git(root, "rev-parse", "HEAD")
@@ -62,6 +66,8 @@ def test_native_group_context_and_rounds(
         (root / path).write_text(f"# HEAD_{index}\n{stable}def value():\n    return 2\n")
     git(root, "mv", "c_before.py", "c_after.py")
     (root / "removed.py").unlink()
+    if grouping == "configuration":
+        configuration.write_text("name: synthetic updated\njobs: {}\n")
     git(root, "add", ".")
     git(root, "commit", "-qm", "head")
     head = git(root, "rev-parse", "HEAD")
@@ -69,6 +75,8 @@ def test_native_group_context_and_rounds(
         r"R[0-9]+\tc_before.py\tc_after.py", git(root, "diff", "--name-status", "-M", base, head)
     )
     selected = {"a_first.py", "b_second.py", "c_after.py", "d_fourth.py"}
+    if grouping == "configuration":
+        selected.add(".github/workflows/quality.yml")
     elements = [
         {"id": identity, "label": label, "references": references(path, 9, 9)}
         for identity, label, path in (
@@ -86,7 +94,12 @@ def test_native_group_context_and_rounds(
                 {
                     "nodes": [{**item, "kind": "step"} for item in elements],
                     "edges": [
-                        {"source": "first", "target": "second", "condition": "", "references": []}
+                        {
+                            "source": "first",
+                            "target": "second",
+                            "condition": "version >= 2026.10.19",
+                            "references": references("a_first.py", 9, 9),
+                        }
                     ],
                 }
                 if diagram_kind == "flowchart"
@@ -98,7 +111,7 @@ def test_native_group_context_and_rounds(
                             "source": "first",
                             "target": "second",
                             "message_type": "call",
-                            "label": "Synthetic wiring only",
+                            "label": "version >= 2026.10.19",
                             "references": references("b_second.py", 9, 9),
                         }
                     ],
@@ -159,9 +172,12 @@ def test_native_group_context_and_rounds(
                 self.rfile = BytesIO(raw)
                 super().do_POST()
                 return
+            assert DIAGRAM_TOOL_NAME in names
             prompt = next(
                 message["content"] for message in messages if message.get("role") == "user"
             )
+            assert "even with no findings" in prompt and "entire reviewed change" in prompt
+            assert "include dotfiles" in prompt
             own_block = prompt.split("<review_files>", 1)[1].split("</review_files>", 1)[0]
             own = set(re.findall(r'<file path="([^"\r\n]+)">', own_block))
             other = prompt.split("<other_changed_files>", 1)[1].split("</other_changed_files>", 1)[
@@ -229,6 +245,10 @@ def test_native_group_context_and_rounds(
                 ):
                     name, arguments = DIAGRAM_TOOL_NAME, candidate
                 elif "Synthetic cross-group finding." in prompt or "code_comment" in called:
+                    name, arguments = "task_done", {}
+                elif grouping == "configuration" and min(selected) in own:
+                    # A configuration-only owner still emits the global diagram,
+                    # independently of whether that group has any finding.
                     name, arguments = "task_done", {}
                 else:
                     name, arguments = (
@@ -355,7 +375,7 @@ def test_native_group_context_and_rounds(
     bootstrap = (debug / "bootstrap.md").read_text()
     assert bootstrap.count(base) == bootstrap.count(head) == 1
     assert "same commit as base" in bootstrap
-    assert bootstrap.index("## Optional change diagram") > bootstrap.index("## Evidence coverage")
+    assert bootstrap.index("## Requested change diagram") > bootstrap.index("## Evidence coverage")
     assert "frameworks/runtimes" in bootstrap and "declared/locked dependency versions" in bootstrap
     by_kind = {
         item["kind"]: item["evidence"] for item in ContextPeer.observations if "evidence" in item
@@ -388,16 +408,18 @@ def test_native_group_context_and_rounds(
             for item in ContextPeer.observations
             if "repeat_diagram_state" in item and min(selected) in item["own"]
         ]
-        assert owner_repeat == ["received"]
+        assert owner_repeat == ([] if grouping == "configuration" else ["received"])
     assert session_homes and all(not path.exists() for path in session_homes)
     assert (debug / "native-trace.jsonl").stat().st_mode & 0o777 == 0o600
     initial = [
         item for item in ContextPeer.observations if "other" in item and not item["confirmed"]
     ]
     repeated = [item for item in ContextPeer.observations if "other" in item and item["confirmed"]]
-    assert {tuple(sorted(item["own"])) for item in initial} == {
-        tuple(sorted(item["own"])) for item in repeated
-    }
+    assert {
+        tuple(sorted(item["own"]))
+        for item in initial
+        if not (grouping == "configuration" and min(selected) in item["own"])
+    } == {tuple(sorted(item["own"])) for item in repeated}
     assert len(initial) == (1 if grouping == "combined" else len(selected))
     for item in initial:
         for path in selected - item["own"]:

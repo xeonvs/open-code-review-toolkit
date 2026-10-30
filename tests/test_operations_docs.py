@@ -463,7 +463,7 @@ def test_summary_and_code_tab_boundaries_are_public() -> None:
     security = (PROJECT_ROOT / "docs" / "security.md").read_text(encoding="utf-8")
 
     for phrase in (
-        "Review complete with publication filtering",
+        "Analysis complete; output incomplete",
         "it is not called incomplete OCR coverage",
         "at least two findings",
         "Tool and token lines remain independent",

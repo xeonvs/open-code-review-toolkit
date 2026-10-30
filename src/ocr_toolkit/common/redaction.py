@@ -25,8 +25,62 @@ _SECRET_ASSIGNMENT_KEY_PATTERN = (
     rf"'{SENSITIVE_NAMED_KEY_PATTERN}'|\b{SENSITIVE_NAMED_KEY_PATTERN})"
 )
 _UNTERMINATED_SECRET_RE = re.compile(
-    rf"(?im)({_SECRET_ASSIGNMENT_KEY_PATTERN}[ \t]*[:=][ \t]*)"
-    r"(?P<quote>[\"'])(?:\\[^\r\n]|(?!(?P=quote))[^\\\r\n])+(?:\\)?(?=\r?$)"
+    rf"(?im)(?P<prefix>{_SECRET_ASSIGNMENT_KEY_PATTERN}[ \t]*[:=][ \t]*(?P<quote>[\"']))"
+    r"(?P<value>(?:\\[^\r\n]|(?!(?P=quote))[^\\\r\n])+(?:\\)?)(?=\r?$)"
+)
+
+# The value capture is shared by semantic admission and diagnostic replacement.
+# Admission never infers a credential from normalization or formatting changes.
+_AUTH_RULES = (
+    (
+        re.compile(
+            r'(?i)(?P<prefix>"(?:proxy-)?authorization"\s*:\s*")(?P<value>(?:[^"\\]|\\.)*)(?P<suffix>")'
+        ),
+        r"\g<prefix>***\g<suffix>",
+    ),
+    (
+        re.compile(
+            r"(?i)(?P<prefix>'(?:proxy-)?authorization'\s*:\s*')(?P<value>(?:[^'\\]|\\.)*)(?P<suffix>')"
+        ),
+        r"\g<prefix>***\g<suffix>",
+    ),
+    (
+        re.compile(r"(?im)(?P<prefix>\b(?:proxy-)?authorization\s*[:=]\s*)(?P<value>[^\r\n]+)"),
+        r"\g<prefix>***",
+    ),
+)
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9_.\-+/=~]{12,}")
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\b")
+_ASSIGNMENT_RULES = (
+    (
+        re.compile(
+            rf'(?i)(?P<prefix>"{SENSITIVE_NAMED_KEY_PATTERN}"\s*:\s*")(?P<value>(?:[^"\\]|\\.)*)(?P<suffix>")'
+        ),
+        r"\g<prefix>***\g<suffix>",
+    ),
+    (
+        re.compile(
+            rf'(?i)(?P<prefix>{_SECRET_ASSIGNMENT_KEY_PATTERN}\s*[:=]\s*")(?P<value>(?:[^"\\]|\\.)*)(?P<suffix>")'
+        ),
+        r"\g<prefix>***\g<suffix>",
+    ),
+    (
+        re.compile(
+            rf"(?i)(?P<prefix>{_SECRET_ASSIGNMENT_KEY_PATTERN}\s*[:=]\s*')(?P<value>(?:[^'\\]|\\.)*)(?P<suffix>')"
+        ),
+        r"\g<prefix>***\g<suffix>",
+    ),
+    (_UNTERMINATED_SECRET_RE, r"\g<prefix>***"),
+    (
+        re.compile(
+            rf"(?i)(?P<prefix>\b{SENSITIVE_NAMED_KEY_PATTERN}\s*[:=]\s*)(?P<value>[^\"'\s,;&]+)"
+        ),
+        r"\g<prefix>***",
+    ),
+    (
+        re.compile(r"(?i)(?P<prefix>(?:^|[?&;\s])token=)(?P<value>[A-Za-z0-9_.\-+/=~]{8,})"),
+        r"\g<prefix>***",
+    ),
 )
 
 
@@ -116,13 +170,9 @@ def strip_path_controls(text: str) -> str:
     )
 
 
-def redact_env_secret_values(text: str) -> str:
-    """Replace configured secret values without generic key/value sweeps."""
+def environment_secret_values() -> tuple[str, ...]:
+    """Snapshot effective exact/encoded values for one admission, without a global cache."""
 
-    if not text:
-        return text
-
-    redacted = text
     variants: set[str] = set()
     candidate_names = set(SENSITIVE_ENV_NAMES)
     candidate_names.update(
@@ -136,7 +186,12 @@ def redact_env_secret_values(text: str) -> str:
         if not value or len(value) < 4:
             continue
         normalized_value = strip_redaction_bypass_controls(value)
-        for variant in (value, normalized_value):
+        for variant in (
+            value,
+            normalized_value,
+            unicodedata.normalize("NFC", value),
+            unicodedata.normalize("NFC", normalized_value),
+        ):
             if not variant:
                 continue
             variants.update(
@@ -147,10 +202,54 @@ def redact_env_secret_values(text: str) -> str:
                 }
             )
 
-    for variant in sorted(variants, key=len, reverse=True):
-        redacted = redacted.replace(variant, "***")
+    return tuple(sorted(variants, key=len, reverse=True))
 
+
+def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None) -> str:
+    """Replace configured values; a caller may reuse one immutable admission snapshot."""
+
+    if not text:
+        return text
+    redacted = text
+    for variant in environment_secret_values() if values is None else values:
+        redacted = redacted.replace(variant, "***")
     return redacted
+
+
+def has_sensitive_material(
+    text: str,
+    *,
+    credential_view: str | None = None,
+    values: tuple[str, ...] | None = None,
+) -> bool:
+    """Classify publication material using shared rules, not diagnostic rewrites."""
+
+    values = environment_secret_values() if values is None else values
+    # A decoded passphrase may itself contain words rewritten by token-name
+    # canonicalization. Its incoming representation is independently sensitive.
+    if redact_env_secret_values(text, values=values) != text:
+        return True
+    prepared = normalize_redaction_tokens(strip_redaction_bypass_controls(text))
+    view = text if credential_view is None else credential_view
+    credential = (
+        prepared
+        if view == text
+        else normalize_redaction_tokens(strip_redaction_bypass_controls(view))
+    )
+    return bool(
+        redact_env_secret_values(prepared, values=values) != prepared
+        or redact_url_userinfo_only(prepared) != prepared
+        or _redact_sensitive_query_values(credential) != credential
+        or _BEARER_RE.search(prepared)
+        or _JWT_RE.search(prepared)
+        or any(
+            # A canonical already-masked candidate contains no credential left.
+            # Token normalization alone is not evidence of a secret.
+            match["value"] != "***"
+            for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
+            for match in pattern.finditer(credential)
+        )
+    )
 
 
 def redact_sensitive(text: str) -> str:
@@ -173,85 +272,15 @@ def redact_sensitive(text: str) -> str:
 
     if not text:
         return text
-
     redacted = normalize_redaction_tokens(strip_redaction_bypass_controls(text))
     redacted = redact_url_userinfo(redacted)
     redacted = redact_env_secret_values(redacted)
-
-    # Generic high-entropy sweeps. Order matters: stricter patterns
-    # first so the looser key/value pass doesn't double-redact.
-    # Authorization headers are credentials regardless of auth scheme
-    # (`Basic`, `ApiKey`, `Digest`, custom gateway schemes, or bare values),
-    # so redact the complete header value rather than trying to parse it.
-    redacted = re.sub(
-        r'(?i)("(?:proxy-)?authorization"\s*:\s*")(?:[^"\\]|\\.)*(")',
-        r"\1***\2",
-        redacted,
-    )
-    redacted = re.sub(
-        r"(?i)('(?:proxy-)?authorization'\s*:\s*')(?:[^'\\]|\\.)*(')",
-        r"\1***\2",
-        redacted,
-    )
-    redacted = re.sub(
-        r"(?im)(\b(?:proxy-)?authorization\s*[:=]\s*)[^\r\n]+",
-        r"\1***",
-        redacted,
-    )
-    redacted = re.sub(
-        r"(?i)\bbearer\s+[A-Za-z0-9_.\-+/=~]{12,}",
-        "Bearer ***",
-        redacted,
-    )
-    # JSON-quoted form: `"token": "value"`, `"api_key": "value"`. OCR or
-    # SDK error logs often serialize requests/responses this way. Redact even
-    # short values because the key name already identifies the field as secret.
-    redacted = re.sub(
-        rf'(?i)("{SENSITIVE_NAMED_KEY_PATTERN}"\s*:\s*")' r'(?:[^"\\]|\\.)*(")',
-        r"\1***\2",
-        redacted,
-    )
-    # Named key/value form: `password=...`, `client_secret: ...`,
-    # `private_token=...`. Do not require high entropy for these keys: the
-    # field name itself carries enough signal, and this path is used only for
-    # failure diagnostics. Handle quoted values before unquoted values so
-    # spaces inside `password="..."` are not leaked.
-    redacted = re.sub(
-        rf'(?i)({_SECRET_ASSIGNMENT_KEY_PATTERN})(\s*[:=]\s*)"(?:[^"\\]|\\.)*"',
-        r'\1\2"***"',
-        redacted,
-    )
-    redacted = re.sub(
-        rf"(?i)({_SECRET_ASSIGNMENT_KEY_PATTERN})(\s*[:=]\s*)'(?:[^'\\]|\\.)*'",
-        r"\1\2'***'",
-        redacted,
-    )
-    # Truncated logs or model strings can lose the closing quote without losing
-    # the credential. Require an exact named key and stay on that value's line;
-    # the disjoint escape/non-escape alternatives also bound near-match work.
-    redacted = _UNTERMINATED_SECRET_RE.sub(r"\1\g<quote>***", redacted)
-    redacted = re.sub(
-        rf"(?i)\b({SENSITIVE_NAMED_KEY_PATTERN})(\s*[:=]\s*)[^\"'\s,;&]+",
-        r"\1\2***",
-        redacted,
-    )
-    # Structured logs and URLs often use a bare `token=...` key. Keep it
-    # bounded to query/CLI-like contexts so ordinary prose mentioning
-    # "token" is not aggressively rewritten.
-    redacted = re.sub(
-        r"(?i)(^|[?&;\s])(token=)[A-Za-z0-9_.\-+/=~]{8,}",
-        r"\1\2***",
-        redacted,
-    )
-    # JWT pattern: three base64url segments separated by dots. The
-    # header always starts with `eyJ` (base64 of `{"`); the other two
-    # segments are bounded loosely — real-world JWTs always exceed this.
-    redacted = re.sub(
-        r"\beyJ[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\b",
-        "***",
-        redacted,
-    )
-    return redacted
+    for pattern, replacement in _AUTH_RULES:
+        redacted = pattern.sub(replacement, redacted)
+    redacted = _BEARER_RE.sub("Bearer ***", redacted)
+    for pattern, replacement in _ASSIGNMENT_RULES:
+        redacted = pattern.sub(replacement, redacted)
+    return _JWT_RE.sub("***", redacted)
 
 
 def sanitize_ocr_value(value: Any) -> Any:

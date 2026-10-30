@@ -1,12 +1,14 @@
 """Metamorphic checks across the actual typed renderer and text DLP boundary."""
 
 import html
+import json
 import sys
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from ocr_toolkit.context.code_text import TextSink
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import ForbiddenValue, _html_decode, check_text
 from ocr_toolkit.diagrams.contracts import parse_submission
@@ -210,3 +212,72 @@ def test_bounded_html_numbers_preserve_standard_library_scalar_and_legacy_mappin
     if escaped:
         text = html.escape(text)
     assert _html_decode(text) == html.unescape(html.unescape(text))
+
+
+@given(
+    st.text(alphabet="abcXYZéΩ\u0301", min_size=8, max_size=20),
+    st.sampled_from(["pass word", "api key", "access token", "client secret"]),
+    st.sampled_from(["plain", "html", "double-html", "mermaid", "mermaid-html"]),
+    st.booleans(),
+)
+def test_any_configured_passphrase_survives_supported_representation_order(
+    prefix, words, encoding, spaces
+):
+    secret = prefix + " " + words + " credential"
+    if spaces:
+        secret = " " + secret + " "
+    value = secret
+    if encoding in {"html", "double-html", "mermaid-html"}:
+        value = "".join(f"&#{ord(char)};" for char in value)
+    if encoding == "double-html":
+        value = html.escape(value)
+    if encoding in {"mermaid", "mermaid-html"}:
+        value = "".join(f"#{ord(char)};" for char in value)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("OCR_LLM_TOKEN", secret)
+        checked = check_text(value, budgets=TextBudgets(20000, 80000, 30), publication=True)
+    assert not checked.admitted and checked.reason == "secret"
+
+
+@given(
+    st.sampled_from(["*", "**", "_", "__", "~", "~~", "`"]),
+    st.booleans(),
+    st.sampled_from(["", "call ", "phone=", "tel: ", "value: ", "value = "]),
+    st.integers(0, 9999),
+    st.sampled_from(list(TextSink)),
+    st.sampled_from(["plain", "html", "mermaid"]),
+)
+def test_contacts_survive_matched_and_unmatched_markup_without_labels(
+    marker, paired, prefix, tail, sink, encoding
+):
+    value = prefix + "999 " + marker + "555" + (marker if paired else "") + f"-{tail:04d}"
+    if encoding == "html":
+        value = "".join(f"&#{ord(char)};" for char in value)
+    elif encoding == "mermaid":
+        value = "".join(f"#{ord(char)};" for char in value)
+    checked = check_text(value, budgets=TextBudgets(20000, 80000, 30), publication=True, sink=sink)
+    assert not checked.admitted and checked.reason == "pii"
+
+
+@given(
+    st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=2, max_size=12),
+    st.integers(10, 9999),
+    st.integers(10, 9999),
+    st.sampled_from(["*", " *", "* ", " * ", "**"]),
+    st.sampled_from(["*", " *", "* ", " * ", "**"]),
+    st.sampled_from(["text", "json", "configuration", "log"]),
+    st.sampled_from([TextSink.LITERAL_CODE, TextSink.DIAGRAM_LABEL]),
+)
+def test_arbitrary_data_does_not_gain_authority_by_parsing_as_numeric_syntax(
+    field, left, right, first, second, container, sink
+):
+    value = f"{field} > 2{first}{left:_}{second}{right:_}"
+    if container == "json":
+        value = json.dumps({"value": value})
+    elif container == "configuration":
+        value = "limit: '" + value + "'"
+    elif container == "log":
+        value = "INFO " + value
+    checked = check_text(value, budgets=TextBudgets(20000, 80000, 30), publication=True, sink=sink)
+    prose = check_text(value, budgets=TextBudgets(20000, 80000, 30), publication=True)
+    assert not checked.admitted or prose.admitted

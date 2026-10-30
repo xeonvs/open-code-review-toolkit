@@ -8,6 +8,7 @@ This page routes readers to the canonical document for each topic. It does not r
 - [configuration.md](configuration.md)
 - [development.md](development.md)
 - [diagrams.md](diagrams.md)
+- [dlp-audit.md](dlp-audit.md)
 - [engineering/README.md](engineering/README.md)
 - [gitlab.md](gitlab.md)
 - [local.md](local.md)
@@ -32,6 +33,7 @@ This page routes readers to the canonical document for each topic. It does not r
 ## Contribute and release
 
 - [Development guide](development.md) — local environment, tests, quality gates, and implementation checks.
+- [Private DLP audits](dlp-audit.md) — offline corpus diagnosis, exact expectations, replay and owned source cleanup.
 - [Release process](release.md) — release classification, qualification, publication, and reconciliation.
 - [Contributing guide](../CONTRIBUTING.md) and [security policy](../SECURITY.md) — contribution and vulnerability-reporting routes.
 
