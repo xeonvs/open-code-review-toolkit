@@ -34,6 +34,7 @@ Separate literal source-code interpretation from prose/markup transformations an
 | REQ-007 | Reviewed signed plan-first draft PR, protected feature/development verification, v0.14.3 release PR with full plan archival/reset and external reconciliation | WQ-01, WQ-05, WQ-06 | pending |
 | REQ-008 | Remove all task-owned raw source snapshots and raw spools, verify absence, retain only source-free reports and synthetic regressions | WQ-06 | pending |
 | REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | in_progress |
+| REQ-010 | After Security results, reconcile the repository threat model with actual audit, worker, private-output and release boundaries | WQ-04 | done |
 
 ### Explicit Non-Goals
 
@@ -71,7 +72,7 @@ A read-only Git-blob audit at the baseline covers 452 UTF-8 files and 121131 non
 | WQ-01 | REQ-001, REQ-007 | Materialize and critique full plan, reconcile state, signed first push/draft PR, issue/milestone scope with synthetic examples | done |
 | WQ-02 | REQ-002, REQ-003 | Implement/test private audit CLI, worker, snapshot/expectation/report/compare lifecycle; curate safe source selections and capture complete baseline before changing DLP | done |
 | WQ-03 | REQ-001, REQ-004, REQ-005, REQ-009 | Implement typed source/rendering contexts, structural secret classification and clear two-axis reporting; add synthetic regressions/fuzzing, reconcile coverage guards and update public contracts | done |
-| WQ-04 | REQ-005, REQ-006, REQ-009 | Aggregate review, one Security scan, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | in_progress |
+| WQ-04 | REQ-005, REQ-006, REQ-009, REQ-010 | Aggregate review, one Security scan and threat-model reconciliation, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | in_progress |
 | WQ-05 | REQ-003, REQ-007 | Final feature PR/diagram push, protected CI/merge and development verification; prepare signed release PR with full checked plan archival | pending |
 | WQ-06 | REQ-007, REQ-008 | Stable external verification, issue/milestone/site and clean main; remove owned raw snapshots/spools and verify cleanup before task completion | pending |
 
@@ -128,6 +129,19 @@ For inputs unsuitable for source copying, support metadata-only explicit file se
 
 2026-10-30: official `dlp-audit` implementation is complete, including the resource revision. Serial isolated execution replaces the eager request queue; adjustable overall/file/Git deadlines, binary/oversize preflight, bounded Git metadata/blob transfer, incremental rejection/document budgets and atomic capped-file omissions are implemented. Independent Astra high review and its focused resource follow-up have no outstanding confirmed findings. All 175 focused tests pass, including actual timeout/cancellation kill/reap, hostile state, CLI, Git and binary boundaries. Individual branch-aware coverage is CLI 96%, corpus 92%, scanner 93%, state 99%, execution limits 100%; the 1000-example property profile passes with an independent seed. Ruff, mypy, Bandit, privacy and plan/instruction guards pass. Clean wheel/sdist installation and actual installed CLI/worker/cleanup checks pass (3 installed-suite tests). The helper was amended as signed local commit ddfc8cf; signature verification passed and the worktree was clean before corpus replay. No DLP algorithm correction has been bundled into this helper slice. Corpus replays using the final run schema follow the commit, before source-semantics changes.
 
+2026-10-30: source-aware DLP and two-axis reporting are signed as 81af7a6;
+the helper's call-time default-budget correction is included in signed 75fe7d2.
+Focused source/property, reader/collector/quality and reporting/DLP checks pass.
+The single aggregate Codex Security diff scan covers every one of the 20 changed
+source inventory files in the full published-base-to-81af7a6 range, with complete
+static coverage, zero findings and no deferred work. A fresh independent
+architecture model confirms the actual boundaries. After those results, the
+repository threat model is reconciled with the explicit local audit, trusted
+same-user worker, private state/original-preserving cleanup, local report delivery
+and protected-base release authorization. This documentation update changes no
+runtime; no second aggregate Security scan is required. Successful actual
+own-tool acceptance runs remain zero; final corpus replay and quality are pending.
+
 ### Risks And Recovery
 
 Source provenance is not permission to publish a secret: reject unmapped candidates and scan all original/encoded sensitive material. A lexer/normalizer can create a false phone or hide a real one: choose representations by the actual sink and replay strong counterexamples. Broad expectation patterns can conceal new defects: bind them to exact private input identity and keep scanning. An altered corpus/environment is not a detector regression or improvement: fail comparison as incomparable. Private state can leak through reports/errors or cleanup: use closed output fields, fixed private destinations and ownership-checked removal; preserve originals. On a failed check retain value-free diagnostics and the exact resume action, repair the narrow owner and rerun the affected checks. No additional aggregate Security scan for ordinary follow-up fixes.
@@ -147,10 +161,11 @@ found a Git-reader default-budget regression and a stale gate-test count; both
 are corrected with 132 reader/collector/quality tests passing. Result/preflight
 measures about 87% and now has a synchronized 85% floor; posting stays near 82%
 with its 80% floor. New source modules have independent local 90% floors.
-The first full measurement is not final-head acceptance. Complete the single
-aggregate Security scan, actual own-tool acceptance with a real diagram,
-complete post-review corpus comparisons and final quality. Both successful
-own-tool runs remain unused.
+The first full measurement is not final-head acceptance. The single aggregate
+Security scan is complete with no findings, and the repository threat model is
+reconciled after its results. Next complete actual own-tool acceptance with a real
+diagram, complete post-review corpus
+comparisons and final quality. Both successful own-tool runs remain unused.
 Private corpus details remain outside public artifacts; owned raw snapshots and
 task-owned build/install copies require final verified removal.
 
