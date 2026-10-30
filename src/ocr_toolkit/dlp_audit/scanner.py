@@ -9,8 +9,8 @@ import os
 import resource
 import sys
 import time
+import unicodedata
 import uuid
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ from ocr_toolkit.evidence.opaque_code import SyntaxCache, prove_opaque_code
 
 from .corpus import MAX_FILE, manifest, original_source, read_source, verify_originals
 from .limits import MAX_HIT_BYTES, MAX_HITS, ExecutionLimits
+from .report import render_report
 from .state import DIGEST, MAX_DOCUMENT, AuditError, State, decode, encode, fields
 from .worker_process import WorkerFailure, WorkerSession, frame, read_request
 
@@ -95,6 +96,12 @@ def scanner_identity() -> str:
 
     digest = hashlib.sha256()
     digest.update(importlib.metadata.version("open-code-review-toolkit").encode())
+    # Static Unicode/grammar data changes detector decisions even when toolkit
+    # sources are unchanged. Keep the existing opaque identity/schema, binding
+    # all selected interpretation owners and the interpreter Unicode tables.
+    for dependency in ("mistune", "regex", "emoji"):
+        digest.update(encode((dependency, importlib.metadata.version(dependency))))
+    digest.update(encode((sys.implementation.cache_tag, unicodedata.unidata_version)))
     root = Path(ocr_toolkit.__file__).parent
     for path in sorted(root.rglob("*.py")):
         digest.update(str(path.relative_to(root)).encode())
@@ -393,30 +400,7 @@ def scan(
     }
     identity = uuid.uuid4().hex
     state.save("run", identity, run)
-    counts = Counter((hit["role"], hit["reason"], hit["detector"]) for hit in hits)
-    lines = [
-        "# Private DLP audit",
-        "",
-        f"Run: `{identity}`",
-        f"Complete: {run['complete']}",
-        f"Evaluated units: {evaluated}/{corpus['units']} (each in two roles)",
-        f"Rejected role units: {len(hits)}",
-        "",
-        "## Top ten primary detector groups",
-        "",
-    ]
-    lines.extend(
-        f"- {role} / {reason} / {detector}: {count}"
-        for (role, reason, detector), count in counts.most_common(10)
-    )
-    lines.extend(
-        [
-            "",
-            "Locations and exact identities are in the authenticated JSON report and corpus manifest.",
-            "Counts are primary rejections, not a false-positive rate. Raw code values are absent.",
-        ]
-    )
-    state.markdown(identity, "\n".join(lines) + "\n")
+    state.markdown(identity, render_report(identity, run))
     return identity, run
 
 

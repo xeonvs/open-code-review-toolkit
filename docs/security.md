@@ -238,6 +238,36 @@ comments, strings, annotations and templates cannot supply that proof. This
 operator interpretation does not exempt other sensitive material in the excerpt.
 Authored actionable suggestions never inherit an existing-code syntax waiver.
 
+Closed configuration grammar also distinguishes whole symbolic references
+(`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,
+without evaluating them. Calls, defaults, concatenations and incomplete forms
+retain conservative checks. A `permissions:` indentation block can prove
+`read`/`write`/`none` permission roles; its names alone cannot. Immutable full-source
+proof carries those exact key spans into a code excerpt. Unknown structures and
+unqualified standalone fields keep ordinary checks, including inside Python
+strings. Known-secret values, contacts and material outside those spans remain
+independently protected.
+
+Markdown interpretation uses a bounded Mistune token tree without renderers or
+plugins, plus bounded standard HTML events. Construction shares a 32768-token
+budget and combined block/inline depth 20. Inline finalization reserves its
+construction work before allocating native emphasis nodes. Compatibility
+normalization and case folding check both characters and UTF-8 bytes against
+four times the input size plus 4096 before subsequent interpretation.
+Oversized HTML fragments, derived views, source-position searches and timed
+Unicode matches fail closed as `limit`. Source text and
+applicable normalized/decoded views are checked independently. A formatting
+boundary cannot silently join a contact into a bare identifier. Removing arbitrary
+formatting markers cannot establish an unlabelled phone by joining numeric sides;
+complete phone-shaped fragments remain protected independently. Literal code
+does not activate its markup, while its obfuscated sensitive material remains
+subject to checks. Diagnostic substitutions never establish credential material;
+complete empty/masked query values stay empty/masked in surrounding syntax.
+Static emoji data qualifies only exact standard presentation spans. An emoji
+elsewhere does not authorize an unmatched joiner, bidi control or variation
+selector. Internationalized and quoted email-shaped addresses remain protected
+without DNS or registration checks.
+
 Technical versions, dates and Decimal expressions retain their bounded grammar
 after the renderer's decimal Mermaid escaping, including comparison operators
 and Unicode spaces. DLP inspects one decoded layer as an additional untrusted
@@ -256,6 +286,14 @@ standard-library scalar mappings with bounded integer conversion, including long
 leading-zero forms; decoded HTML/decimal-Mermaid newlines obey the line limit.
 DLP does not validate network configuration: malformed text
 without a phone-shaped token is not necessarily a DLP rejection.
+Complete valid calendar dates, UUIDs and short dotted-version pairs are checked
+as bounded typed tokens, with explicit contact context taking precedence.
+Numeric iteration syntax distinguishes a bounded list of single-digit loop
+items from a formatted contact; additional material outside that span still
+receives every check. Seven-digit national layouts are protected; longer
+six-digit layouts retain their previous conservative classification. Explicit
+contact labels/plus prefixes remain conservative. Underscores
+inside numeric identifiers do not activate Markdown emphasis.
 
 A parsed false value bypasses those DLP checks for one run, emits a prominent warning in
 private logs and bounded Technical details, and always blocks automatic approval.

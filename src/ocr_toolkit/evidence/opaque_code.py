@@ -11,7 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ocr_toolkit.context.code_text import CodeTextContext
-from ocr_toolkit.evidence.source_syntax import PythonSourceSyntax, analyze_python_source
+from ocr_toolkit.evidence.source_syntax import (
+    SourceSyntax,
+    analyze_configuration_source,
+    analyze_python_source,
+)
 from ocr_toolkit.posting.comments import line_number
 from ocr_toolkit.posting.settings import (
     MAX_SUGGESTION_CODE_CHARS,
@@ -33,7 +37,7 @@ MAX_SYNTAX_CACHE_FILES = 4
 class _PreparedProofSource:
     source: str = field(repr=False)
     lines: tuple[str, ...] = field(repr=False)
-    syntax: PythonSourceSyntax | None = None
+    syntax: SourceSyntax | None = None
     analyzed: bool = False
 
 
@@ -124,7 +128,7 @@ def prove_opaque_code(
 
     context = None
     if not cached.analyzed:
-        cached.syntax = analyze_python_source(source)
+        cached.syntax = analyze_python_source(source) or analyze_configuration_source(source)
         cached.analyzed = True
     syntax = cached.syntax
     if syntax is not None:

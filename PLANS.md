@@ -42,6 +42,11 @@ No AI model, pretrained classifier, model download, remote classification, DNS/d
 
 ### Constraints
 
+Respect source-specific disclosure limits. Strictly private additional validation
+inputs, locations, examples, counts and outcomes remain outside public artifacts,
+including this plan, issues and release notes. Use metadata-only authenticated
+inputs for that validation, with private bounded selections and reports.
+
 The first repository write materializes this plan. Every logical commit receives semantic self-review, applicable formatting/tests and staged public-content scanning; Python commits require repository-wide clean format checking. First signed push opens a draft PR; subsequent feature push follows complete local development and acceptance. Preserve pure reporting and provider-neutral core behavior. Public records contain only synthetic cases and aggregates, never private project identities, source, locators, hashes or internal coordination details. Raw snapshots and exclusions stay private outside input roots; do not execute/import audited source. Existing audit schemas/annotation semantics and review receipt schemas stay readable and unchanged. Keep original scanner configuration and input populations comparable; fewer detections alone are not success.
 
 ### Inputs And Sources
@@ -64,8 +69,8 @@ Both original repeat audits completed with unchanged decisions relative to the r
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009 | Materialize/review plan, signed commit/push, draft PR and issue refinements; draft PR #287 opened from signed plan commit 1f99353 | done |
-| WQ-02 | REQ-001, REQ-004, REQ-008 | After WQ-01: revalidate private evidence; fully adjudicate causal groups and improve audit grouping/diagnostics | in_progress |
-| WQ-03 | REQ-002, REQ-003, REQ-004 | After WQ-02: implement representation-aware DLP, confirmed regressions, dependencies and scanner identity | pending |
+| WQ-02 | REQ-001, REQ-004, REQ-008 | Source-bound baseline causal ledger reconciles all 3790 entries; existing audit-report improvements remain in WQ-03/WQ-05 | done |
+| WQ-03 | REQ-002, REQ-003, REQ-004 | After WQ-02: implement representation-aware DLP, confirmed regressions, existing audit report improvements, dependencies and scanner identity | in_progress |
 | WQ-04 | REQ-005, REQ-006, REQ-010 | Shared bounded streaming source metadata, closed diagnoses and pure LR/TB selection implemented; focused real-Git/result/receipt/publication tests pass | done |
 | WQ-05 | REQ-002, REQ-003, REQ-005, REQ-006, REQ-007, REQ-010 | After WQ-03/WQ-04: integrate callers, fuzz/inverse tests, >=90% affected component coverage and installed/resource qualification | pending |
 | WQ-06 | REQ-001, REQ-002, REQ-006, REQ-007, REQ-008 | After WQ-05: aggregate self-review, one Security scan, threat-model review, actual own-tool review and repeat corpora/cleanup | pending |
@@ -73,6 +78,8 @@ Both original repeat audits completed with unchanged decisions relative to the r
 | WQ-08 | REQ-008, REQ-009 | After WQ-07: signed release/v0.14.4 PR with archival/reset; stable publication, external closure and cleanup verification | pending |
 
 ### Locked Decisions
+
+**Module map and profiling.** Group the detector in the one-level `context/dlp/` package, keeping the existing import facade and no parallel legacy file. Candidate, representation, credential-role and admission owners remain separate from acquisition, private audit state and pure reporting. Keep agent routes, development owner map and coverage paths synchronized. Profile actual full-audit workers and compare end-to-end time/CPU/RSS with 0.14.3; component timings alone do not complete acceptance.
 
 **Causal ledger.** Keep original observation identities and role/proof context. Split mixed groups and verify every member against the claimed common cause and additional sensitive material. Use existing exact labels (expected-protection, confirmed-benign, conservative-ambiguity); record confirmed false negatives as synthetic regressions and inverse controls. A detector family alone cannot justify a verdict. Unsupported interpretation remains conservative with an explicit rationale, not an unexamined parking label.
 
@@ -98,9 +105,57 @@ Both original repeat audits completed with unchanged decisions relative to the r
 
 ### Latest Validation Results
 
+The next complete toolkit probe exposed a normalization regression (5358 rejected
+role units); it was explicitly rejected as an acceptance candidate. A focused
+replay of the retained observations and every new rejection from that probe
+resolved 3034 of the 3075 added observations through general Markdown-boundary
+and digit/layout corrections. Remaining new groups are being reviewed for
+material versus conservative interpretation. The numeric certificate census
+has no unexplained candidate across the additionally admitted retained numeric
+units, including complete-unit probes. Baseline dispositions were refined with
+explicit revision history to 1260 confirmed-benign, 1923 expected-protection and
+607 conservative-ambiguity entries; these are adjudications, not final scan
+acceptance. The production CLI now receives those exact reviewed annotations.
+Profile-backed ASCII fast paths have exhaustive equivalence tests over all 128
+ASCII code points. Current focused DLP/property/source suites pass 752 checks;
+strict typing and formatting pass. Final full-population/resource checks remain
+pending and the failed probe is not substituted for them.
+
+The first aggregate quality run completed 4050 passing tests, 47 skips and 357
+subtests at 89.07% total branch-aware coverage, but failed two old private-sidecar
+fixtures that expected UUIDs to be rejected as phones. Both fixtures now verify
+UUID admission and retain bounded diagnostics for an ambiguous identifier; all
+three focused sidecar cases pass. Affected detector/audit/source/layout owners
+measure 92–100% individually. Exact CLI annotation readback verifies all 3790
+retained dispositions and preserves the 80 prior-cycle classifications. The
+repeated aggregate gate passed on the committed detector head. Subsequent
+upstream-integration self-review found a combined block/inline depth gap in
+native emphasis finalization. The correction reserves work before finalization,
+checks combined depth, resets source-free parser scope on failure and bounds
+Unicode compatibility/case-fold expansion. Its focused suite passes 802 tests,
+with 266 extended-profile checks and strict typing. The completed-head aggregate
+gate and corpus replays remain required after this runtime correction.
+
+The full candidate replay had no rejected benign expectation or lost protection,
+but new observations exposed a separate representation error: arbitrary marker
+removal could turn an unpaired arithmetic operator into a phone separator.
+Weak phone classification now uses original/actual Markdown structure, while
+strong-contact deobfuscation and independently complete phone fragments retain
+protection. No arithmetic, repository or filename exemption was added. All 811
+focused cases and 274 extended-profile checks pass, including inverse controls.
+Repeat full coverage on the frozen final source: the concurrent intermediate
+run passed all 4061 tests, but its coverage source changed during execution and
+cannot qualify the corrected head.
+
+WQ-03 detector/package and local audit-report changes are implemented locally. The shared facade is preserved; reporting imports only the pure source-class contract. Synthetic material/representation/network properties pass 443 focused checks; the full-source configuration-role follow-up passes 230, including negative quoted/standalone cases. The earlier combined DLP/audit run passed 737 checks with individual new detector/audit owners at or above 90% branch-aware coverage; current final coverage still needs the completed-head gate. Strict mypy covers all 166 runtime files. Instruction routes validate and scoped current documentation links have no errors; historical archive warnings remain historical evidence.
+
+Actual py-spy sampling included the private corpus's reused worker and completed all 19050 units with no sampling errors. Initial full toolkit replay completed all 121583 units in about 170 seconds before the measured redaction optimizations; the separately installed 0.14.3 baseline took about 126 seconds on the same authenticated input. Peak RSS was approximately 173/153 MiB respectively. These are intermediate measurements, not final performance acceptance. Retained-unit replay exposed secondary causes and overly broad baseline labels; candidate adjudication must refine them with explicit evidence rather than interpreting a lower detection count as correctness. Full final corpus scans, classification readback, final resource comparison and raw cleanup remain required.
+
 Planning probes: isolated binary-only Python 3.14/3.15 component experiments succeeded without target code execution or network classification. On the same synthetic 64 KiB inputs, Mistune used roughly 7 ms for prose, 110 ms for brackets and 62 ms for malformed tags, versus markdown-it-py about 12/520/180 ms. Both required memory/work bounds; the full chosen stack reached approximately 87 MiB peak RSS in the Python 3.15 adversarial probe. These are feasibility results, not production or full-corpus acceptance.
 
 WQ-01 plan/public-content/dependency gates passed; signed first push opened draft PR #287. WQ-04 focused diagram/repository suite passed 308 tests with 35 skips; new text-stream and layout modules have complete branch coverage and the source adapter measured 96% (99% combined for the three modules). Strict mypy passed. Real tests cross large-source runner finalization, v13 receipt loading and publication revalidation; controlled child faults verify reaping. Follow-up coverage cases address the remaining adapter branches. Aggregate quality, Security and actual own-tool acceptance remain pending; none has been claimed complete.
+
+WQ-02 baseline private ledger has 1100 confirmed-benign, 1944 expected-protection and 746 conservative-ambiguity observations, each with a cause and original identity. Counterfactual checks downgraded numeric groups containing additional unexplained candidates rather than granting a blanket benign label. All 30 whole-unit-only cases were separately inspected: 28 exceed code-proof size/span bounds, one proven literal mixes representation changes, and one full excerpt's literals close reference refinement. These are baseline dispositions, not a completed candidate replay. A temporary private excerpt spool supports adjudication and remains owned cleanup work. WQ-03 began: selected dependency lock/install succeeds; empty/masked credential boundaries and standard Unicode presentation have 28 focused synthetic checks passing, including adjacent/concatenated secret and invalid-joiner controls. Broader view/numeric/consumer/fuzz validation remains pending.
 
 ### Risks And Recovery
 
@@ -108,7 +163,14 @@ Lossy parsers can hide material; always retain independent original checks and u
 
 ### Resume Point
 
-WQ-02: complete the private causal ledger using the revalidated source-bound observations and retain only synthetic public regressions. WQ-04's source/layout slice is implemented and locally characterized, including the follow-up 67-test slice, repository-wide Ruff checks and strict mypy. First push/draft PR #287 and both issue refinements are complete; keep further development local.
+WQ-03/WQ-05: amend the reviewed parser/Unicode hardening, rebuild a clean installed
+artifact, then complete full candidate population checks, installed/resource
+qualification and final coverage. Use the frozen installed scanner for audits so
+builds cannot change its identity. All raw candidate scans remain intermediate.
+WQ-04 is committed locally as 316c53d; only the first plan commit has been pushed.
+Preserve the private causal ledger, revalidated owned Git snapshot and excerpt
+spools until final replay, then remove all task-owned raw copies. Aggregate
+Security scans and successful own-tool runs remain 0/1 and 0/2.
 
 ### Plan Fidelity Check
 
@@ -129,6 +191,11 @@ All repository requirements and queue items must be verified, required reviews/c
 ### Post-Close Delivery
 
 Required after release-PR merge: inspect CI-owned stable TestPyPI/PyPI bytes/provenance/installs, annotated tag and immutable Release/receipt; confirm issue/milestone closure, site notification/deployment, synchronized clean main and final owned-state cleanup. No extra repository closure PR.
+
+Final cleanup also removes task-owned temporary source copies, build products,
+environments, diagnostic artifacts and Docker resources. Remove obsolete GitHub
+Actions logs and temporary artifacts after external reconciliation, retaining
+published releases and the evidence needed to verify their provenance.
 
 ### Handoff Notes
 

@@ -6,6 +6,7 @@ import os
 import re
 import unicodedata
 import urllib.parse
+from bisect import bisect_right
 from typing import Any
 
 SENSITIVE_KEY_PATTERN = (
@@ -19,6 +20,7 @@ SENSITIVE_NAMED_KEY_PATTERN = (
     rf"(?:(?:[A-Za-z0-9]+[_.-])*(?:{SENSITIVE_KEY_PATTERN})|"
     r"(?:[A-Za-z0-9]+[_.-])*token)"
 )
+_MATERIAL_KEY_HINT = re.compile(rf"(?i)(?:{SENSITIVE_KEY_PATTERN}|token|authorization)")
 
 _SECRET_ASSIGNMENT_KEY_PATTERN = (
     rf'(?:"{SENSITIVE_NAMED_KEY_PATTERN}"|'
@@ -99,6 +101,7 @@ SECRET_SHAPED_ENV_NAME_RE = re.compile(
     flags=re.IGNORECASE,
 )
 MIN_DISCOVERED_SECRET_LENGTH = 16
+_ASCII_BYPASS_CONTROLS = {code: None for code in (*range(32), 127) if chr(code) not in "\n\r\t"}
 
 
 REDACTION_TOKEN_SEPARATOR = r"[-_\s\u200b-\u200f\u202a-\u202e\u2060-\u206f]*"
@@ -155,6 +158,8 @@ def normalize_redaction_tokens(text: str) -> str:
 def strip_redaction_bypass_controls(text: str) -> str:
     """Remove invisible controls that can split secret keys or values."""
 
+    if text.isascii():
+        return text.translate(_ASCII_BYPASS_CONTROLS)
     return "".join(
         char
         for char in text
@@ -216,6 +221,102 @@ def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None
     return redacted
 
 
+def _complete_credential_value(text: str, end: int) -> bool:
+    """Require a terminal value, not a prefix of concatenation or a call.
+
+    Closing source/JSON wrappers may follow a displayed credential. A following
+    literal or expression does not prove an empty/already-masked whole value.
+    """
+
+    cursor = end
+    for characters in (" \t", "\"'", " \t"):
+        while cursor < len(text) and text[cursor] in characters:
+            cursor += 1
+    return cursor == len(text) or text[cursor] in ",;)]}#\r\n"
+
+
+def masked_credential_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Locate canonical masks so display interpretation cannot erase them."""
+
+    if "***" not in text:
+        return ()
+    return tuple(
+        sorted(
+            {
+                match.span("value")
+                for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
+                for match in pattern.finditer(text)
+                if match["value"] == "***" and _complete_credential_value(text, match.end())
+            }
+        )
+    )
+
+
+def _credential_material(text: str) -> bool:
+    if (":" not in text and "=" not in text) or not _MATERIAL_KEY_HINT.search(text):
+        return False
+    # Resolve complete quoted values first. The broader fallback expressions
+    # must not reinterpret a closing quote as a new credential. Binary search
+    # avoids quadratic work for documents containing many empty/masked fields.
+    query_fields = sorted(
+        match.span()
+        for match in _QUERY_VALUE_RE.finditer(text)
+        if match[1]
+        and _query_key_is_sensitive(match[2])
+        and _empty_query_value(text, match)
+        and _URI_PREFIX.search(text[max(0, match.start() - 1024) : match.start()])
+    )
+    safe_fields = set(query_fields)
+    for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
+        if "suffix" not in pattern.groupindex:
+            continue
+        for match in pattern.finditer(text):
+            index = bisect_right(query_fields, (match.start(), len(text) + 1)) - 1
+            if index >= 0 and match.start() < query_fields[index][1]:
+                continue
+            if match["value"] not in {"", "***"} or not _complete_credential_value(
+                text, match.end()
+            ):
+                return True
+            safe_fields.add(match.span())
+    ordered_fields = sorted(safe_fields)
+    for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
+        if "suffix" in pattern.groupindex:
+            continue
+        for match in pattern.finditer(text):
+            index = bisect_right(ordered_fields, (match.start(), len(text) + 1)) - 1
+            if index >= 0 and match.start() < ordered_fields[index][1]:
+                continue
+            if match["value"] in {"", "***"} and _complete_credential_value(text, match.end()):
+                continue
+            return True
+    return False
+
+
+_QUERY_VALUE_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?")
+_EMPTY_QUERY_VALUE_RE = re.compile(r"(?:(?P<quote>['\"])(?:\*\*\*|)(?P=quote)|\*\*\*)")
+_URI_PREFIX = re.compile(r"[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s\"'<>()]*$")
+
+
+def _empty_query_value(text: str, match: re.Match[str]) -> bool:
+    safe = _EMPTY_QUERY_VALUE_RE.match(text, match.start(3))
+    return safe is not None and (
+        _complete_credential_value(text, safe.end()) or text[safe.end() : safe.end() + 1] == "&"
+    )
+
+
+def _query_has_material(text: str) -> bool:
+    """Classify complete values; diagnostic replacement may consume wrappers."""
+
+    for match in _QUERY_VALUE_RE.finditer(text):
+        if not _query_key_is_sensitive(match[2]):
+            continue
+        if _empty_query_value(text, match):
+            continue
+        return True
+    return False
+
+
 def has_sensitive_material(
     text: str,
     *,
@@ -239,16 +340,10 @@ def has_sensitive_material(
     return bool(
         redact_env_secret_values(prepared, values=values) != prepared
         or redact_url_userinfo_only(prepared) != prepared
-        or _redact_sensitive_query_values(credential) != credential
+        or _query_has_material(credential)
         or _BEARER_RE.search(prepared)
         or _JWT_RE.search(prepared)
-        or any(
-            # A canonical already-masked candidate contains no credential left.
-            # Token normalization alone is not evidence of a secret.
-            match["value"] != "***"
-            for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
-            for match in pattern.finditer(credential)
-        )
+        or _credential_material(credential)
     )
 
 
@@ -356,7 +451,7 @@ def _redact_sensitive_query_values(value: str) -> str:
             return match.group(0)
         return f"{prefix}{key}=***{suffix}"
 
-    return re.sub(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?", replace, value)
+    return _QUERY_VALUE_RE.sub(replace, value)
 
 
 def redact_url_userinfo(value: str) -> str:

@@ -33,7 +33,7 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     coverage_commands = (
         "coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=85",
         "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80",
-        "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp.py,src/ocr_toolkit/posting/approval.py --fail-under=85",
+        "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp/admission.py,src/ocr_toolkit/posting/approval.py --fail-under=85",
         "coverage report --include=src/ocr_toolkit/mcp_config.py,src/ocr_toolkit/providers/gitlab.py,src/ocr_toolkit/providers/gitlab_context.py,src/ocr_toolkit/providers/gitlab_discussions.py,src/ocr_toolkit/providers/gitlab_remediation.py,src/ocr_toolkit/context/policy.py,src/ocr_toolkit/result_contract.py --fail-under=85",
         "coverage report --include=src/ocr_toolkit/result_contract.py --fail-under=90",
     )
@@ -50,7 +50,7 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}" in workflow
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}" in workflow
     assert workflow.count("uv run --no-sync pytest -q") == 2
-    assert "for audit_module in cli corpus scanner state limits worker_process; do" in script
+    assert "for audit_module in cli corpus scanner state limits worker_process report; do" in script
     assert (
         "coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90"
         in script
@@ -58,6 +58,12 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     for command in coverage_commands:
         assert command in script
         assert workflow.count(f"uv run --no-sync {command}") == 1
+    for modules in (
+        "audit_module in cli corpus scanner state limits worker_process report",
+        "source_module in context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata reporting/diagram_layout",
+    ):
+        assert f"for {modules}; do" in script
+        assert f"for {modules}; do" in workflow
 
 
 def test_ci_quality_job_does_not_duplicate_the_package_gate() -> None:
@@ -116,7 +122,7 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
 
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
-    assert output.count("fresh invocation: run --no-sync sh -c") == 18
+    assert output.count("fresh invocation: run --no-sync sh -c") == 29
 
 
 @pytest.mark.parametrize("failure_code", [2, 7, 130])

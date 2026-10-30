@@ -183,8 +183,8 @@ def test_full_source_docstring_and_comment_roles_stay_strict_with_real_declarati
 def test_environment_snapshot_and_unique_view_checks_are_scoped_to_one_admission(
     monkeypatch,
 ) -> None:
-    from ocr_toolkit.context import dlp
     from ocr_toolkit.context.contracts import TextBudgets
+    from ocr_toolkit.context.dlp import admission as dlp
 
     budgets = TextBudgets(20000, 80000, 300)
     collected = []
@@ -525,3 +525,27 @@ def test_literal_sink_keeps_independent_obfuscated_material_checks(value) -> Non
         allow_opaque_code=True,
         sink=TextSink.LITERAL_CODE,
     ).admitted
+
+
+@pytest.mark.parametrize("path", ("settings", "unknown.ext", "workflow.yml"))
+def test_permission_role_comes_from_full_source_not_excerpt_or_filename(path):
+    source = "permissions:\n  id-token: write\n  contents: read\n"
+    result, _, excerpt = projected_source(source, path=path, line=2)
+    assert result["comments"][0].get("existing_code") == excerpt
+    from ocr_toolkit.context.contracts import TextBudgets
+    from ocr_toolkit.context.dlp import check_text
+
+    assert not check_text(excerpt, budgets=TextBudgets(2000, 8000, 10), publication=True).admitted
+
+
+@pytest.mark.parametrize(
+    "source,line",
+    (
+        ("other:\n  id-token: write\n", 2),
+        ("permissions:\n  id-token: synthetic-material\n", 2),
+        ('def example():\n    """permissions:\n      id-token: write\n    """\n', 3),
+    ),
+)
+def test_permission_roles_cannot_be_borrowed_from_unrelated_or_quoted_structure(source, line):
+    result, _, _ = projected_source(source, path="source", line=line)
+    assert "existing_code" not in result["comments"][0]

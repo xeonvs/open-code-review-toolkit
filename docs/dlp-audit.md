@@ -71,6 +71,9 @@ time; no source-bearing request queue is built. Each exchange has a fresh reques
 identity and bounded length framing. A stale/invalid response cannot count as
 evaluation of the next file. Each worker freezes the installed scanner identity
 at startup; the parent independently verifies it before and after the scan.
+The opaque scanner identity includes installed Mistune, regex and emoji versions
+and the interpreter's Unicode tables, so a dependency-only change cannot be
+mistaken for an identical scanner. Existing persisted run formats remain readable.
 Source lines and bounded syntax are prepared once per file rather than once per
 rejected line. Source-bearing locals are released between files. Defaults are 900 seconds overall, 60 seconds per file and 120
 seconds per Git command. For large projects or slower hosts, use `--seconds`
@@ -115,8 +118,10 @@ Console output contains generated identities and aggregate counts. Private JSON
 and Markdown reports contain no snippets or matched values. The authenticated
 corpus manifest maps generated file slots to local source locators; keep it
 private too. JSON reports contain each rejected unit's role, line, primary
-reason, detector and source-proof fact. Markdown lists the ten largest primary
-detector groups. The key, local paths and reports must never be committed or
+reason, detector and source-proof fact. Markdown groups the ten largest primary
+detectors by role and source proof. It separately counts distinct line locations,
+whole-file probes with/without a child primary reason, and differing role facts.
+These are diagnostic queues, not automatic causal labels. The key, local paths and reports must never be committed or
 attached to a public issue. Use independently constructed synthetic examples
 for public regressions.
 

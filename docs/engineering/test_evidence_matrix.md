@@ -10,6 +10,24 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.4 bounded DLP and diagram-source evidence
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Original material survives representation interpretation | Shared DLP -> context/federation/publication and diagram admission | `test_dlp_0144.py`, common helpers and DLP/source/network properties cover Unicode email, standard emoji versus unrelated controls, quoted/masked/query values, ternary versus URI authority, Markdown contact boundaries, technical tokens and inverse material | Deterministic contracts and synthetic properties do not measure universal precision/recall; unsupported roles remain conservative |
+| Source roles are exact and bounded | Full immutable source -> `SourceSyntax` -> source proof -> publication projection | Source-semantic tests carry permission roles into exact excerpts without filename authority; quoted, unrelated, malformed, stale, literal-material and budget cases retain independent checks | Source identity is not confidentiality authority; no execution or alias/factory dataflow inference |
+| Diagram references do not inherit the smaller evidence limit | Git text stream -> `DiagramSourceReader` -> pure admission and GitLab revalidation | Real temporary Git blobs cross 256000/5000000-byte boundaries, split UTF-8, late NUL/invalid text, final lines, unsafe object modes, shared budgets and killed/reaped peer failures; runner/result/receipt consumers use the same adapter | 5000000 bytes/blob, 32000000 bytes/session, 30 seconds and <=65536-byte chunks; optional failure omits only the diagram |
+| Layout remains pure and deterministic | Admitted flowchart -> shared renderer -> local/GitLab | Chain, branch, cycle, Unicode/condition-width and permutation properties qualify LR/TB selection; sequence output stays unchanged | Estimated width selects orientation; it does not prove model semantics or exact provider pixel layout |
+| Private audit observations stay non-authoritative | Official local CLI -> isolated worker -> authenticated state and source-free report | Existing native lifecycle/persistence tests plus report grouping and dependency-identity regressions cover role/proof mismatch visibility, aggregate-child probes, deterministic ordering and library-version changes | No new audit command or CI corpus stage; classifications never suppress runtime checks |
+
+The current full source-test run reaches 89.07% total branch-aware coverage; the
+affected DLP/audit and new source/layout owners each exceed their 90% floors.
+Two obsolete UUID diagnostic-fixture expectations were identified and corrected:
+full UUIDs are now admitted, while ambiguous identifiers still exercise bounded
+rejection sidecars. The completed-head gate, installed/resource qualification,
+aggregate Security scan and actual model/diagram acceptance remain explicit
+requirements in the active plan. Strictly private validation details are absent.
+
 ## v0.14.3 source interpretation and private audit evidence
 
 Final runtime `b4cfbb1` passes the complete sequential quality gate: 3747 tests,

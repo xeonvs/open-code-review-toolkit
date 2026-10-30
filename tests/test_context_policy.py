@@ -443,7 +443,10 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
     )
     assert (email.reason, email.detector) == ("pii", "email:normalized")
     assert (phone.reason, phone.detector) == ("pii", "phone:normalized")
-    assert (technical_id.reason, technical_id.detector) == ("pii", "phone:normalized")
+    assert technical_id.admitted  # Complete UUID syntax is a typed identifier.
+    assert not check_text(
+        "Call 12345678-1234-5678-1234-123456789012", budgets=TextBudgets(100, 200, 2)
+    ).admitted
     assert check_text("Build 123456789012345", budgets=TextBudgets(100, 200, 2)).admitted
     assert check_text("sha-a1234567890abcdef", budgets=TextBudgets(100, 200, 2)).admitted
     monkeypatch.setenv("SYNTHETIC_CONTEXT_SECRET", "not-a-real-token-value")

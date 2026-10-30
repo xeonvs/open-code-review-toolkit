@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ocr_toolkit.context.dlp import FORBIDDEN_SOURCE_CLASSES
 from ocr_toolkit.ocr_result import MAX_TOOLKIT_MCP_USAGE_COUNT
-from ocr_toolkit.result_contract import OcrResultContractError, ReviewOutcome
+from ocr_toolkit.result_contract import (
+    FORBIDDEN_SOURCE_CLASSES,
+    OcrResultContractError,
+    ReviewOutcome,
+)
 
 
 def format_dlp_admission(publication: Any) -> str:

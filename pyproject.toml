@@ -34,6 +34,10 @@ dependencies = [
   "httpx2>=2.13.0,<3",
   "anyio>=4.10.0,<5",
   "certifi>=2026.10.19,<2027",
+  # Bounded DLP representation parsing; no model or network validation.
+  "mistune>=3.4.0,<3.5",
+  "regex>=2026.9.29,<2027",
+  "emoji>=2.16.0,<3",
 ]
 
 [project.urls]
@@ -62,6 +66,7 @@ dev = [
   "towncrier>=26.9.0",
   "twine>=7.0.0",
   "types-jsonschema>=4.26.0.20260518",
+  "types-regex>=2026.9.29.20261030",
 ]
 
 [tool.hatch.version]

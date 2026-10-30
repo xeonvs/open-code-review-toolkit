@@ -6,6 +6,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+FORBIDDEN_SOURCE_CLASSES = frozenset(
+    {
+        "forge_discussions",
+        "remediation_threads",
+        "ci_outcomes",
+        "external_context",
+        "operator_secret",
+        "other",
+    }
+)
+
 OutcomeKind = Literal["clean", "warning", "partial", "failed", "skipped"]
 
 MANIFEST_SCHEMA = "ocr.run-manifest/v1"

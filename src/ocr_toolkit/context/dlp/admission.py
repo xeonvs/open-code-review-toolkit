@@ -2,62 +2,48 @@
 
 from __future__ import annotations
 
-import html
-import ipaddress
 import re
 import unicodedata
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import date
+from functools import wraps
+from typing import ParamSpec
+
+import regex
 
 from ocr_toolkit.common.redaction import (
-    SENSITIVE_NAMED_KEY_PATTERN,
     environment_secret_values,
     has_sensitive_material,
     redact_env_secret_values,
 )
 from ocr_toolkit.context.code_text import CodeTextContext, TextSink
 from ocr_toolkit.context.contracts import TextBudgets
+from ocr_toolkit.context.dlp.credentials import credential_reference_view
+from ocr_toolkit.context.dlp.decoding import _html_decode, _mermaid_decode, bounded_nfkc
+from ocr_toolkit.context.dlp.email import contains_email
+from ocr_toolkit.context.dlp.markup import (
+    RepresentationLimit,
+    interpret_markdown,
+    strip_format_markers,
+)
+from ocr_toolkit.context.dlp.numeric import (
+    _contains_phone,
+    _contains_phone_segments,
+    _explicit_contact_phone,
+    phone_markup_view,
+)
+from ocr_toolkit.context.dlp.presentation import canonical_whitespace, has_unsafe_controls
+from ocr_toolkit.result_contract import FORBIDDEN_SOURCE_CLASSES
 
-EMAIL_RE = re.compile(
-    r"(?i)(?<![\w.+-])[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}"
-    r"@(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}(?![a-z0-9_-])"
-)
-PHONE_RE = re.compile(r"(?<!\w)(?:\+?[1-9][\d .()/-]{7,24}\d)(?!\w)")
-PURE_CREDENTIAL_ASSIGNMENT_RE = re.compile(
-    rf"(?im)^[ \t]*(?:(?P<key_quote>['\"]){SENSITIVE_NAMED_KEY_PATTERN}"
-    rf"(?P=key_quote)|{SENSITIVE_NAMED_KEY_PATTERN})[ \t]*:[ \t]*"
-    r"(?:(?P<quote>['\"])\{\{[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\}\}(?P=quote)|"
-    r"(?P<empty>\"\"|''))[ \t]*$"
-)
-ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
-_MERMAID_ENTITY_RE = re.compile(r"(?<!&)#([0-9]+);")
-_HTML_NUMERIC_ENTITY_RE = re.compile(r"&#([xX][0-9a-fA-F]+|[0-9]+);?")
-_NETWORK_TOKEN_CHARS = frozenset("0123456789abcdefABCDEF:./")
-_NETWORK_LABEL_RE = re.compile(
-    r"(?i)(?<![\w:])(?:ip(?:v[46])?|cidr|subnet|address|host|listen|allow|network|prefix):$"
-)
-_TECHNICAL_SEPARATOR = r"(?:[ \t]+|[ \t]*(?:[<>]=?|[=!]=|=|[≤≥≠])[ \t]*)"
-VERSION_CONTEXT_RE = re.compile(
-    rf"(?i)\b(?:version|release|build|pin){_TECHNICAL_SEPARATOR}(?:v)?$"
-)
-DATE_CONTEXT_RE = re.compile(
-    rf"(?i)\b(?:date|dated|on|since|until|before|after|expires)"
-    rf"(?:[ \t]+on)?{_TECHNICAL_SEPARATOR}$"
-)
-IP_CONTEXT_RE = re.compile(
-    r"(?i)(?:\b|_)(?:ipv4|ip|cidr|subnet|address|host|loginhost|listen|allow|network)\b"
-)
-PHONE_CONTEXT_RE = re.compile(r"(?i)\b(?:call|phone|tel|contact)[ \t]*$")
 MARKDOWN_DEST_RE = re.compile(
     r"(?:\]\(\s*<?(?:https?://|mailto:)|^\s*\[[^\]\n]+\]:\s*<?(?:https?://|mailto:)|"
     r"<(?:https?://|mailto:))",
     re.IGNORECASE | re.MULTILINE,
 )
-HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
-HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>\n]*>")
+HTML_COMMENT_RE = regex.compile(r"<!--[\s\S]*?-->")
+HTML_TAG_RE = regex.compile(r"</?[A-Za-z][^>\n]*>")
 MARKDOWN_ESCAPE_RE = re.compile(r"\\([\\`*{}\[\]()#+\-.!_>~|])")
 MARKDOWN_FORMAT_RE = re.compile(r"[`*_~]")
 DISPLAY_WHITESPACE_RE = re.compile(r"\s+")
@@ -104,219 +90,32 @@ def dlp_mode(enabled: bool) -> Iterator[None]:
         _DLP_ENABLED.reset(token)
 
 
-def _html_decode(value: str) -> str:
-    """Decode the bounded entity layers a browser can display as text."""
-
-    def bounded_number(match: re.Match[str]) -> str:
-        number = match[1]
-        hexadecimal = number[:1].lower() == "x"
-        digits = (number[1:] if hexadecimal else number).lstrip("0") or "0"
-        if len(digits) > (6 if hexadecimal else 7):
-            return "&#1114112;"  # Let html.unescape apply its invalid-scalar mapping.
-        return f"&#{'x' if hexadecimal else ''}{digits};"
-
-    normalized = value
-    for _iteration in range(2):
-        # Preserve HTML's scalar/legacy mappings without an unbounded decimal
-        # integer conversion or changing Python's process-wide integer limit.
-        prepared = (
-            _HTML_NUMERIC_ENTITY_RE.sub(bounded_number, normalized)
-            if "&#" in normalized
-            else normalized
-        )
-        decoded = html.unescape(prepared)
-        if decoded == normalized:
-            break
-        normalized = decoded
-    return normalized
-
-
-def _mermaid_decode(value: str) -> str:
-    """Decode one layer of the renderer's decimal entities without expansion."""
-
-    def character(match: re.Match[str]) -> str:
-        digits = match[1].lstrip("0") or "0"
-        if len(digits) > 7:
-            return match[0]
-        code = int(digits)
-        return chr(code) if code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else match[0]
-
-    return _MERMAID_ENTITY_RE.sub(character, value)
-
-
-def _technical_decode(value: str) -> str:
-    """Resolve bounded HTML/one-Mermaid/HTML context without recursive Mermaid."""
-
-    return _html_decode(_mermaid_decode(_html_decode(value)))
-
-
-def _is_display_control(character: str) -> bool:
-    return bool(
-        (unicodedata.category(character) in {"Cc", "Cf", "Cs"} and not character.isspace())
-        or "\ufe00" <= character <= "\ufe0f"
-        or "\U000e0100" <= character <= "\U000e01ef"
-    )
-
-
-def _contains_phone(value: str) -> bool:
-    """Recognize formatted phone-like values without classifying bare identifiers."""
-
-    return any(
-        (
-            match.group(0).startswith("+")
-            or any(separator in match.group(0) for separator in " .()/-")
-        )
-        and not _technical_number(value, match)
-        for match in PHONE_RE.finditer(value)
-    )
-
-
-def _network_number(value: str, start: int, end: int) -> bool:
-    """Parse a complete bounded network, not a phone-regex-sized fragment."""
-
-    candidate_start = start
-    while start and end - start < 64 and value[start - 1] in _NETWORK_TOKEN_CHARS:
-        start -= 1
-    label_separator = False
-    # Only a recognized delimited label may precede the complete network.
-    # A lone hextet such as ffff: must not grant an IPv4-tail exception.
-    colon = value.find(":", start, candidate_start)
-    if colon >= 0 and _NETWORK_LABEL_RE.search(value[max(0, colon - 16) : colon + 1]):
-        start = colon + 1
-        label_separator = True
-    while end < len(value) and end - start < 64 and value[end] in _NETWORK_TOKEN_CHARS:
-        end += 1
-    contact_prefix = value[max(0, start - 25) : start].rstrip(": \t")
-    if PHONE_CONTEXT_RE.search(contact_prefix):
-        return False
-    left = value[start - 1] if start and not label_separator else ""
-    for neighbor in (left, value[end : end + 1]):
-        if neighbor and (neighbor.isalnum() or neighbor in "_:./%-"):
-            return False
-    token = value[start:end]
-    if "/" not in token:
-        return False
-    if token.endswith("."):
-        # Remove one prose period; dotted/word continuations still fail parsing.
-        token = token[:-1]
-    try:
-        ipaddress.ip_network(token, strict=False)
-    except ValueError:
-        return False
-    return True
-
-
-def _decoded_network_number(before: str, candidate: str, after: str) -> bool:
-    """Bind an encoded fragment to its complete parsed network, not another value."""
-
-    # A 64-character token and contact prefix fit here even with decimal escapes.
-    raw_before, raw_after = before[-1024:], after[:1024]
-    if not any(marker in raw_before or marker in raw_after for marker in ("#", "&")):
-        return False
-    decoded_before = _technical_decode(raw_before)
-    decoded_after = _technical_decode(raw_after)
-    if decoded_before == raw_before and decoded_after == raw_after:
-        return False
-    start = len(decoded_before)
-    return _network_number(
-        decoded_before + candidate + decoded_after, start, start + len(candidate)
-    )
-
-
-def _technical_number(value: str, match: re.Match[str]) -> bool:
-    """Exclude only bounded, parsed technical syntax from phone candidates."""
-
-    candidate = match.group(0)
-    if candidate.startswith("+") or candidate != candidate.strip():
-        return False
-    before, after = value[: match.start()], value[match.end() :]
-    if PHONE_CONTEXT_RE.search(before[-24:]):
-        return False
-    network = "/" in candidate or re.match(r"/[+-]?[0-9]", after) is not None
-    if network and _network_number(value, *match.span()):
-        return True
-    if _decoded_network_number(before, candidate, after):
-        return True
-    if network:
-        return False
-    if before.endswith((".", "/", "-")) or re.match(r"(?:[./-]\d)", after):
-        return False
-    try:
-        if isinstance(ipaddress.ip_address(candidate), ipaddress.IPv4Address):
-            if after.startswith(":"):
-                port = re.match(r":(\d{1,5})\b", after)
-                return bool(port and 1 <= int(port[1]) <= 65535)
-            return bool(IP_CONTEXT_RE.search(before[-96:]))
-    except ValueError:
-        pass
-    # Only the bounded technical prefix is decoded/normalized: other representations and
-    # the complete unit still pass all secret, contact and laundering checks.
-    technical_prefix = unicodedata.normalize("NFKC", _technical_decode(before[-64:]))
-    if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(technical_prefix):
-        try:
-            date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
-        except ValueError:
-            return False
-        return True
-    if re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", candidate):
-        return bool(VERSION_CONTEXT_RE.search(technical_prefix))
-    if re.fullmatch(r"\d+\.\d+", candidate):
-        return bool(
-            re.search(r"(?i)\bdecimal\([ \t]*['\"]$", technical_prefix)
-            and (
-                re.match(r"['\"][ \t]*\)", after)
-                or re.match(r"['\"][ \t]*\)", _technical_decode(after[:64]))
-            )
-        )
-    return False
-
-
 def _semantic_secret_text(value: str) -> str:
     """Remove proven no-value assignments only from generic secret classification."""
 
-    return PURE_CREDENTIAL_ASSIGNMENT_RE.sub("safe_reference_assignment", value)
+    return credential_reference_view(value)
 
 
 def _display_normalize(value: str) -> str:
     """Approximate closed text rendered by common Markdown/HTML constructs."""
 
-    normalized = unicodedata.normalize("NFKC", _html_decode(value))
-    normalized = HTML_COMMENT_RE.sub("", normalized)
-    normalized = HTML_TAG_RE.sub("", normalized)
+    normalized = bounded_nfkc(_html_decode(value), original=value)
+    normalized = interpret_markdown(normalized).visible
     normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
-    normalized = MARKDOWN_FORMAT_RE.sub("", normalized)
-    normalized = "".join(
-        " " if character.isspace() else "" if _is_display_control(character) else character
-        for character in normalized
-    )
-    normalized = unicodedata.normalize("NFKC", normalized).casefold()
+    normalized = canonical_whitespace(normalized)
+    normalized = bounded_nfkc(normalized, original=value, fold=True)
     return DISPLAY_WHITESPACE_RE.sub(" ", normalized).strip()
 
 
 def _source_normalize(value: str) -> str:
     """Normalize publishable source without discarding hidden HTML source text."""
 
-    normalized = unicodedata.normalize("NFKC", _html_decode(value))
+    normalized = bounded_nfkc(_html_decode(value), original=value)
     normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
-    normalized = MARKDOWN_FORMAT_RE.sub("", normalized)
-    normalized = "".join(
-        " " if character.isspace() else "" if _is_display_control(character) else character
-        for character in normalized
-    )
-    normalized = unicodedata.normalize("NFKC", normalized).casefold()
+    normalized = strip_format_markers(normalized)
+    normalized = canonical_whitespace(normalized)
+    normalized = bounded_nfkc(normalized, original=value, fold=True)
     return DISPLAY_WHITESPACE_RE.sub(" ", normalized).strip()
-
-
-FORBIDDEN_SOURCE_CLASSES = frozenset(
-    {
-        "forge_discussions",
-        "remediation_threads",
-        "ci_outcomes",
-        "external_context",
-        "operator_secret",
-        "other",
-    }
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,6 +136,7 @@ class ForbiddenMatcher:
 
     exact: tuple[str, ...]
     sources: tuple[frozenset[str], ...] = ()
+    limited: bool = False
 
     @classmethod
     def compile(cls, values: tuple[str | ForbiddenValue, ...]) -> ForbiddenMatcher:
@@ -347,7 +147,11 @@ class ForbiddenMatcher:
             candidate = normalize_text(value, allow_horizontal_tabs=True)
             if not candidate:
                 continue
-            for representation in (_display_normalize(candidate), _source_normalize(candidate)):
+            try:
+                representations = (_display_normalize(candidate), _source_normalize(candidate))
+            except (RepresentationLimit, TimeoutError):
+                return cls((), (), limited=True)
+            for representation in representations:
                 if representation:
                     registered.setdefault(representation, set()).add(source)
         return cls(tuple(registered), tuple(frozenset(v) for v in registered.values()))
@@ -355,10 +159,16 @@ class ForbiddenMatcher:
     def match_details(self, value: str) -> tuple[str | None, tuple[str, ...]]:
         """Return rejection and aggregate classes without retaining rejected content."""
 
+        if self.limited:
+            return "limit", ()
         if not self.exact:
             return None, ()
         matched: set[str] = set()
-        for normalized in {_display_normalize(value), _source_normalize(value)}:
+        try:
+            representations = {_display_normalize(value), _source_normalize(value)}
+        except (RepresentationLimit, TimeoutError):
+            return "limit", ()
+        for normalized in representations:
             comparison_cost = max(1, len(normalized)) * sum(
                 max(1, len(candidate)) for candidate in self.exact
             )
@@ -397,11 +207,7 @@ def normalize_text(value: object, *, allow_horizontal_tabs: bool = False) -> str
         return None
     normalized = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
     allowed_controls = "\n\t" if allow_horizontal_tabs else "\n"
-    if any(
-        unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"}
-        and character not in allowed_controls
-        for character in normalized
-    ):
+    if has_unsafe_controls(normalized, allowed=allowed_controls):
         return None
     return normalized.strip()
 
@@ -410,32 +216,40 @@ def _literal_normalize(value: str) -> str:
     """Security canonicalization for a fixed literal sink, preserving operators."""
 
     normalized = _html_decode(value)
-    normalized = "".join(
-        " " if char.isspace() else "" if _is_display_control(char) else char for char in normalized
-    )
+    normalized = canonical_whitespace(normalized)
     return DISPLAY_WHITESPACE_RE.sub(
-        " ", unicodedata.normalize("NFKC", normalized).casefold()
+        " ", bounded_nfkc(normalized, original=value, fold=True)
     ).strip()
 
 
-def _literal_contact_view(value: str, *, visible: bool) -> str:
+def _literal_contact_view(value: str, *, visible: bool, formatting: bool = True) -> str:
     """Sweep arbitrary markup in the already source-bound contact view."""
 
-    normalized = unicodedata.normalize("NFKC", _html_decode(value))
-    return _display_normalize(normalized) if visible else _source_normalize(normalized)
+    normalized = bounded_nfkc(_html_decode(value), original=value)
+    normalized = phone_markup_view(normalized, formatting=False)
+    if visible:
+        # Preserve actual formatting boundaries for contact detection. An
+        # unmatched multiplication star stays literal; paired emphasis cannot
+        # join an obfuscated phone into an apparently bare identifier.
+        return _literal_normalize(interpret_markdown(normalized).contacts)
+    return _source_normalize(phone_markup_view(normalized, formatting=formatting))
 
 
-def _explicit_contact_phone(value: str) -> bool:
-    for match in PHONE_RE.finditer(value):
-        candidate = match.group(0)
-        prefix = value[max(0, match.start() - 64) : match.start()].rstrip(" \t'\"=:[{(")
-        if (candidate.startswith("+") or PHONE_CONTEXT_RE.search(prefix)) and not _technical_number(
-            value, match
-        ):
-            return True
-    return False
+_P = ParamSpec("_P")
 
 
+def _bounded_check(function: Callable[_P, DLPResult]) -> Callable[_P, DLPResult]:
+    @wraps(function)
+    def guarded(*args: _P.args, **kwargs: _P.kwargs) -> DLPResult:
+        try:
+            return function(*args, **kwargs)
+        except (RepresentationLimit, TimeoutError):
+            return DLPResult(False, None, "limit", "representation")
+
+    return guarded
+
+
+@_bounded_check
 def check_text(
     value: object,
     *,
@@ -484,6 +298,11 @@ def check_text(
     semantic = _semantic_secret_text(credential)
     if has_sensitive_material(normalized, credential_view=semantic, values=secrets):
         return DLPResult(False, None, "secret", "normalized")
+    compatible = bounded_nfkc(normalized)
+    if compatible != normalized and has_sensitive_material(
+        compatible, credential_view=bounded_nfkc(semantic), values=secrets
+    ):
+        return DLPResult(False, None, "secret", "compatible")
     literal = sink != TextSink.PROSE or allow_opaque_code
     display_transform = _literal_normalize if literal else _display_normalize
     source_transform = _literal_normalize if literal else _source_normalize
@@ -516,7 +335,7 @@ def check_text(
             return DLPResult(False, None, "limit", "lines")
         if redact_env_secret_values(mermaid_original, values=secrets) != mermaid_original:
             return DLPResult(False, None, "secret", "mermaid")
-        if publication and any(_is_display_control(char) for char in mermaid):
+        if publication and has_unsafe_controls(mermaid, display=True):
             return DLPResult(False, None, "laundering", "display_control")
         mermaid_semantic = _semantic_secret_text(_html_decode(_mermaid_decode(decoded_semantic)))
         views.append(("mermaid", mermaid, mermaid_semantic))
@@ -565,19 +384,34 @@ def check_text(
     seen_pii: set[str] = set()
     for representation, candidate in (
         ("normalized", normalized),
+        ("compatible", compatible),
         *((name, text) for name, text, _ in views),
     ):
         if candidate in seen_pii:
             continue
         seen_pii.add(candidate)
-        if EMAIL_RE.search(candidate):
+        if contains_email(candidate, markdown=not literal):
             return DLPResult(False, None, "pii", f"email:{representation}")
-        if _contains_phone(candidate):
+        # Arbitrary marker removal supports strong-contact deobfuscation, but
+        # cannot invent a weak phone candidate from literal punctuation.
+        phone_check = (
+            _explicit_contact_phone
+            if representation in {"source", "mermaid_source"}
+            else _contains_phone
+        )
+        if phone_check(candidate) or (
+            not literal
+            and phone_check(
+                _literal_normalize(
+                    interpret_markdown(phone_markup_view(candidate, formatting=False)).contacts
+                )
+            )
+        ):
             return DLPResult(False, None, "pii", f"phone:{representation}")
     # Secret/email deobfuscation remains independent of literal rendering.
     # Strong contact signals also retain the stricter arbitrary-format sweep.
     for representation, candidate, _secret_view in security_views:
-        if EMAIL_RE.search(candidate):
+        if contains_email(candidate):
             return DLPResult(False, None, "pii", f"email:{representation}")
         if _explicit_contact_phone(candidate):
             return DLPResult(False, None, "pii", f"phone:{representation}")
@@ -590,8 +424,19 @@ def check_text(
             else (phone_original,)
         )
         for candidate in phone_views:
+            # A marker can obscure the boundary of a complete contact fragment
+            # (e.g. an unmatched underscore); never concatenate numeric sides.
+            if _contains_phone_segments(candidate):
+                return DLPResult(False, None, "pii", "phone:literal_markup")
             for visible in (True, False):
-                if _contains_phone(_literal_contact_view(candidate, visible=visible)):
+                phone_check = _contains_phone if visible else _explicit_contact_phone
+                if phone_check(
+                    _literal_contact_view(
+                        candidate,
+                        visible=visible,
+                        formatting=not (allow_opaque_code and sink == TextSink.LITERAL_CODE),
+                    )
+                ):
                     return DLPResult(False, None, "pii", "phone:literal_markup")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
     matcher_reason, source_classes = matcher.match_details(normalized)
@@ -601,18 +446,19 @@ def check_text(
         source_classes = tuple(sorted(set(source_classes) | set(mermaid_sources)))
     if matcher_reason:
         return DLPResult(False, None, matcher_reason, "forbidden_matcher", source_classes)
-    if publication:
+    if publication and not (allow_opaque_code and sink == TextSink.LITERAL_CODE):
         laundering = (
             "markdown_destination"
             if MARKDOWN_DEST_RE.search(normalized)
             or MARKDOWN_DEST_RE.search(decoded)
             or MARKDOWN_DEST_RE.search(displayed)
             else "html_comment"
-            if HTML_COMMENT_RE.search(decoded)
+            if HTML_COMMENT_RE.search(decoded, timeout=0.05)
             else "html_tag"
-            if HTML_TAG_RE.search(decoded) and not (allow_opaque_code and decoded == normalized)
+            if HTML_TAG_RE.search(decoded, timeout=0.05)
+            and not (allow_opaque_code and decoded == normalized)
             else "display_control"
-            if any(_is_display_control(char) for char in decoded)
+            if has_unsafe_controls(decoded, display=True)
             else None
         )
         if laundering is not None:
