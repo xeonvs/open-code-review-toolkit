@@ -1,1 +1,0 @@
-Require an actual admitted diagram during the normal own-tool development review and include its Mermaid in the feature PR at final push. Add toolkit-specific Rules that retain native system checks, with selective test review and documented local base/operator-overlay behavior. Keep raw debug artifacts private.
