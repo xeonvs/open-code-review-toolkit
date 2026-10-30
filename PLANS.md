@@ -28,11 +28,11 @@ Remove the complete text equivalent from ordinary GitLab and standalone local re
 | REQ-001 | Mermaid-only ordinary reports; no textual listing, including GitLab on/spoiler and local | WQ-02 | done |
 | REQ-002 | A single protected bootstrap refs block; identical SHA values printed once with deterministic role aliases | WQ-02 | done |
 | REQ-003 | Human report range details avoid duplicate endpoint/commit lines; legacy and distinct identities remain explicit | WQ-02 | done |
-| REQ-004 | Preserve MCP, evidence records, receipts, persisted schema, immutable Git identity, findings and optional failure behavior; DLP corrections are limited to REQ-011/012 | WQ-02, WQ-03 | in_progress |
-| REQ-005 | Update current public contracts and relevant tests; retain historical evidence unchanged | WQ-02, WQ-03 | in_progress |
+| REQ-004 | Preserve MCP, evidence records, receipts, persisted schema, immutable Git identity, findings and optional failure behavior; DLP corrections are limited to REQ-011/012 | WQ-02, WQ-03 | done |
+| REQ-005 | Update current public contracts and relevant tests; retain historical evidence unchanged | WQ-02, WQ-03 | done |
 | REQ-006 | Signed draft feature PR, reviewed local development, protected feature merge and verified development publication | WQ-01, WQ-04 | in_progress |
 | REQ-007 | Deliver v0.14.2 with plan archived in its release PR and independent external reconciliation | WQ-05, WQ-06 | pending |
-| REQ-008 | Require a real admitted diagram for own-tool acceptance, publish it in the feature PR at final push and document this normal development procedure | WQ-02, WQ-03, WQ-04 | pending |
+| REQ-008 | Require a real admitted diagram for own-tool acceptance, publish it in the feature PR at final push and document this normal development procedure | WQ-02, WQ-03, WQ-04 | in_progress |
 | REQ-009 | Keep bootstrap provider-neutral for local, GitLab and future adapters, with conditional intent/protection hints and complete context discovery | WQ-02, WQ-03 | done |
 | REQ-010 | Add repository-specific self-review Rules, retain system checks, select relevant tests per task, qualify and use a private operator copy in this review | WQ-03 | done |
 | REQ-011 | Correct the real-review assertion and technical Mermaid false positives with whole-unit encoded-value checks and stronger property/publication tests | WQ-03 | done |
@@ -82,7 +82,7 @@ Clean synchronized main contains published v0.14.1. Current diagram rendering ap
 | --- | --- | --- | --- |
 | WQ-01 | REQ-006 | Materialize and critique full plan; set active-plan state; signed plan commit, privacy/dependency gates, initial push and draft PR | done |
 | WQ-02 | REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-008, REQ-009 | Implement compact protected refs, Mermaid-only reports and range-line consolidation with focused regression/property/native tests and documentation | done |
-| WQ-03 | REQ-004, REQ-005, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012 | Aggregate semantic review, full quality, one security diff scan, qualified actual own-tool acceptance with repository Rules; fix findings and rerun affected checks | in_progress |
+| WQ-03 | REQ-004, REQ-005, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012 | Aggregate semantic review, full quality, one security diff scan, qualified actual own-tool acceptance with repository Rules; fix findings and rerun affected checks | done |
 | WQ-04 | REQ-006, REQ-008 | Final reviewed feature push with the real admitted diagram in the PR, protected CI and merge; verify development TestPyPI workflow | pending |
 | WQ-05 | REQ-007 | Signed release/v0.14.2 PR: metadata, changelog, notes, issue authorization and full checked plan archival; protected CI and merge | pending |
 | WQ-06 | REQ-007 | External stable workflow, immutable receipt/release/tag, registries, installed/provenance CI evidence, issue/milestone and clean main readback | pending |
@@ -122,7 +122,7 @@ Actual ChatGPT/high reviews all use qualified OCR 1.13.3, private physical paths
 
 The last run's one failed read requests nonexistent evidence/store.py, then file_find discovers the actual package. Scoped follow-up reads of its real facade/core and the unchanged caller, together with existing store/MCP regression tests, close the auxiliary-context question; this is not claimed as a successful native source read. The diagram-owning group reads all five changed runtime owners across groups before its single submission, plus admission/orchestration and the Rules/development contract. Both native system Rules and repository-specific Rules are present in every group. The complete private report contains the generated Mermaid without a textual listing, and cleanup and DLP pass. Oversized unchanged uv.lock blobs remain explicit evidence omissions, not full lockfile-coverage claims.
 
-DLP properties vary prose and recognized-label delimiters, same-candidate encoded slash/mask fragments, nonnumeric paths, malformed addresses/masks/ports, Unicode and comparison forms, whole-unit reverse contacts/secrets and actual flow/sequence renderers. Long zero-padded HTML/Mermaid entities preserve scalar mappings without changing process-wide integer limits; decoded line limits remain enforced. The final label correction remains inside this reviewed parser boundary: both independent extended seeds (31446 and 31546) pass 372 cases with 1000 examples/property, and 431 focused tests pass with 97.25% DLP coverage; Ruff formatting/lint and mypy pass. A further actual-model run is not required for this scoped finding correction under the documented post-review procedure. The final complete quality gate is the remaining local runtime check.
+DLP properties vary prose and recognized-label delimiters, same-candidate encoded slash/mask fragments, nonnumeric paths, malformed addresses/masks/ports, Unicode and comparison forms, whole-unit reverse contacts/secrets and actual flow/sequence renderers. Long zero-padded HTML/Mermaid entities preserve scalar mappings without changing process-wide integer limits; decoded line limits remain enforced. The final label correction remains inside this reviewed parser boundary: both independent extended seeds (31446 and 31546) pass 372 cases with 1000 examples/property, and 431 focused tests pass with 97.25% DLP coverage; Ruff formatting/lint and mypy pass. A further actual-model run is not required for this scoped finding correction under the documented post-review procedure. Final runtime ddb510c passes the complete quality gate: 3426 tests, 41 skips and 357 subtests, 88.30% overall coverage and 98% DLP; all scoped floors pass. The dependency audit reports no known vulnerabilities in audited dependencies. Final changes after this runtime head are documentation only.
 
 ### Risks And Recovery
 
@@ -130,7 +130,7 @@ Moving refs or the diagram request can displace required navigation; protect the
 
 ### Resume Point
 
-WQ-03: commit the reviewed recognized-label correction, then run the complete quality gate on that final runtime head. Three successful actual-model runs in this task exhaust the inherited allowance; the last review is complete and has the required admitted diagram, and its one finding is corrected through focused tests and semantic review of the same parser boundary. WQ-04 follows: update the final evidence/status documents, include the exact admitted Mermaid in the feature PR, run pre-push gates, push and complete protected delivery. No feature push before final checks pass.
+WQ-04: commit the final evidence/status documents, include the exact admitted Mermaid in the feature PR, run pre-push secret gates, push and complete protected feature CI/merge and development TestPyPI verification. Runtime checks and finding corrections are complete. Three successful actual-model runs in this task exhaust the inherited allowance; the last review has the required admitted diagram and its one finding is corrected through focused tests, semantic review and final full quality.
 
 ### Plan Fidelity Check
 
@@ -145,12 +145,12 @@ WQ-03: commit the reviewed recognized-label correction, then run the complete qu
 
 - [x] Baseline matches current main and archived prior work remains historical.
 - [x] No unrelated backlog or roadmap work activated.
-- [ ] Final diff, docs, checks and plan describe the same completed scope.
+- [x] Final diff, docs, checks and plan describe the same completed implementation scope; external delivery remains pending.
 
 ### Closure Gate
 
-- [ ] All implementation requirements and applicable verification complete on the final runtime head.
-- [ ] Security and real own-tool findings resolved with truthful acceptance evidence.
+- [x] All implementation requirements and applicable verification complete on the final runtime head.
+- [x] Security and real own-tool findings resolved with truthful acceptance evidence.
 - [ ] Protected feature merge and development publication verified.
 - [ ] Release PR contains authorization, version markers, notes and checked full plan archive.
 - [ ] No unfinished repository work or follow-up closure PR remains; external delivery is classified below.

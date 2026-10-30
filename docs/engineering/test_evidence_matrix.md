@@ -12,6 +12,12 @@ This matrix records what the repository test suite proves and, equally important
 
 ## v0.14.2 compact context, presentation and DLP evidence
 
+Final runtime `ddb510c` passes the complete quality gate: 3426 tests, 41 skips
+and 357 subtests; 88.30% total coverage, 98% DLP and every scoped floor pass.
+Independent extended seeds 31446/31546 each pass 372 DLP cases under the
+1000-example profile. Focused corrections are reviewed at their existing
+boundary; later documentation changes do not replace the runtime evidence.
+
 | Boundary | Production owner and entry point | Evidence | Claim limit |
 | --- | --- | --- | --- |
 | Protected bootstrap and unchanged full evidence | `evidence.project.render_bootstrap` and production evidence MCP | `test_evidence_bootstrap.py` covers 40 supported profiles, distinct/missing/equal ref roles, 513 admitted records, oversized inventories and UTF-8 clipping with both required ends retained; extended `test_bootstrap_reporting.py` properties vary routing and aliases | Full MCP records/counts remain independently asserted; presentation tests do not prove model behavior |
