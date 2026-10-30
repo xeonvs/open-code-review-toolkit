@@ -25,7 +25,7 @@ Separate literal source-code interpretation from prose/markup transformations an
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Reproduce #282 through source proof, projection and local reporting; keep native analysis and incomplete publication visibly distinct | WQ-01, WQ-03 | in_progress |
+| REQ-001 | Reproduce #282 through source proof, projection and local reporting; keep native analysis and incomplete publication visibly distinct | WQ-01, WQ-03 | done |
 | REQ-002 | Official local-only offline audit CLI for snippets, file sets and Git snapshots, using production DLP and code admission rather than another detector | WQ-02 | done |
 | REQ-003 | Private snapshots/reports/expectations outside source trees; HMAC identities, explicit selections, no target-owned allowlist and no secret-bearing console output | WQ-02, WQ-05 | done |
 | REQ-004 | Fix confirmed reference-expression and representation false positives without project-specific identifier exceptions, broad source exemptions or weakened literal-secret/PII checks | WQ-03 | done |
@@ -33,7 +33,7 @@ Separate literal source-code interpretation from prose/markup transformations an
 | REQ-006 | One aggregate Security scan, ordinary actual own-tool acceptance with a real PR diagram, then full repeated corpus scans and final quality | WQ-04 | in_progress |
 | REQ-007 | Reviewed signed plan-first draft PR, protected feature/development verification, v0.14.3 release PR with full plan archival/reset and external reconciliation | WQ-01, WQ-05, WQ-06 | pending |
 | REQ-008 | Remove all task-owned raw source snapshots and raw spools, verify absence, retain only source-free reports and synthetic regressions | WQ-06 | pending |
-| REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | in_progress |
+| REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | done |
 | REQ-010 | After Security results, reconcile the repository threat model with actual audit, worker, private-output and release boundaries | WQ-04 | done |
 
 ### Explicit Non-Goals
@@ -170,6 +170,28 @@ observations remain explicit (3490 and 277), not a claimed precision/recall rate
 The overall final quality gate is running; positive actual diagram acceptance,
 post-acceptance replays, candidate-tree diagnosis and installed artifacts remain.
 
+2026-10-30: the second actual ChatGPT/Astra high run of 72abb603..b4cfbb1 is
+accepted: 51/51 selected files, zero raw/delivered findings, no DLP omissions and
+one admitted twelve-node flowchart. All 147 tool calls are retained. The one
+guessed missing reporting path is recovered by successful reads of the real
+local provider/outcome owners. The unchanged oversized lock and the soft
+bootstrap recommendation remain explicit, with no budget or exhaustion warning.
+No more actual model runs are authorized in this cycle. Candidate-tree audit
+evaluates 126855 units completely; added synthetic controls and conservative
+data/prose decisions remain visible. A stale prompt-title property is corrected.
+Seven tests in the first full gate collided with the concurrent actual review's
+repository lock; repeat the gate sequentially after that review. Post-acceptance
+corpus replays and final quality are running. Runtime remains b4cfbb1.
+
+2026-10-30: the sequential final quality gate passes: 3747 tests, 47 skips and
+357 subtests, 88.79% total coverage and every scoped floor. Result/preflight is
+87%, posting 82%, each audit module 92-100%, source syntax 93% and text contexts
+100%. Clean wheel/sdist installations and installed local/MCP/audit checks are
+included. Extended bootstrap properties also pass after correcting the stale
+title. Remaining local acceptance work is the post-quality corpus replay; builds
+and scans are serialized because generated version metadata participates in
+scanner identity. No runtime change follows the accepted actual review.
+
 ### Risks And Recovery
 
 Source provenance is not permission to publish a secret: reject unmapped candidates and scan all original/encoded sensitive material. A lexer/normalizer can create a false phone or hide a real one: choose representations by the actual sink and replay strong counterexamples. Broad expectation patterns can conceal new defects: bind them to exact private input identity and keep scanning. An altered corpus/environment is not a detector regression or improvement: fail comparison as incomparable. Private state can leak through reports/errors or cleanup: use closed output fields, fixed private destinations and ownership-checked removal; preserve originals. On a failed check retain value-free diagnostics and the exact resume action, repair the narrow owner and rerun the affected checks. No additional aggregate Security scan for ordinary follow-up fixes.
@@ -191,16 +213,13 @@ measures about 87% and now has a synchronized 85% floor; posting stays near 82%
 with its 80% floor. New source modules have independent local 90% floors.
 The first full measurement is not final-head acceptance. The single aggregate
 Security scan is complete with no findings, and the repository threat model is
-reconciled after its results. One successful native run is consumed but positive
-engineering acceptance is pending. Its five findings are reproduced and being
-corrected together. Broader counterexamples rejected a standalone-expression
-waiver; operator roles now require exact full-source proof. The revised DLP and
-property suite passes 545 checks, and independent review confirms the original
-data-binding bypasses are closed. The advertised diagram schema now matches
-the parser's conditional-reference requirement. Scoped coverage, official native
-handoffs and both full replays are complete with reviewed transitions. Commit
-corrections, then use the remaining actual run with a real diagram. Complete
-post-acceptance replays, candidate-tree diagnosis and final quality afterwards.
+reconciled after its results. Both actual runs are consumed; the second is
+accepted with zero findings and a real admitted diagram. The first run's five
+findings are corrected, including the later independently reproduced data-binding
+bypass. Scoped coverage, official native handoffs and both full replays are
+complete with reviewed transitions. Final sequential quality is green. Finish
+post-quality corpus replays, publish the exact admitted
+diagram with the feature PR, and continue protected feature/release delivery.
 Private corpus details remain outside public artifacts; owned raw snapshots and
 task-owned build/install copies require final verified removal.
 

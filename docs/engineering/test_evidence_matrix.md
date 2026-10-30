@@ -12,9 +12,14 @@ This matrix records what the repository test suite proves and, equally important
 
 ## v0.14.3 source interpretation and private audit evidence
 
+Final runtime `b4cfbb1` passes the complete sequential quality gate: 3747 tests,
+47 skips, 357 subtests and 88.79% total coverage. Every scoped floor passes;
+each audit module measures 92-100%, source syntax 93% and text contexts 100%.
+The gate includes clean wheel/sdist installation and installed local/MCP checks.
+
 | Boundary | Production owner and entry point | Evidence | Claim limit |
 | --- | --- | --- | --- |
-| Source references versus sensitive material | Immutable reader -> `prove_opaque_code` -> `check_text` -> publication projection | `test_dlp_source_semantics.py` checks reference/empty bindings, Unicode positions, stale proofs, docstrings, interpreter contradictions, embedded/default/mapping-key literals, escaped contacts and resource bounds; a real temporary Git repository with only C/JavaScript/JSON crosses the isolated audit worker | Python refinement is bounded syntax analysis, with no filename authority or alias/factory dataflow claim; unknown languages keep strict credential checks |
+| Source references versus sensitive material | Immutable reader -> `prove_opaque_code` -> `check_text` -> publication projection | Source-semantic and raw-review regressions check reference/empty bindings, Unicode positions, stale proofs, docstrings, interpreter contradictions, embedded/default/mapping-key literals, escaped contacts and resource bounds; a real temporary Git repository with only C/JavaScript/JSON crosses the isolated audit worker | Python refinement is bounded syntax analysis, with no filename authority or alias/factory dataflow claim; unknown syntax and arbitrary data keep conservative decisions |
 | Literal rendering and independent security views | Shared DLP -> code fields and diagram admission | Source-context properties vary operator spacing, compatibility Unicode, HTML/Mermaid entities and markup; inverse cases retain actual configured secrets, credential literals, phone and email protection; minimized regressions include fullwidth markup and escaped national phone separators | Semantic counterexamples complement coverage; this is not a general precision/recall measurement |
 | Private local corpus lifecycle | `ocr-ci dlp-audit` -> descriptor/Git readers -> isolated framed worker -> authenticated state/reports/compare/cleanup | Native peers cover deadlines, full pipes, malformed/stale frames, cancellation/reaping, content-based binary skips, moving originals, hostile persistence and owned cleanup; clean wheel/sdist checks execute the installed command outside checkout | No audited code is imported or executed, no automatic CI corpus scan, and raw-hit counts are not false-positive rates |
 | Analysis versus delivered output | Runner projection -> shared outcome -> local/GitLab adapters | Existing filtered, partial, failed, private-only and approval regression suites preserve coverage/finding counts and render `Analysis complete; output incomplete` for omitted public output | Complete native analysis does not certify complete publication; optional diagram omission alone remains independent |
@@ -22,6 +27,23 @@ This matrix records what the repository test suite proves and, equally important
 Extended local source/DLP qualification uses the 1000-example profile with
 explicit independent seeds. Full private corpus comparisons and actual model
 acceptance remain distinct release gates recorded by the active plan.
+
+The accepted actual ChatGPT/Astra high review of `72abb603..b4cfbb1` completed
+51/51 selected files, with zero raw or delivered findings and no DLP omissions.
+One output-tool call produced an admitted twelve-node flowchart after global
+cross-group reads. Its complete native trace retained all 147 tool calls. A
+guessed nonexistent reporting path was followed by successful reads of the
+actual local provider and shared outcome owner. The unchanged oversized lock
+remained an explicit bounded-evidence omission; a soft bootstrap recommendation
+was accepted by OCR, without token/tool/context-exhaustion warnings. These
+facts qualify the observed handoff and diagram, not general model completeness.
+
+Post-review qualification passes 545 DLP/source tests and properties with the
+1000-example profile, plus 24 official native grouping/round/diagram checks.
+Captured populations contain 121583 and 19050 units; all 80 newly admitted
+role units and 23 changed reasons were reviewed privately. No new rejection or
+unexplained transition was observed. Unchanged untriaged observations remain
+visible, so these comparisons do not claim a detector accuracy rate.
 
 ## v0.14.2 compact context, presentation and DLP evidence
 

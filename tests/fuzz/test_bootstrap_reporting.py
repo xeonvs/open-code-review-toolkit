@@ -61,7 +61,7 @@ def test_bootstrap_clipping_retains_complete_unique_refs_and_valid_aliases(
     )
     summary = evidence_summary(store)
     complete = render_bootstrap(store, **options, max_chars=7950, max_bytes=65536)
-    marker = "\n## Optional change diagram\n\n"
+    marker = "\n## Requested change diagram\n\n"
     closing = marker + complete.split(marker, 1)[1] if marker in complete else ""
     try:
         rendered = render_bootstrap(store, **options, max_chars=chars, max_bytes=bytes_)
@@ -98,7 +98,7 @@ def test_bootstrap_clipping_retains_complete_unique_refs_and_valid_aliases(
             if value is not None:
                 assert resolved[role][0] == value * 40
                 assert rendered.count(value * 40) == 1
-        assert ("## Optional change diagram" in rendered) == (
+        assert ("## Requested change diagram" in rendered) == (
             diagram_enabled and values[0] is not None and values[1] is not None
         )
     assert evidence_summary(store) == summary
