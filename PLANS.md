@@ -29,9 +29,9 @@ Separate literal source-code interpretation from prose/markup transformations an
 | REQ-002 | Official local-only offline audit CLI for snippets, file sets and Git snapshots, using production DLP and code admission rather than another detector | WQ-02 | done |
 | REQ-003 | Private snapshots/reports/expectations outside source trees; HMAC identities, explicit selections, no target-owned allowlist and no secret-bearing console output | WQ-02, WQ-05 | done |
 | REQ-004 | Fix confirmed reference-expression and representation false positives without project-specific identifier exceptions, broad source exemptions or weakened literal-secret/PII checks | WQ-03 | done |
-| REQ-005 | Broader synthetic regression/property matrix, real producer-consumer checks and truthful corpus classification rather than coverage or raw-hit targets | WQ-03, WQ-04 | in_progress |
-| REQ-006 | One aggregate Security scan, ordinary actual own-tool acceptance with a real PR diagram, then full repeated corpus scans and final quality | WQ-04 | in_progress |
-| REQ-007 | Reviewed signed plan-first draft PR, protected feature/development verification, v0.14.3 release PR with full plan archival/reset and external reconciliation | WQ-01, WQ-05, WQ-06 | pending |
+| REQ-005 | Broader synthetic regression/property matrix, real producer-consumer checks and truthful corpus classification rather than coverage or raw-hit targets | WQ-03, WQ-04 | done |
+| REQ-006 | One aggregate Security scan, ordinary actual own-tool acceptance with a real PR diagram, then full repeated corpus scans and final quality | WQ-04 | done |
+| REQ-007 | Reviewed signed plan-first draft PR, protected feature/development verification, v0.14.3 release PR with full plan archival/reset and external reconciliation | WQ-01, WQ-05, WQ-06 | in_progress |
 | REQ-008 | Remove all task-owned raw source snapshots and raw spools, verify absence, retain only source-free reports and synthetic regressions | WQ-06 | pending |
 | REQ-009 | Review CI/local coverage ownership and stale 80% floors; verify real CI-equivalent coverage and headroom before setting synchronized thresholds | WQ-03, WQ-04 | done |
 | REQ-010 | After Security results, reconcile the repository threat model with actual audit, worker, private-output and release boundaries | WQ-04 | done |
@@ -73,8 +73,8 @@ A read-only Git-blob audit at the baseline covers 452 UTF-8 files and 121131 non
 | WQ-01 | REQ-001, REQ-007 | Materialize and critique full plan, reconcile state, signed first push/draft PR, issue/milestone scope with synthetic examples | done |
 | WQ-02 | REQ-002, REQ-003 | Implement/test private audit CLI, worker, snapshot/expectation/report/compare lifecycle; curate safe source selections and capture complete baseline before changing DLP | done |
 | WQ-03 | REQ-001, REQ-004, REQ-005, REQ-009 | Implement typed source/rendering contexts, structural secret classification and clear two-axis reporting; add synthetic regressions/fuzzing, reconcile coverage guards and update public contracts | done |
-| WQ-04 | REQ-005, REQ-006, REQ-009, REQ-010 | Aggregate review, one Security scan and threat-model reconciliation, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | in_progress |
-| WQ-05 | REQ-003, REQ-007 | Final feature PR/diagram push, protected CI/merge and development verification; prepare signed release PR with full checked plan archival | pending |
+| WQ-04 | REQ-005, REQ-006, REQ-009, REQ-010 | Aggregate review, one Security scan and threat-model reconciliation, qualified actual self-review/diagram and scoped corrections; repeat both full corpora, review every transition and complete final quality with measured threshold headroom | done |
+| WQ-05 | REQ-003, REQ-007 | Final feature PR/diagram push, protected CI/merge and development verification; prepare signed release PR with full checked plan archival | in_progress |
 | WQ-06 | REQ-007, REQ-008 | Stable external verification, issue/milestone/site and clean main; remove owned raw snapshots/spools and verify cleanup before task completion | pending |
 
 ### Locked Decisions
@@ -192,13 +192,19 @@ title. Remaining local acceptance work is the post-quality corpus replay; builds
 and scans are serialized because generated version metadata participates in
 scanner identity. No runtime change follows the accepted actual review.
 
+2026-10-30: both post-quality captured replays are complete. Comparisons against
+the reviewed candidates have zero decision changes, new admissions/rejections,
+unexplained transitions or lost confirmed protection. The unchanged untriaged
+populations remain explicit. Local implementation acceptance is complete;
+continue with the signed feature push and exact admitted Mermaid in PR #283.
+
 ### Risks And Recovery
 
 Source provenance is not permission to publish a secret: reject unmapped candidates and scan all original/encoded sensitive material. A lexer/normalizer can create a false phone or hide a real one: choose representations by the actual sink and replay strong counterexamples. Broad expectation patterns can conceal new defects: bind them to exact private input identity and keep scanning. An altered corpus/environment is not a detector regression or improvement: fail comparison as incomparable. Private state can leak through reports/errors or cleanup: use closed output fields, fixed private destinations and ownership-checked removal; preserve originals. On a failed check retain value-free diagnostics and the exact resume action, repair the narrow owner and rerun the affected checks. No additional aggregate Security scan for ordinary follow-up fixes.
 
 ### Resume Point
 
-WQ-04: helper commit 75fe7d2 is local. Its preserved baseline at 50b7691 takes
+Completed WQ-04 evidence: helper commit 75fe7d2 is local. Its preserved baseline at 50b7691 takes
 139.62 seconds for 121583 units and 22.47 seconds for 19050 units, with zero
 decision changes; rejection totals remain untriaged observations. Source-aware
 admission, literal rendering, independent material checks, both-role audit
@@ -217,9 +223,10 @@ reconciled after its results. Both actual runs are consumed; the second is
 accepted with zero findings and a real admitted diagram. The first run's five
 findings are corrected, including the later independently reproduced data-binding
 bypass. Scoped coverage, official native handoffs and both full replays are
-complete with reviewed transitions. Final sequential quality is green. Finish
-post-quality corpus replays, publish the exact admitted
-diagram with the feature PR, and continue protected feature/release delivery.
+complete with reviewed transitions. Final sequential quality and post-quality
+replays are complete. WQ-05: publish the exact admitted diagram with the signed
+feature PR, await protected CI, merge and verify development publication before
+preparing the release PR and checked plan archival.
 Private corpus details remain outside public artifacts; owned raw snapshots and
 task-owned build/install copies require final verified removal.
 
@@ -235,12 +242,12 @@ task-owned build/install copies require final verified removal.
 
 - [x] Baseline is current clean main with published v0.14.2; prior evidence remains historical.
 - [x] Public material contains synthetic examples only; no private corpus identity or source is retained here.
-- [ ] Final implementation, actual decisions, docs and acceptance evidence agree.
+- [x] Final implementation, actual decisions, docs and acceptance evidence agree.
 
 ### Closure Gate
 
-- [ ] Implementation and applicable final-runtime verification are complete.
-- [ ] Security/own-tool findings and all unexpected corpus transitions are resolved; an actual admitted PR diagram exists.
+- [x] Implementation and applicable final-runtime verification are complete.
+- [x] Security/own-tool findings and all unexpected corpus transitions are resolved; an actual admitted PR diagram exists.
 - [ ] Protected feature merge and development publication are verified.
 - [ ] Release PR prepares authorization, markers, notes, pins and checked full plan archival/reset.
 - [ ] Required external publication/reconciliation and raw snapshot cleanup are truthfully classified under Post-Close Delivery.
