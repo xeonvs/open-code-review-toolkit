@@ -181,8 +181,8 @@ reinterpret literal escaped hashes. Phone-shaped fragments of CIDR or dotted-mas
 notation receive an exception only after the complete network token, bounded to
 64 characters, parses through `ipaddress`, including IPv6 with an embedded IPv4
 address. Escaped network punctuation is reconstructed around that exact numeric
-fragment, while original-text checks remain active. Labels and one terminal
-prose period stay outside the address; explicit contact context is checked
+fragment, while original-text checks remain active. Recognized labels and one
+terminal prose period stay outside the address; explicit contact context is checked
 before the complete token. Other contacts and credentials in the same unit
 remain subject to their independent checks. Numeric HTML references retain
 standard-library scalar mappings with bounded integer conversion, including long

@@ -178,16 +178,51 @@ def test_malformed_ipv6_is_bounded_and_cannot_hide_a_contact(text):
     (
         ":::",
         "ffff:",
-        "2001:db8::: ",
+        "2001:db8:::",
         "x2001:db8::",
         "_2001:db8::",
         "a" * 64 + "2001:db8::",
         "%2001:db8::",
     ),
 )
-def test_invalid_ipv6_prefix_cannot_exempt_the_dotted_candidate(prefix):
-    checked = check_text(f"network {prefix}192.0.2.1/96", budgets=BUDGETS, publication=True)
+@pytest.mark.parametrize("mask", (24, 32, 96))
+def test_invalid_ipv6_prefix_cannot_exempt_the_dotted_candidate(prefix, mask):
+    checked = check_text(f"network {prefix}192.0.2.1/{mask}", budgets=BUDGETS, publication=True)
     assert not checked.admitted and checked.reason == "pii"
+
+
+@pytest.mark.parametrize("mask,admitted", ((24, True), (32, True), (96, False)))
+def test_whitespace_separates_an_ipv4_network_from_an_unrelated_malformed_value(mask, admitted):
+    text = f"network 2001:db8::: 192.0.2.1/{mask}"
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted is admitted
+
+
+@given(st.text(alphabet="0123456789abcdefABCDEF", min_size=1, max_size=4), st.integers(0, 32))
+def test_a_single_hextet_is_not_a_network_label(hextet, mask):
+    text = f"network {hextet}:192.0.2.100/{mask}"
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "pii", text
+
+
+@given(st.lists(st.integers(0, 65535), min_size=6, max_size=6), st.integers(0, 128))
+def test_complete_ipv6_with_a_dotted_tail_keeps_all_six_hextets(hextets, mask):
+    text = "network " + ":".join(format(part, "x") for part in hextets) + f":192.0.2.100/{mask}"
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted and checked.text == text
+
+
+@pytest.mark.parametrize(
+    "label",
+    ("ipv4", "IP", "cidr", "subnet", "address", "host", "listen", "allow", "network", "prefix"),
+)
+@pytest.mark.parametrize("address", ("192.0.2.100/24", "::ffff:192.0.2.100/96"))
+def test_only_recognized_delimited_labels_are_separated_from_networks(label, address):
+    text = f"{label}:{address}"
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted and checked.text == text
+    embedded = check_text("x" + text, budgets=BUDGETS, publication=True)
+    assert not embedded.admitted and embedded.reason == "pii"
 
 
 @pytest.mark.parametrize("text", ("network ::ffff:192.0.2.1/96", "network 2001:db8::192.0.2.1/128"))

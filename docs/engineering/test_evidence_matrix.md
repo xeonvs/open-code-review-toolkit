@@ -10,6 +10,45 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.2 compact context, presentation and DLP evidence
+
+| Boundary | Production owner and entry point | Evidence | Claim limit |
+| --- | --- | --- | --- |
+| Protected bootstrap and unchanged full evidence | `evidence.project.render_bootstrap` and production evidence MCP | `test_evidence_bootstrap.py` covers 40 supported profiles, distinct/missing/equal ref roles, 513 admitted records, oversized inventories and UTF-8 clipping with both required ends retained; extended `test_bootstrap_reporting.py` properties vary routing and aliases | Full MCP records/counts remain independently asserted; presentation tests do not prove model behavior |
+| Real native grouped and federated routing | Qualified OCR 1.13.3 -> production stdio MCP -> admission/cleanup | 18 `test_native_context.py` cases retrieve framework/runtime and locked dependency facts, inspect cross-group changes and preserve staged/unstaged/untracked work; `test_ocr_qualification.py` preserves intent-to-federation routing under forced clipping | Controlled model peers prove native/toolkit handoffs, not natural model choice or diagram semantics |
+| Mermaid-only reporting and exact human range | Shared pure renderer -> local/GitLab adapters and clean installed artifacts | Diagram/admission, reporting properties and installed wheel/sdist suites cover both variants, modes, malformed labels, legacy/different identities and optional faults; technical edge conditions are checked against independent literal expected strings | Formatting preserves an admitted model; mechanical source references do not prove semantic correctness |
+| Technical DLP versus contacts | `context.dlp.check_text` -> runner publication projection | Extended DLP/network generators mix raw/encoded comparison operators, Unicode forms, dates/versions, IPv4/CIDR/dotted masks, IPv6 and mapped addresses, malformed neighbors, controls and contacts; minimized regressions cover Mermaid, mapped-CIDR and long-mask false positives, complete-token contact priority, explicit labels versus hextets and long zero-padded entities; standard-library scalar-oracle and decoded-line tests preserve bounds; producer tests verify findings survive while mixed secrets/contacts are omitted | Network exceptions require a complete token of at most 64 characters parsed by `ipaddress`; DLP is not a general network-configuration validator |
+
+The first actual ChatGPT review of `3c483ae1..4326742` completed 25/25 selected
+files, made one diagram submission and produced an admitted nine-node flowchart.
+Its complete native trace confirms repository Rules at the matching file groups,
+cross-group source reads by the diagram owner and no failed source/tool responses.
+One valid independent-condition test finding was hidden by the reproduced Mermaid
+DLP false positive; both are corrected and the original finding now survives the
+real publication projection. Later model reviews and scoped corrections below
+complete the acceptance evidence.
+
+The later review of `3c483ae1..82349c4` completes 32/32 files and finds two
+valid network punctuation/contact defects, including one DLP-filtered proposal;
+both are triaged from the raw result and corrected. Its background compression
+cancellation occurs after that group completes, without an exhaustion warning.
+The final actual review of `3c483ae1..5739600` completes 32/32 files, uses
+1,368,358 tokens and produces one admitted ten-node/ten-edge flowchart. It finds
+one valid label-versus-hextet defect, corrected with recognized-label parsing,
+generated single-hextet negatives and complete IPv6 positives. These scoped
+corrections use regression tests and semantic review of the same boundary.
+
+The last trace has 222 complete records, no LLM errors or exhaustion warnings,
+and one failed auxiliary read of nonexistent `evidence/store.py`. Native
+`file_find` locates the actual package; scoped follow-up inspection of its facade,
+core and caller plus existing store/MCP tests close that context question. This
+is not claimed as a successful native read. The diagram owner reads all five
+changed runtime files across groups plus admission/orchestration before its
+single submission. Every group retains native system Rules and the applicable
+repository Rules. The original Mermaid is the feature PR's change-flow artifact;
+no textual listing is reintroduced. Oversized unchanged lockfile blobs remain
+explicitly omitted evidence, not a full lockfile-coverage claim.
+
 ## v0.14.1 corrective diagram and debug qualification
 
 The corrective runtime at `b3c0029` passes the complete quality gate: 3153 tests,
@@ -325,24 +364,6 @@ The v0.10.0 real-OCR evidence reached
 It preserves older snapshots and freezes the 1.11.7 pre-Rego epoch. The current
 recommended candidate is indexed by `compatibility/ocr-support.json`; its exact
 qualification evidence is linked there.
-
-## v0.14.2 compact context, presentation and DLP evidence
-
-| Boundary | Production owner and entry point | Evidence | Claim limit |
-| --- | --- | --- | --- |
-| Protected bootstrap and unchanged full evidence | `evidence.project.render_bootstrap` and production evidence MCP | `test_evidence_bootstrap.py` covers 40 supported profiles, distinct/missing/equal ref roles, 513 admitted records, oversized inventories and UTF-8 clipping with both required ends retained; extended `test_bootstrap_reporting.py` properties vary routing and aliases | Full MCP records/counts remain independently asserted; presentation tests do not prove model behavior |
-| Real native grouped and federated routing | Qualified OCR 1.13.3 -> production stdio MCP -> admission/cleanup | 18 `test_native_context.py` cases retrieve framework/runtime and locked dependency facts, inspect cross-group changes and preserve staged/unstaged/untracked work; `test_ocr_qualification.py` preserves intent-to-federation routing under forced clipping | Controlled model peers prove native/toolkit handoffs, not natural model choice or diagram semantics |
-| Mermaid-only reporting and exact human range | Shared pure renderer -> local/GitLab adapters and clean installed artifacts | Diagram/admission, reporting properties and installed wheel/sdist suites cover both variants, modes, malformed labels, legacy/different identities and optional faults; technical edge conditions are checked against independent literal expected strings | Formatting preserves an admitted model; mechanical source references do not prove semantic correctness |
-| Technical DLP versus contacts | `context.dlp.check_text` -> runner publication projection | Extended DLP/network generators mix raw/encoded comparison operators, Unicode forms, dates/versions, IPv4/CIDR/dotted masks, IPv6 and mapped addresses, malformed neighbors, controls and contacts; minimized regressions preserve Mermaid, mapped-CIDR and long-mask false positives; producer tests verify findings survive while mixed secrets/contacts are omitted | Network exceptions require a complete token of at most 64 characters parsed by `ipaddress`; DLP is not a general network-configuration validator |
-
-The first actual ChatGPT review of `3c483ae1..4326742` completed 25/25 selected
-files, made one diagram submission and produced an admitted nine-node flowchart.
-Its complete native trace confirms repository Rules at the matching file groups,
-cross-group source reads by the diagram owner and no failed source/tool responses.
-One valid independent-condition test finding was hidden by the reproduced Mermaid
-DLP false positive; both are corrected and the original finding now survives the
-real publication projection. This first run is diagnostic evidence; final
-acceptance of the corrective runtime head is a separate required gate.
 
 ## v0.13.0 / #264 protected-policy authority evidence
 

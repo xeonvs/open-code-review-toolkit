@@ -34,6 +34,9 @@ ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
 _MERMAID_ENTITY_RE = re.compile(r"(?<!&)#([0-9]+);")
 _HTML_NUMERIC_ENTITY_RE = re.compile(r"&#([xX][0-9a-fA-F]+|[0-9]+);?")
 _NETWORK_TOKEN_CHARS = frozenset("0123456789abcdefABCDEF:./")
+_NETWORK_LABEL_RE = re.compile(
+    r"(?i)(?<![\w:])(?:ip(?:v[46])?|cidr|subnet|address|host|listen|allow|network|prefix):$"
+)
 _TECHNICAL_SEPARATOR = r"(?:[ \t]+|[ \t]*(?:[<>]=?|[=!]=|=|[≤≥≠])[ \t]*)"
 VERSION_CONTEXT_RE = re.compile(
     rf"(?i)\b(?:version|release|build|pin){_TECHNICAL_SEPARATOR}(?:v)?$"
@@ -172,14 +175,12 @@ def _network_number(value: str, start: int, end: int) -> bool:
     candidate_start = start
     while start and end - start < 64 and value[start - 1] in _NETWORK_TOKEN_CHARS:
         start -= 1
-    prefix = value[start:candidate_start]
     label_separator = False
-    # Separate log labels such as IP: without splitting a genuine IPv6 prefix.
-    if prefix.count(":") == 1:
-        start += prefix.index(":") + 1
-        label_separator = True
-    elif value[start : start + 1] == ":" and start and value[start - 1].isalnum():
-        start += 1
+    # Only a recognized delimited label may precede the complete network.
+    # A lone hextet such as ffff: must not grant an IPv4-tail exception.
+    colon = value.find(":", start, candidate_start)
+    if colon >= 0 and _NETWORK_LABEL_RE.search(value[max(0, colon - 16) : colon + 1]):
+        start = colon + 1
         label_separator = True
     while end < len(value) and end - start < 64 and value[end] in _NETWORK_TOKEN_CHARS:
         end += 1
