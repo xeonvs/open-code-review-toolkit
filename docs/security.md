@@ -180,8 +180,14 @@ grammar. This decoding is bounded and non-expanding, and does not recursively
 reinterpret literal escaped hashes. Phone-shaped fragments of CIDR or dotted-mask
 notation receive an exception only after the complete network token, bounded to
 64 characters, parses through `ipaddress`, including IPv6 with an embedded IPv4
-address. Other contacts and credentials in the same unit remain subject to their
-independent checks. DLP does not validate network configuration: malformed text
+address. Escaped network punctuation is reconstructed around that exact numeric
+fragment, while original-text checks remain active. Labels and one terminal
+prose period stay outside the address; explicit contact context is checked
+before the complete token. Other contacts and credentials in the same unit
+remain subject to their independent checks. Numeric HTML references retain
+standard-library scalar mappings with bounded integer conversion, including long
+leading-zero forms; decoded HTML/decimal-Mermaid newlines obey the line limit.
+DLP does not validate network configuration: malformed text
 without a phone-shaped token is not necessarily a DLP rejection.
 
 A parsed false value bypasses those DLP checks for one run, emits a prominent warning in

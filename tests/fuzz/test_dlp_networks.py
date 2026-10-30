@@ -43,6 +43,52 @@ def test_valid_synthetic_network_notation_is_not_a_contact(text, publication):
 
 @given(
     network_text(),
+    st.sampled_from((".", ". Next sentence", ", next value", "; next value", ")", "]", "`")),
+)
+def test_valid_networks_survive_prose_punctuation(text, suffix):
+    checked = check_text(text + suffix, budgets=BUDGETS, publication=True)
+    assert checked.admitted, (text, suffix, checked.detector)
+
+
+@given(
+    st.integers(1, 254),
+    st.integers(0, 128),
+    st.sampled_from(("Call ", "phone ", "tel ", "contact ", "Call: ", "phone:")),
+)
+def test_contact_context_applies_before_the_complete_embedded_ipv4_ipv6_token(
+    host, prefix, contact
+):
+    text = f"{contact}::ffff:192.0.2.{host}/{prefix}"
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "pii", text
+
+
+@pytest.mark.parametrize(
+    "value", ("192.0.2.100/32", "192.0.2.100/255.255.255.255", "::ffff:192.0.2.1/96")
+)
+@pytest.mark.parametrize("label", ("IP:", "address:", "network: ", "prefix="))
+def test_network_label_delimiters_do_not_become_part_of_the_address(value, label):
+    checked = check_text(label + value, budgets=BUDGETS, publication=True)
+    assert checked.admitted and checked.text == label + value
+
+
+@pytest.mark.parametrize("prefix", (24, 96))
+@pytest.mark.parametrize("suffix", (".1", "..", ".abc", "-1", "x", "%zone", "/"))
+def test_invalid_network_continuations_never_fall_back_to_a_valid_ipv4_tail(prefix, suffix):
+    checked = check_text(
+        f"network ::ffff:192.0.2.100/{prefix}{suffix}", budgets=BUDGETS, publication=True
+    )
+    assert not checked.admitted and checked.reason == "pii"
+
+
+@pytest.mark.parametrize("text", ("network ::ffff:192.0.2.1/96.", "Call ::ffff:192.0.2.100/96"))
+def test_native_review_network_boundary_regressions(text):
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted is text.endswith(".")
+
+
+@given(
+    network_text(),
     st.sampled_from(
         ("; Call +1 202 555 0142", "; person@example.invalid", '; api_key: "synthetic-secret"')
     ),
@@ -189,6 +235,12 @@ def test_explicit_contact_context_keeps_priority_over_a_network_exception(contex
 @pytest.mark.parametrize("port", (-1, 0, 65536, 999999, 2**64))
 def test_invalid_port_cannot_create_an_ipv4_exception(port):
     checked = check_text(f"IP 192.0.2.100:{port}", budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "pii"
+
+
+@pytest.mark.parametrize("value", ("0.192.0.2.100", "192.0.2.100.1", "192.0.2.100/32.1"))
+def test_an_invalid_address_cannot_inherit_an_exception_from_its_valid_ipv4_fragment(value):
+    checked = check_text("IP " + value, budgets=BUDGETS, publication=True)
     assert not checked.admitted and checked.reason == "pii"
 
 

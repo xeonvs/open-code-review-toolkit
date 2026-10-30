@@ -201,6 +201,14 @@ def test_long_mermaid_near_match_remains_bounded_and_is_not_a_comparison(count) 
     assert not checked.admitted and checked.reason == ("limit" if count == 1000 else "pii")
 
 
+@pytest.mark.parametrize(
+    "text", ("version < 2020.1.10/docs", "date < 2020-01-01/notes", "IP 192.0.2.100/help")
+)
+def test_nonnumeric_path_suffix_is_not_misclassified_as_a_cidr_mask(text):
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted and checked.text == text
+
+
 @st.composite
 def technical_text(draw: st.DrawFn) -> str:
     """Construct parsed-safe technical values without reusing the detector regex."""

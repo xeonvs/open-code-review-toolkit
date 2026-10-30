@@ -207,6 +207,10 @@ warnings and required auxiliary reads for material gaps; zero failed-call
 counts alone do not prove every source response was valid. Keep the native
 terminal state and the engineering acceptance decision distinct, and do not
 silently reset an owner-imposed run allowance by relabelling a completed run.
+If DLP omits a finding, inspect and triage its private raw-result entry before
+acceptance; a safe report with no findings does not establish a clean native
+review. Keep that raw material private and verify the correction through the
+production DLP boundary as well as the finding's own regression test.
 
 For the normal own-tool development review, set `OCR_REVIEW_DIAGRAM_MODE=local`
 and require an actual model-generated, admitted diagram before accepting that
