@@ -195,6 +195,7 @@ def test_full_pipe_disables_progress_without_blocking() -> None:
 
 
 def test_progress_stops_when_review_raises(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
     observed: list[ReviewProgress] = []
     original_start = ReviewProgress.start
 

@@ -271,6 +271,21 @@ adjacent fields and fragments remain visible. Source-string ends require bounded
 carrier evidence. Whitespace after `=` cannot prove an empty value. Canonical masks
 remain literal during Markdown interpretation so masks in separate fields cannot
 form an emphasis pair and invent credential material.
+Sensitive encoded keys remain detectable after semicolon query separators;
+semicolons in an already sensitive value cannot prove that value empty.
+Only a single unambiguous outer carrier can close a quoted assignment;
+ambiguous quote runs retain material checks. Malformed HTML parser assertions
+make the security view unavailable and fail closed, including when preparing
+forbidden values, rather than escaping the DLP result contract.
+Encoded fields inside original ordinary quoted carriers retain their sensitive
+key and surrounding source in the semantic view. The complete decoded payload
+must prove an empty, masked or closed symbolic value before its absent value
+is represented as a canonical mask with unambiguous carrier quotes. Later
+decoding and continuation checks still see the field. Whitespace, closing
+delimiters and trailing container separators cannot hide an immediate postfix;
+unknown separator tokens retain conservative checks. Semantic construction
+allows at most 4096 fields/carriers per view. Original known secrets, contacts,
+userinfo, bearer/JWT and forbidden-origin checks remain independent.
 Static emoji data qualifies only exact standard presentation spans. An emoji
 elsewhere does not authorize an unmatched joiner, bidi control or variation
 selector. Internationalized and quoted email-shaped addresses remain protected

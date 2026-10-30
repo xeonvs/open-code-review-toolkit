@@ -122,6 +122,7 @@ SUMMARY_ACTION_COUNTS = action_counts()
 def test_run_resolves_disabled_dlp_once_and_warns_before_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     observed: list[bool] = []
 
     def run(*_args: object, **kwargs: object) -> int:
@@ -144,6 +145,7 @@ def test_run_resolves_disabled_dlp_once_and_warns_before_execution(
 def test_invalid_dlp_setting_fails_before_review_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     called: list[bool] = []
     monkeypatch.setattr(
         review_runner,

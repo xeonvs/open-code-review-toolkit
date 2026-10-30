@@ -354,7 +354,8 @@ the `ocr_toolkit.context.dlp` API; `admission.py` composes decisions and forbidd
 matching, `decoding.py` handles bounded entities, `markup.py` owns bounded
 Markdown/HTML interpretation, `numeric.py` and `email.py` own candidates, and
 `presentation.py` qualifies standard Unicode sequences. `credentials.py` owns
-closed absent-value reference roles. Application field names do not establish
+closed absent-value reference roles and key-preserving encoded-carrier projection.
+Application field names do not establish
 permission semantics. Keep these owners at one
 package level. They do not acquire sources, store snapshots or publish reports.
 `common/redaction.py` remains the independent diagnostic/material primitive,

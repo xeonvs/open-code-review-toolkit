@@ -237,8 +237,13 @@ def interpret_markdown(value: str) -> MarkupText:
                 if len(fragment) > 65_536:
                     raise RepresentationLimit("HTML token budget")
                 html = _VisibleHTML(state.env["dlp_budget"])
-                html.feed(fragment)
-                html.close()
+                try:
+                    html.feed(fragment)
+                    html.close()
+                except AssertionError as exc:
+                    # Some supported stdlib parsers assert on malformed marked
+                    # sections. An unavailable security view must fail closed.
+                    raise RepresentationLimit("HTML interpretation unavailable") from exc
                 add("".join(html.parts) + html.rawdata)
             else:
                 add(token.get("raw", "\n" if kind in {"softbreak", "linebreak"} else ""))

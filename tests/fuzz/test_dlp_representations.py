@@ -6,6 +6,7 @@ from datetime import date
 from hypothesis import given
 from hypothesis import strategies as st
 
+from ocr_toolkit import review_runner
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import check_text
 
@@ -190,8 +191,6 @@ def test_fragment_detection_preserves_identifier_boundaries(name, number):
 def test_nonempty_query_suffix_never_inherits_mask_authority(
     key, mask, separator, suffix, wrapper, encoding
 ):
-    from ocr_toolkit import review_runner
-
     value = encode(
         wrapper.format(f"https://example.invalid?{key}={mask}{separator}{suffix}"), encoding
     )
@@ -277,3 +276,148 @@ def test_leading_value_whitespace_never_proves_absent_material(
     assert not check_text(
         value, budgets=BUDGETS, publication=True, allow_horizontal_tabs=True
     ).admitted
+
+
+@given(
+    st.sampled_from(("%74oken", "pa%73sword", "access%5Ftoken", "api%5Fkey")),
+    st.sampled_from(("?", "&", ";", ";;")),
+    st.sampled_from(("", "https://example.invalid?public=word")),
+    st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
+    ENCODING,
+)
+def test_query_key_separators_cannot_hide_encoded_material(
+    key, separator, prefix, material, encoding
+):
+    value = encode(prefix + separator + key + "=" + material, encoding)
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.sampled_from(("password", "token", "api_key")),
+    st.sampled_from(('"', "'")),
+    st.sampled_from((";", ",", ")", "]", "}", "#", "\n")),
+    st.sampled_from(("{}", '"{}"', "'{}'", "value = {}")),
+    st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
+    ENCODING,
+)
+def test_quote_runs_cannot_prove_an_empty_prefix_is_the_whole_value(
+    key, quote, punctuation, wrapper, material, encoding
+):
+    from ocr_toolkit.common.redaction import has_sensitive_material
+
+    source = wrapper.format(f"{key} = {quote * 3}{punctuation}{material}{quote * 3}")
+    assert has_sensitive_material(source, values=())
+    value = encode(source, encoding)
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1, max_size=20), st.booleans())
+def test_malformed_marked_sections_never_escape_publication_or_forbidden_checks(keyword, closed):
+    from ocr_toolkit import review_runner
+    from ocr_toolkit.context.dlp import ForbiddenMatcher
+
+    value = "<div>\n<![" + keyword + ("]>" if closed else "[") + "\n</div>"
+    decision = check_text(value, budgets=BUDGETS, publication=True)
+    assert not decision.admitted
+    matcher = ForbiddenMatcher.compile((value,))
+    assert matcher.match_details("ordinary text")[0] in {None, "limit"}
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.sampled_from(("token", "login_password", "api_key")),
+    st.sampled_from(("", "***", "${REF}", "${{ source.value }}", "{{ NAME }}")),
+    st.sampled_from(("html", "numeric", "mermaid")),
+    st.sampled_from(('"', "'")),
+    SENSITIVE,
+    ENCODING,
+)
+def test_encoded_absent_field_keeps_its_original_carrier_and_independent_material(
+    key, mask, encoding, quote, material, outer_encoding
+):
+    field = f'"{key}": "{mask}"'
+    carrier = "(" + quote + encode(field, encoding) + quote + ",)"
+    assert check_text(carrier, budgets=BUDGETS, publication=True).admitted
+    assert not check_text(
+        carrier + "; " + encode(material, outer_encoding), budgets=BUDGETS, publication=True
+    ).admitted
+    nonempty = "(" + quote + encode(f'"{key}": "{material}"', encoding) + quote + ",)"
+    assert not check_text(nonempty, budgets=BUDGETS, publication=True).admitted
+
+
+@given(st.sampled_from(("numeric", "mermaid")), st.sampled_from(('"', "'")), st.integers(3, 5))
+def test_encoded_key_cannot_make_ambiguous_quote_runs_an_absent_carrier(encoding, quote, size):
+    value = (
+        encode("password", encoding) + " = " + quote * size + ";synthetic-material" + quote * size
+    )
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.text(alphabet="abcdef_-/", min_size=1, max_size=40),
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(('"', "'")),
+    st.sampled_from(("{}", "assert value == {}", "items = [{}]")),
+    st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
+)
+def test_unquoted_mask_keeps_its_whole_original_carrier(prefix, key, quote, wrapper, material):
+    safe = wrapper.format(quote + prefix + "/" + key + "=***" + quote)
+    assert check_text(safe, budgets=BUDGETS, publication=True).admitted
+    unsafe = wrapper.format(quote + prefix + "/" + key + "=***" + material + quote)
+    assert not check_text(unsafe, budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("***", '"***"', "${REF}")),
+    st.sampled_from(("html", "numeric", "mermaid")),
+    st.text(alphabet=" \t\n", min_size=1, max_size=12),
+    st.sampled_from(("", "+ ")),
+    st.integers(1, 4),
+)
+def test_carrier_completion_crosses_newlines_and_parentheses(
+    key, mask, encoding, space, operator, depth
+):
+    field = encode(key + "=" + mask, encoding)
+    carrier = "(" * depth + '"' + field + '"' + ")" * depth
+    value = carrier + space + operator + '"synthetic-material"'
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.sampled_from(("token", "login_password", "api_key")),
+    st.sampled_from(("", "***", "${REF}", "{{ NAME }}")),
+    st.sampled_from(("html", "numeric", "mermaid")),
+    st.sampled_from(('"', "'")),
+    st.text(alphabet=" \t\n,;()[]{}+.#/\"'_abc012-", max_size=40),
+)
+def test_encoded_absent_carrier_matches_the_canonical_raw_field(key, absent, encoding, quote, tail):
+    raw = "('" + key + '="***"' + "')" + tail
+    encoded = "(" + quote + encode(f'"{key}": "{absent}"', encoding) + quote + ")" + tail
+    assert (
+        check_text(encoded, budgets=BUDGETS, publication=True).admitted
+        == check_text(raw, budgets=BUDGETS, publication=True).admitted
+    )

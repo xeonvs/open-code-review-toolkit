@@ -5,7 +5,7 @@
 plan_schema_version: 2
 Status: active
 Owner: root
-Last Updated: 2026-10-30
+Last Updated: 2026-10-31
 
 Release classification: release-required; target v0.14.4; next development line remains 0.15.0.
 
@@ -146,7 +146,43 @@ skips; streaming/layout owners reached full branch coverage and the source
 adapter reached 99%. Earlier clean Python 3.15 wheel installation, real MCP
 round-trip and installed audit/cleanup probes passed on the pre-correction
 artifact. Rebuild and repeat installed qualification for the corrected commit.
-Actual own-tool review and admitted model-generated diagram remain 0/2.
+The first actual own-tool review of `17254d2..58b0bbc` completed 56/56 selected
+items with no failed or waived coverage and an admitted TB flowchart. It found
+three defects: encoded query keys after semicolons, ambiguous quote runs and a
+malformed-HTML parser assertion on Python 3.12. All three were reproduced; the
+HTML finding was retained privately despite its conservative publication filter.
+The only failed auxiliary read requested lines beyond EOF and was preceded and
+followed by complete reads of that file, so it left no material source gap.
+No budget warning occurred. This consumes own-tool run 1/2; its findings must be
+fixed before final acceptance. Focused production-boundary regressions pass on
+Python 3.12 and the current interpreter; two independent 1000-example DLP
+profiles pass 210 checks each. Correct mask controls caught and prevented an
+intermediate false-positive regression. Seven tests that used the real checkout
+for configuration-failure checks were isolated into temporary directories after
+colliding with the live review lock; their 246-test owner suite passes. The full
+gate must run on the corrected frozen source.
+
+Full-population `1a5b1f0` replay completed, then causal review exposed two
+encoded empty-field false positives and four ordinary quoted-path mask probes.
+The correction preserves original carrier boundaries and the sensitive key in
+a canonical no-material view; it does not remove a field from subsequent
+decoding or continuation checks. Focused independent review reproduced and
+closed multiline/container continuations. Structural, inverse and raw/encoded
+equivalence properties cover these boundaries, with a shared 4096-field budget.
+The current 3790-observation retained replay has zero oracle mismatches; this
+is a narrow correction gate, not the final full passing-population audit.
+Exact source inspection also corrected four initial masked-URI/reference labels,
+preserving every previous verdict and rationale in private revision history.
+
+The frozen `1a5b1f0` quality gate passed 4130 tests and 357 subtests at 89.08%
+total branch-aware coverage, with all individual floors satisfied. It precedes
+the final carrier correction and must be repeated for that correction. Clean
+installed Python 3.12/3.15 checks and actual worker profiling passed at that
+checkpoint. The complete toolkit audit measured 107 seconds wall/106 seconds
+user CPU and 155 MiB peak RSS, compared with the installed 0.14.3 baseline's
+126/122 seconds and 153 MiB. A 999-sample, zero-error Python 3.12 worker profile
+identified normalization and material checks as the main costs. Final frozen
+artifact/corpus/resource and second-model acceptance remain required.
 
 ### Risks And Recovery
 
@@ -154,15 +190,16 @@ Lossy parsers can hide material; always retain independent original checks and u
 
 ### Resume Point
 
-Finish the extended property gate and focused review, then make a signed logical
-correction commit while retaining `185d7db` as the immutable Security scan anchor.
-Rebuild a clean installed artifact, run the final frozen-source quality gate and
-actual own-tool acceptance, and repeat complete corpus/resource/annotation checks
-after review. Keep the exact admitted Mermaid for the feature PR. Only the signed
+Commit the focused own-tool corrections after semantic review, retaining
+`185d7db` as the immutable Security scan anchor. Rebuild a clean installed
+artifact, repeat complete corpus/resource/annotation checks, run the final
+frozen-source gate and use the second own-tool run for the corrected candidate.
+Keep the exact admitted Mermaid for the feature PR. Only the signed
 plan commit has been pushed to draft PR #287. Preserve authenticated private state
 and owned raw copies until their final replay, then perform all source/build/log
 and task-owned Docker/GitHub cleanup. Aggregate Security scans used: 1/1, complete;
-successful own-tool runs used: 0/2. No release acceptance or feature push is claimed.
+successful own-tool runs used: 1/2. No release acceptance or feature push is claimed.
+
 
 ### Plan Fidelity Check
 
@@ -191,7 +228,7 @@ published releases and the evidence needed to verify their provenance.
 
 ### Handoff Notes
 
-Root owns plan, private evidence reconciliation, integration and release state. First plan push only; implementation remains local until WQ-06 acceptance. Own-tool runs used: 0/2; aggregate Security scans used: 1/1, complete on 185d7db. Revalidate actual Git/external state before retrying an uncertain mutation.
+Root owns plan, private evidence reconciliation, integration and release state. First plan push only; implementation remains local until WQ-06 acceptance. Own-tool runs used: 1/2; aggregate Security scans used: 1/1, complete on 185d7db. Revalidate actual Git/external state before retrying an uncertain mutation.
 
 ## Recently Completed
 

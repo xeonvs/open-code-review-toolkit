@@ -22,8 +22,10 @@ This matrix records what the repository test suite proves and, equally important
 
 Affected DLP/material/audit and new source/layout owners have individual 90%
 branch-aware floors. Properties cross query punctuation, leading whitespace,
-adjacent fields/fragments, actual Markdown masks, unknown enclosures and the
-production publication projection. Two obsolete UUID diagnostic expectations
+adjacent fields/fragments, actual Markdown masks, unknown enclosures, semicolon
+query keys, quote runs and the production publication projection. Minimized
+actual-review regressions exercise the real HTML parser and forbidden-value
+preparation on Python 3.12 as well as the current interpreter. Two obsolete UUID diagnostic expectations
 were corrected without dropping ambiguous-identifier sidecar coverage. Current
 gate, installed/resource and model/diagram acceptance results belong to the
 active plan; line coverage alone is not semantic evidence. Strictly private

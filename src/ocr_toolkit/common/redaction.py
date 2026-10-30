@@ -222,17 +222,51 @@ def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None
     return redacted
 
 
-def _complete_credential_value(text: str, end: int) -> bool:
+def _complete_credential_carrier(text: str, end: int) -> bool:
+    """Require a complete carrier expression across whitespace and closers."""
+
+    cursor = end
+    while cursor < len(text):
+        if text[cursor].isspace() or text[cursor] in ")]}":
+            cursor += 1
+        elif text[cursor] == ",":
+            after = cursor + 1
+            while after < len(text) and text[after].isspace():
+                after += 1
+            if after < len(text) and text[after] in ")]}":
+                # A trailing container separator cannot hide its postfix.
+                cursor = after
+            else:
+                # Unknown tokens after a separator do not prove a new field;
+                # comments or operators must not conceal a later postfix.
+                return after == len(text) or text[after].isalnum() or text[after] in "_\"'([{"
+        else:
+            break
+    return cursor == len(text) or text[cursor] == ";"
+
+
+def _complete_credential_value(text: str, end: int, *, start: int | None = None) -> bool:
     """Require a terminal value, not a prefix of concatenation or a call.
 
-    Closing source/JSON wrappers may follow a displayed credential. A following
-    literal or expression does not prove an empty/already-masked whole value.
+    One unambiguous matching outer quote may close its carrier. Arbitrary
+    quotes cannot prove an empty prefix is the whole value.
     """
 
     cursor = end
-    for characters in (" \t", "\"'", " \t"):
-        while cursor < len(text) and text[cursor] in characters:
-            cursor += 1
+    while cursor < len(text) and text[cursor] in " \t":
+        cursor += 1
+    if start is not None and cursor < len(text) and text[cursor] in "\"'":
+        quote = text[cursor]
+        opening = text.rfind(quote, max(0, start - 1024), start)
+        carrier = opening >= 0 and (opening == 0 or text[opening - 1] not in "\\\"'")
+        # An unquoted mask can be inside a path or other quoted carrier. Its
+        # entire prefix must be unambiguous; quote runs never prove a carrier.
+        prefix = text[opening + 1 : cursor] if carrier else ""
+        single = opening == start - 1 or (
+            text[end - 1] not in "\"'" and not any(c in prefix for c in (quote, "\\", "\r", "\n"))
+        )
+        if carrier and single and text[end - 1] != quote:
+            return _complete_credential_carrier(text, cursor + 1)
     return cursor == len(text) or text[cursor] in ",;)]}#\r\n"
 
 
@@ -241,16 +275,25 @@ def masked_credential_spans(text: str) -> tuple[tuple[int, int], ...]:
 
     if "***" not in text:
         return ()
-    return tuple(
-        sorted(
-            {
-                match.span("value")
-                for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
-                for match in pattern.finditer(text)
-                if match["value"] == "***" and _complete_credential_value(text, match.end())
-            }
-        )
-    )
+    spans = {
+        match.span("value")
+        for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
+        for match in pattern.finditer(text)
+        if match["value"] == "***"
+        and _complete_credential_value(text, match.end(), start=match.start())
+    }
+    # URI carriers have their own proven boundaries. A closing carrier quote
+    # must not require granting the same authority to arbitrary quote runs.
+    for query, end, empty, qualified in _material_queries(text):
+        if empty and qualified:
+            start = query.end()
+            while start < end and text[start].isspace():
+                start += 1
+            if text[start:end] == "***":
+                spans.add((start, end))
+            elif text[start:end] in {"'***'", '"***"'}:
+                spans.add((start + 1, end - 1))
+    return tuple(sorted(spans))
 
 
 def _credential_material(text: str) -> bool:
@@ -277,7 +320,7 @@ def _credential_material(text: str) -> bool:
             continue
         for match in pattern.finditer(text):
             if match["value"] not in {"", "***"} or not _complete_credential_value(
-                text, match.end()
+                text, match.end(), start=match.start()
             ):
                 return True
             safe_fields.add(match.span())
@@ -289,7 +332,9 @@ def _credential_material(text: str) -> bool:
             index = bisect_right(ordered_fields, (match.start(), len(text) + 1)) - 1
             if index >= 0 and match.end() <= ordered_fields[index][1]:
                 continue
-            if match["value"] in {"", "***"} and _complete_credential_value(text, match.end()):
+            if match["value"] in {"", "***"} and _complete_credential_value(
+                text, match.end(), start=match.start()
+            ):
                 continue
             return True
     return False
@@ -298,7 +343,7 @@ def _credential_material(text: str) -> bool:
 _QUERY_VALUE_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?")
 # Diagnostic replacement and material classification have distinct grammars.
 # A key-only iterator cannot consume another credential inside a wrapper tail.
-_QUERY_KEY_RE = re.compile(r"(?i)(^|[?&])([^=?#&\s]+)=")
+_QUERY_KEY_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;\s]+)=")
 _QUERY_END_RE = re.compile(r"[&#\s]")
 _EMPTY_QUERY_VALUE_RE = re.compile(r"(?:(?P<quote>['\"])(?:\*\*\*|)(?P=quote)|\*\*\*)")
 _URI_CARRIER = re.compile(r"(?P<quote>['\"])[A-Za-z][A-Za-z0-9+.-]{0,31}:[^\s\"'<>]*$")
@@ -349,7 +394,7 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
             end = boundary.start() if boundary else maximum
             closed = closing >= 0 and end == closing
             empty = start == end or _EMPTY_QUERY_VALUE_RE.fullmatch(text, start, end) is not None
-            if closed and not _complete_credential_value(text, end + 1):
+            if closed and not _complete_credential_carrier(text, end + 1):
                 empty = False
             if (
                 end < len(text)
