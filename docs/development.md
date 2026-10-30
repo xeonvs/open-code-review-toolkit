@@ -194,6 +194,13 @@ private filesystem and reporting usage each have an independent 85% floor.
 For regexes, review the semantic alternatives too: line coverage cannot prove
 that every encoded representation or boundary is exercised.
 
+Cross transformations and context, rather than only varying strings: configured
+secrets may contain words rewritten by canonicalization; markup may be unpaired
+and contacts unlabelled; ambient secrets may match diagnostic wrapper fields.
+Pair each minimized defect with inverse cases and the actual audit/projection
+handoff. Use work bounds for repeated files/ranges, not just line coverage or
+process-reuse assertions, when checking scanner performance.
+
 Use the local [private DLP audit commands](dlp-audit.md) for offline
 corpus diagnosis and baseline/candidate replay without OCR. Curate private
 inputs before capture, classify exact units without production suppression,
@@ -206,9 +213,12 @@ Source interpretation is tested at the real immutable-source proof and
 publication projection, including a temporary repository containing only C,
 JavaScript and JSON. Filename changes must not grant syntax authority. Vary
 reference expressions, Unicode columns, docstrings, embedded/default/mapping-key
-literals, stale contexts and parser bounds. Pair benign literal arithmetic with
+literals, stale contexts and parser bounds. Pair proven numeric computation with
 obfuscated phone/email/credential controls and configured-secret Unicode/space
-variants. The two source-context modules each have a local 90% branch-aware
+variants. Exercise configurations, prose, logs and unknown syntax without granting
+authority to an expression merely because it parses. Vary phone tails beyond
+leading-zero fixtures so valid numeric syntax cannot hide a false negative.
+The two source-context modules each have a local 90% branch-aware
 floor. These measures complement semantic counterexamples; they do not establish
 a detector precision or recall rate.
 

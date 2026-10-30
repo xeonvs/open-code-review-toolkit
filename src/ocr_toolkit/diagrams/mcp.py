@@ -58,6 +58,18 @@ def diagram_tool_definition() -> dict[str, object]:
             },
         }
     )
+    edge = obj(
+        {
+            "source": identifier,
+            "target": identifier,
+            "condition": {"type": "string", "maxLength": 80},
+            "references": {**refs, "minItems": 0},
+        }
+    )
+    edge["oneOf"] = [
+        {"properties": {"condition": {"const": ""}}},
+        {"properties": {"condition": {"minLength": 1}, "references": {"minItems": 1}}},
+    ]
     flow = obj(
         {
             "kind": {"const": "flowchart"},
@@ -77,14 +89,7 @@ def diagram_tool_definition() -> dict[str, object]:
             "edges": {
                 "type": "array",
                 "maxItems": 16,
-                "items": obj(
-                    {
-                        "source": identifier,
-                        "target": identifier,
-                        "condition": {"type": "string", "maxLength": 80},
-                        "references": {**refs, "minItems": 0},
-                    }
-                ),
+                "items": edge,
             },
         }
     )
@@ -117,7 +122,7 @@ def diagram_tool_definition() -> dict[str, object]:
     return {
         "name": DIAGRAM_TOOL_NAME,
         "description": (
-            "Submit one optional model-proposed summary for the exact full review range. "
+            "Submit the requested model-proposed summary for the exact full review range. "
             "Choose flowchart for decisions or sequence for ordered component interactions. "
             "Use not-applicable without diagram for changes with no useful behavioral summary. "
             "Do not send prose reasons, raw Mermaid, HTML, styles or output paths. "

@@ -82,11 +82,23 @@ def test_nonempty_literal_material_is_not_a_reference(key, value):
     st.sampled_from(["*", " *", "* ", " * ", " ** "]),
     st.sampled_from(["*", " *", "* ", " * ", " ** "]),
 )
-def test_fixed_literal_sink_preserves_multiplication_for_any_language(
-    _extension, left, right, first, second
-):
+def test_proven_operators_are_independent_of_filename(_extension, left, right, first, second):
     value = f"bytes = 2{first}{left}{second}{right};"
-    assert check_text(value, budgets=BUDGETS, publication=True, sink=TextSink.LITERAL_CODE).admitted
+    source = "def calculate():\n    " + value + "\n"
+    path = "source." + _extension
+    proof = prove_opaque_code(
+        dict(start_line=2, end_line=2, existing_code=source.splitlines()[1]),
+        path,
+        lambda _path: source,
+    )
+    assert check_text(
+        value,
+        budgets=BUDGETS,
+        publication=True,
+        sink=TextSink.LITERAL_CODE,
+        allow_opaque_code=proof.existing_verified,
+        code_context=proof.existing_context,
+    ).admitted
 
 
 @given(

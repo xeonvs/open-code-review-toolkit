@@ -118,15 +118,28 @@ def test_full_source_syntax_is_independent_of_extension(path) -> None:
 @pytest.mark.parametrize(
     "path,source,line",
     [
-        ("src/a.c", "int main(void) {\n  int size = 2 *1024 *1024;\n}\n", 2),
-        ("src/mixed.c", "int main(void) {\n  int size = 2 *1024*1024;\n}\n", 2),
-        ("src/a.js", "function size() {\n  const bytes = 2 *1024 *1024;\n}\n", 2),
-        ("bin/limits", '#!/bin/sh\nbytes="2 *1024 *1024"\n', 2),
+        ("src/a.c", "int main(void) {\n  int size = 1024*1024;\n}\n", 2),
+        ("src/a.js", "function size() {\n  const bytes = 1024*1024;\n}\n", 2),
+        ("bin/limits", '#!/bin/sh\nbytes="1024*1024"\n', 2),
     ],
 )
 def test_literal_renderer_fix_does_not_require_python(path, source, line) -> None:
     result, _, excerpt = projected_source(source, path=path, line=line)
     assert result["comments"][0].get("existing_code") == excerpt
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "int main(void) {\n  int size = 2 *1024*1024;\n}\n",
+        "function size() {\n  const bytes = 2 *1024*1024;\n}\n",
+        '#!/bin/sh\nbytes="2 *1024*1024"\n',
+    ],
+)
+def test_unknown_numeric_interpretation_preserves_strict_checks_and_finding(source):
+    result, publication, _ = projected_source(source, path="source", line=2)
+    assert len(result["comments"]) == 1 and "existing_code" not in result["comments"][0]
+    assert publication["state"] == "publication-filtered"
 
 
 def test_source_context_cannot_cross_text_or_prose_boundaries() -> None:
@@ -387,6 +400,30 @@ def test_syntax_cache_is_bounded_and_never_reuses_changed_source() -> None:
     assert len(cache) <= MAX_SYNTAX_CACHE_FILES
 
 
+@pytest.mark.parametrize("count", [50, 400])
+def test_many_proofs_prepare_one_source_once(monkeypatch, count) -> None:
+    from ocr_toolkit.evidence import opaque_code
+
+    source = "def parse(parts):\n" + "    token=parts\n" * count
+    original = opaque_code._prepare_source
+    work = []
+
+    def prepare(value):
+        work.append(len(value))
+        return original(value)
+
+    monkeypatch.setattr(opaque_code, "_prepare_source", prepare)
+    cache = {}
+    for line in range(2, count + 2):
+        comment = dict(
+            path="source", start_line=line, end_line=line, existing_code="    token=parts"
+        )
+        assert prove_opaque_code(
+            comment, "source", lambda _path: source, syntax_cache=cache
+        ).existing_verified
+    assert work == [len(source)]
+
+
 @pytest.mark.parametrize(
     "secret", ["synthetic-a\u0301bcZ-credential", " synthetic-private-credential "]
 )
@@ -418,8 +455,8 @@ def test_repository_without_python_files_crosses_real_git_proof_and_audit(tmp_pa
     root = tmp_path.resolve() / "source"
     root.mkdir()
     sources = {
-        "main.c": "int main(void) {\n  int bytes = 2 *1024 *1024;\n}\n",
-        "main.js": "function bytes() {\n  const size = 2 *1024 *1024;\n}\n",
+        "main.c": "#include <stdint.h>\nint main(void) {\n  int bytes = 1024*1024;\n}\n",
+        "main.js": "function bytes() {\n  const size = 1024*1024;\n}\n",
         "settings.json": '{"password":"syntheticShortCredential"}\n',
     }
     for name, text in sources.items():

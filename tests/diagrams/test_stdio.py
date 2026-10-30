@@ -14,6 +14,7 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
 from ocr_toolkit.diagrams.collector import DiagramCollector
+from ocr_toolkit.diagrams.contracts import DiagramError, parse_submission
 from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME, diagram_tool_definition
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
@@ -56,6 +57,28 @@ def client(root: Path, collector: DiagramCollector | None) -> Client:
     if collector is not None:
         args.extend(("--diagram-run-id", collector.run_id))
     return Client(StdioServerParameters(command=sys.executable, args=args, cwd=root), cache=None)
+
+
+@pytest.mark.parametrize(
+    "condition,has_references", [("", False), ("", True), ("supported", False), ("supported", True)]
+)
+def test_advertised_conditional_reference_contract_matches_parser(condition, has_references):
+    payload = flow_submission()
+    edge = payload["diagram"]["edges"][0]
+    edge["condition"] = condition
+    if not has_references:
+        edge["references"] = []
+    valid = not condition or has_references
+    assert Draft202012Validator(diagram_tool_definition()["inputSchema"]).is_valid(payload) == valid
+    if valid:
+        assert parse_submission(
+            payload, expected_range=ReviewRange(payload["base_sha"], payload["head_sha"])
+        )
+    else:
+        with pytest.raises(DiagramError):
+            parse_submission(
+                payload, expected_range=ReviewRange(payload["base_sha"], payload["head_sha"])
+            )
 
 
 @pytest.mark.parametrize("factory", (flow_submission, sequence_submission))

@@ -7,7 +7,7 @@ the complete original text for sensitive content and prove its renderer safe.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ocr_toolkit.context.code_text import CodeTextContext
@@ -27,7 +27,23 @@ from ocr_toolkit.posting.suggestions import (
 MAX_PROOF_SOURCE_CHARS = 256_000
 MAX_PROOF_PATH_CHARS = 1_024
 MAX_SYNTAX_CACHE_FILES = 4
-SyntaxCache = dict[str, tuple[str, PythonSourceSyntax | None]]
+
+
+@dataclass(slots=True)
+class _PreparedProofSource:
+    source: str = field(repr=False)
+    lines: tuple[str, ...] = field(repr=False)
+    syntax: PythonSourceSyntax | None = None
+    analyzed: bool = False
+
+
+SyntaxCache = dict[str, _PreparedProofSource]
+
+
+def _prepare_source(source: str) -> _PreparedProofSource:
+    return _PreparedProofSource(
+        source, tuple(source.replace("\r\n", "\n").replace("\r", "\n").splitlines())
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +108,14 @@ def prove_opaque_code(
         return OpaqueCodeProof()
     if not isinstance(source, str) or len(source) > MAX_PROOF_SOURCE_CHARS:
         return OpaqueCodeProof()
-    lines = source.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    cached = syntax_cache.get(path) if syntax_cache is not None else None
+    if cached is None or cached.source != source:
+        cached = _prepare_source(source)
+        if syntax_cache is not None:
+            if path not in syntax_cache and len(syntax_cache) >= MAX_SYNTAX_CACHE_FILES:
+                del syntax_cache[next(iter(syntax_cache))]
+            syntax_cache[path] = cached
+    lines = cached.lines
     if end > len(lines):
         return OpaqueCodeProof()
     selected = "\n".join(lines[start - 1 : end])
@@ -100,15 +123,10 @@ def prove_opaque_code(
         return OpaqueCodeProof()
 
     context = None
-    cached = syntax_cache.get(path) if syntax_cache is not None else None
-    if cached is not None and cached[0] == source:
-        syntax = cached[1]
-    else:
-        syntax = analyze_python_source(source)
-        if syntax_cache is not None:
-            if path not in syntax_cache and len(syntax_cache) >= MAX_SYNTAX_CACHE_FILES:
-                del syntax_cache[next(iter(syntax_cache))]
-            syntax_cache[path] = source, syntax
+    if not cached.analyzed:
+        cached.syntax = analyze_python_source(source)
+        cached.analyzed = True
+    syntax = cached.syntax
     if syntax is not None:
         context = syntax.context(start, end, existing)
 

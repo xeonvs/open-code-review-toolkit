@@ -9,6 +9,7 @@ import io
 import re
 import tokenize
 import unicodedata
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 
 from ocr_toolkit.context.code_text import CodeTextContext
@@ -16,6 +17,23 @@ from ocr_toolkit.context.code_text import CodeTextContext
 MAX_SYNTAX_CHARS = 256_000
 MAX_SYNTAX_NODES = 30_000
 MAX_KEY_SPANS = 4096
+
+
+def _merged_ranges(spans: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = merged[-1][0], max(end, merged[-1][1])
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _relative_spans(
+    spans: tuple[tuple[int, int], ...], left: int, right: int
+) -> tuple[tuple[int, int], ...]:
+    first, last = bisect_left(spans, (left, -1)), bisect_left(spans, (right, -1))
+    return tuple((a - left, b - left) for a, b in spans[first:last] if b <= right)
 
 
 def _reference_value(node: ast.AST | None, known_names: set[str]) -> bool:
@@ -72,6 +90,7 @@ class PythonSourceSyntax:
     line_starts: tuple[int, ...]
     key_spans: tuple[tuple[int, int], ...]
     material_spans: tuple[tuple[int, int], ...]
+    operator_spans: tuple[tuple[int, int], ...] = ()
 
     def context(self, start: int, end: int, value: str) -> CodeTextContext | None:
         if not 1 <= start <= end <= len(self.line_starts):
@@ -87,15 +106,14 @@ class PythonSourceSyntax:
         # We do not infer dataflow through aliases, defaults or local factories.
         # If the excerpt also contains literal material, retain strict generic
         # checks instead of waiving a key whose value might refer to that material.
-        if any(a < right and b > left for a, b in self.material_spans):
-            return None
+        index = bisect_left(self.material_spans, (right, -1))
+        material = bool(index and self.material_spans[index - 1][1] > left)
         left += len(selected) - len(selected.lstrip())
-        spans = tuple(
-            (a - left, b - left)
-            for a, b in self.key_spans
-            if left <= a < b <= left + len(normalized)
-        )
-        return CodeTextContext(hashlib.sha256(normalized.encode()).hexdigest(), spans)
+        spans = () if material else _relative_spans(self.key_spans, left, left + len(normalized))
+        operators = _relative_spans(self.operator_spans, left, left + len(normalized))
+        if material and not operators:
+            return None
+        return CodeTextContext(hashlib.sha256(normalized.encode()).hexdigest(), spans, operators)
 
 
 def analyze_python_source(source: str) -> PythonSourceSyntax | None:
@@ -145,6 +163,7 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
             starts.append(starts[-1] + len(line) + 1)
         by_start: dict[tuple[int, int], tuple[int, int]] = {}
         by_end: dict[tuple[int, int], tuple[int, int]] = {}
+        star_tokens = []
         # Tokenizer columns count characters, AST columns count UTF-8 bytes.
         # Translate ordered token boundaries in one pass, without quadratic slices.
         positions: dict[int, tuple[int, int]] = {}
@@ -158,6 +177,15 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
         for count, token in enumerate(tokenize.generate_tokens(io.StringIO(source).readline)):
             if count > 3 * MAX_SYNTAX_NODES:
                 return None
+            if token.type == tokenize.OP and token.string in {"*", "**"}:
+                star_tokens.append(
+                    (
+                        starts[token.start[0] - 1] + token.start[1],
+                        starts[token.end[0] - 1] + token.end[1],
+                    )
+                )
+                if len(star_tokens) > MAX_KEY_SPANS:
+                    return None
             if token.type not in {tokenize.NAME, tokenize.STRING}:
                 continue
             a, b = token.start, token.end
@@ -187,8 +215,45 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
             for node in nodes
             if isinstance(node, ast.Constant) and not _reference_value(node, known_names)
         ]
+        # Only actual numeric computation in the qualified full-source AST can
+        # prove operator roles. An annotation, quoted string or template cannot.
+        blocked: set[int] = set()
+        for node in nodes:
+            annotation = getattr(node, "annotation", None)
+            if isinstance(annotation, ast.AST):
+                blocked.add(id(annotation))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns:
+                blocked.add(id(node.returns))
+            if isinstance(
+                node, (ast.JoinedStr, getattr(ast, "TemplateStr", ast.JoinedStr), ast.TypeAlias)
+            ):
+                blocked.add(id(node))
+            blocked.update(id(parameter) for parameter in getattr(node, "type_params", ()))
+            if id(node) in blocked:
+                blocked.update(id(child) for child in ast.iter_child_nodes(node))
+        numeric: set[int] = set()
+        for node in reversed(nodes):
+            if id(node) in blocked:
+                continue
+            if (
+                (isinstance(node, ast.Constant) and type(node.value) in (int, float))
+                or (
+                    isinstance(node, ast.UnaryOp)
+                    and isinstance(node.op, (ast.UAdd, ast.USub))
+                    and id(node.operand) in numeric
+                )
+                or (
+                    isinstance(node, ast.BinOp)
+                    and id(node.left) in numeric
+                    and id(node.right) in numeric
+                )
+            ):
+                numeric.add(id(node))
+        numeric_nodes = [
+            node for node in nodes if isinstance(node, ast.BinOp) and id(node) in numeric
+        ]
         needed: dict[int, set[int]] = {}
-        for node in material:
+        for node in (*material, *numeric_nodes):
             if node.end_lineno is None or node.end_col_offset is None:
                 return None
             needed.setdefault(node.lineno, set()).add(node.col_offset)
@@ -201,10 +266,29 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
                 previous_char += len(raw[previous_byte:column].decode())
                 offsets[number, column] = starts[number - 1] + previous_char
                 previous_byte = column
-        material_spans = tuple(
-            (offsets[node.lineno, node.col_offset], offsets[node.end_lineno, node.end_col_offset])
-            for node in material
+        material_spans = _merged_ranges(
+            [
+                (
+                    offsets[node.lineno, node.col_offset],
+                    offsets[node.end_lineno, node.end_col_offset],
+                )
+                for node in material
+            ]
         )
+        ranges = _merged_ranges(
+            [
+                (
+                    offsets[node.lineno, node.col_offset],
+                    offsets[node.end_lineno, node.end_col_offset],
+                )
+                for node in numeric_nodes
+            ]
+        )
+        operators = []
+        for operator_start, operator_end in star_tokens:
+            index = bisect_right(ranges, (operator_start, len(source) + 1)) - 1
+            if index >= 0 and operator_end <= ranges[index][1]:
+                operators.append((operator_start, operator_end))
         for node in nodes:
             if isinstance(node, ast.arguments):
                 positional = node.posonlyargs + node.args
@@ -242,6 +326,8 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
                 key(node)
             if len(spans) > MAX_KEY_SPANS:
                 return None
-        return PythonSourceSyntax(source, tuple(starts), tuple(sorted(spans)), material_spans)
+        return PythonSourceSyntax(
+            source, tuple(starts), tuple(sorted(spans)), material_spans, tuple(operators)
+        )
     except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError, tokenize.TokenError):
         return None

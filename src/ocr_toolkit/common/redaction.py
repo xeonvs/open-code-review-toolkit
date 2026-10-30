@@ -224,6 +224,11 @@ def has_sensitive_material(
 ) -> bool:
     """Classify publication material using shared rules, not diagnostic rewrites."""
 
+    values = environment_secret_values() if values is None else values
+    # A decoded passphrase may itself contain words rewritten by token-name
+    # canonicalization. Its incoming representation is independently sensitive.
+    if redact_env_secret_values(text, values=values) != text:
+        return True
     prepared = normalize_redaction_tokens(strip_redaction_bypass_controls(text))
     view = text if credential_view is None else credential_view
     credential = (

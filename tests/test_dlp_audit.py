@@ -221,6 +221,15 @@ def test_real_worker_proof_projection_and_no_source_in_report(state) -> None:
     assert "parts" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("secret", ["source", "Inspect", "excerpt"])
+def test_real_worker_wrapper_text_cannot_turn_benign_input_into_failure(state, monkeypatch, secret):
+    monkeypatch.setenv("OCR_LLM_TOKEN", secret)
+    identity = captured(state, "\tamount = 3\n")
+    result = scanner.supervised(request(state, identity), 30)
+    assert result["units"] == 2
+    assert result["hits"] and all(hit["role"] == "text" for hit in result["hits"])
+
+
 def test_raw_role_matches_prose_while_code_keeps_source_tabs(state) -> None:
     from ocr_toolkit import review_runner
     from ocr_toolkit.evidence.opaque_code import prove_opaque_code
@@ -1160,6 +1169,35 @@ def test_worker_entrypoint_checks_resource_limits_and_suppresses_input(state, mo
         assert output.getvalue() == b""
 
 
+def test_reused_worker_hashes_package_once_for_multiple_requests(state, monkeypatch) -> None:
+    bodies = [request(state, captured(state, f"amount = {number}\n")) for number in range(3)]
+    original = scanner.scanner_identity
+    calls = []
+
+    def identity():
+        calls.append(True)
+        return original()
+
+    incoming = b"".join(
+        worker_process.frame(number.to_bytes(16, "big") + state_module.encode(body))
+        for number, body in enumerate(bodies)
+    )
+    output = io.BytesIO()
+    with monkeypatch.context() as patch:
+        patch.setattr(scanner, "scanner_identity", identity)
+        patch.setattr(scanner.resource, "setrlimit", lambda *_args: None)
+        patch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(incoming)))
+        patch.setattr(sys, "stdout", SimpleNamespace(buffer=output))
+        assert scanner.worker() == 0
+    assert len(calls) == 1
+    stream = io.BytesIO(output.getvalue())
+    for number in range(3):
+        response = worker_process.read_request(stream)
+        assert response[:16] == number.to_bytes(16, "big")
+        assert state_module.decode(response[16:])["units"] == 2
+    assert worker_process.read_request(stream) is None
+
+
 def test_loading_many_files_and_hits_has_linear_work_bound(state, monkeypatch) -> None:
     identity = "e" * 32
     files = [
@@ -1361,7 +1399,7 @@ def test_worker_returns_closed_resource_failure_without_raw_values(
 ) -> None:
     body = request(state, captured(state, "amount = 1\n"))
 
-    def failing(_body):
+    def failing(_body, **_kwargs):
         raise failure
 
     monkeypatch.setattr(scanner, "evaluate", failing)

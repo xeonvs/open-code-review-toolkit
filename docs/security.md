@@ -217,8 +217,10 @@ cross the shared detector. Private retention is checked separately.
 
 Publication classifies sensitive material independently of diagnostic redaction:
 a redactor changing formatting alone does not prove that text contains a secret.
-Literal code and renderer-owned diagram labels preserve arithmetic operators;
-independent security views still inspect Markdown/HTML obfuscation, compatibility
+Literal source can preserve operators only when exact full-source proof establishes
+their computational role. A scalar parsing as an expression is insufficient;
+configuration, documents, logs and diagram labels receive no such authority.
+Independent security views still inspect Markdown/HTML obfuscation, compatibility
 Unicode, configured secret values, credential literals, contacts and forbidden
 source text. Configured values are checked before whitespace/NFC normalization
 as well as afterwards. An exact code match does not exempt sensitive material.
@@ -228,9 +230,12 @@ identify non-value credential names in declarations and reference expressions,
 including `token = "".join(parts)`. Filenames do not authorize this interpretation.
 A contradictory interpreter declaration, ambiguous data or unsupported syntax
 keeps strict credential checks. Any nonempty literal in the published excerpt
-disables this refinement, including dictionary keys and default values: the
+disables credential-name refinement, including dictionary keys and default values: the
 toolkit does not infer dataflow through aliases or factories. Other languages
-receive literal rendering checks with conservative credential interpretation.
+and unqualified inputs keep conservative credential and ambiguous-number handling.
+The bounded Python analysis can also identify numeric multiplication operators;
+comments, strings, annotations and templates cannot supply that proof. This
+operator interpretation does not exempt other sensitive material in the excerpt.
 Authored actionable suggestions never inherit an existing-code syntax waiver.
 
 Technical versions, dates and Decimal expressions retain their bounded grammar

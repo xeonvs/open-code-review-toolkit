@@ -60,7 +60,6 @@ HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
 HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>\n]*>")
 MARKDOWN_ESCAPE_RE = re.compile(r"\\([\\`*{}\[\]()#+\-.!_>~|])")
 MARKDOWN_FORMAT_RE = re.compile(r"[`*_~]")
-NUMERIC_OPERATOR_PREFIX_RE = re.compile(r"[=<>!?:\[(,][ \t]*[+-]?[0-9]+(?:\.[0-9]+)?[ \t]*$")
 DISPLAY_WHITESPACE_RE = re.compile(r"\s+")
 MIN_EXACT_EXCERPT_CHARS = 24
 MAX_EXCERPT_SEARCH_COST = 50_000_000
@@ -420,39 +419,10 @@ def _literal_normalize(value: str) -> str:
 
 
 def _literal_contact_view(value: str, *, visible: bool) -> str:
-    """Deobfuscate contacts without treating unmatched arithmetic stars as markup."""
+    """Sweep arbitrary markup in the already source-bound contact view."""
 
     normalized = unicodedata.normalize("NFKC", _html_decode(value))
-    if visible:
-        normalized = HTML_COMMENT_RE.sub("", normalized)
-    normalized = HTML_TAG_RE.sub("", normalized)
-    normalized = MARKDOWN_ESCAPE_RE.sub(r"\1", normalized)
-    # Disjoint delimiter/body characters bound near-match work. Whitespace at a
-    # closing edge is not emphasis: `2 *1024 *1024` keeps its operators.
-    for marker in (r"\*\*", r"\*", "__", "_", "~~", "`"):
-        char = marker.replace("\\", "")[0]
-        excluded = re.escape(char)
-        pattern = (
-            rf"(?<!{excluded}){marker}(?=\S)([^{excluded}\n]*[^\s{excluded}]){marker}(?!{excluded})"
-        )
-
-        def emphasis(match: re.Match[str]) -> str:
-            # Require an expression delimiter as well as numeric operands.
-            # Bare `202 *555* 0114` remains an obfuscated contact, while a
-            # binding such as `size = 2 *1024*1024` keeps literal operators.
-            left = normalized[max(0, match.start() - 32) : match.start()].rstrip()
-            right = normalized[match.end() : match.end() + 32].lstrip()
-            if (
-                char == "*"
-                and NUMERIC_OPERATOR_PREFIX_RE.search(left)
-                and right[:1].isdecimal()
-                and match[1].isdecimal()
-            ):
-                return match[0]
-            return match[1]
-
-        normalized = re.sub(pattern, emphasis, normalized)
-    return _literal_normalize(normalized)
+    return _display_normalize(normalized) if visible else _source_normalize(normalized)
 
 
 def _explicit_contact_phone(value: str) -> bool:
@@ -538,11 +508,14 @@ def check_text(
     mermaid = _mermaid_decode(decoded)
     has_mermaid = mermaid != decoded
     if has_mermaid:
-        mermaid = normalize_text(_html_decode(mermaid), allow_horizontal_tabs=allow_horizontal_tabs)
+        mermaid_original = _html_decode(mermaid)
+        mermaid = normalize_text(mermaid_original, allow_horizontal_tabs=allow_horizontal_tabs)
         if mermaid is None:
             return DLPResult(False, None, "invalid_text", "mermaid")
         if mermaid.count("\n") + 1 > budgets.max_lines:
             return DLPResult(False, None, "limit", "lines")
+        if redact_env_secret_values(mermaid_original, values=secrets) != mermaid_original:
+            return DLPResult(False, None, "secret", "mermaid")
         if publication and any(_is_display_control(char) for char in mermaid):
             return DLPResult(False, None, "laundering", "display_control")
         mermaid_semantic = _semantic_secret_text(_html_decode(_mermaid_decode(decoded_semantic)))
@@ -609,7 +582,14 @@ def check_text(
         if _explicit_contact_phone(candidate):
             return DLPResult(False, None, "pii", f"phone:{representation}")
     if publication and literal:
-        for candidate in (normalized, mermaid) if has_mermaid else (normalized,):
+        context = code_context if allow_opaque_code and sink != TextSink.DIAGRAM_LABEL else None
+        phone_original = context.phone_view(normalized) if context is not None else normalized
+        phone_views = (
+            (phone_original, _html_decode(_mermaid_decode(_html_decode(phone_original))))
+            if has_mermaid
+            else (phone_original,)
+        )
+        for candidate in phone_views:
             for visible in (True, False):
                 if _contains_phone(_literal_contact_view(candidate, visible=visible)):
                     return DLPResult(False, None, "pii", "phone:literal_markup")

@@ -15,19 +15,26 @@ class TextSink(Enum):
 
 @dataclass(frozen=True, slots=True)
 class CodeTextContext:
-    """Only proven non-value key spans; original values remain independently checked."""
+    """Proven syntax roles; original values remain independently checked."""
 
     text_digest: str
     key_spans: tuple[tuple[int, int], ...]
+    operator_spans: tuple[tuple[int, int], ...] = ()
 
     def credential_view(self, value: str) -> str:
+        return self._view(value, self.key_spans, operators=False)
+
+    def phone_view(self, value: str) -> str:
+        return self._view(value, self.operator_spans, operators=True)
+
+    def _view(self, value: str, spans: tuple[tuple[int, int], ...], *, operators: bool) -> str:
         if hashlib.sha256(value.encode()).hexdigest() != self.text_digest:
             return value
         previous = 0
         pieces = []
-        if not isinstance(self.key_spans, tuple) or len(self.key_spans) > 4096:
+        if not isinstance(spans, tuple) or len(spans) > 4096:
             return value
-        for span in self.key_spans:
+        for span in spans:
             if not isinstance(span, tuple) or len(span) != 2:
                 return value
             start, end = span
@@ -37,7 +44,10 @@ class CodeTextContext:
                 or not previous <= start < end <= len(value)
             ):
                 return value
-            pieces.extend((value[previous:start], "x" * (end - start)))
+            if operators and value[start:end] not in {"*", "**"}:
+                return value
+            replacement = "×" if operators else "x"  # noqa: RUF001 - internal math marker
+            pieces.extend((value[previous:start], replacement * (end - start)))
             previous = end
         pieces.append(value[previous:])
         return "".join(pieces)

@@ -106,11 +106,12 @@ def _unit_id(key: bytes, corpus: str, item: dict[str, Any], unit: int, role: str
     return mac(key, corpus, item["path"], item["digest"], unit, role, PROFILE)
 
 
-def evaluate(request: dict[str, Any]) -> dict[str, Any]:
+def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> dict[str, Any]:
     """Evaluate every whole-file/nonempty-line unit with the production owners."""
 
     fields(request, {"key", "corpus", "item", "source", "scanner"})
-    if request["scanner"] != scanner_identity():
+    expected_identity = scanner_identity() if worker_identity is None else worker_identity
+    if request["scanner"] != expected_identity:
         raise AuditError("worker scanner identity changed")
     key = bytes.fromhex(request["key"])
     item = request["item"]
@@ -118,9 +119,10 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
     if len(key) != 32 or not isinstance(text, str) or len(text.encode()) > MAX_FILE:
         raise AuditError("invalid worker request")
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
+    lines = text.splitlines()
     units = [
         (0, text),
-        *((number, line) for number, line in enumerate(text.splitlines(), 1) if line.strip()),
+        *((number, line) for number, line in enumerate(lines, 1) if line.strip()),
     ]
     if len(units) != item["units"]:
         raise AuditError("worker unit population changed")
@@ -148,8 +150,8 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
             comment = {
                 "path": item["path"],
                 "start_line": number or 1,
-                "end_line": number or len(text.splitlines()),
-                "content": "Inspect this source excerpt.",
+                "end_line": number or len(lines),
+                "content": "",
                 "existing_code": value,
             }
             proof = prove_opaque_code(
@@ -196,11 +198,11 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
     return {"units": len(units), "proven_rejections": proven, "hits": hits}
 
 
-def _worker_response(raw_request: bytes) -> bytes:
+def _worker_response(raw_request: bytes, *, worker_identity: str | None = None) -> bytes:
     """Keep all source-bearing locals within one request's stack frame."""
 
     try:
-        result = evaluate(decode(raw_request))
+        result = evaluate(decode(raw_request), worker_identity=worker_identity)
         raw = encode(result)
         if len(raw) > MAX_DOCUMENT:
             raise AuditError("worker output limit")
@@ -216,10 +218,15 @@ def worker() -> int:
     try:
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_DOCUMENT, MAX_DOCUMENT))
+        identity = scanner_identity()
         while (raw_request := read_request(sys.stdin.buffer)) is not None:
             if len(raw_request) < 17:
                 raise AuditError("missing worker request identity")
-            sys.stdout.buffer.write(frame(raw_request[:16] + _worker_response(raw_request[16:])))
+            sys.stdout.buffer.write(
+                frame(
+                    raw_request[:16] + _worker_response(raw_request[16:], worker_identity=identity)
+                )
+            )
             sys.stdout.buffer.flush()
             del raw_request
         return 0

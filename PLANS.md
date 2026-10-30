@@ -45,6 +45,7 @@ No OCR/model pass during corpus diagnosis or replay; no new review engine, forge
 - This full plan is the first tracked write. Use codex/ feature branch, signed logical commits and a plan-first draft PR. Keep implementation local until reviewed acceptance is complete; self-review, formatting and staged secret scanning precede every commit/amend.
 - Original input text retains independent known-secret, literal-credential, contact and forbidden-source checks. Source proof only enables the interpretation justified by the exact excerpt and safe sink; it is not confidentiality authority.
 - Prefer typed context and parsed value roles over lists of benign names, paths, functions, versions or numeric constants. Ambiguous/unproven syntax keeps the conservative decision.
+- General-purpose text includes configuration, documentation, logs and extensionless inputs. Common sensitive-material checks do not depend on programming language; source/sink refinements require their own bounded proof.
 - All private state is operator-selected outside audited roots and Git worktrees, with private physical directories/files, bounded closed schemas and atomic writes. No automatic reading of an input repository's exclusion configuration.
 - Snapshots contain only selected code; keys, dumps, working logs, generated environments and private measurements are excluded from this task's external corpus. Source copies remain local and task-owned until mandatory final cleanup.
 - Audit input bounds remain 20000 files, 1 MiB/file, 16 MiB total and 200000 line/file units, with no extension-based exclusion policy. Reject oversize bodies by metadata and nontext content before DLP; record omissions explicitly. Resource revision: expose finite total, per-file and per-Git budgets (defaults 900/60/120 seconds). Use exactly one worker so resource use and cancellation do not depend on a concurrent queue. Bound submissions, retained results and report generation before serialization; incomplete scans cannot pass. These bounds describe retained application data/work, not an exact process-RAM guarantee.
@@ -78,9 +79,9 @@ A read-only Git-blob audit at the baseline covers 452 UTF-8 files and 121131 non
 
 ### Locked Decisions
 
-**DLP boundaries.** Keep diagnostic redaction conservative. Publication uses explicit semantic detector decisions, sharing candidate rules rather than inferring a secret from any redactor rewrite. Bind source interpretation to the existing exact-source proof and safe literal renderer. Distinguish prose, fenced source and fixed renderer-owned diagram labels so Markdown-only deletions do not manufacture contacts in literal arithmetic. Keep independent security canonicalization, whole-unit sensitive-value checks and forbidden attribution. No blanket exemption for code or model-chosen context.
+**DLP boundaries.** Keep diagnostic redaction conservative. Publication uses explicit semantic detector decisions, sharing candidate rules rather than inferring a secret from any redactor rewrite. Bind source interpretation to the existing exact-source proof and safe literal renderer. Distinguish prose, fenced source and fixed renderer-owned diagram labels. Only proven computational operators can avoid Markdown deletion; a scalar parsing as an expression supplies no authority. Configurations, documents, logs and other data remain first-class inputs, with conservative decisions for ambiguous contacts. Keep independent security canonicalization, whole-unit sensitive-value checks and forbidden attribution. No blanket exemption for code or model-chosen context.
 
-Use bounded standard-library syntactic analysis of proven Python source to classify declarations, reference/call/slice/keyword expressions, empty constructions and non-value defaults. Every waived generic candidate must map to the proven syntax and contain no credential literal material. Nonempty literals, embedded values, comments not covered by a valid syntax proof, unknown syntax and unsupported language refinements remain conservative. Other languages retain strict credential handling while receiving the sink-correct literal rendering behavior; this is not a claim of universal language semantics. Parsed technical literal corrections require complete valid grammar and explicit contact priority, not repository-specific names. No new third-party runtime engine is selected: replacing the detector does not solve the proven source/sink mismatch and introduces different precision/recall tradeoffs.
+Use bounded standard-library syntactic analysis of proven Python source to classify declarations, reference/call/slice/keyword expressions, empty constructions and non-value defaults. Every waived generic candidate must map to the proven syntax and contain no credential literal material. Nonempty literals, embedded values, comments not covered by a valid syntax proof, unknown syntax and unsupported language refinements remain conservative. Other languages retain conservative credential and ambiguous-number handling; this is not a claim of universal language semantics. Parsed technical literal corrections require complete valid grammar and explicit contact priority, not repository-specific names. No new third-party runtime engine is selected: replacing the detector does not solve the proven source/sink mismatch and introduces different precision/recall tradeoffs.
 
 Syntax qualification depends on complete content, never a filename suffix. A
 contradictory interpreter closes refinement; ambiguous standalone data remains
@@ -89,7 +90,8 @@ disables key waivers because alias/default/factory dataflow is not proved.
 Text-bound contexts remain in memory with a four-file source-analysis cache.
 Audit fast paths must check both prose and literal sinks rather than inferring
 one from the other. Independent security views normalize compatibility Unicode
-before removing markup, while literal arithmetic retains its operators.
+before removing markup. Only source-proven numeric computation retains its
+operators; strings, templates, annotations and arbitrary data do not supply proof.
 
 **Reporting.** Show native analysis and publication health separately whenever public fields/findings are omitted: analysis complete cannot imply accepted complete publication. Preserve native coverage, retained/omitted counts, partial/budget/failed precedence and private-only sanitization. Diagram-only omission stays optional. Share provider-neutral presentation; provider writes and approval rules remain with their existing owners. Ordinary review exit behavior and persisted identities remain unchanged.
 
@@ -142,6 +144,32 @@ and protected-base release authorization. This documentation update changes no
 runtime; no second aggregate Security scan is required. Successful actual
 own-tool acceptance runs remain zero; final corpus replay and quality are pending.
 
+2026-10-30: the first actual Astra/high review of published base through 301d4ae
+completes 42/42 files, without native warnings, but is not accepted: no diagram
+submission occurs and publication retains two of five findings. All three hidden
+findings are inspected in the private raw result and DLP journal. Their prose
+contains phone or named-credential examples; those omissions follow the current
+policy, while their underlying findings reproduce real defects. Missing cases
+were unmatched unlabeled contact markup, known passphrases changed by token-name
+normalization after decoding, and collision of an ambient secret with audit's
+synthetic wrapper text. Two additional findings expose repeated package hashing
+per file and repeated whole-source preparation per line. Correct all five at
+their shared owners, extend general representation/property and actual worker
+tests, then requalify the native diagram path before the remaining actual run.
+The owner explicitly retains a single aggregate Security scan.
+
+2026-10-30: post-review source/representation qualification passes 545 tests and
+properties at 1000 examples per property; focused audit/source checks pass 284.
+Each audit module measures 92-100% branch-aware coverage, source syntax 93%,
+and text-bound contexts 100%. Official native diagram handoffs pass all 24
+group/round/format cases; 67 SDK/bootstrap/schema checks also pass. Full captured
+replays evaluate 121583 and 19050 units. All 80 newly admitted role units and 23
+changed reasons are reviewed and privately classified: no new rejection,
+unexplained admission or lost confirmed protection. Unchanged untriaged
+observations remain explicit (3490 and 277), not a claimed precision/recall rate.
+The overall final quality gate is running; positive actual diagram acceptance,
+post-acceptance replays, candidate-tree diagnosis and installed artifacts remain.
+
 ### Risks And Recovery
 
 Source provenance is not permission to publish a secret: reject unmapped candidates and scan all original/encoded sensitive material. A lexer/normalizer can create a false phone or hide a real one: choose representations by the actual sink and replay strong counterexamples. Broad expectation patterns can conceal new defects: bind them to exact private input identity and keep scanning. An altered corpus/environment is not a detector regression or improvement: fail comparison as incomparable. Private state can leak through reports/errors or cleanup: use closed output fields, fixed private destinations and ownership-checked removal; preserve originals. On a failed check retain value-free diagnostics and the exact resume action, repair the narrow owner and rerun the affected checks. No additional aggregate Security scan for ordinary follow-up fixes.
@@ -163,9 +191,16 @@ measures about 87% and now has a synchronized 85% floor; posting stays near 82%
 with its 80% floor. New source modules have independent local 90% floors.
 The first full measurement is not final-head acceptance. The single aggregate
 Security scan is complete with no findings, and the repository threat model is
-reconciled after its results. Next complete actual own-tool acceptance with a real
-diagram, complete post-review corpus
-comparisons and final quality. Both successful own-tool runs remain unused.
+reconciled after its results. One successful native run is consumed but positive
+engineering acceptance is pending. Its five findings are reproduced and being
+corrected together. Broader counterexamples rejected a standalone-expression
+waiver; operator roles now require exact full-source proof. The revised DLP and
+property suite passes 545 checks, and independent review confirms the original
+data-binding bypasses are closed. The advertised diagram schema now matches
+the parser's conditional-reference requirement. Scoped coverage, official native
+handoffs and both full replays are complete with reviewed transitions. Commit
+corrections, then use the remaining actual run with a real diagram. Complete
+post-acceptance replays, candidate-tree diagnosis and final quality afterwards.
 Private corpus details remain outside public artifacts; owned raw snapshots and
 task-owned build/install copies require final verified removal.
 

@@ -61,15 +61,18 @@ Its protected opening contains the required evidence call, one immutable-ref
 block and review navigation. Each distinct SHA appears once in that block;
 equal roles use `same commit as base`, `head` or `policy` without changing
 their trust or authority. Diagram arguments use the base/head values from this
-block. The optional diagram request follows the evidence overview at the end.
+block. The diagram request follows the evidence overview at the end.
 Clipping preserves both the required opening and this closing instruction, or
 rejects an insufficient bound.
-Only the group containing the lexically first selected non-deleted path is asked
-to submit. This selects an output executor, not the diagram's source scope: it
+Only the group containing the case-sensitive lexically first selected non-deleted
+full path, including dotfiles, is asked to submit. Output is requested even when
+that group has no findings; pending output must be submitted before `task_done`.
+This selects an output executor, not the diagram's source scope: it
 must inspect the global inventory and relevant immutable cross-group diffs with
 the existing native reader. Other groups keep their independent finding reviews.
 The diagram describes one coherent changed flow; it does not assert complete
-repository coverage. Insufficient source context leaves the optional output absent.
+repository coverage. Insufficient source context or an unavailable output tool
+leaves the optional output absent without changing the review outcome.
 
 When output is enabled, the mandatory evidence summary also exposes a closed
 `diagram_output.state`: `pending`, `received`, `omitted-invalid` or `unavailable`.

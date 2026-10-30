@@ -69,7 +69,10 @@ aggregate budget before transferring blob bodies.
 A single isolated worker is reused within one scan and evaluates one file at a
 time; no source-bearing request queue is built. Each exchange has a fresh request
 identity and bounded length framing. A stale/invalid response cannot count as
-evaluation of the next file. Source-bearing locals are released between files. Defaults are 900 seconds overall, 60 seconds per file and 120
+evaluation of the next file. Each worker freezes the installed scanner identity
+at startup; the parent independently verifies it before and after the scan.
+Source lines and bounded syntax are prepared once per file rather than once per
+rejected line. Source-bearing locals are released between files. Defaults are 900 seconds overall, 60 seconds per file and 120
 seconds per Git command. For large projects or slower hosts, use `--seconds`
 (1–86400), `--file-seconds` and `--git-seconds` (both 1–3600). The total deadline
 also caps each child process and source verification. Increasing time does not
@@ -92,7 +95,9 @@ only the trusted installed toolkit; Python isolation prevents imports from the
 audited working directory.
 
 Every whole file and nonempty line is checked as publication text and as an
-existing-code field. Text uses the ordinary prose contract; only code permits
+existing-code field. These are sink comparisons for arbitrary text, including
+configuration, documentation and logs, not language detection by filename.
+Text uses the ordinary prose contract; only the literal source field permits
 horizontal tabs. Both sink interpretations are checked independently. If either rejects, the
 unit is replayed through the real immutable source-proof and publication-projection
 owners. Prose admission is never used to infer code admission; different rendering
@@ -101,6 +106,8 @@ refinement can only relax them. Proof
 eligibility remains bounded by the production code-field contracts. Whole-file
 and line observations are different units; a count is not a false-positive rate.
 The scanner records one primary rejection per role, not every possible match.
+The projection wrapper contains no descriptive text that could collide with an
+ambient secret; rejection of the input field remains independently observable.
 
 ## Reports and exact classifications
 
