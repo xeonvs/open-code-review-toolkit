@@ -50,7 +50,7 @@ from ocr_toolkit.posting.suggestions import (
     SuggestionState,
     safe_repository_path,
 )
-from ocr_toolkit.reporting.diagram import prepare_diagram_section, range_details
+from ocr_toolkit.reporting.diagram import diagram_status, prepare_diagram_section, range_details
 from ocr_toolkit.reporting.metadata import (
     CATEGORY_EMOJI as CATEGORY_EMOJI,
 )
@@ -786,7 +786,7 @@ def summarize_result(
     diagram_state_index = None
     if admitted_diagram is not None:
         diagram_state_index = len(technical)
-        technical.append(f"- Change diagram: {inline_code(admitted_diagram.state)}")
+        technical.append(diagram_status(admitted_diagram))
     if mr_head_sha and mr_head_sha != reviewed_sha:
         technical.append(f"- MR head commit: {_inline_code(mr_head_sha)}")
     if merge_request_lifecycle:

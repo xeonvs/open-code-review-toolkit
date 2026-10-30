@@ -63,6 +63,7 @@ from ocr_toolkit.diagrams.contracts import (
 from ocr_toolkit.diagrams.lifecycle import DiagramExecution, diagram_warning
 from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
 from ocr_toolkit.diagrams.persistence import diagram_payload
+from ocr_toolkit.diagrams.sources import DiagramSourceReader
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import (
     EvidenceArtifacts,
@@ -1874,7 +1875,7 @@ def _finalize_ocr_result(
                 review_range=admitted_range,
                 calls=calls,
                 failed_calls=failed,
-                read_source=read_source,
+                read_source=DiagramSourceReader(Path.cwd(), identity.source_sha),
                 forbidden_matcher=ForbiddenMatcher.compile(forbidden),
                 dlp_enabled=dlp_enabled,
             )

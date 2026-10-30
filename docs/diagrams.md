@@ -84,7 +84,13 @@ rules; the collector never picks a winner among competing candidates.
 
 Limits apply to the whole candidate:
 
-- Flowchart: fixed `LR`, at most 12 nodes and 16 edges.
+- Flowchart: at most 12 nodes and 16 edges. The toolkit automatically selects
+  `LR` or `TB` using graph topology and displayed label/condition widths. It
+  prefers `LR` when the estimated width fits an ordinary report viewport;
+  otherwise it chooses the narrower estimate. Cycles and Unicode labels are
+  included. This is a deterministic readability estimate, not a provider-font
+  guarantee or another model request. Sequence diagrams retain their standard
+  time ordering.
 - Sequence: at most eight participants, 16 messages across **all** branches,
   four two-way `alt` fragments and nesting depth two.
 - Candidate: 16 KiB; each label/condition is one line, at most 80 code points and
@@ -101,8 +107,18 @@ different route: the entire optional diagram is omitted. Publication rechecks
 the immutable source references and DLP; a GitLab note budget also omits the
 whole diagram rather than cutting its conditions.
 
+Source-reference validation streams the complete immutable regular blob and
+retains only its byte count and validated UTF-8/LF line metadata. It permits
+5,000,000 bytes per source and 32,000,000 bytes across distinct objects in one
+30-second validation session. NUL or invalid UTF-8 anywhere in the blob rejects
+the reference, including after the requested line. Aliases share validated
+object metadata. These limits are independent of the 256,000-byte evidence and
+code-proof reader limit; diagram support does not grant larger evidence reads.
+
 Technical details record `disabled`, `not-applicable`, `unsupported`, `generated`,
-`not-generated` or `omitted-invalid`. No candidate, MCP output failure, unsafe
+`not-generated` or `omitted-invalid`. An omitted-invalid entry also shows its
+closed reason, such as `budget`, `reference` or `unavailable`, without source or
+exception text. No candidate, MCP output failure, unsafe
 collector, source-read failure, cleanup failure or rendering error changes
 findings, native coverage, review outcome or approval eligibility. A bounded
 warning may be logged. Mandatory evidence/range failures retain their normal

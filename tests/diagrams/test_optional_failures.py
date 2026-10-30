@@ -14,6 +14,7 @@ import pytest
 from ocr_toolkit import mcp_config, review_runner
 from ocr_toolkit.context.dlp import ForbiddenMatcher
 from ocr_toolkit.diagrams import lifecycle, mcp
+from ocr_toolkit.diagrams.contracts import ReferenceSourceInfo
 from ocr_toolkit.diagrams.lifecycle import DiagramExecution
 from ocr_toolkit.evidence.actions import read_action_receipt
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
@@ -92,23 +93,20 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
         (),
         (),
     )
-    read_blob = GitRepositoryReader.read_blob
     calls = []
 
-    def transient(reader, sha, path):
-        calls.append((sha, path))
-        if len(calls) == 1:
-            if failure == "missing":
-                return None
-            if failure == "unicode":
-                return b"\xff"
-            if failure == "timeout":
-                raise TimeoutExpired("git", 1)
-            raise OSError("synthetic optional source read failure")
-        return read_blob(reader, sha, path)
+    def transient(reader, entry, **kwargs):
+        calls.append(entry.path)
+        if failure == "missing":
+            raise ValueError("synthetic missing source")
+        if failure == "unicode":
+            raise UnicodeError("synthetic invalid text")
+        if failure == "timeout":
+            raise TimeoutExpired("git", 1)
+        raise OSError("synthetic optional source read failure")
 
     monkeypatch.chdir(root)
-    monkeypatch.setattr(GitRepositoryReader, "read_blob", transient)
+    monkeypatch.setattr(GitRepositoryReader, "read_text_metadata", transient)
     reports = []
     _, filtered, publication = review_runner._finalize_ocr_result(
         result,
@@ -124,7 +122,7 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
     assert not filtered and publication["state"] == "passed"
     assert reports[0].comments == (comment,) and reports[0].diagram.state == "omitted-invalid"
     assert reports[0].outcome.status == "complete"
-    assert calls == [(head, "app.py"), (head, "app.py")]
+    assert calls == ["app.py"]
 
 
 @pytest.fixture
@@ -144,7 +142,7 @@ def finish(execution: DiagramExecution):
         review_range=REVIEW_RANGE,
         calls=1,
         failed_calls=0,
-        read_source=lambda _path: "one\ntwo\nthree\n",
+        read_source=lambda _path: ReferenceSourceInfo(3),
         forbidden_matcher=ForbiddenMatcher.compile(()),
         dlp_enabled=True,
     )

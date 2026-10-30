@@ -17,6 +17,7 @@ from ocr_toolkit.diagrams.contracts import (
     DiagramResult,
     DiagramState,
     DiagramSubmission,
+    ReferenceSourceInfo,
     diagram_text_units,
 )
 from ocr_toolkit.review_range import ReviewRange
@@ -28,7 +29,7 @@ def admit_diagram(
     *,
     review_range: ReviewRange | None,
     output_calls: int,
-    read_source: Callable[[str], str | None],
+    read_source: Callable[[str], ReferenceSourceInfo],
     forbidden_matcher: ForbiddenMatcher,
     dlp_enabled: bool,
 ) -> DiagramResult:
@@ -70,7 +71,7 @@ def admit_candidate(
     *,
     review_range: ReviewRange | None,
     output_calls: int,
-    read_source: Callable[[str], str | None],
+    read_source: Callable[[str], ReferenceSourceInfo],
     forbidden_matcher: ForbiddenMatcher,
     dlp_enabled: bool,
 ) -> DiagramResult:
@@ -92,21 +93,26 @@ def admit_candidate(
     )
     if rejection is not None:
         return result("omitted-invalid", rejection)
-    source_lines: dict[str, int | None] = {}
+    source_lines: dict[str, ReferenceSourceInfo] = {}
     for _text, references in diagram_text_units(candidate.diagram):
         for reference in references:
             if reference.path not in source_lines:
                 try:
                     source = read_source(reference.path)
                 except (OSError, ValueError, UnicodeError, TimeoutExpired):
-                    source = None
-                source_lines[reference.path] = (
-                    source.count("\n") + (0 if source.endswith("\n") else 1)
-                    if source and "\x00" not in source
-                    else None
-                )
-            count = source_lines[reference.path]
-            if count is None or reference.end_line > count:
+                    source = ReferenceSourceInfo(reason="unavailable")
+                if (
+                    not isinstance(source, ReferenceSourceInfo)
+                    or type(source.line_count) is not int
+                    or source.line_count < 0
+                    or source.reason not in {"none", "budget", "unavailable", "reference"}
+                ):
+                    return result("omitted-invalid", "reference")
+                source_lines[reference.path] = source
+            info = source_lines[reference.path]
+            if info.reason != "none":
+                return result("omitted-invalid", info.reason)
+            if reference.end_line > info.line_count:
                 return result("omitted-invalid", "reference")
     return result("generated", submission=candidate)
 

@@ -29,11 +29,12 @@ Examine both existing authenticated corpora completely by causally justified gro
 | REQ-002 | Correct confirmed FP/FN causes across code, configuration, documentation, logs and ordinary text without corpus-specific exemptions | WQ-03, WQ-05, WQ-06 | pending |
 | REQ-003 | Qualify Mistune/regex/emoji with bounded work, supported-Python binary installation, dependency identity and resource evidence | WQ-03, WQ-05 | pending |
 | REQ-004 | Improve existing private audit reports; preserve exact annotations and closed persisted formats; no new CLI command or CI stage | WQ-02, WQ-03 | pending |
-| REQ-005 | Independently bounded immutable source metadata validates diagram references above the evidence-size limit, at admission and publication | WQ-04, WQ-05 | pending |
-| REQ-006 | Optional diagram/MCP/rendering failure never changes findings, coverage or approval eligibility; exact admitted Mermaid accompanies feature PR | WQ-04, WQ-05, WQ-06 | pending |
+| REQ-005 | Independently bounded immutable source metadata validates diagram references above the evidence-size limit, at admission and publication | WQ-04, WQ-05 | done |
+| REQ-006 | Optional diagram/MCP/rendering failure never changes findings, coverage or approval eligibility; exact admitted Mermaid accompanies feature PR | WQ-04, WQ-05, WQ-06 | in_progress |
 | REQ-007 | Meaningful branch/property/boundary coverage, one aggregate Security scan, threat-model reconciliation and real own-tool acceptance | WQ-05, WQ-06 | pending |
 | REQ-008 | Private-safe source, immutable inputs, bounded acquisition and owned raw-source cleanup with originals unchanged | WQ-02, WQ-06, WQ-08 | pending |
 | REQ-009 | Signed draft-plan PR, local reviewed development, protected feature/release delivery and plan archive in the release PR | WQ-01, WQ-07, WQ-08 | in_progress |
+| REQ-010 | Select a readable flowchart orientation automatically in the pure renderer; preserve sequence semantics and MCP/receipt grammar | WQ-04, WQ-05, WQ-06 | done |
 
 ### Explicit Non-Goals
 
@@ -62,11 +63,11 @@ Both original repeat audits completed with unchanged decisions relative to the r
 
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-009 | Materialize/review plan, signed commit/push, draft PR and issue refinements | in_progress |
-| WQ-02 | REQ-001, REQ-004, REQ-008 | After WQ-01: revalidate private evidence; fully adjudicate causal groups and improve audit grouping/diagnostics | pending |
+| WQ-01 | REQ-009 | Materialize/review plan, signed commit/push, draft PR and issue refinements; draft PR #287 opened from signed plan commit 1f99353 | done |
+| WQ-02 | REQ-001, REQ-004, REQ-008 | After WQ-01: revalidate private evidence; fully adjudicate causal groups and improve audit grouping/diagnostics | in_progress |
 | WQ-03 | REQ-002, REQ-003, REQ-004 | After WQ-02: implement representation-aware DLP, confirmed regressions, dependencies and scanner identity | pending |
-| WQ-04 | REQ-005, REQ-006 | After WQ-01: implement shared bounded streaming diagram-source metadata and closed diagnoses | pending |
-| WQ-05 | REQ-002, REQ-003, REQ-005, REQ-006, REQ-007 | After WQ-03/WQ-04: integrate callers, fuzz/inverse tests, >=90% affected component coverage and installed/resource qualification | pending |
+| WQ-04 | REQ-005, REQ-006, REQ-010 | Shared bounded streaming source metadata, closed diagnoses and pure LR/TB selection implemented; focused real-Git/result/receipt/publication tests pass | done |
+| WQ-05 | REQ-002, REQ-003, REQ-005, REQ-006, REQ-007, REQ-010 | After WQ-03/WQ-04: integrate callers, fuzz/inverse tests, >=90% affected component coverage and installed/resource qualification | pending |
 | WQ-06 | REQ-001, REQ-002, REQ-006, REQ-007, REQ-008 | After WQ-05: aggregate self-review, one Security scan, threat-model review, actual own-tool review and repeat corpora/cleanup | pending |
 | WQ-07 | REQ-009 | After WQ-06: final quality/docs/secret/dependency gates, exact diagram in feature PR, protected CI/merge and development publication | pending |
 | WQ-08 | REQ-008, REQ-009 | After WQ-07: signed release/v0.14.4 PR with archival/reset; stable publication, external closure and cleanup verification | pending |
@@ -80,6 +81,8 @@ Both original repeat audits completed with unchanged decisions relative to the r
 **Dependencies and resource bounds.** Qualify Mistune 3.4.0 AST without renderers/plugins, regex 2026.9.29 for narrow bounded operations/Unicode and emoji 2.16.0 static standard sequence data; stdlib HTMLParser supplies bounded HTML events. Do not rebuild text from emoji tokens: unmatched joiners can be skipped. Whole original checks and exact accepted spans remain authoritative. Extend the documented runtime-dependency exception only at this parsing boundary; pure reporting never imports it. Preserve external text budgets, limit nesting to 20 and enforce a shared 32768-token budget during construction, not afterward. Bound derived views/expansion as they are created; exhaustion is explicit limit, never admission. Prepare source once per file, avoid cross-file source retention and include actual dependency versions in scanner identity. Existing audit reports gain grouping/proof/aggregate visibility without new CLI commands or persisted review-schema changes.
 
 **Diagram references.** The production Git reader owns a streaming immutable regular-blob text-metadata operation: exact object binding, strict incremental UTF-8, NUL rejection, byte count and LF line count including final non-LF line. Never follow symlinks/gitlinks or consult mutable checkout content. Use at most 5000000 bytes/blob, 32000000 aggregate bytes and 30 seconds for one diagram's reference-validation session; chunks <=65536 bytes. Cache metadata by immutable object, not whole sources. Share the adapter between initial admission and GitLab revalidation. Leave evidence/source-proof reads at 256000 bytes. Pure admission receives typed metadata; reporting has no Git/DLP orchestration. Use existing budget/unavailable/reference reasons with source-free diagnostics; do not change receipt schemas. Any auxiliary failure omits only the diagram.
+
+**Orientation.** Added during implementation: pure deterministic LR/TB selection condenses cycles, ranks the resulting graph and estimates displayed node/condition widths, including Unicode. Prefer LR within 100 estimated display columns; otherwise select TB only when its estimated width is smaller. Preserve node/edge/message order and fixed Mermaid grammar. No model-selected direction, additional model pass, configuration or receipt fields. Sequence diagrams retain standard time ordering. Synthetic chains, branches, cycles and permutations qualify the estimator; final own-tool acceptance also checks the actual graph.
 
 **Documentation and delivery.** Synchronize public contracts, audit docs, decision flow, evidence matrix, dependency-boundary rationale, changelog and backlog; preserve historical artifacts. The feature PR receives the exact admitted self-review Mermaid without debug text. Stable marker 0.14.4, next marker 0.15.0, signed release branch and exact PR title Release v0.14.4. Release authorization references both issues without premature closing keywords. Release CI owns issue closure after immutable receipt readback. Existing site notification remains the only release-site path.
 
@@ -95,7 +98,9 @@ Both original repeat audits completed with unchanged decisions relative to the r
 
 ### Latest Validation Results
 
-Planning probes only: isolated binary-only Python 3.14/3.15 component experiments succeeded without target code execution or network classification. On the same synthetic 64 KiB inputs, Mistune used roughly 7 ms for prose, 110 ms for brackets and 62 ms for malformed tags, versus markdown-it-py about 12/520/180 ms. Both required memory/work bounds; the full chosen stack reached approximately 87 MiB peak RSS in the Python 3.15 adversarial probe. These are feasibility results, not production or full-corpus acceptance. No new implementation, Security scan or own-tool run has passed yet.
+Planning probes: isolated binary-only Python 3.14/3.15 component experiments succeeded without target code execution or network classification. On the same synthetic 64 KiB inputs, Mistune used roughly 7 ms for prose, 110 ms for brackets and 62 ms for malformed tags, versus markdown-it-py about 12/520/180 ms. Both required memory/work bounds; the full chosen stack reached approximately 87 MiB peak RSS in the Python 3.15 adversarial probe. These are feasibility results, not production or full-corpus acceptance.
+
+WQ-01 plan/public-content/dependency gates passed; signed first push opened draft PR #287. WQ-04 focused diagram/repository suite passed 308 tests with 35 skips; new text-stream and layout modules have complete branch coverage and the source adapter measured 96% (99% combined for the three modules). Strict mypy passed. Real tests cross large-source runner finalization, v13 receipt loading and publication revalidation; controlled child faults verify reaping. Follow-up coverage cases address the remaining adapter branches. Aggregate quality, Security and actual own-tool acceptance remain pending; none has been claimed complete.
 
 ### Risks And Recovery
 
@@ -103,7 +108,7 @@ Lossy parsers can hide material; always retain independent original checks and u
 
 ### Resume Point
 
-WQ-01: critically review this saved plan and its requirement/queue coverage, run plan/public-content/dependency guards, create the signed plan commit and first draft-PR push. Then update the two issues with public-safe final contracts and enter WQ-02.
+WQ-02: complete the private causal ledger using the revalidated source-bound observations and retain only synthetic public regressions. WQ-04's source/layout slice is implemented and locally characterized, including the follow-up 67-test slice, repository-wide Ruff checks and strict mypy. First push/draft PR #287 and both issue refinements are complete; keep further development local.
 
 ### Plan Fidelity Check
 

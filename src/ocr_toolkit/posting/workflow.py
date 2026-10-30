@@ -26,6 +26,7 @@ from ocr_toolkit.diagrams.contracts import (
 )
 from ocr_toolkit.diagrams.lifecycle import diagram_warning
 from ocr_toolkit.diagrams.persistence import parse_diagram_payload
+from ocr_toolkit.diagrams.sources import DiagramSourceReader
 from ocr_toolkit.evidence.artifacts import repository_artifacts
 from ocr_toolkit.evidence.gitlink_projection import (
     make_gitlink_projection,
@@ -1074,21 +1075,12 @@ def publication_range_and_diagram(
         return review_range, diagram
     try:
         assert review_range is not None
-        reader = GitRepositoryReader(Path.cwd())
-        cache: dict[str, str | None] = {}
-
-        def source(path: str) -> str | None:
-            if path not in cache:
-                blob = reader.read_blob(review_range.head, path)
-                cache[path] = blob.decode("utf-8") if blob is not None else None
-            return cache[path]
-
         diagram = admit_candidate(
             diagram.mode,
             diagram.submission,
             review_range=review_range,
             output_calls=diagram.calls,
-            read_source=source,
+            read_source=DiagramSourceReader(Path.cwd(), review_range.head),
             forbidden_matcher=ForbiddenMatcher.compile(()),
             dlp_enabled=metadata["dlp"]["enabled"],
         )
