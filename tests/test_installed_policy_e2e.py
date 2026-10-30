@@ -239,6 +239,24 @@ def test_installed_wheel_and_sdist_expose_target_policy_through_real_mcp(
             env={"HOME": str(root), "PATH": str(binary_directory)},
         )
         assert "review" in help_text and "post" in help_text
+        assert "dlp-audit" in help_text
+        audit_output = _run(
+            [
+                str(python),
+                "-I",
+                str(PROJECT_ROOT / "tests" / "installed_dlp_audit.py"),
+                str(cli),
+                str(root / "audit"),
+            ],
+            cwd=root,
+            env={"HOME": str(root), "PATH": ""},
+            timeout=120,
+        )
+        assert json.loads(audit_output) == {
+            "installed_audit": True,
+            "private": True,
+            "raw_removed": True,
+        }
         config_home = root / "config-home"
         config_environment = {
             "HOME": str(config_home),

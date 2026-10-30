@@ -5,6 +5,13 @@ findings in a Markdown artifact and the console, without connecting the reposito
 Install the toolkit and its [qualified OCR binary](../compatibility/ocr-support.json),
 then configure the LLM environment described in [configuration.md](configuration.md).
 
+## Offline DLP audits
+
+For local DLP diagnosis, use [the `ocr-ci dlp-audit` commands](dlp-audit.md).
+They scan selected files or immutable Git blobs, produce private reports and
+compare exact runs. They require only the toolkit, without OCR or an LLM, and
+operate independently of the local review/provider configuration.
+
 <!-- ew:invariant id="local-review.preparation" -->
 ## Review preparation
 

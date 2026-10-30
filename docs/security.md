@@ -214,6 +214,23 @@ bounded states and counts. Publication `ocr.publication/v2` separates omitted
 public fields and reasons from private-only sanitized fields and reasons; OCR
 coverage and provider posting counts remain independent.
 
+## Local DLP diagnostics
+
+[`ocr-ci dlp-audit`](dlp-audit.md) evaluates explicitly selected local inputs
+with the production scanner. It is a manually invoked diagnostic command,
+independent of review/provider acquisition and GitLab publication. Audits always
+enable DLP and bind comparisons to the effective known-secret set. Their exit
+status and reports describe scanner expectations; review and approval authority
+remain with the existing review contracts.
+
+Audit state lives outside source roots and Git worktrees with owner-only
+permissions. HMAC identities bind exact inputs and sink roles; annotations
+classify results while every unit is still evaluated. Reports retain metadata
+and local locators, not snippets. Explicit source snapshots store selected bytes
+under the same private ownership and require verified cleanup. Metadata-only
+mode evaluates original bytes in memory and rejects drift during replay. Input
+projects supply neither executable code nor exclusion policy to the audit.
+
 ## Preserved controls
 
 - Repository reads use immutable objects, fixed roots and bounds, reject unsafe

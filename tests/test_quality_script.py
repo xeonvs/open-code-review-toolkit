@@ -40,7 +40,7 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
 
     assert script.count("pytest -q --cov=ocr_toolkit") == 1
     assert "--cov-fail-under=85" in script
-    assert script.count("coverage report --include=") == 6
+    assert script.count("coverage report --include=") == 7
     assert (
         "uv run --no-sync pytest --ignore=tests/test_installed_policy_e2e.py --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85"
         in workflow
@@ -50,6 +50,11 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}" in workflow
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}" in workflow
     assert workflow.count("uv run --no-sync pytest -q") == 2
+    assert "for audit_module in cli corpus scanner state limits worker_process; do" in script
+    assert (
+        "coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90"
+        in script
+    )
     for command in coverage_commands:
         assert command in script
         assert workflow.count(f"uv run --no-sync {command}") == 1
@@ -111,7 +116,7 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
 
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
-    assert output.count("fresh invocation: run --no-sync sh -c") == 10
+    assert output.count("fresh invocation: run --no-sync sh -c") == 16
 
 
 @pytest.mark.parametrize("failure_code", [2, 7, 130])

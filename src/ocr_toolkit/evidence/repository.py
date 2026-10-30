@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import math
+import os
 import re
+import selectors
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -103,11 +107,26 @@ def normalize_repo_path(value: str) -> str:
 class GitRepositoryReader:
     """Provide bounded read-only Git plumbing for one trusted repository root."""
 
-    def __init__(self, root: Path, *, max_file_bytes: int = 256_000) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        max_file_bytes: int = 256_000,
+        deadline: float | None = None,
+        command_timeout: float | None = None,
+    ) -> None:
         """Resolve the repository root and constrain every subsequent Git command."""
 
+        if deadline is not None and not math.isfinite(deadline):
+            raise RepositoryEvidenceError("repository deadline must be finite")
+        if command_timeout is not None and (
+            not math.isfinite(command_timeout) or command_timeout <= 0
+        ):
+            raise RepositoryEvidenceError("repository command timeout must be finite and positive")
+        self.deadline = deadline
+        self.command_timeout = command_timeout
         resolved = root.resolve(strict=True)
-        probe = self._run_at(resolved, ["rev-parse", "--show-toplevel"])
+        probe = self._run_at(resolved, ["rev-parse", "--show-toplevel"], timeout=self._timeout(15))
         if probe.returncode != 0 or Path(probe.stdout.strip()).resolve() != resolved:
             raise RepositoryEvidenceError("root is not a Git repository top level")
         self.root = resolved
@@ -115,9 +134,20 @@ class GitRepositoryReader:
             raise RepositoryEvidenceError("max_file_bytes must be between 1 and 5000000")
         self.max_file_bytes = max_file_bytes
 
+    def _timeout(self, limit: int) -> float:
+        """Cap each Git process by an optional caller-owned monotonic deadline."""
+
+        budget = self.command_timeout if self.command_timeout is not None else limit
+        if self.deadline is None:
+            return budget
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise RepositoryEvidenceError("repository acquisition deadline exceeded")
+        return min(budget, remaining)
+
     @staticmethod
     def _run_at(
-        root: Path, args: list[str], *, timeout: int = 15, text: bool = True
+        root: Path, args: list[str], *, timeout: float = 15, text: bool = True
     ) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
         """Run Git without a shell, hooks, prompts, or repository-controlled paging."""
 
@@ -148,7 +178,54 @@ class GitRepositoryReader:
     ) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
         """Run a bounded Git plumbing command at this reader's fixed root."""
 
-        return self._run_at(self.root, args, timeout=timeout, text=text)
+        if self.command_timeout is not None:
+            return self._run_streamed(args, timeout=self._timeout(timeout), text=text)
+        return self._run_at(self.root, args, timeout=self._timeout(timeout), text=text)
+
+    def _run_streamed(
+        self, args: list[str], *, timeout: float, text: bool
+    ) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
+        """Bound audit metadata while consuming it, including enormous Git trees."""
+
+        command = [*_git_prefix(self.root), *args]
+        output, errors = bytearray(), bytearray()
+        deadline = time.monotonic() + timeout
+        with subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=_git_environment()
+        ) as process:
+            assert process.stdout is not None and process.stderr is not None
+            try:
+                with selectors.DefaultSelector() as selector:
+                    selector.register(process.stdout, selectors.EVENT_READ, output)
+                    selector.register(process.stderr, selectors.EVENT_READ, errors)
+                    while selector.get_map():
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise RepositoryEvidenceError(
+                                "Git metadata acquisition deadline exceeded"
+                            )
+                        for key, _events in selector.select(remaining):
+                            part = os.read(key.fd, 65536)
+                            if not part:
+                                selector.unregister(key.fileobj)
+                            else:
+                                if len(key.data) + len(part) > MAX_GIT_TEXT_BYTES:
+                                    raise RepositoryEvidenceError(
+                                        "Git plumbing output exceeds the bounded byte limit"
+                                    )
+                                key.data.extend(part)
+                process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+        if text:
+            return subprocess.CompletedProcess(
+                command, process.returncode, output.decode(), errors.decode()
+            )
+        return subprocess.CompletedProcess(
+            command, process.returncode, bytes(output), bytes(errors)
+        )
 
     def has_commit(self, sha: str) -> bool:
         """Return whether one exact lowercase commit object is available locally."""
@@ -199,7 +276,7 @@ class GitRepositoryReader:
                 stderr=subprocess.DEVNULL,
                 check=False,
                 env=_git_environment(),
-                timeout=60,
+                timeout=self._timeout(60),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise RepositoryEvidenceError("bounded protected-target fetch failed") from exc
@@ -455,7 +532,7 @@ class GitRepositoryReader:
                 input=request,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=30,
+                timeout=self._timeout(30),
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -493,7 +570,7 @@ class GitRepositoryReader:
                 input=request,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=30,
+                timeout=self._timeout(30),
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -547,9 +624,15 @@ class GitRepositoryReader:
                 )
         return self._batch_contents(entries, sizes)
 
-    def read_candidate_blobs(self, entries: tuple[RepositoryObject, ...]) -> BoundedBlobRead:
+    def read_candidate_blobs(
+        self, entries: tuple[RepositoryObject, ...], *, max_total_bytes: int | None = None
+    ) -> BoundedBlobRead:
         """Read candidates within bounds while reporting deterministic omissions."""
 
+        if max_total_bytes is None:
+            max_total_bytes = MAX_BATCH_BLOB_BYTES
+        if type(max_total_bytes) is not int or not 0 <= max_total_bytes <= MAX_BATCH_BLOB_BYTES:
+            raise RepositoryEvidenceError("invalid candidate batch byte budget")
         if not entries:
             return BoundedBlobRead({}, ())
         sizes = self._batch_sizes(entries)
@@ -563,9 +646,9 @@ class GitRepositoryReader:
                     f"omitted {entry.path}: blob exceeds {self.max_file_bytes} bytes"
                 )
                 continue
-            if total_size + size > MAX_BATCH_BLOB_BYTES:
+            if total_size + size > max_total_bytes:
                 diagnostics.append(
-                    f"omitted {entry.path}: batch content exceeds {MAX_BATCH_BLOB_BYTES} bytes"
+                    f"omitted {entry.path}: batch content exceeds {max_total_bytes} bytes"
                 )
                 continue
             accepted_entries.append(entry)

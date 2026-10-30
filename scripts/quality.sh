@@ -31,6 +31,9 @@ run_coverage_gate() {
   for coverage_module in providers/gitlab_ci evidence/policy/schema common/filesystem reporting/usage; do
     run_logged_command "coverage report --include=src/ocr_toolkit/$coverage_module.py --fail-under=85"
   done
+  for audit_module in cli corpus scanner state limits worker_process; do
+    run_logged_command "coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90"
+  done
 }
 
 # An interrupted editable install can leave dist-info without RECORD. uv then

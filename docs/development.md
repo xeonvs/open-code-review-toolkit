@@ -178,6 +178,14 @@ private filesystem and reporting usage each have an independent 85% floor.
 For regexes, review the semantic alternatives too: line coverage cannot prove
 that every encoded representation or boundary is exercised.
 
+Use the local [private DLP audit commands](dlp-audit.md) for offline
+corpus diagnosis and baseline/candidate replay without OCR. Curate private
+inputs before capture, classify exact units without production suppression,
+repeat complete populations after corrections, and remove owned raw snapshots
+after acceptance. Raw-hit counts and coverage percentages are not precision
+or recall measurements. Each audit-helper module has its own branch-aware 90%
+coverage floor in the local quality gate.
+
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 
 - parser changes exercise the semantic grammar and bounded degradation;

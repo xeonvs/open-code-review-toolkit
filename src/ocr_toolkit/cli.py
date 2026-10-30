@@ -1,4 +1,4 @@
-"""Unified command-line interface for Open Code Review CI helpers."""
+"""Command-line interface for review integration and local diagnostics."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ocr_toolkit import __version__, configure, mcp_config, preflight, review_runner
+from ocr_toolkit.dlp_audit import cli as dlp_cli
+from ocr_toolkit.dlp_audit.state import AuditError
 from ocr_toolkit.posting.workflow import main as posting_main
 
 
@@ -17,7 +19,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="ocr-ci",
-        description="Safe CI integration helpers for Open Code Review.",
+        description="Code review integration and local diagnostic tools.",
+        exit_on_error=False,
     )
     parser.add_argument(
         "--version",
@@ -25,6 +28,13 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    audit_parser = subparsers.add_parser(
+        "dlp-audit",
+        help="Run offline DLP audits of local text/code with private reports.",
+        description="Local DLP diagnostics with private reports and exact-run comparisons.",
+        exit_on_error=False,
+    )
+    dlp_cli.configure_parser(audit_parser)
     preflight_parser = subparsers.add_parser(
         "preflight", help="Validate review prerequisites and configured access."
     )
@@ -75,7 +85,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Dispatch one public subcommand and return its process exit code."""
 
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    parser = build_parser()
+    try:
+        args, remaining = parser.parse_known_args(arguments)
+    except (argparse.ArgumentError, AuditError) as exc:
+        if arguments[:1] == ["dlp-audit"]:
+            return dlp_cli.error_result()
+        parser.error(str(exc))
+    if remaining:
+        if args.command == "dlp-audit":
+            return dlp_cli.error_result()
+        parser.error("unrecognized arguments: " + " ".join(remaining))
+    if args.command == "dlp-audit":
+        return dlp_cli.run(args)
     if args.command == "preflight":
         return preflight.main(local=True) if args.local else preflight.main()
     if args.command == "configure":

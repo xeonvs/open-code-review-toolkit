@@ -77,6 +77,11 @@ failure behavior and optional private `--debug-dir` bundles.
 Local reviews keep custom API providers as the default and can optionally use
 [OCR's native ChatGPT authentication](docs/local.md#llm-authentication).
 
+For offline DLP diagnosis of this or another project, use the local
+[`ocr-ci dlp-audit` commands](docs/dlp-audit.md). They provide private reports,
+exact classifications and baseline comparisons using the production scanner.
+OCR and LLM configuration are unnecessary for these commands.
+
 Optional [reasoning and progress controls](docs/configuration.md#provider-endpoint-and-completion-cap-contract)
 do not change review rounds or budgets. Reasoning is unset by default; explicit
 `none` is a wire value whose support depends on the provider/model. Progress is
