@@ -1,3 +1,18 @@
+## 0.14.2 - 2026-10-30
+
+### 🐛 Bug Fixes
+
+- Show diagram-only summaries in local and GitLab reports, without the unsolicited textual node and edge listing. Consolidate duplicate immutable SHA text in bootstrap and human report details. Preserve provider-neutral navigation to framework, dependency/version, policy and federated context when optional bootstrap hints are clipped, without changing machine identities or source validation.
+
+  Keep technical Mermaid version/date/Decimal values, including Unicode spacing, and valid IPv6-with-IPv4 CIDRs or long dotted masks from being mistaken for phone numbers. Check one complete decimal Mermaid representation for contacts, secrets, controls and forbidden data while preserving the original text; retain parsed-token limits and explicit contact-context priority. Strengthen generated/malformed address, mask and port cases, actual-renderer properties and independent condition assertions.
+
+  Preserve network values next to prose punctuation and check contact context before the complete IPv6 token. Reject partial-network fallbacks, retain nonnumeric path suffixes, and prevent long numeric entities from aborting DLP or bypassing decoded line limits. ([#279](https://github.com/xeonvs/open-code-review-toolkit/issues/279))
+
+### 📖 Documentation
+
+- Require an actual admitted diagram during the normal own-tool development review and include its Mermaid in the feature PR at final push. Add toolkit-specific Rules that retain native system checks, with selective test review and documented local base/operator-overlay behavior. Keep raw debug artifacts private. ([#279](https://github.com/xeonvs/open-code-review-toolkit/issues/279))
+
+
 ## 0.14.1 - 2026-10-29
 
 ### 🚀 Features
