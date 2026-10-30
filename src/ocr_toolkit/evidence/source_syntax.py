@@ -13,7 +13,6 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 
 from ocr_toolkit.context.code_text import CodeTextContext
-from ocr_toolkit.context.dlp.credentials import credential_reference_spans
 
 MAX_SYNTAX_CHARS = 256_000
 MAX_SYNTAX_NODES = 30_000
@@ -332,22 +331,3 @@ def analyze_python_source(source: str) -> SourceSyntax | None:
         )
     except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError, tokenize.TokenError):
         return None
-
-
-def analyze_configuration_source(source: str) -> SourceSyntax | None:
-    """Carry closed configuration roles into exact excerpts of the whole source.
-
-    This does not parse or trust arbitrary YAML, expand templates, or infer a
-    framework from a filename. Unknown values/structure retain ordinary checks.
-    """
-
-    if len(source) > MAX_SYNTAX_CHARS or any(char in source for char in "\v\f\x85\u2028\u2029"):
-        return None
-    source = unicodedata.normalize("NFC", source.replace("\r\n", "\n").replace("\r", "\n"))
-    spans = credential_reference_spans(source)
-    if not spans or len(spans) > MAX_KEY_SPANS:
-        return None
-    starts = [0]
-    for line in source.split("\n")[:-1]:
-        starts.append(starts[-1] + len(line) + 1)
-    return SourceSyntax(source, tuple(starts), spans, ())

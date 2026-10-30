@@ -30,7 +30,6 @@ from ocr_toolkit.context.dlp.markup import (
 )
 from ocr_toolkit.context.dlp.numeric import (
     _contains_phone,
-    _contains_phone_segments,
     _explicit_contact_phone,
     phone_markup_view,
 )
@@ -226,13 +225,13 @@ def _literal_contact_view(value: str, *, visible: bool, formatting: bool = True)
     """Sweep arbitrary markup in the already source-bound contact view."""
 
     normalized = bounded_nfkc(_html_decode(value), original=value)
-    normalized = phone_markup_view(normalized, formatting=False)
+    normalized = phone_markup_view(normalized, formatting=formatting)
     if visible:
         # Preserve actual formatting boundaries for contact detection. An
         # unmatched multiplication star stays literal; paired emphasis cannot
         # join an obfuscated phone into an apparently bare identifier.
         return _literal_normalize(interpret_markdown(normalized).contacts)
-    return _source_normalize(phone_markup_view(normalized, formatting=formatting))
+    return _source_normalize(normalized)
 
 
 _P = ParamSpec("_P")
@@ -392,16 +391,9 @@ def check_text(
         seen_pii.add(candidate)
         if contains_email(candidate, markdown=not literal):
             return DLPResult(False, None, "pii", f"email:{representation}")
-        # Arbitrary marker removal supports strong-contact deobfuscation, but
-        # cannot invent a weak phone candidate from literal punctuation.
-        phone_check = (
-            _explicit_contact_phone
-            if representation in {"source", "mermaid_source"}
-            else _contains_phone
-        )
-        if phone_check(candidate) or (
+        if _contains_phone(candidate) or (
             not literal
-            and phone_check(
+            and _contains_phone(
                 _literal_normalize(
                     interpret_markdown(phone_markup_view(candidate, formatting=False)).contacts
                 )
@@ -424,13 +416,8 @@ def check_text(
             else (phone_original,)
         )
         for candidate in phone_views:
-            # A marker can obscure the boundary of a complete contact fragment
-            # (e.g. an unmatched underscore); never concatenate numeric sides.
-            if _contains_phone_segments(candidate):
-                return DLPResult(False, None, "pii", "phone:literal_markup")
             for visible in (True, False):
-                phone_check = _contains_phone if visible else _explicit_contact_phone
-                if phone_check(
+                if _contains_phone(
                     _literal_contact_view(
                         candidate,
                         visible=visible,

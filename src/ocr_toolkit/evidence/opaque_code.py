@@ -13,7 +13,6 @@ from typing import Any
 from ocr_toolkit.context.code_text import CodeTextContext
 from ocr_toolkit.evidence.source_syntax import (
     SourceSyntax,
-    analyze_configuration_source,
     analyze_python_source,
 )
 from ocr_toolkit.posting.comments import line_number
@@ -128,7 +127,7 @@ def prove_opaque_code(
 
     context = None
     if not cached.analyzed:
-        cached.syntax = analyze_python_source(source) or analyze_configuration_source(source)
+        cached.syntax = analyze_python_source(source)
         cached.analyzed = True
     syntax = cached.syntax
     if syntax is not None:

@@ -354,9 +354,11 @@ the `ocr_toolkit.context.dlp` API; `admission.py` composes decisions and forbidd
 matching, `decoding.py` handles bounded entities, `markup.py` owns bounded
 Markdown/HTML interpretation, `numeric.py` and `email.py` own candidates, and
 `presentation.py` qualifies standard Unicode sequences. `credentials.py` owns
-closed reference/permission roles. Keep these owners at one
+closed absent-value reference roles. Application field names do not establish
+permission semantics. Keep these owners at one
 package level. They do not acquire sources, store snapshots or publish reports.
-`common/redaction.py` remains the independent diagnostic/material primitive;
+`common/redaction.py` remains the independent diagnostic/material primitive,
+with separate complete-query and diagnostic-replacement grammars;
 the local `dlp_audit/` package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result

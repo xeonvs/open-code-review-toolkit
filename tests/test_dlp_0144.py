@@ -151,11 +151,9 @@ def test_empty_masks_survive_every_material_representation(value):
         "API_KEY: ${KEY}",
         'password: "{{ REF }}"',
         'token = "${TOKEN}"',
-        "permissions:\n  id-token: write\n  contents: read",
-        "job:\n  permissions:\n    id-token: write",
     ),
 )
-def test_complete_reference_and_permission_roles_contain_no_credential(value):
+def test_complete_symbolic_fields_contain_no_literal_credential(value):
     assert check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
@@ -164,6 +162,8 @@ def test_complete_reference_and_permission_roles_contain_no_credential(value):
     (
         "token: write",
         "id-token: write",
+        "permissions:\n  id-token: write\n  contents: read",
+        "job:\n  permissions:\n    id-token: write",
         "permissions:\n  id-token: synthetic-material",
         "permissions:\n  nested:\n    token: write",
         "permissions:\n  id-token: write\ntoken: synthetic-material",
@@ -445,17 +445,134 @@ def test_casefold_expansion_and_unbound_parser_finalization_are_closed():
         _PARSER.inline.finalize_tokens([], 0)
 
 
-@pytest.mark.parametrize("value", ("size = 128 * 1024", "128 * 1024", "capacity: 512 * 1024"))
+@pytest.mark.parametrize("value", ("size = 128 * 1024", "capacity = 512 * 1024"))
+def test_numeric_operator_role_requires_exact_source_proof(value):
+    from ocr_toolkit.context.code_text import TextSink
+    from ocr_toolkit.evidence.opaque_code import prove_opaque_code
+
+    source = "def compute():\n    " + value + "\n"
+    excerpt = source.splitlines()[1]
+    proof = prove_opaque_code(
+        {"path": "sample", "start_line": 2, "end_line": 2, "existing_code": excerpt},
+        "sample",
+        lambda _: source,
+    )
+    assert proof.existing_verified and proof.existing_context is not None
+    kwargs = dict(
+        sink=TextSink.LITERAL_CODE, allow_opaque_code=True, code_context=proof.existing_context
+    )
+    assert check_text(excerpt, budgets=BUDGETS, publication=True, **kwargs).admitted
+    assert not check_text(excerpt, budgets=BUDGETS, publication=True).admitted
+    for contact in ("012**345**6789", "+1*202*555*0100", "phone: 202*555*0100"):
+        assert not check_text(
+            excerpt + "; " + contact, budgets=BUDGETS, publication=True, **kwargs
+        ).admitted
+    assert not check_text(
+        excerpt + "; pass*word=synthetic-material", budgets=BUDGETS, publication=True, **kwargs
+    ).admitted
+
+
+@pytest.mark.parametrize("value", ("metric_2020.1.10", "opaque_123.456.789"))
 @pytest.mark.parametrize("literal", (False, True))
-def test_unpaired_markup_cannot_invent_phone_separators(value, literal):
+def test_identifier_underscores_cannot_create_an_independent_phone_fragment(value, literal):
     from ocr_toolkit.context.code_text import TextSink
 
     sink = TextSink.LITERAL_CODE if literal else TextSink.PROSE
     assert check_text(value, budgets=BUDGETS, publication=True, sink=sink).admitted
-    for contact in ("012**345**6789", "+1*202*555*0100", "phone: 202*555*0100"):
-        assert not check_text(
-            value + "; " + contact, budgets=BUDGETS, publication=True, sink=sink
-        ).admitted
+
+
+@pytest.mark.parametrize("encoding", ("plain", "html", "mermaid"))
+def test_unmatched_marker_phone_is_protected_in_prose_and_projection(encoding):
+    from ocr_toolkit import review_runner
+
+    value = "202 _555-0114"
+    if encoding != "plain":
+        opener = "&#" if encoding == "html" else "#"
+        value = "".join(f"{opener}{ord(c)};" for c in value)
+    assert check_text(value, budgets=BUDGETS, publication=True).reason == "pii"
+    projected, _, _ = review_runner._publication_projection(
+        {
+            "status": "success",
+            "warnings": [],
+            "comments": [{"path": "sample", "line": 1, "content": value}],
+        },
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@pytest.mark.parametrize(
+    "suffix", (",synthetic", ";synthetic", ")synthetic", "]synthetic", "}synthetic", "%2Csynthetic")
+)
+@pytest.mark.parametrize("mask", ("***", '"***"', "''"))
+def test_query_mask_must_cover_the_whole_uri_value(mask, suffix):
+    value = f"https://example.invalid?token={mask}{suffix}"
+    assert has_sensitive_material(value)
+    assert check_text(value, budgets=BUDGETS, publication=True).reason == "secret"
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        'payload = """\npermissions:\n  password: write\n"""',
+        "const payload = `\npermissions:\n  password: write\n`;",
+        "payload: |\n  permissions:\n    password: write",
+        "payload: >\n  permissions:\n    password: write",
+        'payload: "\n  permissions:\n    password: write\n"',
+        "payload: text\n  permissions:\n    password: write",
+        "parent:\n  child:\n    other: item\n permissions:\n  password: write",
+        "permissions:\n  password: write\nunknown source trailer",
+    ),
+)
+def test_enclosing_text_cannot_declassify_a_literal_credential(value):
+    assert check_text(value, budgets=BUDGETS, publication=True).reason == "secret"
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "token=***,synthetic-secret",
+        "https://example.invalid?token=***#password=synthetic-secret",
+        '{"url":"https://example.invalid?token=***","password":"synthetic-secret"}',
+        '{"a":"https://example.invalid?token=***","b":"https://example.invalid?%74oken=synthetic-secret"}',
+    ),
+)
+def test_safe_query_value_cannot_suppress_an_adjacent_material_region(value):
+    from ocr_toolkit import review_runner
+
+    assert has_sensitive_material(value)
+    assert check_text(value, budgets=BUDGETS, publication=True).reason == "secret"
+    projected, _, _ = review_runner._publication_projection(
+        {
+            "status": "success",
+            "warnings": [],
+            "comments": [{"path": "sample", "line": 1, "content": value}],
+        },
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "https://example.invalid?token=***#section",
+        '{"url":"https://example.invalid?token=***","public":"word"}',
+        '["https://example.invalid?token=***","https://example.invalid?api_key=***"]',
+    ),
+)
+def test_complete_masks_keep_unrelated_wrapper_and_fragment_data(value):
+    assert not has_sensitive_material(value)
+    assert check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize("prefix", ("", "https://example.invalid?"))
+@pytest.mark.parametrize("space", (" ", "  ", "\t", "\n", "\u2000"))
+def test_value_whitespace_cannot_grant_empty_assignment_authority(prefix, space):
+    value = prefix + "password=" + space + "synthetic-secret"
+    assert has_sensitive_material(value)
     assert not check_text(
-        value + "; pass*word=synthetic-material", budgets=BUDGETS, publication=True, sink=sink
+        value, budgets=BUDGETS, publication=True, allow_horizontal_tabs=True
     ).admitted

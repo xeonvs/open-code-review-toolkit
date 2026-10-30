@@ -135,12 +135,6 @@ def _contains_phone(value: str) -> bool:
     )
 
 
-def _contains_phone_segments(value: str) -> bool:
-    """Keep independently phone-shaped fragments without joining across syntax."""
-
-    return any(_contains_phone(part[0]) for part in re.finditer(r"[^`*_~]+", value))
-
-
 def _network_number(value: str, start: int, end: int) -> bool:
     """Parse a complete bounded network, not a phone-regex-sized fragment."""
 

@@ -142,10 +142,24 @@ def test_bounded_unicode_compatibility_matches_the_standard_oracle(value, fold):
 def test_unpaired_numeric_operator_and_sensitive_material_are_independent(
     left, right, material, encoding
 ):
-    value = f"capacity = {left} * {right}"
-    assert check_text(value, budgets=BUDGETS, publication=True).admitted
+    from ocr_toolkit.context.code_text import TextSink
+    from ocr_toolkit.evidence.opaque_code import prove_opaque_code
+
+    value = f"    capacity = {left} * {right}"
+    source = "def compute():\n" + value + "\n"
+    proof = prove_opaque_code(
+        {"path": "sample", "start_line": 2, "end_line": 2, "existing_code": value},
+        "sample",
+        lambda _: source,
+    )
+    assert proof.existing_verified and proof.existing_context is not None
+    kwargs = dict(
+        sink=TextSink.LITERAL_CODE, allow_opaque_code=True, code_context=proof.existing_context
+    )
+    assert check_text(value, budgets=BUDGETS, publication=True, **kwargs).admitted
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
     assert not check_text(
-        value + "; " + encode(material, encoding), budgets=BUDGETS, publication=True
+        value + "; " + encode(material, encoding), budgets=BUDGETS, publication=True, **kwargs
     ).admitted
 
 
@@ -156,4 +170,110 @@ def test_markup_cannot_obscure_an_independently_phone_shaped_fragment(prefix, ta
     value = f"{prefix} {marker}555-0{tail}"
     assert not check_text(
         value, budgets=BUDGETS, publication=True, sink=TextSink.LITERAL_CODE
+    ).admitted
+
+
+@given(st.text(alphabet="abcdefghijk", min_size=1, max_size=20), st.integers(100, 999))
+def test_fragment_detection_preserves_identifier_boundaries(name, number):
+    value = f"{name}_{number}.456.789"
+    assert check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.sampled_from(("token", "api_key", "%74oken", "password")),
+    st.sampled_from(("***", '"***"', "''")),
+    st.sampled_from((",", ";", ")", "]", "}", "%2C", "+", "=")),
+    st.text(alphabet="abcdefghijkLMNOPQ0123456789", min_size=1, max_size=40),
+    st.sampled_from(("{}", 'value = "{}"', "value = '{}'")),
+    ENCODING,
+)
+def test_nonempty_query_suffix_never_inherits_mask_authority(
+    key, mask, separator, suffix, wrapper, encoding
+):
+    from ocr_toolkit import review_runner
+
+    value = encode(
+        wrapper.format(f"https://example.invalid?{key}={mask}{separator}{suffix}"), encoding
+    )
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {
+            "status": "success",
+            "warnings": [],
+            "comments": [{"path": "sample", "line": 1, "content": value}],
+        },
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.sampled_from(("password", "token", "api_key")),
+    st.sampled_from(("read", "write", "none")),
+    st.sampled_from(
+        ("{}", 'payload = """\n{}\n"""', "const x = `\n{}\n`;", "payload: |\n{}", "payload: >\n{}")
+    ),
+    st.integers(0, 3),
+)
+def test_foreign_or_scalar_enclosure_cannot_grant_permission_role(key, access, wrapper, indent):
+    from ocr_toolkit import review_runner
+    from ocr_toolkit.evidence.opaque_code import prove_opaque_code
+
+    block = " " * indent + "permissions:\n" + " " * (indent + 2) + key + ": " + access
+    source = wrapper.format(block)
+    assert check_text(source, budgets=BUDGETS, publication=True).reason == "secret"
+    lines = source.splitlines()
+    number = next(i for i, line in enumerate(lines, 1) if line.strip() == key + ": " + access)
+    comment = {
+        "path": "sample",
+        "start_line": number,
+        "end_line": number,
+        "content": "Inspect the field.",
+        "existing_code": lines[number - 1],
+    }
+    proof = prove_opaque_code(comment, "sample", lambda _: source)
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "warnings": [], "comments": [comment]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+        code_proof=lambda _: proof,
+    )
+    assert "existing_code" not in projected["comments"][0]
+
+
+@given(
+    st.sampled_from(("password", "token", "api_key", "private_token")),
+    st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
+    st.sampled_from(("field", "query", "fragment")),
+    ENCODING,
+)
+def test_masked_uri_and_adjacent_material_are_independent(key, material, placement, encoding):
+    import json
+
+    safe = "https://example.invalid?token=***"
+    if placement == "field":
+        value = json.dumps({"url": safe, key: material}, separators=(",", ":"))
+    elif placement == "query":
+        value = json.dumps(
+            {"a": safe, "b": f"https://example.invalid?{key}={material}"}, separators=(",", ":")
+        )
+    else:
+        value = safe + f"#{key}={material}"
+    assert not check_text(encode(value, encoding), budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.sampled_from(("password", "token", "%74oken")),
+    st.text(alphabet=" \t\n\u2000", min_size=1, max_size=12),
+    st.sampled_from(("", "https://example.invalid?")),
+    st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
+    ENCODING,
+)
+def test_leading_value_whitespace_never_proves_absent_material(
+    key, space, prefix, material, encoding
+):
+    value = encode(prefix + key + "=" + space + material, encoding)
+    assert not check_text(
+        value, budgets=BUDGETS, publication=True, allow_horizontal_tabs=True
     ).admitted

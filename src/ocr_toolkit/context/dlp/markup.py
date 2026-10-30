@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 import weakref
+from bisect import bisect_right
 from collections.abc import Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import cached_property
 from html.parser import HTMLParser
 from typing import Any, SupportsIndex
 
@@ -85,6 +87,12 @@ class _InlineState(InlineState):
         super().__init__(env)
         self.tokens = _Tokens(self)
 
+    @cached_property
+    def credential_masks(self) -> tuple[tuple[int, int], ...]:
+        """Cache exact mask positions only for this short-lived source state."""
+
+        return masked_credential_spans(self.src)
+
 
 class _BlockParser(BlockParser):
     state_cls = _BlockState
@@ -92,6 +100,17 @@ class _BlockParser(BlockParser):
 
 class _InlineParser(InlineParser):
     state_cls = _InlineState
+
+    def parse_emphasis(self, match: re.Match[str], state: InlineState) -> int:
+        assert isinstance(state, _InlineState)
+        masks = state.credential_masks
+        index = bisect_right(masks, (match.start(), len(state.src) + 1)) - 1
+        if index >= 0 and masks[index][0] <= match.start() < match.end() <= masks[index][1]:
+            # A canonical mask contains no credential material. Interpreting
+            # masks in separate fields as one emphasis pair invents a value.
+            state.append_token({"type": "text", "raw": match[0], "_emphasis": False})
+            return match.end()
+        return super().parse_emphasis(match, state)
 
     def render(self, state: InlineState) -> list[dict[str, Any]]:
         token = _INLINE_SCOPE.set((state.env["dlp_budget"], state.env.get("dlp_depth", 0)))

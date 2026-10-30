@@ -34,7 +34,7 @@ run_coverage_gate() {
   for audit_module in cli corpus scanner state limits worker_process report; do
     run_logged_command "coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90"
   done
-  for source_module in context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata reporting/diagram_layout; do
+  for source_module in common/redaction context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata reporting/diagram_layout; do
     run_logged_command "coverage report --include=src/ocr_toolkit/$source_module.py --fail-under=90"
   done
 }

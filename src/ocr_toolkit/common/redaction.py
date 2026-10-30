@@ -7,6 +7,7 @@ import re
 import unicodedata
 import urllib.parse
 from bisect import bisect_right
+from collections.abc import Iterator
 from typing import Any
 
 SENSITIVE_KEY_PATTERN = (
@@ -258,22 +259,23 @@ def _credential_material(text: str) -> bool:
     # Resolve complete quoted values first. The broader fallback expressions
     # must not reinterpret a closing quote as a new credential. Binary search
     # avoids quadratic work for documents containing many empty/masked fields.
-    query_fields = sorted(
-        match.span()
-        for match in _QUERY_VALUE_RE.finditer(text)
-        if match[1]
-        and _query_key_is_sensitive(match[2])
-        and _empty_query_value(text, match)
-        and _URI_PREFIX.search(text[max(0, match.start() - 1024) : match.start()])
-    )
-    safe_fields = set(query_fields)
+    # A proven empty query qualifies only its key, never a broad regex match
+    # spanning a fragment, source wrapper or a subsequent credential field.
+    parts = []
+    previous = 0
+    for query, _end, empty, qualified in _material_queries(text):
+        if empty and qualified:
+            start, end = query.span(2)
+            parts.extend((text[previous:start], "x" * (end - start)))
+            previous = end
+    if parts:
+        parts.append(text[previous:])
+        text = "".join(parts)
+    safe_fields: set[tuple[int, int]] = set()
     for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
         if "suffix" not in pattern.groupindex:
             continue
         for match in pattern.finditer(text):
-            index = bisect_right(query_fields, (match.start(), len(text) + 1)) - 1
-            if index >= 0 and match.start() < query_fields[index][1]:
-                continue
             if match["value"] not in {"", "***"} or not _complete_credential_value(
                 text, match.end()
             ):
@@ -285,7 +287,7 @@ def _credential_material(text: str) -> bool:
             continue
         for match in pattern.finditer(text):
             index = bisect_right(ordered_fields, (match.start(), len(text) + 1)) - 1
-            if index >= 0 and match.start() < ordered_fields[index][1]:
+            if index >= 0 and match.end() <= ordered_fields[index][1]:
                 continue
             if match["value"] in {"", "***"} and _complete_credential_value(text, match.end()):
                 continue
@@ -294,27 +296,75 @@ def _credential_material(text: str) -> bool:
 
 
 _QUERY_VALUE_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?")
+# Diagnostic replacement and material classification have distinct grammars.
+# A key-only iterator cannot consume another credential inside a wrapper tail.
+_QUERY_KEY_RE = re.compile(r"(?i)(^|[?&])([^=?#&\s]+)=")
+_QUERY_END_RE = re.compile(r"[&#\s]")
 _EMPTY_QUERY_VALUE_RE = re.compile(r"(?:(?P<quote>['\"])(?:\*\*\*|)(?P=quote)|\*\*\*)")
-_URI_PREFIX = re.compile(r"[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s\"'<>()]*$")
+_URI_CARRIER = re.compile(r"(?P<quote>['\"])[A-Za-z][A-Za-z0-9+.-]{0,31}:[^\s\"'<>]*$")
+_URI_SCHEME = re.compile(r"(?<![\w.+-])[A-Za-z][A-Za-z0-9+.-]{0,31}://")
+_SOURCE_BREAK = re.compile(r"[\s\"'<>]")
+_BARE_EMPTY_TAIL = re.compile(r"[ \t,;)\]}]*(?:#[^\r\n]*)?(?:\r?\n|$)")
 
 
-def _empty_query_value(text: str, match: re.Match[str]) -> bool:
-    safe = _EMPTY_QUERY_VALUE_RE.match(text, match.start(3))
-    return safe is not None and (
-        _complete_credential_value(text, safe.end()) or text[safe.end() : safe.end() + 1] == "&"
-    )
+def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, bool]]:
+    """Walk complete sensitive values without granting authority to their tails."""
+
+    cursor = 0
+    while (query := _QUERY_KEY_RE.search(text, cursor)) is not None:
+        cursor = query.end()
+        if not _query_key_is_sensitive(query[2]):
+            continue
+        start = cursor
+        # Assignment detectors allow leading whitespace. A URI-shaped prefix
+        # must not turn that same whitespace into proof of an empty value.
+        while start < len(text) and text[start].isspace():
+            start += 1
+        qualified = not query[1] or query.start() == 0
+        safe = _EMPTY_QUERY_VALUE_RE.match(text, start)
+        if not query[1] and safe is not None and safe["quote"]:
+            end = safe.end()
+            empty = _BARE_EMPTY_TAIL.match(text, end) is not None
+        else:
+            left = max(0, query.start() - 1024)
+            window = text[left : query.start()]
+            carrier = _URI_CARRIER.search(window)
+            token_start = max((part.end() for part in _SOURCE_BREAK.finditer(window)), default=0)
+            qualified = (
+                qualified
+                or carrier is not None
+                or _URI_SCHEME.search(window, token_start) is not None
+            )
+            closing = text.find(carrier["quote"], start) if carrier is not None else -1
+            if closing == start and _BARE_EMPTY_TAIL.match(text, closing + 1) is None:
+                # An opening query-value quote cannot also prove the carrier's
+                # end. Ambiguous nested quoting retains ordinary checks.
+                closing = -1
+            if closing >= 0 and text[closing - 1 : closing] == "\\":
+                closing = -1
+            # Bound the delimiter search before a proven source-string end;
+            # otherwise adjacent quoted URLs could rescan the entire suffix.
+            maximum = closing if closing >= 0 else len(text)
+            boundary = _QUERY_END_RE.search(text, start, maximum)
+            end = boundary.start() if boundary else maximum
+            closed = closing >= 0 and end == closing
+            empty = start == end or _EMPTY_QUERY_VALUE_RE.fullmatch(text, start, end) is not None
+            if closed and not _complete_credential_value(text, end + 1):
+                empty = False
+            if (
+                end < len(text)
+                and text[end].isspace()
+                and not _complete_credential_value(text, end)
+            ):
+                empty = False
+        yield query, end, empty, qualified
+        cursor = max(cursor, end)
 
 
 def _query_has_material(text: str) -> bool:
     """Classify complete values; diagnostic replacement may consume wrappers."""
 
-    for match in _QUERY_VALUE_RE.finditer(text):
-        if not _query_key_is_sensitive(match[2]):
-            continue
-        if _empty_query_value(text, match):
-            continue
-        return True
-    return False
+    return any(not empty for _query, _end, empty, _qualified in _material_queries(text))
 
 
 def has_sensitive_material(

@@ -126,7 +126,10 @@ deliberately linked to preserve OCR's account refresh and locking lifecycle.
 
 Source provenance establishes origin, not confidentiality. Bounded syntax
 refinement never executes audited code and does not waive independent checks on
-original or encoded sensitive material. Audit evaluation always enables production
+original or encoded sensitive material. Source characters are bounded before
+Python parsing; the AST node cap is checked afterward and is not a preallocation
+memory ceiling. Application-defined labels cannot manufacture semantic authority
+for a quoted or otherwise unqualified literal. Audit evaluation always enables production
 DLP, independently of the review-mode switch. Incomplete evaluation cannot become a
 clean audit because no hits were recorded. Exact expectation labels never stop
 scanning, broaden source selection or authorize publication; complete-population
@@ -241,12 +244,11 @@ Authored actionable suggestions never inherit an existing-code syntax waiver.
 Closed configuration grammar also distinguishes whole symbolic references
 (`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,
 without evaluating them. Calls, defaults, concatenations and incomplete forms
-retain conservative checks. A `permissions:` indentation block can prove
-`read`/`write`/`none` permission roles; its names alone cannot. Immutable full-source
-proof carries those exact key spans into a code excerpt. Unknown structures and
-unqualified standalone fields keep ordinary checks, including inside Python
-strings. Known-secret values, contacts and material outside those spans remain
-independently protected.
+retain conservative checks. Application labels such as `permissions` and values
+such as `write` do not establish absent credential material in an arbitrary
+repository. No permission-map waiver or configuration fallback supplies source
+authority. Unknown structures and quoted data retain ordinary checks.
+Known-secret values and contacts remain independently protected.
 
 Markdown interpretation uses a bounded Mistune token tree without renderers or
 plugins, plus bounded standard HTML events. Construction shares a 32768-token
@@ -257,12 +259,18 @@ four times the input size plus 4096 before subsequent interpretation.
 Oversized HTML fragments, derived views, source-position searches and timed
 Unicode matches fail closed as `limit`. Source text and
 applicable normalized/decoded views are checked independently. A formatting
-boundary cannot silently join a contact into a bare identifier. Removing arbitrary
-formatting markers cannot establish an unlabelled phone by joining numeric sides;
-complete phone-shaped fragments remain protected independently. Literal code
+boundary cannot silently join a contact into a bare identifier. Unproved
+formatted numbers retain conservative phone checks; arithmetic syntax alone
+does not establish an executable-source role. Literal code
 does not activate its markup, while its obfuscated sensitive material remains
 subject to checks. Diagnostic substitutions never establish credential material;
 complete empty/masked query values stay empty/masked in surrounding syntax.
+Query classification walks keys and complete values independently of diagnostic
+replacement. A safe mask neutralizes only its key for generic assignment checks;
+adjacent fields and fragments remain visible. Source-string ends require bounded
+carrier evidence. Whitespace after `=` cannot prove an empty value. Canonical masks
+remain literal during Markdown interpretation so masks in separate fields cannot
+form an emphasis pair and invent credential material.
 Static emoji data qualifies only exact standard presentation spans. An emoji
 elsewhere does not authorize an unmatched joiner, bidi control or variation
 selector. Internationalized and quoted email-shaped addresses remain protected
