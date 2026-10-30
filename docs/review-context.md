@@ -27,6 +27,22 @@ tool definitions supply the full names and schemas. Tool use remains optional
 and model-directed, with no automatic reference lookup. Missing fields remain
 unknown, and degraded metadata cannot authorize acquisition.
 
+The bootstrap uses common review-intent and evidence navigation for local and
+forge-backed reviews. It names relevant evidence families (framework/runtime,
+declared and locked dependency versions, templates, CI/images/infrastructure,
+policy/guidance) and routes discovery through the required summary's
+`kinds`, `components` and `delta_kinds`, followed by scoped list/get/search.
+The framework and version values remain in MCP records, not duplicated prompt
+text. Local runs without intent metadata have no MR prerequisite for external
+tools. Only captured intent/protection facts add their conditional hints.
+The protected opening and optional diagram closing are budgeted before the
+overview and hints; clipping those optional hints never removes MCP records or
+their mandatory navigation. An impossible private projection bound is rejected.
+The default bootstrap bound is 3000 characters and 32 KiB; the separate native
+preview still qualifies the exact produced background before model execution.
+The bound covers complete routing for combined metadata, enriched context,
+federation and protected-policy fallback without shortening those instructions.
+
 All selected text is untrusted. Acquisition, model projection, publication, and
 retention are separate stages with separate limits and DLP decisions. Context
 cannot add tools, authorize credentials, change review policy, suppress findings,

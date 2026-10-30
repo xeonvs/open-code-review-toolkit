@@ -193,6 +193,12 @@ Select checks from the changed boundary rather than from an ever-growing generic
   alone is not compatibility evidence.
 
 Keep a completed security or local OCR review tied to its exact reviewed range.
+Run one aggregate Codex Security diff scan before own-tool acceptance when the
+change affects runtime behavior or a security boundary. State that reason and
+the reviewed range. Later documentation-only corrections need their applicable
+guards and semantic review; they do not justify another aggregate scan. For a
+subsequent code correction, check the affected boundary and repeat the scan only
+if a concrete material gap remains in its existing coverage.
 For an actual own-tool engineering acceptance run, pass
 `--max-tokens-budget 0`; a positive ceiling is for explicitly bounded exploration.
 Treat budget, tool-round or context-exhaustion warnings as an unsuccessful
@@ -201,14 +207,47 @@ warnings and required auxiliary reads for material gaps; zero failed-call
 counts alone do not prove every source response was valid. Keep the native
 terminal state and the engineering acceptance decision distinct, and do not
 silently reset an owner-imposed run allowance by relabelling a completed run.
+If DLP omits a finding, inspect and triage its private raw-result entry before
+acceptance; a safe report with no findings does not establish a clean native
+review. Keep that raw material private and verify the correction through the
+production DLP boundary as well as the finding's own regression test.
 
-A positive diagram acceptance claim requires an actual model call through the
-production output tool, successful admission and inspection of private Mermaid
-and equivalent text. Check the graph's source context across relevant native
-groups, not just its paths/lines or a complete finding manifest. Grouping and
+For the normal own-tool development review, set `OCR_REVIEW_DIAGRAM_MODE=local`
+and require an actual model-generated, admitted diagram before accepting that
+check. Inspect the production output-tool call and the private Mermaid diagram.
+At the final feature push, include that exact admitted Mermaid in the PR body
+under a descriptive change-flow title; do not publish raw debug artifacts or
+reconstruct a replacement graph. An explicit owner exception may waive positive
+diagram acceptance for a particular task. Check the graph's source context
+across relevant native groups, not just its paths/lines or a complete finding manifest. Grouping and
 group-local plans do not provide a global semantic summary. Controlled-model
 integration tests prove wiring separately; optional omission remains valid
 product behavior but does not satisfy that positive acceptance requirement.
+
+Use the repository's [self-review Rules](engineering/review-rules.json) with
+`--rule docs/engineering/review-rules.json` after the `ocr-ci review --local`
+argument separator. They add toolkit-specific checks while merging native
+system rules and including maintained documentation/changelog text.
+Test-specific guidance is available, but tests are not blanket-included: select
+changed contract, property or integration tests explicitly when their meaning
+or boundary claims matter to the task. Native default selection can omit
+`test_*.py`; an operator Rules copy can add the relevant paths to `include`.
+Local repository-relative Rules are read from the immutable review base;
+local mode does not query a forge or assign protected status to a branch name.
+When deliberately qualifying new Rules absent from that base, review their
+committed content, copy it into the private review directory outside the
+checkout and pass that absolute operator Rules path. For example:
+
+```console
+git show HEAD:docs/engineering/review-rules.json > "$review_dir/rules.json"
+chmod 600 "$review_dir/rules.json"
+```
+
+Then pass `--rule "$review_dir/rules.json"` to that review. This is an explicit
+operator choice; `--debug-dir` only enables diagnostics and does not alter the
+source of Rules. The same Rules can be selected for a forge review through its
+existing policy-authority contract. Do not copy the GitLab example's test
+exclusion into toolkit self-review.
 
 After fixing review findings, use focused regression tests and a scoped self-review
 of the correction. Start another full review only when the earlier result was

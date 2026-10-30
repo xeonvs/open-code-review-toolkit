@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import unicodedata
 from datetime import date
 
 import pytest
@@ -30,6 +31,182 @@ COMPARISONS = st.sampled_from(
         "\u202f>=\u202f",
     )
 )
+
+
+@st.composite
+def mermaid_comparison(draw: st.DrawFn) -> str:
+    """Vary comparison syntax independently of the detector and renderer."""
+
+    is_date = draw(st.booleans())
+    prefix = (
+        draw(st.sampled_from(("date", "expires on", "since")))
+        if is_date
+        else draw(st.sampled_from(("version", "release", "build", "pin", "VERSION")))
+    )
+    operator = draw(
+        st.sampled_from(
+            (
+                "<",
+                "<=",
+                ">",
+                ">=",
+                "==",
+                "!=",
+                "=",
+                "≤",
+                "≥",
+                "≠",
+                "\uff1c\uff1d",
+                "\uff1e\uff1d",
+                "\uff1d\uff1d",
+                "\uff01\uff1d",
+                "﹤﹦",
+                "﹥﹦",
+                "﹦﹦",
+                "﹗﹦",
+            )
+        )
+    )
+    encoded = draw(st.lists(st.booleans(), min_size=len(operator), max_size=len(operator)))
+    operator = "".join(
+        f"#{ord(character)};" if encode else character
+        for character, encode in zip(operator, encoded, strict=True)
+    )
+    space = draw(st.sampled_from(("", " ", "  ", "\u00a0", "\u202f")))
+    if is_date:
+        value = str(draw(st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))))
+    else:
+        value = ".".join(
+            str(draw(st.integers(low, high))) for low, high in ((2020, 2030), (0, 99), (0, 999))
+        )
+    return f"{prefix}{space}{operator}{space}{value}"
+
+
+@given(
+    mermaid_comparison(),
+    st.sampled_from((("", ""), ("`", "`"), ("**", "**"), ('n0 -->|"', '"| n1'))),
+    st.sampled_from(("plain", "escaped", "double-escaped", "entities")),
+    st.booleans(),
+)
+def test_mermaid_technical_comparisons_survive_whole_text_checks(
+    value: str, wrapper: tuple[str, str], representation: str, publication: bool
+) -> None:
+    text = display_representation(wrapper[0] + value + wrapper[1], representation)
+    checked = check_text(text, budgets=BUDGETS, publication=publication)
+    assert checked.admitted, (text, checked.reason, checked.detector)
+    assert checked.text == text
+
+
+@given(
+    mermaid_comparison(),
+    st.sampled_from(
+        (
+            "Call +1 202 555 0142",
+            "Call +1.202.555.0142",
+            "person@example.invalid",
+            "person&#64;example.invalid",
+            'login_password: "synthetic-secret-value"',
+        )
+    ),
+    st.sampled_from(("; ", "\n", " | ")),
+    st.booleans(),
+)
+def test_mermaid_comparison_does_not_exempt_mixed_contacts_or_secrets(
+    technical: str, sensitive: str, separator: str, prepend: bool
+) -> None:
+    text = sensitive + separator + technical if prepend else technical + separator + sensitive
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason in {"pii", "secret"}
+
+
+@pytest.mark.parametrize(
+    "operator",
+    (
+        "#60;",
+        "#60;#61;",
+        "#62;",
+        "#62;#61;",
+        "#61;#61;",
+        "#33;#61;",
+        "#61;",
+        "#8804;",
+        "#8805;",
+        "#8800;",
+        "#65308;#65309;",
+        "#65310;#65309;",
+        "#65309;#65309;",
+        "#65281;#65309;",
+        "#65124;#65126;",
+        "#65125;#65126;",
+        "#65126;#65126;",
+        "#65111;#65126;",
+    ),
+)
+@pytest.mark.parametrize("prefix,value", (("version", "2020.1.10"), ("date", "2020-01-01")))
+def test_mermaid_comparison_minimized_false_positive(prefix, value, operator) -> None:
+    text = f"Expected `{prefix} {operator} {value}` on the rendered edge."
+    assert check_text(text, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize("operator", ("#60", "#0x3c;", "#59;", "#33;", "#61;#61;#61;", "#60;#62;"))
+def test_unknown_or_malformed_mermaid_comparison_is_not_an_exception(operator) -> None:
+    checked = check_text(f"version {operator} 2020.1.10", budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "pii"
+
+
+@given(
+    st.integers(0, 0x10FFFF).filter(
+        lambda code: (
+            unicodedata.normalize("NFKC", chr(code))
+            not in {"<", "<=", ">", ">=", "=", "==", "!=", "≤", "≥", "≠"}
+            and not unicodedata.normalize("NFKC", chr(code)).isspace()
+        )
+    ),
+    st.sampled_from(("version", "date")),
+    st.booleans(),
+)
+def test_other_mermaid_entities_cannot_create_technical_context(code, prefix, publication) -> None:
+    value = "2020.1.10" if prefix == "version" else "2020-01-01"
+    checked = check_text(f"{prefix} #{code}; {value}", budgets=BUDGETS, publication=publication)
+    assert not checked.admitted and checked.reason in {"pii", "invalid_text", "laundering"}
+
+
+@pytest.mark.parametrize("spaces,admitted", ((0, True), (52, True), (53, False), (512, False)))
+def test_mermaid_comparison_cannot_expand_the_bounded_prefix(spaces, admitted) -> None:
+    checked = check_text(
+        "version" + " " * spaces + "#60; 2020.1.10", budgets=BUDGETS, publication=True
+    )
+    assert checked.admitted is admitted
+
+
+@given(mermaid_comparison(), st.sampled_from(("login_password", "api_key", "access_token")))
+def test_mermaid_comparisons_never_exempt_secret_values_or_forbidden_units(value, key) -> None:
+    checked = check_text(f'{key}: "{value}"', budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "secret"
+    forbidden = check_text(value, budgets=BUDGETS, publication=True, forbidden=(value,))
+    assert not forbidden.admitted and forbidden.reason == "forbidden"
+
+
+@given(mermaid_comparison(), st.sampled_from(("\x00", "\x1b", "\u202e", "\u200b", "\ud800")))
+def test_mermaid_comparisons_do_not_hide_controls(value, control) -> None:
+    checked = check_text(value + control, budgets=BUDGETS, publication=True)
+    assert not checked.admitted and checked.reason == "invalid_text"
+
+
+@pytest.mark.parametrize("count", (2, 16, 400, 1000))
+def test_long_mermaid_near_match_remains_bounded_and_is_not_a_comparison(count) -> None:
+    checked = check_text(
+        "version " + "#60;" * count + "2020.1.10", budgets=BUDGETS, publication=True
+    )
+    assert not checked.admitted and checked.reason == ("limit" if count == 1000 else "pii")
+
+
+@pytest.mark.parametrize(
+    "text", ("version < 2020.1.10/docs", "date < 2020-01-01/notes", "IP 192.0.2.100/help")
+)
+def test_nonnumeric_path_suffix_is_not_misclassified_as_a_cidr_mask(text):
+    checked = check_text(text, budgets=BUDGETS, publication=True)
+    assert checked.admitted and checked.text == text
 
 
 @st.composite

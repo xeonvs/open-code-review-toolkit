@@ -58,7 +58,7 @@ This is an engineering acceptance rule, not a change to the CLI's native status
 or the product's partial-result handling.
 
 When a task requires positive diagram qualification, inspect an actual
-model-generated, admitted diagram and its complete private Mermaid/text output.
+model-generated, admitted Mermaid diagram and its source context.
 `not-generated`, `not-applicable` and synthetic model responses do not prove
 that positive capability. Ordinary user reviews still continue without a
 diagram. The [development acceptance procedure](development.md#local-validation)
@@ -197,8 +197,8 @@ flowchart LR
 Set `OCR_REVIEW_DIAGRAM_MODE=local` to request one optional flowchart or sequence
 summary in the private report. Unset/`on`, `spoiler` and `off` do not request a
 standalone diagram. [Diagram modes, bounds and failure behavior](diagrams.md)
-also describe the Mermaid and complete text output. Diagram errors leave the
-review and findings usable.
+also describe Mermaid output and retained private candidate data. Diagram errors
+leave the review and findings usable.
 
 The mandatory repository-evidence MCP remains enabled. Registry validation and
 the toolkit's self-query do not substitute for the review's completed evidence

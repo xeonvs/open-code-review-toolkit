@@ -15,7 +15,8 @@ The summary can also include one optional flowchart or sequence diagram.
 collapses it and `off` suppresses it. A missing, invalid or failed diagram does
 not change findings, coverage or approval. See [the diagram contract](diagrams.md).
 Technical details show its explicit state and the independently admitted
-immutable base/head/range.
+immutable base-to-head range once, with a separate reviewed commit only when
+the range is unverified or the identities differ.
 
 The toolkit reads the previous OCR-owned notes and discussions before it writes anything. It fingerprints new findings, removes findings already owned or suppressed by reviewers, and publishes:
 

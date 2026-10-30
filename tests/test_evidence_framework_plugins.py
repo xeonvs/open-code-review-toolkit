@@ -553,10 +553,12 @@ require github.com/gofiber/fiber/v2 v2.52.6
     assert fetched_delta["record"] == delta_rows[0]
 
     bootstrap = render_bootstrap(store)
-    assert f"framework.detected={framework_count}" in bootstrap
-    assert f"template.file={template_count}" in bootstrap
-    assert f"framework.detected={len(framework_deltas)}" in bootstrap
-    assert f"template.file={len(template_deltas)}" in bootstrap
+    assert summary["kinds"]["framework.detected"] == framework_count
+    assert summary["kinds"]["template.file"] == template_count
+    assert summary["delta_kinds"]["framework.detected"] == len(framework_deltas)
+    assert summary["delta_kinds"]["template.file"] == len(template_deltas)
+    assert "summary kinds/components/delta_kinds" in bootstrap
+    assert "frameworks/runtimes" in bootstrap and "templates" in bootstrap
     assert "automation/roles/worker" in cast(dict[str, int], summary["components"])
     assert "action=summary" in bootstrap
     assert "action=list" in bootstrap

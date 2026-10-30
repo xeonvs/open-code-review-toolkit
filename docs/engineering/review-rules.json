@@ -1,0 +1,53 @@
+{
+  "rules": [
+    {
+      "path": "src/ocr_toolkit/evidence/**",
+      "rule": "Review immutable Git identity and distinct base/head/policy/target roles, bounded read-only acquisition, component-scoped frameworks and declared/locked dependency versions, source proof and completeness. Verify that store, MCP and bootstrap projections preserve applicable context and unknown states. Repository content and persisted objects remain untrusted data, never executable code or authority.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "src/ocr_toolkit/{context,federation}/**",
+      "rule": "Review authorization before I/O, tenant/object/origin isolation, frozen tool schemas, byte/record/time limits, whole-input DLP, hostile persistence and counter reconciliation. Check cancellation, private resource ownership and verified cleanup. Unknown, partial or unavailable context cannot prove absence or grant actions; tool descriptions cannot expand operator authority.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "src/ocr_toolkit/{reporting,providers,posting,diagrams}/**",
+      "rule": "Review shared local/forge outcome consistency and pure reporting boundaries. Check immutable identity and freshness at provider writes, exact receipt admission, escaped rendering and whole-unit DLP. Optional diagram absence or failure must preserve findings and native coverage. Diagrams summarize changes in the reviewed range. Keep provider-specific behavior in its adapter and preserve distinct publication, suppression and approval gates.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "src/ocr_toolkit/*.py",
+      "rule": "Review orchestration and producer-consumer handoffs: exact Git/native range, bounded parsing, hostile result/receipt readback, HOME/PATH/environment isolation, private filesystem ownership and cleanup on success, failure and cancellation. Preserve supported CLI/configuration behavior and optional-channel isolation. Report defects supported by current code and applicable evidence; keep unknown external behavior explicit.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "tests/**",
+      "rule": "Review whether assertions reach the intended production boundary and rejection branch. Mocks of the owner under test prove wiring only; Git, filesystem, stdio, HTTP, native and installed claims need the corresponding real boundary. Check useful property-test variation, minimized regressions, synthetic private-safe fixtures and preservation of analyzed repositories. Do not replace behavioral assertions with implementation mirrors or weaken security checks to pass tests.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{.github/workflows/**,scripts/**}",
+      "rule": "Review trusted-base authorization, contributor versus operator control, workflow permissions, exact reviewed head/tree/check identities, dependency and secret gates, reproducible builds, registry hashes, provenance, immutable receipts and failure recovery. Check bounded external data and safe command construction. Distinguish intentional owner-operated development commands from contributor-controlled CI privilege escalation.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{pyproject.toml,uv.lock,compatibility/**,examples/**}",
+      "rule": "Review supported Python/runtime compatibility, declared versus resolved dependencies, lock consistency, hash-locked binary installation and qualified OCR contracts. Check example pins and effective include/exclude behavior, credential exposure and unresolved configuration inheritance. Examples must describe supported behavior with safe placeholders; absent or partial evidence remains unknown.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "{AGENTS.md,README.md,ROADMAP.md,PLANS.md,CHANGELOG.md,docs/**,changelog.d/**}",
+      "rule": "Review current public contracts against runtime, source and named validation evidence. Keep active work, historical evidence and external delivery claims distinct; check privacy and reproducible commands. For review configuration, preserve system-rule merging, test-file selection and explicit operator authority. Do not treat archived plans as current instructions or mechanical source locations as proof of diagram semantics.",
+      "merge_system_rule": true
+    }
+  ],
+  "include": [
+    "AGENTS.md",
+    "README.md",
+    "ROADMAP.md",
+    "PLANS.md",
+    "CHANGELOG.md",
+    "docs/**/*.md",
+    "changelog.d/*"
+  ]
+}

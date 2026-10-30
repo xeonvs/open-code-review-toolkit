@@ -411,7 +411,8 @@ def main(root: Path, cli: Path) -> int:
             assert result.stat().st_mode & 0o777 == 0o600
             if mode.startswith("diagram-"):
                 assert "Change diagram: `generated`" in completed.stdout
-                assert "```mermaid" in completed.stdout and "Text equivalent:" in completed.stdout
+                assert "```mermaid" in completed.stdout
+                assert "Text equivalent:" not in completed.stdout
                 assert payload["manifest"]["input"]["resolved_head"] == head
         else:
             assert completed.returncode == (

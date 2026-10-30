@@ -70,9 +70,7 @@ def local_summary(report: ReviewReport) -> str:
     if section:
         lines.extend(["", section])
     lines.extend(["", "### Technical details", "", "- Output: local Markdown"])
-    if report.reviewed_sha:
-        lines.append(f"- Reviewed commit: {inline_code(report.reviewed_sha, escape_controls=True)}")
-    lines.extend(range_details(report.review_range))
+    lines.extend(range_details(report.review_range, reviewed_sha=report.reviewed_sha))
     if diagram is not None:
         lines.append(f"- Change diagram: {inline_code(diagram.state)}")
     if report.outcome.coverage_summary:

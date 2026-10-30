@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ocr_toolkit import review_runner
 from ocr_toolkit.posting.formatting import (
     format_publication_dlp_details,
@@ -70,3 +72,45 @@ def test_equal_legacy_aggregate_shapes_have_disjoint_v2_producer_counts() -> Non
         projected_results.append(projected)
     assert projected_results[0]["comments"] == projected_results[1]["comments"]
     assert receipts[0]["omitted"] != receipts[1]["omitted"]
+
+
+@pytest.mark.parametrize(
+    "technical",
+    (
+        "version #60; 2020.1.10",
+        "network ::ffff:192.0.2.1/96",
+        "network 192.0.2.100/255.255.255.255",
+    ),
+)
+@pytest.mark.parametrize(
+    "suffix",
+    (
+        "",
+        "; Call +1 202 555 0142",
+        "; person&#64;example.invalid",
+        '; login_password: "synthetic-secret"',
+    ),
+)
+def test_technical_finding_survives_publication_without_exempting_contacts(technical, suffix):
+    comment = {
+        "path": "src/example.py",
+        "content": f"Assert the technical value `{technical}` independently." + suffix,
+        "existing_code": "assert comparison == expected",
+        "start_line": 1,
+        "end_line": 1,
+    }
+    payload = {
+        "status": "complete",
+        "comments": [comment],
+        "warnings": [],
+        "manifest": _payload(public_fields=2)["manifest"],
+    }
+    projected, receipt, filtered = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset()
+    )
+    if suffix:
+        assert filtered and receipt["state"] == "publication-filtered"
+        assert projected["comments"] == [] and receipt["omitted"]["comments"] == 1
+    else:
+        assert not filtered and receipt["state"] == "passed"
+        assert projected["comments"] == [comment]

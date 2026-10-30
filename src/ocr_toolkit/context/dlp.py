@@ -31,6 +31,12 @@ PURE_CREDENTIAL_ASSIGNMENT_RE = re.compile(
     r"(?P<empty>\"\"|''))[ \t]*$"
 )
 ISO_DATE_RE = re.compile(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})")
+_MERMAID_ENTITY_RE = re.compile(r"(?<!&)#([0-9]+);")
+_HTML_NUMERIC_ENTITY_RE = re.compile(r"&#([xX][0-9a-fA-F]+|[0-9]+);?")
+_NETWORK_TOKEN_CHARS = frozenset("0123456789abcdefABCDEF:./")
+_NETWORK_LABEL_RE = re.compile(
+    r"(?i)(?<![\w:])(?:ip(?:v[46])?|cidr|subnet|address|host|listen|allow|network|prefix):$"
+)
 _TECHNICAL_SEPARATOR = r"(?:[ \t]+|[ \t]*(?:[<>]=?|[=!]=|=|[≤≥≠])[ \t]*)"
 VERSION_CONTEXT_RE = re.compile(
     rf"(?i)\b(?:version|release|build|pin){_TECHNICAL_SEPARATOR}(?:v)?$"
@@ -99,13 +105,47 @@ def dlp_mode(enabled: bool) -> Iterator[None]:
 def _html_decode(value: str) -> str:
     """Decode the bounded entity layers a browser can display as text."""
 
+    def bounded_number(match: re.Match[str]) -> str:
+        number = match[1]
+        hexadecimal = number[:1].lower() == "x"
+        digits = (number[1:] if hexadecimal else number).lstrip("0") or "0"
+        if len(digits) > (6 if hexadecimal else 7):
+            return "&#1114112;"  # Let html.unescape apply its invalid-scalar mapping.
+        return f"&#{'x' if hexadecimal else ''}{digits};"
+
     normalized = value
     for _iteration in range(2):
-        decoded = html.unescape(normalized)
+        # Preserve HTML's scalar/legacy mappings without an unbounded decimal
+        # integer conversion or changing Python's process-wide integer limit.
+        prepared = (
+            _HTML_NUMERIC_ENTITY_RE.sub(bounded_number, normalized)
+            if "&#" in normalized
+            else normalized
+        )
+        decoded = html.unescape(prepared)
         if decoded == normalized:
             break
         normalized = decoded
     return normalized
+
+
+def _mermaid_decode(value: str) -> str:
+    """Decode one layer of the renderer's decimal entities without expansion."""
+
+    def character(match: re.Match[str]) -> str:
+        digits = match[1].lstrip("0") or "0"
+        if len(digits) > 7:
+            return match[0]
+        code = int(digits)
+        return chr(code) if code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else match[0]
+
+    return _MERMAID_ENTITY_RE.sub(character, value)
+
+
+def _technical_decode(value: str) -> str:
+    """Resolve bounded HTML/one-Mermaid/HTML context without recursive Mermaid."""
+
+    return _html_decode(_mermaid_decode(_html_decode(value)))
 
 
 def _is_display_control(character: str) -> bool:
@@ -129,6 +169,58 @@ def _contains_phone(value: str) -> bool:
     )
 
 
+def _network_number(value: str, start: int, end: int) -> bool:
+    """Parse a complete bounded network, not a phone-regex-sized fragment."""
+
+    candidate_start = start
+    while start and end - start < 64 and value[start - 1] in _NETWORK_TOKEN_CHARS:
+        start -= 1
+    label_separator = False
+    # Only a recognized delimited label may precede the complete network.
+    # A lone hextet such as ffff: must not grant an IPv4-tail exception.
+    colon = value.find(":", start, candidate_start)
+    if colon >= 0 and _NETWORK_LABEL_RE.search(value[max(0, colon - 16) : colon + 1]):
+        start = colon + 1
+        label_separator = True
+    while end < len(value) and end - start < 64 and value[end] in _NETWORK_TOKEN_CHARS:
+        end += 1
+    contact_prefix = value[max(0, start - 25) : start].rstrip(": \t")
+    if PHONE_CONTEXT_RE.search(contact_prefix):
+        return False
+    left = value[start - 1] if start and not label_separator else ""
+    for neighbor in (left, value[end : end + 1]):
+        if neighbor and (neighbor.isalnum() or neighbor in "_:./%-"):
+            return False
+    token = value[start:end]
+    if "/" not in token:
+        return False
+    if token.endswith("."):
+        # Remove one prose period; dotted/word continuations still fail parsing.
+        token = token[:-1]
+    try:
+        ipaddress.ip_network(token, strict=False)
+    except ValueError:
+        return False
+    return True
+
+
+def _decoded_network_number(before: str, candidate: str, after: str) -> bool:
+    """Bind an encoded fragment to its complete parsed network, not another value."""
+
+    # A 64-character token and contact prefix fit here even with decimal escapes.
+    raw_before, raw_after = before[-1024:], after[:1024]
+    if not any(marker in raw_before or marker in raw_after for marker in ("#", "&")):
+        return False
+    decoded_before = _technical_decode(raw_before)
+    decoded_after = _technical_decode(raw_after)
+    if decoded_before == raw_before and decoded_after == raw_after:
+        return False
+    start = len(decoded_before)
+    return _network_number(
+        decoded_before + candidate + decoded_after, start, start + len(candidate)
+    )
+
+
 def _technical_number(value: str, match: re.Match[str]) -> bool:
     """Exclude only bounded, parsed technical syntax from phone candidates."""
 
@@ -136,15 +228,19 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
     if candidate.startswith("+") or candidate != candidate.strip():
         return False
     before, after = value[: match.start()], value[match.end() :]
-    if before.endswith((".", "/", "-")) or re.match(r"(?:[./-]\d)", after):
-        return False
     if PHONE_CONTEXT_RE.search(before[-24:]):
         return False
+    network = "/" in candidate or re.match(r"/[+-]?[0-9]", after) is not None
+    if network and _network_number(value, *match.span()):
+        return True
+    if _decoded_network_number(before, candidate, after):
+        return True
+    if network:
+        return False
+    if before.endswith((".", "/", "-")) or re.match(r"(?:[./-]\d)", after):
+        return False
     try:
-        if "/" in candidate:
-            ipaddress.IPv4Network(candidate, strict=False)
-            return True
-        elif isinstance(ipaddress.ip_address(candidate), ipaddress.IPv4Address):
+        if isinstance(ipaddress.ip_address(candidate), ipaddress.IPv4Address):
             if after.startswith(":"):
                 port = re.match(r":(\d{1,5})\b", after)
                 return bool(port and 1 <= int(port[1]) <= 65535)
@@ -153,7 +249,7 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
         pass
     # Only the bounded technical prefix is decoded/normalized: other representations and
     # the complete unit still pass all secret, contact and laundering checks.
-    technical_prefix = unicodedata.normalize("NFKC", _html_decode(before[-64:]))
+    technical_prefix = unicodedata.normalize("NFKC", _technical_decode(before[-64:]))
     if ISO_DATE_RE.fullmatch(candidate) and DATE_CONTEXT_RE.search(technical_prefix):
         try:
             date(int(candidate[:4]), int(candidate[5:7]), int(candidate[8:10]))
@@ -164,8 +260,11 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
         return bool(VERSION_CONTEXT_RE.search(technical_prefix))
     if re.fullmatch(r"\d+\.\d+", candidate):
         return bool(
-            re.search(r"(?i)\bdecimal\([ \t]*['\"]$", before[-32:])
-            and re.match(r"['\"][ \t]*\)", after)
+            re.search(r"(?i)\bdecimal\([ \t]*['\"]$", technical_prefix)
+            and (
+                re.match(r"['\"][ \t]*\)", after)
+                or re.match(r"['\"][ \t]*\)", _technical_decode(after[:64]))
+            )
         )
     return False
 
@@ -342,6 +441,9 @@ def check_text(
     if redact_sensitive(semantic) != semantic:
         return DLPResult(False, None, "secret", "normalized")
     decoded = _html_decode(normalized) if publication else normalized
+    decoded_lines = decoded.replace("\r\n", "\n").replace("\r", "\n").strip().count("\n") + 1
+    if decoded_lines > budgets.max_lines:
+        return DLPResult(False, None, "limit", "lines")
     displayed = _display_normalize(normalized) if publication else normalized
     source = _source_normalize(normalized) if publication else normalized
     # Check decoded keys before Markdown normalization can remove underscores
@@ -365,9 +467,42 @@ def check_text(
         or redact_sensitive(semantic_source) != semantic_source
     ):
         return DLPResult(False, None, "secret", "source")
+    # A technical-number exception must not hide another value encoded with the
+    # renderer's decimal syntax. Inspect the complete additional representation,
+    # preserving the original unit and its existing checks/output.
+    mermaid = _mermaid_decode(decoded)
+    mermaid_views: tuple[tuple[str, str, str], ...] = ()
+    if mermaid != decoded:
+        mermaid = _html_decode(mermaid)
+        checked_mermaid = normalize_text(mermaid, allow_horizontal_tabs=allow_horizontal_tabs)
+        if checked_mermaid is None:
+            return DLPResult(False, None, "invalid_text", "mermaid")
+        mermaid = checked_mermaid
+        if mermaid.count("\n") + 1 > budgets.max_lines:
+            return DLPResult(False, None, "limit", "lines")
+        if publication and any(_is_display_control(character) for character in mermaid):
+            return DLPResult(False, None, "laundering", "display_control")
+        semantic_mermaid = _semantic_secret_text(mermaid)
+        mermaid_views = (("mermaid", mermaid, semantic_mermaid),)
+        if publication:
+            mermaid_views += (
+                (
+                    "mermaid_displayed",
+                    _display_normalize(mermaid),
+                    _display_normalize(semantic_mermaid),
+                ),
+                ("mermaid_source", _source_normalize(mermaid), _source_normalize(semantic_mermaid)),
+            )
+        for representation, candidate, secret_view in mermaid_views:
+            if (
+                redact_env_secret_values(candidate) != candidate
+                or redact_sensitive(secret_view) != secret_view
+            ):
+                return DLPResult(False, None, "secret", representation)
     pii_candidates = (("normalized", normalized),)
     if publication:
         pii_candidates += (("decoded", decoded), ("displayed", displayed), ("source", source))
+    pii_candidates += tuple((name, candidate) for name, candidate, _semantic in mermaid_views)
     for representation, candidate in pii_candidates:
         if EMAIL_RE.search(candidate):
             return DLPResult(False, None, "pii", f"email:{representation}")
@@ -375,6 +510,10 @@ def check_text(
             return DLPResult(False, None, "pii", f"phone:{representation}")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
     matcher_reason, source_classes = matcher.match_details(normalized)
+    if mermaid_views:
+        mermaid_reason, mermaid_sources = matcher.match_details(mermaid)
+        matcher_reason = matcher_reason or mermaid_reason
+        source_classes = tuple(sorted(set(source_classes) | set(mermaid_sources)))
     if matcher_reason:
         return DLPResult(False, None, matcher_reason, "forbidden_matcher", source_classes)
     if publication:

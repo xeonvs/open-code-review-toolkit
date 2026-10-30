@@ -171,6 +171,25 @@ is resolved once before acquisition and is shared by local and GitLab execution.
 With DLP enabled, context and federation ingress/egress plus publication sinks
 cross the shared detector. Private retention is checked separately.
 
+Technical versions, dates and Decimal expressions retain their bounded grammar
+after the renderer's decimal Mermaid escaping, including comparison operators
+and Unicode spaces. DLP inspects one decoded layer as an additional untrusted
+representation for secrets, PII, forbidden-source attribution, controls and line
+bounds; it preserves the original text and exact empty/template credential
+grammar. This decoding is bounded and non-expanding, and does not recursively
+reinterpret literal escaped hashes. Phone-shaped fragments of CIDR or dotted-mask
+notation receive an exception only after the complete network token, bounded to
+64 characters, parses through `ipaddress`, including IPv6 with an embedded IPv4
+address. Escaped network punctuation is reconstructed around that exact numeric
+fragment, while original-text checks remain active. Recognized labels and one
+terminal prose period stay outside the address; explicit contact context is checked
+before the complete token. Other contacts and credentials in the same unit
+remain subject to their independent checks. Numeric HTML references retain
+standard-library scalar mappings with bounded integer conversion, including long
+leading-zero forms; decoded HTML/decimal-Mermaid newlines obey the line limit.
+DLP does not validate network configuration: malformed text
+without a phone-shaped token is not necessarily a DLP rejection.
+
 A parsed false value bypasses those DLP checks for one run, emits a prominent warning in
 private logs and bounded Technical details, and always blocks automatic approval.
 Schema, byte/item/time/origin, identity, evidence, cleanup and posting-transaction

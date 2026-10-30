@@ -8,11 +8,11 @@ import pytest
 from ocr_toolkit.context.dlp import ForbiddenMatcher
 from ocr_toolkit.diagrams.admission import admit_diagram
 from ocr_toolkit.diagrams.collector import CollectorSnapshot
-from ocr_toolkit.diagrams.contracts import parse_submission
+from ocr_toolkit.diagrams.contracts import Flowchart, parse_submission
 from ocr_toolkit.reporting.diagram import (
     diagram_mermaid,
     diagram_section,
-    diagram_text,
+    prepare_diagram_section,
     range_details,
 )
 from tests.diagrams.support import REVIEW_RANGE, flow_submission, sequence_submission
@@ -34,43 +34,50 @@ def admitted(payload, *, source="line one\nline two\nline three\n", enabled=True
 @pytest.mark.parametrize(
     "factory,header", ((flow_submission, "flowchart LR"), (sequence_submission, "sequenceDiagram"))
 )
-def test_admitted_variants_have_mermaid_and_complete_text_with_source_spans(
+def test_admitted_variants_have_only_mermaid_without_textual_source_listing(
     factory, header: str
 ) -> None:
     result = admitted(factory())
     assert result.state == "generated" and result.submission is not None
     diagram = result.submission.diagram
     assert diagram is not None
-    mermaid, text = diagram_mermaid(diagram), diagram_text(diagram)
-    assert mermaid.startswith(header) and "app.py:L1" in text
+    mermaid = diagram_mermaid(diagram)
+    assert mermaid.startswith(header)
     expanded, collapsed = diagram_section(result), diagram_section(result, collapsed=True)
-    assert "```mermaid\n" in expanded and "Text equivalent:" in expanded
+    assert "```mermaid\n" in expanded and "Text equivalent:" not in expanded
+    assert "app.py:L1" not in expanded and "\n- " not in expanded
     assert "may omit routes" in expanded and "do not prove behavior" in expanded
     assert collapsed.startswith("<details><summary>Change flow</summary>\n\n")
     assert collapsed.endswith("\n\n</details>")
-    assert mermaid in collapsed and text in collapsed
+    assert mermaid in collapsed and "Text equivalent:" not in collapsed
+    assert "app.py:L1" not in collapsed and "\n- " not in collapsed
 
 
 @pytest.mark.parametrize(
-    "text",
+    "text,escaped",
     (
-        "version < 2020.1.10",
-        "date < 2020-01-01",
-        "version >= 2026.10.19",
-        "IP 192.0.2.123",
-        "network 192.0.2.128/25",
-        "Decimal('123456789.1234')",
-        "'login_password': '{{ service_password }}'",
-        '"login_password": ""',
-        "if a < b and c > d",
+        ("version < 2020.1.10", "version #60; 2020.1.10"),
+        ("date < 2020-01-01", "date #60; 2020-01-01"),
+        ("version >= 2026.10.19", "version #62;#61; 2026.10.19"),
+        ("IP 192.0.2.123", "IP 192.0.2.123"),
+        ("network 192.0.2.128/25", "network 192.0.2.128#47;25"),
+        ("Decimal('123456789.1234')", "Decimal#40;#39;123456789.1234#39;#41;"),
+        (
+            "'login_password': '{{ service_password }}'",
+            "#39;login_password#39;#58; #39;#123;#123; service_password #125;#125;#39;",
+        ),
+        ('"login_password": ""', "#34;login_password#34;#58; #34;#34;"),
+        ("if a < b and c > d", "if a #60; b and c #62; d"),
     ),
 )
-def test_technical_conditions_survive_the_whole_admission_boundary(text: str) -> None:
+def test_technical_conditions_survive_the_whole_admission_boundary(text: str, escaped: str) -> None:
     payload = flow_submission()
     payload["diagram"]["edges"][0]["condition"] = text
     result = admitted(payload)
-    assert result.state == "generated"
-    assert text in diagram_section(result)
+    assert result.state == "generated" and result.submission is not None
+    diagram = result.submission.diagram
+    assert isinstance(diagram, Flowchart) and diagram.edges[0].condition == text
+    assert f'    n0 -->|"{escaped}"| n1' in diagram_section(result)
 
 
 @pytest.mark.parametrize(
@@ -200,4 +207,12 @@ def test_renderer_owns_identifiers_escaping_and_reserved_tokens() -> None:
 
 def test_report_range_details_never_label_a_legacy_range_as_verified() -> None:
     assert range_details(None) == ("- Effective Git range: unverified",)
-    assert REVIEW_RANGE.exact_range in range_details(REVIEW_RANGE)[2]
+    assert range_details(REVIEW_RANGE) == (f"- Effective Git range: `{REVIEW_RANGE.exact_range}`",)
+
+
+def test_generated_without_a_presentation_remains_an_optional_omission() -> None:
+    result = replace(admitted(flow_submission()), submission=None)
+    omitted, section, failed = prepare_diagram_section(result)
+    assert failed and section == ""
+    assert omitted.state == "omitted-invalid" and omitted.reason == "unavailable"
+    assert omitted.calls == result.calls
