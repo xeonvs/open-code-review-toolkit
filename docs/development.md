@@ -23,7 +23,7 @@ review/context/DLP/approval and MCP/provider/policy/result groups have 85% floor
 GitLab posting transactions retain an 80% floor. The latter group measures about
 82%, so raising its threshold requires meaningful tests before changing the gate.
 A high combined result cannot hide a weak group. Individual DLP/audit, source
-syntax, diagram-source metadata and orientation owners have 90% floors in the
+syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
 local and hosted coverage gates. Hosted pull requests run source and contract
 tests on all six supported OS/Python combinations. The expensive
 clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python
@@ -360,6 +360,8 @@ permission semantics. Keep these owners at one
 package level. They do not acquire sources, store snapshots or publish reports.
 `common/redaction.py` remains the independent diagnostic/material primitive,
 with separate complete-query and diagnostic-replacement grammars;
+`common/value_boundaries.py` owns bounded lexical completion across whitespace,
+comments and container closers. It has no detector, parser or I/O dependency.
 the local `dlp_audit/` package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result

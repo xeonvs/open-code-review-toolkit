@@ -184,21 +184,37 @@ user CPU and 155 MiB peak RSS, compared with the installed 0.14.3 baseline's
 identified normalization and material checks as the main costs. Final frozen
 artifact/corpus/resource and second-model acceptance remain required.
 
+The second actual own-tool review of immutable `17254d2..85a355e` completed
+59/59 selected items with zero failed/waived coverage, no budget warnings and
+another admitted TB flowchart. It found three credential-boundary defects:
+multiline empty/reference values lost their sensitive key, ambiguous URI quote
+runs manufactured absence proof, and comments/newlines hid adjacent material.
+All raw findings were inspected, including one conservatively filtered from
+publication. Own-tool runs used: 2/2. Corrections retain keys and original
+boundaries, add no artificial separators and share a pure 4096-code-point
+completion owner. Comments are trivia rather than termination. Focused tests
+exercise both admission modes and production publication; 311 current contracts
+pass, and two independent 1000-example profiles each passed 296 checks before
+the final Unicode-field boundary extension. The retained 3790-observation replay
+has no benign rejection or protection loss. This does not replace the final
+complete passing-population replay or frozen quality gate.
+
 ### Risks And Recovery
 
 Lossy parsers can hide material; always retain independent original checks and use exact positive spans, with conservative rejection on incomplete interpretation. Regex timeouts do not bound unrelated parser operations; construction-time token/nesting/derived-size budgets and adversarial performance tests remain mandatory. New dependency versions must invalidate scanner identity and pass clean installed qualification. Full causal reconciliation may expose additional defects; add minimized cases within these requirements rather than corpus-specific exemptions. Private source availability or fingerprints can invalidate replay: stop that comparison and recover exact authorized inputs, never silently substitute a different corpus. Cancellation must kill/reap task-owned processes and retain explicit snapshot-cleanup ownership. Do not change published 0.14.3 artifacts/tags or force public feature history. Local unpushed fixups may amend after review.
 
 ### Resume Point
 
-Commit the focused own-tool corrections after semantic review, retaining
-`185d7db` as the immutable Security scan anchor. Rebuild a clean installed
-artifact, repeat complete corpus/resource/annotation checks, run the final
-frozen-source gate and use the second own-tool run for the corrected candidate.
+Commit the second own-tool corrections separately after semantic review,
+retaining `185d7db` as the Security scan anchor and both immutable model-review
+heads. Rebuild clean installed artifacts, repeat complete corpus/resource/annotation
+checks and run the final frozen-source gate. No further model run is planned;
+remaining corrections use focused production-boundary tests and semantic review.
 Keep the exact admitted Mermaid for the feature PR. Only the signed
 plan commit has been pushed to draft PR #287. Preserve authenticated private state
 and owned raw copies until their final replay, then perform all source/build/log
 and task-owned Docker/GitHub cleanup. Aggregate Security scans used: 1/1, complete;
-successful own-tool runs used: 1/2. No release acceptance or feature push is claimed.
+successful own-tool runs used: 2/2. No release acceptance or feature push is claimed.
 
 
 ### Plan Fidelity Check

@@ -421,3 +421,102 @@ def test_encoded_absent_carrier_matches_the_canonical_raw_field(key, absent, enc
         check_text(encoded, budgets=BUDGETS, publication=True).admitted
         == check_text(raw, budgets=BUDGETS, publication=True).admitted
     )
+
+
+@given(
+    st.sampled_from(("password", "token", "api_key")),
+    st.sampled_from(('""', '"***"', "${REF}", '"${REF}"')),
+    st.sampled_from(("", "# note", "// note", "/* note */", "<!-- note -->")),
+    st.sampled_from(("\n", "\r\n", "\r")),
+    st.sampled_from(("+ ", "", "or ")),
+    ENCODING,
+)
+def test_empty_or_reference_field_keeps_its_key_through_multiline_continuation(
+    key, value, comment, newline, operator, encoding
+):
+    source = key + "=" + value + " " + comment + newline + operator + '"synthetic-material"'
+    assert not check_text(encode(source, encoding), budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {
+            "status": "success",
+            "comments": [{"path": "sample", "line": 1, "content": encode(source, encoding)}],
+        },
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.sampled_from(('"', "'")),
+    st.integers(2, 5),
+    st.sampled_from(("token", "%74oken", "password", "api_key")),
+    st.sampled_from((";", ",", ")", "]", "}", "#", " ")),
+    ENCODING,
+)
+def test_ambiguous_uri_carrier_opening_cannot_prove_an_empty_query(
+    quote, run, key, separator, encoding
+):
+    source = (
+        "payload = "
+        + quote * run
+        + "https://example.invalid?"
+        + key
+        + "=***"
+        + quote
+        + separator
+        + "synthetic-material"
+        + quote * run
+    )
+    assert not check_text(encode(source, encoding), budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.sampled_from(("password", "token", "api_key")),
+    st.sampled_from(('""', '"***"', "${REF}", '"${REF}"')),
+    st.sampled_from(("", " # note", " // note", " /* note */")),
+    st.sampled_from(
+        (' + "synthetic-material"', '\n + "synthetic-material"', ' "synthetic-material"')
+    ),
+    ENCODING,
+)
+def test_separately_encoded_continuation_cannot_gain_an_invented_field_boundary(
+    key, value, comment, continuation, encoding
+):
+    if comment.startswith((" #", " //")) and "\n" not in continuation:
+        continuation = "\n" + continuation
+    source = key + "=" + value + comment + encode(continuation, encoding)
+    assert not check_text(source, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": source}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert projected["comments"] == []
+
+
+@given(
+    st.text(
+        st.characters(categories=("Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Mc", "Nd", "Pc")),
+        min_size=1,
+        max_size=24,
+    ).filter(str.isidentifier),
+    ENCODING,
+)
+def test_unicode_next_field_preserves_empty_value_and_independent_material(name, encoding):
+    # A prefix avoids generating a sensitive key and keeps the oracle structural.
+    source = 'password=""\npublic_' + name + "=ready"
+    baseline = check_text(
+        encode("public_" + name + "=ready", encoding), budgets=BUDGETS, publication=True
+    )
+    # Identifier syntax can contain variation selectors; independent display
+    # controls must retain their rejection rather than gain a field-name waiver.
+    assert (
+        check_text(encode(source, encoding), budgets=BUDGETS, publication=True).admitted
+        == baseline.admitted
+    )
+    assert not check_text(
+        encode(source + ' api_key="synthetic-material"', encoding),
+        budgets=BUDGETS,
+        publication=True,
+    ).admitted

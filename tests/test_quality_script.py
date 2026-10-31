@@ -60,7 +60,7 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
         assert workflow.count(f"uv run --no-sync {command}") == 1
     for modules in (
         "audit_module in cli corpus scanner state limits worker_process report",
-        "source_module in common/redaction context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata reporting/diagram_layout",
+        "source_module in common/redaction common/value_boundaries context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata reporting/diagram_layout",
     ):
         assert f"for {modules}; do" in script
         assert f"for {modules}; do" in workflow
@@ -122,7 +122,7 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
 
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
-    assert output.count("fresh invocation: run --no-sync sh -c") == 30
+    assert output.count("fresh invocation: run --no-sync sh -c") == 31
 
 
 @pytest.mark.parametrize("failure_code", [2, 7, 130])

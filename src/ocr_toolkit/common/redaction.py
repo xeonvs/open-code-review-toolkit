@@ -10,6 +10,9 @@ from bisect import bisect_right
 from collections.abc import Iterator
 from typing import Any
 
+from ocr_toolkit.common.value_boundaries import complete_carrier as _complete_credential_carrier
+from ocr_toolkit.common.value_boundaries import complete_value
+
 SENSITIVE_KEY_PATTERN = (
     r"x-api-key|api[_-]?key|access[_-]?token|auth[_-]?token|"
     r"secret[_-]?key|refresh[_-]?token|private[_-]?token|"
@@ -222,29 +225,6 @@ def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None
     return redacted
 
 
-def _complete_credential_carrier(text: str, end: int) -> bool:
-    """Require a complete carrier expression across whitespace and closers."""
-
-    cursor = end
-    while cursor < len(text):
-        if text[cursor].isspace() or text[cursor] in ")]}":
-            cursor += 1
-        elif text[cursor] == ",":
-            after = cursor + 1
-            while after < len(text) and text[after].isspace():
-                after += 1
-            if after < len(text) and text[after] in ")]}":
-                # A trailing container separator cannot hide its postfix.
-                cursor = after
-            else:
-                # Unknown tokens after a separator do not prove a new field;
-                # comments or operators must not conceal a later postfix.
-                return after == len(text) or text[after].isalnum() or text[after] in "_\"'([{"
-        else:
-            break
-    return cursor == len(text) or text[cursor] == ";"
-
-
 def _complete_credential_value(text: str, end: int, *, start: int | None = None) -> bool:
     """Require a terminal value, not a prefix of concatenation or a call.
 
@@ -267,7 +247,7 @@ def _complete_credential_value(text: str, end: int, *, start: int | None = None)
         )
         if carrier and single and text[end - 1] != quote:
             return _complete_credential_carrier(text, cursor + 1)
-    return cursor == len(text) or text[cursor] in ",;)]}#\r\n"
+    return complete_value(text, end)
 
 
 def masked_credential_spans(text: str) -> tuple[tuple[int, int], ...]:
@@ -349,7 +329,6 @@ _EMPTY_QUERY_VALUE_RE = re.compile(r"(?:(?P<quote>['\"])(?:\*\*\*|)(?P=quote)|\*
 _URI_CARRIER = re.compile(r"(?P<quote>['\"])[A-Za-z][A-Za-z0-9+.-]{0,31}:[^\s\"'<>]*$")
 _URI_SCHEME = re.compile(r"(?<![\w.+-])[A-Za-z][A-Za-z0-9+.-]{0,31}://")
 _SOURCE_BREAK = re.compile(r"[\s\"'<>]")
-_BARE_EMPTY_TAIL = re.compile(r"[ \t,;)\]}]*(?:#[^\r\n]*)?(?:\r?\n|$)")
 
 
 def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, bool]]:
@@ -369,11 +348,17 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
         safe = _EMPTY_QUERY_VALUE_RE.match(text, start)
         if not query[1] and safe is not None and safe["quote"]:
             end = safe.end()
-            empty = _BARE_EMPTY_TAIL.match(text, end) is not None
+            empty = complete_value(text, end)
         else:
             left = max(0, query.start() - 1024)
             window = text[left : query.start()]
             carrier = _URI_CARRIER.search(window)
+            ambiguous_carrier = False
+            if carrier is not None:
+                opening = left + carrier.start("quote")
+                if opening and text[opening - 1] in "\\\"'":
+                    carrier = None
+                    ambiguous_carrier = True
             token_start = max((part.end() for part in _SOURCE_BREAK.finditer(window)), default=0)
             qualified = (
                 qualified
@@ -381,7 +366,7 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
                 or _URI_SCHEME.search(window, token_start) is not None
             )
             closing = text.find(carrier["quote"], start) if carrier is not None else -1
-            if closing == start and _BARE_EMPTY_TAIL.match(text, closing + 1) is None:
+            if closing == start and not _complete_credential_carrier(text, closing + 1):
                 # An opening query-value quote cannot also prove the carrier's
                 # end. Ambiguous nested quoting retains ordinary checks.
                 closing = -1
@@ -394,6 +379,7 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
             end = boundary.start() if boundary else maximum
             closed = closing >= 0 and end == closing
             empty = start == end or _EMPTY_QUERY_VALUE_RE.fullmatch(text, start, end) is not None
+            empty = empty and not ambiguous_carrier
             if closed and not _complete_credential_carrier(text, end + 1):
                 empty = False
             if (

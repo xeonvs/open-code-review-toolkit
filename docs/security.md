@@ -286,6 +286,13 @@ delimiters and trailing container separators cannot hide an immediate postfix;
 unknown separator tokens retain conservative checks. Semantic construction
 allows at most 4096 fields/carriers per view. Original known secrets, contacts,
 userinfo, bearer/JWT and forbidden-origin checks remain independent.
+The shared lexical completion check examines at most 4096 trailing code points.
+Comments and newlines are trivia, not proof that a value ended: adjacent literals,
+operators and container postfixes retain material checks. A distinct following
+field may establish a boundary; incomplete comments or an exhausted tail budget
+cannot. No-material projections preserve sensitive keys and never invent a
+separator. This is bounded lexical evidence, not execution or general expression
+evaluation. Source-format ambiguity in active prose remains conservative.
 Static emoji data qualifies only exact standard presentation spans. An emoji
 elsewhere does not authorize an unmatched joiner, bidi control or variation
 selector. Internationalized and quoted email-shaped addresses remain protected

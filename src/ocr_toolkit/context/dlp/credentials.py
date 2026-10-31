@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ocr_toolkit.common.redaction import SENSITIVE_NAMED_KEY_PATTERN
+from ocr_toolkit.common.value_boundaries import complete_field
 from ocr_toolkit.context.dlp.decoding import RepresentationLimit, _technical_decode, bounded_nfkc
 
 MAX_CREDENTIAL_FIELDS = 4096
@@ -16,7 +17,7 @@ _MEMBER = rf"{_NAME}(?:\.{_NAME}){{0,7}}"
 _REFERENCE = rf"(?:\$?\{{\{{[ \t]*{_MEMBER}[ \t]*\}}\}}|\$\{{{_NAME}\}})"
 _NO_VALUE = re.compile(
     rf"(?im)^[ \t]*(?P<key>['\"]?{SENSITIVE_NAMED_KEY_PATTERN}['\"]?)[ \t]*[:=][ \t]*"
-    rf"(?P<value>{_REFERENCE}|(?P<quote>['\"])(?:{_REFERENCE}|)(?P=quote))"
+    rf"(?P<value>{_REFERENCE}|\*\*\*|(?P<quote>['\"])(?:{_REFERENCE}|\*\*\*|)(?P=quote))"
     r"(?=[ \t]*$)"
 )
 _ABSENT_FIELD = re.compile(
@@ -77,13 +78,14 @@ def _encoded_absent_carriers(value: str) -> tuple[tuple[int, int, str], ...]:
 
 
 def credential_reference_spans(value: str) -> tuple[tuple[int, int], ...]:
-    """Locate complete symbolic fields; application labels grant no value waiver."""
+    """Locate complete no-material field values; keep their keys visible."""
 
     spans = []
-    for match in _NO_VALUE.finditer(value):
-        if len(spans) >= MAX_CREDENTIAL_FIELDS:
+    for index, match in enumerate(_NO_VALUE.finditer(value)):
+        if index >= MAX_CREDENTIAL_FIELDS:
             raise RepresentationLimit("credential field budget")
-        spans.append(match.span("key"))
+        if complete_field(value, match.end()):
+            spans.append(match.span("value"))
     return tuple(spans)
 
 
@@ -101,7 +103,7 @@ def credential_reference_view(value: str) -> str:
     carriers = _encoded_absent_carriers(value)
     if len(references) + len(carriers) > MAX_CREDENTIAL_FIELDS:
         raise RepresentationLimit("credential semantic span budget")
-    spans = sorted((*((a, b, "x" * (b - a)) for a, b in references), *carriers))
+    spans = sorted((*((a, b, '"***"') for a, b in references), *carriers))
     for start, end, replacement in spans:
         if start < previous:
             continue
