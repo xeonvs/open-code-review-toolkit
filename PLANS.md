@@ -161,10 +161,17 @@ claim of actual secret material or a repository-specific exception.
 Owned Git source snapshots were removed through the official cleanup command;
 metadata-only inputs were revalidated without source copying. Source-free
 private state remains private. The obsolete repository dist and unused
-project-owned qualification image were removed. Remaining temporary environments,
-raw diagnostic spools and obsolete hosted storage belong to final delivery
-cleanup. Only the signed plan commit is remote; feature CI/merge, development
-publication and the stable release handoff remain pending.
+project-owned qualification image were removed. Temporary analysis environments,
+builds and raw diagnostic spools are removed; only source-free private comparison
+state and admitted diagrams remain. PR #287 contains the completed implementation
+and exact second-review Mermaid. Hosted Linux CI exposed three oversized pytest
+parameter IDs: raw 270000-byte fixtures entered PYTEST_CURRENT_TEST and exceeded
+Linux's per-environment-string exec limit before Git could start. Short semantic
+IDs preserve the exact fixture bytes and assertions. The corrected 25-test owner
+suite passes on macOS and Linux, including a 2-CPU/2-GiB temporary Linux container
+that is removed after execution. Runtime is unchanged; no new Security/OCR/corpus
+run is justified by this fixture correction. Protected CI/merge, development
+publication, final hosted cleanup and stable delivery remain pending.
 
 ### Risks And Recovery
 
@@ -172,9 +179,8 @@ Lossy parsers can hide material; always retain independent original checks and u
 
 ### Resume Point
 
-Commit the final validation/status documentation after scoped review and secret
-checks; push the completed signed feature to PR #287 with the exact admitted
-second-review Mermaid. Wait for protected checks, merge and verify development
+Commit/push the scoped fixture-ID correction after its semantic and secret gates.
+Reconcile the current PR #287 head, wait for all protected checks, merge and verify development
 publication. Prepare the signed release/v0.14.4 PR, archive/reset this complete
 plan there, then independently verify stable external delivery and cleanup.
 No further OCR or aggregate Security run is required for unchanged behavior.

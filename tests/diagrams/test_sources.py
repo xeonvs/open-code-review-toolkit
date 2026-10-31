@@ -86,6 +86,17 @@ def test_large_valid_source_does_not_depend_on_evidence_blob_limit(tmp_path, siz
         (b"safe\n" + b"x" * 270_000 + b"\xff", 0, "reference"),
         (b"safe\n" + b"x" * 270_000 + b"\xe2\x82", 0, "reference"),
     ),
+    ids=(
+        "empty",
+        "final-line-without-lf",
+        "final-lf",
+        "crlf-lines",
+        "unicode-separator-is-not-lf",
+        "utf8-across-chunks",
+        "late-nul",
+        "late-invalid-utf8",
+        "late-incomplete-utf8",
+    ),
 )
 def test_whole_blob_text_checks_and_line_units(tmp_path, content, lines, reason):
     root, review_range = repository(tmp_path, content)
