@@ -196,6 +196,13 @@ private filesystem and reporting usage each have an independent 85% floor.
 For regexes, review the semantic alternatives too: line coverage cannot prove
 that every encoded representation or boundary is exercised.
 
+Give large parametrized fixtures short semantic IDs. Pytest includes the test
+ID in `PYTEST_CURRENT_TEST`; embedding a raw blob there can exceed a platform's
+per-environment-string exec limit before the tested subprocess starts. Keep the
+original boundary-sized payload and exercise the real child on Linux as well
+as macOS when this handoff matters. A data generator does not cover its test
+runner's process environment automatically.
+
 Cross transformations and context, rather than only varying strings: configured
 secrets may contain words rewritten by canonicalization; markup may be unpaired
 and contacts unlabelled; ambient secrets may match diagnostic wrapper fields.
