@@ -223,8 +223,9 @@ def test_debug_observes_actual_dlp_without_extra_checks(
 
 
 def test_claimed_local_option_failure_records_not_run_and_no_source_capture(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     result = tmp_path / "result.json"
     result.write_text("caller-owned old result")
     directory = tmp_path / "debug"
@@ -292,7 +293,12 @@ def test_local_context_refusal_precedes_private_debug_artifacts(
 
 
 @pytest.mark.parametrize("local", [False, True])
-def test_debug_rejects_nonlocal_or_legacy_retention_before_io(tmp_path: Path, local: bool) -> None:
+def test_debug_rejects_nonlocal_or_legacy_retention_before_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, local: bool
+) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
     with pytest.raises(review_runner.ReviewRunnerError, match="without legacy retention"):
         review_runner.run_evidence_review(
             tmp_path / "result",
@@ -302,7 +308,7 @@ def test_debug_rejects_nonlocal_or_legacy_retention_before_io(tmp_path: Path, lo
             preserve_private_artifacts=local,
             debug_dir=tmp_path / "debug",
         )
-    assert list(tmp_path.iterdir()) == []
+    assert set(tmp_path.iterdir()) == {checkout}
 
 
 def test_summary_capture_stops_at_byte_bound(
@@ -357,6 +363,7 @@ def test_journal_limit_preserves_incomplete_snapshot(
 def test_late_debug_write_failure_preserves_original_review_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     original_write = DebugBundle._write
     writes = 0
 

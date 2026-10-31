@@ -22,8 +22,10 @@ The `coverage` and `check` modes reuse one branch-aware test run. Result/preflig
 review/context/DLP/approval and MCP/provider/policy/result groups have 85% floors;
 GitLab posting transactions retain an 80% floor. The latter group measures about
 82%, so raising its threshold requires meaningful tests before changing the gate.
-A high combined result cannot hide a weak group. Hosted pull requests run source
-and contract tests on all six supported OS/Python combinations. The expensive
+A high combined result cannot hide a weak group. Individual DLP/audit, source
+syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
+local and hosted coverage gates. Hosted pull requests run source and contract
+tests on all six supported OS/Python combinations. The expensive
 clean-install wheel/sdist behavioral test runs once in the required Ubuntu/Python
 3.12 job; the separate required build job smoke-tests both distribution paths.
 The five matrix jobs start alongside Python 3.12 rather than waiting for it.
@@ -346,6 +348,26 @@ own their respective pure calculations. Shared reporting must not import posting
 forge acquisition, forge receipts, environment configuration or provider actions.
 Posting facades preserve existing imports while GitLab retains its publication
 transactions, discussion anchors, suppression and approval policy.
+
+`context/dlp/` is the shared detector boundary. Its short `__init__.py` preserves
+the `ocr_toolkit.context.dlp` API; `admission.py` composes decisions and forbidden
+matching, `decoding.py` handles bounded entities, `markup.py` owns bounded
+Markdown/HTML interpretation, `numeric.py` and `email.py` own candidates, and
+`presentation.py` qualifies standard Unicode sequences. `credentials.py` owns
+closed absent-value reference roles and key-preserving encoded-carrier projection.
+Application field names do not establish
+permission semantics. Keep these owners at one
+package level. They do not acquire sources, store snapshots or publish reports.
+`common/redaction.py` remains the independent diagnostic/material primitive,
+with separate complete-query and diagnostic-replacement grammars;
+`common/value_boundaries.py` owns bounded lexical completion across whitespace,
+comments and container closers. It has no detector, parser or I/O dependency.
+the local `dlp_audit/` package owns acquisition, isolated execution and private
+comparison. Its `report.py` summarizes source-free role/proof and whole-file
+observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result
+contract, not the detector. Git text streaming lives in
+`evidence/text_metadata.py`; `diagrams/sources.py` owns its immutable-head session
+and budgets, while `reporting/diagram_layout.py` estimates orientation without I/O.
 
 `providers/local.py` publishes private Markdown artifacts and console output from that shared report, with every
 admitted finding and no posting cap, remote badge or HTML disclosure. It does not

@@ -57,6 +57,14 @@ class SourceReference:
 
 
 @dataclass(frozen=True, slots=True)
+class ReferenceSourceInfo:
+    """Mechanical source facts supplied by a caller-bound acquisition adapter."""
+
+    line_count: int = 0
+    reason: Literal["none", "budget", "unavailable", "reference"] = "none"
+
+
+@dataclass(frozen=True, slots=True)
 class FlowNode:
     identifier: str
     kind: Literal["step", "decision"]

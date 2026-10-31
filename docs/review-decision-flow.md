@@ -142,10 +142,10 @@ flowchart TD
     rejection_diag --> retain_rejected{Authorized local private retention?}
     retain_rejected -- No --> integrity_error[Delete unsafe handoff;<br/>normal publication blocked]
     retain_rejected -- Yes --> retained_rejected[Owner-only bounded diagnostic envelope;<br/>no receipt, successful report or posting authority]
-    core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>source spans and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
+    core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
     diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
-    dlp_mode -- true --> dlp[Check whole original values and literal sinks;<br/>bounded source roles refine credential keys;<br/>publication and private-field DLP]
+    dlp_mode -- true --> dlp[Check original and bounded independent representations;<br/>source roles refine keys, never confidentiality;<br/>publication and private-field DLP]
     dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
     disabled --> publishable
     dlp --> dlp_state{DLP state}
@@ -169,7 +169,7 @@ flowchart TD
     receipt --> post{Posting input valid at readback?}
     retained_rejected --> posting_error
     post -- No --> posting_error[Job-local publication-policy error;<br/>findings transaction not started]
-    post -- Yes --> diagram_post[Revalidate optional source/DLP and render;<br/>fault omits diagram, findings continue]
+    post -- Yes --> diagram_post[Revalidate the same source bounds and DLP;<br/>render flowchart with deterministic LR/TB or sequence;<br/>fault omits diagram, findings continue]
     diagram_post --> live_state{Current MR diff, target T,<br/>policy P and lifecycle valid?}
     live_state -- Invalid, moved or terminal --> posting_error
     live_state -- Open --> transaction[Publish current findings and summary<br/>with bounded readback and rollback]

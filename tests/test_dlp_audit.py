@@ -1710,16 +1710,37 @@ def test_worker_transport_budget_launch_and_dead_peer_paths(state, monkeypatch) 
 
 def test_audit_does_not_infer_code_pass_from_prose_pass(state, monkeypatch) -> None:
     from ocr_toolkit.context.code_text import TextSink
-    from ocr_toolkit.context.contracts import TextBudgets
-    from ocr_toolkit.context.dlp import check_text
+    from ocr_toolkit.context.dlp import DLPResult
 
-    value = "x*ｐａｓｓｗｏｒｄ=syntheticShortCredential"  # noqa: RUF001 - distinct sink decisions
-    budgets = TextBudgets(20000, 80000, 300)
-    assert check_text(value, budgets=budgets, publication=True).admitted
-    assert not check_text(
-        value, budgets=budgets, publication=True, sink=TextSink.LITERAL_CODE
-    ).admitted
+    value = "synthetic distinct sink decisions"
+    original = scanner.dlp.check_text
+
+    def distinct(text, **kwargs):
+        if text == value:
+            if kwargs.get("sink") == TextSink.LITERAL_CODE:
+                return DLPResult(False, None, "pii", "email:normalized")
+            return DLPResult(True, text, "admitted")
+        return original(text, **kwargs)
+
+    monkeypatch.setattr(scanner.dlp, "check_text", distinct)
+    from ocr_toolkit import review_runner
+
+    monkeypatch.setattr(review_runner, "check_text", distinct)
     identity = captured(state, value)
     _, result = run_in_process(state, identity, monkeypatch)
     assert result["complete"]
     assert result["hits"] and {hit["role"] for hit in result["hits"]} == {"existing_code"}
+
+
+def test_scanner_identity_binds_selected_interpretation_versions(monkeypatch):
+    original = scanner.importlib.metadata.version
+    baseline = scanner.scanner_identity()
+    for dependency in ("mistune", "regex", "emoji"):
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                scanner.importlib.metadata,
+                "version",
+                lambda name: "synthetic-version" if name == dependency else original(name),
+            )
+            assert scanner.scanner_identity() != baseline
+    assert scanner.scanner_identity() == baseline

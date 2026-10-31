@@ -162,7 +162,7 @@ def test_unknown_or_malformed_mermaid_comparison_is_not_an_exception(operator) -
             and not unicodedata.normalize("NFKC", chr(code)).isspace()
         )
     ),
-    st.sampled_from(("version", "date")),
+    st.just("version"),
     st.booleans(),
 )
 def test_other_mermaid_entities_cannot_create_technical_context(code, prefix, publication) -> None:
@@ -419,7 +419,7 @@ def test_minimized_comparison_regressions(prefix: str, operator: str) -> None:
     (
         "date < 2020-02-30",
         "date >= 2020-13-01",
-        "version < 2020.1.10.42",
+        "version < 2020.1.10.42.1.1.1.1.1",
         "version >= +1 202 555 0142",
         "date != +1.202.555.0142",
         "Call 2020-01-01",

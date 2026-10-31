@@ -1,4 +1,4 @@
-"""Bounded full-source Python syntax, separate from Git and DLP orchestration."""
+"""Bounded full-source syntax roles, separate from Git and DLP orchestration."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def _python_declaration(source: str) -> bool | None:
 
 
 @dataclass(frozen=True, slots=True)
-class PythonSourceSyntax:
+class SourceSyntax:
     source: str = field(repr=False)
     line_starts: tuple[int, ...]
     key_spans: tuple[tuple[int, int], ...]
@@ -116,7 +116,7 @@ class PythonSourceSyntax:
         return CodeTextContext(hashlib.sha256(normalized.encode()).hexdigest(), spans, operators)
 
 
-def analyze_python_source(source: str) -> PythonSourceSyntax | None:
+def analyze_python_source(source: str) -> SourceSyntax | None:
     """Never treat an excerpt parsed out of a docstring/comment as executable code."""
 
     if len(source) > MAX_SYNTAX_CHARS or any(char in source for char in "\v\f\x85\u2028\u2029"):
@@ -326,7 +326,7 @@ def analyze_python_source(source: str) -> PythonSourceSyntax | None:
                 key(node)
             if len(spans) > MAX_KEY_SPANS:
                 return None
-        return PythonSourceSyntax(
+        return SourceSyntax(
             source, tuple(starts), tuple(sorted(spans)), material_spans, tuple(operators)
         )
     except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError, tokenize.TokenError):

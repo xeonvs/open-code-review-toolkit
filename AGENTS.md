@@ -7,6 +7,9 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Repository Map
 
 - `src/ocr_toolkit/` - runtime package and the `ocr-ci` command.
+- `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
+- `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
+- `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - bounded Git text facts and optional diagram-reference acquisition.
 - `tests/` - regression, contract, and synthetic integration tests.
 - `examples/gitlab/` - public synthetic GitLab CI examples.
 - `docs/` - user, security, development, strategy, and release documentation.
@@ -40,6 +43,9 @@ Read the matching owners and run their applicable guards. The general repository
 
 <!-- ew:route id="review-context" triggers="src/ocr_toolkit/context/**|docs/review-context.md|review context admission|context publication" owners="docs/review-context.md|docs/engineering/project_principles.md" guards="manual_review:compare context acquisition admission store and publication with the current contract|test:scripts/quality.sh check" -->
 | `review-context` | Review-context admission or publication | Current bounded-context contract and project principles | Context lifecycle comparison and quality checks |
+
+<!-- ew:route id="dlp" triggers="src/ocr_toolkit/context/dlp/**|src/ocr_toolkit/common/redaction.py|src/ocr_toolkit/common/value_boundaries.py|src/ocr_toolkit/dlp_audit/**|DLP interpretation|DLP corpus audit" owners="docs/security.md|docs/dlp-audit.md|docs/development.md|docs/engineering/project_principles.md" guards="manual_review:compare material representations source proof sink authority private replay and resource bounds|test:scripts/quality.sh check|lint:scripts/gitleaks.sh" -->
+| `dlp` | Shared DLP interpretation, redaction or local corpus audit | Security, audit and development contracts | Material/sink comparison, replay and bounded-work checks |
 
 <!-- ew:route id="federation" triggers="src/ocr_toolkit/federation/**|docs/engineering/governed_federation_contracts.md|federation admission|external MCP gateway" owners="docs/engineering/governed_federation_contracts.md|docs/engineering/project_principles.md" guards="manual_review:compare registry admission gateway DLP and receipt changes with the federation contract|test:scripts/quality.sh check" -->
 | `federation` | Governed external-tool admission or gateway | Federation contract and project principles | Gateway contract comparison and quality checks |

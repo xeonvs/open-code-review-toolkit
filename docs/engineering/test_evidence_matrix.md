@@ -10,6 +10,31 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.4 bounded DLP and diagram-source evidence
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Original material survives representation interpretation | Shared DLP -> context/federation/publication and diagram admission | `test_dlp_0144.py`, common helpers and DLP/source/network properties cover Unicode email, standard emoji versus unrelated controls, quoted/masked/query values, ternary versus URI authority, Markdown contact boundaries, technical tokens and inverse material | Deterministic contracts and synthetic properties do not measure universal precision/recall; unsupported roles remain conservative |
+| Absence proof cannot erase later material | `common.value_boundaries` -> material checks -> key-preserving credential projection -> finding publication | Parser-boundary regressions reproduce both own-tool reviews; composed properties vary quote runs, comments, newline forms, encoding order, distinct Unicode fields and separately encoded continuations through the production publication filter | 4096 trailing code points and 4096 semantic fields/carriers; no expression execution or language-wide semantic inference; ambiguous active-prose comment rendering remains conservative |
+| Source roles are exact and bounded | Full immutable source -> `SourceSyntax` -> source proof -> publication projection | Source-semantic tests exercise exact numeric/name roles without filename authority; quoted, unrelated, malformed, stale, literal-material and budget cases retain checks. Permission-map names and quoted data cannot manufacture roles | Source identity is not confidentiality authority; no execution or alias/factory dataflow inference |
+| Diagram references do not inherit the smaller evidence limit | Git text stream -> `DiagramSourceReader` -> pure admission and GitLab revalidation | Real temporary Git blobs cross 256000/5000000-byte boundaries, split UTF-8, late NUL/invalid text, final lines, unsafe object modes, shared budgets and killed/reaped peer failures; runner/result/receipt consumers use the same adapter | 5000000 bytes/blob, 32000000 bytes/session, 30 seconds and <=65536-byte chunks; optional failure omits only the diagram |
+| Layout remains pure and deterministic | Admitted flowchart -> shared renderer -> local/GitLab | Chain, branch, cycle, Unicode/condition-width and permutation properties qualify LR/TB selection; sequence output stays unchanged | Estimated width selects orientation; it does not prove model semantics or exact provider pixel layout |
+| Private audit observations stay non-authoritative | Official local CLI -> isolated worker -> authenticated state and source-free report | Existing native lifecycle/persistence tests plus report grouping and dependency-identity regressions cover role/proof mismatch visibility, aggregate-child probes, deterministic ordering and library-version changes | No new audit command or CI corpus stage; classifications never suppress runtime checks |
+
+Affected DLP/material/audit and new source/layout owners have individual 90%
+branch-aware floors. Properties cross query punctuation, leading whitespace,
+adjacent fields/fragments, actual Markdown masks, unknown enclosures, semicolon
+query keys, quote runs and the production publication projection. Minimized
+actual-review regressions exercise the real HTML parser and forbidden-value
+preparation on Python 3.12 as well as the current interpreter. Two obsolete UUID diagnostic expectations
+were corrected without dropping ambiguous-identifier sidecar coverage. Current
+gate, installed/resource and model/diagram acceptance results belong to the
+active plan; line coverage alone is not semantic evidence. Strictly private
+validation details are absent.
+Explicit following-field controls verify independent email and encoded configured
+secrets after a symbolic reference. Bare mixed-prose continuations remain
+conservative and are tested separately; reason priority is not an accuracy metric.
+
 ## v0.14.3 source interpretation and private audit evidence
 
 Final runtime `b4cfbb1` passes the complete sequential quality gate: 3747 tests,

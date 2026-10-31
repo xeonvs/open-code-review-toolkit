@@ -126,7 +126,10 @@ deliberately linked to preserve OCR's account refresh and locking lifecycle.
 
 Source provenance establishes origin, not confidentiality. Bounded syntax
 refinement never executes audited code and does not waive independent checks on
-original or encoded sensitive material. Audit evaluation always enables production
+original or encoded sensitive material. Source characters are bounded before
+Python parsing; the AST node cap is checked afterward and is not a preallocation
+memory ceiling. Application-defined labels cannot manufacture semantic authority
+for a quoted or otherwise unqualified literal. Audit evaluation always enables production
 DLP, independently of the review-mode switch. Incomplete evaluation cannot become a
 clean audit because no hits were recorded. Exact expectation labels never stop
 scanning, broaden source selection or authorize publication; complete-population
@@ -238,6 +241,69 @@ comments, strings, annotations and templates cannot supply that proof. This
 operator interpretation does not exempt other sensitive material in the excerpt.
 Authored actionable suggestions never inherit an existing-code syntax waiver.
 
+Closed configuration grammar also distinguishes whole symbolic references
+(`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,
+without evaluating them. Calls, defaults, concatenations and incomplete forms
+retain conservative checks. Application labels such as `permissions` and values
+such as `write` do not establish absent credential material in an arbitrary
+repository. No permission-map waiver or configuration fallback supplies source
+authority. Unknown structures and quoted data retain ordinary checks.
+Known-secret values and contacts remain independently protected.
+
+Markdown interpretation uses a bounded Mistune token tree without renderers or
+plugins, plus bounded standard HTML events. Construction shares a 32768-token
+budget and combined block/inline depth 20. Inline finalization reserves its
+construction work before allocating native emphasis nodes. Compatibility
+normalization and case folding check both characters and UTF-8 bytes against
+four times the input size plus 4096 before subsequent interpretation.
+Oversized HTML fragments, derived views, source-position searches and timed
+Unicode matches fail closed as `limit`. Source text and
+applicable normalized/decoded views are checked independently. A formatting
+boundary cannot silently join a contact into a bare identifier. Unproved
+formatted numbers retain conservative phone checks; arithmetic syntax alone
+does not establish an executable-source role. Literal code
+does not activate its markup, while its obfuscated sensitive material remains
+subject to checks. Diagnostic substitutions never establish credential material;
+complete empty/masked query values stay empty/masked in surrounding syntax.
+Query classification walks keys and complete values independently of diagnostic
+replacement. A safe mask neutralizes only its key for generic assignment checks;
+adjacent fields and fragments remain visible. Source-string ends require bounded
+carrier evidence. Whitespace after `=` cannot prove an empty value. Canonical masks
+remain literal during Markdown interpretation so masks in separate fields cannot
+form an emphasis pair and invent credential material.
+Sensitive encoded keys remain detectable after semicolon query separators;
+semicolons in an already sensitive value cannot prove that value empty.
+Only a single unambiguous outer carrier can close a quoted assignment;
+ambiguous quote runs retain material checks. Malformed HTML parser assertions
+make the security view unavailable and fail closed, including when preparing
+forbidden values, rather than escaping the DLP result contract.
+Encoded fields inside original ordinary quoted carriers retain their sensitive
+key and surrounding source in the semantic view. The complete decoded payload
+must prove an empty, masked or closed symbolic value before its absent value
+is represented as a canonical mask with unambiguous carrier quotes. Later
+decoding and continuation checks still see the field. Whitespace, closing
+delimiters and trailing container separators cannot hide an immediate postfix;
+unknown separator tokens retain conservative checks. Semantic construction
+allows at most 4096 fields/carriers per view. Original known secrets, contacts,
+userinfo, bearer/JWT and forbidden-origin checks remain independent.
+The shared lexical completion check examines at most 4096 trailing code points.
+Comments and newlines are trivia, not proof that a value ended: adjacent literals,
+operators and container postfixes retain material checks. A distinct following
+field may establish a boundary; incomplete comments or an exhausted tail budget
+cannot. No-material projections preserve sensitive keys and never invent a
+separator. This is bounded lexical evidence, not execution or general expression
+evaluation. Source-format ambiguity in active prose remains conservative.
+A newline followed by unstructured prose does not qualify a declarative
+reference field. Rendering may also lose field/comment boundaries in a larger
+unit. Such mixed inputs can retain a conservative credential rejection even
+when an isolated field is empty; this is a precision limit, not evidence that
+the scanner found an actual credential. Explicit independent fields still
+receive their own contact, configured-secret and forbidden-origin checks.
+Static emoji data qualifies only exact standard presentation spans. An emoji
+elsewhere does not authorize an unmatched joiner, bidi control or variation
+selector. Internationalized and quoted email-shaped addresses remain protected
+without DNS or registration checks.
+
 Technical versions, dates and Decimal expressions retain their bounded grammar
 after the renderer's decimal Mermaid escaping, including comparison operators
 and Unicode spaces. DLP inspects one decoded layer as an additional untrusted
@@ -256,6 +322,14 @@ standard-library scalar mappings with bounded integer conversion, including long
 leading-zero forms; decoded HTML/decimal-Mermaid newlines obey the line limit.
 DLP does not validate network configuration: malformed text
 without a phone-shaped token is not necessarily a DLP rejection.
+Complete valid calendar dates, UUIDs and short dotted-version pairs are checked
+as bounded typed tokens, with explicit contact context taking precedence.
+Numeric iteration syntax distinguishes a bounded list of single-digit loop
+items from a formatted contact; additional material outside that span still
+receives every check. Seven-digit national layouts are protected; longer
+six-digit layouts retain their previous conservative classification. Explicit
+contact labels/plus prefixes remain conservative. Underscores
+inside numeric identifiers do not activate Markdown emphasis.
 
 A parsed false value bypasses those DLP checks for one run, emits a prominent warning in
 private logs and bounded Technical details, and always blocks automatic approval.

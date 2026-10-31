@@ -11,7 +11,12 @@ from pathlib import Path
 from ocr_toolkit.context.dlp import ForbiddenMatcher
 from ocr_toolkit.diagrams.admission import admit_diagram
 from ocr_toolkit.diagrams.collector import CollectorSnapshot, DiagramCollector
-from ocr_toolkit.diagrams.contracts import DiagramMode, DiagramResult, diagram_requested
+from ocr_toolkit.diagrams.contracts import (
+    DiagramMode,
+    DiagramResult,
+    ReferenceSourceInfo,
+    diagram_requested,
+)
 from ocr_toolkit.diagrams.persistence import diagram_payload, parse_diagram_payload
 from ocr_toolkit.review_range import ReviewRange
 
@@ -82,7 +87,7 @@ class DiagramExecution:
         review_range: ReviewRange | None,
         calls: int,
         failed_calls: int,
-        read_source: Callable[[str], str | None],
+        read_source: Callable[[str], ReferenceSourceInfo],
         forbidden_matcher: ForbiddenMatcher,
         dlp_enabled: bool,
     ) -> DiagramResult:

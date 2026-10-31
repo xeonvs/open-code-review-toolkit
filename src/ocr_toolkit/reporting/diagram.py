@@ -13,12 +13,20 @@ from ocr_toolkit.diagrams.contracts import (
     SequenceMessage,
     SequenceStep,
 )
+from ocr_toolkit.reporting.diagram_layout import flowchart_direction
 from ocr_toolkit.review_range import ReviewRange
 
 BOUNDED_SUMMARY = (
     "Model-proposed summary; may omit routes and error handling. "
     "Source locations are checked mechanically and do not prove behavior."
 )
+
+
+def diagram_status(result: DiagramResult) -> str:
+    """Expose only the already-admitted closed optional-channel diagnosis."""
+
+    suffix = f" ({result.reason})" if result.state == "omitted-invalid" else ""
+    return f"- Change diagram: {inline_code(result.state)}{suffix}"
 
 
 def _label(text: str) -> str:
@@ -42,7 +50,7 @@ def diagram_mermaid(diagram: Diagram) -> str:
 
     if isinstance(diagram, Flowchart):
         identifiers = {node.identifier: f"n{index}" for index, node in enumerate(diagram.nodes)}
-        lines = ["flowchart LR"]
+        lines = [f"flowchart {flowchart_direction(diagram)}"]
         for node in diagram.nodes:
             opener, closer = ('{"', '"}') if node.kind == "decision" else ('["', '"]')
             lines.append(f"    {identifiers[node.identifier]}{opener}{_label(node.label)}{closer}")

@@ -122,6 +122,7 @@ SUMMARY_ACTION_COUNTS = action_counts()
 def test_run_resolves_disabled_dlp_once_and_warns_before_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     observed: list[bool] = []
 
     def run(*_args: object, **kwargs: object) -> int:
@@ -144,6 +145,7 @@ def test_run_resolves_disabled_dlp_once_and_warns_before_execution(
 def test_invalid_dlp_setting_fails_before_review_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     called: list[bool] = []
     monkeypatch.setattr(
         review_runner,
@@ -3187,10 +3189,18 @@ def test_publication_dlp_atomically_sanitizes_private_fields_without_losing_mani
     assert "synthetic@example.invalid" not in result.read_text(encoding="utf-8")
 
 
-def test_private_dlp_sidecar_attributes_technical_false_positive_without_raw_value(
+@pytest.mark.parametrize(
+    "technical_id,rejected",
+    (
+        ("12345678-1234-5678-1234-123456789012", False),
+        ("RUN-1234567/8901", True),
+    ),
+)
+def test_private_dlp_sidecar_attributes_ambiguous_identifiers_without_raw_value(
     tmp_path: Path,
+    technical_id: str,
+    rejected: bool,
 ) -> None:
-    technical_id = "12345678-1234-5678-1234-123456789012"
     result = tmp_path / "result.json"
     sidecar = tmp_path / "private-dlp-decisions.json"
     result.write_text(
@@ -3209,11 +3219,14 @@ def test_private_dlp_sidecar_attributes_technical_false_positive_without_raw_val
     payload = json.loads(sidecar.read_text(encoding="utf-8"))
     decisions = payload["decisions"]
     assert payload["schema_version"] == "ocr.private-dlp-decisions/v1"
-    assert [item["path"] for item in decisions] == [["manifest", "run_id"], ["session_id"]]
-    assert {item["reason"] for item in decisions} == {"pii"}
-    assert {item["detector"] for item in decisions} == {"phone:normalized"}
-    assert len({item["sha256"] for item in decisions}) == 1
-    assert {item["action"] for item in decisions} == {"reject-value"}
+    if rejected:
+        assert [item["path"] for item in decisions] == [["manifest", "run_id"], ["session_id"]]
+        assert {item["reason"] for item in decisions} == {"pii"}
+        assert {item["detector"] for item in decisions} == {"phone:normalized"}
+        assert len({item["sha256"] for item in decisions}) == 1
+        assert {item["action"] for item in decisions} == {"reject-value"}
+    else:
+        assert decisions == []
     assert payload["truncated"] is False
     assert payload["omitted_decisions"] == 0
     assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
@@ -3223,7 +3236,7 @@ def test_private_dlp_sidecar_attributes_technical_false_positive_without_raw_val
 def test_private_dlp_sidecar_bounds_hostile_paths_and_decision_count() -> None:
     """Bound local diagnostics even when a hostile result rejects every value."""
 
-    technical_id = "12345678-1234-5678-1234-123456789012"
+    technical_id = "RUN-1234567/8901"
     nested: dict[str, object] = {
         str(index): technical_id for index in range(review_runner.PRIVATE_DLP_MAX_DECISIONS + 5)
     }

@@ -6,7 +6,12 @@ import os
 import re
 import unicodedata
 import urllib.parse
+from bisect import bisect_right
+from collections.abc import Iterator
 from typing import Any
+
+from ocr_toolkit.common.value_boundaries import complete_carrier as _complete_credential_carrier
+from ocr_toolkit.common.value_boundaries import complete_value
 
 SENSITIVE_KEY_PATTERN = (
     r"x-api-key|api[_-]?key|access[_-]?token|auth[_-]?token|"
@@ -19,6 +24,7 @@ SENSITIVE_NAMED_KEY_PATTERN = (
     rf"(?:(?:[A-Za-z0-9]+[_.-])*(?:{SENSITIVE_KEY_PATTERN})|"
     r"(?:[A-Za-z0-9]+[_.-])*token)"
 )
+_MATERIAL_KEY_HINT = re.compile(rf"(?i)(?:{SENSITIVE_KEY_PATTERN}|token|authorization)")
 
 _SECRET_ASSIGNMENT_KEY_PATTERN = (
     rf'(?:"{SENSITIVE_NAMED_KEY_PATTERN}"|'
@@ -99,6 +105,7 @@ SECRET_SHAPED_ENV_NAME_RE = re.compile(
     flags=re.IGNORECASE,
 )
 MIN_DISCOVERED_SECRET_LENGTH = 16
+_ASCII_BYPASS_CONTROLS = {code: None for code in (*range(32), 127) if chr(code) not in "\n\r\t"}
 
 
 REDACTION_TOKEN_SEPARATOR = r"[-_\s\u200b-\u200f\u202a-\u202e\u2060-\u206f]*"
@@ -155,6 +162,8 @@ def normalize_redaction_tokens(text: str) -> str:
 def strip_redaction_bypass_controls(text: str) -> str:
     """Remove invisible controls that can split secret keys or values."""
 
+    if text.isascii():
+        return text.translate(_ASCII_BYPASS_CONTROLS)
     return "".join(
         char
         for char in text
@@ -216,6 +225,179 @@ def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None
     return redacted
 
 
+def _complete_credential_value(text: str, end: int, *, start: int | None = None) -> bool:
+    """Require a terminal value, not a prefix of concatenation or a call.
+
+    One unambiguous matching outer quote may close its carrier. Arbitrary
+    quotes cannot prove an empty prefix is the whole value.
+    """
+
+    cursor = end
+    while cursor < len(text) and text[cursor] in " \t":
+        cursor += 1
+    if start is not None and cursor < len(text) and text[cursor] in "\"'":
+        quote = text[cursor]
+        opening = text.rfind(quote, max(0, start - 1024), start)
+        carrier = opening >= 0 and (opening == 0 or text[opening - 1] not in "\\\"'")
+        # An unquoted mask can be inside a path or other quoted carrier. Its
+        # entire prefix must be unambiguous; quote runs never prove a carrier.
+        prefix = text[opening + 1 : cursor] if carrier else ""
+        single = opening == start - 1 or (
+            text[end - 1] not in "\"'" and not any(c in prefix for c in (quote, "\\", "\r", "\n"))
+        )
+        if carrier and single and text[end - 1] != quote:
+            return _complete_credential_carrier(text, cursor + 1)
+    return complete_value(text, end)
+
+
+def masked_credential_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Locate canonical masks so display interpretation cannot erase them."""
+
+    if "***" not in text:
+        return ()
+    spans = {
+        match.span("value")
+        for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
+        for match in pattern.finditer(text)
+        if match["value"] == "***"
+        and _complete_credential_value(text, match.end(), start=match.start())
+    }
+    # URI carriers have their own proven boundaries. A closing carrier quote
+    # must not require granting the same authority to arbitrary quote runs.
+    for query, end, empty, qualified in _material_queries(text):
+        if empty and qualified:
+            start = query.end()
+            while start < end and text[start].isspace():
+                start += 1
+            if text[start:end] == "***":
+                spans.add((start, end))
+            elif text[start:end] in {"'***'", '"***"'}:
+                spans.add((start + 1, end - 1))
+    return tuple(sorted(spans))
+
+
+def _credential_material(text: str) -> bool:
+    if (":" not in text and "=" not in text) or not _MATERIAL_KEY_HINT.search(text):
+        return False
+    # Resolve complete quoted values first. The broader fallback expressions
+    # must not reinterpret a closing quote as a new credential. Binary search
+    # avoids quadratic work for documents containing many empty/masked fields.
+    # A proven empty query qualifies only its key, never a broad regex match
+    # spanning a fragment, source wrapper or a subsequent credential field.
+    parts = []
+    previous = 0
+    for query, _end, empty, qualified in _material_queries(text):
+        if empty and qualified:
+            start, end = query.span(2)
+            parts.extend((text[previous:start], "x" * (end - start)))
+            previous = end
+    if parts:
+        parts.append(text[previous:])
+        text = "".join(parts)
+    safe_fields: set[tuple[int, int]] = set()
+    for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
+        if "suffix" not in pattern.groupindex:
+            continue
+        for match in pattern.finditer(text):
+            if match["value"] not in {"", "***"} or not _complete_credential_value(
+                text, match.end(), start=match.start()
+            ):
+                return True
+            safe_fields.add(match.span())
+    ordered_fields = sorted(safe_fields)
+    for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
+        if "suffix" in pattern.groupindex:
+            continue
+        for match in pattern.finditer(text):
+            index = bisect_right(ordered_fields, (match.start(), len(text) + 1)) - 1
+            if index >= 0 and match.end() <= ordered_fields[index][1]:
+                continue
+            if match["value"] in {"", "***"} and _complete_credential_value(
+                text, match.end(), start=match.start()
+            ):
+                continue
+            return True
+    return False
+
+
+_QUERY_VALUE_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?")
+# Diagnostic replacement and material classification have distinct grammars.
+# A key-only iterator cannot consume another credential inside a wrapper tail.
+_QUERY_KEY_RE = re.compile(r"(?i)(^|[?&;])([^=?#&;\s]+)=")
+_QUERY_END_RE = re.compile(r"[&#\s]")
+_EMPTY_QUERY_VALUE_RE = re.compile(r"(?:(?P<quote>['\"])(?:\*\*\*|)(?P=quote)|\*\*\*)")
+_URI_CARRIER = re.compile(r"(?P<quote>['\"])[A-Za-z][A-Za-z0-9+.-]{0,31}:[^\s\"'<>]*$")
+_URI_SCHEME = re.compile(r"(?<![\w.+-])[A-Za-z][A-Za-z0-9+.-]{0,31}://")
+_SOURCE_BREAK = re.compile(r"[\s\"'<>]")
+
+
+def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, bool]]:
+    """Walk complete sensitive values without granting authority to their tails."""
+
+    cursor = 0
+    while (query := _QUERY_KEY_RE.search(text, cursor)) is not None:
+        cursor = query.end()
+        if not _query_key_is_sensitive(query[2]):
+            continue
+        start = cursor
+        # Assignment detectors allow leading whitespace. A URI-shaped prefix
+        # must not turn that same whitespace into proof of an empty value.
+        while start < len(text) and text[start].isspace():
+            start += 1
+        qualified = not query[1] or query.start() == 0
+        safe = _EMPTY_QUERY_VALUE_RE.match(text, start)
+        if not query[1] and safe is not None and safe["quote"]:
+            end = safe.end()
+            empty = complete_value(text, end)
+        else:
+            left = max(0, query.start() - 1024)
+            window = text[left : query.start()]
+            carrier = _URI_CARRIER.search(window)
+            ambiguous_carrier = False
+            if carrier is not None:
+                opening = left + carrier.start("quote")
+                if opening and text[opening - 1] in "\\\"'":
+                    carrier = None
+                    ambiguous_carrier = True
+            token_start = max((part.end() for part in _SOURCE_BREAK.finditer(window)), default=0)
+            qualified = (
+                qualified
+                or carrier is not None
+                or _URI_SCHEME.search(window, token_start) is not None
+            )
+            closing = text.find(carrier["quote"], start) if carrier is not None else -1
+            if closing == start and not _complete_credential_carrier(text, closing + 1):
+                # An opening query-value quote cannot also prove the carrier's
+                # end. Ambiguous nested quoting retains ordinary checks.
+                closing = -1
+            if closing >= 0 and text[closing - 1 : closing] == "\\":
+                closing = -1
+            # Bound the delimiter search before a proven source-string end;
+            # otherwise adjacent quoted URLs could rescan the entire suffix.
+            maximum = closing if closing >= 0 else len(text)
+            boundary = _QUERY_END_RE.search(text, start, maximum)
+            end = boundary.start() if boundary else maximum
+            closed = closing >= 0 and end == closing
+            empty = start == end or _EMPTY_QUERY_VALUE_RE.fullmatch(text, start, end) is not None
+            empty = empty and not ambiguous_carrier
+            if closed and not _complete_credential_carrier(text, end + 1):
+                empty = False
+            if (
+                end < len(text)
+                and text[end].isspace()
+                and not _complete_credential_value(text, end)
+            ):
+                empty = False
+        yield query, end, empty, qualified
+        cursor = max(cursor, end)
+
+
+def _query_has_material(text: str) -> bool:
+    """Classify complete values; diagnostic replacement may consume wrappers."""
+
+    return any(not empty for _query, _end, empty, _qualified in _material_queries(text))
+
+
 def has_sensitive_material(
     text: str,
     *,
@@ -239,16 +421,10 @@ def has_sensitive_material(
     return bool(
         redact_env_secret_values(prepared, values=values) != prepared
         or redact_url_userinfo_only(prepared) != prepared
-        or _redact_sensitive_query_values(credential) != credential
+        or _query_has_material(credential)
         or _BEARER_RE.search(prepared)
         or _JWT_RE.search(prepared)
-        or any(
-            # A canonical already-masked candidate contains no credential left.
-            # Token normalization alone is not evidence of a secret.
-            match["value"] != "***"
-            for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
-            for match in pattern.finditer(credential)
-        )
+        or _credential_material(credential)
     )
 
 
@@ -356,7 +532,7 @@ def _redact_sensitive_query_values(value: str) -> str:
             return match.group(0)
         return f"{prefix}{key}=***{suffix}"
 
-    return re.sub(r"(?i)(^|[?&;])([^=?#&;]+)=([^&#;\s]+)(#[^&;\s]*)?", replace, value)
+    return _QUERY_VALUE_RE.sub(replace, value)
 
 
 def redact_url_userinfo(value: str) -> str:

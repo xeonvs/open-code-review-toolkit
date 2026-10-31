@@ -8,7 +8,7 @@ import pytest
 from ocr_toolkit.context.dlp import ForbiddenMatcher
 from ocr_toolkit.diagrams.admission import admit_diagram
 from ocr_toolkit.diagrams.collector import CollectorSnapshot
-from ocr_toolkit.diagrams.contracts import Flowchart, parse_submission
+from ocr_toolkit.diagrams.contracts import Flowchart, ReferenceSourceInfo, parse_submission
 from ocr_toolkit.reporting.diagram import (
     diagram_mermaid,
     diagram_section,
@@ -25,7 +25,11 @@ def admitted(payload, *, source="line one\nline two\nline three\n", enabled=True
         CollectorSnapshot(1, 1000, "none", candidate),
         review_range=REVIEW_RANGE,
         output_calls=1,
-        read_source=lambda _path: source,
+        read_source=lambda _path: ReferenceSourceInfo(
+            source.count("\n") + int(not source.endswith("\n"))
+            if source and "\x00" not in source
+            else 0
+        ),
         forbidden_matcher=ForbiddenMatcher.compile(forbidden),
         dlp_enabled=enabled,
     )
@@ -158,7 +162,7 @@ def test_source_unavailability_and_timeout_only_omit_the_optional_channel() -> N
             forbidden_matcher=ForbiddenMatcher.compile(()),
             dlp_enabled=True,
         )
-        assert result.reason == "reference"
+        assert result.reason == "unavailable"
 
 
 def test_snapshot_state_native_count_and_range_admission_are_independent() -> None:
@@ -167,7 +171,7 @@ def test_snapshot_state_native_count_and_range_admission_are_independent() -> No
     options = dict(
         review_range=REVIEW_RANGE,
         output_calls=1,
-        read_source=lambda _path: "one\ntwo\nthree\n",
+        read_source=lambda _path: ReferenceSourceInfo(3),
         forbidden_matcher=ForbiddenMatcher.compile(()),
         dlp_enabled=True,
     )

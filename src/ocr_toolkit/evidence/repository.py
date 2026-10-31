@@ -20,6 +20,12 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.text_metadata import (
+    RepositoryTextMetadata,
+    TextMetadataError,
+    TextMetadataInvalid,
+    consume_text_metadata,
+)
 
 OBJECT_RECORD_RE = re.compile(
     rb"^(?P<mode>[0-7]{6}) (?P<type>blob|tree|commit) (?P<sha>[0-9a-f]{40})\t(?P<path>.*)$",
@@ -50,6 +56,14 @@ def _git_prefix(root: Path) -> list[str]:
 
 class RepositoryEvidenceError(ValueError):
     """Report an invalid ref, path, object type, or bounded Git read."""
+
+
+class RepositoryReadBudget(RepositoryEvidenceError):
+    """A closed byte budget prevented a complete immutable object read."""
+
+
+class RepositoryTextInvalid(RepositoryEvidenceError):
+    """An immutable blob is not valid source text."""
 
 
 class ShallowAncestryUnavailable(RepositoryEvidenceError):
@@ -483,11 +497,42 @@ class GitRepositoryReader:
             size = int(size_result.stdout.strip()) if size_result.returncode == 0 else -1
         except ValueError as exc:
             raise RepositoryEvidenceError("Git returned an invalid object size") from exc
-        if size < 0 or size > self.max_file_bytes:
-            raise RepositoryEvidenceError(
+        if size < 0:
+            raise RepositoryEvidenceError("Git returned an invalid object size")
+        if size > self.max_file_bytes:
+            raise RepositoryReadBudget(
                 f"repository blob exceeds {self.max_file_bytes} bytes: {entry.path}"
             )
         return size
+
+    def read_text_metadata(
+        self, entry: RepositoryObject, *, max_bytes: int
+    ) -> RepositoryTextMetadata:
+        """Consume an exact regular blob with bounded memory and strict text checks.
+
+        The caller obtains entry from object_at at its immutable reviewed head.
+        The whole blob must pass, including bytes after the requested source span.
+        """
+
+        if type(max_bytes) is not int or not 0 <= max_bytes <= MAX_BATCH_BLOB_BYTES:
+            raise RepositoryEvidenceError("invalid text metadata byte budget")
+        if re.fullmatch(r"[0-9a-f]{40}", entry.object_sha) is None:
+            raise RepositoryEvidenceError("repository blob identity is invalid")
+        size = self.bounded_regular_blob_size(entry)
+        if size > max_bytes:
+            raise RepositoryReadBudget("repository text exceeds remaining byte budget")
+        try:
+            return consume_text_metadata(
+                [*_git_prefix(self.root), "cat-file", "blob", entry.object_sha],
+                environment=_git_environment(),
+                object_sha=entry.object_sha,
+                size=size,
+                timeout=self._timeout(30),
+            )
+        except TextMetadataInvalid as exc:
+            raise RepositoryTextInvalid(str(exc)) from exc
+        except TextMetadataError as exc:
+            raise RepositoryEvidenceError(str(exc)) from exc
 
     @staticmethod
     def _batch_request(entries: tuple[RepositoryObject, ...]) -> bytes:
