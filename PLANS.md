@@ -25,13 +25,13 @@ Examine both existing authenticated corpora completely by causally justified gro
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Full private causal disposition of all 3790 retained observations, including the 3767 previously unadjudicated entries; no unexplained remainder | WQ-02, WQ-06 | pending |
-| REQ-002 | Correct confirmed FP/FN causes across code, configuration, documentation, logs and ordinary text without corpus-specific exemptions | WQ-03, WQ-05, WQ-06 | pending |
-| REQ-003 | Qualify Mistune/regex/emoji with bounded work, supported-Python binary installation, dependency identity and resource evidence | WQ-03, WQ-05 | pending |
-| REQ-004 | Improve existing private audit reports; preserve exact annotations and closed persisted formats; no new CLI command or CI stage | WQ-02, WQ-03 | pending |
+| REQ-001 | Full private causal disposition of all 3790 retained observations, including the 3767 previously unadjudicated entries; no unexplained remainder | WQ-02, WQ-06 | done |
+| REQ-002 | Correct confirmed FP/FN causes across code, configuration, documentation, logs and ordinary text without corpus-specific exemptions | WQ-03, WQ-05, WQ-06 | done |
+| REQ-003 | Qualify Mistune/regex/emoji with bounded work, supported-Python binary installation, dependency identity and resource evidence | WQ-03, WQ-05 | done |
+| REQ-004 | Improve existing private audit reports; preserve exact annotations and closed persisted formats; no new CLI command or CI stage | WQ-02, WQ-03 | done |
 | REQ-005 | Independently bounded immutable source metadata validates diagram references above the evidence-size limit, at admission and publication | WQ-04, WQ-05 | done |
 | REQ-006 | Optional diagram/MCP/rendering failure never changes findings, coverage or approval eligibility; exact admitted Mermaid accompanies feature PR | WQ-04, WQ-05, WQ-06 | in_progress |
-| REQ-007 | Meaningful branch/property/boundary coverage, one aggregate Security scan, threat-model reconciliation and real own-tool acceptance | WQ-05, WQ-06 | pending |
+| REQ-007 | Meaningful branch/property/boundary coverage, one aggregate Security scan, threat-model reconciliation and real own-tool acceptance | WQ-05, WQ-06 | done |
 | REQ-008 | Private-safe source, immutable inputs, bounded acquisition and owned raw-source cleanup with originals unchanged | WQ-02, WQ-06, WQ-08 | pending |
 | REQ-009 | Signed draft-plan PR, local reviewed development, protected feature/release delivery and plan archive in the release PR | WQ-01, WQ-07, WQ-08 | in_progress |
 | REQ-010 | Select a readable flowchart orientation automatically in the pure renderer; preserve sequence semantics and MCP/receipt grammar | WQ-04, WQ-05, WQ-06 | done |
@@ -70,11 +70,11 @@ Both original repeat audits completed with unchanged decisions relative to the r
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009 | Materialize/review plan, signed commit/push, draft PR and issue refinements; draft PR #287 opened from signed plan commit 1f99353 | done |
 | WQ-02 | REQ-001, REQ-004, REQ-008 | Source-bound baseline causal ledger reconciles all 3790 entries; existing audit-report improvements remain in WQ-03/WQ-05 | done |
-| WQ-03 | REQ-002, REQ-003, REQ-004 | After WQ-02: implement representation-aware DLP, confirmed regressions, existing audit report improvements, dependencies and scanner identity | in_progress |
+| WQ-03 | REQ-002, REQ-003, REQ-004 | After WQ-02: implement representation-aware DLP, confirmed regressions, existing audit report improvements, dependencies and scanner identity | done |
 | WQ-04 | REQ-005, REQ-006, REQ-010 | Shared bounded streaming source metadata, closed diagnoses and pure LR/TB selection implemented; focused real-Git/result/receipt/publication tests pass | done |
-| WQ-05 | REQ-002, REQ-003, REQ-005, REQ-006, REQ-007, REQ-010 | After WQ-03/WQ-04: integrate callers, fuzz/inverse tests, >=90% affected component coverage and installed/resource qualification | in_progress |
-| WQ-06 | REQ-001, REQ-002, REQ-006, REQ-007, REQ-008 | After WQ-05: aggregate self-review, one Security scan, threat-model review, actual own-tool review and repeat corpora/cleanup | in_progress |
-| WQ-07 | REQ-009 | After WQ-06: final quality/docs/secret/dependency gates, exact diagram in feature PR, protected CI/merge and development publication | pending |
+| WQ-05 | REQ-002, REQ-003, REQ-005, REQ-006, REQ-007, REQ-010 | After WQ-03/WQ-04: integrate callers, fuzz/inverse tests, >=90% affected component coverage and installed/resource qualification | done |
+| WQ-06 | REQ-001, REQ-002, REQ-006, REQ-007, REQ-008 | After WQ-05: aggregate self-review, one Security scan, threat-model review, actual own-tool review and repeat corpora/cleanup | done |
+| WQ-07 | REQ-009 | Final local gates passed; attach exact diagram, push signed feature, verify protected CI/merge and development publication | in_progress |
 | WQ-08 | REQ-008, REQ-009 | After WQ-07: signed release/v0.14.4 PR with archival/reset; stable publication, external closure and cleanup verification | pending |
 
 ### Locked Decisions
@@ -105,111 +105,66 @@ Both original repeat audits completed with unchanged decisions relative to the r
 
 ### Latest Validation Results
 
-The aggregate Security diff scan of immutable `17254d2..185d7db` is complete:
-30 source/workflow owners reviewed, with a fresh independent architecture pass.
-Two medium credential-admission findings and one low PII finding were reproduced
-through the frozen installed production admission/proof/publication boundary.
-The report remains private. This consumes the one aggregate scan; later fixes
-use focused semantic review and tests, not another scan.
+Final runtime is `bb9f2fb`; the strengthened field/reason contracts in `d464c2f`
+pass the complete quality gate: 4223 tests, 47 expected skips, 357 subtests and
+89.17% total branch-aware coverage. Every individual floor passes. Shared
+material classification is 97%, lexical completion 94%, credentials/admission
+98%, and audit owners meet their independent 90% floors. Strict typing covers
+167 runtime files. Extended 1000-example profiles used independent seeds;
+composed properties cover encoding order, quote runs, comments, multiline
+continuations, Unicode identifiers and production publication. Minimized
+counterexamples remain synthetic regressions. Coverage and example counts do
+not establish universal precision or recall.
 
-The corrections remove the unqualified permission-map waiver and its source
-fallback, preserve whole query-value boundaries, neutralize only proven-safe
-query keys, keep adjacent fields/fragments independent, and prevent leading
-whitespace or ambiguous source quoting from proving absence. Canonical masks
-remain literal during Markdown interpretation. The numerical-text relaxation
-was withdrawn: executable operator roles require exact source proof, while
-unqualified inputs keep conservative phone checks. No repository, language,
-country or concrete-value exception was added.
+All 3790 original retained observations have source-bound causal dispositions:
+1264 confirmed benign, 1921 expected protection and 605 conservative ambiguity.
+Revision history preserves corrected initial verdicts. Final complete replays
+cover the same authenticated 121583 and 19050 units as their baselines. Official
+comparisons have zero benign rejection, protection loss, unexplained admission,
+unreviewed change, changed unqualified reason or untriaged observation. The
+1244/20 new admissions and 39/3 new rejections were individually reconciled;
+fewer detections alone are not acceptance. A separate current-code diagnostic
+covered 130139 units and reported 3087 role observations, including deliberate
+synthetic fixtures and conservative policy restrictions. Its top groups and
+changed-source delta were inspected; it is not a zero-finding or fully
+adjudicated accuracy claim and does not replace the fixed-population comparison.
 
-Current focused DLP/material/source and complete property suites pass 990 tests
-and eight subtests, with affected measured owners at 93–100% branch-aware
-coverage. Strict typing passes all 166 runtime files. Two independent seeds of
-the 1000-example DLP profile each pass 400 checks on the corrected source. The per-module
-90% floors now include the shared material classifier in both local and hosted
-gates. The final full quality gate still has to qualify the corrected commit;
-an earlier complete run exposed the PII regression despite 4068 passing tests,
-so it was not accepted as release evidence.
+The installed final toolkit replay measured 107.70 seconds wall, 106.42 seconds
+user CPU and about 153 MiB peak RSS, versus installed 0.14.3's 125.97/122.26
+seconds and about 153 MiB. A real Python 3.12 audit worker profile has 499
+samples and zero sampling errors; normalization/material checks dominate.
+The short profile is supporting evidence, not a throughput guarantee.
 
-Original corpus populations remain authenticated and comparable. The full
-`185d7db` scans covered 121583 and 19050 units, but preceded these corrections
-and are not final acceptance. Source-bound dispositions retain explicit revision
-history; no label may change merely to make a scanner pass. Repeat complete
-passing/rejected populations after corrections and review, explaining new
-admissions, rejections, detector changes and role authority. The toolkit probe
-measured about 115 seconds wall/111 seconds CPU and 164 MiB peak RSS, versus the
-separately installed 0.14.3 baseline's 126/122 seconds and 153 MiB. These remain
-intermediate resource measurements until final replay.
+One aggregate Security scan of immutable `17254d2..185d7db` reviewed 30 owners
+and validated three findings. All were corrected and their installed production
+reproducers still reject unsafe input. No aggregate scan was repeated. Actual
+own-tool runs `17254d2..58b0bbc` and `17254d2..85a355e` completed 56/56 and 59/59
+selected items with zero failed/waived coverage, no budget warnings and admitted
+TB flowcharts. Their six findings were inspected, including the two privately
+retained publication-filtered findings, and corrected through focused tests and
+independent semantic review. The only failed auxiliary reads requested beyond
+EOF and were recovered by complete reads. Both original model diagrams re-admit
+through current DLP and real immutable Git metadata and exactly match delivered
+Mermaid. Aggregate scans used: 1/1; successful own-tool runs used: 2/2.
 
-The diagram source/layout slice remains locally committed as `316c53d`.
-Its focused real-Git/result/receipt/publication suite passed 308 tests with 35
-skips; streaming/layout owners reached full branch coverage and the source
-adapter reached 99%. Earlier clean Python 3.15 wheel installation, real MCP
-round-trip and installed audit/cleanup probes passed on the pre-correction
-artifact. Rebuild and repeat installed qualification for the corrected commit.
-The first actual own-tool review of `17254d2..58b0bbc` completed 56/56 selected
-items with no failed or waived coverage and an admitted TB flowchart. It found
-three defects: encoded query keys after semicolons, ambiguous quote runs and a
-malformed-HTML parser assertion on Python 3.12. All three were reproduced; the
-HTML finding was retained privately despite its conservative publication filter.
-The only failed auxiliary read requested lines beyond EOF and was preceded and
-followed by complete reads of that file, so it left no material source gap.
-No budget warning occurred. This consumes own-tool run 1/2; its findings must be
-fixed before final acceptance. Focused production-boundary regressions pass on
-Python 3.12 and the current interpreter; two independent 1000-example DLP
-profiles pass 210 checks each. Correct mask controls caught and prevented an
-intermediate false-positive regression. Seven tests that used the real checkout
-for configuration-failure checks were isolated into temporary directories after
-colliding with the live review lock; their 246-test owner suite passes. The full
-gate must run on the corrected frozen source.
+Clean Python 3.15 wheel and sdist installations, hash-locked binary runtime
+installation, pip checks and real installed MCP probes pass outside checkout;
+the final Python 3.12 installed wheel/MCP probe passes. Installed audit lifecycle
+and raw cleanup pass. The original diagram source/layout real-Git, admission,
+receipt and publication slice passed 308 tests with 35 skips; final full-gate
+coverage includes those unchanged consumers. Optional omission stays independent
+of review outcome. Public contracts, threat model, decision flow, owner routes,
+evidence matrix and maintained fuzzing backlog are synchronized. Mixed prose
+without a proved credential boundary remains explicitly conservative, not a
+claim of actual secret material or a repository-specific exception.
 
-Full-population `1a5b1f0` replay completed, then causal review exposed two
-encoded empty-field false positives and four ordinary quoted-path mask probes.
-The correction preserves original carrier boundaries and the sensitive key in
-a canonical no-material view; it does not remove a field from subsequent
-decoding or continuation checks. Focused independent review reproduced and
-closed multiline/container continuations. Structural, inverse and raw/encoded
-equivalence properties cover these boundaries, with a shared 4096-field budget.
-The current 3790-observation retained replay has zero oracle mismatches; this
-is a narrow correction gate, not the final full passing-population audit.
-Exact source inspection also corrected four initial masked-URI/reference labels,
-preserving every previous verdict and rationale in private revision history.
-
-The frozen `1a5b1f0` quality gate passed 4130 tests and 357 subtests at 89.08%
-total branch-aware coverage, with all individual floors satisfied. It precedes
-the final carrier correction and must be repeated for that correction. Clean
-installed Python 3.12/3.15 checks and actual worker profiling passed at that
-checkpoint. The complete toolkit audit measured 107 seconds wall/106 seconds
-user CPU and 155 MiB peak RSS, compared with the installed 0.14.3 baseline's
-126/122 seconds and 153 MiB. A 999-sample, zero-error Python 3.12 worker profile
-identified normalization and material checks as the main costs. Final frozen
-artifact/corpus/resource and second-model acceptance remain required.
-
-The second actual own-tool review of immutable `17254d2..85a355e` completed
-59/59 selected items with zero failed/waived coverage, no budget warnings and
-another admitted TB flowchart. It found three credential-boundary defects:
-multiline empty/reference values lost their sensitive key, ambiguous URI quote
-runs manufactured absence proof, and comments/newlines hid adjacent material.
-All raw findings were inspected, including one conservatively filtered from
-publication. Own-tool runs used: 2/2. Corrections retain keys and original
-boundaries, add no artificial separators and share a pure 4096-code-point
-completion owner. Comments are trivia rather than termination. Focused tests
-exercise both admission modes and production publication; 311 current contracts
-pass, and two independent 1000-example profiles each passed 296 checks before
-the final Unicode-field boundary extension. The retained 3790-observation replay
-has no benign rejection or protection loss. This does not replace the final
-complete passing-population replay or frozen quality gate.
-
-The frozen `bb9f2fb` run exercised 4221 tests and 357 subtests at 89.17%
-coverage but failed two older reason-attribution assertions that treated a
-newline as sufficient reference-field completion. This checkpoint is not a
-passed gate. The corrected tests retain the ambiguous inputs as conservative
-rejections and use explicit following fields to prove independent email and
-encoded configured-secret checks; their 196-test owner suite passes. This
-precision limit is documented rather than hidden with a text/filename waiver.
-Re-run the complete gate on these final contracts. Clean installed wheel/sdist
-Python 3.15 MCP probes and the Python 3.12 wheel probe pass; installed audit raw
-cleanup passes. Both actual model diagrams re-admit with current production
-DLP and immutable source readers and match their delivered Mermaid exactly.
+Owned Git source snapshots were removed through the official cleanup command;
+metadata-only inputs were revalidated without source copying. Source-free
+private state remains private. The obsolete repository dist and unused
+project-owned qualification image were removed. Remaining temporary environments,
+raw diagnostic spools and obsolete hosted storage belong to final delivery
+cleanup. Only the signed plan commit is remote; feature CI/merge, development
+publication and the stable release handoff remain pending.
 
 ### Risks And Recovery
 
@@ -217,17 +172,13 @@ Lossy parsers can hide material; always retain independent original checks and u
 
 ### Resume Point
 
-Commit the second own-tool corrections separately after semantic review,
-retaining `185d7db` as the Security scan anchor and both immutable model-review
-heads. Rebuild clean installed artifacts, repeat complete corpus/resource/annotation
-checks and run the final frozen-source gate. No further model run is planned;
-remaining corrections use focused production-boundary tests and semantic review.
-Keep the exact admitted Mermaid for the feature PR. Only the signed
-plan commit has been pushed to draft PR #287. Preserve authenticated private state
-and owned raw copies until their final replay, then perform all source/build/log
-and task-owned Docker/GitHub cleanup. Aggregate Security scans used: 1/1, complete;
-successful own-tool runs used: 2/2. No release acceptance or feature push is claimed.
-
+Commit the final validation/status documentation after scoped review and secret
+checks; push the completed signed feature to PR #287 with the exact admitted
+second-review Mermaid. Wait for protected checks, merge and verify development
+publication. Prepare the signed release/v0.14.4 PR, archive/reset this complete
+plan there, then independently verify stable external delivery and cleanup.
+No further OCR or aggregate Security run is required for unchanged behavior.
+No stable release or external publication is claimed complete.
 
 ### Plan Fidelity Check
 
