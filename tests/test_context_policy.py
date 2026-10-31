@@ -529,7 +529,9 @@ def test_proven_technical_numbers_and_no_value_assignments_are_admitted(value: s
         ("login_password: \"{{ 'synthetic-secret-value' }}\"", "secret"),
         ('login_password: "{{ service_password }}" # extra', "secret"),
         ('login_password: "{{ service_password }}"\ntoken=synthetic-secret-value', "secret"),
-        ('login_password: "{{ service_password }}"\ncontact@example.invalid', "pii"),
+        ('login_password: "{{ service_password }}"\ncontact: contact@example.invalid', "pii"),
+        # A bare next line cannot establish a declarative field boundary.
+        ('login_password: "{{ service_password }}"\ncontact@example.invalid', "secret"),
     ],
 )
 def test_technical_number_and_reference_exceptions_preserve_other_checks(
@@ -555,10 +557,19 @@ def test_no_value_reference_does_not_mask_displayed_environment_secret(
 ) -> None:
     sentinel = "opaque" + "-sentinel-123"
     monkeypatch.setenv("OCR_LLM_TOKEN", sentinel)
-    value = 'login_password: "{{ service_password }}"\n' + sentinel.replace("-", "&#45;")
+    value = 'login_password: "{{ service_password }}"\nnote: ' + sentinel.replace("-", "&#45;")
     checked = check_text(value, budgets=TextBudgets(2000, 8000, 30), publication=True)
     assert checked.reason == "secret"
     assert checked.detector in {"decoded", "displayed", "source"}
+
+
+def test_mixed_prose_after_reference_keeps_a_conservative_boundary() -> None:
+    budgets = TextBudgets(2000, 8000, 30)
+    prefix = 'login_password: "{{ service_password }}"\n'
+    assert check_text(prefix + "note: ordinary text", budgets=budgets, publication=True).admitted
+    for suffix in ("ordinary text", "contact@example.invalid", '+ "synthetic-material"'):
+        checked = check_text(prefix + suffix, budgets=budgets, publication=True)
+        assert not checked.admitted and checked.reason == "secret"
 
 
 def test_publication_retains_technical_code_fields_and_pure_reference() -> None:

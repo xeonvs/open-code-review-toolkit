@@ -293,6 +293,12 @@ field may establish a boundary; incomplete comments or an exhausted tail budget
 cannot. No-material projections preserve sensitive keys and never invent a
 separator. This is bounded lexical evidence, not execution or general expression
 evaluation. Source-format ambiguity in active prose remains conservative.
+A newline followed by unstructured prose does not qualify a declarative
+reference field. Rendering may also lose field/comment boundaries in a larger
+unit. Such mixed inputs can retain a conservative credential rejection even
+when an isolated field is empty; this is a precision limit, not evidence that
+the scanner found an actual credential. Explicit independent fields still
+receive their own contact, configured-secret and forbidden-origin checks.
 Static emoji data qualifies only exact standard presentation spans. An emoji
 elsewhere does not authorize an unmatched joiner, bidi control or variation
 selector. Internationalized and quoted email-shaped addresses remain protected

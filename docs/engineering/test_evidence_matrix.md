@@ -31,6 +31,9 @@ were corrected without dropping ambiguous-identifier sidecar coverage. Current
 gate, installed/resource and model/diagram acceptance results belong to the
 active plan; line coverage alone is not semantic evidence. Strictly private
 validation details are absent.
+Explicit following-field controls verify independent email and encoded configured
+secrets after a symbolic reference. Bare mixed-prose continuations remain
+conservative and are tested separately; reason priority is not an accuracy metric.
 
 ## v0.14.3 source interpretation and private audit evidence
 

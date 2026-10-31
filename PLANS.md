@@ -199,6 +199,18 @@ the final Unicode-field boundary extension. The retained 3790-observation replay
 has no benign rejection or protection loss. This does not replace the final
 complete passing-population replay or frozen quality gate.
 
+The frozen `bb9f2fb` run exercised 4221 tests and 357 subtests at 89.17%
+coverage but failed two older reason-attribution assertions that treated a
+newline as sufficient reference-field completion. This checkpoint is not a
+passed gate. The corrected tests retain the ambiguous inputs as conservative
+rejections and use explicit following fields to prove independent email and
+encoded configured-secret checks; their 196-test owner suite passes. This
+precision limit is documented rather than hidden with a text/filename waiver.
+Re-run the complete gate on these final contracts. Clean installed wheel/sdist
+Python 3.15 MCP probes and the Python 3.12 wheel probe pass; installed audit raw
+cleanup passes. Both actual model diagrams re-admit with current production
+DLP and immutable source readers and match their delivered Mermaid exactly.
+
 ### Risks And Recovery
 
 Lossy parsers can hide material; always retain independent original checks and use exact positive spans, with conservative rejection on incomplete interpretation. Regex timeouts do not bound unrelated parser operations; construction-time token/nesting/derived-size budgets and adversarial performance tests remain mandatory. New dependency versions must invalidate scanner identity and pass clean installed qualification. Full causal reconciliation may expose additional defects; add minimized cases within these requirements rather than corpus-specific exemptions. Private source availability or fingerprints can invalidate replay: stop that comparison and recover exact authorized inputs, never silently substitute a different corpus. Cancellation must kill/reap task-owned processes and retain explicit snapshot-cleanup ownership. Do not change published 0.14.3 artifacts/tags or force public feature history. Local unpushed fixups may amend after review.
