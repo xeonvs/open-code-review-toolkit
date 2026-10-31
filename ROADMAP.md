@@ -86,11 +86,17 @@ flowchart LR
   inactive planning in BL-025.
 
 - OCR compatibility and the established common evidence model converge at compact-bootstrap/evidence-MCP integration.
-- The v0.14.0 candidate adds independently admitted immutable range identity,
+- The v0.14.0 release introduced independently admitted immutable range identity,
   optional typed flow/sequence summaries in the existing OCR loop, a bounded
   Hypothesis campaign and Python 3.15. The release PR archives repository work;
   protected publication and external reconciliation follow the immutable
   release receipt.
+- The v0.14.4 source tree strengthens shared DLP across bounded text
+  representations, preserves explicit source/sink authority, and extends the
+  local private audit's grouping and resource evidence. Optional diagram source
+  validation uses independent bounded Git metadata, while pure rendering selects
+  flowchart orientation. The release PR closes repository work; immutable
+  publication and independent external readback remain separate delivery steps.
 - M3 preserves BL-011's historical characterization. M7 supersedes that runtime path with governed federation; the old direct composition and adapter execution contracts are not current fallback paths.
 - M2 is established through independently verified stable delivery of its framework plugins, template rules, scoped evidence, deltas, and built-in MCP projection. Conditional future ecosystem packs remain in M8 and do not reopen M2.
 - M4 is established through independently verified v0.6.0 artifacts and later protected-target identity improvements. M5 consumes but does not reopen its policy boundary.

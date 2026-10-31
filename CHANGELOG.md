@@ -1,3 +1,15 @@
+## 0.14.4 - 2026-10-31
+
+### 🚀 Features
+
+- Flowcharts automatically choose a horizontal or vertical layout from their topology and label widths; sequence diagrams keep their standard orientation. ([#287](https://github.com/xeonvs/open-code-review-toolkit/issues/287))
+
+### 🐛 Bug Fixes
+
+- Diagram source references now validate complete immutable UTF-8 blobs independently of the smaller evidence-reader limit, with bounded streaming and explicit omission reasons in local and GitLab technical details. ([#285](https://github.com/xeonvs/open-code-review-toolkit/issues/285))
+- Correct representation-sensitive DLP false positives for complete technical tokens, empty/masked credentials and symbolic references, while protecting internationalized email, formatted contacts and complete credential values across query separators and quoted carriers. Handle malformed HTML without aborting review. Use bounded model-free Markdown/Unicode interpretation, preserve independent original-material checks, and improve private audit grouping and dependency-bound scanner identity. ([#286](https://github.com/xeonvs/open-code-review-toolkit/issues/286))
+
+
 ## 0.14.3 - 2026-10-30
 
 ### 🚀 Features
