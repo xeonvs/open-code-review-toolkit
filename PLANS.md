@@ -30,7 +30,7 @@ reviews, repeated corpus checks, publication and cleanup.
 
 | Requirement | Requested outcome | Work | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | pending |
+| REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | in_progress |
 | REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | pending |
 | REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | pending |
 | REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | pending |
@@ -84,7 +84,8 @@ audits into GitLab or hosted CI. Current runtime support windows remain intact.
 - Current owners: AGENTS.md; project principles; development/release guides;
   security, local, diagram, context, audit and compatibility contracts; decision
   flow and test evidence matrix. Instruction contract version 3 is valid.
-- compatibility/ocr-support.json recommends 1.13.3; upstream adjacent stable
+- The plan-entry recommendation was 1.13.3; local qualified pins now select
+  1.13.5. The adjacent upstream stable
   releases: https://github.com/alibaba/open-code-review/releases/tag/v1.13.4 and
   https://github.com/alibaba/open-code-review/releases/tag/v1.13.5.
 - Source review of both adjacent upstream diffs and repository planning probes.
@@ -130,9 +131,9 @@ successful parsing alone cannot authorize a DLP exemption.
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
 | WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners, removed unreachable execution, froze predecessor epoch; both candidates passed Linux/Darwin base and actual consumed handoffs; promoted pins/capabilities locally and restored weekly workflow | done |
-| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Freeze replay baseline, implement strict datetime fix, inspect causal groups and retain focused library comparisons/synthetic regressions | pending |
+| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime fix and diverse positive/negative properties implemented; retained baseline ledger/state confirmed present; causal-group classification, supplemental-library comparisons and complete replay remain | in_progress |
 | WQ-04 | REQ-002, REQ-003 | Implement shared bounded excerpt acquisition/proof and closed audit diagnoses across real callers | pending |
-| WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Integrate handoffs, improve coverage/properties, installed checks and synchronize contracts/routes/docs | pending |
+| WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | New capability/datetime owners have measured 100% coverage and individual 90% gates; remaining handoffs, floors, installed checks and contract/docs reconciliation follow implementation | in_progress |
 | WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, one Security scan/threat-model reconciliation, actual native review/diagram, scoped fixes and complete corpus/resource replays | pending |
 | WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
 | WQ-08 | REQ-010, REQ-011 | Signed release PR with checked plan archive/reset, stable/external receipt readback, issue/site/main reconciliation and cleanup | pending |
@@ -309,6 +310,26 @@ error. The 33 focused malformed-list/current-pin checks pass. Review preserved
 range/source/selection checks, optional-output degradation, historical evidence
 and provider authority; only exact proven handoffs gain capability admission.
 
+Signed local commit febab52 contains the consumed handoffs and OCR promotion.
+The next DLP slice recognizes complete bounded calendar timestamps around the
+whole phone candidate without a keyword whitelist. It validates calendar/clock
+and offsets, keeps explicit contact priority, rejects continued/ambiguous bounded
+lookahead, and leaves original/derived secret and PII checks independent. Diverse
+properties found a Unicode decimal-domain mismatch; normalization now covers all
+decimal digits while preserving source-position containment. Regressions also
+cover stdlib 24:00 normalization and offset-minute overflow. A generator oracle
+was corrected because additional fractional digits can form another valid
+timestamp, rather than a malformed token.
+The final scoped DLP/audit/context/property suite passes 1197 tests. Datetime
+tests pass 72 checks on Python 3.12.9, 3.14.0 and 3.15.0; two independent extended
+seeds pass all five properties at 1000 examples each. The new module has 100%
+measured statement/branch coverage. Both new runtime owners now have explicit
+90% local/hosted floors; 44 workflow/quality contracts pass. Format/lint, runtime
+types and public-content checks pass. The audit's installed-source identity
+automatically includes the new owner. Prior authenticated ledger/state remain
+retained outside Git; corpus replays, resource comparisons and remaining causal
+groups/library conclusions have not been completed or reclassified as passes.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
@@ -325,12 +346,13 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-03: after the reviewed capability/promotion slice is committed locally, freeze
-the authenticated replay baseline and implement complete bounded datetime
-interpretation, with explicit contact and adjacent sensitive-value negatives.
-Then WQ-04 streaming immutable excerpt proof and closed source-free audit
-diagnoses. Preserve the completed qualification outputs; repeat only affected
-checks. Installed/new-owner coverage and hosted proof remain explicitly pending.
+WQ-04: after the reviewed datetime slice is committed locally, implement bounded
+streaming immutable excerpt proof by extending the existing Git text reader;
+integrate comment/diagram/audit consumers and closed source-free diagnoses.
+Then finish WQ-03's causal groups and retained supplemental-library comparisons
+with actual replay evidence. Preserve completed qualification/property outputs;
+repeat only affected checks. Remaining floors, installed/native acceptance,
+one Security scan, hosted workflow and full release/cleanup remain mandatory.
 No further feature push occurs until final feature delivery.
 
 ### Plan Fidelity Check

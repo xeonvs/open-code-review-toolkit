@@ -391,6 +391,13 @@ Every top-level test module is classified below. A module can contain more than 
 
 ## v0.14.5 adjacent OCR qualification
 
+Complete calendar interpretation is covered by `test_dlp_datetimes.py` and the
+matching bounded property family: valid/invalid clocks and offsets, continued
+tokens, leap days, Unicode decimal scripts, encoded display views, contact intent
+and independent neighboring sensitive material. Extended independent seeds
+exercise 1000 examples per property; measured module coverage is not a substitute
+for the causal corpus replay and protection-loss classification.
+
 | Boundary | Evidence | Claim limit |
 | --- | --- | --- |
 | Live and frozen consumed contracts | Immutable evidence through 1.13.4 remains independently readable; 1.13.5 measures omitted/zero and exact tool limits against real rounds and native manifest fields; verified Linux amd64 and Darwin arm64 base suites pass | Controlled model peer, not configured-model acceptance |

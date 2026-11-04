@@ -228,6 +228,14 @@ Unicode, configured secret values, credential literals, contacts and forbidden
 source text. Configured values are checked before whitespace/NFC normalization
 as well as afterwards. An exact code match does not exempt sensitive material.
 
+Numeric interpretation recognizes a complete bounded calendar timestamp around
+the entire phone candidate, including its clock, optional fractional seconds
+and timezone. It validates calendar and offset components, rejects continued or
+malformed tokens, and preserves explicit contact priority. Unicode decimal digits
+have the same calendar meaning as ASCII digits; no surrounding keyword, filename
+or source proof grants an exception. Other contacts, credentials and configured
+values in the original and derived material remain independently checked.
+
 For an exact immutable-source excerpt, bounded full-source Python syntax can
 identify non-value credential names in declarations and reference expressions,
 including `token = "".join(parts)`. Filenames do not authorize this interpretation.
