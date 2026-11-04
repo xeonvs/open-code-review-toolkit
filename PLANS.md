@@ -396,6 +396,14 @@ replays use explicit curated text selections and metadata-only original-file
 verification, with no source copies. Their source-free comparisons and resource
 results remain private; final post-review replay and cleanup are still required.
 
+Additional approval-adapter tests exercise malformed MR/diff/author/approval JSON
+through a validated current receipt, preserve the previous-review decision, and
+assert no approval write. Post-write author changes cannot become a success or
+trigger another write. All 20 focused tests pass; the non-object JSON property
+also passes independent 1000-example seeds. Appending these checks to the unchanged
+runtime measurement raises posting to 83.25% and total to 89.48%; the >=87%
+posting target and threshold changes remain pending.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
