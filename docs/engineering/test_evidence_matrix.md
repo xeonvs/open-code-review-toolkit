@@ -389,6 +389,17 @@ Every top-level test module is classified below. A module can contain more than 
 | Serialized comment repair and failure arguments | Checksum-verified OCR 1.11.4 and 1.11.5 use a local deterministic gateway; native, serialized and repaired batches preserve fields and anchors, suspect batches fail with original arguments in private failure data | Binary behavior and field preservation, not model judgment |
 | Forward-only suite and historical evidence | Complete real no-LLM runs before/after refactoring yield identical JSON contracts; frozen promotion-baseline and historical-independence tests reject missing proof before writes | Historical readback does not imply supported execution of old binaries |
 
+## v0.14.5 adjacent OCR qualification
+
+| Boundary | Evidence | Claim limit |
+| --- | --- | --- |
+| Live and frozen consumed contracts | Immutable evidence through 1.13.4 remains independently readable; 1.13.5 measures omitted/zero and exact tool limits against real rounds and native manifest fields; verified Linux amd64 and Darwin arm64 base suites pass | Controlled model peer, not configured-model acceptance |
+| Optional native handoffs | `test_native.py`, `test_native_context.py`, `test_gitlinks.py` and federation `test_ocr_qualification.py` passed 111 checks per adjacent Darwin binary with platform-specific official digests; pure capability gates reject unseen versions | Real OCR, MCP, filesystem, Git and toolkit consumers; no paid model or live forge |
+| Diff recovery, paths and anchors | `test_native_paths.py` checks missing/mixed/all-found reads on both patches; 1.13.5 additionally exercises delimiter paths, rename/copy output paths and new-side blank-line anchors | Actual Git and OCR; copied destinations may be selected as new files; no claim of upstream copy-header classification |
+
+Hosted scheduled-workflow execution, clean installed toolkit qualification and
+the admitted actual-model diagram are separate final release gates.
+
 ## Shared reporting and local output
 
 | Boundary | Owner and entry point | Evidence | Claim limit |

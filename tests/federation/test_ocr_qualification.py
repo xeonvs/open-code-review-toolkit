@@ -32,19 +32,19 @@ from ocr_toolkit.evidence.review_context import (
 from ocr_toolkit.evidence.store import EvidenceStore
 from ocr_toolkit.federation import parse_registry, start_gateway
 from ocr_toolkit.mcp_config import MCPCapability
-from ocr_toolkit.preflight import validate_ocr_binary
 from tests.test_ocr_compat import load_script
 
 
-def test_checksum_verified_ocr_reads_mr_intent_before_federated_tracker(tmp_path: Path) -> None:
+def test_checksum_verified_ocr_reads_mr_intent_before_federated_tracker(
+    tmp_path: Path, qualified_native_ocr
+) -> None:
     """Prove real OCR routing with a deterministic peer, not natural model selection."""
-    binary_name = os.environ.get("OCR_FEDERATION_QUALIFY_BINARY")
+    binary_name, _version = qualified_native_ocr("OCR_FEDERATION_QUALIFY_BINARY")
     digest = os.environ.get("OCR_FEDERATION_QUALIFY_SHA256")
     if not binary_name or not digest:
         pytest.skip("external OCR binary qualification requires its verified path and SHA-256")
     binary = Path(binary_name)
     assert hashlib.sha256(binary.read_bytes()).hexdigest() == digest
-    assert validate_ocr_binary(executable=str(binary), announce=False) in {"1.13.2", "1.13.3"}
     compat = load_script()
     env = compat.execution._isolated_probe_environment(tmp_path / "isolated-home")
     repo, base, head = compat.execution._synthetic_repo(tmp_path, env)

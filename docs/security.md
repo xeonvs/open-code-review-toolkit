@@ -68,7 +68,7 @@ The main trust transitions are:
    cannot supply the policy that authorizes its own privileged publication.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
-For qualified OCR 1.13.3 only, the toolkit compares complete before/after Git
+For an exact capability-qualified OCR version, the toolkit compares complete before/after Git
 trees, the explicit unfiltered diff, and the ordinary-file projection before
 the model runs. It reads `.gitmodules` from immutable blobs without using its
 URLs, freezes process-local Git overrides for preview and production, then

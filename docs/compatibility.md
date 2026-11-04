@@ -372,6 +372,35 @@ range. This does not extend OCR review to submodule contents or qualify a later
 OCR version for partial repository coverage; other versions retain the
 no-model stop until separately proven.
 
+### OCR 1.13.4–1.13.5 — toolkit 0.14.5 qualification
+
+Both adjacent releases passed the complete consumed CLI/result suite on verified
+Linux amd64 and Darwin arm64 binaries. OCR 1.13.4 preserves available content in
+mixed `file_read_diff` responses and names missing paths with recovery guidance.
+OCR 1.13.5 honors positive `--max-tools` overrides below the template default:
+omitted and zero use 100, 49 normalizes to 50, and 50/75/100/125 are applied
+exactly. Counted main rounds agree with the native manifest's effective limit;
+grace completion and the incomplete negative control retain their coverage
+semantics. JSONC, Scala, EJS/Liquid/Nunjucks and HAML/Slim/ERB selection and
+built-in Rules are qualified too.
+
+Real controlled-peer consumers exercised both diagram variants, grouped and
+repeated review rounds, optional output failures, actual evidence/federation MCP
+and partial gitlink projection for both patches. Additional real Git/OCR checks
+cover ambiguous ` b/` paths, rename/copy output paths and new-side blank-line
+anchors. Copy review can select the destination as a new file; qualification
+does not require OCR to represent it as a copy. These probes establish transport
+and consumer behavior, not configured-model diagram or finding quality.
+
+The shared pure `native_capabilities` owner records exact diagram and gitlink
+qualifications separately from supported runtime versions. The adjacent source
+diff changes none of the native authentication-store, refresh or provider
+resolution boundaries, so the existing same-line local ChatGPT contract remains
+applicable. Workspace-only ignored-file handling, the upstream GitHub Action and
+session display changes do not change toolkit immutable-range authority.
+Issue [#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294) owns
+this qualification chain; hosted verification remains part of release acceptance.
+
 ## Promotion and rollback
 
 Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates every machine-readable or executable version/checksum pin. Never edit only one copy. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.

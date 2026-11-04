@@ -7,6 +7,7 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Repository Map
 
 - `src/ocr_toolkit/` - runtime package and the `ocr-ci` command.
+- `src/ocr_toolkit/native_capabilities.py` - pure exact-version qualifications for optional OCR handoffs; preflight owns runtime acceptance separately.
 - `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
 - `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - bounded Git text facts and optional diagram-reference acquisition.

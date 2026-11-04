@@ -34,9 +34,9 @@ reviews, repeated corpus checks, publication and cleanup.
 | REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | pending |
 | REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | pending |
 | REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | pending |
-| REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | pending |
-| REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | pending |
-| REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | in_progress |
+| REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | in_progress |
+| REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | in_progress |
+| REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | done |
 | REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | pending |
 | REQ-009 | Reconcile instructions, architecture, contracts, threat model and backlog | WQ-01, WQ-05, WQ-06 | in_progress |
 | REQ-010 | Signed PRs, aggregate/security/native review, stable release and external closure | WQ-01, WQ-06, WQ-07, WQ-08 | in_progress |
@@ -129,7 +129,7 @@ successful parsing alone cannot authorize a DLP exemption.
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
-| WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners and removed unreachable live legacy; both adjacent candidates passed Linux/Darwin base contracts; freeze predecessor, commit current epoch/weekly workflow, then qualify consumed capabilities and promote | in_progress |
+| WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners, removed unreachable execution, froze predecessor epoch; both candidates passed Linux/Darwin base and actual consumed handoffs; promoted pins/capabilities locally and restored weekly workflow | done |
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Freeze replay baseline, implement strict datetime fix, inspect causal groups and retain focused library comparisons/synthetic regressions | pending |
 | WQ-04 | REQ-002, REQ-003 | Implement shared bounded excerpt acquisition/proof and closed audit diagnoses across real callers | pending |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Integrate handoffs, improve coverage/properties, installed checks and synchronize contracts/routes/docs | pending |
@@ -278,11 +278,36 @@ boundaries, and corrected the actual extracted-peer consumers. Existing
 real diagram/group/gitlink consumers passed 100 tests against supported 1.13.3;
 four stale peer imports were corrected to their extracted owner. These checks
 do not qualify those capabilities on the new candidates. Issue #294 tracks the
-adjacent qualification chain. Recommendation and runtime capabilities remain
-unchanged until specialised proofs pass. Candidate artifacts, setup environment
+adjacent qualification chain. Recommendation and runtime capabilities
+were unchanged until specialised proofs passed. Candidate artifacts, setup environment
 and cleanup inventory stay private. DLP implementation and corpus replays remain
 pending; no new feature push, Security scan or model review has occurred.
 Successful own-tool reviews in this cycle: 0/2. Aggregate Security scans: 0/1.
+
+Signed local commit 4e83832 contains the frozen predecessor, live 1.13.5 contract
+and weekly workflow. Both new Darwin binaries then passed 111 real native
+diagram/group/federation/gitlink checks each. Missing/mixed/all-found diff reads
+passed for both; 1.13.5 additionally passed delimiter-path modification, rename,
+copy destination and new-side blank-line anchor checks. Fixture corrections
+retained enough unchanged content for Git rename detection and disambiguated a
+duplicate copied block; neither was a product failure. Official platform-specific
+digests are now checked by shared opt-in test fixtures before candidate execution.
+Promotion used the validated adjacent evidence chain and recorded bounded human
+conclusions; manifest, preflight, example pins and pure capability gates now agree
+on 1.13.5. Native-auth source review found no changed ownership or resolution
+boundary. Public contracts, route map and decision flow reflect capability gates.
+Consumer checks passed 754 tests with 45 expected external-binary skips; the one
+stale current-pin assertion was corrected and its focused check passed. Types
+pass across 168 runtime files; preflight/local-provider checks passed 150 tests
+and 42 subtests. Clean installed artifacts, final coverage and hosted execution
+remain WQ-05/WQ-07 gates. All implementation remains local after the plan push.
+The new pure capability owner has 100% measured coverage with exact-version,
+future-version and generated-string controls. Semantic review also found that
+unhashable entries in current evidence capability lists could raise TypeError;
+both frozen and live validators now reject them through the closed contract
+error. The 33 focused malformed-list/current-pin checks pass. Review preserved
+range/source/selection checks, optional-output degradation, historical evidence
+and provider authority; only exact proven handoffs gain capability admission.
 
 ### Risks And Recovery
 
@@ -300,11 +325,12 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-02: frozen readback, the 1.13.5 live epoch and weekly workflow are ready for
-their reviewed local commit. Then centralize pure runtime capabilities,
-qualify diagram/federation/gitlink handoffs for both adjacent candidates and
-promote evidence/pins together. Verified Linux/Darwin base outputs are retained;
-do not rerun unchanged completed probes without a material reason.
+WQ-03: after the reviewed capability/promotion slice is committed locally, freeze
+the authenticated replay baseline and implement complete bounded datetime
+interpretation, with explicit contact and adjacent sensitive-value negatives.
+Then WQ-04 streaming immutable excerpt proof and closed source-free audit
+diagnoses. Preserve the completed qualification outputs; repeat only affected
+checks. Installed/new-owner coverage and hosted proof remain explicitly pending.
 No further feature push occurs until final feature delivery.
 
 ### Plan Fidelity Check

@@ -112,6 +112,7 @@ from ocr_toolkit.evidence.review_range import resolve_review_range
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
+from ocr_toolkit.native_capabilities import supports_native_capability
 from ocr_toolkit.ocr_result import (
     MAX_TOOLKIT_MCP_USAGE_COUNT,
     PARTIAL_TOOLKIT_RESULT_SCHEMA_VERSION,
@@ -3652,7 +3653,7 @@ def _run_evidence_review(
                         )
                     except preflight.PreflightError as exc:
                         raise ReviewRunnerError(str(exc)) from exc
-                if native_version == "1.13.3":
+                if supports_native_capability(native_version, "gitlink_projection"):
                     projection = make_gitlink_projection(reader, gitlink_plan)
                 else:
                     gitlink_detected = True

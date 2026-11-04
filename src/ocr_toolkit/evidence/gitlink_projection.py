@@ -1,4 +1,4 @@
-"""Private, independently checked Git input for OCR 1.13.3 gitlink reviews."""
+"""Private, independently checked Git input for qualified native gitlink reviews."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from pathlib import Path
 from ocr_toolkit.common.git import read_only_git_prefix
 from ocr_toolkit.evidence.gitlinks import GitlinkInputPlan
 from ocr_toolkit.evidence.repository import GitRepositoryReader, RepositoryEvidenceError
+from ocr_toolkit.native_capabilities import supports_native_capability
 from ocr_toolkit.ocr_result import TOOLKIT_GITLINK_SELECTION_KEY
 from ocr_toolkit.result_contract import OcrResultContractError
 from ocr_toolkit.review_range import ReviewRange, admit_native_range
@@ -694,7 +695,12 @@ def qualify_gitlink_manifest(
     native_input = manifest.get("input")
     assert isinstance(native_input, dict)
     execution = manifest.get("execution")
-    if not isinstance(execution, dict) or execution.get("ocr_version") != "v1.13.3":
+    native_version = execution.get("ocr_version") if isinstance(execution, dict) else None
+    if (
+        not isinstance(native_version, str)
+        or not native_version.startswith("v")
+        or not supports_native_capability(native_version[1:], "gitlink_projection")
+    ):
         raise RepositoryEvidenceError("OCR gitlink manifest has an unsupported binary version")
     coverage = manifest.get("coverage")
     if not isinstance(coverage, dict):

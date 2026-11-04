@@ -139,8 +139,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.13.3"
-    assert manifest["monitoring_floor"] == "1.13.3"
+    assert manifest["recommended_version"] == "1.13.5"
+    assert manifest["monitoring_floor"] == "1.13.5"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.11"],
         "qualified_patches_only": True,
@@ -202,6 +202,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.1", "tested"),
         ("1.13.2", "tested"),
         ("1.13.3", "tested"),
+        ("1.13.4", "tested"),
+        ("1.13.5", "tested"),
     ]
 
     assert module.contracts.qualified_runtime_versions(manifest) == (
@@ -224,6 +226,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.1",
             "1.13.2",
             "1.13.3",
+            "1.13.4",
+            "1.13.5",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
@@ -2966,6 +2970,19 @@ def test_probe_local_refuses_frozen_epoch_before_binary_access(
     assert result == 1
     assert "frozen readback-only qualification epoch" in capsys.readouterr().err
     assert not output.exists()
+
+
+@pytest.mark.parametrize("version", ["1.13.4", "1.13.5"])
+@pytest.mark.parametrize("field", ["required_review_flags", "optional_capabilities"])
+@pytest.mark.parametrize("value", [None, True, 4, "flags", {}, [None], [{}], [[]]])
+def test_qualification_rejects_malformed_capability_lists_with_closed_error(
+    version: str, field: str, value: object
+) -> None:
+    module = load_script()
+    evidence = current_contracts(module, version)
+    evidence[field] = value
+    with pytest.raises(module.core.CompatibilityError, match="CLI capabilities"):
+        module.contracts._validate_contracts_for_version(version, evidence)
 
 
 def test_live_qualification_boundary_accepts_all_current_candidates() -> None:

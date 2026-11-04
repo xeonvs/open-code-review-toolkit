@@ -33,8 +33,10 @@ def _validate_current_contracts(value: object, version: str) -> None:
     capabilities = value.get("optional_capabilities")
     if (
         not isinstance(flags, list)
+        or not all(isinstance(flag, str) for flag in flags)
         or not settings.REQUIRED_REVIEW_FLAGS.issubset(flags)
         or not isinstance(capabilities, list)
+        or not all(isinstance(capability, str) for capability in capabilities)
         or not {"review_effort", "semantic_grouping"}.issubset(capabilities)
     ):
         core._fail("current qualification omitted required CLI capabilities")
