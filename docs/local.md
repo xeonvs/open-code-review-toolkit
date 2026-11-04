@@ -176,7 +176,7 @@ offline inference. OpenAI determines subscription eligibility, available models
 and usage limits. The toolkit does not import ChatGPT conversations or use a
 Codex credential cache. It keeps the same mandatory evidence, validation and
 DLP pipeline; a subscription does not bypass repository/service egress rules.
-See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.3/pages/src/content/docs/en/chatgpt-preview.md)
+See the [OCR native-provider guide](https://github.com/alibaba/open-code-review/blob/v1.13.5/pages/src/content/docs/en/chatgpt-preview.md)
 and [OpenAI's token-sharing overview](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ```mermaid
@@ -252,7 +252,7 @@ configuration or unsafe-destination failures print only to the console. A failed
 artifact or console delivery returns nonzero; a completed artifact remains
 available if the console fails afterward.
 
-With qualified OCR 1.13.3, a changed Git submodule pointer can be excluded
+With capability-qualified OCR, a changed Git submodule pointer can be excluded
 automatically while selected ordinary files are reviewed. Local Markdown
 states the effective repository coverage separately from the native OCR
 manifest; the changed pointer and submodule contents remain unreviewed. A

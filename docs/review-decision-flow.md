@@ -121,7 +121,7 @@ flowchart TD
     registry --> acquire_ok{Mandatory evidence, context, and<br/>federation readiness valid?}
     acquire_ok -- No --> preflight_error
     acquire_ok -- Yes --> gitlink_check{Changed gitlink?}
-    gitlink_check -- Yes --> gitlink_scope{Pure pointer shape and<br/>qualified OCR 1.13.3?}
+    gitlink_check -- Yes --> gitlink_scope{Pure pointer shape and<br/>capability-qualified OCR?}
     gitlink_scope -- No --> gitlink[Closed v6 unqualified status;<br/>model not started]
     gitlink_scope -- Yes --> gitlink_projection[Freeze original trees, ordinary diff,<br/>Git inputs and child overrides]
     gitlink_projection --> preview[Run exact OCR preview with<br/>toolkit-owned child environment]
@@ -198,8 +198,8 @@ flowchart TD
 Recognized stops record an identity-bound `ocr.pre-execution-status/v5` or
 gitlink-specific v6 with a closed stage and `model_execution=not_started`.
 A stale merge-request revision is reported only in the old job's local output;
-it never posts into the newer merge request. Pure changed gitlinks under OCR
-1.13.3 are projected from the original trees before preview; unsafe forms
+it never posts into the newer merge request. Pure changed gitlinks under
+capability-qualified OCR are projected from the original trees before preview; unsafe forms
 stop. Zero selected ordinary files also stop without model execution and use
 an advisory v6 status. Note-capable setup and preview statuses carry the complete authenticated
 B/H/T/P identity for live revalidation before each write; setup also requires
@@ -226,6 +226,13 @@ checks. Publication `ocr.publication/v2` separates public omitted fields and
 reasons from private-only sanitized fields and reasons. The v4 summary signal
 and receipt v13 expose those closed counts without converting OCR coverage or
 provider posting counts.
+
+Finding source requests are planned together and coalesced by immutable Git
+object before optional diagram reads. Complete bounded text validation precedes
+excerpt admission; small excerpts from large files do not become full syntax
+inputs. GitLab remapping precedes its separate batched suggestion verification.
+Read or budget failures withhold the optional code exception/replacement while
+retaining the finding and ordinary DLP checks.
 
 Receipt v14 adds separate path-free effective repository coverage only for a
 qualified partial gitlink review. Native OCR `complete` then covers its selected

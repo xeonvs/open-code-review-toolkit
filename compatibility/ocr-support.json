@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.3",
-  "recommended_version": "1.13.3",
+  "monitoring_floor": "1.13.5",
+  "recommended_version": "1.13.5",
   "releases": [
     {
       "assets": [
@@ -2777,6 +2777,112 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.3",
       "status": "tested",
       "version": "1.13.3"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "795f8ed4b8555b245a6a1d3db4739ec0bd3778cc650843f784c1edd019edaabb",
+          "size": 58286832
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "59053183e8059588b3e5b7a5faa56c5c4c8dd5147ef8e55af647860c49ae12d5",
+          "size": 55298994
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "70415c919901bdf7c54779d5c212442a351deca3473a111034ec0d05f4466ea6",
+          "size": 56533154
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "163b84d2432c8b394ea9342155a22d43dcee89969511e4ef1ca064eadf581e15",
+          "size": 53215394
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "250f33c282bcf74bea1e70ba07049f38c300ff19a18400388d3aff4e04024f65",
+          "size": 58001408
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "587be96694e72409045216e9bd34521cd7a23a626e0a64a8d961ce723113ed85",
+          "size": 53922816
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "ecd8e31676c8e8b92e788ce3a188cf7822b5f8c30644f22cedb9fc0872c2a5d7",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.4.json",
+      "evidence_sha256": "bf9289c90bc196a845567823abcdf05f52f47bb64f1d4614d2525e38002578cb",
+      "human_conclusion": "Adjacent source review and checksum-verified Linux amd64 and Darwin arm64 contract probes passed. Real controlled-peer diagram variants, group/round context, federation routing and partial gitlink consumers passed; missing and mixed diff reads preserve available content and name missing paths. Native authentication ownership and provider resolution are unchanged; upstream workspace-only and GitHub Action changes do not alter toolkit immutable range authority.",
+      "published_at": "2026-11-02T15:19:48Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.4",
+      "status": "tested",
+      "version": "1.13.4"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "521676efd8189f595f03162a3e6d584f99f95be0e1f6285e96ea6da590cd4446",
+          "size": 58319728
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "539e7b6477b676b38f07038751ee3660d96e23d5a4a86c219a0fc33b77efb13d",
+          "size": 55332146
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "f9d918dd8b461719be975430e0f7396b4e642b465ffa490d651ace0d8c989171",
+          "size": 56565922
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "fe10babbd1e30c6fad2b3d33381de034c6b1bc67ed046e15f18782ad22e0d8ad",
+          "size": 53215394
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "3e3530f0fd754fe23f71945fecbbd97b7bfe92bbcc8edf06038324f64ba96be5",
+          "size": 58035200
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "d728937efd3094d85ab24021bb50f630a3e3c365b793673409fe1ec456a2855a",
+          "size": 53956608
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "71a3260b7ab9ed5d20db3790e44294be15944e07e39625dc8da20881c42eccc7",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.5.json",
+      "evidence_sha256": "2068f744cfb1ed1091dec598298848bbaf44ff5837641d8106fdb99a20301e3d",
+      "human_conclusion": "Adjacent source review and checksum-verified Linux amd64 and Darwin arm64 probes passed. Omitted and zero max-tools use 100, 49 normalizes to 50, and exact 50/75/100/125 overrides agree with native manifest limits and grace verdicts. Expanded JSONC, Scala and template Rules passed. Real diagram variants/grouping, federation and partial gitlink handoffs passed; ambiguous delimiter paths, rename/copy output paths and new-side blank-line anchors were exercised against real Git and OCR. Native authentication boundaries are unchanged; no configured-model quality claim is made.",
+      "published_at": "2026-11-03T14:43:14Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.5",
+      "status": "tested",
+      "version": "1.13.5"
     }
   ],
   "runtime_support": {

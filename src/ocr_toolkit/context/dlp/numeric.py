@@ -10,6 +10,7 @@ from datetime import date
 
 import regex
 
+from ocr_toolkit.context.dlp.datetimes import complete_datetime
 from ocr_toolkit.context.dlp.decoding import _technical_decode, bounded_nfkc
 
 _DIGIT_MARKS = regex.compile(r"(?<=\p{Nd})\p{M}+")
@@ -197,7 +198,9 @@ def _technical_number(value: str, match: re.Match[str]) -> bool:
         or _explicit_context(value, match.start())
     ):
         return False
-    if _complete_technical_block(value, match.start(), match.end()):
+    if complete_datetime(value, *match.span()) or _complete_technical_block(
+        value, match.start(), match.end()
+    ):
         return True
     # All contextual grammars below are bounded. Do not copy the complete
     # document per candidate when a file contains many valid technical tokens.

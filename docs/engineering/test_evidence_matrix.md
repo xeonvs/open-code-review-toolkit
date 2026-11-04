@@ -10,6 +10,31 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.5 current source and parser evidence
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Short excerpts do not require full syntax retention | Complete immutable Git blob -> shared session -> source proof -> publication and GitLab suggestion consumers | Real Git tests coalesce object aliases and distinct ranges, preserve dirty worktrees, reject late invalid text/identity changes, cache failed reads, and verify remapping before suggestion planning. A finalizer fixture admits 115 distinct synthetic fields with one read; optional diagram failures leave findings intact | 5 MB/blob, 32 MB/session, 30 seconds; existing fragment bounds and separate 256000-character/four-file syntax limit remain |
+| Private diagnoses do not become disclosure authority | Actual audit worker -> authenticated state -> closed old/new readback | Large snapshot proof and malformed/nested diagnostic properties exercise whole-run rejection; old records retain frozen identities and unavailable diagnoses | Logical audit population/profile unchanged; diagnoses cannot bypass DLP or transfer historical classifications |
+| Supplemental parsers need their own qualification | Actual optional Tree-sitter C, Pygments and PIISA lexical stage -> synthetic counterexamples | `tests/research/test_dlp_parser_candidates.py` reproduces recovered expressions in erroneous trees, identical lexer tokens in valid/broken programs, and omitted prefix-free contacts; toolkit contact controls remain active | Optional research environment, not production dependencies or a full PIISA regional pipeline. Python 3.15 Tree-sitter binary install and PIISA plugin wheel availability currently fail qualification |
+
+Focused source integration measures about 98% combined branch-aware coverage,
+with each new owner above its independent 90% floor. Fresh authenticated public
+corpus replay also verifies 115 large-source observations through independent
+immutable Git proof and the installed publication path, without fragment syntax
+authority. This does not authenticate the unavailable historical HMAC state or
+complete the remaining causal/private-corpus acceptance.
+
+The completed local Linux amd64/Python 3.14 measurement is 89.84% overall and
+87.10% for the posting group. A minimal-container run first exposed a missing
+`jq` prerequisite and an empty-directory assumption in retained-HOME fixture
+cleanup. Installing the prerequisite and replaying all affected cases passed;
+the fixture now removes its own complete temporary tree. HTTP delivery, hostile
+snapshot/result and terminal-state tests qualify total/posting floors of 88%/85%.
+This local evidence does not replace protected hosted CI. The
+[causal matrix](dlp_causal_review.md) records the fourteen reviewed categories and
+explicit missing-key limitations.
+
 ## v0.14.4 bounded DLP and diagram-source evidence
 
 | Invariant | Real boundary | Verification | Limit |
@@ -388,6 +413,24 @@ Every top-level test module is classified below. A module can contain more than 
 | Opaque failure arguments → finalization → DLP → GitLab posting | Paired clean/finding/warning/partial/filtered results in `test_review_runner.py` preserve byte-equivalent finalized artifacts and note bodies; malformed/oversized arguments degrade diagnostics only | Real toolkit parser and posting workflow; GitLab transport is replaced with a capture, not a live service |
 | Serialized comment repair and failure arguments | Checksum-verified OCR 1.11.4 and 1.11.5 use a local deterministic gateway; native, serialized and repaired batches preserve fields and anchors, suspect batches fail with original arguments in private failure data | Binary behavior and field preservation, not model judgment |
 | Forward-only suite and historical evidence | Complete real no-LLM runs before/after refactoring yield identical JSON contracts; frozen promotion-baseline and historical-independence tests reject missing proof before writes | Historical readback does not imply supported execution of old binaries |
+
+## v0.14.5 adjacent OCR qualification
+
+Complete calendar interpretation is covered by `test_dlp_datetimes.py` and the
+matching bounded property family: valid/invalid clocks and offsets, continued
+tokens, leap days, Unicode decimal scripts, encoded display views, contact intent
+and independent neighboring sensitive material. Extended independent seeds
+exercise 1000 examples per property; measured module coverage is not a substitute
+for the causal corpus replay and protection-loss classification.
+
+| Boundary | Evidence | Claim limit |
+| --- | --- | --- |
+| Live and frozen consumed contracts | Immutable evidence through 1.13.4 remains independently readable; 1.13.5 measures omitted/zero and exact tool limits against real rounds and native manifest fields; verified Linux amd64 and Darwin arm64 base suites pass | Controlled model peer, not configured-model acceptance |
+| Optional native handoffs | `test_native.py`, `test_native_context.py`, `test_gitlinks.py` and federation `test_ocr_qualification.py` passed 111 checks per adjacent Darwin binary with platform-specific official digests; pure capability gates reject unseen versions | Real OCR, MCP, filesystem, Git and toolkit consumers; no paid model or live forge |
+| Diff recovery, paths and anchors | `test_native_paths.py` checks missing/mixed/all-found reads on both patches; 1.13.5 additionally exercises delimiter paths, rename/copy output paths and new-side blank-line anchors | Actual Git and OCR; copied destinations may be selected as new files; no claim of upstream copy-header classification |
+
+Hosted scheduled-workflow execution, clean installed toolkit qualification and
+the admitted actual-model diagram are separate final release gates.
 
 ## Shared reporting and local output
 

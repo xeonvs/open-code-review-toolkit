@@ -16,12 +16,16 @@ uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
 
+Release/workflow shell contract tests require `bash` and `jq` alongside Git and the locked Python environment.
+
 For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`.
 
 The `coverage` and `check` modes reuse one branch-aware test run. Result/preflight,
 review/context/DLP/approval and MCP/provider/policy/result groups have 85% floors;
-GitLab posting transactions retain an 80% floor. The latter group measures about
-82%, so raising its threshold requires meaningful tests before changing the gate.
+GitLab posting transactions have an 85% floor and total coverage has an 88% floor.
+Negative transport, snapshot, artifact and terminal-status checks qualify these
+thresholds on the Linux/Python 3.14 coverage owner; retain the measured margin
+in the release evidence rather than inferring it from the configured floor.
 A high combined result cannot hide a weak group. Individual DLP/audit, source
 syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
 local and hosted coverage gates. Hosted pull requests run source and contract
@@ -52,6 +56,14 @@ During an authorized implementation task, run the scoped local tests that use sy
 For an authorized real local OCR review, follow the [local review preparation and output recipe](local.md#review-preparation) before launching the model. Select the API or native authentication mode, verify the exact qualified executable and supported local flags, and check native model reachability separately from toolkit preflight. Use a fresh private directory and its physical `pwd -P` path for JSON, stderr and Markdown; verify the process exit status and delivered report, then inspect the admitted findings. Do not infer success from OCR's intermediate JSON when report publication fails.
 
 ## Maintaining OCR qualification
+
+`scripts/ocr_compat.py` is the stable repository-only CLI. Its
+`ocr_qualification/` package separates contract validation, execution, verified
+asset acquisition, the deterministic peer, numeric/selection/comment probes,
+candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
+shared qualification inputs; `core.py` owns bounded document/version primitives.
+Tests patch the actual owning modules rather than a compatibility re-export.
+These tools and their controlled peer are excluded from installed distributions.
 
 Current operator guidance describes the qualified OCR contract without repeating
 release numbers or asset hashes; link to `compatibility/ocr-support.json` for the
@@ -87,11 +99,16 @@ forward-only suite boundary. It never launches OCR and must not depend on curren
 numeric defaults, language inventories or live fixtures. Preserve historical
 evidence bytes. Frozen epochs are readback-only: fresh `qualify` and
 `probe-local` requests below the live suite boundary fail before asset downloads
-or binary execution. Runtime support and validation of existing evidence remain
+or binary execution. Live projections also reject those frozen versions rather
+than reconstructing their old language, preview or numeric execution behavior.
+Their original expectations belong only to the frozen readback owner.
+Runtime support and validation of existing evidence remain
 owned by the compatibility manifest and the frozen validators. Generic promotion
 tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required
-contract evidence before writing any pin or evidence file.
+contract evidence and generated-output collisions before writing any pin or
+evidence file. Identical preplaced outputs are reusable; unrelated content is
+preserved and rejected.
 
 When a consumed upstream contract changes, first freeze the last unaffected
 evidence epoch exactly, then advance the cutoff. The same version-selected
@@ -119,6 +136,15 @@ token-budget changes do not extend the toolkit's consumed `review` contract.
 Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
+
+Evidence through OCR 1.13.4 is now frozen. Its 1.13.0–1.13.4 contract lives in
+the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
+numeric defaults and language inventories. Fresh execution starts at 1.13.5.
+The live max-tools probe separately measures omitted and zero defaults, explicit
+50/75/100/125 overrides and 49 normalization, then checks the native manifest's
+effective limit against actual counted rounds. The same probe implementation
+runs for all new candidates. Current template/JSONC/Scala selection and Rules
+requirements belong to the live contract; old evidence is never regenerated.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn
@@ -230,6 +256,34 @@ leading-zero fixtures so valid numeric syntax cannot hide a false negative.
 The two source-context modules each have a local 90% branch-aware
 floor. These measures complement semantic counterexamples; they do not establish
 a detector precision or recall rate.
+
+### Supplemental parser qualification
+
+`tests/research/test_dlp_parser_candidates.py` retains synthetic comparisons for
+optional parser additions. Run it separately in an isolated Python 3.14 environment
+with the built toolkit wheel and `pytest==9.2.0`, `tree-sitter==0.26.0`,
+`tree-sitter-c==0.24.2`, `pygments==2.21.0`, and `pii-extract-plg-regex==0.5.1`:
+
+```sh
+"$probe_env/bin/pytest" --confcutdir=tests/research -o addopts= \
+  -q tests/research/test_dlp_parser_candidates.py
+```
+
+The normal suite skips unavailable optional research packages. These packages
+are not runtime/dev-lock additions or a CI corpus audit. The retained decision
+is to keep current admission and bounded stdlib fixes: Tree-sitter returns
+expression nodes even in erroneous trees, and its qualified version lacks a
+Python 3.15 wheel; Pygments gives identical numeric tokens in complete and broken
+programs; PIISA's international lexical stage omits a contact without an explicit
+international prefix. Such observations cannot grant source roles or prove PII
+absence. PIISA's full regional/context pipeline is not qualified by that lexical
+probe. Its plugin currently also lacks a wheel. Reconsider a focused addition
+only with supported binary installs, bounded correct role proof and demonstrated
+benefit on independently classified cases. No model downloads are involved.
+
+Primary contracts: [Tree-sitter node errors](https://tree-sitter.github.io/py-tree-sitter/classes/tree_sitter.Node.html),
+[Pygments lexer API](https://pygments.org/docs/api/), and
+[PIISA regex plugin](https://github.com/piisa/pii-extract-plg-regex).
 
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 
@@ -372,9 +426,16 @@ comments and container closers. It has no detector, parser or I/O dependency.
 the local `dlp_audit/` package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result
-contract, not the detector. Git text streaming lives in
-`evidence/text_metadata.py`; `diagrams/sources.py` owns its immutable-head session
-and budgets, while `reporting/diagram_layout.py` estimates orientation without I/O.
+contract, not the detector. `dlp_audit/proof.py` supplies authenticated snapshot
+excerpts and validates closed source/syntax diagnoses; historical runs retain
+their original identities without invented diagnoses. Git text streaming lives
+in `evidence/text_metadata.py`, bounded capture in `text_excerpts.py`, and pure
+limits/facts in `text_contracts.py`. `evidence/source_reader.py` owns the shared
+immutable-head session and budgets. It coalesces planned ranges by object,
+completes finding proofs before optional diagram reads, and keeps syntax separate
+from excerpt identity. `diagrams/sources.py` projects metadata;
+`posting/source_suggestions.py` acquires remapped replacement excerpts without
+full syntax retention. `reporting/diagram_layout.py` estimates orientation without I/O.
 
 `providers/local.py` publishes private Markdown artifacts and console output from that shared report, with every
 admitted finding and no posting cap, remote badge or HTML disclosure. It does not

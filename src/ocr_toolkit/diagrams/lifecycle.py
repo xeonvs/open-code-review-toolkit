@@ -18,6 +18,7 @@ from ocr_toolkit.diagrams.contracts import (
     diagram_requested,
 )
 from ocr_toolkit.diagrams.persistence import diagram_payload, parse_diagram_payload
+from ocr_toolkit.native_capabilities import supports_native_capability
 from ocr_toolkit.review_range import ReviewRange
 
 
@@ -50,7 +51,7 @@ class DiagramExecution:
     ) -> DiagramExecution:
         if not diagram_requested(mode, local=local):
             return cls(DiagramResult(mode, "disabled"))
-        if native_version != "1.13.3":
+        if not supports_native_capability(native_version, "diagram_output"):
             return cls(DiagramResult(mode, "unsupported"))
         execution = cls(DiagramResult(mode, "not-generated"))
         try:

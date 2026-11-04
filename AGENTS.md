@@ -7,13 +7,17 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Repository Map
 
 - `src/ocr_toolkit/` - runtime package and the `ocr-ci` command.
+- `src/ocr_toolkit/native_capabilities.py` - pure exact-version qualifications for optional OCR handoffs; preflight owns runtime acceptance separately.
 - `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
-- `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - bounded Git text facts and optional diagram-reference acquisition.
+- `src/ocr_toolkit/evidence/text_contracts.py` and `text_excerpts.py` - pure text bounds, LF-addressed facts and incremental excerpt retention.
+- `src/ocr_toolkit/evidence/source_reader.py` and `text_metadata.py` - shared immutable Git text sessions and whole-blob validation; `src/ocr_toolkit/diagrams/sources.py` projects optional diagram references.
+- `src/ocr_toolkit/posting/source_suggestions.py` - bounded acquisition for already remapped GitLab suggestion ranges.
 - `tests/` - regression, contract, and synthetic integration tests.
 - `examples/gitlab/` - public synthetic GitLab CI examples.
 - `docs/` - user, security, development, strategy, and release documentation.
 - `.github/workflows/` - pinned CI, security, build, and release automation.
+- `scripts/ocr_qualification/` - repository-only OCR contracts, controlled probes, asset verification and promotion; `scripts/ocr_compat.py` is its CLI.
 
 ## Sources Of Truth
 
@@ -31,6 +35,9 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Task Routes
 
 Read the matching owners and run their applicable guards. The general repository route applies alongside a more specific route; a shared owner or unchanged-state guard needs only one current read or check.
+
+<!-- ew:route id="ocr-qualification" triggers="scripts/ocr_compat.py|scripts/ocr_compat_history.py|scripts/ocr_qualification/**|compatibility/**|.github/workflows/ocr-compatibility.yml|OCR qualification" owners="docs/compatibility.md|docs/development.md" guards="test:tests/test_ocr_compat.py|manual_review:compare frozen readback live probes immutable asset identity and promotion consumers" -->
+| `ocr-qualification` | OCR contracts, qualification and promotion | Compatibility policy and qualification maintenance | Contract tests and actual candidate boundary evidence |
 
 <!-- ew:route id="repository-change" triggers="**" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:inspect the scoped final diff and applicable repository checks" -->
 | `repository-change` | Every repository change | Project principles and development procedures | Scoped diff review and applicable checks |

@@ -50,6 +50,17 @@ def render_report(identity: str, run: dict[str, Any]) -> str:
         groups.items(), key=lambda row: (-row[1], row[0])
     )[:10]:
         lines.append(f"- {reason} / {detector} / {role} / source-proof={proof}: {count}")
+    lines.extend(("", "## Source proof diagnoses", ""))
+    for (source, syntax), count in sorted(
+        Counter(
+            (
+                hit.get("source_proof", "legacy-unavailable"),
+                hit.get("syntax_proof", "legacy-unavailable"),
+            )
+            for hit in hits
+        ).items()
+    ):
+        lines.append(f"- {source} / syntax={syntax}: {count}")
     if run["errors"]:
         lines.extend(("", "## Incomplete evaluation", ""))
         for reason, count in sorted(Counter(error["reason"] for error in run["errors"]).items()):

@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import inspect
 import json
+import os
+import shutil
+import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
@@ -20,22 +28,26 @@ MANIFEST = PROJECT_ROOT / "compatibility" / "ocr-support.json"
 
 
 def load_script() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("ocr_compat_test_module", SCRIPT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
+    """Load production owners; patches target their actual module globals."""
+    for name in tuple(sys.modules):
+        if name == "ocr_qualification" or name.startswith("ocr_qualification."):
+            del sys.modules[name]
     with patched_attr(sys, "path", [str(SCRIPT.parent), *sys.path]):
-        spec.loader.exec_module(module)
-    return module
+        importlib.import_module("ocr_qualification.cli")
+        return importlib.import_module("ocr_qualification")
 
 
 def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, Any]:
     """Extend a frozen fixture with the live contract selected for one version."""
 
-    contracts = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
+    if module.core._version(version) < (1, 13, 5):
+        return module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")[
+            "contracts"
+        ]
+    contracts = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
         "contracts"
     ]
-    contracts["numeric_cli_probe"] = module._numeric_contract_for_version(version)
+    contracts["numeric_cli_probe"] = module.contracts._numeric_contract_for_version(version)
     contracts["reasoning_effort_probe"] = {
         "result": "passed",
         "protocols": ["openai", "openai-responses"],
@@ -46,19 +58,17 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
     contracts["language_rule_probe"].update(
         {
             "extensions": sorted(
-                Path(path).suffix for path in module._language_rules_for_version(version)
+                Path(path).suffix for path in module.contracts._language_rules_for_version(version)
             ),
-            "selected": len(module._language_rules_for_version(version)),
-            "default_excluded_paths": list(module._default_excluded_paths_for_version(version)),
+            "selected": len(module.contracts._language_rules_for_version(version)),
+            "default_excluded_paths": list(
+                module.contracts._default_excluded_paths_for_version(version)
+            ),
         }
     )
     contracts["provider_directory_preview_probe"] = {
         "result": "passed",
-        "tracked_provider_directory": (
-            "reported"
-            if module._version(version) >= module.PROVIDER_DIRECTORY_PREVIEW_CUTOFF
-            else "omitted"
-        ),
+        "tracked_provider_directory": ("reported"),
     }
     return contracts
 
@@ -68,12 +78,12 @@ def set_manifest_recommendation(module: ModuleType, manifest: dict[str, Any], ve
 
     manifest["recommended_version"] = version
     manifest["monitoring_floor"] = version
-    manifest["runtime_support"] = module._rolling_runtime_support(version)
+    manifest["runtime_support"] = module.contracts._rolling_runtime_support(version)
 
 
 def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
     module = load_script()
-    source = inspect.getsource(module.run_contracts)
+    source = inspect.getsource(module.probes.run_contracts)
 
     assert "_validate_contracts_for_version(version, contracts)" in source
     assert "_validate_current_contracts(contracts)" not in source
@@ -81,49 +91,13 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
 
 def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-
-    assert "policies/authz.rego" not in module._language_rules_for_version("1.11.7")
-    assert module._language_rules_for_version("1.11.8")["policies/authz.rego"] == "**/*.rego"
-    assert module._language_negative_paths_for_version("1.11.7") == (
-        "rtl/include.svh",
-        "policies/authz.rego",
-        "types/interface.pyi",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.JINJA_RULE_PATHS,
-        *module.LANGUAGE_1_13_2_PATHS,
-    )
-    assert module._language_negative_paths_for_version("1.11.8") == (
-        "rtl/include.svh",
-        "types/interface.pyi",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.JINJA_RULE_PATHS,
-        *module.LANGUAGE_1_13_2_PATHS,
-    )
-    assert module._language_rules_for_version("1.12.0")["types/interface.pyi"] == "default"
-    assert module._language_negative_paths_for_version("1.12.0") == (
-        "rtl/include.svh",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.JINJA_RULE_PATHS,
-        *module.LANGUAGE_1_13_2_PATHS,
-    )
-    assert (
-        module._language_rules_for_version("1.12.1")["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
-    )
-    assert module._language_negative_paths_for_version("1.12.1") == (
-        "rtl/include.svh",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.JINJA_RULE_PATHS,
-        *module.LANGUAGE_1_13_2_PATHS,
-    )
-    assert module._language_negative_paths_for_version("1.12.8") == (
-        "rtl/include.svh",
-        *module.JINJA_RULE_PATHS,
-        *module.LANGUAGE_1_13_2_PATHS,
-    )
+    rules = module.contracts._language_rules_for_version("1.13.5")
+    assert rules["policies/authz.rego"] == "**/*.rego"
+    assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
+    assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
+    assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
+    assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
+    assert module.contracts._language_negative_paths_for_version("1.13.5") == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -139,10 +113,10 @@ def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str,
 def manifest_before_1_11_3(module: ModuleType) -> dict[str, Any]:
     """Return the committed support chain as it stood before 1.11.3 promotion."""
 
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, manifest, "1.11.2")
     manifest["releases"] = [
-        item for item in manifest["releases"] if module._version(item["version"]) < (1, 11, 3)
+        item for item in manifest["releases"] if module.core._version(item["version"]) < (1, 11, 3)
     ]
     return manifest
 
@@ -150,23 +124,23 @@ def manifest_before_1_11_3(module: ModuleType) -> dict[str, Any]:
 def manifest_before_1_11_7(module: ModuleType) -> dict[str, Any]:
     """Return the committed support chain immediately before this promotion."""
 
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, manifest, "1.11.6")
     manifest["releases"] = [
-        item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 6)
+        item for item in manifest["releases"] if module.core._version(item["version"]) <= (1, 11, 6)
     ]
     return manifest
 
 
 def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
 
-    module.validate_manifest(manifest, PROJECT_ROOT)
+    module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.13.3"
-    assert manifest["monitoring_floor"] == "1.13.3"
+    assert manifest["recommended_version"] == "1.13.5"
+    assert manifest["monitoring_floor"] == "1.13.5"
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.11"],
         "qualified_patches_only": True,
@@ -228,9 +202,11 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.1", "tested"),
         ("1.13.2", "tested"),
         ("1.13.3", "tested"),
+        ("1.13.4", "tested"),
+        ("1.13.5", "tested"),
     ]
 
-    assert module.qualified_runtime_versions(manifest) == (
+    assert module.contracts.qualified_runtime_versions(manifest) == (
         [
             "1.12.0",
             "1.12.1",
@@ -250,6 +226,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.1",
             "1.13.2",
             "1.13.3",
+            "1.13.4",
+            "1.13.5",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
@@ -259,20 +237,20 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    contracts = current_contracts(module)
+    contracts = current_contracts(module, "1.13.5")
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
-        Path(path).suffix for path in module._language_rules_for_version("1.12.8")
+        Path(path).suffix for path in module.contracts._language_rules_for_version("1.13.5")
     )
-    module._validate_current_contracts(contracts, "1.12.8")
+    module.contracts._validate_current_contracts(contracts, "1.13.5")
     extensions.reverse()
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_current_contracts(contracts, "1.12.8")
+    with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
+        module.contracts._validate_current_contracts(contracts, "1.13.5")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.12.8", 22, "reported"), ("1.12.11", 24, "reported"), ("1.13.2", 32, "reported")],
+    [("1.13.5", 40, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -280,88 +258,88 @@ def test_current_contract_selects_live_language_and_preview_epoch(
     module = load_script()
     contracts = current_contracts(module, version)
 
-    module._validate_current_contracts(contracts, version)
+    module.contracts._validate_current_contracts(contracts, version)
     assert contracts["language_rule_probe"]["selected"] == selected
     assert (
         contracts["provider_directory_preview_probe"]["tracked_provider_directory"] == preview_state
     )
 
 
-def test_fsharp_and_default_exclusion_epoch_preserves_older_evidence() -> None:
+@pytest.mark.parametrize(
+    "version",
+    [
+        "1.11.7",
+        "1.11.8",
+        "1.12.0",
+        "1.12.1",
+        "1.12.6",
+        "1.12.7",
+        "1.12.8",
+        "1.12.10",
+        "1.12.11",
+        "1.12.13",
+    ],
+)
+def test_frozen_language_epochs_use_readback_without_live_execution(version: str) -> None:
     module = load_script()
-
-    assert module._default_excluded_paths_for_version("1.12.6") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-    )
-    assert module._default_excluded_paths_for_version("1.12.7") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-        "src/test_helpers.py",
-    )
-    assert module._default_excluded_paths_for_version("1.12.8") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-        "src/test_helpers.py",
-        "src/WidgetTest.fs",
-        "node_modules/example/index.ts",
-        "dist/generated.js",
-    )
-    assert not set(module.FSHARP_RULE_PATHS) & set(module._language_rules_for_version("1.12.7"))
-    assert {
-        module._language_rules_for_version("1.12.8")[path] for path in module.FSHARP_RULE_PATHS
-    } == {"**/*.{fs,fsi,fsx}"}
-    module._validate_current_contracts(current_contracts(module, "1.12.8"), "1.12.8")
+    evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
+    module.contracts._validate_evidence_contracts(version, evidence)
+    for projection in (
+        module.contracts._language_rules_for_version,
+        module.contracts._language_negative_paths_for_version,
+        module.contracts._default_excluded_paths_for_version,
+        module.contracts._numeric_contract_for_version,
+    ):
+        with pytest.raises(module.core.CompatibilityError, match="frozen readback-only"):
+            projection(version)
+    evidence["contracts"]["language_rule_probe"]["result"] = "invalid"
+    with pytest.raises(module.core.CompatibilityError):
+        module.contracts._validate_evidence_contracts(version, evidence)
 
 
 @pytest.mark.parametrize("extension", [".j2", ".jinja2"])
 def test_jinja_contract_requires_both_selection_and_rule_evidence(extension: str) -> None:
     module = load_script()
     previous = current_contracts(module, "1.12.10")
-    module._validate_current_contracts(previous, "1.12.10")
-    assert set(module.JINJA_RULE_PATHS).issubset(
-        module._language_negative_paths_for_version("1.12.10")
-    )
-    assert not set(module.JINJA_RULE_PATHS) & set(
-        module._language_negative_paths_for_version("1.12.11")
-    )
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_current_contracts(previous, "1.12.11")
+    module.contracts._validate_contracts_for_version("1.12.10", previous)
+    assert extension not in previous["language_rule_probe"]["extensions"]
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification"):
+        module.contracts._validate_contracts_for_version("1.12.11", previous)
     current = current_contracts(module, "1.12.11")
-    module._validate_current_contracts(current, "1.12.11")
+    module.contracts._validate_contracts_for_version("1.12.11", current)
     current["language_rule_probe"]["extensions"].remove(extension)
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_current_contracts(current, "1.12.11")
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification"):
+        module.contracts._validate_contracts_for_version("1.12.11", current)
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     recommended = next(
         item for item in manifest["releases"] if item["version"] == manifest["recommended_version"]
     )
     recommended["status"] = "observed-candidate"
 
-    with pytest.raises(module.CompatibilityError, match="recommended_version"):
-        module.validate_manifest(manifest, PROJECT_ROOT)
+    with pytest.raises(module.core.CompatibilityError, match="recommended_version"):
+        module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 def test_manifest_rejects_evidence_hash_mismatch() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["releases"][0]["evidence_sha256"] = "0" * 64
 
-    with pytest.raises(module.CompatibilityError, match="evidence hash mismatch"):
-        module.validate_manifest(manifest, PROJECT_ROOT)
+    with pytest.raises(module.core.CompatibilityError, match="evidence hash mismatch"):
+        module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 def test_manifest_rejects_floor_above_recommended() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["monitoring_floor"] = "2.0.0"
 
-    with pytest.raises(module.CompatibilityError, match="monitoring_floor"):
-        module.validate_manifest(manifest, PROJECT_ROOT)
+    with pytest.raises(module.core.CompatibilityError, match="monitoring_floor"):
+        module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 @pytest.mark.parametrize(
@@ -375,11 +353,11 @@ def test_manifest_rejects_floor_above_recommended() -> None:
 )
 def test_manifest_rejects_runtime_window_drift(field: str, value: object) -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["runtime_support"][field] = value
 
-    with pytest.raises(module.CompatibilityError, match="runtime_support"):
-        module.validate_manifest(manifest, PROJECT_ROOT)
+    with pytest.raises(module.core.CompatibilityError, match="runtime_support"):
+        module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 def test_manifest_rejects_missing_required_review_budget_evidence(tmp_path: Path) -> None:
@@ -392,25 +370,25 @@ def test_manifest_rejects_missing_required_review_budget_evidence(tmp_path: Path
     evidence = json.loads(source_evidence.read_text(encoding="utf-8"))
     evidence["contracts"].pop("review_budget_probe")
     evidence_path = evidence_dir / "ocr-1.9.5.json"
-    evidence_path.write_bytes(module.canonical_json(evidence))
+    evidence_path.write_bytes(module.core.canonical_json(evidence))
 
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["releases"] = [item for item in manifest["releases"] if item["version"] == "1.9.5"]
-    manifest["releases"][0]["evidence_sha256"] = module.hashlib.sha256(
+    manifest["releases"][0]["evidence_sha256"] = hashlib.sha256(
         evidence_path.read_bytes()
     ).hexdigest()
 
-    with pytest.raises(module.CompatibilityError, match="partial review budget behavior"):
-        module.validate_manifest(manifest, root)
+    with pytest.raises(module.core.CompatibilityError, match="partial review budget behavior"):
+        module.contracts.validate_manifest(manifest, root)
 
 
 def test_manifest_rejects_assets_that_differ_from_evidence() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["releases"][0]["assets"][0]["sha256"] = "f" * 64
 
-    with pytest.raises(module.CompatibilityError, match="assets disagree"):
-        module.validate_manifest(manifest, PROJECT_ROOT)
+    with pytest.raises(module.core.CompatibilityError, match="assets disagree"):
+        module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 @pytest.mark.parametrize(
@@ -440,7 +418,9 @@ def test_comment_probe_rejects_broken_boundary_observations(
     import contextlib
 
     module = load_script()
-    monkeypatch.setattr(module, "_synthetic_repo", lambda *_: (tmp_path, "a" * 40, "b" * 40))
+    monkeypatch.setattr(
+        module.execution, "_synthetic_repo", lambda *_: (tmp_path, "a" * 40, "b" * 40)
+    )
     mode = "array"
 
     def gateway(**kwargs: object) -> object:
@@ -458,7 +438,7 @@ def test_comment_probe_rejects_broken_boundary_observations(
         if corruption in invalid_top_levels:
             return invalid_top_levels[corruption]
         comments = [
-            {**item, "start_line": 2} for item in module._comment_probe_records("example.py")
+            {**item, "start_line": 2} for item in module.peer._comment_probe_records("example.py")
         ]
         warnings = [{"type": "comment_args_repaired"}] if mode == "repaired" else []
         calls = {}
@@ -468,7 +448,7 @@ def test_comment_probe_rejects_broken_boundary_observations(
                 "tool_call_number": 1,
                 "tool_name": "code_comment",
                 "error": "invalid character",
-                "arguments": module._comment_probe_arguments(mode, "example.py"),
+                "arguments": module.peer._comment_probe_arguments(mode, "example.py"),
             }
             if corruption == "missing-arguments":
                 detail.pop("arguments")
@@ -500,10 +480,10 @@ def test_comment_probe_rejects_broken_boundary_observations(
             warnings = []
         return json.dumps({"comments": comments, "warnings": warnings, "tool_calls": calls})
 
-    monkeypatch.setattr(module, "_stub_gateway", gateway)
-    monkeypatch.setattr(module, "_run", observation)
-    with pytest.raises(module.CompatibilityError, match="comment arguments"):
-        module._comment_arguments_probe(tmp_path / "ocr", tmp_path)
+    monkeypatch.setattr(module.peer, "_stub_gateway", gateway)
+    monkeypatch.setattr(module.execution, "_run", observation)
+    with pytest.raises(module.core.CompatibilityError, match="comment arguments"):
+        module.comments._comment_arguments_probe(tmp_path / "ocr", tmp_path)
 
 
 def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
@@ -518,17 +498,17 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
     status_output = tmp_path / "status.json"
     binary_digest = "0" * 64
     assets = [
-        module.Asset(
+        module.core.Asset(
             name="opencodereview-linux-amd64",
             size=1,
             sha256=binary_digest,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.0/bin",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/bin",
         ),
-        module.Asset(
+        module.core.Asset(
             name="sha256sum.txt",
             size=1,
             sha256="1" * 64,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.0/sums",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/sums",
         ),
     ]
 
@@ -537,37 +517,41 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
         path.write_bytes(b"x")
         return path
 
-    monkeypatch.setattr(module, "release_assets", lambda _release: assets)
-    monkeypatch.setattr(module, "_download", download)
+    monkeypatch.setattr(module.assets, "release_assets", lambda _release: assets)
+    monkeypatch.setattr(module.assets, "_download", download)
     monkeypatch.setattr(
-        module,
+        module.assets,
         "parse_checksum_file",
         lambda _path: {"opencodereview-linux-amd64": binary_digest},
     )
-    monkeypatch.setattr(module, "_synthetic_repo", lambda root, _env: (root, "a" * 40, "b" * 40))
     monkeypatch.setattr(
-        module,
+        module.execution, "_synthetic_repo", lambda root, _env: (root, "a" * 40, "b" * 40)
+    )
+    monkeypatch.setattr(
+        module.peer,
         "_stub_gateway",
         lambda **_kwargs: contextlib.nullcontext("http://127.0.0.1:1/v1"),
     )
-    monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "{")
+    monkeypatch.setattr(module.execution, "_run", lambda *_args, **_kwargs: "{")
     monkeypatch.setattr(
-        module,
+        module.probes,
         "run_contracts",
-        lambda binary, _version, directory: module._comment_arguments_probe(binary, directory),
+        lambda binary, _version, directory: module.comments._comment_arguments_probe(
+            binary, directory
+        ),
     )
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(module, "_request_json", lambda _url: release("1.13.0")),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.5")),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                "v1.13.0",
+                "v1.13.5",
                 "--comparison-version",
                 "1.12.13",
                 "--tested-baseline-version",
@@ -592,7 +576,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
 
 def test_discovery_filters_known_prerelease_and_old_versions() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     payload = [
         release("1.8.1"),
         release("1.8.0"),
@@ -601,8 +585,8 @@ def test_discovery_filters_known_prerelease_and_old_versions() -> None:
         {"tag_name": "nightly", "draft": False, "prerelease": False},
     ]
 
-    with patched_attr(module, "_request_json", lambda _url: payload):
-        unseen = module.discover_unseen(manifest)
+    with patched_attr(module.assets, "_request_json", lambda _url: payload):
+        unseen = module.assets.discover_unseen(manifest)
 
     assert [item["tag_name"] for item in unseen] == ["v2.0.0"]
 
@@ -611,7 +595,7 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
     module = load_script()
     manifest = manifest_before_1_11_3(module)
     first_page = [release("1.11.3")]
-    first_page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
+    first_page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 1))
     second_page = [release("1.11.2")]
     requested: list[str] = []
 
@@ -619,8 +603,8 @@ def test_discovery_pages_until_the_monitoring_floor() -> None:
         requested.append(url)
         return first_page if "page=1" in url else second_page
 
-    with patched_attr(module, "_request_json", fake_request):
-        unseen = module.discover_unseen(manifest)
+    with patched_attr(module.assets, "_request_json", fake_request):
+        unseen = module.assets.discover_unseen(manifest)
 
     assert [item["tag_name"] for item in unseen] == ["v1.11.3"]
     assert len(requested) == 2
@@ -637,8 +621,8 @@ def test_discovery_honors_exact_stable_release_ceiling() -> None:
         release("1.11.6"),
     ]
 
-    with patched_attr(module, "_request_json", lambda _url: payload):
-        unseen = module.discover_unseen(manifest, through_tag="v1.11.9")
+    with patched_attr(module.assets, "_request_json", lambda _url: payload):
+        unseen = module.assets.discover_unseen(manifest, through_tag="v1.11.9")
 
     assert [item["tag_name"] for item in unseen] == ["v1.11.7", "v1.11.8", "v1.11.9"]
 
@@ -648,28 +632,28 @@ def test_discovery_rejects_missing_release_ceiling() -> None:
     manifest = manifest_before_1_11_7(module)
     payload = [release("1.11.8"), release("1.11.7"), release("1.11.6")]
 
-    with patched_attr(module, "_request_json", lambda _url: payload):
-        with pytest.raises(module.CompatibilityError, match="ceiling was not found"):
-            module.discover_unseen(manifest, through_tag="v1.11.9")
+    with patched_attr(module.assets, "_request_json", lambda _url: payload):
+        with pytest.raises(module.core.CompatibilityError, match="ceiling was not found"):
+            module.assets.discover_unseen(manifest, through_tag="v1.11.9")
 
 
 def test_discovery_fails_when_bounded_pages_do_not_reach_floor() -> None:
     module = load_script()
     manifest = manifest_before_1_11_3(module)
     page = [release("1.11.3")]
-    page.extend({"draft": True} for _ in range(module.MAX_RELEASES_PER_PAGE - 1))
+    page.extend({"draft": True} for _ in range(module.settings.MAX_RELEASES_PER_PAGE - 1))
 
-    with patched_attr(module, "_request_json", lambda _url: page):
-        with pytest.raises(module.CompatibilityError, match="monitoring floor"):
-            module.discover_unseen(manifest)
+    with patched_attr(module.assets, "_request_json", lambda _url: page):
+        with pytest.raises(module.core.CompatibilityError, match="monitoring floor"):
+            module.assets.discover_unseen(manifest)
 
 
 def test_qualification_matrix_uses_adjacent_predecessors() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["recommended_version"] = "1.8.6"
 
-    matrix = module.qualification_matrix(manifest, [release("1.8.8"), release("1.8.7")])
+    matrix = module.assets.qualification_matrix(manifest, [release("1.8.8"), release("1.8.7")])
 
     assert matrix == {
         "include": [
@@ -689,10 +673,10 @@ def test_qualification_matrix_uses_adjacent_predecessors() -> None:
 
 def test_qualification_matrix_preserves_a_release_gap_for_human_review() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["recommended_version"] = "1.8.6"
 
-    matrix = module.qualification_matrix(manifest, [release("1.8.8")])
+    matrix = module.assets.qualification_matrix(manifest, [release("1.8.8")])
 
     assert matrix["include"][0]["comparison_version"] == "1.8.6"
 
@@ -701,7 +685,7 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
     module = load_script()
     manifest = manifest_before_1_11_3(module)
 
-    matrix = module.qualification_matrix(manifest, [release("1.11.3")])
+    matrix = module.assets.qualification_matrix(manifest, [release("1.11.3")])
 
     assert matrix == {
         "include": [
@@ -716,10 +700,10 @@ def test_qualification_matrix_accepts_the_next_manual_patch() -> None:
 
 def test_qualification_matrix_rejects_duplicate_releases() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
 
-    with pytest.raises(module.CompatibilityError, match="duplicate version"):
-        module.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
+    with pytest.raises(module.core.CompatibilityError, match="duplicate version"):
+        module.assets.qualification_matrix(manifest, [release("1.8.9"), release("1.8.9")])
 
 
 @pytest.mark.parametrize(
@@ -737,7 +721,7 @@ def test_qualification_matrix_rejects_duplicate_releases() -> None:
 def test_execution_signals_require_review_even_when_probes_pass(notes: str) -> None:
     """A passing harness cannot authorize unreviewed provider or deadline changes."""
 
-    classification, reasons = load_script().classify_candidate(
+    classification, reasons = load_script().promotion.classify_candidate(
         comparison_version="1.12.11",
         version="1.12.12",
         release_notes=notes,
@@ -751,31 +735,31 @@ def test_execution_signals_require_review_even_when_probes_pass(notes: str) -> N
 def test_automatic_safe_policy_is_conservative() -> None:
     module = load_script()
 
-    automatic, reasons = module.classify_candidate(
+    automatic, reasons = module.promotion.classify_candidate(
         comparison_version="1.7.17",
         version="1.7.18",
         release_notes="fix: correct comment normalization",
         contracts_passed=True,
     )
-    breaking, breaking_reasons = module.classify_candidate(
+    breaking, breaking_reasons = module.promotion.classify_candidate(
         comparison_version="1.7.17",
         version="1.7.18",
         release_notes="fix: change JSON schema for comments",
         contracts_passed=True,
     )
-    feature_patch, feature_reasons = module.classify_candidate(
+    feature_patch, feature_reasons = module.promotion.classify_candidate(
         comparison_version="1.10.1",
         version="1.10.2",
         release_notes="## Features\n\n- feat(rules): add Solidity support\n\n## Bug Fixes\n\n- fix: correct grouping",
         contracts_passed=True,
     )
-    minor, minor_reasons = module.classify_candidate(
+    minor, minor_reasons = module.promotion.classify_candidate(
         comparison_version="1.7.17",
         version="1.8.0",
         release_notes="fix: update documentation",
         contracts_passed=True,
     )
-    skipped, skipped_reasons = module.classify_candidate(
+    skipped, skipped_reasons = module.promotion.classify_candidate(
         comparison_version="1.7.17",
         version="1.7.19",
         release_notes="fix: update documentation",
@@ -813,7 +797,7 @@ def test_release_transition_accepts_only_adjacent_semver_steps(
 ) -> None:
     module = load_script()
 
-    assert module._release_transition(previous, candidate) == expected
+    assert module.core._release_transition(previous, candidate) == expected
 
 
 def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
@@ -821,8 +805,8 @@ def test_checksum_file_rejects_traversal_and_duplicates(tmp_path: Path) -> None:
     checksum = tmp_path / "sha256sum.txt"
     checksum.write_text(f"{'a' * 64}  ../escape\n", encoding="utf-8")
 
-    with pytest.raises(module.CompatibilityError, match="unsafe or duplicate"):
-        module.parse_checksum_file(checksum)
+    with pytest.raises(module.core.CompatibilityError, match="unsafe or duplicate"):
+        module.assets.parse_checksum_file(checksum)
 
 
 def test_probe_environment_ignores_operator_ocr_and_git_configuration(
@@ -837,15 +821,13 @@ def test_probe_environment_ignores_operator_ocr_and_git_configuration(
         OCR_CONFIG_PATH="/tmp/operator-config.json",
         OCR_LLM_PROVIDER="operator-provider",
     ):
-        env = module._isolated_probe_environment(home)
+        env = module.execution._isolated_probe_environment(home)
 
     assert env["HOME"] == str(home)
     assert env["XDG_CONFIG_HOME"] == str(home / ".config")
-    assert env["GIT_CONFIG_GLOBAL"] == module.os.devnull
-    assert env["GIT_CONFIG_SYSTEM"] == module.os.devnull
-    assert env["PATH"].split(module.os.pathsep)[0] == str(
-        Path(module.shutil.which("git") or "").parent
-    )
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert env["GIT_CONFIG_SYSTEM"] == os.devnull
+    assert env["PATH"].split(os.pathsep)[0] == str(Path(shutil.which("git") or "").parent)
     assert env["TMPDIR"] == str(home / "tmp")
     assert not any(key.startswith("OCR_") for key in env)
     assert not any(
@@ -866,12 +848,12 @@ def test_issue_body_uses_stable_marker_and_safe_release_changes() -> None:
         "classification_reasons": ["release notes contain a material signal"],
         "comparison_version": "1.7.17",
         "tested_baseline_version": "1.7.16",
-        "release_changes": module.release_changes_excerpt(
+        "release_changes": module.delivery.release_changes_excerpt(
             "fix parser output\n<script>alert(1)</script>\n```escape"
         ),
     }
 
-    body = module.render_issue(evidence)
+    body = module.delivery.render_issue(evidence)
 
     assert "<!-- ocr-compat-candidate:v1.7.18 -->" in body
     assert "Human checklist" in body
@@ -887,7 +869,7 @@ def test_failed_qualification_status_is_closed_and_consistent() -> None:
     """Public failure status accepts only reviewed enum values and exact keys."""
 
     module = load_script()
-    status = module.qualification_status(
+    status = module.contracts.qualification_status(
         tag="v1.10.0",
         comparison_version="1.9.10",
         tested_baseline_version="1.9.10",
@@ -896,11 +878,13 @@ def test_failed_qualification_status_is_closed_and_consistent() -> None:
         reason="contract-probe-failed",
     )
 
-    assert module.validate_qualification_status(status) == status
-    with pytest.raises(module.CompatibilityError, match="schema is invalid"):
-        module.validate_qualification_status({**status, "raw_error": "token=/private/path"})
-    with pytest.raises(module.CompatibilityError, match="inconsistent"):
-        module.validate_qualification_status({**status, "result": "compatible"})
+    assert module.contracts.validate_qualification_status(status) == status
+    with pytest.raises(module.core.CompatibilityError, match="schema is invalid"):
+        module.contracts.validate_qualification_status(
+            {**status, "raw_error": "token=/private/path"}
+        )
+    with pytest.raises(module.core.CompatibilityError, match="inconsistent"):
+        module.contracts.validate_qualification_status({**status, "result": "compatible"})
 
 
 @pytest.mark.parametrize(
@@ -919,8 +903,8 @@ def test_failed_qualification_status_rejects_impossible_stage_pairs(
 
     module = load_script()
 
-    with pytest.raises(module.CompatibilityError, match="phase and reason are inconsistent"):
-        module.qualification_status(
+    with pytest.raises(module.core.CompatibilityError, match="phase and reason are inconsistent"):
+        module.contracts.qualification_status(
             tag="v1.10.0",
             comparison_version="1.9.10",
             tested_baseline_version="1.9.10",
@@ -934,7 +918,7 @@ def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
     """The issue renderer projects closed status without a raw diagnostic field."""
 
     module = load_script()
-    status = module.qualification_status(
+    status = module.contracts.qualification_status(
         tag="v1.10.0",
         comparison_version="1.9.10",
         tested_baseline_version="1.9.10",
@@ -943,7 +927,7 @@ def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
         reason="contract-probe-failed",
     )
 
-    body = module.render_workflow_failure_issue(
+    body = module.delivery.render_workflow_failure_issue(
         status,
         "https://github.com/synthetic/repository/actions/runs/123",
     )
@@ -960,7 +944,7 @@ def test_failed_qualification_issue_contains_no_private_diagnostics() -> None:
 def test_optional_capabilities_validate_additive_llm_identity() -> None:
     module = load_script()
 
-    capabilities = module.detect_optional_capabilities(
+    capabilities = module.contracts.detect_optional_capabilities(
         "review --model MODEL --provider PROVIDER",
         {"llm": {"model": "synthetic-model", "provider": "synthetic-provider"}},
     )
@@ -970,8 +954,8 @@ def test_optional_capabilities_validate_additive_llm_identity() -> None:
         "per_run_model_override",
         "per_run_provider_override",
     ]
-    with pytest.raises(module.CompatibilityError, match="LLM model identity"):
-        module.detect_optional_capabilities("review", {"llm": {"model": ""}})
+    with pytest.raises(module.core.CompatibilityError, match="LLM model identity"):
+        module.contracts.detect_optional_capabilities("review", {"llm": {"model": ""}})
 
 
 def test_optional_capabilities_validate_effort_and_semantic_groups() -> None:
@@ -987,10 +971,10 @@ def test_optional_capabilities_validate_effort_and_semantic_groups() -> None:
         ]
     }
 
-    capabilities = module.detect_optional_capabilities("review --effort low", sample)
+    capabilities = module.contracts.detect_optional_capabilities("review --effort low", sample)
 
     assert capabilities == ["review_effort", "semantic_grouping"]
-    module._validate_file_groups(sample["groups"], {"src/app.py", "tests/test_app.py"})
+    module.contracts._validate_file_groups(sample["groups"], {"src/app.py", "tests/test_app.py"})
 
 
 def test_semantic_groups_reject_duplicate_or_unexpected_paths() -> None:
@@ -1002,10 +986,10 @@ def test_semantic_groups_reject_duplicate_or_unexpected_paths() -> None:
         {"label": "two", "files": ["src/app.py"]},
     ]
 
-    with pytest.raises(module.CompatibilityError, match="invalid grouped path"):
-        module._validate_file_groups(duplicate)
-    with pytest.raises(module.CompatibilityError, match="expected paths"):
-        module._validate_file_groups(
+    with pytest.raises(module.core.CompatibilityError, match="invalid grouped path"):
+        module.contracts._validate_file_groups(duplicate)
+    with pytest.raises(module.core.CompatibilityError, match="expected paths"):
+        module.contracts._validate_file_groups(
             [{"label": "one", "files": ["src/app.py"]}],
             {"src/app.py", "tests/test_app.py"},
         )
@@ -1013,7 +997,7 @@ def test_semantic_groups_reject_duplicate_or_unexpected_paths() -> None:
 
 def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     manifest["recommended_version"] = "1.8.6"
 
     def evidence(version: str, comparison: str, classification: str) -> dict[str, Any]:
@@ -1026,21 +1010,21 @@ def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
             "tested_baseline_version": "1.8.6",
         }
 
-    automatic = module.assess_automatic_chain(
+    automatic = module.promotion.assess_automatic_chain(
         manifest,
         [
             evidence("1.8.8", "1.8.7", "automatic-safe"),
             evidence("1.8.7", "1.8.6", "automatic-safe"),
         ],
     )
-    mixed = module.assess_automatic_chain(
+    mixed = module.promotion.assess_automatic_chain(
         manifest,
         [
             evidence("1.8.7", "1.8.6", "human-review-required"),
             evidence("1.8.8", "1.8.7", "automatic-safe"),
         ],
     )
-    gapped = module.assess_automatic_chain(
+    gapped = module.promotion.assess_automatic_chain(
         manifest,
         [evidence("1.8.8", "1.8.6", "human-review-required")],
     )
@@ -1055,9 +1039,11 @@ def test_complete_chain_requires_every_release_to_be_automatic_safe() -> None:
 def test_release_changes_excerpt_is_bounded() -> None:
     module = load_script()
 
-    excerpt = module.release_changes_excerpt("x" * (module.MAX_RELEASE_CHANGES_CHARS + 10))
+    excerpt = module.delivery.release_changes_excerpt(
+        "x" * (module.settings.MAX_RELEASE_CHANGES_CHARS + 10)
+    )
 
-    assert len(excerpt) <= module.MAX_RELEASE_CHANGES_CHARS + 40
+    assert len(excerpt) <= module.settings.MAX_RELEASE_CHANGES_CHARS + 40
     assert excerpt.endswith("[release notes excerpt truncated]")
 
 
@@ -1070,12 +1056,16 @@ def test_exact_issue_lookup_uses_direct_bounded_listing() -> None:
         requested.append(url)
         return [
             {"number": 47, "body": "other"},
-            {"number": 48, "body": marker},
+            {
+                "number": 48,
+                "body": marker,
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
+            },
             {"number": 99, "body": marker, "pull_request": {}},
         ]
 
-    with patched_attr(module, "_issue_api_request", request):
-        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+    with patched_attr(module.delivery, "_issue_api_request", request):
+        assert module.delivery.find_qualification_issue("synthetic/repository", marker) == 48
 
     assert requested == [
         "https://api.github.com/repos/synthetic/repository/issues?state=all&per_page=100&page=1"
@@ -1088,16 +1078,24 @@ def test_exact_issue_lookup_fails_closed_on_existing_duplicates() -> None:
 
     with (
         patched_attr(
-            module,
+            module.delivery,
             "_issue_api_request",
             lambda _url, **_kwargs: [
-                {"number": 47, "body": marker},
-                {"number": 48, "body": marker},
+                {
+                    "number": 47,
+                    "body": marker,
+                    "user": {"login": "synthetic", "id": 17, "type": "User"},
+                },
+                {
+                    "number": 48,
+                    "body": marker,
+                    "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"},
+                },
             ],
         ),
-        pytest.raises(module.CompatibilityError, match="#47, #48"),
+        pytest.raises(module.core.CompatibilityError, match="#47, #48"),
     ):
-        module.find_qualification_issue("synthetic/repository", marker)
+        module.delivery.find_qualification_issue("synthetic/repository", marker)
 
 
 def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
@@ -1105,7 +1103,7 @@ def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
     marker = "<!-- ocr-compat-candidate:v1.8.4 -->"
 
     with patched_attr(
-        module,
+        module.delivery,
         "_issue_api_request",
         lambda _url, **_kwargs: [
             {
@@ -1113,11 +1111,18 @@ def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
                 "body": marker,
                 "state": "closed",
                 "labels": [{"name": "duplicate"}, {"name": "dependencies"}],
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
             },
-            {"number": 48, "body": marker, "state": "open", "labels": []},
+            {
+                "number": 48,
+                "body": marker,
+                "state": "open",
+                "labels": [],
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
+            },
         ],
     ):
-        assert module.find_qualification_issue("synthetic/repository", marker) == 48
+        assert module.delivery.find_qualification_issue("synthetic/repository", marker) == 48
 
 
 def test_issue_upsert_updates_the_canonical_issue() -> None:
@@ -1138,10 +1143,10 @@ def test_issue_upsert_updates_the_canonical_issue() -> None:
         return {"number": 48}
 
     with (
-        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 48),
-        patched_attr(module, "_issue_api_request", request),
+        patched_attr(module.delivery, "find_qualification_issue", lambda _repo, _marker: 48),
+        patched_attr(module.delivery, "_issue_api_request", request),
     ):
-        number = module.upsert_qualification_issue(
+        number = module.delivery.upsert_qualification_issue(
             repository="synthetic/repository",
             evidence=evidence,
             run_url="https://github.com/synthetic/repository/actions/runs/123",
@@ -1159,7 +1164,7 @@ def test_failed_qualification_upsert_updates_the_canonical_issue() -> None:
 
     module = load_script()
     calls: list[tuple[str, str, dict[str, Any] | None]] = []
-    status = module.qualification_status(
+    status = module.contracts.qualification_status(
         tag="v1.10.0",
         comparison_version="1.9.10",
         tested_baseline_version="1.9.10",
@@ -1175,10 +1180,10 @@ def test_failed_qualification_upsert_updates_the_canonical_issue() -> None:
         return {"number": 135}
 
     with (
-        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 135),
-        patched_attr(module, "_issue_api_request", request),
+        patched_attr(module.delivery, "find_qualification_issue", lambda _repo, _marker: 135),
+        patched_attr(module.delivery, "_issue_api_request", request),
     ):
-        number = module.upsert_qualification_issue(
+        number = module.delivery.upsert_qualification_issue(
             repository="synthetic/repository",
             status=status,
             run_url="https://github.com/synthetic/repository/actions/runs/123",
@@ -1205,17 +1210,17 @@ def test_qualify_cli_retains_closed_status_when_private_probe_fails(
     private_detail = "probe token=secret path=/private/workspace/result.json"
 
     def fail_probe(*_args: object, **_kwargs: object) -> dict[str, Any]:
-        raise module.QualificationStageError(
+        raise module.core.QualificationStageError(
             private_detail,
             phase="contracts",
             reason="contract-probe-failed",
         )
 
     with (
-        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
-        patched_attr(module, "qualify_release", fail_probe),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module.qualification, "qualify_release", fail_probe),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
@@ -1252,8 +1257,8 @@ def test_qualification_stage_closes_unexpected_exception() -> None:
     def fail() -> None:
         raise RuntimeError("token=secret path=/private/workspace")
 
-    with pytest.raises(module.QualificationStageError) as captured:
-        module._qualification_stage("contracts", "contract-probe-failed", fail)
+    with pytest.raises(module.core.QualificationStageError) as captured:
+        module.core._qualification_stage("contracts", "contract-probe-failed", fail)
 
     assert captured.value.phase == "contracts"
     assert captured.value.reason == "unexpected-error"
@@ -1268,7 +1273,7 @@ def test_dependency_setup_failure_records_closed_status_without_runtime(
     module = load_script()
     output = tmp_path / "status.json"
     assert (
-        module.main(
+        module.cli.main(
             [
                 "record-setup-failure",
                 "--tag",
@@ -1283,7 +1288,7 @@ def test_dependency_setup_failure_records_closed_status_without_runtime(
         )
         == 0
     )
-    status = module.validate_qualification_status(json.loads(output.read_text()))
+    status = module.contracts.validate_qualification_status(json.loads(output.read_text()))
     assert status["phase"] == "environment"
     assert status["reason"] == "dependency-setup-failed"
     assert status["result"] == "failed"
@@ -1302,10 +1307,10 @@ def test_qualify_cli_retains_closed_status_for_unexpected_exception(
         raise RuntimeError(private_detail)
 
     with (
-        patched_attr(module, "_request_json", lambda _url: release("1.12.8")),
-        patched_attr(module, "qualify_release", fail_qualification),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.12.8")),
+        patched_attr(module.qualification, "qualify_release", fail_qualification),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
@@ -1349,11 +1354,11 @@ def test_qualify_cli_redacts_unexpected_status_writer_exception(
         raise RuntimeError(private_detail)
 
     with (
-        patched_attr(module, "_request_json", lambda _url: release("1.12.8")),
-        patched_attr(module, "qualify_release", fail_qualification),
-        patched_attr(module, "write_atomic_bytes", fail_status_write),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.12.8")),
+        patched_attr(module.qualification, "qualify_release", fail_qualification),
+        patched_attr(module.core, "write_atomic_bytes", fail_status_write),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
@@ -1386,7 +1391,7 @@ def test_qualify_cli_retains_status_when_manifest_validation_fails(tmp_path: Pat
     status_output = tmp_path / "status.json"
     manifest.write_text("{}\n", encoding="utf-8")
 
-    result = module.main(
+    result = module.cli.main(
         [
             "--manifest",
             str(manifest),
@@ -1432,14 +1437,14 @@ def test_qualify_cli_replaces_retained_evidence_with_failed_status_after_late_wr
         output: Path,
         **_kwargs: object,
     ) -> dict[str, Any]:
-        output.write_bytes(module.canonical_json(evidence))
+        output.write_bytes(module.core.canonical_json(evidence))
         return evidence
 
     with (
-        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
-        patched_attr(module, "qualify_release", retain_evidence),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module.qualification, "qualify_release", retain_evidence),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
@@ -1480,9 +1485,11 @@ def test_atomic_output_preserves_baseline_and_cleans_temporary_on_replace_failur
     def fail_replace(_source: object, _target: object) -> None:
         raise OSError("injected replace failure")
 
-    with patched_attr(module.os, "replace", fail_replace):
-        with pytest.raises(module.CompatibilityError, match="cannot write compatibility status"):
-            module.write_atomic_bytes(output, b"replacement\n", label="compatibility status")
+    with patched_attr(os, "replace", fail_replace):
+        with pytest.raises(
+            module.core.CompatibilityError, match="cannot write compatibility status"
+        ):
+            module.core.write_atomic_bytes(output, b"replacement\n", label="compatibility status")
 
     assert output.read_bytes() == b"baseline\n"
     assert list(tmp_path.glob(".status.json.*")) == []
@@ -1499,7 +1506,7 @@ def test_qualify_cli_recovers_when_success_status_commit_fails_once(tmp_path: Pa
             encoding="utf-8"
         )
     )
-    real_write = module.write_atomic_bytes
+    real_write = module.core.write_atomic_bytes
     status_writes = 0
 
     def retain_evidence(
@@ -1508,7 +1515,7 @@ def test_qualify_cli_recovers_when_success_status_commit_fails_once(tmp_path: Pa
         output: Path,
         **_kwargs: object,
     ) -> dict[str, Any]:
-        output.write_bytes(module.canonical_json(evidence))
+        output.write_bytes(module.core.canonical_json(evidence))
         return evidence
 
     def fail_first_status_write(path: Path, payload: bytes, *, label: str) -> None:
@@ -1516,15 +1523,15 @@ def test_qualify_cli_recovers_when_success_status_commit_fails_once(tmp_path: Pa
         if path == status_output:
             status_writes += 1
             if status_writes == 1:
-                raise module.CompatibilityError("cannot write compatibility status")
+                raise module.core.CompatibilityError("cannot write compatibility status")
         real_write(path, payload, label=label)
 
     with (
-        patched_attr(module, "_request_json", lambda _url: release("1.10.0")),
-        patched_attr(module, "qualify_release", retain_evidence),
-        patched_attr(module, "write_atomic_bytes", fail_first_status_write),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.10.0")),
+        patched_attr(module.qualification, "qualify_release", retain_evidence),
+        patched_attr(module.core, "write_atomic_bytes", fail_first_status_write),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(MANIFEST),
@@ -1558,8 +1565,8 @@ def test_status_upsert_does_not_require_a_valid_support_manifest(tmp_path: Path)
     invalid_manifest.write_text("{}\n", encoding="utf-8")
     status_path = tmp_path / "status.json"
     status_path.write_bytes(
-        module.canonical_json(
-            module.qualification_status(
+        module.core.canonical_json(
+            module.contracts.qualification_status(
                 tag="v1.10.0",
                 comparison_version="1.9.10",
                 tested_baseline_version="1.9.10",
@@ -1579,10 +1586,10 @@ def test_status_upsert_does_not_require_a_valid_support_manifest(tmp_path: Path)
         return {"number": 140}
 
     with (
-        patched_attr(module, "find_qualification_issue", lambda _repo, _marker: 140),
-        patched_attr(module, "_issue_api_request", request),
+        patched_attr(module.delivery, "find_qualification_issue", lambda _repo, _marker: 140),
+        patched_attr(module.delivery, "_issue_api_request", request),
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(invalid_manifest),
@@ -1610,13 +1617,13 @@ def test_qualification_requires_exact_supported_asset_matrix() -> None:
     candidate = release("1.7.18")
     candidate["assets"] = []
 
-    with pytest.raises(module.CompatibilityError, match="assets are missing"):
-        module.release_assets(candidate)
+    with pytest.raises(module.core.CompatibilityError, match="assets are missing"):
+        module.assets.release_assets(candidate)
 
 
 def test_manifest_cli_validate() -> None:
     module = load_script()
-    assert module.main(["--manifest", str(MANIFEST), "validate"]) == 0
+    assert module.cli.main(["--manifest", str(MANIFEST), "validate"]) == 0
 
 
 def test_prepare_update_cli_prints_relative_manifest_path(
@@ -1633,11 +1640,11 @@ def test_prepare_update_cli_prints_relative_manifest_path(
     relative_manifest = MANIFEST.relative_to(PROJECT_ROOT)
 
     with patched_attr(
-        module,
+        module.promotion,
         "prepare_update",
         lambda **_kwargs: [relative_manifest],
     ):
-        result = module.main(
+        result = module.cli.main(
             [
                 "--manifest",
                 str(relative_manifest),
@@ -1655,7 +1662,7 @@ def test_prepare_update_cli_prints_relative_manifest_path(
 
 def test_evidence_json_is_canonical() -> None:
     module = load_script()
-    payload = module.canonical_json({"z": 1, "a": 2})
+    payload = module.core.canonical_json({"z": 1, "a": 2})
     assert payload == b'{\n  "a": 2,\n  "z": 1\n}\n'
     assert json.loads(payload) == {"a": 2, "z": 1}
 
@@ -1683,15 +1690,15 @@ def test_metadata_request_scopes_github_token_to_api_origin() -> None:
             return Response()
 
     with (
-        patched_attr(module, "METADATA_OPENER", Opener()),
+        patched_attr(module.assets, "METADATA_OPENER", Opener()),
         patched_env(GITHUB_TOKEN="synthetic-github-token"),
     ):
-        assert module._request_json(f"{module.UPSTREAM_API}/releases") == {}
+        assert module.assets._request_json(f"{module.settings.UPSTREAM_API}/releases") == {}
 
     request = captured["request"]
     assert request.get_header("Authorization") == "Bearer synthetic-github-token"
     assert request.get_header("X-github-api-version") == "2022-11-28"
-    assert captured["timeout"] == module.HTTP_TIMEOUT_SECONDS
+    assert captured["timeout"] == module.settings.HTTP_TIMEOUT_SECONDS
 
 
 def test_metadata_request_rejects_non_github_origin_before_authentication() -> None:
@@ -1699,22 +1706,25 @@ def test_metadata_request_rejects_non_github_origin_before_authentication() -> N
 
     with (
         patched_env(GITHUB_TOKEN="synthetic-github-token"),
-        pytest.raises(module.CompatibilityError, match="outside the allowed GitHub API origin"),
+        pytest.raises(
+            module.core.CompatibilityError, match="outside the allowed GitHub API origin"
+        ),
     ):
-        module._request_json("https://downloads.example.invalid/releases")
+        module.assets._request_json("https://downloads.example.invalid/releases")
 
 
 def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> None:
     module = load_script()
 
-    with module._stub_gateway() as gateway:
-        request = module.urllib.request.Request(
+    with module.peer._stub_gateway() as gateway:
+        request = urllib.request.Request(
             f"{gateway}/chat/completions",
             data=json.dumps({"messages": {"invalid": True}}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with pytest.raises(module.urllib.error.HTTPError) as error:
-            module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
+        error.value.close()
 
     assert error.value.code == 400
 
@@ -1730,19 +1740,19 @@ def test_compatibility_gateway_distinguishes_tool_free_plan_requests() -> None:
         ]
     }
 
-    with module._stub_gateway() as gateway:
-        request = module.urllib.request.Request(
+    with module.peer._stub_gateway() as gateway:
+        request = urllib.request.Request(
             f"{gateway}/chat/completions",
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with module.urllib.request.urlopen(
-            request, timeout=module.HTTP_TIMEOUT_SECONDS
+        with urllib.request.urlopen(
+            request, timeout=module.settings.HTTP_TIMEOUT_SECONDS
         ) as response:
             result = json.loads(response.read())
 
-        assert module._StubHandler.request_stages == ["plan"]
-        assert module._StubHandler.grouping_inventories == []
+        assert module.peer._StubHandler.request_stages == ["plan"]
+        assert module.peer._StubHandler.grouping_inventories == []
 
     content = result["choices"][0]["message"]["content"]
     assert content == "Summary: Review the changed code.\n\nIssues\n(none)"
@@ -1756,36 +1766,38 @@ def test_reasoning_gateway_captures_wire_fields_without_model_reply(protocol: st
         if protocol == "chat/completions"
         else {"reasoning": {"effort": "none", "summary": "auto"}}
     )
-    with module._stub_gateway(capture_reasoning=True) as gateway:
-        request = module.urllib.request.Request(
+    with module.peer._stub_gateway(capture_reasoning=True) as gateway:
+        request = urllib.request.Request(
             f"{gateway}/{protocol}",
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with pytest.raises(module.urllib.error.HTTPError) as error:
-            module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
         assert error.value.code == 400
-        observed = module._StubHandler.reasoning_requests
+        error.value.close()
+        observed = module.peer._StubHandler.reasoning_requests
         assert len(observed) == 1 and observed[0]["path"] == f"/v1/{protocol}"
         assert observed[0]["root_present"] is (protocol == "chat/completions")
         assert observed[0]["nested_present"] is (protocol == "responses")
-        assert module._StubHandler.request_count == 0
-        assert module._StubHandler.reasoning_overflow is False
+        assert module.peer._StubHandler.request_count == 0
+        assert module.peer._StubHandler.reasoning_overflow is False
 
 
 def test_reasoning_gateway_records_capture_overflow() -> None:
     module = load_script()
-    with module._stub_gateway(capture_reasoning=True) as gateway:
+    with module.peer._stub_gateway(capture_reasoning=True) as gateway:
         for _ in range(33):
-            request = module.urllib.request.Request(
+            request = urllib.request.Request(
                 f"{gateway}/responses",
                 data=b'{"reasoning":{"effort":"none"}}',
                 headers={"Content-Type": "application/json"},
             )
-            with pytest.raises(module.urllib.error.HTTPError):
-                module.urllib.request.urlopen(request, timeout=module.HTTP_TIMEOUT_SECONDS)
-        assert len(module._StubHandler.reasoning_requests) == 32
-        assert module._StubHandler.reasoning_overflow is True
+            with pytest.raises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
+            error.value.close()
+        assert len(module.peer._StubHandler.reasoning_requests) == 32
+        assert module.peer._StubHandler.reasoning_overflow is True
 
 
 def test_grouping_inventory_strictly_parses_current_shape() -> None:
@@ -1814,7 +1826,7 @@ def test_grouping_inventory_strictly_parses_current_shape() -> None:
         "win\\deleted.hbs (DELETED, +0/-5)\n"
         "renamed.mustache (RENAMED, +0/-0)"
     )
-    result = module.parse_grouping_inventory(
+    result = module.peer.parse_grouping_inventory(
         messages(
             "[0] ADDED   src/space (unicode) λ.py (+10/-0)\n"
             "[1] DELETED   win\\deleted.hbs (+0/-5)\n"
@@ -1822,12 +1834,12 @@ def test_grouping_inventory_strictly_parses_current_shape() -> None:
         )
     )
     assert result == [
-        module.GroupingInventoryEntry(0, "ADDED", "src/space (unicode) λ.py", 10, 0),
-        module.GroupingInventoryEntry(1, "DELETED", "win\\deleted.hbs", 0, 5),
-        module.GroupingInventoryEntry(2, "RENAMED", "renamed.mustache", 0, 0),
+        module.core.GroupingInventoryEntry(0, "ADDED", "src/space (unicode) λ.py", 10, 0),
+        module.core.GroupingInventoryEntry(1, "DELETED", "win\\deleted.hbs", 0, 5),
+        module.core.GroupingInventoryEntry(2, "RENAMED", "renamed.mustache", 0, 0),
     ]
-    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory entry"):
-        module.parse_grouping_inventory(old_inventory)
+    with pytest.raises(module.core.CompatibilityError, match="invalid grouping inventory entry"):
+        module.peer.parse_grouping_inventory(old_inventory)
 
 
 def test_schema_three_candidate_remains_chain_aware() -> None:
@@ -1844,7 +1856,7 @@ def test_schema_three_candidate_remains_chain_aware() -> None:
         "classification": "automatic-safe",
     }
 
-    result = module.assess_automatic_chain(manifest, [evidence])
+    result = module.promotion.assess_automatic_chain(manifest, [evidence])
 
     assert result == {
         "automatic_blockers": [],
@@ -1888,8 +1900,8 @@ def test_grouping_inventory_rejects_mixed_duplicate_and_malformed_values(
         }
     ]
 
-    with pytest.raises(module.CompatibilityError, match="invalid grouping inventory"):
-        module.parse_grouping_inventory(messages)
+    with pytest.raises(module.core.CompatibilityError, match="invalid grouping inventory"):
+        module.peer.parse_grouping_inventory(messages)
 
 
 def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> None:
@@ -1906,16 +1918,16 @@ def test_grouping_inventory_rejects_missing_duplicate_and_oversized_blocks() -> 
         ),
     }
 
-    with pytest.raises(module.CompatibilityError, match="exactly one"):
-        module.parse_grouping_inventory([])
-    with pytest.raises(module.CompatibilityError, match="exactly one"):
-        module.parse_grouping_inventory([valid, valid])
+    with pytest.raises(module.core.CompatibilityError, match="exactly one"):
+        module.peer.parse_grouping_inventory([])
+    with pytest.raises(module.core.CompatibilityError, match="exactly one"):
+        module.peer.parse_grouping_inventory([valid, valid])
     oversized = "\n".join(
         f"[{index}] MODIFIED   file-{index}.py (+1/-1)"
-        for index in range(module.MAX_GROUPING_INVENTORY_ENTRIES + 1)
+        for index in range(module.settings.MAX_GROUPING_INVENTORY_ENTRIES + 1)
     )
-    with pytest.raises(module.CompatibilityError, match="invalid entry count"):
-        module.parse_grouping_inventory(
+    with pytest.raises(module.core.CompatibilityError, match="invalid entry count"):
+        module.peer.parse_grouping_inventory(
             [
                 {
                     "role": "user",
@@ -1953,18 +1965,24 @@ def test_grouping_inventory_rejects_reorder_status_and_churn_drift(
 
     module = load_script()
     expected = [
-        module.GroupingInventoryEntry(0, "MODIFIED", "first.py", 1, 1),
-        module.GroupingInventoryEntry(1, "MODIFIED", "second.py", 1, 1),
+        module.core.GroupingInventoryEntry(0, "MODIFIED", "first.py", 1, 1),
+        module.core.GroupingInventoryEntry(1, "MODIFIED", "second.py", 1, 1),
     ]
 
-    with pytest.raises(module.CompatibilityError, match="unexpected status/churn"):
-        module._require_exact_grouping_inventory(
-            [module.GroupingInventoryEntry(index, *entry) for index, entry in enumerate(observed)],
+    with pytest.raises(module.core.CompatibilityError, match="unexpected status/churn"):
+        module.peer._require_exact_grouping_inventory(
+            [
+                module.core.GroupingInventoryEntry(index, *entry)
+                for index, entry in enumerate(observed)
+            ],
             expected,
         )
 
 
-def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
+@pytest.mark.parametrize("wrong_limit", ["healthy", None, 0, 49, 50, 75, 100, 125])
+def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
+    wrong_limit: str | int | None,
+) -> None:
     """Derive effective numeric behavior without retaining raw OCR diagnostics."""
 
     module = load_script()
@@ -1993,7 +2011,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
             stderr = (
                 "Error: --max-tokens-budget must be a non-negative integer (0 means unlimited)\n"
             )
-        return module.subprocess.CompletedProcess(
+        return subprocess.CompletedProcess(
             [flag, str(value)],
             returncode,
             stdout='{"files": []}\n',
@@ -2007,20 +2025,33 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
         _head: str,
         _directory: Path,
         *,
-        value: int,
+        value: int | None,
         expected_diagnostic: object,
         grace_task_done: bool = True,
     ) -> tuple[int, dict[str, object]]:
-        return (100 if value <= 50 else value), {
+        rounds = 100 if value in (None, 0) else max(50, value)
+        if value == wrong_limit:
+            rounds = 42
+        return rounds, {
             "completed": grace_task_done,
             "limit_warning": True,
         }
 
     with (
-        patched_attr(module, "_run_numeric_preview_case", preview),
-        patched_attr(module, "_effective_max_tools_probe", effective),
+        patched_attr(module.numeric, "_run_numeric_preview_case", preview),
+        patched_attr(module.numeric, "_effective_max_tools_probe", effective),
     ):
-        result = module._numeric_cli_probe(
+        if wrong_limit != "healthy":
+            with pytest.raises(module.core.CompatibilityError):
+                module.numeric._numeric_cli_probe(
+                    Path("/synthetic/ocr"),
+                    Path("/synthetic/repo"),
+                    "a" * 40,
+                    "b" * 40,
+                    Path("/synthetic/probe"),
+                )
+            return
+        result = module.numeric._numeric_cli_probe(
             Path("/synthetic/ocr"),
             Path("/synthetic/repo"),
             "a" * 40,
@@ -2028,7 +2059,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
             Path("/synthetic/probe"),
         )
 
-    assert result == module._numeric_contract_for_version("1.13.1")
+    assert result == module.contracts._numeric_contract_for_version("1.13.5")
     assert "stderr" not in json.dumps(result)
 
 
@@ -2066,8 +2097,8 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
         captured["timeout"] = timeout
         yield Response()
 
-    digest = module.hashlib.sha256(b"ocr").hexdigest()
-    asset = module.Asset(
+    digest = hashlib.sha256(b"ocr").hexdigest()
+    asset = module.core.Asset(
         name="opencodereview-linux-amd64",
         size=3,
         sha256=digest,
@@ -2077,14 +2108,14 @@ def test_asset_download_never_uses_github_api_token(tmp_path: Path) -> None:
         ),
     )
     with (
-        patched_attr(module.urllib.request, "urlopen", fake_urlopen),
+        patched_attr(urllib.request, "urlopen", fake_urlopen),
         patched_env(GITHUB_TOKEN="synthetic-github-token"),
     ):
-        assert module._download(asset, tmp_path).read_bytes() == b"ocr"
+        assert module.assets._download(asset, tmp_path).read_bytes() == b"ocr"
 
     request = captured["request"]
     assert request.get_header("Authorization") is None
-    assert request.get_header("User-agent") == module.USER_AGENT
+    assert request.get_header("User-agent") == module.settings.USER_AGENT
 
 
 def test_asset_download_retries_timeout_and_resets_partial_file(tmp_path: Path) -> None:
@@ -2122,20 +2153,20 @@ def test_asset_download_retries_timeout_and_resets_partial_file(tmp_path: Path) 
         calls += 1
         return Response(fail_midstream=calls == 1)
 
-    asset = module.Asset(
+    asset = module.core.Asset(
         name="opencodereview-linux-amd64",
         size=3,
-        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        sha256=hashlib.sha256(b"ocr").hexdigest(),
         url=(
             "https://github.com/alibaba/open-code-review/releases/download/"
             "v1.8.5/opencodereview-linux-amd64"
         ),
     )
     with (
-        patched_attr(module.urllib.request, "urlopen", flaky_urlopen),
-        patched_attr(module.time, "sleep", lambda _seconds: None),
+        patched_attr(urllib.request, "urlopen", flaky_urlopen),
+        patched_attr(time, "sleep", lambda _seconds: None),
     ):
-        destination = module._download(asset, tmp_path)
+        destination = module.assets._download(asset, tmp_path)
 
     assert destination.read_bytes() == b"ocr"
     assert calls == 2
@@ -2150,23 +2181,23 @@ def test_asset_download_bounds_transient_retries(tmp_path: Path) -> None:
         calls += 1
         raise TimeoutError("synthetic timeout")
 
-    asset = module.Asset(
+    asset = module.core.Asset(
         name="opencodereview-linux-amd64",
         size=3,
-        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        sha256=hashlib.sha256(b"ocr").hexdigest(),
         url=(
             "https://github.com/alibaba/open-code-review/releases/download/"
             "v1.8.5/opencodereview-linux-amd64"
         ),
     )
     with (
-        patched_attr(module.urllib.request, "urlopen", timed_out_urlopen),
-        patched_attr(module.time, "sleep", lambda _seconds: None),
-        pytest.raises(module.CompatibilityError, match="after 3 attempts"),
+        patched_attr(urllib.request, "urlopen", timed_out_urlopen),
+        patched_attr(time, "sleep", lambda _seconds: None),
+        pytest.raises(module.core.CompatibilityError, match="after 3 attempts"),
     ):
-        module._download(asset, tmp_path)
+        module.assets._download(asset, tmp_path)
 
-    assert calls == module.DOWNLOAD_ATTEMPTS
+    assert calls == module.settings.DOWNLOAD_ATTEMPTS
 
 
 def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
@@ -2176,7 +2207,7 @@ def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
     def not_found_urlopen(request: Any, *, timeout: int) -> None:
         nonlocal calls
         calls += 1
-        raise module.urllib.error.HTTPError(
+        raise urllib.error.HTTPError(
             request.full_url,
             404,
             "synthetic not found",
@@ -2184,25 +2215,28 @@ def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
             fp=None,
         )
 
-    asset = module.Asset(
+    asset = module.core.Asset(
         name="opencodereview-linux-amd64",
         size=3,
-        sha256=module.hashlib.sha256(b"ocr").hexdigest(),
+        sha256=hashlib.sha256(b"ocr").hexdigest(),
         url=(
             "https://github.com/alibaba/open-code-review/releases/download/"
             "v1.8.5/opencodereview-linux-amd64"
         ),
     )
     with (
-        patched_attr(module.urllib.request, "urlopen", not_found_urlopen),
-        pytest.raises(module.CompatibilityError, match="cannot download"),
+        patched_attr(urllib.request, "urlopen", not_found_urlopen),
+        pytest.raises(module.core.CompatibilityError, match="cannot download"),
     ):
-        module._download(asset, tmp_path)
+        module.assets._download(asset, tmp_path)
 
     assert calls == 1
 
 
-def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "collision", ["none", "fragment", "first-evidence", "last-evidence", "symlink", "identical"]
+)
+def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path, collision: str) -> None:
     module = load_script()
     root = tmp_path
     (root / "compatibility" / "evidence").mkdir(parents=True)
@@ -2225,22 +2259,22 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
             baseline_evidence.read_bytes()
         )
     manifest_path = root / "compatibility" / "ocr-support.json"
-    synthetic_manifest = module.load_json(MANIFEST)
+    synthetic_manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, synthetic_manifest, "1.8.6")
     synthetic_manifest["releases"] = [
         item
         for item in synthetic_manifest["releases"]
-        if module._version(item["version"]) <= (1, 8, 6)
+        if module.core._version(item["version"]) <= (1, 8, 6)
     ]
-    manifest_path.write_bytes(module.canonical_json(synthetic_manifest))
+    manifest_path.write_bytes(module.core.canonical_json(synthetic_manifest))
     preflight = root / "src" / "ocr_toolkit" / "preflight.py"
-    old_supported, old_deprecated = module.qualified_runtime_versions(synthetic_manifest)
+    old_supported, old_deprecated = module.contracts.qualified_runtime_versions(synthetic_manifest)
     preflight.write_text(
-        module._render_python_constant("RECOMMENDED_OCR_VERSION", "1.8.6")
+        module.promotion._render_python_constant("RECOMMENDED_OCR_VERSION", "1.8.6")
         + "\n"
-        + module._render_python_constant("SUPPORTED_OCR_VERSIONS", tuple(old_supported))
+        + module.promotion._render_python_constant("SUPPORTED_OCR_VERSIONS", tuple(old_supported))
         + "\n"
-        + module._render_python_constant("DEPRECATED_OCR_VERSIONS", tuple(old_deprecated))
+        + module.promotion._render_python_constant("DEPRECATED_OCR_VERSIONS", tuple(old_deprecated))
         + "\n",
         encoding="utf-8",
     )
@@ -2263,7 +2297,7 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         asset["sha256"] = "a" * 64
     evidence_187 = {
         "schema_version": 3,
-        "upstream_repository": module.UPSTREAM_REPOSITORY,
+        "upstream_repository": module.settings.UPSTREAM_REPOSITORY,
         "version": "1.8.7",
         "tag": "v1.8.7",
         "published_at": "2026-07-28T00:00:00Z",
@@ -2303,7 +2337,25 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         },
     }
 
-    changed = module.prepare_update(
+    fragment = root / "changelog.d" / "42.maintenance.md"
+    evidence_first = root / "compatibility" / "evidence" / "ocr-1.8.7.json"
+    evidence_last = root / "compatibility" / "evidence" / "ocr-1.8.8.json"
+    if collision == "fragment":
+        fragment.write_text("Preserve existing hand-maintained release notes.\n")
+    elif collision == "first-evidence":
+        evidence_first.write_bytes(b"unreferenced previous evidence")
+    elif collision == "last-evidence":
+        evidence_last.write_bytes(b"unreferenced previous evidence")
+    elif collision == "symlink":
+        target = root / "preserved-target"
+        target.write_bytes(b"caller content")
+        fragment.symlink_to(target)
+    elif collision == "identical":
+        evidence_first.write_bytes(module.core.canonical_json(evidence_187))
+        fragment.write_text(
+            "Target checksum-verified Open Code Review 1.8.8 after qualifying 1.8.7 through 1.8.8.\n"
+        )
+    arguments = dict(
         manifest_path=manifest_path,
         evidence=[evidence_188, evidence_187],
         fragment_number=42,
@@ -2313,13 +2365,25 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         },
         root=root,
     )
+    if collision not in {"none", "identical"}:
+        before = {
+            path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()
+        }
+        with pytest.raises(module.core.CompatibilityError, match="destination"):
+            module.promotion.prepare_update(**arguments)
+        assert {
+            path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()
+        } == before
+        if collision == "symlink":
+            assert fragment.is_symlink() and target.read_bytes() == b"caller content"
+        return
+    changed = module.promotion.prepare_update(**arguments)
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",
         "compatibility/evidence/ocr-1.8.7.json",
         "compatibility/evidence/ocr-1.8.8.json",
         "src/ocr_toolkit/preflight.py",
-        "examples/gitlab/ocr-review.gitlab-ci.yml",
         "changelog.d/42.maintenance.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -2337,8 +2401,11 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "semantic_grouping",
     ]
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.8.8"' in example_text
-    assert f'OCR_SHA256: "{"b" * 64}"' in example_text
+    assert 'OCR_VERSION: "v1.8.6"' in example_text
+    assert (
+        'OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"'
+        in example_text
+    )
     for path, content in durable_docs.items():
         assert path.read_text(encoding="utf-8") == content
     fragment = (root / "changelog.d" / "42.maintenance.md").read_text(encoding="utf-8")
@@ -2350,13 +2417,13 @@ def promotion_manifest(tmp_path: Path) -> Path:
     """Freeze the promotion-policy baseline independently of the current runtime pin."""
 
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, manifest, "1.11.3")
     manifest["releases"] = [
-        item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 3)
+        item for item in manifest["releases"] if module.core._version(item["version"]) <= (1, 11, 3)
     ]
     target = tmp_path / "manifest.json"
-    target.write_bytes(module.canonical_json(manifest))
+    target.write_bytes(module.core.canonical_json(manifest))
     return target
 
 
@@ -2371,8 +2438,8 @@ def test_prepare_update_rejects_human_review_candidate(promotion_manifest: Path)
         "tested_baseline_version": "1.11.3",
     }
 
-    with pytest.raises(module.CompatibilityError, match="bounded conclusion"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="bounded conclusion"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=42,
@@ -2386,9 +2453,9 @@ def test_historical_evidence_is_independent_of_live_contract_defaults(
     """Current suite changes cannot reinterpret already-qualified historical artifacts."""
 
     module = load_script()
-    monkeypatch.setattr(module, "CURRENT_NUMERIC_CLI_CONTRACT", {})
-    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {})
-    module.validate_manifest(module.load_json(promotion_manifest), PROJECT_ROOT)
+    monkeypatch.setattr(module.settings, "CURRENT_NUMERIC_CLI_CONTRACT", {})
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {})
+    module.contracts.validate_manifest(module.core.load_json(promotion_manifest), PROJECT_ROOT)
 
 
 @pytest.mark.parametrize(
@@ -2408,15 +2475,15 @@ def test_current_promotion_rejects_missing_contract_before_writing(
 
     module = load_script()
     promotion_manifest = tmp_path / "ocr-support.json"
-    previous_manifest = module.load_json(MANIFEST)
+    previous_manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, previous_manifest, "1.12.13")
     previous_manifest["releases"] = [
         item
         for item in previous_manifest["releases"]
-        if module._version(item["version"]) <= (1, 12, 13)
+        if module.core._version(item["version"]) <= (1, 12, 13)
     ]
     promotion_manifest.write_text(json.dumps(previous_manifest), encoding="utf-8")
-    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.12.13.json")
+    evidence = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.12.13.json")
     evidence["version"] = "1.13.0"
     evidence["tag"] = "v1.13.0"
     evidence["classification"] = "human-review-required"
@@ -2425,8 +2492,8 @@ def test_current_promotion_rejects_missing_contract_before_writing(
     evidence["contracts"] = current_contracts(module, "1.13.0")
     evidence["contracts"].pop(missing_probe)
     before = promotion_manifest.read_bytes()
-    with pytest.raises(module.CompatibilityError, match=missing_probe):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match=missing_probe):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=176,
@@ -2440,30 +2507,30 @@ def test_recent_historical_evidence_is_independent_of_live_inventory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_script()
-    manifest = module.load_json(MANIFEST)
+    manifest = module.core.load_json(MANIFEST)
     set_manifest_recommendation(module, manifest, "1.11.5")
     manifest["releases"] = [
-        item for item in manifest["releases"] if module._version(item["version"]) <= (1, 11, 5)
+        item for item in manifest["releases"] if module.core._version(item["version"]) <= (1, 11, 5)
     ]
-    monkeypatch.setattr(module, "CURRENT_NUMERIC_CLI_CONTRACT", {})
-    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {})
-    monkeypatch.setattr(module, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
-    module.validate_manifest(manifest, PROJECT_ROOT)
+    monkeypatch.setattr(module.settings, "CURRENT_NUMERIC_CLI_CONTRACT", {})
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {})
+    monkeypatch.setattr(module.settings, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
+    module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
 def test_ocr_1117_uses_frozen_contract_independent_of_live_rego_inventory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_script()
-    evidence = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
+    evidence = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
     evidence["version"] = "1.11.7"
 
-    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
-    module._validate_evidence_contracts("1.11.7", evidence)
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
+    module.contracts._validate_evidence_contracts("1.11.7", evidence)
 
     evidence["contracts"]["language_rule_probe"]["selected"] = 17
-    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
-        module._validate_evidence_contracts("1.11.7", evidence)
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.contracts._validate_evidence_contracts("1.11.7", evidence)
 
 
 @pytest.mark.parametrize("version", ["1.11.8", "1.11.9"])
@@ -2471,15 +2538,15 @@ def test_rego_epoch_is_frozen_without_reinterpreting_evidence(version: str) -> N
     module = load_script()
     evidence_path = PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json"
     before = evidence_path.read_bytes()
-    evidence = module.load_json(evidence_path)
+    evidence = module.core.load_json(evidence_path)
 
-    module._validate_evidence_contracts(version, evidence)
+    module.contracts._validate_evidence_contracts(version, evidence)
     language = evidence["contracts"]["language_rule_probe"]
     language["extensions"].remove(".rego")
     language["selected"] -= 1
 
-    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
-        module._validate_evidence_contracts(version, evidence)
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.contracts._validate_evidence_contracts(version, evidence)
     assert evidence_path.read_bytes() == before
 
 
@@ -2490,17 +2557,17 @@ def test_ocr_1120_to_1127_epochs_are_frozen_without_reinterpreting_evidence(
     module = load_script()
     evidence_path = PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json"
     before = evidence_path.read_bytes()
-    evidence = module.load_json(evidence_path)
+    evidence = module.core.load_json(evidence_path)
 
-    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
-    monkeypatch.setattr(module, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
-    module._validate_evidence_contracts(version, evidence)
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
+    monkeypatch.setattr(module.settings, "CURRENT_DEFAULT_EXCLUDED_PATHS", ())
+    module.contracts._validate_evidence_contracts(version, evidence)
     language = evidence["contracts"]["language_rule_probe"]
     language["extensions"].remove(".rego")
     language["selected"] -= 1
 
-    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
-        module._validate_evidence_contracts(version, evidence)
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.contracts._validate_evidence_contracts(version, evidence)
     assert evidence_path.read_bytes() == before
 
 
@@ -2509,8 +2576,8 @@ def test_ocr_1117_to_1119_chain_crosses_frozen_epochs_before_writes(
 ) -> None:
     module = load_script()
     manifest_path = tmp_path / "ocr-support.json"
-    manifest_path.write_bytes(module.canonical_json(manifest_before_1_11_7(module)))
-    base = module.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
+    manifest_path.write_bytes(module.core.canonical_json(manifest_before_1_11_7(module)))
+    base = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.6.json")
     evidence: list[dict[str, object]] = []
     comparison = "1.11.6"
     for version in ("1.11.7", "1.11.8", "1.11.9"):
@@ -2536,8 +2603,8 @@ def test_ocr_1117_to_1119_chain_crosses_frozen_epochs_before_writes(
     language["selected"] = len(extensions)
     before = manifest_path.read_bytes()
 
-    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.promotion.prepare_update(
             manifest_path=manifest_path,
             evidence=evidence,
             fragment_number=196,
@@ -2563,8 +2630,8 @@ def test_prepare_update_requires_human_review_for_minor_transition(
         "tested_baseline_version": "1.11.3",
     }
 
-    with pytest.raises(module.CompatibilityError, match="explicit human review"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="explicit human review"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=73,
@@ -2586,8 +2653,8 @@ def test_prepare_update_rejects_schema_one_minor_or_major_transition(
         "classification": "human-review-required",
     }
 
-    with pytest.raises(module.CompatibilityError, match="chain-aware evidence schema 2"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="chain-aware evidence schema 2"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=73,
@@ -2607,8 +2674,8 @@ def test_prepare_update_rejects_nonadjacent_minor_transition(promotion_manifest:
         "tested_baseline_version": "1.11.3",
     }
 
-    with pytest.raises(module.CompatibilityError, match="contiguous release sequence"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="contiguous release sequence"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=73,
@@ -2628,8 +2695,8 @@ def test_prepare_update_rejects_conclusion_outside_evidence_chain(promotion_mani
         "tested_baseline_version": "1.11.3",
     }
 
-    with pytest.raises(module.CompatibilityError, match="only evidence versions"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="only evidence versions"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=72,
@@ -2653,8 +2720,8 @@ def test_prepare_update_rejects_invalid_optional_reviewed_conclusion(
         "tested_baseline_version": "1.11.3",
     }
 
-    with pytest.raises(module.CompatibilityError, match="bounded plain text"):
-        module.prepare_update(
+    with pytest.raises(module.core.CompatibilityError, match="bounded plain text"):
+        module.promotion.prepare_update(
             manifest_path=promotion_manifest,
             evidence=evidence,
             fragment_number=72,
@@ -2703,10 +2770,10 @@ def test_preview_file_selection_accepts_json_and_rejects_legacy_text(
     module = load_script()
 
     if isinstance(payload, str):
-        with pytest.raises(module.CompatibilityError, match="JSON object"):
-            module._preview_file_selection(payload, "fixture.unknown")
+        with pytest.raises(module.core.CompatibilityError, match="JSON object"):
+            module.selection._preview_file_selection(payload, "fixture.unknown")
     else:
-        assert module._preview_file_selection(payload, "fixture.unknown") == expected
+        assert module.selection._preview_file_selection(payload, "fixture.unknown") == expected
 
 
 @pytest.mark.parametrize("invalid_path", [None, 7])
@@ -2721,24 +2788,29 @@ def test_selected_preview_paths_rejects_non_string_selected_path(invalid_path: o
         ]
     }
 
-    with pytest.raises(module.CompatibilityError, match="selected a file with an invalid path"):
-        module._selected_preview_paths(payload)
+    with pytest.raises(
+        module.core.CompatibilityError, match="selected a file with an invalid path"
+    ):
+        module.selection._selected_preview_paths(payload)
 
 
-@pytest.mark.parametrize("version", ["1.12.8", "1.12.10", "1.12.11", "1.12.13"])
+@pytest.mark.parametrize(
+    "version",
+    ["1.12.8", "1.12.10", "1.12.11", "1.12.13", "1.13.0", "1.13.1", "1.13.2", "1.13.3", "1.13.4"],
+)
 def test_pre_grace_evidence_remains_frozen(version: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """New probe requirements cannot reinterpret existing qualification receipts."""
 
     module = load_script()
     path = PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json"
     before = path.read_bytes()
-    evidence = module.load_json(path)
-    monkeypatch.setattr(module, "CURRENT_LANGUAGE_RULES", {})
-    monkeypatch.setattr(module, "CURRENT_NUMERIC_CLI_CONTRACT", {})
-    module._validate_evidence_contracts(version, evidence)
+    evidence = module.core.load_json(path)
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {})
+    monkeypatch.setattr(module.settings, "CURRENT_NUMERIC_CLI_CONTRACT", {})
+    module.contracts._validate_evidence_contracts(version, evidence)
     evidence["contracts"]["numeric_cli_probe"]["grace_rounds"] = {}
-    with pytest.raises(module.CompatibilityError, match="historical qualification contract"):
-        module._validate_evidence_contracts(version, evidence)
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.contracts._validate_evidence_contracts(version, evidence)
     assert path.read_bytes() == before
 
 
@@ -2746,28 +2818,21 @@ def test_pre_grace_evidence_remains_frozen(version: str, monkeypatch: pytest.Mon
 def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None:
     module = load_script()
     contracts = current_contracts(module, version)
-    module._validate_contracts_for_version(version, contracts)
+    module.contracts._validate_contracts_for_version(version, contracts)
     grace = contracts["numeric_cli_probe"]["grace_rounds"]
-    fixed = module._version(version) >= (1, 13, 1)
+    fixed = module.core._version(version) >= (1, 13, 1)
     assert grace == {
         "task_done": {"completed": fixed, "limit_warning": fixed},
         "no_task_done": {"completed": False, "limit_warning": fixed},
     }
     contracts["numeric_cli_probe"].pop("grace_rounds")
-    with pytest.raises(module.CompatibilityError, match="numeric_cli_probe"):
-        module._validate_contracts_for_version(version, contracts)
+    with pytest.raises(module.core.CompatibilityError, match="numeric_cli_probe"):
+        module.contracts._validate_contracts_for_version(version, contracts)
 
 
-def test_powershell_nushell_shader_and_opentofu_rule_epoch() -> None:
+def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    prior = module._language_rules_for_version("1.13.1")
-    current = module._language_rules_for_version("1.13.2")
-    assert prior[module.POWERSHELL_SCRIPT_PATH] == "default"
-    assert current[module.POWERSHELL_SCRIPT_PATH] == "**/*.{ps1,psm1,psd1}"
-    assert set(module.LANGUAGE_1_13_2_PATHS).isdisjoint(prior)
-    assert set(module.LANGUAGE_1_13_2_PATHS).issubset(
-        module._language_negative_paths_for_version("1.13.1")
-    )
+    current = module.contracts._language_rules_for_version("1.13.5")
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",
         ".psm1": "**/*.{ps1,psm1,psd1}",
@@ -2778,17 +2843,29 @@ def test_powershell_nushell_shader_and_opentofu_rule_epoch() -> None:
         ".wgsl": "**/*.{glsl,hlsl,wgsl,metal}",
         ".metal": "**/*.{glsl,hlsl,wgsl,metal}",
         ".tofu": "**/*.{tf,tofu,hcl,tfvars}",
+        ".jsonc": "**/*.{json,json5,jsonc}",
+        ".scala": "**/*.scala",
+        ".ejs": "**/*.{ejs,liquid,njk}",
+        ".liquid": "**/*.{ejs,liquid,njk}",
+        ".njk": "**/*.{ejs,liquid,njk}",
+        ".haml": "**/*.{haml,slim}",
+        ".slim": "**/*.{haml,slim}",
+        ".erb": "**/*.erb",
     }
     for extension, pattern in expected.items():
         assert {rule for path, rule in current.items() if Path(path).suffix == extension} == {
             pattern
         }
-        contracts = current_contracts(module, "1.13.2")
-        contracts["language_rule_probe"]["extensions"].remove(extension)
-        with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-            module._validate_contracts_for_version("1.13.2", contracts)
-    with pytest.raises(module.CompatibilityError, match="language_rule_probe"):
-        module._validate_contracts_for_version("1.13.2", current_contracts(module, "1.13.1"))
+        observed = current_contracts(module, "1.13.5")
+        observed["language_rule_probe"]["extensions"].remove(extension)
+        with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
+            module.contracts._validate_contracts_for_version("1.13.5", observed)
+    stale_language = current_contracts(module, "1.13.5")
+    stale_language["language_rule_probe"] = current_contracts(module, "1.13.4")[
+        "language_rule_probe"
+    ]
+    with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
+        module.contracts._validate_contracts_for_version("1.13.5", stale_language)
 
 
 @pytest.mark.parametrize("task_done", [True, False])
@@ -2797,17 +2874,17 @@ def test_exhaustion_peer_emits_only_the_requested_grace_verdict(task_done: bool)
 
     module = load_script()
     mode = "exhaust-tools" if task_done else "exhaust-tools-incomplete"
-    with module._stub_gateway(main_mode=mode) as gateway:
-        request = module.urllib.request.Request(
+    with module.peer._stub_gateway(main_mode=mode) as gateway:
+        request = urllib.request.Request(
             f"{gateway}/chat/completions",
             data=json.dumps(
                 {"messages": [], "tools": [{"function": {"name": "task_done"}}]}
             ).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with module.urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             result = json.load(response)
-        assert module._StubHandler.request_stages == ["grace"]
+        assert module.peer._StubHandler.request_stages == ["grace"]
     message = result["choices"][0]["message"]
     if task_done:
         assert message["tool_calls"][0]["function"] == {"name": "task_done", "arguments": "{}"}
@@ -2825,6 +2902,9 @@ def test_exhaustion_peer_emits_only_the_requested_grace_verdict(task_done: bool)
         "duplicate-warning",
         "failed-warning",
         "tool-count",
+        "manifest-missing",
+        "manifest-type",
+        "manifest-rounds",
     ],
 )
 def test_effective_tool_probe_rejects_inconsistent_completion_observations(
@@ -2836,7 +2916,8 @@ def test_effective_tool_probe_rejects_inconsistent_completion_observations(
 
     module = load_script()
     payload = manifest_result("complete", selected=["example"], completed=["example"])
-    payload["tool_calls"] = {"total": 1, "by_tool": {"file_read": 1}}
+    payload["tool_calls"] = {"total": 100, "by_tool": {"file_read": 100}}
+    payload["manifest"]["execution"] = {"max_tool_request_times": 100}
     payload["warnings"] = [
         {
             "type": "review_limit_reached",
@@ -2856,25 +2937,31 @@ def test_effective_tool_probe_rejects_inconsistent_completion_observations(
         payload["warnings"].append({"type": "subtask_error"})
     elif corruption == "tool-count":
         payload["tool_calls"]["total"] = 2
+    elif corruption == "manifest-missing":
+        payload["manifest"].pop("execution")
+    elif corruption == "manifest-type":
+        payload["manifest"]["execution"]["max_tool_request_times"] = "100"
+    elif corruption == "manifest-rounds":
+        payload["manifest"]["execution"]["max_tool_request_times"] = 50
 
     def observed_run(*_args: Any, **_kwargs: Any) -> Any:
-        module._StubHandler.request_stages = ["main", "grace"]
-        return module.subprocess.CompletedProcess(
-            [], returncode, stdout=json.dumps(payload), stderr=""
-        )
+        module.peer._StubHandler.request_stages = ["main"] * 100 + ["grace"]
+        return subprocess.CompletedProcess([], returncode, stdout=json.dumps(payload), stderr="")
 
-    monkeypatch.setattr(module.subprocess, "run", observed_run)
+    monkeypatch.setattr(subprocess, "run", observed_run)
     arguments = (Path("/synthetic/ocr"), tmp_path, "a" * 40, "b" * 40, tmp_path)
     if corruption is None:
-        assert module._effective_max_tools_probe(
+        assert module.numeric._effective_max_tools_probe(
             *arguments, value=100, expected_diagnostic=None
         ) == (
-            1,
+            100,
             {"completed": True, "limit_warning": True},
         )
     else:
-        with pytest.raises(module.CompatibilityError):
-            module._effective_max_tools_probe(*arguments, value=100, expected_diagnostic=None)
+        with pytest.raises(module.core.CompatibilityError):
+            module.numeric._effective_max_tools_probe(
+                *arguments, value=100, expected_diagnostic=None
+            )
 
 
 @pytest.mark.parametrize("field", ["completed", "limit_warning"])
@@ -2884,11 +2971,11 @@ def test_grace_epoch_rejects_inverted_observations(field: str, case: str) -> Non
     contracts = current_contracts(module, "1.13.1")
     grace = contracts["numeric_cli_probe"]["grace_rounds"][case]
     grace[field] = not grace[field]
-    with pytest.raises(module.CompatibilityError, match="numeric_cli_probe"):
-        module._validate_contracts_for_version("1.13.1", contracts)
+    with pytest.raises(module.core.CompatibilityError, match="numeric_cli_probe"):
+        module.contracts._validate_contracts_for_version("1.13.1", contracts)
 
 
-@pytest.mark.parametrize("version", ["1.12.8", "1.12.13"])
+@pytest.mark.parametrize("version", ["1.12.8", "1.12.13", "1.13.0", "1.13.3", "1.13.4"])
 def test_frozen_epoch_fresh_qualification_fails_before_assets_or_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str
 ) -> None:
@@ -2900,20 +2987,24 @@ def test_frozen_epoch_fresh_qualification_fails_before_assets_or_execution(
     def unexpected_boundary(*_args: Any, **_kwargs: Any) -> Any:
         pytest.fail("frozen qualification crossed an asset or execution boundary")
 
-    monkeypatch.setattr(module, "release_assets", unexpected_boundary)
-    monkeypatch.setattr(module, "_download", unexpected_boundary)
-    monkeypatch.setattr(module, "_run", unexpected_boundary)
+    monkeypatch.setattr(module.assets, "release_assets", unexpected_boundary)
+    monkeypatch.setattr(module.assets, "_download", unexpected_boundary)
+    monkeypatch.setattr(module.execution, "_run", unexpected_boundary)
     monkeypatch.setenv("RUNNER_OS", "Linux")
-    with pytest.raises(module.QualificationStageError, match="frozen readback-only") as captured:
-        module.qualify_release(release(version), {}, output)
+    with pytest.raises(
+        module.core.QualificationStageError, match="frozen readback-only"
+    ) as captured:
+        module.qualification.qualify_release(release(version), {}, output)
     assert captured.value.phase == "metadata"
     assert captured.value.reason == "metadata-invalid"
-    with pytest.raises(module.CompatibilityError, match="frozen readback-only"):
-        module.run_contracts(tmp_path / "absent-binary", version, tmp_path / "absent-workspace")
+    with pytest.raises(module.core.CompatibilityError, match="frozen readback-only"):
+        module.probes.run_contracts(
+            tmp_path / "absent-binary", version, tmp_path / "absent-workspace"
+        )
     assert not output.exists()
     assert not (tmp_path / "absent-workspace").exists()
-    evidence = module.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
-    module._validate_evidence_contracts(version, evidence)
+    evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
+    module.contracts._validate_evidence_contracts(version, evidence)
 
 
 def test_probe_local_refuses_frozen_epoch_before_binary_access(
@@ -2921,7 +3012,7 @@ def test_probe_local_refuses_frozen_epoch_before_binary_access(
 ) -> None:
     module = load_script()
     output = tmp_path / "evidence.json"
-    result = module.main(
+    result = module.cli.main(
         [
             "--manifest",
             str(MANIFEST),
@@ -2939,7 +3030,20 @@ def test_probe_local_refuses_frozen_epoch_before_binary_access(
     assert not output.exists()
 
 
+@pytest.mark.parametrize("version", ["1.13.4", "1.13.5"])
+@pytest.mark.parametrize("field", ["required_review_flags", "optional_capabilities"])
+@pytest.mark.parametrize("value", [None, True, 4, "flags", {}, [None], [{}], [[]]])
+def test_qualification_rejects_malformed_capability_lists_with_closed_error(
+    version: str, field: str, value: object
+) -> None:
+    module = load_script()
+    evidence = current_contracts(module, version)
+    evidence[field] = value
+    with pytest.raises(module.core.CompatibilityError, match="CLI capabilities"):
+        module.contracts._validate_contracts_for_version(version, evidence)
+
+
 def test_live_qualification_boundary_accepts_all_current_candidates() -> None:
     module = load_script()
-    for version in ("1.13.0", "1.13.1", "1.13.2"):
-        module._require_live_qualification_version(version)
+    for version in ("1.13.5",):
+        module.contracts._require_live_qualification_version(version)

@@ -164,7 +164,11 @@ def test_gitlab_docs_match_the_current_review_surface() -> None:
     # advances the published example. Once the plan is archived, the example
     # must name the current recommendation without relying on a legacy marker.
     plan = (PROJECT_ROOT / "PLANS.md").read_text()
-    if "## Active Plan:" not in plan:
+    state = (PROJECT_ROOT / "docs/codex/ENGINEERING_WORKFLOW_STATE.yaml").read_text()
+    active = re.search(r"^active_plan: PLANS\.md$", state, re.MULTILINE) and re.search(
+        r"^Status: (active|blocked|ready_for_closure)$", plan, re.MULTILINE
+    )
+    if not active:
         assert example_version == recommended
     linux_digest = next(
         asset["sha256"]

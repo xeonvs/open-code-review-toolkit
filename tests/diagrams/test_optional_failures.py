@@ -48,7 +48,8 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
     git(root, "init", "-q")
     source = root / "app.py"
     source.write_text("List<Entry> value;\none\ntwo\n")
-    git(root, "add", "app.py")
+    (root / "diagram_only.py").write_text("# Optional source\nsafe\npath\n")
+    git(root, "add", ".")
     git(root, "commit", "-qm", "base")
     base = git(root, "rev-parse", "HEAD")
     source.write_text("List<Entry> value;\nchanged\ntwo\n")
@@ -67,6 +68,9 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
     )
     candidate = flow_submission()
     candidate.update(base_sha=base, head_sha=head)
+    for item in (*candidate["diagram"]["nodes"], *candidate["diagram"]["edges"]):
+        for reference in item["references"]:
+            reference["path"] = "diagram_only.py"
     execution.collector.submit(candidate)
     execution.capture()
     comment = {
@@ -94,9 +98,12 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
         (),
     )
     calls = []
+    original_read = GitRepositoryReader.read_text_metadata
 
     def transient(reader, entry, **kwargs):
         calls.append(entry.path)
+        if entry.path != "diagram_only.py":
+            return original_read(reader, entry, **kwargs)
         if failure == "missing":
             raise ValueError("synthetic missing source")
         if failure == "unicode":
@@ -122,7 +129,7 @@ def test_transient_diagram_source_failure_cannot_poison_finding_code_proof(
     assert not filtered and publication["state"] == "passed"
     assert reports[0].comments == (comment,) and reports[0].diagram.state == "omitted-invalid"
     assert reports[0].outcome.status == "complete"
-    assert calls == ["app.py"]
+    assert calls == ["app.py", "diagram_only.py"]
 
 
 @pytest.fixture

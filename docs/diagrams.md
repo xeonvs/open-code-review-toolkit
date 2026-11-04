@@ -47,8 +47,9 @@ sequenceDiagram
 
 Production output also supplies mechanically checked paths and inclusive line
 ranges at the effective immutable reviewed head. It never derives a diagram
-from finding prose or runs a second review/model pass. The first qualified
-native capability is OCR **1.13.3**; an unqualified version reports `unsupported`.
+from finding prose or runs a second review/model pass. The pure
+`native_capabilities` owner records exact qualified OCR versions separately from
+runtime support; an unqualified version reports `unsupported`.
 
 The fixed internal `ocr_toolkit_review_diagram` MCP tool accepts typed data into
 one private run collector. The model selects no output path, network destination

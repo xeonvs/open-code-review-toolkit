@@ -29,10 +29,13 @@ forge/LLM/MCP credentials, external-object confidentiality, and publication and
 approval state. Local audit assets also include selected source snapshots,
 private origin locators, the state authentication key and exact expectations.
 Release assets include protected authorization, distribution bytes, provenance
-and immutable publication receipts.
+and immutable publication receipts. Repository maintenance also protects canonical
+qualification issues and existing qualification evidence or changelog fragments.
 
 A contributor can control repository content, merge-request metadata and
-discussion text, including tool-like instructions and crafted references. An MCP
+discussion text, including tool-like instructions and crafted references. Public
+issue authors can copy qualification markers; their text cannot authorize a
+privileged workflow to edit or reopen their issue. An MCP
 upstream controls its descriptions, schemas and responses. An operator controls
 the reviewed registry, credentials and selected protected policy. A compromised
 runner or same-user process remains a host-level threat outside the toolkit's
@@ -66,9 +69,14 @@ The main trust transitions are:
    predecessor, exact reviewed commit/tree/check identities, reproducible builds,
    registry verification and environment-bound publishing. Candidate source
    cannot supply the policy that authorizes its own privileged publication.
+9. Qualification issue reuse requires an exact first-line version marker and
+   GitHub-controlled authorship by the repository's individual owner or the
+   verified Actions bot. Membership associations and marker text alone grant no
+   authority. Generated promotion outputs reject conflicting existing content
+   before any pin is changed; exclusive creation protects new destinations.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
-For qualified OCR 1.13.3 only, the toolkit compares complete before/after Git
+For an exact capability-qualified OCR version, the toolkit compares complete before/after Git
 trees, the explicit unfiltered diff, and the ordinary-file projection before
 the model runs. It reads `.gitmodules` from immutable blobs without using its
 URLs, freezes process-local Git overrides for preview and production, then
@@ -228,6 +236,14 @@ Unicode, configured secret values, credential literals, contacts and forbidden
 source text. Configured values are checked before whitespace/NFC normalization
 as well as afterwards. An exact code match does not exempt sensitive material.
 
+Numeric interpretation recognizes a complete bounded calendar timestamp around
+the entire phone candidate, including its clock, optional fractional seconds
+and timezone. It validates calendar and offset components, rejects continued or
+malformed tokens, and preserves explicit contact priority. Unicode decimal digits
+have the same calendar meaning as ASCII digits; no surrounding keyword, filename
+or source proof grants an exception. Other contacts, credentials and configured
+values in the original and derived material remain independently checked.
+
 For an exact immutable-source excerpt, bounded full-source Python syntax can
 identify non-value credential names in declarations and reference expressions,
 including `token = "".join(parts)`. Filenames do not authorize this interpretation.
@@ -240,6 +256,22 @@ The bounded Python analysis can also identify numeric multiplication operators;
 comments, strings, annotations and templates cannot supply that proof. This
 operator interpretation does not exempt other sensitive material in the excerpt.
 Authored actionable suggestions never inherit an existing-code syntax waiver.
+
+Source identity and syntax authority have separate bounds. A shared immutable
+Git session validates the complete regular UTF-8, NUL-free blob and its object
+digest before admitting requested LF-addressed excerpts. Limits are 5 MB per
+blob, 32 MB read/retained excerpt budgets and 30 seconds per session. Captured
+fragments retain the existing 12,000-character and 200-line-span limits; CRLF
+transport overhead does not enlarge the normalized publication limit. Full-source
+syntax remains limited to 256,000 characters with four cached files. A large
+source can therefore prove a short excerpt without conferring syntax authority
+on a fragment. Bare CR and other non-LF separators cannot invent Git line
+addresses. Source failures close the optional code exception, and optional
+diagram reads run after finding proofs so they cannot consume their budget first.
+Completed excerpts retain their reservation; active overlapping spans use sorted
+source-span priority at source-character positions. Arbitrary pipe chunk boundaries
+cannot change which proofs fit the aggregate budget. Normal acquisition batches
+prefixes between allocation limits.
 
 Closed configuration grammar also distinguishes whole symbolic references
 (`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,

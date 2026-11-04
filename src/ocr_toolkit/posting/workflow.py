@@ -122,10 +122,9 @@ from ocr_toolkit.posting.snapshot import (
     publish_failure_exit,
     rollback_current_run_comments,
 )
+from ocr_toolkit.posting.source_suggestions import SuggestionSourceReader
 from ocr_toolkit.posting.suggestions import (
     SuggestionDecision,
-    evaluate_suggestion,
-    safe_repository_path,
 )
 from ocr_toolkit.posting.transaction import PostingTransaction
 from ocr_toolkit.pre_execution import (
@@ -686,7 +685,6 @@ def finalize_review_approval(
 DiffLineCache = dict[tuple[str, str, str], set[int]]
 FileLineCache = dict[tuple[str, str], list[tuple[int, str]]]
 ChangedPathCache = dict[tuple[str, str], list[str]]
-FileTextCache = dict[tuple[str, str], str | None]
 MAX_CROSS_FILE_REMAP_PATHS = 200
 MAX_REMAP_FILE_BYTES = 2_000_000
 MAX_REMAP_DIFF_BYTES = 8_000_000
@@ -865,48 +863,6 @@ def head_file_lines(
     if cache is not None:
         cache[cache_key] = lines
     return lines
-
-
-def head_file_text(
-    refs: dict[str, str], path: str, cache: FileTextCache | None = None
-) -> str | None:
-    """Return one bounded UTF-8 head blob without consulting the worktree."""
-
-    cache_key = (refs["head_sha"], path)
-    if cache is not None and cache_key in cache:
-        return cache[cache_key]
-    if not safe_repository_path(path):
-        if cache is not None:
-            cache[cache_key] = None
-        return None
-    text: str | None = None
-    try:
-        size_result = subprocess.run(
-            [*_git_read_prefix(), "cat-file", "-s", f"{refs['head_sha']}:{path}"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=_git_read_environment(),
-            text=True,
-            timeout=15,
-        )
-        size = int(size_result.stdout.strip() or "0")
-        if size_result.returncode == 0 and 0 <= size <= MAX_REMAP_FILE_BYTES:
-            result = subprocess.run(
-                [*_git_read_prefix(), "show", f"{refs['head_sha']}:{path}"],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                env=_git_read_environment(),
-                timeout=15,
-            )
-            if result.returncode == 0:
-                text = result.stdout.decode("utf-8")
-    except (OSError, UnicodeDecodeError, ValueError, subprocess.SubprocessError):
-        text = None
-    if cache is not None:
-        cache[cache_key] = text
-    return text
 
 
 def unique_existing_code_line(
@@ -1428,7 +1384,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
     diff_line_cache: DiffLineCache = {}
     file_line_cache: FileLineCache = {}
     changed_path_cache: ChangedPathCache = {}
-    file_text_cache: FileTextCache = {}
+    located_comments: list[dict[str, Any]] = []
 
     for raw_comment in comments:
         if not isinstance(raw_comment, dict):
@@ -1451,6 +1407,7 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                 line = remapped_line
                 raw_comment["path"] = remapped_path
                 raw_comment["line"] = remapped_line
+                raw_comment.pop("old_path", None)
                 old_path = None
                 print(
                     "Inline posting remapped missing line from existing_code, "
@@ -1458,13 +1415,16 @@ def post_results(config: GitLabConfig, result: dict[str, Any]) -> int:
                     file=sys.stderr,
                 )
 
-        suggestion_decision = evaluate_suggestion(
-            raw_comment,
-            path,
-            lambda candidate_path: (
-                head_file_text(refs, candidate_path, file_text_cache) if refs else None
-            ),
-        )
+        located_comments.append(raw_comment)
+
+    suggestion_sources = SuggestionSourceReader(
+        Path.cwd(), refs["head_sha"] if refs else "", located_comments
+    )
+    for raw_comment in located_comments:
+        path = clean_text(raw_comment.get("path"))
+        old_path = clean_text(raw_comment.get("old_path")) or None
+        line = comment_line(raw_comment)
+        suggestion_decision = suggestion_sources.evaluate(raw_comment, path)
         if not refs or not path or line <= 0:
             reason = inline_skip_reason(refs, path, line)
             print(

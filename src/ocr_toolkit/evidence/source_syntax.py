@@ -13,8 +13,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 
 from ocr_toolkit.context.code_text import CodeTextContext
+from ocr_toolkit.evidence.text_contracts import MAX_SYNTAX_CHARS as MAX_SYNTAX_CHARS
 
-MAX_SYNTAX_CHARS = 256_000
 MAX_SYNTAX_NODES = 30_000
 MAX_KEY_SPANS = 4096
 
@@ -119,7 +119,11 @@ class SourceSyntax:
 def analyze_python_source(source: str) -> SourceSyntax | None:
     """Never treat an excerpt parsed out of a docstring/comment as executable code."""
 
-    if len(source) > MAX_SYNTAX_CHARS or any(char in source for char in "\v\f\x85\u2028\u2029"):
+    if (
+        len(source) > MAX_SYNTAX_CHARS
+        or any(char in source for char in "\v\f\x85\u2028\u2029")
+        or re.search(r"\r(?!\n)", source)
+    ):
         return None
     source = unicodedata.normalize("NFC", source.replace("\r\n", "\n").replace("\r", "\n"))
     try:

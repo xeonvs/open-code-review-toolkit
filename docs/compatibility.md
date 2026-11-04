@@ -16,8 +16,9 @@ must provide the current evidence schema and its complete version-selected
 consumed contract. The current epoch includes explicit reasoning wire capture and
 the current built-in language/test-exclusion inventory.
 
-The **OCR compatibility** workflow qualifies stable upstream releases newer than
-the manifest monitoring floor. Exact-tag manual dispatch is the
+The **OCR compatibility** workflow checks stable upstream releases every Monday
+at 07:15 UTC and qualifies candidates newer than the manifest monitoring floor.
+Exact-tag manual dispatch is the
 single-candidate path. A manual
 `through_tag` instead qualifies the complete contiguous unseen
 chain only through that exact stable release, preventing a scoped maintenance
@@ -42,7 +43,7 @@ Classify a pin-only promotion and its machine or human qualification evidence as
 - `automatic-safe`: only an adjacent patch in the already-tested major/minor line, with every probe passing and maintenance-only release notes containing no material compatibility signal. When several releases are discovered together, each keeps the manifest recommendation as its tested baseline but is classified against its adjacent predecessor. The aggregation job prepares one cumulative compatibility patch only when the complete sequence is contiguous and every member is automatic-safe. The patch covers the manifest, evidence, runtime preflight version, and GitLab example version/checksum. It never writes directly to `main`.
 - `human-review-required`: every minor/major release, skipped or non-increasing patch, changed or failed contract, feature-bearing release, material/security/deprecation/config/provider signal, or ambiguous release notes. The workflow creates or refreshes one qualification issue with machine evidence, a bounded plain-text release-change excerpt, and a human checklist.
 
-Each OCR version owns one stable HTML marker and one qualification issue. The workflow performs a single upsert through bounded direct issue listing rather than GitHub's eventually consistent search index. Historical issues closed with the `duplicate` label remain as incident evidence but do not compete for canonical identity. Any other duplicate state fails closed instead of creating another issue; after operators select and reconcile the canonical issue, reruns update it in place.
+Each OCR version owns one stable HTML marker and one qualification issue. The workflow performs a single upsert through bounded direct issue listing rather than GitHub's eventually consistent search index. Reuse requires the exact marker on the first line and a GitHub-reported author matching the repository's individual owner or the verified GitHub Actions bot identity. Marker copies, quoted mentions and membership associations confer no write authority. Other manually created issues require operator reconciliation. Historical issues closed with the `duplicate` label remain as incident evidence but do not compete for canonical identity. Any other duplicate among eligible issues fails closed instead of creating another issue; after operators select and reconcile the canonical issue, reruns update it in place.
 
 The qualification step writes evidence, public issue text, and its closed status through same-directory atomic replacements. The step outcome is authoritative: a successful step publishes validated evidence, while a failed step publishes only the closed failure status even if retained evidence exists from work completed before the failure. Status-based recovery validates no support manifest because it does not consume support metadata. The workflow publishes the issue and diagnostic artifact before restoring the failed job outcome; dependent aggregation and promotion jobs therefore remain blocked. Raw exceptions and subprocess output stay in the private job log and never enter the status or issue projection.
 
@@ -371,8 +372,44 @@ range. This does not extend OCR review to submodule contents or qualify a later
 OCR version for partial repository coverage; other versions retain the
 no-model stop until separately proven.
 
+### OCR 1.13.4–1.13.5 — toolkit 0.14.5 qualification
+
+Both adjacent releases passed the complete consumed CLI/result suite on verified
+Linux amd64 and Darwin arm64 binaries. OCR 1.13.4 preserves available content in
+mixed `file_read_diff` responses and names missing paths with recovery guidance.
+OCR 1.13.5 honors positive `--max-tools` overrides below the template default:
+omitted and zero use 100, 49 normalizes to 50, and 50/75/100/125 are applied
+exactly. Counted main rounds agree with the native manifest's effective limit;
+grace completion and the incomplete negative control retain their coverage
+semantics. JSONC, Scala, EJS/Liquid/Nunjucks and HAML/Slim/ERB selection and
+built-in Rules are qualified too.
+
+Real controlled-peer consumers exercised both diagram variants, grouped and
+repeated review rounds, optional output failures, actual evidence/federation MCP
+and partial gitlink projection for both patches. Additional real Git/OCR checks
+cover ambiguous ` b/` paths, rename/copy output paths and new-side blank-line
+anchors. Copy review can select the destination as a new file; qualification
+does not require OCR to represent it as a copy. These probes establish transport
+and consumer behavior, not configured-model diagram or finding quality.
+
+The shared pure `native_capabilities` owner records exact diagram and gitlink
+qualifications separately from supported runtime versions. The adjacent source
+diff changes none of the native authentication-store, refresh or provider
+resolution boundaries, so the existing same-line local ChatGPT contract remains
+applicable. Workspace-only ignored-file handling, the upstream GitHub Action and
+session display changes do not change toolkit immutable-range authority.
+Issue [#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294) owns
+this qualification chain; hosted verification remains part of release acceptance.
+
 ## Promotion and rollback
 
-Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates every machine-readable or executable version/checksum pin. Never edit only one copy. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.
+Preparation validates all generated destinations before writing. Existing evidence
+or changelog fragments must contain identical bytes; different content, symlinks
+and non-regular destinations are rejected before checkout changes. New generated
+files are created exclusively before mutable pins are updated. This protects
+existing work without claiming a transaction across files or isolation from
+another process controlled by the same operator.
+
+Promotion changes `recommended_version`, advances `monitoring_floor`, adds the tested release and evidence, and updates runtime qualification pins together. The GitLab example retains its compatible published toolkit/OCR pair until the release PR advances the toolkit version, OCR version and asset checksum together; qualification alone cannot make an older installed wheel accept the new OCR binary. Human-qualified candidates must record the compatibility conclusion and release-note impact; an automatic-safe candidate may also record a reviewed conclusion when it is delivered with a human-reviewed chain instead of using the generic machine conclusion. Conclusions may name only versions present in that promotion. A reviewed promotion may cross only one adjacent semantic-version boundary at a time: the next patch, the next minor at `.0`, or the next major at `.0.0`; minor and major transitions always require an explicit human conclusion. Automatic-safe preparation remains limited to adjacent patches in the already-tested major/minor line and retains the same protected review boundary even though the patch itself is mechanical.
 
 Rollback selects a previously tested manifest entry, restores its runtime and executable-example pins, and travels through the same release-required path. Do not delete historical evidence: it explains the prior support decision and lets future qualification distinguish a rollback from an unseen release.

@@ -28,7 +28,6 @@ from ocr_toolkit.pre_execution import (
     GITLINK_STATUS_SCHEMA,
     read_pre_execution_status,
 )
-from ocr_toolkit.preflight import validate_ocr_binary
 
 OLD_OID = "1" * 40
 NEW_OID = "2" * 40
@@ -674,6 +673,14 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
     qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
     manifest = payload["manifest"]
     assert isinstance(manifest, dict)
+    for version in ("v1.13.4", "v1.13.5"):
+        manifest["execution"]["ocr_version"] = version
+        qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    for version in (None, [], "1.13.5", "v1.13.6", "v1.13.5 "):
+        manifest["execution"]["ocr_version"] = version
+        with pytest.raises(RepositoryEvidenceError, match="unsupported binary"):
+            qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
+    manifest["execution"]["ocr_version"] = "v1.13.3"
     native_input = manifest["input"]
     assert isinstance(native_input, dict)
     native_input["resolved_head"] = base
@@ -930,15 +937,11 @@ def test_unqualified_gitlink_writes_versioned_no_model_status(tmp_path: Path) ->
 
 @pytest.mark.parametrize("kind", ["added", "updated", "deleted"])
 def test_installed_ocr_gitlink_preview_qualification(
-    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch, qualified_native_ocr
 ) -> None:
     """Opt-in real-binary probe; CI may not have a verified installed OCR."""
 
-    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
-    if binary is None:
-        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the verified OCR executable")
-    validated = validate_ocr_binary(executable=binary, announce=False)
-    assert validated
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     repo = tmp_path / "repo"
     repo.mkdir()
     base, head = _fixture(repo, kind)
@@ -990,16 +993,13 @@ def test_installed_ocr_gitlink_preview_qualification(
 
 @pytest.mark.parametrize("kind", ["added", "updated", "deleted", "mixed", "move"])
 def test_installed_ocr_projected_review_matches_native_manifest(
-    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch, qualified_native_ocr
 ) -> None:
     """Opt-in production proof against the official binary and local fake provider."""
 
-    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
-    if binary is None:
-        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the checksum-verified OCR 1.13.3")
-    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
-    from ocr_compat import _stub_gateway
+    from ocr_qualification.peer import _stub_gateway
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1071,19 +1071,16 @@ def test_installed_ocr_projected_review_matches_native_manifest(
 
 @pytest.mark.parametrize("kind", ["updated", "only"])
 def test_installed_ocr_toolkit_local_gitlink_route(
-    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch, qualified_native_ocr
 ) -> None:
     """Exercise the toolkit and real OCR together without a paid model or forge."""
 
-    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
-    if binary is None:
-        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the checksum-verified OCR 1.13.3")
-    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
     import http.server
     import threading
 
-    from ocr_compat import _StubHandler
+    from ocr_qualification.peer import _StubHandler
 
     from ocr_toolkit import cli, provider_config
 

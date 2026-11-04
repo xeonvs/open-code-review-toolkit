@@ -15,7 +15,6 @@ import pytest
 
 from ocr_toolkit import cli, provider_config, review_debug, review_runner
 from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
-from ocr_toolkit.preflight import validate_ocr_binary
 from tests.diagrams.support import references
 from tests.test_evidence_repository import git
 
@@ -29,15 +28,13 @@ def test_native_group_context_and_rounds(
     grouping: str,
     missing_context: bool,
     diagram_kind: str | None,
+    qualified_native_ocr,
 ) -> None:
     """Cross the actual launcher/tools to distinguish global access from group visibility."""
 
-    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
-    if binary is None:
-        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to checksum-verified OCR 1.13.3")
-    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
-    from ocr_compat import _StubHandler
+    from ocr_qualification.peer import _StubHandler
 
     root = tmp_path / "repo"
     root.mkdir()

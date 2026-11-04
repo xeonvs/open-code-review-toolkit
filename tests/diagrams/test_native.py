@@ -15,7 +15,6 @@ import pytest
 from ocr_toolkit import cli, provider_config, review_runner
 from ocr_toolkit.diagrams.mcp import DIAGRAM_TOOL_NAME
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
-from ocr_toolkit.preflight import validate_ocr_binary
 from ocr_toolkit.review_range import ReviewRange, admit_native_range
 from tests.diagrams.support import flow_submission, sequence_submission
 from tests.diagrams.test_stdio import bind
@@ -39,14 +38,11 @@ from tests.test_evidence_repository import git
     ),
 )
 def test_qualified_native_diagram_handoff_preserves_review_and_checkout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str, qualified_native_ocr
 ) -> None:
-    binary = os.environ.get("OCR_GITLINK_QUALIFY_BINARY")
-    if binary is None:
-        pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to checksum-verified OCR 1.13.3")
-    assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
+    binary, _version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
-    from ocr_compat import _StubHandler
+    from ocr_qualification.peer import _StubHandler
 
     root = tmp_path / "repo"
     root.mkdir()

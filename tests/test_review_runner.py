@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import signal
 import stat
 import subprocess
@@ -5026,7 +5027,9 @@ def test_evidence_review_prepares_internal_context_before_ocr(
             # A private execution diagnostic cannot be a successful posting job.
             assert workflow.post_results(gitlab_config(), retained) == 1
             assert "not publication-eligible" in capsys.readouterr().err
-        session_homes[0].rmdir()
+        # Authorized retention may include cache subdirectories on Linux.
+        # This fixture owns the temporary HOME and removes its complete tree.
+        shutil.rmtree(session_homes[0])
     else:
         if ocr_exit_code == 0:
             assert events[9] == "ocr-usage"

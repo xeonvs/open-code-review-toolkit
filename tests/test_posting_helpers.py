@@ -18,6 +18,12 @@ from typing import Any
 
 from ocr_toolkit import ocr_result
 from ocr_toolkit.common.git import isolated_git_environment, read_only_git_prefix
+from ocr_toolkit.evidence.source_reader import SourceReadSession
+from ocr_toolkit.evidence.text_contracts import (
+    RepositoryTextExcerpt,
+    RepositoryTextMetadata,
+    SourceReadResult,
+)
 from ocr_toolkit.posting import (
     approval,
     gitlab,
@@ -866,12 +872,20 @@ class PostingIdentityTests(unittest.TestCase):
             patched_attr(
                 workflow,
                 "get_diff_refs",
-                lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                lambda _config: {"base_sha": "a", "start_sha": "b", "head_sha": "c" * 40},
             ),
             patched_attr(
-                workflow,
-                "head_file_text",
-                lambda *_args: "route:\n  destination: 192.0.2.0/24\n",
+                SourceReadSession,
+                "read_excerpt",
+                lambda *_args: SourceReadResult(
+                    RepositoryTextMetadata(
+                        "d" * 40,
+                        40,
+                        2,
+                        (RepositoryTextExcerpt(1, 2, "route:\n  destination: 192.0.2.0/24"),),
+                    ),
+                    "none",
+                ),
             ),
             patched_attr(
                 workflow,
@@ -2246,32 +2260,6 @@ class PostingWorkflowTests(unittest.TestCase):
                 workflow.head_file_lines(refs, "file.py", cache),
                 [(1, "first()"), (3, "  second()")],
             )
-
-    def test_head_file_text_uses_only_safe_bounded_git_blobs(self) -> None:
-        """Read only safe repository paths through the bounded Git blob contract."""
-
-        refs = {"head_sha": "head"}
-        cache: workflow.FileTextCache = {}
-        self.assertIsNone(workflow.head_file_text(refs, "../private", cache))
-        self.assertIsNone(workflow.head_file_text(refs, "../private", cache))
-
-        with patched_attr(
-            workflow.subprocess,
-            "run",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid size")),
-        ):
-            self.assertIsNone(workflow.head_file_text(refs, "broken.py"))
-
-        responses = iter(
-            (
-                type("Result", (), {"returncode": 0, "stdout": "8"})(),
-                type("Result", (), {"returncode": 0, "stdout": b"value=1\n"})(),
-            )
-        )
-        cache = {}
-        with patched_attr(workflow.subprocess, "run", lambda *_args, **_kwargs: next(responses)):
-            self.assertEqual(workflow.head_file_text(refs, "safe.py", cache), "value=1\n")
-            self.assertEqual(workflow.head_file_text(refs, "safe.py", cache), "value=1\n")
 
     def test_workflow_identity_helpers_fail_closed_on_ambiguous_values(self) -> None:
         """Keep inline, approval, and reviewed-SHA identities unambiguous."""

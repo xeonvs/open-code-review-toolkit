@@ -14,6 +14,8 @@ import pytest
 from ocr_toolkit import cli, configure, local_chatgpt, preflight, review_runner
 from ocr_toolkit.config_writer import read_ocr_config, write_ocr_config
 
+pytestmark = pytest.mark.usefixtures("isolated_review_workspace")
+
 
 @pytest.fixture(autouse=True)
 def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -3,6 +3,7 @@
 This index routes maintainers to canonical engineering owners without duplicating their rules.
 
 <!-- engineering-workflow:index:start -->
+- [dlp_causal_review.md](dlp_causal_review.md)
 - [execution_history/README.md](execution_history/README.md)
 - [governed_federation_contracts.md](governed_federation_contracts.md)
 - [project_principles.md](project_principles.md)

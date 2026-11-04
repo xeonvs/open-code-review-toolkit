@@ -61,7 +61,7 @@ are shown separately. Previous comments are preserved with the actual incomplete
 stage reason instead of being replaced by a falsely clean review.
 
 When a changed Git submodule pointer is safely separable under the qualified
-OCR 1.13.3 executable, the toolkit reviews only the selected ordinary files.
+OCR executable, the toolkit reviews only the selected ordinary files.
 The summary labels effective repository coverage **partial** and gives path-free
 ordinary-file and changed-pointer counts. OCR's native `complete` manifest then
 means only that its selected ordinary work completed. The pointer and submodule
