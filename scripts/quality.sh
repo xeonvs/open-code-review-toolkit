@@ -22,9 +22,9 @@ run_logged_command() {
 }
 
 run_coverage_gate() {
-  run_logged_command "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=85"
+  run_logged_command "pytest -q --cov=ocr_toolkit --cov-report=term --cov-fail-under=88"
   run_logged_command "coverage report --include=src/ocr_toolkit/ocr_result.py,src/ocr_toolkit/preflight.py --fail-under=85"
-  run_logged_command "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=80"
+  run_logged_command "coverage report --include=src/ocr_toolkit/posting/workflow.py,src/ocr_toolkit/posting/gitlab.py,src/ocr_toolkit/posting/snapshot.py,src/ocr_toolkit/posting/gitlab_approval.py --fail-under=85"
   run_logged_command "coverage report --include=src/ocr_toolkit/review_runner.py,src/ocr_toolkit/context/broker.py,src/ocr_toolkit/context/store.py,src/ocr_toolkit/context/dlp/admission.py,src/ocr_toolkit/posting/approval.py --fail-under=85"
   run_logged_command "coverage report --include=src/ocr_toolkit/mcp_config.py,src/ocr_toolkit/providers/gitlab.py,src/ocr_toolkit/providers/gitlab_context.py,src/ocr_toolkit/providers/gitlab_discussions.py,src/ocr_toolkit/providers/gitlab_remediation.py,src/ocr_toolkit/context/policy.py,src/ocr_toolkit/result_contract.py --fail-under=85"
   run_logged_command "coverage report --include=src/ocr_toolkit/result_contract.py --fail-under=90"

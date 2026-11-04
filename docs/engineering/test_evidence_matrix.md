@@ -25,6 +25,16 @@ immutable Git proof and the installed publication path, without fragment syntax
 authority. This does not authenticate the unavailable historical HMAC state or
 complete the remaining causal/private-corpus acceptance.
 
+The completed local Linux amd64/Python 3.14 measurement is 89.84% overall and
+87.10% for the posting group. A minimal-container run first exposed a missing
+`jq` prerequisite and an empty-directory assumption in retained-HOME fixture
+cleanup. Installing the prerequisite and replaying all affected cases passed;
+the fixture now removes its own complete temporary tree. HTTP delivery, hostile
+snapshot/result and terminal-state tests qualify total/posting floors of 88%/85%.
+This local evidence does not replace protected hosted CI. The
+[causal matrix](dlp_causal_review.md) records the fourteen reviewed categories and
+explicit missing-key limitations.
+
 ## v0.14.4 bounded DLP and diagram-source evidence
 
 | Invariant | Real boundary | Verification | Limit |

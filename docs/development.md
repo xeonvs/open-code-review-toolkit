@@ -16,12 +16,16 @@ uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
 
+Release/workflow shell contract tests require `bash` and `jq` alongside Git and the locked Python environment.
+
 For routine agent and contributor checks, run focused tests for each logical change and `scripts/quality.sh check` once on the completed handoff head. After changing Python, run `scripts/quality.sh format` before self-review so Ruff's formatter is applied immediately; before every Python commit, require a clean repository-wide `uv run --frozen ruff format --check .` result. The full wrapper remains the final owner and repeats that check, so a formatting failure discovered only after push is a missed local commit gate rather than a missing quality control. It replaces the selected mode's prior log, captures current output under ignored `.quality-logs/`, and prints only a short status; on failure it prints the last 80 lines and preserves the failing command's exit status. Individual modes are `format`, `lint`, `test`, `coverage`, `types`, and `security`.
 
 The `coverage` and `check` modes reuse one branch-aware test run. Result/preflight,
 review/context/DLP/approval and MCP/provider/policy/result groups have 85% floors;
-GitLab posting transactions retain an 80% floor. The latter group measures about
-82%, so raising its threshold requires meaningful tests before changing the gate.
+GitLab posting transactions have an 85% floor and total coverage has an 88% floor.
+Negative transport, snapshot, artifact and terminal-status checks qualify these
+thresholds on the Linux/Python 3.14 coverage owner; retain the measured margin
+in the release evidence rather than inferring it from the configured floor.
 A high combined result cannot hide a weak group. Individual DLP/audit, source
 syntax, shared credential material/completion, diagram-source metadata and orientation owners have 90% floors in the
 local and hosted coverage gates. Hosted pull requests run source and contract

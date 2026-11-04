@@ -131,9 +131,9 @@ successful parsing alone cannot authorize a DLP exemption.
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
 | WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners, removed unreachable execution, froze predecessor epoch; both candidates passed Linux/Darwin base and actual consumed handoffs; promoted pins/capabilities locally and restored weekly workflow | done |
-| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime fix and diverse positive/negative properties implemented; historical ledger retained but its HMAC key is unavailable; reconstruct verified inputs and create a fresh paired baseline before causal replay/comparison | in_progress |
-| WQ-04 | REQ-002, REQ-003 | Shared immutable session, independent identity/syntax proof, runner/diagram/GitLab consumers and closed audit diagnoses implemented with focused/extended tests; installed and current corpus acceptance remain | in_progress |
-| WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | New capability/datetime owners have measured 100% coverage and individual 90% gates; remaining handoffs, floors, installed checks and contract/docs reconciliation follow implementation | in_progress |
+| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime/property fixes, fresh paired populations, fourteen-category causal review and retained supplemental-library counterexamples complete; missing historical authentication/locators remain explicit unknowns; final replay belongs to WQ-06 | done |
+| WQ-04 | REQ-002, REQ-003 | Shared immutable session, identity/syntax separation, runner/diagram/GitLab consumers, closed audit diagnoses and installed/public-source handoffs verified; final own-tool acceptance belongs to WQ-06 | done |
+| WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Linux coverage and source-boundary negative controls qualify the new floors; installed handoffs, synthetic/properties and current contracts/matrix/changelog reconciled; final aggregate/security/model review remains WQ-06 | done |
 | WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, one Security scan/threat-model reconciliation, actual native review/diagram, scoped fixes and complete corpus/resource replays | pending |
 | WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
 | WQ-08 | REQ-010, REQ-011 | Signed release PR with checked plan archive/reset, stable/external receipt readback, issue/site/main reconciliation and cleanup | pending |
@@ -404,6 +404,33 @@ also passes independent 1000-example seeds. Appending these checks to the unchan
 runtime measurement raises posting to 83.25% and total to 89.48%; the >=87%
 posting target and threshold changes remain pending.
 
+The next boundary slice adds 78 HTTP, snapshot, artifact, delivery and terminal-state
+checks. Host posting coverage reaches 87.10%; Linux amd64/Python 3.14 measures
+89.84% overall and 87.10% posting. The minimal-container full run exposed six
+missing-jq shell checks and four fixture-only retained-HOME cleanup assumptions.
+The prerequisite and owned-tree fixture cleanup were corrected; all affected
+checks pass on focused Linux replay. A fresh immutable Git/projection test also
+proves that a narrow reference role cannot authorize a mixed whole-source unit.
+Total/posting gates now become 88%/85% in both local and hosted owners.
+
+All fourteen causal groups have explicit dispositions in the public
+[causal matrix](docs/engineering/dlp_causal_review.md), with per-observation
+correspondence kept private. Fresh public comparison has zero unexplained
+admissions, unreviewed transitions, new rejections, or classified protection loss.
+Unchanged untriaged observations remain explicitly unclassified, not sensitive
+by assertion or a precision claim. Historical missing-key/unrecoverable inputs
+remain unknown. Fresh private transitions are independently reviewed and their
+material, identities and statistics remain outside public artifacts.
+
+Aggregate self-review reconciles the full branch interactions: qualification
+capabilities remain separate from runtime acceptance; source identity remains
+separate from syntax and privacy authority; finding proofs precede optional
+diagram reads; remapping precedes posting excerpt acquisition; old/new audit
+shapes reject mixed diagnostics atomically. The full range has no whitespace
+errors, support-manifest validation, Ruff and runtime typing pass, and the new
+delivery/source checks pass Python 3.12 and 3.15 (105 each). Independent Security
+review and actual model/diagram acceptance remain mandatory and have not run.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
@@ -431,14 +458,12 @@ not the required detector, corpus, privacy or protection-preservation outcomes.
 
 ### Resume Point
 
-WQ-03/WQ-04: reconstruct authorized immutable inputs and create a fresh paired
-private baseline after the historical audit key proved unavailable. Classify
-current source-proof observations and remaining causal groups, then retain the
-supplemental-library comparisons and actual complete replay evidence. The bounded
-source integration is implemented locally; installed acceptance remains pending.
-Preserve completed qualification/property outputs;
-repeat only affected checks. Remaining floors, installed/native acceptance,
-one Security scan, hosted workflow and full release/cleanup remain mandatory.
+WQ-06: complete aggregate self-review, run the single Security diff scan and
+reconcile the threat model, then execute the real qualified own-tool review with
+ChatGPT high, unlimited budget and an admitted local diagram. Inspect findings
+and failed reads, correct scoped issues, and repeat final current-population
+corpus checks. Final quality/secret/dependency gates, feature delivery with exact
+diagram, hosted qualification/CI and the full release/cleanup remain mandatory.
 No further feature push occurs until final feature delivery.
 
 ### Plan Fidelity Check

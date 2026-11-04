@@ -260,3 +260,22 @@ def test_source_pathless_invalid_and_expired_reads(tmp_path, monkeypatch):
     session._prepare()
     monkeypatch.setattr(session, "_expired", lambda: True)
     assert session.read("source").reason == "budget"
+
+
+def test_narrow_reference_role_does_not_authorize_a_mixed_whole_source_unit(tmp_path):
+    source = 'def fetch(token: str):\n    return "constant"\n'
+    _, head = repository(tmp_path, source.encode())
+    session = SourceReadSession(tmp_path, head, {"source": ((1, 1), (1, 2))})
+    narrow = comment("source", 1, "def fetch(token: str):")
+    whole = {**comment("source", 1, source), "end_line": 2}
+    for item, expected_filtered in ((narrow, False), (whole, True)):
+        proof = prove_opaque_code(item, "source", read_head_excerpt=session.read_excerpt)
+        assert proof.existing_verified
+        projected, _, filtered = review_runner._publication_projection(
+            {"status": "success", "warnings": [], "comments": [item]},
+            forbidden=(),
+            allowed_tools=frozenset(),
+            code_proof=lambda _comment: proof,
+        )
+        assert filtered == expected_filtered
+        assert ("existing_code" in projected["comments"][0]) != expected_filtered

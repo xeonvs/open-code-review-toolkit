@@ -114,6 +114,11 @@ ambient secret; rejection of the input field remains independently observable.
 
 ## Reports and exact classifications
 
+The [0.14.5 causal matrix](engineering/dlp_causal_review.md) distinguishes corrected
+calendar/source cases from deliberately conservative role, grammar and aggregate
+boundaries. Historical missing-key records remain unverified; current annotations
+bind fresh authenticated inputs and never become runtime suppressions.
+
 Console output contains generated identities and aggregate counts. Private JSON
 and Markdown reports contain no snippets or matched values. The authenticated
 corpus manifest maps generated file slots to local source locators; keep it
