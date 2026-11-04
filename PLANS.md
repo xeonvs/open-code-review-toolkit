@@ -33,14 +33,14 @@ reviews, repeated corpus checks, publication and cleanup.
 | REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | in_progress |
 | REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | in_progress |
 | REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | in_progress |
-| REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | pending |
+| REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | done |
 | REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | in_progress |
 | REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | in_progress |
 | REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | done |
-| REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | pending |
+| REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | in_progress |
 | REQ-009 | Reconcile instructions, architecture, contracts, threat model and backlog | WQ-01, WQ-05, WQ-06 | in_progress |
 | REQ-010 | Signed PRs, aggregate/security/native review, stable release and external closure | WQ-01, WQ-06, WQ-07, WQ-08 | in_progress |
-| REQ-011 | Private-safe corpora, unchanged originals and task-owned cleanup | WQ-03, WQ-06, WQ-08 | pending |
+| REQ-011 | Private-safe corpora, unchanged originals and task-owned cleanup | WQ-03, WQ-06, WQ-08 | in_progress |
 
 ### Explicit Non-Goals
 
@@ -134,7 +134,7 @@ successful parsing alone cannot authorize a DLP exemption.
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime/property fixes, fresh paired populations, fourteen-category causal review and retained supplemental-library counterexamples complete; missing historical authentication/locators remain explicit unknowns; final replay belongs to WQ-06 | done |
 | WQ-04 | REQ-002, REQ-003 | Shared immutable session, identity/syntax separation, runner/diagram/GitLab consumers, closed audit diagnoses and installed/public-source handoffs verified; final own-tool acceptance belongs to WQ-06 | done |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Linux coverage and source-boundary negative controls qualify the new floors; installed handoffs, synthetic/properties and current contracts/matrix/changelog reconciled; final aggregate/security/model review remains WQ-06 | done |
-| WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, one Security scan/threat-model reconciliation, actual native review/diagram, scoped fixes and complete corpus/resource replays | pending |
+| WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review and single Security scan complete; actual native review, scoped test isolation/release-note corrections and final corpus replay underway | in_progress |
 | WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
 | WQ-08 | REQ-010, REQ-011 | Signed release PR with checked plan archive/reset, stable/external receipt readback, issue/site/main reconciliation and cleanup | pending |
 
@@ -198,8 +198,9 @@ max-tools omitted/0 default, 49 normalization to 50, exact 50/75/100/125 behavio
 grace completion and warnings/coverage through a real deterministic peer. Check
 new language/Rules inventory, complex ` b/` paths, rename/copy and blank-line
 anchors. Qualify both diagram variants/grouping, actual evidence/federation MCP
-and partial gitlink handoffs. Promote all pins/checksums/monitoring together only
-after admission. Release fragments distinguish maintenance, runtime fixes,
+and partial gitlink handoffs. Promote runtime qualification pins/monitoring together
+only after admission. Keep the example's published toolkit/OCR pair intact until
+the release PR advances both versions and its checksum together. Release fragments distinguish maintenance, runtime fixes,
 workflow behavior and Rules changes accurately.
 
 **Weekly workflow.** Remove the obsolete date gate and dependent conditions;
@@ -433,6 +434,39 @@ review and actual model/diagram acceptance remain mandatory and have not run.
 
 ### Risks And Recovery
 
+The single aggregate Security diff scan completed on ed42168..68b4a73 with
+complete changed-file coverage and no findings. Independent architecture review
+reconciled the current threat model. The first real own-tool review completed
+from the clean installed current-head wheel with ChatGPT high, unlimited token
+budget and an admitted model diagram: 94/94 selected files complete, nine findings
+(one conservatively filtered). Successful own-tool runs: 1/2; engineering
+acceptance remains pending. Corrections cover datetime
+lookahead, chunk-independent excerpt allocation, audit LF-span mapping, test
+oracles/qualification isolation and plan/release notes. A parallel
+full quality run passed 4543 tests but 17 CLI-boundary cases encountered the
+active checkout's legitimate review lock. Those tests now use isolated working
+directories without replacing the production lock: all 103 affected-module
+checks pass. The repeated full gate passes 4595 tests and 357 subtests, with 53
+expected optional/external skips; all independent coverage gates, format, lint,
+types and Bandit pass. The missing Rules
+changelog category is present. Corrections remain within the reviewed
+source/proof/promotion boundaries and receive focused behavioral and semantic
+checks without a second aggregate Security scan. The missing auxiliary decisions-module read targeted
+no existing file; the retained trace proves successful scanner, proof, state and
+consumer reads. The model's hidden audit finding was conservatively filtered as
+HTML-like prose and has been independently reproduced through the real worker.
+Initial focused fixes pass 321 checks with 99.34% combined coverage across the
+three changed owners. Eleven properties pass two independent 1000-example seeds;
+the actual qualified federation route passes with an invalid unrelated binary
+setting. Final full tests, resource/corpus replay and second model review remain
+required. The published example now retains its working pair until the release
+PR; promotion cannot independently advance its OCR half. The correction suite
+passes 272 checks on each of Python 3.12 and 3.15. Qualification/environment/docs
+and release-note contracts pass 307 checks. Semantic self-review verifies fixed
+whole-token grammar, byte-bounded source-position allocation, unchanged audit unit
+identities, lazy optional-binary validation and the published-example boundary;
+it preserves disclosure gates and does not infer authority from source proof.
+
 Source proof must never imply confidentiality or syntax authority. Streaming
 failures discard partial proof; repeated reads cannot bypass aggregate limits.
 Do not enlarge publication budgets to fix audit counts. A parser's recovery tree
@@ -458,11 +492,12 @@ not the required detector, corpus, privacy or protection-preservation outcomes.
 
 ### Resume Point
 
-WQ-06: complete aggregate self-review, run the single Security diff scan and
-reconcile the threat model, then execute the real qualified own-tool review with
-ChatGPT high, unlimited budget and an admitted local diagram. Inspect findings
-and failed reads, correct scoped issues, and repeat final current-population
-corpus checks. Final quality/secret/dependency gates, feature delivery with exact
+WQ-06: commit the reviewed, fully checked first-review fixes, then run the second
+qualified own-tool review with ChatGPT high,
+unlimited budget and an admitted local diagram. Successful model runs: 1/2.
+The single aggregate Security scan is complete (1/1); do not restart it.
+Inspect the second result, resolve any findings through focused checks, and
+repeat final current-population corpus/resource checks. Final secret/dependency gates, feature delivery with exact
 diagram, hosted qualification/CI and the full release/cleanup remain mandatory.
 No further feature push occurs until final feature delivery.
 

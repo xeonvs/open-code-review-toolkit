@@ -252,9 +252,7 @@ def _selected_preview_paths(payload: object) -> set[str]:
     return selected
 
 
-def _provider_directory_preview_probe(
-    binary: Path, version: str, directory: Path
-) -> dict[str, object]:
+def _provider_directory_preview_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove the tracked provider-directory preview transition on an exact range."""
 
     root = directory / "provider-directory-preview"

@@ -15,9 +15,6 @@ DEFAULT_MANIFEST = ROOT / "compatibility" / "ocr-support.json"
 PREFLIGHT = ROOT / "src" / "ocr_toolkit" / "preflight.py"
 
 
-GITLAB_EXAMPLE = ROOT / "examples" / "gitlab" / "ocr-review.gitlab-ci.yml"
-
-
 UPSTREAM_REPOSITORY = "alibaba/open-code-review"
 
 

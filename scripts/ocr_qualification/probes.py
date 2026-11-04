@@ -154,7 +154,7 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         binary, directory
     )
     contracts["provider_directory_preview_probe"] = selection._provider_directory_preview_probe(
-        binary, version, directory
+        binary, directory
     )
     contracts["language_rule_probe"] = selection._language_rule_probe(binary, version, directory)
     contracts["completion_cap_probe"] = numeric._completion_cap_probe(binary, directory)

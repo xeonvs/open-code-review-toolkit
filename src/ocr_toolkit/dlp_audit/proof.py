@@ -36,6 +36,22 @@ SYNTAX_REASONS = frozenset(
 )
 
 
+def snapshot_units(source: str) -> list[tuple[int, str, int, int]]:
+    """Preserve historical splitlines identities with independent Git LF spans."""
+
+    line_count = source.count("\n") + int(bool(source) and not source.endswith("\n"))
+    units = [(0, source, 1, line_count)]
+    source_line = 1
+    for number, segment in enumerate(source.splitlines(keepends=True), 1):
+        # One historical unit can be only part of an LF line. It must not gain
+        # whole-line source proof; later units still need their actual LF address.
+        value = segment.splitlines()[0]
+        if value.strip():
+            units.append((number, value, source_line, source_line))
+        source_line += segment.count("\n")
+    return units
+
+
 class SnapshotProofSource:
     """Reuse one authenticated file; never parse a selected fragment as full syntax."""
 

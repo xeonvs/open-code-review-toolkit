@@ -1,5 +1,7 @@
 """Suggestion acquisition crosses real immutable Git without whole-blob retention."""
 
+from pathlib import Path
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -83,11 +85,55 @@ def test_absent_or_malformed_replacements_never_acquire_source(tmp_path, monkeyp
     )
 
 
-@given(st.sampled_from(("line", "start_line", "end_line")), json_values())
-def test_arbitrary_line_json_closes_without_reader_access_or_crash(field, value):
+@given(
+    st.sampled_from(("line", "start_line", "end_line")),
+    st.one_of(
+        st.booleans(),
+        st.floats(),
+        st.integers(max_value=0),
+        st.integers(min_value=1_000_000_001),
+        st.text(alphabet="abc+-./", max_size=20),
+        st.lists(json_values(), max_size=3),
+        st.dictionaries(st.text(max_size=3), json_values(), max_size=3),
+    ),
+)
+def test_invalid_line_json_is_rejected_before_either_reader_route(field, value):
     item = finding(**{field: value})
-    decision = evaluate_suggestion(item, "source")
-    assert decision.state == SuggestionState.OMITTED
+
+    def unexpected(*args):
+        pytest.fail("invalid range reached source acquisition")
+
+    decision = evaluate_suggestion(item, "source", read_head_blob=unexpected)
+    assert decision.omission == SuggestionOmission.INVALID_RANGE
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(SourceReadSession, "read_excerpt", unexpected)
+        reader = SuggestionSourceReader(Path("/synthetic-unavailable-source"), "a" * 40, [item])
+        assert reader.evaluate(item, "source").omission == SuggestionOmission.INVALID_RANGE
+
+
+@given(st.integers(1, 12), st.booleans())
+def test_valid_numeric_line_reaches_source_and_can_be_actionable(number, as_text):
+    calls = []
+
+    def source(path):
+        calls.append(path)
+        return "original\n" * 12
+
+    item = finding(line=str(number) if as_text else number)
+    assert (
+        evaluate_suggestion(item, "source", read_head_blob=source).state
+        == SuggestionState.ACTIONABLE
+    )
+    assert calls == ["source"]
+
+
+@pytest.mark.parametrize("field", ["line", "start_line", "end_line"])
+@pytest.mark.parametrize("value", [2, "2", " 2 ", "\u0662"])
+def test_valid_line_representations_cross_actual_git_acquisition(tmp_path, field, value):
+    _, head = repository(tmp_path, b"header\noriginal\n")
+    item = finding(**{field: value})
+    reader = SuggestionSourceReader(tmp_path, head, [item])
+    assert reader.evaluate(item, "source").state == SuggestionState.ACTIONABLE
 
 
 def test_real_posting_remap_precedes_batched_source_planning(tmp_path, monkeypatch):

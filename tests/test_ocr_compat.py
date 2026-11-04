@@ -2328,7 +2328,6 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "compatibility/evidence/ocr-1.8.7.json",
         "compatibility/evidence/ocr-1.8.8.json",
         "src/ocr_toolkit/preflight.py",
-        "examples/gitlab/ocr-review.gitlab-ci.yml",
         "changelog.d/42.maintenance.md",
     }
     updated = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -2346,8 +2345,11 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         "semantic_grouping",
     ]
     example_text = example.read_text(encoding="utf-8")
-    assert 'OCR_VERSION: "v1.8.8"' in example_text
-    assert f'OCR_SHA256: "{"b" * 64}"' in example_text
+    assert 'OCR_VERSION: "v1.8.6"' in example_text
+    assert (
+        'OCR_SHA256: "1f2611766a562aee300af75524270de9b99ab2cf5c63bf75a9546ebf809f78a6"'
+        in example_text
+    )
     for path, content in durable_docs.items():
         assert path.read_text(encoding="utf-8") == content
     fragment = (root / "changelog.d" / "42.maintenance.md").read_text(encoding="utf-8")

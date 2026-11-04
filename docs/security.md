@@ -260,6 +260,10 @@ source can therefore prove a short excerpt without conferring syntax authority
 on a fragment. Bare CR and other non-LF separators cannot invent Git line
 addresses. Source failures close the optional code exception, and optional
 diagram reads run after finding proofs so they cannot consume their budget first.
+Completed excerpts retain their reservation; active overlapping spans use sorted
+source-span priority at source-character positions. Arbitrary pipe chunk boundaries
+cannot change which proofs fit the aggregate budget. Normal acquisition batches
+prefixes between allocation limits.
 
 Closed configuration grammar also distinguishes whole symbolic references
 (`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,

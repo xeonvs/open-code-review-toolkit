@@ -11,6 +11,8 @@ from ocr_toolkit import cli, review_runner
 from ocr_toolkit.providers import local
 from ocr_toolkit.reporting.model import failed_report
 
+pytestmark = pytest.mark.usefixtures("isolated_review_workspace")
+
 
 def test_atomic_private_artifact_matches_console(tmp_path: Path) -> None:
     report = failed_report("identity")

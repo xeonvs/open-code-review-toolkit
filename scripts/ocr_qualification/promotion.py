@@ -238,7 +238,6 @@ def prepare_update(
     )
     if old_linux_asset is None or not isinstance(old_linux_asset.get("sha256"), str):
         core._fail("previous recommended release lacks the Linux amd64 checksum")
-    old_linux = old_linux_asset["sha256"]
     destinations: list[Path] = []
     evidence_payloads: list[bytes] = []
     for item in evidences:
@@ -341,20 +340,9 @@ def prepare_update(
     )
     if linux_asset is None or not isinstance(linux_asset.get("sha256"), str):
         core._fail("candidate evidence lacks the Linux amd64 checksum")
-    example_path = root / settings.GITLAB_EXAMPLE.relative_to(settings.ROOT)
-    example = example_path.read_text(encoding="utf-8")
-    example = _replace_exact(
-        example,
-        f'OCR_VERSION: "v{old_version}"',
-        f'OCR_VERSION: "v{version}"',
-        source="example version",
-    )
-    example = _replace_exact(
-        example,
-        f'OCR_SHA256: "{old_linux}"',
-        f'OCR_SHA256: "{linux_asset["sha256"]}"',
-        source="example checksum",
-    )
+    # The example installs a published toolkit wheel. Its OCR version/checksum
+    # must advance with that toolkit pin in the release PR, not before the new
+    # runtime support has actually been delivered.
     changelog_dir = root / "changelog.d"
     fragment = changelog_dir / f"{fragment_number}.maintenance.md"
     qualified = version if len(versions) == 1 else f"{versions[0]} through {version}"
@@ -370,9 +358,8 @@ def prepare_update(
         destination.write_bytes(payload)
     manifest_path.write_bytes(manifest_payload)
     preflight_path.write_text(preflight, encoding="utf-8")
-    example_path.write_text(example, encoding="utf-8")
     fragment.write_text(fragment_text, encoding="utf-8")
-    return [manifest_path, *destinations, preflight_path, example_path, fragment]
+    return [manifest_path, *destinations, preflight_path, fragment]
 
 
 def parse_human_conclusions(values: list[str]) -> dict[str, str]:

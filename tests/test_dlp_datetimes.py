@@ -2,11 +2,21 @@
 
 import pytest
 
+from ocr_toolkit.context.code_text import TextSink
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.context.dlp.datetimes import complete_datetime
 
 BUDGETS = TextBudgets(20_000, 80_000, 300)
+
+
+@pytest.mark.parametrize("spaces", [126, 127, 128])
+def test_truncated_timezone_prefix_cannot_qualify_literal_nonpublication_input(spaces):
+    value = "2026-10-23 08:52" + " " * spaces + "UTCinvalid"
+    assert not complete_datetime(value, 0, 13)
+    assert not check_text(
+        value, budgets=BUDGETS, sink=TextSink.LITERAL_CODE, publication=False
+    ).admitted
 
 
 @pytest.mark.parametrize(

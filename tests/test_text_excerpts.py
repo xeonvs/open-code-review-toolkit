@@ -146,6 +146,20 @@ def test_capture_limits_reclaim_discarded_storage_without_reopening_the_range():
     assert capture.source is None and capture.used_bytes <= 7
 
 
+@pytest.mark.parametrize("pieces", [("abcd\nx",), ("abc", "d\nx"), tuple("abcd\nx")])
+def test_overlapping_range_budget_allocation_is_independent_of_pipe_chunks(pieces):
+    capture = TextExcerptCapture(((1, 1), (1, 2)), max_bytes=6, max_source_chars=0)
+    line = 1
+    for piece in pieces:
+        capture.feed(piece, line)
+        line += piece.count("\n")
+    assert [(item.text, item.reason) for item in capture.finish(2)] == [
+        ("abcd", "none"),
+        (None, "limit"),
+    ]
+    assert capture.used_bytes == 4
+
+
 @pytest.mark.parametrize("count,reason", [(12_000, "none"), (12_001, "limit")])
 def test_multibyte_excerpt_limits_apply_to_retained_text(count, reason):
     capture = TextExcerptCapture(((1, 1),), max_bytes=48_000, max_source_chars=0)
@@ -193,17 +207,27 @@ def test_incomplete_or_hostile_process_never_returns_partial_excerpts(behavior):
         "short": "import os; os.write(1,b'x')",
         "long": "import os; os.write(1,b'long')",
         "failed": "import os; os.write(1,b'ok'); raise SystemExit(1)",
-        "stderr": "import os; os.write(2,b'x'*70000)",
+        "stderr": "import os; os.write(1,b'ok'); os.write(2,b'x'*70000)",
         "timeout": "import time; time.sleep(5)",
         "identity": "import os; os.write(1,b'no')",
     }[behavior]
-    with pytest.raises((TextMetadataError, subprocess.TimeoutExpired)):
+    messages = {
+        "short": "incomplete Git text metadata read",
+        "long": "Git text size changed",
+        "failed": "incomplete Git text metadata read",
+        "stderr": "Git text diagnostic limit",
+        "identity": "Git text object identity mismatch",
+        "timeout": "timed out",
+    }
+    error = subprocess.TimeoutExpired if behavior == "timeout" else TextMetadataError
+    digest = hashlib.sha1(b"blob 2\0ok", usedforsecurity=False).hexdigest()
+    with pytest.raises(error, match=messages[behavior]):
         consume_text_metadata(
             [sys.executable, "-I", "-c", code],
             environment=os.environ.copy(),
-            object_sha="a" * 40,
+            object_sha=digest,
             size=2,
-            timeout=0.1,
+            timeout=0.1 if behavior == "timeout" else 5,
             spans=((1, 1),),
         )
 

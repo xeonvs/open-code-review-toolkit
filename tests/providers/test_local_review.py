@@ -11,6 +11,8 @@ from ocr_toolkit import cli, preflight, review_runner
 from ocr_toolkit.evidence.artifacts import prepare_artifact_directory, repository_artifacts
 from ocr_toolkit.reporting.model import failed_report
 
+pytestmark = pytest.mark.usefixtures("isolated_review_workspace")
+
 
 def test_local_preflight_does_not_validate_gitlab(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []

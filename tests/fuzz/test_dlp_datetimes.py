@@ -5,12 +5,28 @@ from datetime import datetime
 from hypothesis import given
 from hypothesis import strategies as st
 
+from ocr_toolkit.context.code_text import TextSink
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.context.dlp.datetimes import complete_datetime
 from tests.fuzz.test_dlp_representations import ENCODING, SENSITIVE, encode
 
 BUDGETS = TextBudgets(20_000, 80_000, 300)
+
+
+@given(st.dates(), st.times(), st.integers(0, 260), st.sampled_from((" ", "\t")), st.booleans())
+def test_incomplete_timezone_continuation_is_rejected_across_lookahead_splits(
+    day, clock, gap, whitespace, publication
+):
+    value = f"{day.isoformat()} {clock.hour:02}:{clock.minute:02}" + whitespace * gap + "UTCinvalid"
+    assert not complete_datetime(value, 0, 13)
+    assert not check_text(
+        value,
+        budgets=BUDGETS,
+        publication=publication,
+        sink=TextSink.LITERAL_CODE,
+        allow_horizontal_tabs=True,
+    ).admitted
 
 
 @st.composite

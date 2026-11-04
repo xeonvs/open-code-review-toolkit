@@ -22,7 +22,7 @@ from ocr_toolkit.evidence.opaque_code import SyntaxCache, prove_opaque_code
 
 from .corpus import MAX_FILE, manifest, original_source, read_source, verify_originals
 from .limits import MAX_HIT_BYTES, MAX_HITS, ExecutionLimits
-from .proof import PROOF_SCHEMA, SnapshotProofSource, validate_diagnoses
+from .proof import PROOF_SCHEMA, SnapshotProofSource, snapshot_units, validate_diagnoses
 from .report import render_report
 from .state import DIGEST, MAX_DOCUMENT, AuditError, State, decode, encode, fields
 from .worker_process import WorkerFailure, WorkerSession, frame, read_request
@@ -127,11 +127,7 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
     if len(key) != 32 or not isinstance(text, str) or len(text.encode()) > MAX_FILE:
         raise AuditError("invalid worker request")
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
-    lines = text.splitlines()
-    units = [
-        (0, text),
-        *((number, line) for number, line in enumerate(lines, 1) if line.strip()),
-    ]
+    units = snapshot_units(text)
     if len(units) != item["units"]:
         raise AuditError("worker unit population changed")
     hits: list[dict[str, Any]] = []
@@ -140,7 +136,7 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
     syntax_cache: SyntaxCache = {}
     proof_source = SnapshotProofSource(text, item["path"])
     with dlp.dlp_mode(True):
-        for number, value in units:
+        for number, value, start, end in units:
             raw = dlp.check_text(
                 value, budgets=budgets, publication=True, allow_horizontal_tabs=False, enabled=True
             )
@@ -158,8 +154,8 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
                 continue
             comment = {
                 "path": item["path"],
-                "start_line": number or 1,
-                "end_line": number or len(lines),
+                "start_line": start,
+                "end_line": end,
                 "content": "",
                 "existing_code": value,
             }

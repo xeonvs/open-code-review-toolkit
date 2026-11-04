@@ -7,11 +7,38 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ocr_toolkit.dlp_audit import scanner
-from ocr_toolkit.dlp_audit.proof import PROOF_SCHEMA, SnapshotProofSource
+from ocr_toolkit.dlp_audit.proof import PROOF_SCHEMA, SnapshotProofSource, snapshot_units
 from ocr_toolkit.dlp_audit.state import AuditError
 from tests.fuzz.strategies import json_values
 from tests.test_dlp_audit import captured, request, run_in_process
 from tests.test_dlp_audit import state as state
+
+
+@given(st.text(alphabet="ab \t\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029", max_size=300))
+def test_source_addresses_do_not_renumber_historical_diagnostic_units(source):
+    units = snapshot_units(source)
+    assert [(number, value) for number, value, _, _ in units] == [
+        (0, source),
+        *((number, value) for number, value in enumerate(source.splitlines(), 1) if value.strip()),
+    ]
+    offset = 0
+    for _, value, start, end in units[1:]:
+        offset = source.index(value, offset)
+        assert start == end == source.count("\n", 0, offset) + 1
+        offset += len(value)
+    assert units[0][3] == source.count("\n") + int(bool(source) and not source.endswith("\n"))
+
+
+@pytest.mark.parametrize(
+    "separator", ["\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
+)
+def test_actual_worker_preserves_unit_identity_but_uses_lf_source_addresses(state, separator):
+    identity = captured(state, f"intro{separator}continued\nList<Entry> value;\n")
+    result = scanner.supervised(request(state, identity), 15)
+    # Historical splitlines units remain stable; this is unit 3 but Git line 2.
+    hits = [hit for hit in result["hits"] if hit["unit"] == 3]
+    assert hits and all(hit["role"] == "text" for hit in hits)
+    assert all(hit["proof"] and hit["source_proof"] == "verified" for hit in hits)
 
 
 def test_actual_worker_qualifies_large_snapshot_excerpts_without_parsing_fragments(state):

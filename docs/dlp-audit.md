@@ -130,6 +130,9 @@ New runs separately record source-proof and syntax-proof diagnoses, including
 unavailable source, range/fragment limits, mismatch, and bounded syntax refinement.
 Historical runs remain readable with unavailable diagnoses; no new proof is
 inferred from them. Diagnostics do not change classifications or sink authority.
+Historical diagnostic unit numbers retain their original Unicode-aware line
+population. Source proof separately maps each unit to Git's LF addresses; a
+partial segment of an LF line does not gain whole-line or syntax authority.
 These are diagnostic queues, not automatic causal labels. The key, local paths and reports must never be committed or
 attached to a public issue. Use independently constructed synthetic examples
 for public regressions.

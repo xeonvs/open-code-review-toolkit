@@ -78,37 +78,96 @@ class TextExcerptCapture:
             return
         parts = text.split("\n")
         last_line = first_line + len(parts) - 1
-        for (start, end), capture in self._spans.items():
+        offsets = [0]
+        for part in parts[:-1]:
+            offsets.append(offsets[-1] + len(part) + 1)
+        events: dict[int, list[tuple[int, _Capture, bool]]] = {}
+        for rank, ((start, end), capture) in enumerate(self._spans.items()):
             if capture.limited or end < first_line or start > last_line:
                 continue
-            piece = "\n".join(
-                parts[max(0, start - first_line) : min(len(parts), end - first_line + 1)]
+            left = offsets[max(0, start - first_line)]
+            right = offsets[end - first_line + 1] - 1 if end < last_line else len(text)
+            if left < right:
+                events.setdefault(left, []).append((rank, capture, True))
+                events.setdefault(right, []).append((rank, capture, False))
+        active: dict[int, _Capture] = {}
+        previous = 0
+        for position in sorted(events):
+            if active and position > previous:
+                self._append(text[previous:position], active)
+            for rank, capture, opening in events[position]:
+                if opening and not capture.limited:
+                    active[rank] = capture
+                else:
+                    active.pop(rank, None)
+            previous = position
+
+    def _discard(self, capture: _Capture) -> None:
+        self.used_bytes -= capture.bytes
+        capture.parts.clear()
+        capture.chars = capture.bytes = 0
+        capture.limited = True
+
+    def _retain(self, capture: _Capture, text: str, size: int) -> None:
+        capture.parts.append(text)
+        capture.chars += len(text)
+        capture.bytes += size
+        self.used_bytes += size
+
+    def _append(self, text: str, active: dict[int, _Capture]) -> None:
+        """Allocate at source positions, batching prefixes that cannot hit a limit."""
+
+        offset = 0
+        while active and offset < len(text):
+            captures = tuple(active.values())
+            chars = min(MAX_EXCERPT_SOURCE_CHARS - item.chars for item in captures)
+            room = min(
+                (self._max_bytes - self.used_bytes) // len(captures),
+                *(MAX_EXCERPT_BYTES - item.bytes for item in captures),
             )
-            size = len(piece.encode("utf-8"))
-            if (
-                len(piece) > MAX_EXCERPT_SOURCE_CHARS - capture.chars
-                or size > MAX_EXCERPT_BYTES - capture.bytes
-                or size > self._max_bytes - self.used_bytes
-            ):
-                self.used_bytes -= capture.bytes
-                capture.parts.clear()
-                capture.limited = True
-                continue
-            capture.parts.append(piece)
-            capture.chars += len(piece)
-            capture.bytes += size
-            self.used_bytes += size
+            prefix = text[offset : offset + chars]
+            encoded = prefix.encode("utf-8")
+            if len(encoded) > room:
+                prefix = encoded[:room].decode("utf-8", errors="ignore")
+                encoded = prefix.encode("utf-8")
+            if prefix:
+                for capture in captures:
+                    self._retain(capture, prefix, len(encoded))
+                offset += len(prefix)
+            if offset == len(text):
+                break
+            # Completed spans keep their reservation. At a limit, process one
+            # source character and evict lower-priority active spans first;
+            # allocation cannot depend on OS pipe boundaries. Usual reads batch.
+            character = text[offset]
+            size = len(character.encode("utf-8"))
+            ranks = sorted(active)
+            victims = ranks.copy()
+            for rank in ranks:
+                capture = active.get(rank)
+                if capture is None:
+                    continue
+                if (
+                    capture.chars == MAX_EXCERPT_SOURCE_CHARS
+                    or size > MAX_EXCERPT_BYTES - capture.bytes
+                ):
+                    self._discard(active.pop(rank))
+                    continue
+                while rank in active and size > self._max_bytes - self.used_bytes:
+                    while victims[-1] not in active:
+                        victims.pop()
+                    self._discard(active.pop(victims.pop()))
+                if rank in active:
+                    self._retain(capture, character, size)
+            offset += 1
 
     def finish(self, line_count: int) -> tuple[RepositoryTextExcerpt, ...]:
         result = []
         for (start, end), capture in self._spans.items():
             text = None if capture.limited or end > line_count else "".join(capture.parts)
             if text is not None and len(normalize_fragment(text)) > MAX_EXCERPT_CHARS:
-                capture.limited = True
                 text = None
-                self.used_bytes -= capture.bytes
-                capture.parts.clear()
-                capture.bytes = 0
+                self._discard(capture)
             result.append(
                 RepositoryTextExcerpt(
                     start,

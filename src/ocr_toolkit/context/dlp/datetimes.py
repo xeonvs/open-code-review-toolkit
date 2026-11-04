@@ -28,8 +28,8 @@ def complete_datetime(value: str, start: int, end: int) -> bool:
             continue
         left = value[block.start() - 1] if block.start() else ""
         tail = value[block.end() : block.end() + _WINDOW]
-        if tail and not tail.strip(" \t") and block.end() + len(tail) < len(value):
-            # The bounded lookahead cannot distinguish a zone from prose yet.
+        if block.end() + len(tail) < len(value) and "utc".startswith(tail.lstrip(" \t").casefold()):
+            # Empty or partial zone tokens at the read boundary remain unknown.
             continue
         right = tail[:1]
         if left and (_word_part(left) or left in "_.:+/-"):
