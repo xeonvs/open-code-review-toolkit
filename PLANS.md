@@ -1,9 +1,9 @@
 # Execution Plans
 
-## Toolkit 0.14.5 — DLP precision, OCR qualification and maintenance quality
+## Active Plan: Toolkit 0.14.5 — DLP precision, OCR qualification and maintenance quality
 
+plan_schema_version: 2
 Status: active
-Plan Origin: plan_mode_approved
 Release classification: release-required
 Target release: 0.14.5
 Next development marker: 0.15.0
@@ -16,6 +16,10 @@ positives, prove bounded excerpts from large immutable sources, qualify OCR
 1.13.4–1.13.5 including diagrams/federation/gitlinks, restore weekly qualification,
 remove unreachable qualification code, improve meaningful boundary coverage and
 documentation, and complete the protected stable-release lifecycle and cleanup.
+
+### Plan Origin
+
+plan_mode_approved
 
 ### Requested Scope
 
@@ -523,15 +527,19 @@ not the required detector, corpus, privacy or protection-preservation outcomes.
 
 ### Resume Point
 
-WQ-07: deliver the reviewed corrections and exact accepted diagram in feature
-PR #293, then execute exact-tag hosted OCR 1.13.5 qualification on that head,
-wait for protected CI, merge and verify development publication.
+WQ-07: feature PR #293 contains the final implementation and exact accepted
+diagram. Exact-tag hosted qualification run 41860552131 passed on eebe711,
+including the actual qualify and canonical-issue upsert steps. Only plan/index
+documentation changed afterward, so that qualification remains applicable.
+Wait for protected CI, merge and verify development publication.
 Successful model runs: **2/2**, both complete;
 do not launch another.
 The single aggregate Security scan is complete (1/1); do not restart it.
-Final current-population corpus checks are complete. Final secret/dependency gates, feature delivery with exact
-diagram, hosted qualification/CI and the full release/cleanup remain mandatory.
-No further feature push occurs until final feature delivery.
+Final current-population corpus checks and local secret/dependency gates are
+complete. Protected CI, merge, development publication and the full release/cleanup
+remain mandatory. The checked lifecycle exposed missing plan format metadata and
+one missing managed-index entry; this documentation-only correction repairs them
+before archival without changing the qualified runtime or repository tooling.
 
 ### Plan Fidelity Check
 
