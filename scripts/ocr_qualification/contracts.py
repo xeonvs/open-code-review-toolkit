@@ -14,19 +14,20 @@ from . import core, settings
 def _numeric_contract_for_version(version: str) -> dict[str, object]:
     """Select required grace verdicts without changing frozen numeric defaults."""
 
+    _require_live_qualification_version(version)
     contract = dict(settings.CURRENT_NUMERIC_CLI_CONTRACT)
-    if core._version(version) >= settings.GRACE_PROBE_CUTOFF:
-        fixed = core._version(version) >= settings.GRACE_COMPLETION_CUTOFF
-        contract["grace_rounds"] = {
-            "task_done": {"completed": fixed, "limit_warning": fixed},
-            "no_task_done": {"completed": False, "limit_warning": fixed},
-        }
+    fixed = core._version(version) >= settings.GRACE_COMPLETION_CUTOFF
+    contract["grace_rounds"] = {
+        "task_done": {"completed": fixed, "limit_warning": fixed},
+        "no_task_done": {"completed": False, "limit_warning": fixed},
+    }
     return contract
 
 
 def _validate_current_contracts(value: object, version: str) -> None:
     """Require the live consumed contract epoch selected for one candidate version."""
 
+    _require_live_qualification_version(version)
     if not isinstance(value, dict):
         core._fail("current qualification contracts are missing")
     flags = value.get("required_review_flags")
@@ -39,11 +40,6 @@ def _validate_current_contracts(value: object, version: str) -> None:
     ):
         core._fail("current qualification omitted required CLI capabilities")
     extensions = sorted(Path(path).suffix for path in _language_rules_for_version(version))
-    provider_directory_state = (
-        "reported"
-        if core._version(version) >= settings.PROVIDER_DIRECTORY_PREVIEW_CUTOFF
-        else "omitted"
-    )
     expected = {
         "numeric_cli_probe": _numeric_contract_for_version(version),
         "review_budget_probe": {
@@ -78,7 +74,7 @@ def _validate_current_contracts(value: object, version: str) -> None:
         },
         "provider_directory_preview_probe": {
             "result": "passed",
-            "tracked_provider_directory": provider_directory_state,
+            "tracked_provider_directory": "reported",
         },
         "language_rule_probe": {
             "excluded_extensions": [".svh"],
@@ -150,19 +146,8 @@ def _validate_evidence_contracts(version: str, evidence: dict[str, Any]) -> None
 def _language_rules_for_version(version: str) -> dict[str, str]:
     """Return live probe paths for the frozen or current candidate epoch."""
 
+    _require_live_qualification_version(version)
     rules = dict(settings.CURRENT_LANGUAGE_RULES)
-    if core._version(version) < history.REGO_CONTRACT_CUTOFF:
-        rules.pop("policies/authz.rego")
-    if core._version(version) < settings.PYI_SELECTION_CUTOFF:
-        rules.pop("types/interface.pyi")
-    elif core._version(version) < settings.PYI_PYTHON_RULE_CUTOFF:
-        rules["types/interface.pyi"] = "default"
-    if core._version(version) < settings.FSHARP_RULE_CUTOFF:
-        for path in settings.FSHARP_RULE_PATHS:
-            rules.pop(path)
-    if core._version(version) < settings.JINJA_RULE_CUTOFF:
-        for path in settings.JINJA_RULE_PATHS:
-            rules.pop(path)
     if core._version(version) < settings.LANGUAGE_1_13_2_CUTOFF:
         rules[settings.POWERSHELL_SCRIPT_PATH] = "default"
         for path in settings.LANGUAGE_1_13_2_PATHS:
@@ -173,15 +158,8 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
 def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
     """Keep next-epoch languages observable as negative controls."""
 
+    _require_live_qualification_version(version)
     paths = ["rtl/include.svh"]
-    if core._version(version) < history.REGO_CONTRACT_CUTOFF:
-        paths.append("policies/authz.rego")
-    if core._version(version) < settings.PYI_SELECTION_CUTOFF:
-        paths.append("types/interface.pyi")
-    if core._version(version) < settings.FSHARP_RULE_CUTOFF:
-        paths.extend(("src/Program.fsi", "scripts/check.fsx"))
-    if core._version(version) < settings.JINJA_RULE_CUTOFF:
-        paths.extend(settings.JINJA_RULE_PATHS)
     if core._version(version) < settings.LANGUAGE_1_13_2_CUTOFF:
         paths.extend(settings.LANGUAGE_1_13_2_PATHS)
     return tuple(paths)
@@ -190,19 +168,8 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
 def _default_excluded_paths_for_version(version: str) -> tuple[str, ...]:
     """Return the exact built-in test exclusions owned by one OCR epoch."""
 
-    paths = [
-        path
-        for path in settings.CURRENT_DEFAULT_EXCLUDED_PATHS
-        if (
-            path != settings.PYTEST_PREFIX_EXCLUDED_PATH
-            or core._version(version) >= settings.PYTEST_PREFIX_EXCLUSION_CUTOFF
-        )
-        and (
-            path not in settings.EXPANDED_DEFAULT_EXCLUDED_PATHS
-            or core._version(version) >= settings.EXPANDED_DEFAULT_EXCLUSION_CUTOFF
-        )
-    ]
-    return tuple(paths)
+    _require_live_qualification_version(version)
+    return settings.CURRENT_DEFAULT_EXCLUDED_PATHS
 
 
 def _rolling_runtime_support(version: str) -> dict[str, object]:

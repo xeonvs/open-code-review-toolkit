@@ -95,7 +95,10 @@ forward-only suite boundary. It never launches OCR and must not depend on curren
 numeric defaults, language inventories or live fixtures. Preserve historical
 evidence bytes. Frozen epochs are readback-only: fresh `qualify` and
 `probe-local` requests below the live suite boundary fail before asset downloads
-or binary execution. Runtime support and validation of existing evidence remain
+or binary execution. Live projections also reject those frozen versions rather
+than reconstructing their old language, preview or numeric execution behavior.
+Their original expectations belong only to the frozen readback owner.
+Runtime support and validation of existing evidence remain
 owned by the compatibility manifest and the frozen validators. Generic promotion
 tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required

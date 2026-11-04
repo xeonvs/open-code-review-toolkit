@@ -257,6 +257,16 @@ instruction routes. This proves extraction behavior for the existing contract,
 not candidate 1.13.4/1.13.5 qualification or clean installed artifacts. No Security
 scan, actual model review, hosted qualification or publication has completed in
 this cycle. Further feature work remains local after the first plan push.
+
+Signed local commit 4803979 contains the characterized mechanical extraction.
+The next slice removes unreachable pre-1.13 live branches while preserving
+historical evidence/readback and runtime support: 187 focused tests pass.
+OCR 1.13.4 passed the complete existing deterministic contract suite on verified
+Linux amd64 and Darwin arm64 binaries. Linux qualification is classified
+human-review-required; its first disposable environment lacked Git and failed
+setup, then the corrected environment passed. Additional diagram/federation/
+gitlink capability qualification remains pending. Candidate artifacts, setup
+environment and exact cleanup inventory stay in the private qualification root.
 Successful own-tool reviews in this cycle: 0/2. Aggregate Security scans: 0/1.
 
 ### Risks And Recovery
@@ -275,11 +285,12 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-02: complete semantic/import/CLI review of the local qualification extraction,
-including preserving CLI help text and checking real entry points. Then remove
-unreachable live legacy without changing historical readback or evidence bytes,
-and qualify 1.13.4 before introducing the 1.13.5 contract epoch. No further
-feature push occurs until the approved final feature-delivery boundary.
+WQ-02: self-review and commit the unreachable-live-branch removal with its
+historical-readback regression checks. Then freeze the proven 1.13.0–1.13.4
+contract and introduce the 1.13.5 live epoch, numeric/Rules probes and centralized
+capability qualification. The actual 1.13.4 Linux/Darwin outputs are retained
+privately; do not rerun unchanged completed probes without a material reason.
+No further feature push occurs until final feature delivery.
 
 ### Plan Fidelity Check
 

@@ -229,25 +229,10 @@ CURRENT_DEFAULT_EXCLUDED_PATHS = (
 )
 
 
-PYI_SELECTION_CUTOFF = (1, 12, 0)
-
-
-PYI_PYTHON_RULE_CUTOFF = (1, 12, 1)
-
-
-PROVIDER_DIRECTORY_PREVIEW_CUTOFF = (1, 12, 1)
-
-
-PYTEST_PREFIX_EXCLUSION_CUTOFF = (1, 12, 7)
-
-
 PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
 
 
 PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
-
-
-GRACE_PROBE_CUTOFF = (1, 13, 0)
 
 
 GRACE_COMPLETION_CUTOFF = (1, 13, 1)
@@ -268,28 +253,6 @@ LANGUAGE_1_13_2_PATHS = (
     "shaders/main.wgsl",
     "shaders/main.metal",
     "infra/main.tofu",
-)
-
-
-JINJA_RULE_CUTOFF = (1, 12, 11)
-
-
-JINJA_RULE_PATHS = ("views/page.jinja2", "views/component.j2")
-
-
-FSHARP_RULE_CUTOFF = (1, 12, 8)
-
-
-FSHARP_RULE_PATHS = ("src/Program.fs", "src/Program.fsi", "scripts/check.fsx")
-
-
-EXPANDED_DEFAULT_EXCLUSION_CUTOFF = (1, 12, 8)
-
-
-EXPANDED_DEFAULT_EXCLUDED_PATHS = (
-    "src/WidgetTest.fs",
-    "node_modules/example/index.ts",
-    "dist/generated.js",
 )
 
 

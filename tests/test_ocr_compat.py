@@ -40,6 +40,10 @@ def load_script() -> ModuleType:
 def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, Any]:
     """Extend a frozen fixture with the live contract selected for one version."""
 
+    if module.core._version(version) < (1, 13, 0):
+        return module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")[
+            "contracts"
+        ]
     contracts = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.11.5.json")[
         "contracts"
     ]
@@ -64,11 +68,7 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
     )
     contracts["provider_directory_preview_probe"] = {
         "result": "passed",
-        "tracked_provider_directory": (
-            "reported"
-            if module.core._version(version) >= module.settings.PROVIDER_DIRECTORY_PREVIEW_CUTOFF
-            else "omitted"
-        ),
+        "tracked_provider_directory": ("reported"),
     }
     return contracts
 
@@ -89,56 +89,21 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
     assert "_validate_current_contracts(contracts)" not in source
 
 
-def test_live_language_probe_paths_follow_candidate_epoch() -> None:
+@pytest.mark.parametrize("version", ["1.13.0", "1.13.1", "1.13.2", "1.13.3"])
+def test_live_language_probe_paths_follow_candidate_epoch(version: str) -> None:
     module = load_script()
-
-    assert "policies/authz.rego" not in module.contracts._language_rules_for_version("1.11.7")
-    assert (
-        module.contracts._language_rules_for_version("1.11.8")["policies/authz.rego"] == "**/*.rego"
-    )
-    assert module.contracts._language_negative_paths_for_version("1.11.7") == (
-        "rtl/include.svh",
-        "policies/authz.rego",
-        "types/interface.pyi",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.settings.JINJA_RULE_PATHS,
-        *module.settings.LANGUAGE_1_13_2_PATHS,
-    )
-    assert module.contracts._language_negative_paths_for_version("1.11.8") == (
-        "rtl/include.svh",
-        "types/interface.pyi",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.settings.JINJA_RULE_PATHS,
-        *module.settings.LANGUAGE_1_13_2_PATHS,
-    )
-    assert (
-        module.contracts._language_rules_for_version("1.12.0")["types/interface.pyi"] == "default"
-    )
-    assert module.contracts._language_negative_paths_for_version("1.12.0") == (
-        "rtl/include.svh",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.settings.JINJA_RULE_PATHS,
-        *module.settings.LANGUAGE_1_13_2_PATHS,
-    )
-    assert (
-        module.contracts._language_rules_for_version("1.12.1")["types/interface.pyi"]
-        == "**/*.{py,pyi,ipynb}"
-    )
-    assert module.contracts._language_negative_paths_for_version("1.12.1") == (
-        "rtl/include.svh",
-        "src/Program.fsi",
-        "scripts/check.fsx",
-        *module.settings.JINJA_RULE_PATHS,
-        *module.settings.LANGUAGE_1_13_2_PATHS,
-    )
-    assert module.contracts._language_negative_paths_for_version("1.12.8") == (
-        "rtl/include.svh",
-        *module.settings.JINJA_RULE_PATHS,
-        *module.settings.LANGUAGE_1_13_2_PATHS,
-    )
+    rules = module.contracts._language_rules_for_version(version)
+    negative = module.contracts._language_negative_paths_for_version(version)
+    assert rules["policies/authz.rego"] == "**/*.rego"
+    assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
+    assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
+    assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
+    if module.core._version(version) < (1, 13, 2):
+        assert rules["scripts/setup.ps1"] == "default"
+        assert negative == ("rtl/include.svh", *module.settings.LANGUAGE_1_13_2_PATHS)
+    else:
+        assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
+        assert negative == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -274,20 +239,20 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    contracts = current_contracts(module)
+    contracts = current_contracts(module, "1.13.2")
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
-        Path(path).suffix for path in module.contracts._language_rules_for_version("1.12.8")
+        Path(path).suffix for path in module.contracts._language_rules_for_version("1.13.2")
     )
-    module.contracts._validate_current_contracts(contracts, "1.12.8")
+    module.contracts._validate_current_contracts(contracts, "1.13.2")
     extensions.reverse()
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(contracts, "1.12.8")
+        module.contracts._validate_current_contracts(contracts, "1.13.2")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.12.8", 22, "reported"), ("1.12.11", 24, "reported"), ("1.13.2", 32, "reported")],
+    [("1.13.0", 24, "reported"), ("1.13.1", 24, "reported"), ("1.13.2", 32, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -302,54 +267,51 @@ def test_current_contract_selects_live_language_and_preview_epoch(
     )
 
 
-def test_fsharp_and_default_exclusion_epoch_preserves_older_evidence() -> None:
+@pytest.mark.parametrize(
+    "version",
+    [
+        "1.11.7",
+        "1.11.8",
+        "1.12.0",
+        "1.12.1",
+        "1.12.6",
+        "1.12.7",
+        "1.12.8",
+        "1.12.10",
+        "1.12.11",
+        "1.12.13",
+    ],
+)
+def test_frozen_language_epochs_use_readback_without_live_execution(version: str) -> None:
     module = load_script()
-
-    assert module.contracts._default_excluded_paths_for_version("1.12.6") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-    )
-    assert module.contracts._default_excluded_paths_for_version("1.12.7") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-        "src/test_helpers.py",
-    )
-    assert module.contracts._default_excluded_paths_for_version("1.12.8") == (
-        "src/test/kotlin/scripts/Example.kts",
-        "test/parser.ml",
-        "src/test_helpers.py",
-        "src/WidgetTest.fs",
-        "node_modules/example/index.ts",
-        "dist/generated.js",
-    )
-    assert not set(module.settings.FSHARP_RULE_PATHS) & set(
-        module.contracts._language_rules_for_version("1.12.7")
-    )
-    assert {
-        module.contracts._language_rules_for_version("1.12.8")[path]
-        for path in module.settings.FSHARP_RULE_PATHS
-    } == {"**/*.{fs,fsi,fsx}"}
-    module.contracts._validate_current_contracts(current_contracts(module, "1.12.8"), "1.12.8")
+    evidence = module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")
+    module.contracts._validate_evidence_contracts(version, evidence)
+    for projection in (
+        module.contracts._language_rules_for_version,
+        module.contracts._language_negative_paths_for_version,
+        module.contracts._default_excluded_paths_for_version,
+        module.contracts._numeric_contract_for_version,
+    ):
+        with pytest.raises(module.core.CompatibilityError, match="frozen readback-only"):
+            projection(version)
+    evidence["contracts"]["language_rule_probe"]["result"] = "invalid"
+    with pytest.raises(module.core.CompatibilityError):
+        module.contracts._validate_evidence_contracts(version, evidence)
 
 
 @pytest.mark.parametrize("extension", [".j2", ".jinja2"])
 def test_jinja_contract_requires_both_selection_and_rule_evidence(extension: str) -> None:
     module = load_script()
     previous = current_contracts(module, "1.12.10")
-    module.contracts._validate_current_contracts(previous, "1.12.10")
-    assert set(module.settings.JINJA_RULE_PATHS).issubset(
-        module.contracts._language_negative_paths_for_version("1.12.10")
-    )
-    assert not set(module.settings.JINJA_RULE_PATHS) & set(
-        module.contracts._language_negative_paths_for_version("1.12.11")
-    )
-    with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(previous, "1.12.11")
+    module.contracts._validate_contracts_for_version("1.12.10", previous)
+    assert extension not in previous["language_rule_probe"]["extensions"]
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification"):
+        module.contracts._validate_contracts_for_version("1.12.11", previous)
     current = current_contracts(module, "1.12.11")
-    module.contracts._validate_current_contracts(current, "1.12.11")
+    module.contracts._validate_contracts_for_version("1.12.11", current)
     current["language_rule_probe"]["extensions"].remove(extension)
-    with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(current, "1.12.11")
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification"):
+        module.contracts._validate_contracts_for_version("1.12.11", current)
 
 
 def test_manifest_rejects_recommended_candidate(tmp_path: Path) -> None:

@@ -308,31 +308,25 @@ def _provider_directory_preview_probe(
     selected = records.get("src/main.py")
     if not isinstance(selected, dict) or selected.get("will_review") is not True:
         core._fail("provider-directory preview omitted the reviewable control file")
-    reports_provider_directory = (
-        core._version(version) >= settings.PROVIDER_DIRECTORY_PREVIEW_CUTOFF
-    )
-    expected_paths = set(paths) if reports_provider_directory else {"src/main.py"}
+    expected_paths = set(paths)
     if len(records) != len(file_records) or set(records) != expected_paths:
         core._fail("provider-directory preview changed its exact tracked-file inventory")
     provider_record = records.get("vendor/dependency.py")
-    expected_counts = (2, 1, 1) if reports_provider_directory else (1, 1, 0)
+    expected_counts = (2, 1, 1)
     observed_counts = (
         payload.get("total_files"),
         payload.get("reviewable_count"),
         payload.get("excluded_count"),
     )
-    if reports_provider_directory:
-        if (
-            not isinstance(provider_record, dict)
-            or provider_record.get("will_review") is not False
-            or provider_record.get("exclude_reason") != "provider_directory"
-        ):
-            core._fail("candidate did not report the tracked provider-directory exclusion")
-    elif provider_record is not None:
-        core._fail("candidate reported provider-directory preview data before its contract epoch")
+    if (
+        not isinstance(provider_record, dict)
+        or provider_record.get("will_review") is not False
+        or provider_record.get("exclude_reason") != "provider_directory"
+    ):
+        core._fail("candidate did not report the tracked provider-directory exclusion")
     if observed_counts != expected_counts:
         core._fail("candidate changed provider-directory preview counts")
-    expected_churn = 2 if reports_provider_directory else 1
+    expected_churn = 2
     if (
         payload.get("total_insertions") != expected_churn
         or payload.get("total_deletions") != expected_churn
@@ -340,7 +334,7 @@ def _provider_directory_preview_probe(
         core._fail("candidate changed provider-directory preview churn totals")
     return {
         "result": "passed",
-        "tracked_provider_directory": "reported" if reports_provider_directory else "omitted",
+        "tracked_provider_directory": "reported",
     }
 
 
@@ -483,8 +477,6 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         raise core.CompatibilityError("language preview did not emit JSON") from exc
     selected = _selected_preview_paths(payload)
     expected_selected = set(supported_paths) | set(settings.PYTEST_PREFIX_CONTROL_PATHS)
-    if core._version(version) < settings.PYTEST_PREFIX_EXCLUSION_CUTOFF:
-        expected_selected.add(settings.PYTEST_PREFIX_EXCLUDED_PATH)
     if selected != expected_selected:
         missing = sorted(expected_selected - selected)
         unexpected = sorted(selected - expected_selected)
