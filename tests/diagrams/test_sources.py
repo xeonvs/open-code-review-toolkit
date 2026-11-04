@@ -113,8 +113,11 @@ def test_file_and_shared_byte_budgets_are_closed(tmp_path, monkeypatch):
     assert reader("app.py").line_count == 10
     assert reader("alias").line_count == 10  # Same object is read and charged once.
     assert reader("marker").reason == "budget"
-    assert reader._used == 50
-    assert not any(isinstance(value, (bytes, str)) for value in reader._objects.values())
+    assert reader.session.used_bytes == 50
+    assert reader.session.retained_bytes == 0
+    retained = reader.session.read("app.py")
+    assert retained.syntax_source is None
+    assert retained.metadata.source is None and retained.metadata.excerpts == ()
     monkeypatch.setattr(sources, "MAX_SOURCE_BYTES", 49)
     assert sources.DiagramSourceReader(root, review_range.head)("app.py").reason == "budget"
 
@@ -123,7 +126,7 @@ def test_invalid_root_and_corrupt_object_alias_are_closed(tmp_path):
     root, review_range = repository(tmp_path, b"safe\n\xff", aliases=True)
     reader = sources.DiagramSourceReader(root, review_range.head)
     assert reader("app.py").reason == reader("alias").reason == "reference"
-    assert reader._used == 6
+    assert reader.session.used_bytes == 6
     assert (
         sources.DiagramSourceReader(tmp_path, review_range.head)("app.py").reason == "unavailable"
     )
@@ -146,11 +149,11 @@ def test_missing_links_mutable_checkout_and_wrong_lines_do_not_supply_proof(tmp_
 def test_deadline_is_shared_and_initialization_is_lazy(tmp_path, monkeypatch):
     root, review_range = repository(tmp_path, b"one\n")
     reader = sources.DiagramSourceReader(root, review_range.head)
-    assert reader._reader is None
+    assert reader.session is None
     monkeypatch.setattr(sources, "SOURCE_SECONDS", 0)
     assert reader("app.py").reason == "budget"
     assert admitted(root, review_range).reason == "budget"
-    assert reader._reader is None
+    assert reader.session._reader is None
 
 
 def test_metadata_budget_and_object_arguments_are_validated(tmp_path):

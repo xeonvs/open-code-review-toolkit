@@ -31,10 +31,10 @@ run_coverage_gate() {
   for coverage_module in providers/gitlab_ci evidence/policy/schema common/filesystem reporting/usage; do
     run_logged_command "coverage report --include=src/ocr_toolkit/$coverage_module.py --fail-under=85"
   done
-  for audit_module in cli corpus scanner state limits worker_process report; do
+  for audit_module in cli corpus scanner state limits worker_process report proof; do
     run_logged_command "coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90"
   done
-  for source_module in native_capabilities common/redaction common/value_boundaries context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/datetimes context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata evidence/text_contracts evidence/text_excerpts reporting/diagram_layout; do
+  for source_module in native_capabilities common/redaction common/value_boundaries context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/datetimes context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata evidence/text_contracts evidence/text_excerpts evidence/source_reader evidence/opaque_code posting/source_suggestions reporting/diagram_layout; do
     run_logged_command "coverage report --include=src/ocr_toolkit/$source_module.py --fail-under=90"
   done
 }

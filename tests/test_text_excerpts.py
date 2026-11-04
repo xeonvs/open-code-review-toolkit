@@ -17,7 +17,11 @@ from ocr_toolkit.evidence.repository import (
     RepositoryEvidenceError,
     RepositoryTextInvalid,
 )
-from ocr_toolkit.evidence.text_contracts import RepositoryTextExcerpt, RepositoryTextMetadata
+from ocr_toolkit.evidence.text_contracts import (
+    RepositoryTextExcerpt,
+    RepositoryTextMetadata,
+    normalize_fragment,
+)
 from ocr_toolkit.evidence.text_excerpts import TextExcerptCapture
 from ocr_toolkit.evidence.text_metadata import TextMetadataError, consume_text_metadata
 from tests.test_evidence_repository import git
@@ -163,6 +167,24 @@ def test_duplicate_spans_are_idempotent_and_exact_source_char_limit_is_inclusive
     capture.feed("abc", 1)
     (item,) = capture.finish(1)
     assert item.text == "abc" and capture.source == "abc" and capture.used_bytes == 3
+
+
+def test_crlf_transport_overhead_does_not_reduce_the_existing_fragment_limit():
+    lines = ["a" * 60, *(["a" * 59] * 199)]
+    source = "\r\n".join(lines) + "\r\n"
+    assert len("\n".join(lines)) == 12_000
+    capture = TextExcerptCapture(((1, 200),), max_bytes=32_000_000, max_source_chars=0)
+    capture.feed(source, 1)
+    (excerpt,) = capture.finish(200)
+    assert excerpt.reason == "none"
+    assert normalize_fragment(excerpt.text) == "\n".join(lines)
+
+
+def test_final_normalized_limit_is_checked_after_allowing_transport_overhead():
+    capture = TextExcerptCapture(((1, 1),), max_bytes=32_000_000, max_source_chars=0)
+    capture.feed("a" * 12_001, 1)
+    (excerpt,) = capture.finish(1)
+    assert excerpt.text is None and excerpt.reason == "limit"
 
 
 @pytest.mark.parametrize("behavior", ["short", "long", "failed", "stderr", "timeout", "identity"])

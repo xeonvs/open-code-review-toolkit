@@ -11,7 +11,8 @@ Use this file as the short repository map and route table for Open Code Review T
 - `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
 - `src/ocr_toolkit/evidence/text_contracts.py` and `text_excerpts.py` - pure text bounds, LF-addressed facts and incremental excerpt retention.
-- `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - whole-blob Git text validation and optional diagram-reference acquisition.
+- `src/ocr_toolkit/evidence/source_reader.py` and `text_metadata.py` - shared immutable Git text sessions and whole-blob validation; `src/ocr_toolkit/diagrams/sources.py` projects optional diagram references.
+- `src/ocr_toolkit/posting/source_suggestions.py` - bounded acquisition for already remapped GitLab suggestion ranges.
 - `tests/` - regression, contract, and synthetic integration tests.
 - `examples/gitlab/` - public synthetic GitLab CI examples.
 - `docs/` - user, security, development, strategy, and release documentation.

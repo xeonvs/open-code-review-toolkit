@@ -119,7 +119,11 @@ class SourceSyntax:
 def analyze_python_source(source: str) -> SourceSyntax | None:
     """Never treat an excerpt parsed out of a docstring/comment as executable code."""
 
-    if len(source) > MAX_SYNTAX_CHARS or any(char in source for char in "\v\f\x85\u2028\u2029"):
+    if (
+        len(source) > MAX_SYNTAX_CHARS
+        or any(char in source for char in "\v\f\x85\u2028\u2029")
+        or re.search(r"\r(?!\n)", source)
+    ):
         return None
     source = unicodedata.normalize("NFC", source.replace("\r\n", "\n").replace("\r", "\n"))
     try:

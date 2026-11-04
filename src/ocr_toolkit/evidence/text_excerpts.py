@@ -7,10 +7,12 @@ from dataclasses import dataclass, field
 from ocr_toolkit.evidence.text_contracts import (
     MAX_EXCERPT_BYTES,
     MAX_EXCERPT_CHARS,
+    MAX_EXCERPT_SOURCE_CHARS,
     MAX_EXCERPT_SPAN_LINES,
     MAX_SYNTAX_CHARS,
     RepositoryTextExcerpt,
     TextSpan,
+    normalize_fragment,
 )
 
 MAX_TEXT_SPANS = 10_000
@@ -84,7 +86,7 @@ class TextExcerptCapture:
             )
             size = len(piece.encode("utf-8"))
             if (
-                len(piece) > MAX_EXCERPT_CHARS - capture.chars
+                len(piece) > MAX_EXCERPT_SOURCE_CHARS - capture.chars
                 or size > MAX_EXCERPT_BYTES - capture.bytes
                 or size > self._max_bytes - self.used_bytes
             ):
@@ -98,15 +100,24 @@ class TextExcerptCapture:
             self.used_bytes += size
 
     def finish(self, line_count: int) -> tuple[RepositoryTextExcerpt, ...]:
-        return tuple(
-            RepositoryTextExcerpt(
-                start,
-                end,
-                None if capture.limited or end > line_count else "".join(capture.parts),
-                "range" if end > line_count else "limit" if capture.limited else "none",
+        result = []
+        for (start, end), capture in self._spans.items():
+            text = None if capture.limited or end > line_count else "".join(capture.parts)
+            if text is not None and len(normalize_fragment(text)) > MAX_EXCERPT_CHARS:
+                capture.limited = True
+                text = None
+                self.used_bytes -= capture.bytes
+                capture.parts.clear()
+                capture.bytes = 0
+            result.append(
+                RepositoryTextExcerpt(
+                    start,
+                    end,
+                    text,
+                    "range" if end > line_count else "limit" if capture.limited else "none",
+                )
             )
-            for (start, end), capture in self._spans.items()
-        )
+        return tuple(result)
 
     @property
     def source(self) -> str | None:

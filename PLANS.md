@@ -31,8 +31,8 @@ reviews, repeated corpus checks, publication and cleanup.
 | Requirement | Requested outcome | Work | Status |
 | --- | --- | --- | --- |
 | REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | in_progress |
-| REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | pending |
-| REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | pending |
+| REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | in_progress |
+| REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | in_progress |
 | REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | pending |
 | REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | in_progress |
 | REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | in_progress |
@@ -131,8 +131,8 @@ successful parsing alone cannot authorize a DLP exemption.
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
 | WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners, removed unreachable execution, froze predecessor epoch; both candidates passed Linux/Darwin base and actual consumed handoffs; promoted pins/capabilities locally and restored weekly workflow | done |
-| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime fix and diverse positive/negative properties implemented; retained baseline ledger/state confirmed present; causal-group classification, supplemental-library comparisons and complete replay remain | in_progress |
-| WQ-04 | REQ-002, REQ-003 | Bounded Git excerpt producer and pure contracts implemented/tested; integrate immutable batch session, code/suggestion/diagram consumers and closed audit diagnoses | in_progress |
+| WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime fix and diverse positive/negative properties implemented; historical ledger retained but its HMAC key is unavailable; reconstruct verified inputs and create a fresh paired baseline before causal replay/comparison | in_progress |
+| WQ-04 | REQ-002, REQ-003 | Shared immutable session, independent identity/syntax proof, runner/diagram/GitLab consumers and closed audit diagnoses implemented with focused/extended tests; installed and current corpus acceptance remain | in_progress |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | New capability/datetime owners have measured 100% coverage and individual 90% gates; remaining handoffs, floors, installed checks and contract/docs reconciliation follow implementation | in_progress |
 | WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, one Security scan/threat-model reconciliation, actual native review/diagram, scoped fixes and complete corpus/resource replays | pending |
 | WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
@@ -350,6 +350,21 @@ oracle. Shared pure limits preserve existing publication bounds. Caller batching
 admission integration, audit diagnoses and all 115 real proof observations remain
 pending; the producer tests alone do not establish those outcomes.
 
+The next local slice integrates one immutable session across finding proofs and
+optional diagram metadata, with object-alias coalescing, charged failed reads,
+four-entry syntax retention and finding-first priority. GitLab remapping precedes
+its separate suggestion session; the old full-blob suggestion reader is removed.
+Audit workers reuse authenticated snapshot text and publish closed source/syntax
+diagnoses with an explicit version marker; old run shapes retain frozen readback.
+256 focused tests pass with about 98% combined branch-aware coverage; each new
+owner exceeds 90%. A real finalizer fixture preserves 115 distinct short fields
+from a large synthetic file in one blob read. Real posting/remapping, stale and
+missing source, corrupt persisted diagnoses and nested JSON properties pass.
+Two independent extended property seeds pass; 445 runner/posting/optional-output
+checks and 205 subtests also pass. These synthetic handoffs do not authenticate
+the historical corpus observations. Current private replay and installed/final
+acceptance remain outstanding.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
@@ -364,13 +379,25 @@ recover only exact authorized immutable inputs, never substitute another corpus.
 Retain explicit ownership/cleanup for any new private snapshots. Preserve failed
 check evidence and review exact identities before retrying external mutations.
 
+Historical audit recovery found retained signed metadata but no matching HMAC
+key; the operator confirmed the temporary state is no longer available. Source
+repositories do not replace that key. Treat retained locators as untrusted hints,
+recover authorized immutable revisions where possible, and capture a fresh
+authenticated population for both installed 0.14.4 and the candidate. Keep its key
+and source-free evidence in durable private storage. Do not claim old identities,
+annotations or the historical 115 observations have been authenticated or exactly
+replayed without their original key. Classify current observations independently;
+record unrecovered historical cases as unknown. This changes evidence recovery,
+not the required detector, corpus, privacy or protection-preservation outcomes.
+
 ### Resume Point
 
-WQ-04: after the reviewed producer foundation is committed locally, add the
-immutable batch session over the existing Git reader, then integrate independent
-identity/syntax proof, suggestions, diagram priority and source-free audit diagnoses.
-Then finish WQ-03's causal groups and retained supplemental-library comparisons
-with actual replay evidence. Preserve completed qualification/property outputs;
+WQ-03/WQ-04: reconstruct authorized immutable inputs and create a fresh paired
+private baseline after the historical audit key proved unavailable. Classify
+current source-proof observations and remaining causal groups, then retain the
+supplemental-library comparisons and actual complete replay evidence. The bounded
+source integration is implemented locally; installed acceptance remains pending.
+Preserve completed qualification/property outputs;
 repeat only affected checks. Remaining floors, installed/native acceptance,
 one Security scan, hosted workflow and full release/cleanup remain mandatory.
 No further feature push occurs until final feature delivery.

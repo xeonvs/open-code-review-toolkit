@@ -392,9 +392,16 @@ comments and container closers. It has no detector, parser or I/O dependency.
 the local `dlp_audit/` package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result
-contract, not the detector. Git text streaming lives in
-`evidence/text_metadata.py`; `diagrams/sources.py` owns its immutable-head session
-and budgets, while `reporting/diagram_layout.py` estimates orientation without I/O.
+contract, not the detector. `dlp_audit/proof.py` supplies authenticated snapshot
+excerpts and validates closed source/syntax diagnoses; historical runs retain
+their original identities without invented diagnoses. Git text streaming lives
+in `evidence/text_metadata.py`, bounded capture in `text_excerpts.py`, and pure
+limits/facts in `text_contracts.py`. `evidence/source_reader.py` owns the shared
+immutable-head session and budgets. It coalesces planned ranges by object,
+completes finding proofs before optional diagram reads, and keeps syntax separate
+from excerpt identity. `diagrams/sources.py` projects metadata;
+`posting/source_suggestions.py` acquires remapped replacement excerpts without
+full syntax retention. `reporting/diagram_layout.py` estimates orientation without I/O.
 
 `providers/local.py` publishes private Markdown artifacts and console output from that shared report, with every
 admitted finding and no posting cap, remote badge or HTML disclosure. It does not

@@ -249,6 +249,18 @@ comments, strings, annotations and templates cannot supply that proof. This
 operator interpretation does not exempt other sensitive material in the excerpt.
 Authored actionable suggestions never inherit an existing-code syntax waiver.
 
+Source identity and syntax authority have separate bounds. A shared immutable
+Git session validates the complete regular UTF-8, NUL-free blob and its object
+digest before admitting requested LF-addressed excerpts. Limits are 5 MB per
+blob, 32 MB read/retained excerpt budgets and 30 seconds per session. Captured
+fragments retain the existing 12,000-character and 200-line-span limits; CRLF
+transport overhead does not enlarge the normalized publication limit. Full-source
+syntax remains limited to 256,000 characters with four cached files. A large
+source can therefore prove a short excerpt without conferring syntax authority
+on a fragment. Bare CR and other non-LF separators cannot invent Git line
+addresses. Source failures close the optional code exception, and optional
+diagram reads run after finding proofs so they cannot consume their budget first.
+
 Closed configuration grammar also distinguishes whole symbolic references
 (`${{ source.member }}`, `${NAME}`, or `{{ NAME }}`) from literal credentials,
 without evaluating them. Calls, defaults, concatenations and incomplete forms

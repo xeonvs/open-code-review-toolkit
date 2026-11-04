@@ -121,6 +121,10 @@ private too. JSON reports contain each rejected unit's role, line, primary
 reason, detector and source-proof fact. Markdown groups the ten largest primary
 detectors by role and source proof. It separately counts distinct line locations,
 whole-file probes with/without a child primary reason, and differing role facts.
+New runs separately record source-proof and syntax-proof diagnoses, including
+unavailable source, range/fragment limits, mismatch, and bounded syntax refinement.
+Historical runs remain readable with unavailable diagnoses; no new proof is
+inferred from them. Diagnostics do not change classifications or sink authority.
 These are diagnostic queues, not automatic causal labels. The key, local paths and reports must never be committed or
 attached to a public issue. Use independently constructed synthetic examples
 for public regressions.
@@ -145,6 +149,13 @@ key binds identities to the exact corpus, file bytes, unit and sink role.
 Annotations also bind the profile and effective environment-secret set. New
 inputs cannot inherit an old exemption. A changed rejected reason or proof fact
 needs an explicit new classification. Untriaged rejections remain visible.
+
+Keep the owner-only state directory, including its `key`, in durable private
+storage when later replay is required. Removing raw snapshots does not remove
+that key. A retained signed manifest without its original key cannot authenticate
+old fingerprints or annotations. If the key is lost, capture a fresh baseline
+and candidate from identical verified inputs; historical counts remain historical
+and old classifications cannot be transferred automatically.
 
 ## Replay and compare
 

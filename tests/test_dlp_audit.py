@@ -367,6 +367,8 @@ def test_comparison_flags_new_rejections_and_lost_protection(state, monkeypatch)
         "reason": "secret",
         "detector": "normalized",
         "proof": True,
+        "source_proof": "verified",
+        "syntax_proof": "not-qualified",
     }
     new_id = "b" * 32
     state.save("run", new_id, {**before, "hits": [*before["hits"], hit]})
@@ -1390,7 +1392,9 @@ def test_generation_and_admission_enforce_record_and_byte_budgets(state, monkeyp
             with pytest.raises(scanner.ScanFailure, match="output_budget"):
                 scanner.evaluate(body)
             with pytest.raises(AuditError, match="population"):
-                scanner.validate_hits(hits, files=[body["item"]], units=body["item"]["units"])
+                scanner.validate_hits(
+                    hits, files=[body["item"]], units=body["item"]["units"], diagnostics=True
+                )
 
 
 @pytest.mark.parametrize("failure", [scanner.ScanFailure("output_budget"), MemoryError()])
@@ -1542,7 +1546,12 @@ def test_admitted_units_do_not_load_review_or_provider_owners(state, monkeypatch
         return native_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", bounded_import)
-    assert scanner.evaluate(body) == {"units": 2, "proven_rejections": 0, "hits": []}
+    assert scanner.evaluate(body) == {
+        "units": 2,
+        "proven_rejections": 0,
+        "hits": [],
+        "proof_schema": scanner.PROOF_SCHEMA,
+    }
 
 
 def test_reused_native_worker_matches_fresh_workers_and_reaps(state) -> None:
@@ -1575,7 +1584,7 @@ def test_delayed_duplicate_clean_response_cannot_pass_another_file(state, monkey
 import json,sys
 stream=sys.stdin.buffer
 size=int.from_bytes(stream.read(4),'big'); first=stream.read(size)
-body=json.dumps({'units':2,'proven_rejections':0,'hits':[]}).encode()
+body=json.dumps({'units':2,'proven_rejections':0,'hits':[],'proof_schema':'ocr.dlp-source-proof/v1'}).encode()
 reply=first[:16]+body
 sys.stdout.buffer.write(len(reply).to_bytes(4,'big')+reply); sys.stdout.buffer.flush()
 size=int.from_bytes(stream.read(4),'big'); stream.read(size)

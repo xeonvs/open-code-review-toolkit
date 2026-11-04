@@ -227,6 +227,13 @@ reasons from private-only sanitized fields and reasons. The v4 summary signal
 and receipt v13 expose those closed counts without converting OCR coverage or
 provider posting counts.
 
+Finding source requests are planned together and coalesced by immutable Git
+object before optional diagram reads. Complete bounded text validation precedes
+excerpt admission; small excerpts from large files do not become full syntax
+inputs. GitLab remapping precedes its separate batched suggestion verification.
+Read or budget failures withhold the optional code exception/replacement while
+retaining the finding and ordinary DLP checks.
+
 Receipt v14 adds separate path-free effective repository coverage only for a
 qualified partial gitlink review. Native OCR `complete` then covers its selected
 ordinary files; it does not claim the skipped pointer or submodule contents.

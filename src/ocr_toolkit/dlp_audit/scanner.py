@@ -22,6 +22,7 @@ from ocr_toolkit.evidence.opaque_code import SyntaxCache, prove_opaque_code
 
 from .corpus import MAX_FILE, manifest, original_source, read_source, verify_originals
 from .limits import MAX_HIT_BYTES, MAX_HITS, ExecutionLimits
+from .proof import PROOF_SCHEMA, SnapshotProofSource, validate_diagnoses
 from .report import render_report
 from .state import DIGEST, MAX_DOCUMENT, AuditError, State, decode, encode, fields
 from .worker_process import WorkerFailure, WorkerSession, frame, read_request
@@ -137,6 +138,7 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
     used = 0
     proven = 0
     syntax_cache: SyntaxCache = {}
+    proof_source = SnapshotProofSource(text, item["path"])
     with dlp.dlp_mode(True):
         for number, value in units:
             raw = dlp.check_text(
@@ -162,7 +164,10 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
                 "existing_code": value,
             }
             proof = prove_opaque_code(
-                comment, item["path"], lambda _path: text, syntax_cache=syntax_cache
+                comment,
+                item["path"],
+                read_head_excerpt=proof_source.read,
+                syntax_cache=syntax_cache,
             )
             proven += int(proof.existing_verified)
             checked = dlp.check_text(
@@ -199,10 +204,17 @@ def evaluate(request: dict[str, Any], *, worker_identity: str | None = None) -> 
                             "reason": decision.reason,
                             "detector": decision.detector,
                             "proof": proof.existing_verified,
+                            "source_proof": proof.source_reason,
+                            "syntax_proof": proof.syntax_reason,
                         },
                         used,
                     )
-    return {"units": len(units), "proven_rejections": proven, "hits": hits}
+    return {
+        "units": len(units),
+        "proven_rejections": proven,
+        "hits": hits,
+        "proof_schema": PROOF_SCHEMA,
+    }
 
 
 def _worker_response(raw_request: bytes, *, worker_identity: str | None = None) -> bytes:
@@ -254,7 +266,10 @@ def supervised(
         result = decode(owner.exchange(encode(request), timeout))
         if isinstance(result, dict) and set(result) == {"error"}:
             raise ScanFailure(result["error"])
-        return fields(result, {"units", "proven_rejections", "hits"})
+        result = fields(result, {"units", "proven_rejections", "hits", "proof_schema"})
+        if result["proof_schema"] != PROOF_SCHEMA:
+            raise AuditError("invalid worker proof schema")
+        return result
     except WorkerFailure as exc:
         owner.close()
         raise ScanFailure(exc.reason) from exc
@@ -266,7 +281,9 @@ def supervised(
             owner.close()
 
 
-def validate_hits(value: Any, *, files: list[dict[str, Any]], units: int) -> list[dict[str, Any]]:
+def validate_hits(
+    value: Any, *, files: list[dict[str, Any]], units: int, diagnostics: bool = False
+) -> list[dict[str, Any]]:
     """Admit only closed, unique and bounded rejection records."""
 
     if not isinstance(value, list) or len(value) > min(MAX_HITS, 2 * units):
@@ -275,15 +292,18 @@ def validate_hits(value: Any, *, files: list[dict[str, Any]], units: int) -> lis
     identities: set[str] = set()
     used = 0
     for item in value:
-        fields(item, {"id", "slot", "unit", "role", "reason", "detector", "proof"})
+        validate_diagnoses(item, required=diagnostics)
         if (
             not isinstance(item["id"], str)
             or DIGEST.fullmatch(item["id"]) is None
             or item["id"] in identities
+            or not isinstance(item["slot"], str)
             or item["slot"] not in known
             or type(item["unit"]) is not int
             or not 0 <= item["unit"] <= known[item["slot"]]["lines"]
+            or not isinstance(item["role"], str)
             or item["role"] not in ROLES
+            or not isinstance(item["reason"], str)
             or item["reason"] not in REASONS
             or not isinstance(item["detector"], str)
             or len(item["detector"]) > 80
@@ -364,7 +384,9 @@ def scan(
                 or not 0 <= result["proven_rejections"] <= result["units"]
             ):
                 raise AuditError("invalid worker proof count")
-            admitted_hits = validate_hits(result["hits"], files=[item], units=item["units"])
+            admitted_hits = validate_hits(
+                result["hits"], files=[item], units=item["units"], diagnostics=True
+            )
             size = sum(hit_bytes(hit) for hit in admitted_hits)
             if len(hits) + len(admitted_hits) > MAX_HITS or used + size > MAX_HIT_BYTES:
                 stopped = "output_budget"
@@ -389,6 +411,7 @@ def scan(
         "corpus": corpus_id,
         "scanner": scanner,
         "profile": PROFILE,
+        "proof_schema": PROOF_SCHEMA,
         "secret_set": secret_set,
         "units": evaluated,
         "expected_units": corpus["units"],
@@ -407,8 +430,10 @@ def scan(
 def load_run(state: State, identity: str) -> dict[str, Any]:
     """Revalidate a persisted run and its complete population, including passes."""
 
+    document = state.load("run", identity)
+    diagnosed = isinstance(document, dict) and "proof_schema" in document
     run = fields(
-        state.load("run", identity),
+        document,
         {
             "corpus",
             "scanner",
@@ -421,8 +446,11 @@ def load_run(state: State, identity: str) -> dict[str, Any]:
             "complete",
             "errors",
             "hits",
-        },
+        }
+        | ({"proof_schema"} if diagnosed else set()),
     )
+    if diagnosed and run["proof_schema"] != PROOF_SCHEMA:
+        raise AuditError("invalid persisted proof schema")
     ExecutionLimits.parse(run["execution"])
     corpus = manifest(state, run["corpus"])
     if (
@@ -463,7 +491,7 @@ def load_run(state: State, identity: str) -> dict[str, Any]:
         not failed and run["units"] == corpus["units"]
     ):
         raise AuditError("invalid complete population")
-    validate_hits(run["hits"], files=corpus["files"], units=run["units"])
+    validate_hits(run["hits"], files=corpus["files"], units=run["units"], diagnostics=diagnosed)
     files_by_slot = {item["slot"]: item for item in corpus["files"]}
     for hit in run["hits"]:
         item = files_by_slot[hit["slot"]]

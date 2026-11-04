@@ -9,6 +9,11 @@ from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
 
+from ocr_toolkit.evidence.text_contracts import (
+    RepositoryTextExcerpt,
+    normalize_fragment,
+    source_lines,
+)
 from ocr_toolkit.posting.comments import line_number
 from ocr_toolkit.posting.settings import (
     MAX_SUGGESTION_CODE_CHARS,
@@ -108,8 +113,42 @@ ELLIPSIS_BRIDGE_RE = re.compile(
 def normalize_replacement(value: str) -> str:
     """Normalize transport line endings and one optional terminal newline."""
 
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-    return normalized[:-1] if normalized.endswith("\n") else normalized
+    return normalize_fragment(value)
+
+
+def bounded_source_range(comment: dict[str, Any]) -> tuple[int, int] | None:
+    """Select LF source addresses without coercing booleans or huge integers."""
+
+    values = []
+    for key in ("start_line", "end_line"):
+        raw = comment.get(key)
+        raw = comment.get("line") if raw is None else raw
+        if type(raw) not in {str, int} or (isinstance(raw, str) and len(raw) > 12):
+            return None
+        try:
+            values.append(line_number(raw))
+        except (ValueError, TypeError):
+            return None
+    start, end = values
+    return (start, end) if 1 <= start <= end <= 1_000_000_000 else None
+
+
+def suggestion_source_request(comment: dict[str, Any], path: str) -> tuple[int, int] | None:
+    """Plan a replacement read even when its optional original text is missing."""
+
+    replacement = comment.get("suggestion_code")
+    span = bounded_source_range(comment)
+    if (
+        not isinstance(replacement, str)
+        or not replacement.strip()
+        or not isinstance(path, str)
+        or len(path) > 1024
+        or not safe_repository_path(path)
+        or span is None
+        or span[1] - span[0] > MAX_SUGGESTION_SPAN_LINES
+    ):
+        return None
+    return span
 
 
 def safe_repository_path(path: str) -> bool:
@@ -160,7 +199,10 @@ def _replacement_shape_omission(replacement: str) -> SuggestionOmission | None:
 def evaluate_suggestion(
     comment: dict[str, Any],
     path: str,
-    read_head_blob: Callable[[str], str | None],
+    read_head_blob: Callable[[str], str | None] | None = None,
+    *,
+    excerpt: RepositoryTextExcerpt | None = None,
+    source_line_count: int = 0,
 ) -> SuggestionDecision:
     """Prove an OCR replacement applies to one range in the reviewed head blob."""
 
@@ -173,24 +215,28 @@ def evaluate_suggestion(
     if not safe_repository_path(path):
         return _omitted(SuggestionOmission.INVALID_PATH)
 
-    raw_start = comment.get("start_line")
-    raw_end = comment.get("end_line")
-    start = line_number(comment.get("line") if raw_start is None else raw_start)
-    end = line_number(comment.get("line") if raw_end is None else raw_end)
-    if start <= 0 or end < start:
+    source_range = bounded_source_range(comment)
+    if source_range is None:
         return _omitted(SuggestionOmission.INVALID_RANGE)
+    start, end = source_range
     span = end - start
     if span > MAX_SUGGESTION_SPAN_LINES:
         return _omitted(SuggestionOmission.RANGE_TOO_LARGE)
 
-    source = read_head_blob(path)
-    if source is None:
-        return _omitted(SuggestionOmission.SOURCE_UNAVAILABLE)
-    source_lines = source.replace("\r\n", "\n").replace("\r", "\n").splitlines()
-    if end > len(source_lines):
-        return _omitted(SuggestionOmission.RANGE_OUT_OF_BOUNDS)
-
-    selected = "\n".join(source_lines[start - 1 : end])
+    if excerpt is not None:
+        if type(source_line_count) is not int or end > source_line_count:
+            return _omitted(SuggestionOmission.RANGE_OUT_OF_BOUNDS)
+        if (excerpt.start_line, excerpt.end_line) != (start, end) or excerpt.text is None:
+            return _omitted(SuggestionOmission.SOURCE_UNAVAILABLE)
+        selected = excerpt.text
+    else:
+        source = read_head_blob(path) if read_head_blob is not None else None
+        if source is None:
+            return _omitted(SuggestionOmission.SOURCE_UNAVAILABLE)
+        lines = source_lines(source)
+        if end > len(lines):
+            return _omitted(SuggestionOmission.RANGE_OUT_OF_BOUNDS)
+        selected = "\n".join(lines[start - 1 : end])
     replacement = normalize_replacement(raw_replacement)
     if replacement == normalize_replacement(selected):
         return SuggestionDecision(SuggestionState.NO_OP)

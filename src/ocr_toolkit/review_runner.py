@@ -94,11 +94,17 @@ from ocr_toolkit.evidence.mcp import (
     call_tool,
     evidence_summary,
 )
-from ocr_toolkit.evidence.opaque_code import OpaqueCodeProof, SyntaxCache, prove_opaque_code
+from ocr_toolkit.evidence.opaque_code import (
+    OpaqueCodeProof,
+    SyntaxCache,
+    code_source_request,
+    prove_opaque_code,
+)
 from ocr_toolkit.evidence.project import render_bootstrap
 from ocr_toolkit.evidence.repository import (
     GitRepositoryReader,
     RepositoryEvidenceError,
+    RepositoryReadBudget,
     ShallowAncestryUnavailable,
     normalize_repo_path,
 )
@@ -109,6 +115,7 @@ from ocr_toolkit.evidence.review_context import (
     parse_review_context_mode,
 )
 from ocr_toolkit.evidence.review_range import resolve_review_range
+from ocr_toolkit.evidence.source_reader import SourceReadSession
 from ocr_toolkit.evidence.store import EvidenceStore, EvidenceStoreError
 from ocr_toolkit.federation import start_gateway
 from ocr_toolkit.federation.contracts import Registry
@@ -1784,8 +1791,6 @@ def _finalize_ocr_result(
     failure_telemetry = ToolFailureTelemetry(False, True, None, {}, ())
     allowed_tools = PUBLIC_REVIEW_TOOL_CALL_NAMES
     report: ReviewReport | None = None
-    source_reader = GitRepositoryReader(Path.cwd())
-    source_cache: dict[str, str | None] = {}
     syntax_cache: SyntaxCache = {}
     if expected_range is None and projection is not None:
         expected_range = ReviewRange(projection.plan.base_sha, projection.plan.head_sha)
@@ -1798,31 +1803,6 @@ def _finalize_ocr_result(
         )
     ):
         raise ReviewRunnerError("review range disagrees with the execution identity")
-
-    def read_source(path: str) -> str | None:
-        """Read immutable text without sharing optional-channel failure state."""
-
-        try:
-            blob = source_reader.read_blob(identity.source_sha, path)
-            return blob.decode("utf-8") if blob is not None else None
-        except (
-            RepositoryEvidenceError,
-            UnicodeDecodeError,
-            OSError,
-            subprocess.TimeoutExpired,
-        ):
-            return None
-
-    def read_reviewed_head(path: str) -> str | None:
-        if path not in source_cache:
-            source_cache[path] = read_source(path)
-        return source_cache[path]
-
-    def code_proof(comment: dict[str, object]) -> OpaqueCodeProof:
-        path = comment.get("path")
-        if not isinstance(path, str):
-            return OpaqueCodeProof()
-        return prove_opaque_code(comment, path, read_reviewed_head, syntax_cache=syntax_cache)
 
     def finalize(payload: dict[str, object]) -> dict[str, object]:
         nonlocal failure_telemetry, filtered, publication, usage, report
@@ -1862,6 +1842,44 @@ def _finalize_ocr_result(
             dlp_enabled=dlp_enabled,
             review_range=admitted_range,
         )
+        comments = payload.get("comments")
+        requests: dict[str, set[tuple[int, int]]] = {}
+        if dlp_enabled and isinstance(comments, list):
+            for comment in comments:
+                if (
+                    isinstance(comment, dict)
+                    and isinstance(path := comment.get("path"), str)
+                    and (request := code_source_request(comment, path)) is not None
+                ):
+                    requests.setdefault(path, set()).add(request)
+        source_session = None
+        source_failure = OpaqueCodeProof(source_reason="unavailable")
+        try:
+            source_session = SourceReadSession(
+                Path.cwd(),
+                identity.source_sha,
+                {path: tuple(sorted(spans)) for path, spans in requests.items()},
+            )
+        except RepositoryReadBudget:
+            source_failure = OpaqueCodeProof(source_reason="budget")
+        except (OSError, ValueError):
+            pass
+        proofs: dict[int, OpaqueCodeProof] = {}
+        if dlp_enabled and isinstance(comments, list):
+            for comment in comments:
+                if not isinstance(comment, dict):
+                    continue
+                path = comment.get("path")
+                proofs[id(comment)] = (
+                    prove_opaque_code(
+                        comment,
+                        path,
+                        read_head_excerpt=source_session.read_excerpt,
+                        syntax_cache=syntax_cache,
+                    )
+                    if source_session is not None and isinstance(path, str)
+                    else source_failure
+                )
         admitted_diagram = DiagramResult("off", "disabled")
         if diagram_execution is not None:
             raw_tools = payload.get("tool_calls")
@@ -1876,7 +1894,9 @@ def _finalize_ocr_result(
                 review_range=admitted_range,
                 calls=calls,
                 failed_calls=failed,
-                read_source=DiagramSourceReader(Path.cwd(), identity.source_sha),
+                read_source=DiagramSourceReader(
+                    Path.cwd(), identity.source_sha, session=source_session
+                ),
                 forbidden_matcher=ForbiddenMatcher.compile(forbidden),
                 dlp_enabled=dlp_enabled,
             )
@@ -1898,7 +1918,7 @@ def _finalize_ocr_result(
             forbidden=forbidden,
             allowed_tools=allowed_tools,
             dlp_enabled=dlp_enabled,
-            code_proof=code_proof,
+            code_proof=lambda comment: proofs.get(id(comment), OpaqueCodeProof()),
             **({"debug": state.debug} if state is not None and state.debug is not None else {}),
         )
         if state is not None:
