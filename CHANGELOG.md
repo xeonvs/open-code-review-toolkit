@@ -1,3 +1,42 @@
+## 0.14.5 - 2026-11-04
+
+### 🐛 Bug Fixes
+
+- Recognize complete validated calendar timestamps without misclassifying their date/hour fragment as a phone, while preserving explicit contact priority and independent secret/PII checks across material representations. Incomplete timezone prefixes at a bounded read boundary remain unqualified.
+
+  Preserve short source-bound code fields in large immutable files, sharing bounded Git reads across findings and optional diagram references. Make excerpt allocation independent of pipe chunk boundaries. Revalidate remapped GitLab suggestions through the same excerpt contract, without granting syntax authority to captured fragments.
+
+  Keep local audit source proofs aligned with Git LF addresses after Unicode or other line separators, preserving historical diagnostic unit identities. ([#292](https://github.com/xeonvs/open-code-review-toolkit/issues/292))
+- Preserve diagram generation and partial gitlink review when using newly qualified OCR 1.13.4 or 1.13.5, with one exact-version capability owner for preparation and manifest admission.
+
+  Keep the published GitLab example's toolkit/OCR pair compatible during qualification; advance both versions and the binary checksum together in the toolkit release PR.
+
+  Reject conflicting generated evidence or changelog destinations before qualification promotion changes the checkout, preserving identical preplaced outputs. ([#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294))
+
+### 🛠 Maintenance
+
+- Update development tooling to mypy 2.4.1, pytest 9.2.0 and Ruff 0.17.3, including mypy's ast-serialize dependency. ([#289](https://github.com/xeonvs/open-code-review-toolkit/issues/289))
+- Refresh the hash-locked certifi trust bundle to 2026.10.23 while preserving the binary-only runtime installation path. ([#290](https://github.com/xeonvs/open-code-review-toolkit/issues/290))
+- Update SHA-pinned setup-python to 7.1.0, setup-uv to 10.3.3 and CodeQL Action to 4.39.1 across current workflows, preserving workflow permissions and release authorization. ([#291](https://github.com/xeonvs/open-code-review-toolkit/issues/291))
+- Target checksum-verified Open Code Review 1.13.5 after qualifying 1.13.4 through 1.13.5.
+  Restore automatic compatibility checks every Monday at 07:15 UTC without the expired date gate. ([#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294))
+
+### 🔧 Refactoring
+
+- Separate pure text bounds from Git I/O and extend streamed text validation with bounded LF-addressed excerpts and complete object-identity verification, preserving existing publication limits.
+
+  Add closed source/syntax diagnoses to private audit runs while preserving frozen historical readback and independent DLP checks. Retain model-free parser counterexamples and explicit conservative causal dispositions. ([#292](https://github.com/xeonvs/open-code-review-toolkit/issues/292))
+- Separate repository-only OCR qualification into explicit contract, acquisition, controlled-probe and promotion owners while preserving its CLI and frozen evidence validation. ([#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294))
+
+### 🧩 Rules
+
+- Qualify OCR's JSONC, Scala, EJS/Liquid/Nunjucks and HAML/Slim/ERB selection and built-in Rules in the recommended release. ([#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294))
+
+### Security
+
+- Bind canonical qualification-issue reuse to GitHub-controlled owner or Actions-bot authorship and an exact first-line marker, so copied markers cannot authorize edits, reopen unrelated issues or preempt the canonical issue. ([#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294))
+
+
 ## 0.14.4 - 2026-10-31
 
 ### 🚀 Features
