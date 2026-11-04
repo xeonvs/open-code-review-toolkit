@@ -97,7 +97,7 @@ def test_cli_hostile_or_missing_result_is_job_only_and_never_reaches_delivery(
         "scalar": "7",
         "malformed": "{broken",
         "duplicate": '{"comments":[],"comments":[]}',
-        "oversize": '"' + ("x" * 100) + '"',
+        "oversize": '{"comments":[],"padding":"' + ("x" * 100) + '"}',
     }
     if case != "missing":
         result.write_text(values[case])
@@ -135,7 +135,13 @@ def test_cli_rejects_missing_delivery_authority_before_artifact_acquisition(monk
     monkeypatch.setattr(
         workflow,
         "load_gitlab_config",
-        lambda: None if case == "config" else replace(gitlab_config(), current_user_id=None),
+        lambda: (
+            None
+            if case == "config"
+            else replace(gitlab_config(), current_user_id=None)
+            if case == "actor"
+            else gitlab_config()
+        ),
     )
     monkeypatch.setattr(
         workflow,

@@ -106,7 +106,9 @@ Runtime support and validation of existing evidence remain
 owned by the compatibility manifest and the frozen validators. Generic promotion
 tests use a frozen baseline; only current-pin
 tests assert the latest supported version. Current promotion validates all required
-contract evidence before writing any pin or evidence file.
+contract evidence and generated-output collisions before writing any pin or
+evidence file. Identical preplaced outputs are reusable; unrelated content is
+preserved and rejected.
 
 When a consumed upstream contract changes, first freeze the last unaffected
 evidence epoch exactly, then advance the cutoff. The same version-selected

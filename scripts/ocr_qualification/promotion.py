@@ -133,6 +133,21 @@ def assess_automatic_chain(
     }
 
 
+def _generated_destination(path: Path, payload: bytes) -> bool:
+    """Preflight every generated output; preserve identical already-placed bytes."""
+
+    if path.is_symlink():
+        core._fail(f"generated destination must not be a symlink: {path}")
+    if not path.exists():
+        return True
+    if not path.is_file():
+        core._fail(f"generated destination is not a regular file: {path}")
+    with path.open("rb") as existing:
+        if existing.read(len(payload) + 1) != payload:
+            core._fail(f"generated destination already has different content: {path}")
+    return False
+
+
 def prepare_update(
     *,
     manifest_path: Path,
@@ -349,16 +364,23 @@ def prepare_update(
     fragment_text = (
         f"Target checksum-verified Open Code Review {version} after qualifying {qualified}.\n"
     )
+    outputs = [
+        *zip(destinations, evidence_payloads, strict=True),
+        (fragment, fragment_text.encode()),
+    ]
+    pending = [
+        (path, payload) for path, payload in outputs if _generated_destination(path, payload)
+    ]
 
     # Validate every input and transformation before changing the checkout, then
     # write each accepted evidence snapshot together with its linked manifest.
     destinations[0].parent.mkdir(parents=True, exist_ok=True)
     changelog_dir.mkdir(exist_ok=True)
-    for destination, payload in zip(destinations, evidence_payloads, strict=True):
-        destination.write_bytes(payload)
+    for destination, payload in pending:
+        with destination.open("xb") as output:
+            output.write(payload)
     manifest_path.write_bytes(manifest_payload)
     preflight_path.write_text(preflight, encoding="utf-8")
-    fragment.write_text(fragment_text, encoding="utf-8")
     return [manifest_path, *destinations, preflight_path, fragment]
 
 

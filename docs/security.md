@@ -29,10 +29,13 @@ forge/LLM/MCP credentials, external-object confidentiality, and publication and
 approval state. Local audit assets also include selected source snapshots,
 private origin locators, the state authentication key and exact expectations.
 Release assets include protected authorization, distribution bytes, provenance
-and immutable publication receipts.
+and immutable publication receipts. Repository maintenance also protects canonical
+qualification issues and existing qualification evidence or changelog fragments.
 
 A contributor can control repository content, merge-request metadata and
-discussion text, including tool-like instructions and crafted references. An MCP
+discussion text, including tool-like instructions and crafted references. Public
+issue authors can copy qualification markers; their text cannot authorize a
+privileged workflow to edit or reopen their issue. An MCP
 upstream controls its descriptions, schemas and responses. An operator controls
 the reviewed registry, credentials and selected protected policy. A compromised
 runner or same-user process remains a host-level threat outside the toolkit's
@@ -66,6 +69,11 @@ The main trust transitions are:
    predecessor, exact reviewed commit/tree/check identities, reproducible builds,
    registry verification and environment-bound publishing. Candidate source
    cannot supply the policy that authorizes its own privileged publication.
+9. Qualification issue reuse requires an exact first-line version marker and
+   GitHub-controlled authorship by the repository's individual owner or the
+   verified Actions bot. Membership associations and marker text alone grant no
+   authority. Generated promotion outputs reject conflicting existing content
+   before any pin is changed; exclusive creation protects new destinations.
 
 Changed Git submodule pointers are a separate repository-coverage boundary.
 For an exact capability-qualified OCR version, the toolkit compares complete before/after Git

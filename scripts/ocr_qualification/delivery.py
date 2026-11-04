@@ -202,8 +202,25 @@ def render_workflow_failure_issue(status: dict[str, Any], run_url: str) -> str:
     )
 
 
+def _owns_qualification_issue(author: Any, owner: str) -> bool:
+    """Use GitHub-controlled identity, never body text or membership association."""
+
+    if (
+        not isinstance(author, dict)
+        or not isinstance(author.get("login"), str)
+        or type(author.get("id")) is not int
+        or author["id"] <= 0
+    ):
+        return False
+    return (author.get("type") == "User" and author["login"].casefold() == owner.casefold()) or (
+        author.get("type") == "Bot"
+        and author["login"] == settings.GITHUB_ACTIONS_LOGIN
+        and author["id"] == settings.GITHUB_ACTIONS_USER_ID
+    )
+
+
 def find_qualification_issue(repository: str, marker: str) -> int | None:
-    """Find one exact marker through bounded direct issue listing, without search indexing."""
+    """Find one owner/Actions-authored header through bounded direct listing."""
 
     if settings.REPOSITORY_RE.fullmatch(repository) is None:
         core._fail("repository must use the owner/name form")
@@ -221,8 +238,10 @@ def find_qualification_issue(repository: str, marker: str) -> int | None:
             if (
                 isinstance(number, int)
                 and not isinstance(number, bool)
+                and number > 0
                 and isinstance(body, str)
-                and marker in body
+                and body.split("\n", 1)[0].removesuffix("\r") == marker
+                and _owns_qualification_issue(issue.get("user"), repository.split("/", 1)[0])
             ):
                 labels = issue.get("labels")
                 label_names = (
@@ -300,7 +319,7 @@ def upsert_qualification_issue(
             payload=payload,
         )
     returned_number = response.get("number") if isinstance(response, dict) else None
-    if not isinstance(returned_number, int) or isinstance(returned_number, bool):
+    if type(returned_number) is not int or returned_number <= 0:
         core._fail("GitHub issue write did not return a valid issue number")
     if issue_number is not None and returned_number != issue_number:
         core._fail("GitHub issue update returned a different issue number")

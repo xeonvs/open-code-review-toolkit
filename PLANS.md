@@ -30,15 +30,15 @@ reviews, repeated corpus checks, publication and cleanup.
 
 | Requirement | Requested outcome | Work | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | in_progress |
-| REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | in_progress |
-| REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | in_progress |
+| REQ-001 | Strict complete datetime interpretation without contact/secret bypasses | WQ-03, WQ-05 | done |
+| REQ-002 | Bounded streaming immutable-source proof for short excerpts in large files | WQ-04, WQ-05 | done |
+| REQ-003 | Source-free proof diagnoses and causal replay of remaining DLP groups | WQ-03, WQ-04, WQ-06 | done |
 | REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | done |
-| REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | in_progress |
+| REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | done |
 | REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | in_progress |
 | REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | done |
-| REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | in_progress |
-| REQ-009 | Reconcile instructions, architecture, contracts, threat model and backlog | WQ-01, WQ-05, WQ-06 | in_progress |
+| REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | done |
+| REQ-009 | Reconcile instructions, architecture, contracts, threat model and backlog | WQ-01, WQ-05, WQ-06 | done |
 | REQ-010 | Signed PRs, aggregate/security/native review, stable release and external closure | WQ-01, WQ-06, WQ-07, WQ-08 | in_progress |
 | REQ-011 | Private-safe corpora, unchanged originals and task-owned cleanup | WQ-03, WQ-06, WQ-08 | in_progress |
 
@@ -134,8 +134,8 @@ successful parsing alone cannot authorize a DLP exemption.
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime/property fixes, fresh paired populations, fourteen-category causal review and retained supplemental-library counterexamples complete; missing historical authentication/locators remain explicit unknowns; final replay belongs to WQ-06 | done |
 | WQ-04 | REQ-002, REQ-003 | Shared immutable session, identity/syntax separation, runner/diagram/GitLab consumers, closed audit diagnoses and installed/public-source handoffs verified; final own-tool acceptance belongs to WQ-06 | done |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Linux coverage and source-boundary negative controls qualify the new floors; installed handoffs, synthetic/properties and current contracts/matrix/changelog reconciled; final aggregate/security/model review remains WQ-06 | done |
-| WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review and single Security scan complete; actual native review, scoped test isolation/release-note corrections and final corpus replay underway | in_progress |
-| WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
+| WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, single Security scan, both native reviews/findings, full quality and final corpus/resource replay complete | done |
+| WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates pass; attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication remain | in_progress |
 | WQ-08 | REQ-010, REQ-011 | Signed release PR with checked plan archive/reset, stable/external receipt readback, issue/site/main reconciliation and cleanup | pending |
 
 ### Locked Decisions
@@ -439,7 +439,7 @@ complete changed-file coverage and no findings. Independent architecture review
 reconciled the current threat model. The first real own-tool review completed
 from the clean installed current-head wheel with ChatGPT high, unlimited token
 budget and an admitted model diagram: 94/94 selected files complete, nine findings
-(one conservatively filtered). Successful own-tool runs: 1/2; engineering
+(one conservatively filtered). At that checkpoint successful own-tool runs were 1/2; engineering
 acceptance remains pending. Corrections cover datetime
 lookahead, chunk-independent excerpt allocation, audit LF-span mapping, test
 oracles/qualification isolation and plan/release notes. A parallel
@@ -467,6 +467,37 @@ whole-token grammar, byte-bounded source-position allocation, unchanged audit un
 identities, lazy optional-binary validation and the published-example boundary;
 it preserves disclosure gates and does not infer authority from source proof.
 
+The second installed-artifact own-tool review completed at 0fbe34f: native
+coverage 99/99, no budget or coverage warnings, DLP passed and a generated
+eleven-node change-flow diagram admitted. Its complete private trace confirms
+the diagram output call and evidence navigation. One failed auxiliary read
+named a nonexistent detector module; the actual numeric/admission owners were
+read successfully. Successful own-tool runs are now **2/2**; do not launch another.
+Five findings received focused corrections: bind qualification-issue reuse to
+forge-controlled authorship, reject promotion-output collisions, and repair
+three negative test oracles so their valid controls reach the intended guards.
+A fresh independent security investigator and post-patch reviewer examined the
+issue-authorization fix; no surviving bypass or regression was reported.
+The public threat model and compatibility contracts now state that boundary.
+No second aggregate Security scan is needed for these scoped corrections.
+
+Final paired corpus replays are complete, with no unexplained admissions,
+unreviewed changes, new rejections or confirmed protection loss. Existing
+untriaged observations remain explicit and are not a clean-precision claim.
+Three resource comparisons remain within the 15% investigation threshold; one
+short scan initially exceeded it. Three repeated serial baseline/candidate pairs
+all completed; median candidate/baseline ratios are 0.961 wall time, 0.997 CPU
+and 1.000 RSS. The initial variance does not establish a performance regression.
+Repository-only follow-up corrections do not change the replayed runtime.
+The final full quality gate passes 4625 tests and 357 subtests, with 53 expected
+optional/external skips; coverage is 89.86% overall and 87.10% for posting, and
+every independent floor, format, lint, typing and Bandit check passes. Focused
+qualification/posting/document checks pass 334 cases. A delayed HTTP-response
+finalizer warning exposed unclosed error responses in controlled-peer tests;
+those responses now close explicitly rather than relying on garbage collection.
+All 262 qualification checks pass with unraisable-exception warnings treated as
+errors. Dependency audit and working-tree/unpublished-history secret gates pass.
+
 Source proof must never imply confidentiality or syntax authority. Streaming
 failures discard partial proof; repeated reads cannot bypass aggregate limits.
 Do not enlarge publication budgets to fix audit counts. A parser's recovery tree
@@ -492,12 +523,13 @@ not the required detector, corpus, privacy or protection-preservation outcomes.
 
 ### Resume Point
 
-WQ-06: commit the reviewed, fully checked first-review fixes, then run the second
-qualified own-tool review with ChatGPT high,
-unlimited budget and an admitted local diagram. Successful model runs: 1/2.
+WQ-07: deliver the reviewed corrections and exact accepted diagram in feature
+PR #293, then execute exact-tag hosted OCR 1.13.5 qualification on that head,
+wait for protected CI, merge and verify development publication.
+Successful model runs: **2/2**, both complete;
+do not launch another.
 The single aggregate Security scan is complete (1/1); do not restart it.
-Inspect the second result, resolve any findings through focused checks, and
-repeat final current-population corpus/resource checks. Final secret/dependency gates, feature delivery with exact
+Final current-population corpus checks are complete. Final secret/dependency gates, feature delivery with exact
 diagram, hosted qualification/CI and the full release/cleanup remain mandatory.
 No further feature push occurs until final feature delivery.
 

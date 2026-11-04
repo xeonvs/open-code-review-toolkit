@@ -1056,7 +1056,11 @@ def test_exact_issue_lookup_uses_direct_bounded_listing() -> None:
         requested.append(url)
         return [
             {"number": 47, "body": "other"},
-            {"number": 48, "body": marker},
+            {
+                "number": 48,
+                "body": marker,
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
+            },
             {"number": 99, "body": marker, "pull_request": {}},
         ]
 
@@ -1077,8 +1081,16 @@ def test_exact_issue_lookup_fails_closed_on_existing_duplicates() -> None:
             module.delivery,
             "_issue_api_request",
             lambda _url, **_kwargs: [
-                {"number": 47, "body": marker},
-                {"number": 48, "body": marker},
+                {
+                    "number": 47,
+                    "body": marker,
+                    "user": {"login": "synthetic", "id": 17, "type": "User"},
+                },
+                {
+                    "number": 48,
+                    "body": marker,
+                    "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"},
+                },
             ],
         ),
         pytest.raises(module.core.CompatibilityError, match="#47, #48"),
@@ -1099,8 +1111,15 @@ def test_exact_issue_lookup_ignores_closed_labeled_duplicate_archives() -> None:
                 "body": marker,
                 "state": "closed",
                 "labels": [{"name": "duplicate"}, {"name": "dependencies"}],
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
             },
-            {"number": 48, "body": marker, "state": "open", "labels": []},
+            {
+                "number": 48,
+                "body": marker,
+                "state": "open",
+                "labels": [],
+                "user": {"login": "synthetic", "id": 17, "type": "User"},
+            },
         ],
     ):
         assert module.delivery.find_qualification_issue("synthetic/repository", marker) == 48
@@ -1705,6 +1724,7 @@ def test_compatibility_gateway_rejects_malformed_messages_over_real_http() -> No
         )
         with pytest.raises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
+        error.value.close()
 
     assert error.value.code == 400
 
@@ -1755,6 +1775,7 @@ def test_reasoning_gateway_captures_wire_fields_without_model_reply(protocol: st
         with pytest.raises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
         assert error.value.code == 400
+        error.value.close()
         observed = module.peer._StubHandler.reasoning_requests
         assert len(observed) == 1 and observed[0]["path"] == f"/v1/{protocol}"
         assert observed[0]["root_present"] is (protocol == "chat/completions")
@@ -1772,8 +1793,9 @@ def test_reasoning_gateway_records_capture_overflow() -> None:
                 data=b'{"reasoning":{"effort":"none"}}',
                 headers={"Content-Type": "application/json"},
             )
-            with pytest.raises(urllib.error.HTTPError):
+            with pytest.raises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(request, timeout=module.settings.HTTP_TIMEOUT_SECONDS)
+            error.value.close()
         assert len(module.peer._StubHandler.reasoning_requests) == 32
         assert module.peer._StubHandler.reasoning_overflow is True
 
@@ -2211,7 +2233,10 @@ def test_asset_download_does_not_retry_not_found(tmp_path: Path) -> None:
     assert calls == 1
 
 
-def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "collision", ["none", "fragment", "first-evidence", "last-evidence", "symlink", "identical"]
+)
+def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path, collision: str) -> None:
     module = load_script()
     root = tmp_path
     (root / "compatibility" / "evidence").mkdir(parents=True)
@@ -2312,7 +2337,25 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         },
     }
 
-    changed = module.promotion.prepare_update(
+    fragment = root / "changelog.d" / "42.maintenance.md"
+    evidence_first = root / "compatibility" / "evidence" / "ocr-1.8.7.json"
+    evidence_last = root / "compatibility" / "evidence" / "ocr-1.8.8.json"
+    if collision == "fragment":
+        fragment.write_text("Preserve existing hand-maintained release notes.\n")
+    elif collision == "first-evidence":
+        evidence_first.write_bytes(b"unreferenced previous evidence")
+    elif collision == "last-evidence":
+        evidence_last.write_bytes(b"unreferenced previous evidence")
+    elif collision == "symlink":
+        target = root / "preserved-target"
+        target.write_bytes(b"caller content")
+        fragment.symlink_to(target)
+    elif collision == "identical":
+        evidence_first.write_bytes(module.core.canonical_json(evidence_187))
+        fragment.write_text(
+            "Target checksum-verified Open Code Review 1.8.8 after qualifying 1.8.7 through 1.8.8.\n"
+        )
+    arguments = dict(
         manifest_path=manifest_path,
         evidence=[evidence_188, evidence_187],
         fragment_number=42,
@@ -2322,6 +2365,19 @@ def test_prepare_update_promotes_one_reviewed_release_chain(tmp_path: Path) -> N
         },
         root=root,
     )
+    if collision not in {"none", "identical"}:
+        before = {
+            path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()
+        }
+        with pytest.raises(module.core.CompatibilityError, match="destination"):
+            module.promotion.prepare_update(**arguments)
+        assert {
+            path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()
+        } == before
+        if collision == "symlink":
+            assert fragment.is_symlink() and target.read_bytes() == b"caller content"
+        return
+    changed = module.promotion.prepare_update(**arguments)
 
     assert {path.relative_to(root).as_posix() for path in changed} == {
         "compatibility/ocr-support.json",

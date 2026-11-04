@@ -17,6 +17,10 @@ PREFLIGHT = ROOT / "src" / "ocr_toolkit" / "preflight.py"
 
 UPSTREAM_REPOSITORY = "alibaba/open-code-review"
 
+# Forge-owned identity, matching the release issue-receipt boundary.
+GITHUB_ACTIONS_LOGIN = "github-actions[bot]"
+GITHUB_ACTIONS_USER_ID = 41898282
+
 
 UPSTREAM_API = f"https://api.github.com/repos/{UPSTREAM_REPOSITORY}"
 
