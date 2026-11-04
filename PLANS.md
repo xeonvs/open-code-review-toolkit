@@ -36,7 +36,7 @@ reviews, repeated corpus checks, publication and cleanup.
 | REQ-004 | Evaluate focused model-free library additions and retain concrete comparative tests | WQ-03, WQ-05 | pending |
 | REQ-005 | Qualify adjacent OCR 1.13.4/1.13.5 and actual consumed capabilities | WQ-02, WQ-05 | pending |
 | REQ-006 | Restore weekly qualification, bounded dispatch and effective hosted execution | WQ-02, WQ-07 | pending |
-| REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | pending |
+| REQ-007 | Remove unreachable live legacy and establish cohesive qualification owners | WQ-02 | in_progress |
 | REQ-008 | Improve branch/semantic coverage, property diversity and resource evidence | WQ-05, WQ-06 | pending |
 | REQ-009 | Reconcile instructions, architecture, contracts, threat model and backlog | WQ-01, WQ-05, WQ-06 | in_progress |
 | REQ-010 | Signed PRs, aggregate/security/native review, stable release and external closure | WQ-01, WQ-06, WQ-07, WQ-08 | in_progress |
@@ -73,7 +73,9 @@ audits into GitLab or hosted CI. Current runtime support windows remain intact.
 - Runtime dependencies preserve supported Python/platform, hash-locked binary-only
   installation, no models/network classification and bounded processing.
 - Remove owned source copies and temporary builds/analysis resources at closure;
-  preserve necessary source-free reports and release/security evidence.
+  preserve necessary source-free reports and release/security evidence. Include
+  task-owned Docker/build resources and obsolete GitHub Actions logs/artifacts;
+  preserve authoritative release evidence and unrelated user resources.
 
 ### Inputs And Sources
 
@@ -106,7 +108,7 @@ the release PR; no later closure PR. No landing-chat task is requested.
 Clean main/origin/main at ed42168c2605ea3f4ef22717d7e0862f8317e06f,
 stable v0.14.4. Historical final gate: 4223 tests, 357 subtests, 89.17% branch-aware
 coverage, individual affected DLP/audit floors passing. These are prior results,
-not new-run evidence. No implementation changes have yet been made.
+not new-run evidence. At plan entry, no implementation changes had been made.
 
 Planning confirmed the active workflow's daily cron is neutralized by a date
 gate. Fresh qualification below 1.13.0 is already forbidden but live helpers
@@ -126,8 +128,8 @@ successful parsing alone cannot authorize a DLP exemption.
 
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-009, REQ-010 | Materialize/critique plan, reconcile routes, signed plan push/draft PR and scoped issue tracking | in_progress |
-| WQ-02 | REQ-005, REQ-006, REQ-007 | Characterize/extract qualification owners, remove unreachable legacy, qualify adjacent candidates/capabilities and restore weekly workflow | pending |
+| WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
+| WQ-02 | REQ-005, REQ-006, REQ-007 | Characterized/extracted qualification owners; finish semantic/import/CLI review, remove unreachable legacy, qualify adjacent candidates/capabilities and restore weekly workflow | in_progress |
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Freeze replay baseline, implement strict datetime fix, inspect causal groups and retain focused library comparisons/synthetic regressions | pending |
 | WQ-04 | REQ-002, REQ-003 | Implement shared bounded excerpt acquisition/proof and closed audit diagnoses across real callers | pending |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Integrate handoffs, improve coverage/properties, installed checks and synchronize contracts/routes/docs | pending |
@@ -183,7 +185,8 @@ runtime support windows remain unchanged. One pure runtime capability owner
 replaces independent 1.13.3 diagram/gitlink checks; unqualified versions fail
 closed. Native-auth applicability is reviewed separately from API probes.
 
-**Consumed OCR changes.** Check 1.13.4 missing/mixed diff reads. Check 1.13.5
+**Consumed OCR changes.** Qualify checksum-verified Linux and Darwin binaries
+against the adjacent chain. Check 1.13.4 missing/mixed diff reads. Check 1.13.5
 max-tools omitted/0 default, 49 normalization to 50, exact 50/75/100/125 behavior,
 grace completion and warnings/coverage through a real deterministic peer. Check
 new language/Rules inventory, complex ` b/` paths, rename/copy and blank-line
@@ -204,7 +207,8 @@ extended local 1000 with independent seeds/minimized synthetic regressions.
 Improve posting group to >=87% before raising its gate to 85%; raise total gate
 to 88% only after >=89% on CI-owner Python 3.14. Never waive a required check to
 meet a number. Compare complete replay CPU/wall/RSS with installed 0.14.4 under
-the same Python/environment/input; profile substantial regressions. Keep audit
+the same Python/environment/input; a wall-time or RSS increase above 15% triggers
+repeat measurement and profiling, not automatic acceptance. Keep audit
 local-only and test actual bounded/cancellation/cleanup paths.
 
 **Review/delivery.** One aggregate Security scan then threat-model review. Actual
@@ -237,10 +241,22 @@ that PR. CI owns receipt-bound issue closure; independently verify external stat
 
 ### Latest Validation Results
 
-Planning-only observations above; manifest validation and instruction-contract
-checks passed on the unchanged baseline. Materialized-plan semantic review,
-instruction/privacy checks and pre-push dependency audit passed. No new implementation, Security scan,
-actual model review, hosted qualification or publication has completed.
+The initial plan commit has a verified SSH signature. Gitleaks passed for its
+staged content, public tree and feature history; instruction/privacy checks and
+the shared dependency audit passed too.
+It is published in draft PR #293. Qualification characterization passed 175
+tests in 11.92 seconds. The mechanical extraction retains all 77 original
+function/class ASTs modulo explicit owner qualification; none is missing or
+semantically changed. The same 175 tests pass in 8.15 seconds, and manifest
+validation passes. Combined qualification/document/environment consumers pass
+241 tests with one expected external-qualification skip. The checksum-verified
+Darwin arm64 OCR 1.13.3 completed the full real deterministic probe-local CLI
+through the extracted owners. Semantic review corrected module/local-name
+collisions, preserved CLI help and fresh test-owner isolation, and reconciled
+instruction routes. This proves extraction behavior for the existing contract,
+not candidate 1.13.4/1.13.5 qualification or clean installed artifacts. No Security
+scan, actual model review, hosted qualification or publication has completed in
+this cycle. Further feature work remains local after the first plan push.
 Successful own-tool reviews in this cycle: 0/2. Aggregate Security scans: 0/1.
 
 ### Risks And Recovery
@@ -259,10 +275,11 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-01: review the materialized plan against all approved requirements, perform
-applicable plan/instruction/privacy guards, create the codex feature branch and
-signed plan commit, run pre-push gates, push once and open the draft PR. Then
-proceed to characterization/extraction and qualification in WQ-02.
+WQ-02: complete semantic/import/CLI review of the local qualification extraction,
+including preserving CLI help text and checking real entry points. Then remove
+unreachable live legacy without changing historical readback or evidence bytes,
+and qualify 1.13.4 before introducing the 1.13.5 contract epoch. No further
+feature push occurs until the approved final feature-delivery boundary.
 
 ### Plan Fidelity Check
 
@@ -272,6 +289,12 @@ proceed to characterization/extraction and qualification in WQ-02.
 - [x] Qualification/frozen-history ordering avoids invalidating predecessor proof.
 - [x] Release-required target, archive owner and external closure are explicit.
 - [x] No omitted outcome is disguised as a non-goal; resume point is actionable.
+- [x] Disk plan rechecked against all five approved scope groups after the first
+  implementation step: baseline/prior research, concrete DLP fixes, supplemental
+  libraries, OCR/architecture/tests/docs, and complete protected release/cleanup.
+  The check restored explicit Linux/Darwin qualification, the 15% performance
+  investigation trigger and hosted/task-owned cleanup detail; no approved
+  deliverable was dropped. Current queue/evidence were reconciled separately.
 
 ### Reconciliation Check
 
@@ -291,7 +314,7 @@ proceed to characterization/extraction and qualification in WQ-02.
 
 Repository plan remains active through feature delivery and release preparation.
 The release PR archives the final repository state using the checked lifecycle;
-registry/provenance/install/tag/immutable receipt/issue/site readback remains
+registry/provenance/install/tag/immutable receipt/issue/milestone/site readback remains
 required external delivery. Do not mark the objective complete before that
 independent reconciliation. No extra closure PR follows stable publication.
 

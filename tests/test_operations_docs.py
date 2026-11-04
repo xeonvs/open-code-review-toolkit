@@ -811,6 +811,9 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
         encoding="utf-8"
     )
     qualifier = (PROJECT_ROOT / "scripts" / "ocr_compat.py").read_text(encoding="utf-8")
+    qualification_root = PROJECT_ROOT / "scripts" / "ocr_qualification"
+    settings = (qualification_root / "settings.py").read_text(encoding="utf-8")
+    promotion = (qualification_root / "promotion.py").read_text(encoding="utf-8")
     policy = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     assert "schedule:" in workflow
@@ -840,7 +843,7 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert 'GITLAB_DOC = ROOT / "docs" / "gitlab.md"' not in qualifier
     assert 'SECURITY_DOC = ROOT / "docs" / "security.md"' not in qualifier
     assert "public version references" not in policy
-    assert "MAX_QUALIFICATION_CHAIN = 10" in qualifier
+    assert "MAX_QUALIFICATION_CHAIN = 10" in settings
     assert "OCR_UPDATE_BOT_TOKEN" in workflow
     assert "gh auth setup-git" in workflow
     assert "git switch -C" in workflow
@@ -867,8 +870,8 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     assert "if: steps.qualify.outcome == 'failure'" in workflow
     assert "run: exit 1" in workflow
     assert "gh issue create" not in workflow
-    assert 'f"{fragment_number}.maintenance.md"' in qualifier
-    assert 'f"{fragment_number}.feature.md"' not in qualifier
+    assert 'f"{fragment_number}.maintenance.md"' in promotion
+    assert 'f"{fragment_number}.feature.md"' not in promotion
     for contract in (
         "OCR 1.9.9 — inherited predecessor",
         "OCR 1.9.10 — toolkit 0.8.0 target and 0.8.2 predecessor",

@@ -14,6 +14,7 @@ Use this file as the short repository map and route table for Open Code Review T
 - `examples/gitlab/` - public synthetic GitLab CI examples.
 - `docs/` - user, security, development, strategy, and release documentation.
 - `.github/workflows/` - pinned CI, security, build, and release automation.
+- `scripts/ocr_qualification/` - repository-only OCR contracts, controlled probes, asset verification and promotion; `scripts/ocr_compat.py` is its CLI.
 
 ## Sources Of Truth
 
@@ -31,6 +32,9 @@ Use this file as the short repository map and route table for Open Code Review T
 ## Task Routes
 
 Read the matching owners and run their applicable guards. The general repository route applies alongside a more specific route; a shared owner or unchanged-state guard needs only one current read or check.
+
+<!-- ew:route id="ocr-qualification" triggers="scripts/ocr_compat.py|scripts/ocr_compat_history.py|scripts/ocr_qualification/**|compatibility/**|.github/workflows/ocr-compatibility.yml|OCR qualification" owners="docs/compatibility.md|docs/development.md" guards="test:tests/test_ocr_compat.py|manual_review:compare frozen readback live probes immutable asset identity and promotion consumers" -->
+| `ocr-qualification` | OCR contracts, qualification and promotion | Compatibility policy and qualification maintenance | Contract tests and actual candidate boundary evidence |
 
 <!-- ew:route id="repository-change" triggers="**" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:inspect the scoped final diff and applicable repository checks" -->
 | `repository-change` | Every repository change | Project principles and development procedures | Scoped diff review and applicable checks |

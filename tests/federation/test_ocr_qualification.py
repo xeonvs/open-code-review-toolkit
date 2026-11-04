@@ -46,8 +46,8 @@ def test_checksum_verified_ocr_reads_mr_intent_before_federated_tracker(tmp_path
     assert hashlib.sha256(binary.read_bytes()).hexdigest() == digest
     assert validate_ocr_binary(executable=str(binary), announce=False) in {"1.13.2", "1.13.3"}
     compat = load_script()
-    env = compat._isolated_probe_environment(tmp_path / "isolated-home")
-    repo, base, head = compat._synthetic_repo(tmp_path, env)
+    env = compat.execution._isolated_probe_environment(tmp_path / "isolated-home")
+    repo, base, head = compat.execution._synthetic_repo(tmp_path, env)
     tracker_key = "SYNTH-" + uuid.uuid4().hex[:12]
     tracker_calls = tmp_path / "tracker-calls.json"
     tracker_peer = tmp_path / "tracker_peer.py"
@@ -133,7 +133,7 @@ server.run()
             ]
         return []
 
-    class ModelPeer(compat._StubHandler):
+    class ModelPeer(compat.peer._StubHandler):
         """Read real internal MCP output before deriving an authorized tracker call."""
 
         def do_POST(self) -> None:

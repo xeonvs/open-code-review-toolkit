@@ -53,6 +53,14 @@ For an authorized real local OCR review, follow the [local review preparation an
 
 ## Maintaining OCR qualification
 
+`scripts/ocr_compat.py` is the stable repository-only CLI. Its
+`ocr_qualification/` package separates contract validation, execution, verified
+asset acquisition, the deterministic peer, numeric/selection/comment probes,
+candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
+shared qualification inputs; `core.py` owns bounded document/version primitives.
+Tests patch the actual owning modules rather than a compatibility re-export.
+These tools and their controlled peer are excluded from installed distributions.
+
 Current operator guidance describes the qualified OCR contract without repeating
 release numbers or asset hashes; link to `compatibility/ocr-support.json` for the
 exact recommendation of the same toolkit revision. Keep exact versions in
