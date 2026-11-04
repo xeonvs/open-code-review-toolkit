@@ -10,6 +10,21 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.5 current source and parser evidence
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Short excerpts do not require full syntax retention | Complete immutable Git blob -> shared session -> source proof -> publication and GitLab suggestion consumers | Real Git tests coalesce object aliases and distinct ranges, preserve dirty worktrees, reject late invalid text/identity changes, cache failed reads, and verify remapping before suggestion planning. A finalizer fixture admits 115 distinct synthetic fields with one read; optional diagram failures leave findings intact | 5 MB/blob, 32 MB/session, 30 seconds; existing fragment bounds and separate 256000-character/four-file syntax limit remain |
+| Private diagnoses do not become disclosure authority | Actual audit worker -> authenticated state -> closed old/new readback | Large snapshot proof and malformed/nested diagnostic properties exercise whole-run rejection; old records retain frozen identities and unavailable diagnoses | Logical audit population/profile unchanged; diagnoses cannot bypass DLP or transfer historical classifications |
+| Supplemental parsers need their own qualification | Actual optional Tree-sitter C, Pygments and PIISA lexical stage -> synthetic counterexamples | `tests/research/test_dlp_parser_candidates.py` reproduces recovered expressions in erroneous trees, identical lexer tokens in valid/broken programs, and omitted prefix-free contacts; toolkit contact controls remain active | Optional research environment, not production dependencies or a full PIISA regional pipeline. Python 3.15 Tree-sitter binary install and PIISA plugin wheel availability currently fail qualification |
+
+Focused source integration measures about 98% combined branch-aware coverage,
+with each new owner above its independent 90% floor. Fresh authenticated public
+corpus replay also verifies 115 large-source observations through independent
+immutable Git proof and the installed publication path, without fragment syntax
+authority. This does not authenticate the unavailable historical HMAC state or
+complete the remaining causal/private-corpus acceptance.
+
 ## v0.14.4 bounded DLP and diagram-source evidence
 
 | Invariant | Real boundary | Verification | Limit |

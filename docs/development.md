@@ -251,6 +251,34 @@ The two source-context modules each have a local 90% branch-aware
 floor. These measures complement semantic counterexamples; they do not establish
 a detector precision or recall rate.
 
+### Supplemental parser qualification
+
+`tests/research/test_dlp_parser_candidates.py` retains synthetic comparisons for
+optional parser additions. Run it separately in an isolated Python 3.14 environment
+with the built toolkit wheel and `pytest==9.2.0`, `tree-sitter==0.26.0`,
+`tree-sitter-c==0.24.2`, `pygments==2.21.0`, and `pii-extract-plg-regex==0.5.1`:
+
+```sh
+"$probe_env/bin/pytest" --confcutdir=tests/research -o addopts= \
+  -q tests/research/test_dlp_parser_candidates.py
+```
+
+The normal suite skips unavailable optional research packages. These packages
+are not runtime/dev-lock additions or a CI corpus audit. The retained decision
+is to keep current admission and bounded stdlib fixes: Tree-sitter returns
+expression nodes even in erroneous trees, and its qualified version lacks a
+Python 3.15 wheel; Pygments gives identical numeric tokens in complete and broken
+programs; PIISA's international lexical stage omits a contact without an explicit
+international prefix. Such observations cannot grant source roles or prove PII
+absence. PIISA's full regional/context pipeline is not qualified by that lexical
+probe. Its plugin currently also lacks a wheel. Reconsider a focused addition
+only with supported binary installs, bounded correct role proof and demonstrated
+benefit on independently classified cases. No model downloads are involved.
+
+Primary contracts: [Tree-sitter node errors](https://tree-sitter.github.io/py-tree-sitter/classes/tree_sitter.Node.html),
+[Pygments lexer API](https://pygments.org/docs/api/), and
+[PIISA regex plugin](https://github.com/piisa/pii-extract-plg-regex).
+
 Select checks from the changed boundary rather than from an ever-growing generic prohibition list. Start with the narrowest reproducer, then run the applicable contract tests and the complete quality gate before release handoff. In particular:
 
 - parser changes exercise the semantic grammar and bounded degradation;

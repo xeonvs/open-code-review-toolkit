@@ -365,6 +365,37 @@ checks and 205 subtests also pass. These synthetic handoffs do not authenticate
 the historical corpus observations. Current private replay and installed/final
 acceptance remain outstanding.
 
+Fresh paired public replay uses installed 0.14.4 and the clean candidate wheel
+under the same Python 3.14/runtime dependencies and authenticated immutable input:
+both complete all 121583 units. Rejections change from 2308 to 2192, with 116
+admissions, no new rejections, and 172 changed facts/reasons awaiting causal
+classification. This is not a precision/protection-preservation claim. Independent
+snapshot-to-Git-to-publication replay confirms all 115 large-source observations
+from the fresh run, with one 658778-byte read and no syntax authority. The other
+admission contains the demonstrated complete calendar timestamp. Wall time is
+98.42 versus 99.70 seconds; peak RSS is 177487872 versus 175194112 bytes. The 15%
+investigation trigger is not reached. Historical HMAC state remains unverified.
+
+Retained optional research tests pass against actual Tree-sitter 0.26.0/C 0.24.2,
+Pygments 2.21.0 and PIISA regex 0.5.1: erroneous trees still expose expression
+nodes, lexer numeric roles survive broken syntax, and the international lexical
+stage omits a prefix-free contact that toolkit blocks. These do not qualify
+source authority or the full regional/context pipeline. Binary-only probes fail
+for Tree-sitter on Python 3.15 and for the PIISA plugin. No runtime dependency is
+added; current admission/stdlib fixes remain the selected implementation. The
+development owner records the concrete reconsideration conditions. Source
+handoff tests also pass actual Python 3.12 and 3.15 (57 each).
+
+The current full branch-aware coverage run passes 4461 tests and 357 subtests
+(53 expected optional/external skips), including clean installed wheel/sdist
+behavior. Total coverage is 89.41%; all current independent gates pass. GitLab
+posting remains 82.45%, below the planned >=87% measurement required before its
+gate moves to 85%; meaningful posting-edge tests remain WQ-05 work. New floor
+values are not yet claimed as delivered. Additional authorized private paired
+replays use explicit curated text selections and metadata-only original-file
+verification, with no source copies. Their source-free comparisons and resource
+results remain private; final post-review replay and cleanup are still required.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
