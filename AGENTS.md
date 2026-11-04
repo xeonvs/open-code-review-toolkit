@@ -10,7 +10,8 @@ Use this file as the short repository map and route table for Open Code Review T
 - `src/ocr_toolkit/native_capabilities.py` - pure exact-version qualifications for optional OCR handoffs; preflight owns runtime acceptance separately.
 - `src/ocr_toolkit/context/dlp/` - shared DLP facade, admission and bounded text interpretation.
 - `src/ocr_toolkit/dlp_audit/` - local-only private corpus diagnosis and replay.
-- `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - bounded Git text facts and optional diagram-reference acquisition.
+- `src/ocr_toolkit/evidence/text_contracts.py` and `text_excerpts.py` - pure text bounds, LF-addressed facts and incremental excerpt retention.
+- `src/ocr_toolkit/evidence/text_metadata.py` and `src/ocr_toolkit/diagrams/sources.py` - whole-blob Git text validation and optional diagram-reference acquisition.
 - `tests/` - regression, contract, and synthetic integration tests.
 - `examples/gitlab/` - public synthetic GitLab CI examples.
 - `docs/` - user, security, development, strategy, and release documentation.

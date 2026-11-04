@@ -13,8 +13,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 
 from ocr_toolkit.context.code_text import CodeTextContext
+from ocr_toolkit.evidence.text_contracts import MAX_SYNTAX_CHARS as MAX_SYNTAX_CHARS
 
-MAX_SYNTAX_CHARS = 256_000
 MAX_SYNTAX_NODES = 30_000
 MAX_KEY_SPANS = 4096
 

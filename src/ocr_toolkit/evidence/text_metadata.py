@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import codecs
+import hashlib
 import os
 import selectors
 import subprocess
 import time
-from dataclasses import dataclass
+
+from ocr_toolkit.evidence.text_contracts import RepositoryTextMetadata, TextSpan
+from ocr_toolkit.evidence.text_excerpts import MAX_CAPTURE_BYTES, TextExcerptCapture
 
 
 class TextMetadataError(ValueError):
@@ -18,20 +21,26 @@ class TextMetadataInvalid(TextMetadataError):
     """The complete blob contains invalid source text."""
 
 
-@dataclass(frozen=True, slots=True)
-class RepositoryTextMetadata:
-    object_sha: str
-    byte_count: int
-    line_count: int
-
-
 def consume_text_metadata(
-    command: list[str], *, environment: dict[str, str], object_sha: str, size: int, timeout: float
+    command: list[str],
+    *,
+    environment: dict[str, str],
+    object_sha: str,
+    size: int,
+    timeout: float,
+    spans: tuple[TextSpan, ...] = (),
+    max_excerpt_bytes: int = MAX_CAPTURE_BYTES,
+    max_source_chars: int = 0,
 ) -> RepositoryTextMetadata:
     """Consume one caller-authorized, size-preflighted object and reap its peer."""
 
     deadline = time.monotonic() + timeout
+    capture = TextExcerptCapture(
+        spans, max_bytes=max_excerpt_bytes, max_source_chars=max_source_chars
+    )
     decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    # Git uses SHA-1 as an object identifier, not as a trust secret.
+    digest = hashlib.sha1(f"blob {size}\0".encode("ascii"), usedforsecurity=False)
     received = newline_count = error_bytes = 0
     last_byte = None
     with subprocess.Popen(
@@ -61,17 +70,27 @@ def consume_text_metadata(
                             raise TextMetadataError("Git text size changed")
                         if b"\x00" in chunk:
                             raise TextMetadataInvalid("repository blob is not text")
-                        decoder.decode(chunk)
+                        digest.update(chunk)
+                        decoded = decoder.decode(chunk)
+                        capture.feed(decoded, newline_count + 1)
                         newline_count += chunk.count(b"\n")
                         last_byte = chunk[-1]
             decoder.decode(b"", final=True)
             process.wait(timeout=max(0.001, deadline - time.monotonic()))
             if process.returncode != 0 or received != size:
                 raise TextMetadataError("incomplete Git text metadata read")
+            if digest.hexdigest() != object_sha:
+                raise TextMetadataError("Git text object identity mismatch")
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired("Git text metadata", timeout)
         finally:
             if process.poll() is None:
                 process.kill()
             process.wait()
-    return RepositoryTextMetadata(
-        object_sha, received, newline_count + int(last_byte is not None and last_byte != 10)
+    lines = newline_count + int(last_byte is not None and last_byte != 10)
+    result = RepositoryTextMetadata(
+        object_sha, received, lines, capture.finish(lines), capture.source
     )
+    if time.monotonic() >= deadline:
+        raise subprocess.TimeoutExpired("Git text metadata", timeout)
+    return result

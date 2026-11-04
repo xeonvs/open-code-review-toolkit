@@ -132,7 +132,7 @@ successful parsing alone cannot authorize a DLP exemption.
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
 | WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners, removed unreachable execution, froze predecessor epoch; both candidates passed Linux/Darwin base and actual consumed handoffs; promoted pins/capabilities locally and restored weekly workflow | done |
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Datetime fix and diverse positive/negative properties implemented; retained baseline ledger/state confirmed present; causal-group classification, supplemental-library comparisons and complete replay remain | in_progress |
-| WQ-04 | REQ-002, REQ-003 | Implement shared bounded excerpt acquisition/proof and closed audit diagnoses across real callers | pending |
+| WQ-04 | REQ-002, REQ-003 | Bounded Git excerpt producer and pure contracts implemented/tested; integrate immutable batch session, code/suggestion/diagram consumers and closed audit diagnoses | in_progress |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | New capability/datetime owners have measured 100% coverage and individual 90% gates; remaining handoffs, floors, installed checks and contract/docs reconciliation follow implementation | in_progress |
 | WQ-06 | REQ-003, REQ-008, REQ-009, REQ-010, REQ-011 | Aggregate self-review, one Security scan/threat-model reconciliation, actual native review/diagram, scoped fixes and complete corpus/resource replays | pending |
 | WQ-07 | REQ-006, REQ-010 | Final quality/secret/dependency gates, attach exact diagram, final feature push, hosted dispatch/protected CI, merge/dev publication | pending |
@@ -156,6 +156,12 @@ syntax exemptions. Unavailable/oversized/stale/invalid inputs close proof. Runne
 owns acquisition/session orchestration, pure contracts own identity/decisions,
 reporting remains free of Git/MCP/environment/DLP orchestration. Reuse the Git
 streaming boundary rather than creating another resolver or raw-blob reader.
+Use Git's LF line addresses; CRLF is normalized for fragment comparison, while
+bare CR and Unicode separators cannot introduce extra Git lines or authorize
+misaligned full-source syntax roles. Plan all required spans before a blob read
+and coalesce identical objects. Excerpt retention preserves the existing 12000
+character and 200-line-span limits; optional full syntax stays within 256000
+characters and never substitutes for the independent identity proof.
 
 **Audit and causality.** Add source-free diagnoses for missing source,
 source/excerpt limits, line mismatch and unavailable syntax refinement; diagnoses
@@ -330,6 +336,20 @@ automatically includes the new owner. Prior authenticated ledger/state remain
 retained outside Git; corpus replays, resource comparisons and remaining causal
 groups/library conclusions have not been completed or reclassified as passes.
 
+WQ-04's producer foundation extends the existing streamed Git text boundary;
+it validates the full UTF-8/NUL-free blob, exact size and actual Git object digest
+before returning any captured range. Only bounded requested LF-addressed excerpts
+and optional separately bounded full syntax text can be retained; metadata-only
+consumers retain no source. Invalid capture arguments stop before Git I/O.
+65 real Git/process and extraction controls pass with 100% measured coverage
+across streaming/retention owners, including corrupt same-size loose objects,
+late invalid bytes, CRLF, non-LF separators, process failures and deadlines after
+peer exit/capture completion. Another 190 repository/syntax/quality checks pass;
+two independent 1000-example extraction properties match a separate full-text
+oracle. Shared pure limits preserve existing publication bounds. Caller batching,
+admission integration, audit diagnoses and all 115 real proof observations remain
+pending; the producer tests alone do not establish those outcomes.
+
 ### Risks And Recovery
 
 Source proof must never imply confidentiality or syntax authority. Streaming
@@ -346,9 +366,9 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-04: after the reviewed datetime slice is committed locally, implement bounded
-streaming immutable excerpt proof by extending the existing Git text reader;
-integrate comment/diagram/audit consumers and closed source-free diagnoses.
+WQ-04: after the reviewed producer foundation is committed locally, add the
+immutable batch session over the existing Git reader, then integrate independent
+identity/syntax proof, suggestions, diagram priority and source-free audit diagnoses.
 Then finish WQ-03's causal groups and retained supplemental-library comparisons
 with actual replay evidence. Preserve completed qualification/property outputs;
 repeat only affected checks. Remaining floors, installed/native acceptance,

@@ -15,6 +15,7 @@ from ocr_toolkit.evidence.source_syntax import (
     SourceSyntax,
     analyze_python_source,
 )
+from ocr_toolkit.evidence.text_contracts import MAX_SYNTAX_CHARS
 from ocr_toolkit.posting.comments import line_number
 from ocr_toolkit.posting.settings import (
     MAX_SUGGESTION_CODE_CHARS,
@@ -27,7 +28,7 @@ from ocr_toolkit.posting.suggestions import (
     safe_repository_path,
 )
 
-MAX_PROOF_SOURCE_CHARS = 256_000
+MAX_PROOF_SOURCE_CHARS = MAX_SYNTAX_CHARS
 MAX_PROOF_PATH_CHARS = 1_024
 MAX_SYNTAX_CACHE_FILES = 4
 

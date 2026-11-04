@@ -20,8 +20,13 @@ from ocr_toolkit.evidence.model import (
     RefRole,
     TrustClass,
 )
+from ocr_toolkit.evidence.text_contracts import RepositoryTextMetadata
+from ocr_toolkit.evidence.text_excerpts import (
+    MAX_CAPTURE_BYTES,
+    validate_capture_limits,
+    validate_spans,
+)
 from ocr_toolkit.evidence.text_metadata import (
-    RepositoryTextMetadata,
     TextMetadataError,
     TextMetadataInvalid,
     consume_text_metadata,
@@ -506,7 +511,13 @@ class GitRepositoryReader:
         return size
 
     def read_text_metadata(
-        self, entry: RepositoryObject, *, max_bytes: int
+        self,
+        entry: RepositoryObject,
+        *,
+        max_bytes: int,
+        spans: tuple[tuple[int, int], ...] = (),
+        max_excerpt_bytes: int = MAX_CAPTURE_BYTES,
+        max_source_chars: int = 0,
     ) -> RepositoryTextMetadata:
         """Consume an exact regular blob with bounded memory and strict text checks.
 
@@ -518,6 +529,11 @@ class GitRepositoryReader:
             raise RepositoryEvidenceError("invalid text metadata byte budget")
         if re.fullmatch(r"[0-9a-f]{40}", entry.object_sha) is None:
             raise RepositoryEvidenceError("repository blob identity is invalid")
+        try:
+            validate_spans(spans)
+            validate_capture_limits(max_excerpt_bytes, max_source_chars)
+        except ValueError as exc:
+            raise RepositoryEvidenceError(str(exc)) from exc
         size = self.bounded_regular_blob_size(entry)
         if size > max_bytes:
             raise RepositoryReadBudget("repository text exceeds remaining byte budget")
@@ -528,6 +544,9 @@ class GitRepositoryReader:
                 object_sha=entry.object_sha,
                 size=size,
                 timeout=self._timeout(30),
+                spans=spans,
+                max_excerpt_bytes=max_excerpt_bytes,
+                max_source_chars=max_source_chars,
             )
         except TextMetadataInvalid as exc:
             raise RepositoryTextInvalid(str(exc)) from exc
