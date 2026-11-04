@@ -999,7 +999,7 @@ def test_installed_ocr_projected_review_matches_native_manifest(
         pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to the checksum-verified OCR 1.13.3")
     assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
-    from ocr_compat import _stub_gateway
+    from ocr_qualification.peer import _stub_gateway
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1083,7 +1083,7 @@ def test_installed_ocr_toolkit_local_gitlink_route(
     import http.server
     import threading
 
-    from ocr_compat import _StubHandler
+    from ocr_qualification.peer import _StubHandler
 
     from ocr_toolkit import cli, provider_config
 

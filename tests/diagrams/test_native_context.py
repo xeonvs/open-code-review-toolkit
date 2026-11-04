@@ -37,7 +37,7 @@ def test_native_group_context_and_rounds(
         pytest.skip("set OCR_GITLINK_QUALIFY_BINARY to checksum-verified OCR 1.13.3")
     assert validate_ocr_binary(executable=binary, announce=False) == "1.13.3"
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
-    from ocr_compat import _StubHandler
+    from ocr_qualification.peer import _StubHandler
 
     root = tmp_path / "repo"
     root.mkdir()

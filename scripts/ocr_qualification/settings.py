@@ -155,7 +155,7 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
             "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
             "minimum": {"effective": 1, "input": 1, "outcome": "accepted"},
             "omitted": {"effective": "unlimited", "input": None, "outcome": "accepted"},
-            "representative": {"effective": 30_000, "input": 30_000, "outcome": "accepted"},
+            "representative": {"effective": 30000, "input": 30000, "outcome": "accepted"},
             "sentinel": {"effective": "unlimited", "input": 0, "outcome": "accepted"},
         },
         "maximum": None,
@@ -164,20 +164,23 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
     "max_tools": {
         "cases": {
             "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
-            "minimum": {"effective": 100, "input": 50, "outcome": "accepted"},
+            "minimum": {"effective": 50, "input": 50, "outcome": "accepted"},
             "minimum_minus_one": {
-                "effective": 100,
+                "effective": 50,
                 "input": 49,
                 "outcome": "normalized",
                 "reported_normalization": 50,
             },
             "omitted": {"effective": 100, "input": None, "outcome": "accepted"},
-            "representative": {"effective": 101, "input": 101, "outcome": "accepted"},
+            "representative": {"effective": 125, "input": 125, "outcome": "accepted"},
             "sentinel": {"effective": 100, "input": 0, "outcome": "accepted"},
+            "lower_override": {"effective": 75, "input": 75, "outcome": "accepted"},
+            "template_value": {"effective": 100, "input": 100, "outcome": "accepted"},
         },
         "maximum": None,
-        "owner": "ocr-template-or-higher-cli",
+        "owner": "ocr-cli-or-template-default",
         "reported_minimum": 50,
+        "manifest_limit_verified": True,
     },
     "result": "passed",
 }
@@ -216,6 +219,14 @@ CURRENT_LANGUAGE_RULES = {
     "shaders/main.wgsl": "**/*.{glsl,hlsl,wgsl,metal}",
     "shaders/main.metal": "**/*.{glsl,hlsl,wgsl,metal}",
     "infra/main.tofu": "**/*.{tf,tofu,hcl,tfvars}",
+    "config/settings.jsonc": "**/*.{json,json5,jsonc}",
+    "views/page.ejs": "**/*.{ejs,liquid,njk}",
+    "views/page.liquid": "**/*.{ejs,liquid,njk}",
+    "views/page.njk": "**/*.{ejs,liquid,njk}",
+    "views/page.haml": "**/*.{haml,slim}",
+    "views/page.slim": "**/*.{haml,slim}",
+    "views/page.erb": "**/*.erb",
+    "src/Main.scala": "**/*.scala",
 }
 
 
@@ -233,27 +244,6 @@ PYTEST_PREFIX_EXCLUDED_PATH = "src/test_helpers.py"
 
 
 PYTEST_PREFIX_CONTROL_PATHS = ("src/contest_helpers.py", "src/test_helpers.go")
-
-
-GRACE_COMPLETION_CUTOFF = (1, 13, 1)
-
-
-LANGUAGE_1_13_2_CUTOFF = (1, 13, 2)
-
-
-POWERSHELL_SCRIPT_PATH = "scripts/setup.ps1"
-
-
-LANGUAGE_1_13_2_PATHS = (
-    "scripts/module.psm1",
-    "scripts/module.psd1",
-    "scripts/setup.nu",
-    "shaders/main.glsl",
-    "shaders/main.hlsl",
-    "shaders/main.wgsl",
-    "shaders/main.metal",
-    "infra/main.tofu",
-)
 
 
 REQUIRED_ASSETS = {

@@ -817,12 +817,12 @@ def test_ocr_compatibility_workflow_is_bounded_and_protected() -> None:
     policy = (PROJECT_ROOT / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     assert "schedule:" in workflow
-    assert '- cron: "15 7 * * *"' in workflow
+    assert '- cron: "15 7 * * 1"' in workflow
     assert '- cron: "41 5 * * *"' not in workflow
     assert "workflow_dispatch:" in workflow
-    assert "20261001" in workflow
-    assert 'matrix={"include":[]}' in workflow
-    assert "steps.schedule_gate.outputs.skip != 'true'" in workflow
+    assert "20261001" not in workflow
+    assert "schedule_gate" not in workflow
+    assert "date -u" not in workflow
     assert "through_tag:" in workflow
     assert "tag and through_tag are mutually exclusive" in workflow
     assert "UV_SETUP_OUTCOME: ${{ steps.setup_uv.outcome }}" in workflow

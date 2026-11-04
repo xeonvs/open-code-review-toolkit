@@ -40,7 +40,7 @@ def load_script() -> ModuleType:
 def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, Any]:
     """Extend a frozen fixture with the live contract selected for one version."""
 
-    if module.core._version(version) < (1, 13, 0):
+    if module.core._version(version) < (1, 13, 5):
         return module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")[
             "contracts"
         ]
@@ -89,21 +89,15 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
     assert "_validate_current_contracts(contracts)" not in source
 
 
-@pytest.mark.parametrize("version", ["1.13.0", "1.13.1", "1.13.2", "1.13.3"])
-def test_live_language_probe_paths_follow_candidate_epoch(version: str) -> None:
+def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-    rules = module.contracts._language_rules_for_version(version)
-    negative = module.contracts._language_negative_paths_for_version(version)
+    rules = module.contracts._language_rules_for_version("1.13.5")
     assert rules["policies/authz.rego"] == "**/*.rego"
     assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
     assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
-    if module.core._version(version) < (1, 13, 2):
-        assert rules["scripts/setup.ps1"] == "default"
-        assert negative == ("rtl/include.svh", *module.settings.LANGUAGE_1_13_2_PATHS)
-    else:
-        assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
-        assert negative == ("rtl/include.svh",)
+    assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
+    assert module.contracts._language_negative_paths_for_version("1.13.5") == ("rtl/include.svh",)
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -239,20 +233,20 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    contracts = current_contracts(module, "1.13.2")
+    contracts = current_contracts(module, "1.13.5")
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
-        Path(path).suffix for path in module.contracts._language_rules_for_version("1.13.2")
+        Path(path).suffix for path in module.contracts._language_rules_for_version("1.13.5")
     )
-    module.contracts._validate_current_contracts(contracts, "1.13.2")
+    module.contracts._validate_current_contracts(contracts, "1.13.5")
     extensions.reverse()
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(contracts, "1.13.2")
+        module.contracts._validate_current_contracts(contracts, "1.13.5")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.13.0", 24, "reported"), ("1.13.1", 24, "reported"), ("1.13.2", 32, "reported")],
+    [("1.13.5", 40, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -504,13 +498,13 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
             name="opencodereview-linux-amd64",
             size=1,
             sha256=binary_digest,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.0/bin",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/bin",
         ),
         module.core.Asset(
             name="sha256sum.txt",
             size=1,
             sha256="1" * 64,
-            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.0/sums",
+            url="https://github.com/alibaba/open-code-review/releases/download/v1.13.5/sums",
         ),
     ]
 
@@ -545,7 +539,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.0")),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.5")),
     ):
         result = module.cli.main(
             [
@@ -553,7 +547,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                "v1.13.0",
+                "v1.13.5",
                 "--comparison-version",
                 "1.12.13",
                 "--tested-baseline-version",
@@ -1959,7 +1953,10 @@ def test_grouping_inventory_rejects_reorder_status_and_churn_drift(
         )
 
 
-def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> None:
+@pytest.mark.parametrize("wrong_limit", ["healthy", None, 0, 49, 50, 75, 100, 125])
+def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
+    wrong_limit: str | int | None,
+) -> None:
     """Derive effective numeric behavior without retaining raw OCR diagnostics."""
 
     module = load_script()
@@ -2002,11 +1999,14 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
         _head: str,
         _directory: Path,
         *,
-        value: int,
+        value: int | None,
         expected_diagnostic: object,
         grace_task_done: bool = True,
     ) -> tuple[int, dict[str, object]]:
-        return (100 if value <= 50 else value), {
+        rounds = 100 if value in (None, 0) else max(50, value)
+        if value == wrong_limit:
+            rounds = 42
+        return rounds, {
             "completed": grace_task_done,
             "limit_warning": True,
         }
@@ -2015,6 +2015,16 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
         patched_attr(module.numeric, "_run_numeric_preview_case", preview),
         patched_attr(module.numeric, "_effective_max_tools_probe", effective),
     ):
+        if wrong_limit != "healthy":
+            with pytest.raises(module.core.CompatibilityError):
+                module.numeric._numeric_cli_probe(
+                    Path("/synthetic/ocr"),
+                    Path("/synthetic/repo"),
+                    "a" * 40,
+                    "b" * 40,
+                    Path("/synthetic/probe"),
+                )
+            return
         result = module.numeric._numeric_cli_probe(
             Path("/synthetic/ocr"),
             Path("/synthetic/repo"),
@@ -2023,7 +2033,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values() -> N
             Path("/synthetic/probe"),
         )
 
-    assert result == module.contracts._numeric_contract_for_version("1.13.1")
+    assert result == module.contracts._numeric_contract_for_version("1.13.5")
     assert "stderr" not in json.dumps(result)
 
 
@@ -2722,7 +2732,10 @@ def test_selected_preview_paths_rejects_non_string_selected_path(invalid_path: o
         module.selection._selected_preview_paths(payload)
 
 
-@pytest.mark.parametrize("version", ["1.12.8", "1.12.10", "1.12.11", "1.12.13"])
+@pytest.mark.parametrize(
+    "version",
+    ["1.12.8", "1.12.10", "1.12.11", "1.12.13", "1.13.0", "1.13.1", "1.13.2", "1.13.3", "1.13.4"],
+)
 def test_pre_grace_evidence_remains_frozen(version: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """New probe requirements cannot reinterpret existing qualification receipts."""
 
@@ -2755,16 +2768,9 @@ def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None
         module.contracts._validate_contracts_for_version(version, contracts)
 
 
-def test_powershell_nushell_shader_and_opentofu_rule_epoch() -> None:
+def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    prior = module.contracts._language_rules_for_version("1.13.1")
-    current = module.contracts._language_rules_for_version("1.13.2")
-    assert prior[module.settings.POWERSHELL_SCRIPT_PATH] == "default"
-    assert current[module.settings.POWERSHELL_SCRIPT_PATH] == "**/*.{ps1,psm1,psd1}"
-    assert set(module.settings.LANGUAGE_1_13_2_PATHS).isdisjoint(prior)
-    assert set(module.settings.LANGUAGE_1_13_2_PATHS).issubset(
-        module.contracts._language_negative_paths_for_version("1.13.1")
-    )
+    current = module.contracts._language_rules_for_version("1.13.5")
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",
         ".psm1": "**/*.{ps1,psm1,psd1}",
@@ -2775,19 +2781,29 @@ def test_powershell_nushell_shader_and_opentofu_rule_epoch() -> None:
         ".wgsl": "**/*.{glsl,hlsl,wgsl,metal}",
         ".metal": "**/*.{glsl,hlsl,wgsl,metal}",
         ".tofu": "**/*.{tf,tofu,hcl,tfvars}",
+        ".jsonc": "**/*.{json,json5,jsonc}",
+        ".scala": "**/*.scala",
+        ".ejs": "**/*.{ejs,liquid,njk}",
+        ".liquid": "**/*.{ejs,liquid,njk}",
+        ".njk": "**/*.{ejs,liquid,njk}",
+        ".haml": "**/*.{haml,slim}",
+        ".slim": "**/*.{haml,slim}",
+        ".erb": "**/*.erb",
     }
     for extension, pattern in expected.items():
         assert {rule for path, rule in current.items() if Path(path).suffix == extension} == {
             pattern
         }
-        contracts = current_contracts(module, "1.13.2")
-        contracts["language_rule_probe"]["extensions"].remove(extension)
+        observed = current_contracts(module, "1.13.5")
+        observed["language_rule_probe"]["extensions"].remove(extension)
         with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-            module.contracts._validate_contracts_for_version("1.13.2", contracts)
+            module.contracts._validate_contracts_for_version("1.13.5", observed)
+    stale_language = current_contracts(module, "1.13.5")
+    stale_language["language_rule_probe"] = current_contracts(module, "1.13.4")[
+        "language_rule_probe"
+    ]
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_contracts_for_version(
-            "1.13.2", current_contracts(module, "1.13.1")
-        )
+        module.contracts._validate_contracts_for_version("1.13.5", stale_language)
 
 
 @pytest.mark.parametrize("task_done", [True, False])
@@ -2824,6 +2840,9 @@ def test_exhaustion_peer_emits_only_the_requested_grace_verdict(task_done: bool)
         "duplicate-warning",
         "failed-warning",
         "tool-count",
+        "manifest-missing",
+        "manifest-type",
+        "manifest-rounds",
     ],
 )
 def test_effective_tool_probe_rejects_inconsistent_completion_observations(
@@ -2835,7 +2854,8 @@ def test_effective_tool_probe_rejects_inconsistent_completion_observations(
 
     module = load_script()
     payload = manifest_result("complete", selected=["example"], completed=["example"])
-    payload["tool_calls"] = {"total": 1, "by_tool": {"file_read": 1}}
+    payload["tool_calls"] = {"total": 100, "by_tool": {"file_read": 100}}
+    payload["manifest"]["execution"] = {"max_tool_request_times": 100}
     payload["warnings"] = [
         {
             "type": "review_limit_reached",
@@ -2855,9 +2875,15 @@ def test_effective_tool_probe_rejects_inconsistent_completion_observations(
         payload["warnings"].append({"type": "subtask_error"})
     elif corruption == "tool-count":
         payload["tool_calls"]["total"] = 2
+    elif corruption == "manifest-missing":
+        payload["manifest"].pop("execution")
+    elif corruption == "manifest-type":
+        payload["manifest"]["execution"]["max_tool_request_times"] = "100"
+    elif corruption == "manifest-rounds":
+        payload["manifest"]["execution"]["max_tool_request_times"] = 50
 
     def observed_run(*_args: Any, **_kwargs: Any) -> Any:
-        module.peer._StubHandler.request_stages = ["main", "grace"]
+        module.peer._StubHandler.request_stages = ["main"] * 100 + ["grace"]
         return subprocess.CompletedProcess([], returncode, stdout=json.dumps(payload), stderr="")
 
     monkeypatch.setattr(subprocess, "run", observed_run)
@@ -2866,7 +2892,7 @@ def test_effective_tool_probe_rejects_inconsistent_completion_observations(
         assert module.numeric._effective_max_tools_probe(
             *arguments, value=100, expected_diagnostic=None
         ) == (
-            1,
+            100,
             {"completed": True, "limit_warning": True},
         )
     else:
@@ -2887,7 +2913,7 @@ def test_grace_epoch_rejects_inverted_observations(field: str, case: str) -> Non
         module.contracts._validate_contracts_for_version("1.13.1", contracts)
 
 
-@pytest.mark.parametrize("version", ["1.12.8", "1.12.13"])
+@pytest.mark.parametrize("version", ["1.12.8", "1.12.13", "1.13.0", "1.13.3", "1.13.4"])
 def test_frozen_epoch_fresh_qualification_fails_before_assets_or_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str
 ) -> None:
@@ -2944,5 +2970,5 @@ def test_probe_local_refuses_frozen_epoch_before_binary_access(
 
 def test_live_qualification_boundary_accepts_all_current_candidates() -> None:
     module = load_script()
-    for version in ("1.13.0", "1.13.1", "1.13.2"):
+    for version in ("1.13.5",):
         module.contracts._require_live_qualification_version(version)

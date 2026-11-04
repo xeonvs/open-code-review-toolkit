@@ -16,8 +16,9 @@ must provide the current evidence schema and its complete version-selected
 consumed contract. The current epoch includes explicit reasoning wire capture and
 the current built-in language/test-exclusion inventory.
 
-The **OCR compatibility** workflow qualifies stable upstream releases newer than
-the manifest monitoring floor. Exact-tag manual dispatch is the
+The **OCR compatibility** workflow checks stable upstream releases every Monday
+at 07:15 UTC and qualifies candidates newer than the manifest monitoring floor.
+Exact-tag manual dispatch is the
 single-candidate path. A manual
 `through_tag` instead qualifies the complete contiguous unseen
 chain only through that exact stable release, preventing a scoped maintenance

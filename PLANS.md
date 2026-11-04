@@ -129,7 +129,7 @@ successful parsing alone cannot authorize a DLP exemption.
 | Item | Requirements | Work | Status |
 | --- | --- | --- | --- |
 | WQ-01 | REQ-009, REQ-010 | Full plan materialized/reviewed; signed plan commit 61a2fd2 pushed and draft PR #293 opened; DLP issue #292 created | done |
-| WQ-02 | REQ-005, REQ-006, REQ-007 | Characterized/extracted qualification owners; finish semantic/import/CLI review, remove unreachable legacy, qualify adjacent candidates/capabilities and restore weekly workflow | in_progress |
+| WQ-02 | REQ-005, REQ-006, REQ-007 | Extracted owners and removed unreachable live legacy; both adjacent candidates passed Linux/Darwin base contracts; freeze predecessor, commit current epoch/weekly workflow, then qualify consumed capabilities and promote | in_progress |
 | WQ-03 | REQ-001, REQ-003, REQ-004, REQ-011 | Freeze replay baseline, implement strict datetime fix, inspect causal groups and retain focused library comparisons/synthetic regressions | pending |
 | WQ-04 | REQ-002, REQ-003 | Implement shared bounded excerpt acquisition/proof and closed audit diagnoses across real callers | pending |
 | WQ-05 | REQ-001, REQ-002, REQ-004, REQ-005, REQ-008, REQ-009 | Integrate handoffs, improve coverage/properties, installed checks and synchronize contracts/routes/docs | pending |
@@ -200,6 +200,10 @@ cron `15 7 * * 1` is Monday 07:15 UTC. Preserve bounded discovery, mutually
 exclusive manual tag/through_tag, issue idempotency and protected promotion.
 Actual hosted acceptance uses a v1.13.5 ceiling and checks real work, not just
 workflow success. No automatic stable release is introduced.
+After promotion moves the monitoring floor to 1.13.5, use exact-tag dispatch
+`tag=v1.13.5` at the final feature head: through-tag discovery at that same floor
+would do no qualification work. The adjacent chain is covered by the retained
+Linux/Darwin evidence; hosted acceptance must exercise the selected candidate.
 
 **Coverage/resources.** Preserve >=90% individual affected DLP/audit/new-owner
 floors and existing higher results. Hypothesis defaults 100 examples/property;
@@ -258,15 +262,26 @@ not candidate 1.13.4/1.13.5 qualification or clean installed artifacts. No Secur
 scan, actual model review, hosted qualification or publication has completed in
 this cycle. Further feature work remains local after the first plan push.
 
-Signed local commit 4803979 contains the characterized mechanical extraction.
-The next slice removes unreachable pre-1.13 live branches while preserving
-historical evidence/readback and runtime support: 187 focused tests pass.
-OCR 1.13.4 passed the complete existing deterministic contract suite on verified
-Linux amd64 and Darwin arm64 binaries. Linux qualification is classified
-human-review-required; its first disposable environment lacked Git and failed
-setup, then the corrected environment passed. Additional diagram/federation/
-gitlink capability qualification remains pending. Candidate artifacts, setup
-environment and exact cleanup inventory stay in the private qualification root.
+Signed local commits 4803979 and be4369e contain the characterized extraction and
+unreachable-live-branch removal; the latter passed 187 focused tests. The current
+slice freezes the proven 1.13.0–1.13.4 readback independently of live settings,
+advances fresh qualification to 1.13.5, restores Monday qualification without the
+date gate, and measures effective numeric defaults/overrides against native
+manifest limits. OCR 1.13.4 and 1.13.5 passed their complete base contracts on
+checksum-verified Linux amd64 and Darwin arm64 binaries. Both Linux candidates
+are human-review-required. The first disposable 1.13.4 environment lacked Git;
+the corrected setup passed. Current qualification/document/environment checks
+passed 240 tests, including effective-limit corruption cases. Formatting, lint,
+manifest validation, instruction and public-content checks pass. Semantic review
+preserved frozen evidence and runtime support, checked default/override/grace
+boundaries, and corrected the actual extracted-peer consumers. Existing
+real diagram/group/gitlink consumers passed 100 tests against supported 1.13.3;
+four stale peer imports were corrected to their extracted owner. These checks
+do not qualify those capabilities on the new candidates. Issue #294 tracks the
+adjacent qualification chain. Recommendation and runtime capabilities remain
+unchanged until specialised proofs pass. Candidate artifacts, setup environment
+and cleanup inventory stay private. DLP implementation and corpus replays remain
+pending; no new feature push, Security scan or model review has occurred.
 Successful own-tool reviews in this cycle: 0/2. Aggregate Security scans: 0/1.
 
 ### Risks And Recovery
@@ -285,11 +300,11 @@ check evidence and review exact identities before retrying external mutations.
 
 ### Resume Point
 
-WQ-02: self-review and commit the unreachable-live-branch removal with its
-historical-readback regression checks. Then freeze the proven 1.13.0–1.13.4
-contract and introduce the 1.13.5 live epoch, numeric/Rules probes and centralized
-capability qualification. The actual 1.13.4 Linux/Darwin outputs are retained
-privately; do not rerun unchanged completed probes without a material reason.
+WQ-02: frozen readback, the 1.13.5 live epoch and weekly workflow are ready for
+their reviewed local commit. Then centralize pure runtime capabilities,
+qualify diagram/federation/gitlink handoffs for both adjacent candidates and
+promote evidence/pins together. Verified Linux/Darwin base outputs are retained;
+do not rerun unchanged completed probes without a material reason.
 No further feature push occurs until final feature delivery.
 
 ### Plan Fidelity Check

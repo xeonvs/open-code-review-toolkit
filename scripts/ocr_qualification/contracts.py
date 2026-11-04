@@ -16,10 +16,9 @@ def _numeric_contract_for_version(version: str) -> dict[str, object]:
 
     _require_live_qualification_version(version)
     contract = dict(settings.CURRENT_NUMERIC_CLI_CONTRACT)
-    fixed = core._version(version) >= settings.GRACE_COMPLETION_CUTOFF
     contract["grace_rounds"] = {
-        "task_done": {"completed": fixed, "limit_warning": fixed},
-        "no_task_done": {"completed": False, "limit_warning": fixed},
+        "task_done": {"completed": True, "limit_warning": True},
+        "no_task_done": {"completed": False, "limit_warning": True},
     }
     return contract
 
@@ -148,10 +147,6 @@ def _language_rules_for_version(version: str) -> dict[str, str]:
 
     _require_live_qualification_version(version)
     rules = dict(settings.CURRENT_LANGUAGE_RULES)
-    if core._version(version) < settings.LANGUAGE_1_13_2_CUTOFF:
-        rules[settings.POWERSHELL_SCRIPT_PATH] = "default"
-        for path in settings.LANGUAGE_1_13_2_PATHS:
-            rules.pop(path)
     return rules
 
 
@@ -160,8 +155,6 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
 
     _require_live_qualification_version(version)
     paths = ["rtl/include.svh"]
-    if core._version(version) < settings.LANGUAGE_1_13_2_CUTOFF:
-        paths.extend(settings.LANGUAGE_1_13_2_PATHS)
     return tuple(paths)
 
 

@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, NoReturn
 
-HISTORICAL_CUTOFF = (1, 13, 0)
+from ocr_qualification import frozen_113
+
+HISTORICAL_CUTOFF = (1, 13, 5)
 REGO_CONTRACT_CUTOFF = (1, 11, 8)
 
 ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {
@@ -435,6 +437,9 @@ def validate_contracts(
 
     if version_tuple >= HISTORICAL_CUTOFF:
         fail("current evidence cannot use historical validation")
+    if version_tuple >= (1, 13, 0):
+        frozen_113.validate_contracts(version_tuple, evidence.get("contracts"), fail)
+        return
     if version_tuple >= (1, 12, 11):
         if evidence.get("contracts") != ARCHIVED_1_12_11_CONTRACTS:
             fail(f"historical qualification contract disagrees for {version}")

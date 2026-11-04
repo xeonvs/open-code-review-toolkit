@@ -199,7 +199,7 @@ def _effective_max_tools_probe(
     head: str,
     directory: Path,
     *,
-    value: int,
+    value: int | None,
     expected_diagnostic: re.Pattern[str] | None,
     grace_task_done: bool = True,
 ) -> tuple[int, dict[str, object]]:
@@ -207,6 +207,25 @@ def _effective_max_tools_probe(
 
     mode = "exhaust-tools" if grace_task_done else "exhaust-tools-incomplete"
     env = execution._isolated_probe_environment(directory / f"effective-max-tools-{value}-{mode}")
+    command = [
+        str(binary),
+        "review",
+        "--from",
+        base,
+        "--to",
+        head,
+        "--format",
+        "json",
+        "--audience",
+        "agent",
+        "--concurrency",
+        "1",
+        "--effort",
+        "low",
+        "--no-filter",
+    ]
+    if value is not None:
+        command.extend(["--max-tools", str(value)])
     with peer._stub_gateway(main_mode=mode) as gateway_url:
         env.update(
             {
@@ -219,25 +238,7 @@ def _effective_max_tools_probe(
         )
         try:
             completed = subprocess.run(  # nosec B603
-                [
-                    str(binary),
-                    "review",
-                    "--from",
-                    base,
-                    "--to",
-                    head,
-                    "--format",
-                    "json",
-                    "--audience",
-                    "agent",
-                    "--concurrency",
-                    "1",
-                    "--effort",
-                    "low",
-                    "--no-filter",
-                    "--max-tools",
-                    str(value),
-                ],
+                command,
                 cwd=repo,
                 env=env,
                 check=False,
@@ -276,6 +277,14 @@ def _effective_max_tools_probe(
         or tool_calls.get("total") != observed
     ):
         core._fail("effective max-tools probe returned an inconsistent tool-loop result")
+    manifest = payload.get("manifest") if isinstance(payload, dict) else None
+    execution_facts = manifest.get("execution") if isinstance(manifest, dict) else None
+    if (
+        not isinstance(execution_facts, dict)
+        or type(execution_facts.get("max_tool_request_times")) is not int
+        or execution_facts["max_tool_request_times"] != observed
+    ):
+        core._fail("effective max-tools manifest limit disagrees with observed rounds")
     from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
 
     try:
@@ -368,35 +377,52 @@ def _numeric_cli_probe(
         binary, repo, base, head, directory, flag="--max-tools", value=minimum
     )
     _accepted_numeric_preview(minimum_preview, flag="--max-tools")
-    template_default, grace_completion = _effective_max_tools_probe(
-        binary,
-        repo,
-        base,
-        head,
-        directory,
-        value=below,
-        expected_diagnostic=settings.MAX_TOOLS_NORMALIZATION_RE,
-    )
-    if template_default < minimum:
-        core._fail("candidate max-tools template default is below the reported minimum")
-    representative = template_default + 1
-    representative_preview = _run_numeric_preview_case(
-        binary, repo, base, head, directory, flag="--max-tools", value=representative
-    )
-    _accepted_numeric_preview(representative_preview, flag="--max-tools")
-    effective_representative, representative_grace = _effective_max_tools_probe(
-        binary,
-        repo,
-        base,
-        head,
-        directory,
-        value=representative,
-        expected_diagnostic=None,
-    )
-    if effective_representative != representative:
-        core._fail("candidate max-tools representative value was not applied exactly")
-    if representative_grace != grace_completion:
-        core._fail("candidate max-tools grace verdict changed with the numeric boundary")
+    observed_cases: dict[str, dict[str, object]] = {}
+    grace_completion: dict[str, object] | None = None
+    for name, requested_value in (
+        ("omitted", None),
+        ("sentinel", 0),
+        ("minimum", minimum),
+        ("minimum_minus_one", below),
+        ("lower_override", 75),
+        ("template_value", 100),
+        ("representative", 125),
+    ):
+        if name in {"lower_override", "template_value", "representative"}:
+            _accepted_numeric_preview(
+                _run_numeric_preview_case(
+                    binary, repo, base, head, directory, flag="--max-tools", value=requested_value
+                ),
+                flag="--max-tools",
+            )
+        rounds, verdict = _effective_max_tools_probe(
+            binary,
+            repo,
+            base,
+            head,
+            directory,
+            value=requested_value,
+            expected_diagnostic=settings.MAX_TOOLS_NORMALIZATION_RE
+            if name == "minimum_minus_one"
+            else None,
+        )
+        if grace_completion is None:
+            grace_completion = verdict
+        elif verdict != grace_completion:
+            core._fail("candidate max-tools grace verdict changed with the numeric boundary")
+        if name not in {"omitted", "sentinel"} and rounds != max(minimum, requested_value):
+            core._fail("candidate max-tools override was not applied exactly")
+        observed_cases[name] = {
+            "effective": rounds,
+            "input": requested_value,
+            "outcome": "normalized" if name == "minimum_minus_one" else "accepted",
+        }
+        if name == "minimum_minus_one":
+            observed_cases[name]["reported_normalization"] = minimum
+    template_default = observed_cases["omitted"]["effective"]
+    if observed_cases["sentinel"]["effective"] != template_default or template_default < minimum:
+        core._fail("candidate max-tools sentinel/default observations disagree")
+    observed_cases["invalid_below"] = {"effective": None, "input": -1, "outcome": "rejected"}
     incomplete_rounds, grace_incomplete = _effective_max_tools_probe(
         binary,
         repo,
@@ -407,7 +433,7 @@ def _numeric_cli_probe(
         expected_diagnostic=None,
         grace_task_done=False,
     )
-    if incomplete_rounds != template_default:
+    if incomplete_rounds != minimum:
         core._fail("candidate max-tools non-completion changed the effective round limit")
 
     budget_cases: dict[str, subprocess.CompletedProcess[str]] = {
@@ -453,38 +479,11 @@ def _numeric_cli_probe(
             "owner": "ocr-cli",
         },
         "max_tools": {
-            "cases": {
-                "invalid_below": {"effective": None, "input": -1, "outcome": "rejected"},
-                "minimum": {
-                    "effective": template_default,
-                    "input": minimum,
-                    "outcome": "accepted",
-                },
-                "minimum_minus_one": {
-                    "effective": template_default,
-                    "input": below,
-                    "outcome": "normalized",
-                    "reported_normalization": minimum,
-                },
-                "omitted": {
-                    "effective": template_default,
-                    "input": None,
-                    "outcome": "accepted",
-                },
-                "representative": {
-                    "effective": representative,
-                    "input": representative,
-                    "outcome": "accepted",
-                },
-                "sentinel": {
-                    "effective": template_default,
-                    "input": 0,
-                    "outcome": "accepted",
-                },
-            },
+            "cases": observed_cases,
             "maximum": None,
-            "owner": "ocr-template-or-higher-cli",
+            "owner": "ocr-cli-or-template-default",
             "reported_minimum": minimum,
+            "manifest_limit_verified": True,
         },
         "result": "passed",
     }

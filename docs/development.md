@@ -131,6 +131,15 @@ Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
+Evidence through OCR 1.13.4 is now frozen. Its 1.13.0–1.13.4 contract lives in
+the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
+numeric defaults and language inventories. Fresh execution starts at 1.13.5.
+The live max-tools probe separately measures omitted and zero defaults, explicit
+50/75/100/125 overrides and 49 normalization, then checks the native manifest's
+effective limit against actual counted rounds. The same probe implementation
+runs for all new candidates. Current template/JSONC/Scala selection and Rules
+requirements belong to the live contract; old evidence is never regenerated.
+
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn
 unconsumed upstream wording/features into mandatory checks. Prove preservation
