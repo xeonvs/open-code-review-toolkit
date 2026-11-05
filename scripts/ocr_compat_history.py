@@ -7,7 +7,7 @@ from typing import Any, NoReturn
 
 from ocr_qualification import frozen_113
 
-HISTORICAL_CUTOFF = (1, 13, 5)
+HISTORICAL_CUTOFF = (1, 13, 6)
 REGO_CONTRACT_CUTOFF = (1, 11, 8)
 
 ARCHIVED_NUMERIC_CLI_CONTRACT: dict[str, object] = {

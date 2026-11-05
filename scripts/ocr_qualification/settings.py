@@ -187,7 +187,17 @@ CURRENT_NUMERIC_CLI_CONTRACT: dict[str, object] = {
 }
 
 
+DEFAULT_RULE_CONTROL_PATHS = ("BUILDX", "nested/WORKSPACES")
+
 CURRENT_LANGUAGE_RULES = {
+    "app/src/Program.cs": "**/*.cs",
+    "bazel/rules.bzl": "**/*.{bzl,bazel,star}",
+    "bazel/defs.bazel": "**/*.{bzl,bazel,star}",
+    "bazel/config.star": "**/*.{bzl,bazel,star}",
+    "BUILD": "**/{BUILD,WORKSPACE}",
+    "WORKSPACE": "**/{BUILD,WORKSPACE}",
+    "nested/BUILD": "**/{BUILD,WORKSPACE}",
+    "nested/WORKSPACE": "**/{BUILD,WORKSPACE}",
     "views/page.pug": "**/*.pug",
     "views/page.jinja2": "**/*.{jinja2,j2}",
     "views/component.j2": "**/*.{jinja2,j2}",

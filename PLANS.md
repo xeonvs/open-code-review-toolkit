@@ -58,8 +58,8 @@ evidence matrix, causal matrix and backlog where behavior or recorded state chan
 
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
-| REQ-001 | Qualified OCR 1.13.6, C# Rules and existing project-context reads | WQ-03, WQ-06 | pending |
-| REQ-002 | Starlark, streaming controls and existing consumed handoffs qualified | WQ-03, WQ-06 | pending |
+| REQ-001 | Qualified OCR 1.13.6, C# Rules and existing project-context reads | WQ-03, WQ-06 | in_progress |
+| REQ-002 | Starlark, streaming controls and existing consumed handoffs qualified | WQ-03, WQ-06 | in_progress |
 | REQ-003 | Dependabot #296 and frozen compatible dependency/tool refresh | WQ-02, WQ-07 | in_progress |
 | REQ-004 | Safe bounded markup publication across real consumers/readback | WQ-04, WQ-06 | pending |
 | REQ-005 | Exact code-span email correction and credential/protection review | WQ-04, WQ-05 | pending |
@@ -171,8 +171,8 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | --- | --- | --- | --- |
 | WQ-01 | REQ-008, REQ-009 | Full plan/fidelity/state verified; signed plan 0287855 pushed; draft PR #299 and issues #297/#298 created | done |
 | WQ-02 | REQ-003 | Exact 33-update lock and uv/verified CodeQL pins; 47 focused tests, formatter/lint/types and updated dependency audit pass; semantic diff review complete | done |
-| WQ-03 | REQ-001, REQ-002 | Characterize frozen 1.13.5 readback, then extend current probes before verified 1.13.6 execution and promotion | in_progress |
-| WQ-04 | REQ-004, REQ-005, REQ-007 | Reproductions, bounded shared safe-prose projection, exact code-span email fix and actual consumer/readback tests | pending |
+| WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
+| WQ-04 | REQ-004, REQ-005, REQ-007 | Reproductions, bounded shared safe-prose projection, exact code-span email fix and actual consumer/readback tests | in_progress |
 | WQ-05 | REQ-005, REQ-006, REQ-007 | Individual causal annotations, inverse/properties, paired corpus replay, resource investigation and current-checkout scan | pending |
 | WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Canonical docs/workflow reconciliation, aggregate self-review, one Security scan, own-tool diagram/findings, corrections and final full gate | pending |
 | WQ-07 | REQ-003, REQ-009 | Final feature push with exact admitted diagram, protected CI, merge, development publication and #296 reconciliation | pending |
@@ -293,6 +293,47 @@ the audit as a non-registry development distribution. Review confirms the
 workflow diff changes only uv/CodeQL pins, preserving schedule, permissions,
 control flow and release authorization.
 
+Dependency slice is signed locally as 29bf0ce and has not been pushed. New
+qualification work remains uncommitted. Three new red epoch/selection checks
+were reproduced, then pass after freezing 1.13.5 independently of live settings.
+The complete committed support manifest still validates with unchanged historical
+evidence. The final promoted qualification/environment/capability/release-note
+scope passes 295 checks, and mypy passes 174 runtime files. Exact context call/path
+binding, missing-proof rejection, extensionless inventory and metadata-only CLI
+isolation are covered. Repository Ruff format/lint also passes. These are focused
+gates; the final full runtime quality gate remains WQ-06.
+
+Official Darwin 1.13.6 binary and checksum-list hashes match the planning inputs.
+Real C# main requests carry the new Rules and actually read unchanged csproj,
+Directory.Build.props and global.json context. Focused real wire checks pass
+OpenAI, Responses and Anthropic: false preserved, unset/nonboolean omitted.
+These are controlled-peer proofs, not model-quality acceptance. Final full
+Linux amd64 and Darwin arm64 contracts are identical and pass. Linux evidence
+is tracked with support metadata; independent Darwin evidence stays private.
+Source/probe review separates selected paths
+from extension suffixes: BUILD/WORKSPACE are explicit paths, not empty extensions.
+Ordinary extensionless BUILDX/WORKSPACES remain selected with default Rules;
+negative controls prove they do not acquire Starlark Rules. Unsupported suffixes
+are checked separately. Starlark samples use bazel/ so root BUILD cannot collide
+with a build/ directory on case-insensitive filesystems.
+
+The first Linux container installed the new binary-only hash-locked runtime and
+passed pip check; qualification stopped before candidate execution because the
+official harness requires RUNNER_OS=Linux. The successful replacement explicitly
+checks actual Linux before setting that runner marker. The final artifact is
+compatible/human-review-required. The native scope passes all 116 distinct
+cases: 111 initial passes plus focused recovery of a stale future-version oracle
+and four skipped cases. The path gate now applies from the 1.13.5 epoch forward,
+and federation receives its mandatory verified SHA. Six focused recovery checks
+pass, including one already-passing case repeated.
+
+Reviewed promotion advances manifest/preflight/capabilities to 1.13.6 without
+changing the published GitLab example pair. Local OCR was atomically replaced
+with verified 1.13.6 after checking the exact prior 1.13.5 identity; no old
+installed copy is retained. Rules and false-stream behavior have separate
+changelog classifications. Hosted qualification and own-tool acceptance remain
+required; Security 0/1 and model reviews 0/2 remain unused.
+
 ### Risks And Recovery
 
 Markup can conceal protected values or execute at a sink. Do not remove data to
@@ -313,10 +354,11 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 ### Resume Point
 
-WQ-03: characterize frozen 1.13.5 readback, then extend current C#/Starlark and
-false-stream probes before verified 1.13.6 execution. Dependency changes have
-focused acceptance and remain local. No further feature push before final
-acceptance; full quality and installed/native release gates remain mandatory.
+WQ-04: after the reviewed qualification commit, reproduce safe-prose publication
+and exact code-span failures, implement the shared bounded projector and wire
+production/readback/render/audit consumers. Existing qualified native and
+dependency evidence applies to unchanged inputs. No further feature push before
+final acceptance. Security 0/1 and model reviews 0/2 remain unused.
 
 ### Plan Fidelity Check
 
@@ -356,7 +398,8 @@ private evidence. No additional repository closure PR follows publication.
 ### Handoff Notes
 
 The approved full scope is materialized, signed and pushed in draft PR #299.
-The local dependency slice is complete; candidate qualification, DLP corrections,
+The local signed dependency slice and controlled candidate qualification are
+complete. DLP corrections,
 individual annotations, aggregate Security, actual model acceptance and release
 delivery remain unfinished. Use the current queue and relevant private evidence
 rather than reconstructing conversation history. Earlier release acceptance is

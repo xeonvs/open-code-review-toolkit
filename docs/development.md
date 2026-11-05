@@ -62,6 +62,9 @@ For an authorized real local OCR review, follow the [local review preparation an
 asset acquisition, the deterministic peer, numeric/selection/comment probes,
 candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
 shared qualification inputs; `core.py` owns bounded document/version primitives.
+`wire_controls.py` owns API request-control captures, `selection.py` owns language
+and unchanged-project-context probes, and `peer.py` binds their bounded synthetic
+exchanges, including exact tool-call identities for context-read evidence.
 Tests patch the actual owning modules rather than a compatibility re-export.
 These tools and their controlled peer are excluded from installed distributions.
 
@@ -137,14 +140,19 @@ Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
-Evidence through OCR 1.13.4 is now frozen. Its 1.13.0–1.13.4 contract lives in
+Evidence through OCR 1.13.5 is now frozen. Its 1.13.0–1.13.5 contract lives in
 the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
-numeric defaults and language inventories. Fresh execution starts at 1.13.5.
+numeric defaults and language inventories. Fresh execution starts at 1.13.6.
 The live max-tools probe separately measures omitted and zero defaults, explicit
 50/75/100/125 overrides and 49 normalization, then checks the native manifest's
 effective limit against actual counted rounds. The same probe implementation
 runs for all new candidates. Current template/JSONC/Scala selection and Rules
-requirements belong to the live contract; old evidence is never regenerated.
+requirements, C#/Starlark Rules, unchanged C# context reads and explicit false
+streaming belong to the live contract; old evidence is never regenerated.
+Extensionless build paths are recorded separately from actual extension suffixes.
+Similar ordinary names retain default Rules instead of acquiring Starlark Rules.
+Metadata/help/status paths remain usable with stdlib Python; import installed
+toolkit dependencies only inside the executable probe that consumes them.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn

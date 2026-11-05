@@ -401,6 +401,36 @@ session display changes do not change toolkit immutable-range authority.
 Issue [#294](https://github.com/xeonvs/open-code-review-toolkit/issues/294) owns
 this qualification chain; hosted verification remains part of release acceptance.
 
+### OCR 1.13.6 — toolkit 0.14.6 qualification
+
+Verified Linux amd64 and Darwin arm64 binaries pass identical consumed contract
+probes. C# source remains selectable and now receives the actual built-in C#
+Rules, including nullability, ownership, async and cancellation guidance. A real
+native main request carries those Rules and reads unchanged csproj,
+Directory.Build.props and global.json context for target framework, nullable,
+language version and SDK settings through the existing bounded file tools.
+
+Starlark adds `.bzl`, `.bazel`, `.star`, `BUILD` and `WORKSPACE`, including nested
+paths. The inventory records 48 qualified paths and 44 extension suffixes;
+extensionless filenames do not create empty extension entries. Similar ordinary
+extensionless names retain generic Rules, and unsupported-extension controls
+remain rejected.
+
+Real wire capture qualifies explicit boolean `stream: false` on OpenAI Chat
+Completions, Responses and Anthropic requests. Unset and nonboolean values do
+not request streaming. Provider-owned mandatory streaming remains separate.
+The adjacent diff preserves native provider resolution, auth-store and refresh
+ownership. Upstream GitHub Action comment ownership and site-provider presentation
+are not toolkit execution paths.
+
+Actual controlled consumers qualify both diagram variants, grouped context,
+evidence/federation MCP, partial gitlinks and complex diff/anchor paths while
+preserving staged, unstaged and untracked work. These are protocol and consumer
+proofs; configured-model acceptance remains part of the release's own-tool review.
+Issue [#298](https://github.com/xeonvs/open-code-review-toolkit/issues/298) owns
+qualification and the final exact-tag hosted check. Published GitLab examples
+advance their toolkit/OCR/checksum pair together in the stable release PR.
+
 ## Promotion and rollback
 
 Preparation validates all generated destinations before writing. Existing evidence

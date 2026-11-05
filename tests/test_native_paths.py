@@ -17,9 +17,9 @@ from tests.test_ocr_compat import load_script
 @pytest.mark.parametrize("case", ["missing-mixed", "modify", "rename", "copy"])
 def test_native_path_recovery_and_blank_line_anchor(tmp_path, qualified_native_ocr, case):
     binary, version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
-    if case != "missing-mixed" and version != "1.13.5":
-        pytest.skip("complex-header and blank-line changes are qualified from the new epoch")
     compat = load_script()
+    if case != "missing-mixed" and compat.core._version(version) < (1, 13, 5):
+        pytest.skip("complex-header and blank-line changes are qualified from the new epoch")
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-q")

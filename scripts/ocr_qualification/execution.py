@@ -57,7 +57,15 @@ def _isolated_probe_environment(home: Path) -> dict[str, str]:
     }
 
 
-def _synthetic_repo(directory: Path, env: dict[str, str]) -> tuple[Path, str, str]:
+def _synthetic_repo(
+    directory: Path,
+    env: dict[str, str],
+    *,
+    source_path: str = "example.py",
+    baseline: str = "def value():\n    return 1\n",
+    changed: str = "def value():\n    return 2\n",
+    context_files: dict[str, str] | None = None,
+) -> tuple[Path, str, str]:
     """Create an immutable two-commit fixture under isolated Git configuration."""
 
     repo = directory / "synthetic-review"
@@ -65,13 +73,18 @@ def _synthetic_repo(directory: Path, env: dict[str, str]) -> tuple[Path, str, st
     _run(["git", "init", "--initial-branch=main"], cwd=repo, env=env)
     _run(["git", "config", "user.name", "Synthetic Reviewer"], cwd=repo, env=env)
     _run(["git", "config", "user.email", "reviewer@example.com"], cwd=repo, env=env)
-    target = repo / "example.py"
-    target.write_text("def value():\n    return 1\n", encoding="utf-8")
-    _run(["git", "add", "example.py"], cwd=repo, env=env)
+    target = repo / source_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(baseline, encoding="utf-8")
+    for path, content in (context_files or {}).items():
+        context = repo / path
+        context.parent.mkdir(parents=True, exist_ok=True)
+        context.write_text(content, encoding="utf-8")
+    _run(["git", "add", source_path, *(context_files or {})], cwd=repo, env=env)
     _run(["git", "commit", "-m", "baseline"], cwd=repo, env=env)
     base = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=env).strip()
-    target.write_text("def value():\n    return 2\n", encoding="utf-8")
-    _run(["git", "add", "example.py"], cwd=repo, env=env)
+    target.write_text(changed, encoding="utf-8")
+    _run(["git", "add", source_path], cwd=repo, env=env)
     _run(["git", "commit", "-m", "change value"], cwd=repo, env=env)
     head = _run(["git", "rev-parse", "HEAD"], cwd=repo, env=env).strip()
     return repo, base, head

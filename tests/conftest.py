@@ -39,7 +39,7 @@ def native_candidate_inventory() -> Callable[[str], tuple[str, str] | None]:
     asset_name = f"opencodereview-{system}-{machine.get(platform.machine(), 'unknown')}"
     root = Path(__file__).resolve().parents[1]
     known: dict[str, tuple[str, int]] = {}
-    for version in ("1.13.2", "1.13.3", "1.13.4", "1.13.5"):
+    for version in ("1.13.2", "1.13.3", "1.13.4", "1.13.5", "1.13.6"):
         path = root / "compatibility" / "evidence" / f"ocr-{version}.json"
         for asset in json.loads(path.read_text(encoding="utf-8"))["assets"]:
             if asset["name"] == asset_name:

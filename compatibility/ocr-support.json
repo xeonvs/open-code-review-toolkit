@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.5",
-  "recommended_version": "1.13.5",
+  "monitoring_floor": "1.13.6",
+  "recommended_version": "1.13.6",
   "releases": [
     {
       "assets": [
@@ -2883,6 +2883,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.5",
       "status": "tested",
       "version": "1.13.5"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "1bda69fddc88a57a4d9177adb0b15b5a7470645f0c4b05fd474c57b26d4abf54",
+          "size": 58336144
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "6d1e6bb73d1f14b2c03d7456c016c5b553b13d25931cf154605732304c6b367a",
+          "size": 55348674
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "cb1330516431dea980c75497fa2bc46ad5fe5a4f3d35e947ab5af4a1742cae92",
+          "size": 56582306
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "d6ff0735b817a636e6727ffbb2555868929b3607c070feba7bda3aaa0f81eb60",
+          "size": 53215394
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "ecbe8eb15cc63190eb9e9d6b478d45313c8b6f6374aea7db2da1ed3b9ea134e6",
+          "size": 58051072
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "4593572d9717b4fa552f09cddc97e1a29b98478305f4cf32e43f8a85e7d80e18",
+          "size": 53971968
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "58755741cf62e3d4046415c8ee8e14dff364fc43ecbd36254fb7792adb529fb1",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.6.json",
+      "evidence_sha256": "1ba682dba1f8bfc7fcbdc967fc4d60a4f0f7b71b4c9dc684b7ea4eb2c5ff8120",
+      "human_conclusion": "Reviewed every adjacent source change. Official Linux amd64 and independently checksum-verified Darwin arm64 pass identical current contract probes, including actual C# Rules in main requests, unchanged project-context file reads, Starlark paths and default-rule negative controls, and explicit false streaming across OpenAI, Responses and Anthropic. Actual toolkit consumers qualify diagrams, grouped context, federation MCP and partial gitlinks while preserving local checkout state. Native provider/auth-store/locking ownership is unchanged in the adjacent diff; provider-mandated streaming remains its own contract. Upstream Action and site changes are not toolkit execution paths. No model-quality claim is inferred from deterministic peers; own-tool acceptance and protected hosted delivery remain required.",
+      "published_at": "2026-11-05T11:49:27Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.6",
+      "status": "tested",
+      "version": "1.13.6"
     }
   ],
   "runtime_support": {

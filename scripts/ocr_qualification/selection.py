@@ -125,6 +125,92 @@ def _semantic_grouping_probe(binary: Path, directory: Path) -> dict[str, object]
     return result
 
 
+def _csharp_context_probe(binary: Path, directory: Path) -> dict[str, object]:
+    """Read unchanged C# project context through actual native file tools."""
+
+    root = directory / "csharp-context-probe"
+    root.mkdir()
+    git_env = execution._isolated_probe_environment(root / "git-home")
+    context = {
+        "app/Project.csproj": "<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>",
+        "Directory.Build.props": "<Project><PropertyGroup><LangVersion>14.0</LangVersion></PropertyGroup></Project>",
+        "global.json": '{"sdk":{"version":"10.0.100"}}',
+    }
+    repo, base, head = execution._synthetic_repo(
+        root,
+        git_env,
+        source_path="app/Program.cs",
+        baseline="public class Program { public static int Value() => 1; }\n",
+        changed="public class Program { public static int Value() => 2; }\n",
+        context_files=context,
+    )
+    env = execution._isolated_probe_environment(root / "review-home")
+    expected_context = {
+        "app/Project.csproj": (
+            "<TargetFramework>net10.0</TargetFramework>",
+            "<Nullable>enable</Nullable>",
+        ),
+        "Directory.Build.props": ("<LangVersion>14.0</LangVersion>",),
+        "global.json": ("10.0.100",),
+    }
+    with peer._stub_gateway(context_reads=expected_context) as gateway_url:
+        env.update(
+            {
+                "OCR_LLM_URL": gateway_url,
+                "OCR_LLM_TOKEN": "synthetic-token",
+                "OCR_LLM_MODEL": "synthetic-model",
+                "OCR_LLM_PROTOCOL": "openai",
+                "OCR_TELEMETRY_ENABLED": "false",
+            }
+        )
+        output = execution._run(
+            [
+                str(binary),
+                "review",
+                "--from",
+                base,
+                "--to",
+                head,
+                "--effort",
+                "low",
+                "--concurrency",
+                "1",
+                "--format",
+                "json",
+                "--audience",
+                "agent",
+            ],
+            cwd=repo,
+            env=env,
+        )
+        observed = set(peer._StubHandler.observed_context_reads)
+        rules_seen = peer._StubHandler.observed_csharp_rules
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise core.CompatibilityError("C# context review did not emit JSON") from exc
+    if observed != set(context):
+        core._fail(f"native C# context reads were incomplete: {sorted(set(context) - observed)!r}")
+    if not rules_seen:
+        core._fail("native C# main request omitted the qualified Rules")
+    from ocr_toolkit.result_contract import OcrResultContractError, parse_result_outcome
+
+    try:
+        outcome = parse_result_outcome(result)
+    except OcrResultContractError as exc:
+        raise core.CompatibilityError(
+            "native C# context review returned an invalid outcome"
+        ) from exc
+    if outcome.kind != "clean" or outcome.selected_count != 1 or outcome.completed_count != 1:
+        core._fail("native C# context review did not complete its exact selected file")
+    return {
+        "result": "passed",
+        "rules_in_main_request": True,
+        "context_paths": sorted(context),
+        "execution": "read-only-native-tools",
+    }
+
+
 def _small_change_grouping_probe(binary: Path, directory: Path) -> dict[str, object]:
     """Prove OCR keeps below-threshold grouping local and deterministic."""
 
@@ -437,6 +523,7 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
                 *supported_paths,
                 *unsupported_paths,
                 *default_excluded_paths,
+                *settings.DEFAULT_RULE_CONTROL_PATHS,
                 *settings.PYTEST_PREFIX_CONTROL_PATHS,
                 settings.PYTEST_PREFIX_EXCLUDED_PATH,
             }
@@ -474,7 +561,11 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
     except json.JSONDecodeError as exc:
         raise core.CompatibilityError("language preview did not emit JSON") from exc
     selected = _selected_preview_paths(payload)
-    expected_selected = set(supported_paths) | set(settings.PYTEST_PREFIX_CONTROL_PATHS)
+    expected_selected = (
+        set(supported_paths)
+        | set(settings.PYTEST_PREFIX_CONTROL_PATHS)
+        | set(settings.DEFAULT_RULE_CONTROL_PATHS)
+    )
     if selected != expected_selected:
         missing = sorted(expected_selected - selected)
         unexpected = sorted(selected - expected_selected)
@@ -496,6 +587,11 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         selected_control, reason = _preview_file_selection(payload, path)
         if not selected_control or reason not in {None, ""}:
             core._fail(f"candidate overmatched the pytest-prefix exclusion: {path}")
+    for path in settings.DEFAULT_RULE_CONTROL_PATHS:
+        output = execution._run([str(binary), "rules", "check", path], cwd=repo, env=env)
+        if "Source: System built-in\n" not in output or "Pattern: default\n" not in output:
+            core._fail("candidate overmatched Starlark Rules onto an ordinary extensionless file")
+    rule_documents = set()
     for path in supported_paths:
         output = execution._run([str(binary), "rules", "check", path], cwd=repo, env=env)
         if (
@@ -507,8 +603,23 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         expected_pattern = exact_patterns.get(path)
         if expected_pattern is not None and f"Pattern: {expected_pattern}\n" not in output:
             core._fail(f"candidate resolved the wrong built-in language rule for {path}")
-    extensions = sorted(Path(path).suffix for path in supported_paths)
-    expected_extensions = sorted(Path(path).suffix for path in exact_patterns)
+        if path.endswith(".cs"):
+            if (
+                "#### Nullability and Reference Types" not in output
+                or "#### Async, Tasks, and Cancellation" not in output
+            ):
+                core._fail("candidate omitted the C# rule document")
+            rule_documents.add("csharp")
+        elif path in {"BUILD", "WORKSPACE", "nested/BUILD", "nested/WORKSPACE"} or path.endswith(
+            (".bzl", ".bazel", ".star")
+        ):
+            if "# Starlark Code Review Guide" not in output:
+                core._fail("candidate omitted the Starlark rule document")
+            rule_documents.add("starlark")
+    extensions = sorted({Path(path).suffix for path in supported_paths if Path(path).suffix})
+    expected_extensions = sorted(
+        {Path(path).suffix for path in exact_patterns if Path(path).suffix}
+    )
     if extensions != expected_extensions:
         core._fail("language probe paths disagree with the canonical extension projection")
     result: dict[str, object] = {
@@ -518,6 +629,10 @@ def _language_rule_probe(binary: Path, version: str, directory: Path) -> dict[st
         "result": "passed",
         "rule_source": "system_builtin",
         "selected": len(supported_paths),
+        "paths": list(supported_paths),
+        "excluded_paths": list(unsupported_paths),
+        "rule_documents": sorted(rule_documents),
+        "default_rule_paths": list(settings.DEFAULT_RULE_CONTROL_PATHS),
     }
     for name, source, heading in (
         ("objective.m", "#import <Foundation/Foundation.h>\n", "Objective-C"),

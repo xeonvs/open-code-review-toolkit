@@ -11,7 +11,7 @@ from typing import Any
 
 from . import comments as comment_checks
 from . import contracts as contract_rules
-from . import core, execution, numeric, peer, selection, settings
+from . import core, execution, numeric, peer, selection, settings, wire_controls
 
 
 def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]:
@@ -157,8 +157,10 @@ def run_contracts(binary: Path, version: str, directory: Path) -> dict[str, Any]
         binary, directory
     )
     contracts["language_rule_probe"] = selection._language_rule_probe(binary, version, directory)
+    contracts["csharp_context_probe"] = selection._csharp_context_probe(binary, directory)
     contracts["completion_cap_probe"] = numeric._completion_cap_probe(binary, directory)
     contracts["reasoning_effort_probe"] = numeric._reasoning_effort_probe(binary, directory)
+    contracts["stream_override_probe"] = wire_controls.stream_override_probe(binary, directory)
     contracts["comment_arguments_probe"] = comment_checks._comment_arguments_probe(
         binary, directory
     )
