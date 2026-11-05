@@ -60,7 +60,7 @@ evidence matrix, causal matrix and backlog where behavior or recorded state chan
 | --- | --- | --- | --- |
 | REQ-001 | Qualified OCR 1.13.6, C# Rules and existing project-context reads | WQ-03, WQ-06 | pending |
 | REQ-002 | Starlark, streaming controls and existing consumed handoffs qualified | WQ-03, WQ-06 | pending |
-| REQ-003 | Dependabot #296 and frozen compatible dependency/tool refresh | WQ-02, WQ-07 | pending |
+| REQ-003 | Dependabot #296 and frozen compatible dependency/tool refresh | WQ-02, WQ-07 | in_progress |
 | REQ-004 | Safe bounded markup publication across real consumers/readback | WQ-04, WQ-06 | pending |
 | REQ-005 | Exact code-span email correction and credential/protection review | WQ-04, WQ-05 | pending |
 | REQ-006 | Individual disposition of all 1611 public observations and final paired replays | WQ-05, WQ-06 | pending |
@@ -169,9 +169,9 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 
 | Item | Requirements | Work and completion evidence | Status |
 | --- | --- | --- | --- |
-| WQ-01 | REQ-008, REQ-009 | Materialize/fidelity-check plan, activate state, signed plan push/draft PR and tracked issue scope | in_progress |
-| WQ-02 | REQ-003 | Freeze compatible dependency inventory, lock, uv and verified CodeQL pins; audit/focused compatibility tests | pending |
-| WQ-03 | REQ-001, REQ-002 | Freeze old readback, extend current probes, qualify official 1.13.6 and actual handoffs, promote recommendation/capabilities | pending |
+| WQ-01 | REQ-008, REQ-009 | Full plan/fidelity/state verified; signed plan 0287855 pushed; draft PR #299 and issues #297/#298 created | done |
+| WQ-02 | REQ-003 | Exact 33-update lock and uv/verified CodeQL pins; 47 focused tests, formatter/lint/types and updated dependency audit pass; semantic diff review complete | done |
+| WQ-03 | REQ-001, REQ-002 | Characterize frozen 1.13.5 readback, then extend current probes before verified 1.13.6 execution and promotion | in_progress |
 | WQ-04 | REQ-004, REQ-005, REQ-007 | Reproductions, bounded shared safe-prose projection, exact code-span email fix and actual consumer/readback tests | pending |
 | WQ-05 | REQ-005, REQ-006, REQ-007 | Individual causal annotations, inverse/properties, paired corpus replay, resource investigation and current-checkout scan | pending |
 | WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Canonical docs/workflow reconciliation, aggregate self-review, one Security scan, own-tool diagram/findings, corrections and final full gate | pending |
@@ -277,7 +277,21 @@ state pointer is set. Thirty environment/release-note contract tests and the
 instruction contract pass. Public issues #297/#298 track the DLP and canonical
 OCR scopes. No runtime implementation or new OCR/model/Security acceptance is
 claimed. Source grouping is not individual triage. Security remains 0/1 and
-successful own-tool reviews 0/2.
+successful own-tool reviews 0/2. Signed plan commit 0287855 is pushed in draft
+PR #299; subsequent implementation remains local.
+
+The updated lock changes exactly the 33 approved package/version records;
+package membership, unrelated records and non-revision metadata are unchanged.
+uv 0.13.7 produces lock revision 5. CodeQL v4.39.3's annotated tag peels to
+`33d7b85da1a04171e211befe2c739303b9a4c066`; three workflow pins use that commit.
+Eleven uv pin/documentation occurrences now agree on 0.13.7. An isolated new-lock
+environment passes 47 dependency/workflow/MCP/transport/admission checks, Ruff
+format/lint across 419 files and mypy across 174 runtime files. These are focused
+checks, not the final full quality gate. Updated dependency audit passes with no
+known vulnerabilities; the editable toolkit itself is explicitly skipped by
+the audit as a non-registry development distribution. Review confirms the
+workflow diff changes only uv/CodeQL pins, preserving schedule, permissions,
+control flow and release authorization.
 
 ### Risks And Recovery
 
@@ -299,9 +313,10 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 ### Resume Point
 
-WQ-01: complete staged privacy checks and create the signed plan commit and
-draft PR. The full plan/state and focused contracts are verified. Then
-freeze WQ-02 dependencies before code or expensive acceptance.
+WQ-03: characterize frozen 1.13.5 readback, then extend current C#/Starlark and
+false-stream probes before verified 1.13.6 execution. Dependency changes have
+focused acceptance and remain local. No further feature push before final
+acceptance; full quality and installed/native release gates remain mandatory.
 
 ### Plan Fidelity Check
 
@@ -340,11 +355,12 @@ private evidence. No additional repository closure PR follows publication.
 
 ### Handoff Notes
 
-The approved full scope is materialized before implementation. No dependency
-refresh, new candidate qualification, code correction, individual annotation,
-Security scan, actual model review or release delivery has yet been performed.
-Use the current queue and relevant private evidence rather than reconstructing
-conversation history. Earlier release acceptance is historical, not this cycle's.
+The approved full scope is materialized, signed and pushed in draft PR #299.
+The local dependency slice is complete; candidate qualification, DLP corrections,
+individual annotations, aggregate Security, actual model acceptance and release
+delivery remain unfinished. Use the current queue and relevant private evidence
+rather than reconstructing conversation history. Earlier release acceptance is
+historical, not this cycle's. Security 0/1; successful model reviews 0/2.
 
 ## Recently Completed
 
