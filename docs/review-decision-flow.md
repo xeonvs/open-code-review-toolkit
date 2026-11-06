@@ -145,7 +145,7 @@ flowchart TD
     core -- Yes --> diagram_admit[Admit optional typed candidate against native range,<br/>bounded immutable text metadata and whole-unit DLP;<br/>fault, conflict or budget omits whole diagram]
     diagram_admit --> diag[Classify additive failed-tool diagnostics;<br/>validated diagram failures stay optional]
     diag --> dlp_mode{OCR_DLP_ENABLED?}
-    dlp_mode -- true --> dlp[Check original and bounded independent representations;<br/>source roles refine keys, never confidentiality;<br/>publication and private-field DLP]
+    dlp_mode -- true --> dlp[Check original, hidden and decoded material;<br/>prepare bounded inert prose and recheck it;<br/>source roles refine keys, never confidentiality;<br/>publication and private-field DLP]
     dlp_mode -- false --> disabled[Keep prominent risk warning;<br/>force comment-only]
     disabled --> publishable
     dlp --> dlp_state{DLP state}

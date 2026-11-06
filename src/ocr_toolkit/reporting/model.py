@@ -53,6 +53,7 @@ class ExecutionFacts:
     repository_coverage: RepositoryCoverage | None = None
     review_range: ReviewRange | None = None
     diagram: DiagramResult | None = None
+    prepared_prose: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +76,7 @@ class ReviewReport:
     gitlink_unqualified: bool = False
     review_range: ReviewRange | None = None
     diagram: DiagramResult | None = None
+    prepared_prose: bool = False
 
 
 def report_from_result(
@@ -128,6 +130,7 @@ def report_from_result(
         repository_coverage=execution.repository_coverage,
         review_range=execution.review_range,
         diagram=execution.diagram,
+        prepared_prose=execution.prepared_prose,
     )
 
 

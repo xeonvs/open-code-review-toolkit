@@ -220,8 +220,9 @@ transports; their trust boundaries are described in
 Standard output contains shared review health, coverage, warnings, tool/token and
 verified MCP facts, DLP admission status, and every admitted finding. It has no
 posting caps, remote badges, HTML disclosures or platform publication claims.
-Finding text and code are rendered as literal fenced content. Diagnostics use
-standard error; JSON stays in the private `--result` artifact.
+Admitted finding prose uses the shared safe Markdown presentation; source code
+stays in literal fences. Raw or DLP-disabled reports also fence finding text.
+Diagnostics use standard error; JSON stays in the private `--result` artifact.
 
 The same complete Markdown is published to `--report PATH`, defaulting to the
 `--result` path plus `.md`. The report target must be fresh and distinct from

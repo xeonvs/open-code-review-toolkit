@@ -226,16 +226,24 @@ def test_large_html_fragment_is_not_partially_interpreted():
     assert checked.reason == "limit" and not checked.admitted
 
 
-def test_source_span_search_exhaustion_is_closed(monkeypatch):
-    from ocr_toolkit.context.dlp import email
+def test_source_span_construction_exhaustion_is_closed(monkeypatch):
+    from ocr_toolkit.context.dlp import markup
 
-    monkeypatch.setattr(email, "MAX_SOURCE_SEARCH", 1)
+    budget_type = markup._Budget
+    monkeypatch.setattr(markup, "_Budget", lambda: budget_type(remaining=0))
     checked = check_text("`@review.bot`", budgets=BUDGETS, publication=True)
     assert checked.reason == "limit" and not checked.admitted
 
 
-def test_repeated_delimiter_mention_is_conservative_without_exact_position_proof():
-    assert not check_text("`@review.bot` `@review.bot`", budgets=BUDGETS, publication=True).admitted
+def test_repeated_delimiter_mentions_have_independent_position_proof():
+    from ocr_toolkit.context.dlp.markup import interpret_markdown
+
+    value = "`@review.bot` `@review.bot`"
+    assert interpret_markdown(value).code_openings == ((0, 1), (14, 1))
+    assert check_text(value, budgets=BUDGETS, publication=True).admitted
+    assert not check_text(
+        value + " author@example.invalid", budgets=BUDGETS, publication=True
+    ).admitted
 
 
 @pytest.mark.parametrize(

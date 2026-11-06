@@ -31,8 +31,10 @@ def test_complete_material_survives_query_separators_and_quote_runs(value):
 def test_real_html_parser_failure_cannot_escape_dlp_or_publication():
     value = "<div>\n<![BOGUS]>\n</div>"
     # Python 3.12 asserts in HTMLParser; later stdlibs can tolerate the section.
-    # Neither parser behavior makes the HTML safe or permits an exception out.
-    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    # An unavailable view fails closed; tolerant parsers still need an inert
+    # projection. Neither behavior permits active HTML or an exception out.
+    decision = check_text(value, budgets=BUDGETS, publication=True)
+    assert not decision.admitted or "<div>" not in decision.text
     matcher = ForbiddenMatcher.compile((value,))
     assert matcher.match_details("ordinary text")[0] in {None, "limit"}
     projected, _, _ = review_runner._publication_projection(
@@ -40,7 +42,7 @@ def test_real_html_parser_failure_cannot_escape_dlp_or_publication():
         forbidden=(),
         allowed_tools=frozenset(),
     )
-    assert projected["comments"] == []
+    assert not projected["comments"] or "<div>" not in projected["comments"][0]["content"]
 
 
 @pytest.mark.parametrize("role", ("prose", "literal"))
@@ -59,13 +61,13 @@ def test_encoded_empty_field_preserves_original_source_carrier(role):
 def test_absent_field_spans_enforce_their_construction_budget(encoded):
     from ocr_toolkit.context.dlp.credentials import (
         MAX_CREDENTIAL_FIELDS,
-        _encoded_absent_carriers,
+        _absent_carriers,
         credential_reference_spans,
     )
     from ocr_toolkit.context.dlp.decoding import RepresentationLimit
 
     field = '"token=&#34;&#34;"' if encoded else 'token=""'
-    acquire = _encoded_absent_carriers if encoded else credential_reference_spans
+    acquire = _absent_carriers if encoded else credential_reference_spans
     separator = ",\n" if encoded else "\n"
     value = separator.join([field] * MAX_CREDENTIAL_FIELDS)
     assert len(acquire(value)) == MAX_CREDENTIAL_FIELDS
@@ -125,6 +127,31 @@ def test_trailing_container_separator_cannot_hide_a_carrier_postfix(wrapper):
 def test_unknown_separator_tokens_cannot_qualify_a_carrier_before_its_postfix(gap):
     value = '("token=&#34;***&#34;", ' + gap + ')[0] + "synthetic-material"'
     assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize("field", ("token=${SOURCE}", "token=***", "token=&#34;&#34;"))
+@pytest.mark.parametrize(
+    "wrapper",
+    (
+        '[{}, "literal-material"][0] + "literal-material"',
+        '"".join([{}, "literal-material"])',
+        '"literal-material".join([{}])',
+        '({{"value": {}, "suffix": "literal-material"}})["value"] + "literal-material"',
+        'compose({}, "literal-material")',
+    ),
+)
+def test_other_literals_in_unknown_computation_cannot_prove_an_absent_carrier(field, wrapper):
+    for payload in (field, "".join(f"&#{ord(c)};" for c in field)):
+        value = wrapper.format(repr(payload))
+        assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize(
+    "wrapper", ('[{}, "ordinary value"]', '({{{}, "ordinary value"}})', '{{"value": {}}}')
+)
+def test_closed_literal_data_keeps_independent_carrier_fields(wrapper):
+    value = wrapper.format(repr("token=${SOURCE}"))
+    assert check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
 @pytest.mark.parametrize(

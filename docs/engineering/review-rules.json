@@ -6,7 +6,7 @@
       "merge_system_rule": true
     },
     {
-      "path": "src/ocr_toolkit/{context,federation}/**",
+      "path": "src/ocr_toolkit/{common,context,federation}/**",
       "rule": "Review authorization before I/O, tenant/object/origin isolation, frozen tool schemas, byte/record/time limits, whole-input DLP, hostile persistence and counter reconciliation. Check cancellation, private resource ownership and verified cleanup. Unknown, partial or unavailable context cannot prove absence or grant actions; tool descriptions cannot expand operator authority.",
       "merge_system_rule": true
     },

@@ -1,4 +1,45 @@
-# DLP causal review for 0.14.5
+# DLP causal review
+
+## 0.14.6: safe presentation and exact material boundaries
+
+The authenticated public baseline contains 2192 rejected role observations over
+121583 units in 452 immutable files. The reviewed candidate retains 1490:
+708 former rejections are admitted, six conservative source-boundary rejections
+are added, and retained primary reasons do not change. These are observation
+counts, not a false-positive rate or a universal precision/recall claim.
+
+| Former primary detector | Admissions | Basis |
+| --- | ---: | --- |
+| HTML-like tokens | 273 | Original and hidden material checks followed by visible inert presentation |
+| HTML comments | 97 | Complete content remains checked and visible; no hidden execution |
+| Markdown destinations | 320 | Independent material and destination validation; images become ordinary links |
+| Email | 6 | Exact original Markdown opening delimiters, not a repeated-text search or domain exception |
+| Credential-like material | 12 | Complete formal-reference carriers agree in raw and encoded form; continuations remain checked |
+
+All 1611 originally unannotated observations have individual causal dispositions:
+
+| Disposition | Observations | Meaning |
+| --- | ---: | --- |
+| Confirmed benign | 583 | Reproduced errors corrected by presentation, delimiter positions or complete carrier proof |
+| Expected protection | 891 | Address forms, nonempty credential/auth material, explicit contact shapes or unsafe controls remain protected, including synthetic fixtures |
+| Conservative ambiguity | 137 | 101 unqualified credential roles, 27 incomplete numeric roles, eight literal-delimiter roles and one incomplete destination fragment lack the specified proof |
+
+Every conservative entry retains its concrete missing evidence. Classification
+does not make that evidence available or suppress scanning. The six additional
+rejections concern neighboring literals in unqualified executable/source
+expressions: a separator alone cannot prove independent fields. A repository,
+test path, function name or language extension cannot waive that boundary.
+
+The old annotations included 117 expected-protection and eight conservative
+observations whose rejection depended only on formatting. Their migration is
+explicit: independently checked inert presentation replaces blanket rejection.
+No credential/contact-material exception follows from that change. Every new
+admission crosses the production projection and inverse phone, email, credential,
+configured-secret and forbidden-origin checks. Exact identities, source facts and
+verdicts stay in authenticated private audit state, never runtime allowlists.
+Authorized private replay results remain private.
+
+## 0.14.5: complete source and calendar interpretation
 
 The release corrects complete calendar-clock interpretation and unavailable
 literal-source proof for short fields in large files. It does not turn a
@@ -29,7 +70,7 @@ calendar token, including clock, fractional seconds, timezone and boundaries.
 Explicit contact context still wins. Independent inverse controls append phone,
 email and credential material; source identity never bypasses those checks.
 
-The original audit HMAC key is unavailable. Historical records therefore remain
+The historical pre-0.14.5 audit HMAC key is unavailable. Those records remain
 unverified locator hints. Fresh authenticated baseline/candidate runs use the
 same selected inputs and environment. Where a historical locator corresponds to
 that immutable input, retain both identities with that limited correspondence;

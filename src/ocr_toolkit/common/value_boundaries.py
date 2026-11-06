@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from ocr_toolkit.common.literal_context import LiteralContext
+
 MAX_TAIL_CHARS = 4096
 _LINE_END = re.compile(r"[\r\n\x85\u2028\u2029]")
 _FIELD_HEAD = re.compile(
@@ -81,9 +83,13 @@ def complete_field(text: str, end: int) -> bool:
     )
 
 
-def complete_carrier(text: str, end: int) -> bool:
+def complete_carrier(
+    text: str, end: int, *, start: int, context: LiteralContext | None = None
+) -> bool:
     """Check a source carrier through trivia, closers and trailing separators."""
 
+    if not (context or LiteralContext(text)).proves_carrier(start, end):
+        return False
     limit = min(len(text), end + MAX_TAIL_CHARS)
     cursor = end
     while cursor < limit:

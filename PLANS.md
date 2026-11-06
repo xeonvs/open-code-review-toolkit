@@ -7,7 +7,7 @@ Status: active
 Release classification: release-required
 Target release: 0.14.6
 Next development marker: 0.15.0
-Last Updated: 2026-11-05
+Last Updated: 2026-11-06
 
 ### Goal
 
@@ -138,6 +138,9 @@ send a landing-page chat handoff or create a post-release repository closure PR.
   quality. Prefer focused existing controls over more scaffolding.
 - Retain private-input confidentiality, audit key and necessary source-free
   evidence; remove task-owned source copies/builds/debug after acceptance.
+- Inspect the canonical rules against ad hoc repository/language fixes and add
+  one real C# project to private paired audits. Use actual-project diagnosis
+  rather than a separate speculative C# corpus; public regressions stay synthetic.
 
 ### Completed Baseline State
 
@@ -172,9 +175,9 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | WQ-01 | REQ-008, REQ-009 | Full plan/fidelity/state verified; signed plan 0287855 pushed; draft PR #299 and issues #297/#298 created | done |
 | WQ-02 | REQ-003 | Exact 33-update lock and uv/verified CodeQL pins; 47 focused tests, formatter/lint/types and updated dependency audit pass; semantic diff review complete | done |
 | WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
-| WQ-04 | REQ-004, REQ-005, REQ-007 | Reproductions, bounded shared safe-prose projection, exact code-span email fix and actual consumer/readback tests | in_progress |
-| WQ-05 | REQ-005, REQ-006, REQ-007 | Individual causal annotations, inverse/properties, paired corpus replay, resource investigation and current-checkout scan | pending |
-| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Canonical docs/workflow reconciliation, aggregate self-review, one Security scan, own-tool diagram/findings, corrections and final full gate | pending |
+| WQ-04 | REQ-004, REQ-005, REQ-007 | Core slice committed; aggregate-review corrections and composed-consumer/resource regressions implemented, pending final focused checks/self-review/commit | in_progress |
+| WQ-05 | REQ-005, REQ-006, REQ-007 | Original public bytes/baseline and all 1611 exact annotations verified; private pairs/resources profiled; post-review acceptance replays and transition checks remain | in_progress |
+| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Aggregate review and single Security scan complete; own-tool diagram/findings, final corrections, installed/native and full gate remain | in_progress |
 | WQ-07 | REQ-003, REQ-009 | Final feature push with exact admitted diagram, protected CI, merge, development publication and #296 reconciliation | pending |
 | WQ-08 | REQ-010 | Signed Release v0.14.6 PR, checked plan archive/reset, stable publication, external readback and cleanup | pending |
 
@@ -272,67 +275,88 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
 
 ### Latest Validation Results
 
-The full materialized plan passes the installed lifecycle check, and its active
-state pointer is set. Thirty environment/release-note contract tests and the
-instruction contract pass. Public issues #297/#298 track the DLP and canonical
-OCR scopes. No runtime implementation or new OCR/model/Security acceptance is
-claimed. Source grouping is not individual triage. Security remains 0/1 and
-successful own-tool reviews 0/2. Signed plan commit 0287855 is pushed in draft
-PR #299; subsequent implementation remains local.
-
-The updated lock changes exactly the 33 approved package/version records;
-package membership, unrelated records and non-revision metadata are unchanged.
-uv 0.13.7 produces lock revision 5. CodeQL v4.39.3's annotated tag peels to
-`33d7b85da1a04171e211befe2c739303b9a4c066`; three workflow pins use that commit.
-Eleven uv pin/documentation occurrences now agree on 0.13.7. An isolated new-lock
-environment passes 47 dependency/workflow/MCP/transport/admission checks, Ruff
-format/lint across 419 files and mypy across 174 runtime files. These are focused
-checks, not the final full quality gate. Updated dependency audit passes with no
-known vulnerabilities; the editable toolkit itself is explicitly skipped by
-the audit as a non-registry development distribution. Review confirms the
-workflow diff changes only uv/CodeQL pins, preserving schedule, permissions,
-control flow and release authorization.
-
-Dependency slice is signed locally as 29bf0ce and has not been pushed. New
-qualification work remains uncommitted. Three new red epoch/selection checks
-were reproduced, then pass after freezing 1.13.5 independently of live settings.
-The complete committed support manifest still validates with unchanged historical
-evidence. The final promoted qualification/environment/capability/release-note
-scope passes 295 checks, and mypy passes 174 runtime files. Exact context call/path
-binding, missing-proof rejection, extensionless inventory and metadata-only CLI
-isolation are covered. Repository Ruff format/lint also passes. These are focused
-gates; the final full runtime quality gate remains WQ-06.
-
-Official Darwin 1.13.6 binary and checksum-list hashes match the planning inputs.
-Real C# main requests carry the new Rules and actually read unchanged csproj,
-Directory.Build.props and global.json context. Focused real wire checks pass
-OpenAI, Responses and Anthropic: false preserved, unset/nonboolean omitted.
-These are controlled-peer proofs, not model-quality acceptance. Final full
-Linux amd64 and Darwin arm64 contracts are identical and pass. Linux evidence
-is tracked with support metadata; independent Darwin evidence stays private.
-Source/probe review separates selected paths
-from extension suffixes: BUILD/WORKSPACE are explicit paths, not empty extensions.
-Ordinary extensionless BUILDX/WORKSPACES remain selected with default Rules;
-negative controls prove they do not acquire Starlark Rules. Unsupported suffixes
-are checked separately. Starlark samples use bazel/ so root BUILD cannot collide
-with a build/ directory on case-insensitive filesystems.
-
-The first Linux container installed the new binary-only hash-locked runtime and
-passed pip check; qualification stopped before candidate execution because the
-official harness requires RUNNER_OS=Linux. The successful replacement explicitly
-checks actual Linux before setting that runner marker. The final artifact is
-compatible/human-review-required. The native scope passes all 116 distinct
-cases: 111 initial passes plus focused recovery of a stale future-version oracle
-and four skipped cases. The path gate now applies from the 1.13.5 epoch forward,
-and federation receives its mandatory verified SHA. Six focused recovery checks
-pass, including one already-passing case repeated.
-
-Reviewed promotion advances manifest/preflight/capabilities to 1.13.6 without
-changing the published GitLab example pair. Local OCR was atomically replaced
-with verified 1.13.6 after checking the exact prior 1.13.5 identity; no old
-installed copy is retained. Rules and false-stream behavior have separate
-changelog classifications. Hosted qualification and own-tool acceptance remain
-required; Security 0/1 and model reviews 0/2 remain unused.
+- Signed plan 0287855 is the only pushed change; draft PR #299 remains open.
+  Dependencies (29bf0ce) and OCR qualification (e0a1074) are signed locally.
+  The consolidated DLP/correction slice remains local; no implementation has
+  been sent to the public branch.
+- The frozen lock contains exactly the 33 approved updates; dependency audit,
+  focused transport checks, formatting and types pass. uv/CodeQL pins agree.
+- Official Linux amd64 and Darwin arm64 OCR 1.13.6 contracts agree. C# Rules and
+  actual unchanged-project context reads, Starlark selection/Rules, explicit
+  false streaming, 116 optional/path consumers and 295 focused checks pass.
+  Historical evidence is unchanged. Local OCR is verified 1.13.6; the previous
+  installed binary is removed. Final hosted-tree qualification remains pending.
+- Safe prose, original code-delimiter positions and complete raw/encoded carrier
+  proof are implemented. Real finalization, receipt reload and local/GitLab
+  presentation are covered. The cross-cutting anti-ad-hoc invariant is in the
+  canonical principles; instruction and plan lifecycle checks pass.
+- All 1611 original public observations are individually annotated in authenticated
+  private state: 583 confirmed benign, 891 expected protection, 137 conservative
+  ambiguities with explicit missing proof. Baseline/candidate correspondence is
+  exact. The pre-Security final public run has 1490 rejections: 708 admissions,
+  six new conservative boundaries, no untriaged/lost-protection/changed-reason or
+  unexplained-admission records. The 117 old format-only protection and eight
+  conservative labels have explicit inert-presentation migrations.
+- Authorized private validation has been performed, including an actual C#
+  source population. Its inputs, measurements, profiling and outcomes remain in
+  private audit state. Post-correction acceptance replays remain pending.
+- Aggregate semantic review and the **single Security diff scan are complete**.
+  All 38 changed-source paths are covered. Six low-severity instances identify
+  image composition/serialization and reference-work amplification; the reserved
+  ancestor crash is a separately fixed correctness defect. No second aggregate
+  scan is planned. The existing repository threat model matches the inspected
+  boundaries; public contracts now describe complete consumed representations.
+- Focused corrections canonicalize complete active prose, preserve structured
+  warning provenance, close fragment delimiters, deduplicate bounded hidden
+  material/destination work and remove stale descendant updates. A real py-spy
+  trace found quadratic URI-prefix scanning; the bounded large-field regression
+  now completes in seconds. Inverse probes also reproduce and fix encoded
+  userinfo delimiter protection on internal hosts, without blocking URL paths.
+- The focused correction scope passes 444 tests and eight subtests; new prose
+  preparation measures 95% branch-aware coverage and pure warning projection
+  100%. Extended structural/URI/representation/network properties pass 170 tests
+  at up to 1000 examples with independent seed 146063. Ruff and mypy pass.
+  Further broad focused/installed checks and final gate remain pending.
+- The wider scope has 1795 passes and ten stale proof-test oracles that depended
+  on the removed prose HTML ban. All 20 real-worker proof cases now pass with
+  sensitive contact inverses, benign markup admission and exact LF/source facts.
+  A fresh projection measurement passes 110 checks and its independent 90%
+  floor; other affected owners pass their independent floors. Main remains the
+  original 881fd1d after a fresh fetch. OCR's installed hash matches, and native
+  account model discovery succeeds. Self-review will select GPT-6 Astra/high and
+  explicit changed boundary tests through a private operator Rules overlay.
+- Security scans: **1/1 completed**. Real own-tool reviews: **1/2**. The one final
+  full quality gate, accepted model diagram/findings, final feature delivery,
+  stable release and external closure have not been claimed.
+- First real GPT-6 Astra/high review completed all 83 selected files with no
+  native warnings, failed tools or failed auxiliary reads. One admitted diagram
+  used cross-group diffs/context before submission. All seven raw findings were
+  inspected, including two protected omissions. Reproductions cover unquoted
+  operands, parser-discarded carriers, composed decoding/NFKC, deleted prepared
+  ancestors, raw warning bounds and qualification call-ID ambiguity. Corrections
+  pass 189 focused checks and 40 explicitly selected 1000-example properties;
+  93 affected checks also pass on Python 3.15. Unpublished DLP commits are
+  consolidated to remove private validation outcomes from their history while
+  preserving the published plan commit.
+  A second own-tool run will cover the corrected, privacy-clean immutable range.
+- The post-correction public replay preserved all 708 existing benign admissions
+  and all annotated protection. Its new queue exposed an overbroad separator
+  rule for reference operands and unstable re-parsing of literal Markdown
+  delimiters. Both causes are corrected structurally, with closed-data scalar
+  and inert/idempotent delimiter regressions. The focused scope passes 321 tests
+  and eight subtests; final matched replay and final-range model review remain.
+- The next exact queue exposed non-local scalar attribution and loss of proved
+  absence during display transforms. Bounded record/ordinal roles and semantic
+  refinement now preserve the original completion proof and enclosing data
+  grammar; unknown computations remain blocked. A focused 293-test scope passes.
+  The next full paired replay is pending; prior intermediate runs are not final
+  acceptance evidence.
+- All six exact public regressions now admit through the real scanner/projection
+  owners. Final focused validation passes 295 checks and 41 properties at 1000
+  examples (seed 146070). Branch coverage is 98.96% for literal context, 98.13%
+  for credential semantics and 91.26% for prose projection. Formatting, lint and
+  types pass. Freeze this runtime for the second model review and final matched
+  replay; investigate or repeat resource measurements outside the agreed margin.
 
 ### Risks And Recovery
 
@@ -354,11 +378,16 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 ### Resume Point
 
-WQ-04: after the reviewed qualification commit, reproduce safe-prose publication
-and exact code-span failures, implement the shared bounded projector and wire
-production/readback/render/audit consumers. Existing qualified native and
-dependency evidence applies to unchanged inputs. No further feature push before
-final acceptance. Security 0/1 and model reviews 0/2 remain unused.
+Complete post-correction paired corpus/protection/resource acceptance, then the
+second own-tool review of the privacy-clean final range with ChatGPT high,
+aggregate budget zero, private debug and an actual admitted diagram. Inspect
+findings, omissions and auxiliary reads; fix any findings. Finish the current
+checkout scan, installed/native handoffs and the one final full quality gate.
+Finish WQ-06 through WQ-08, including hosted exact-tag qualification, final feature
+push/CI/merge, signed Release v0.14.6 PR with plan archival/reset, external release
+reconciliation and task-owned cleanup. Preserve the audit key/source-free proof;
+never copy private identities or source into public artifacts. Do not repeat the
+completed aggregate Security scan. No landing-chat handoff or closure PR.
 
 ### Plan Fidelity Check
 
@@ -398,12 +427,15 @@ private evidence. No additional repository closure PR follows publication.
 ### Handoff Notes
 
 The approved full scope is materialized, signed and pushed in draft PR #299.
-The local signed dependency slice and controlled candidate qualification are
-complete. DLP corrections,
-individual annotations, aggregate Security, actual model acceptance and release
-delivery remain unfinished. Use the current queue and relevant private evidence
-rather than reconstructing conversation history. Earlier release acceptance is
-historical, not this cycle's. Security 0/1; successful model reviews 0/2.
+The signed dependency, controlled qualification and first DLP slices are local.
+All original public observations have exact annotations. The single aggregate
+Security scan is complete; its corrections are ready for a separate local
+commit after focused tests and self-review. Actual model acceptance, final
+paired replay, final quality gate and release delivery remain unfinished. Use
+the current queue and relevant private evidence rather than reconstructing
+conversation history. Earlier release acceptance is historical, not this
+cycle's. Security 1/1 completed; successful model reviews 1/2, corrections and
+privacy-clean final-range review pending.
 
 ## Recently Completed
 

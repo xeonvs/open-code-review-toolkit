@@ -142,6 +142,13 @@ DLP. Private retention is checked separately. Publication filtering does not
 rewrite OCR coverage: a complete OCR manifest remains complete while omitted
 public fields and findings are reported as publication omissions.
 
+Publication prepares admitted prose as bounded inert Markdown after checking
+original, hidden and decoded material. The same prepared values reach local and
+GitLab presentation; safe escaping alone is not an omission. Literal source and
+typed diagram labels keep their separate sink contracts. The
+[security contract](security.md#dlp-and-publication) owns destination validation,
+representation bounds and hostile current-receipt readback.
+
 Forbidden values are registered with a closed source class at acquisition:
 `forge_discussions`, `remediation_threads`, `ci_outcomes`, `external_context`,
 `operator_secret`, or `other`. Each rejected item counts each matching class at

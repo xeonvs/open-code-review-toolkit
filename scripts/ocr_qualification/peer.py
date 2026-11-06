@@ -365,7 +365,7 @@ def context_read_observations(
     """Bind captured project values to their actual file_read call and path."""
 
     calls: dict[str, str] = {}
-    ambiguous: set[str] = set()
+    seen: set[str] = set()
     for message in messages:
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
@@ -376,13 +376,12 @@ def context_read_observations(
             if not isinstance(call, dict) or not isinstance(call.get("id"), str):
                 continue
             identity = call["id"]
-            if identity in calls or identity in ambiguous:
+            if identity in seen:
                 calls.pop(identity, None)
-                ambiguous.add(identity)
                 continue
+            seen.add(identity)
             function = call.get("function")
             if not isinstance(function, dict) or function.get("name") != "file_read":
-                ambiguous.add(identity)
                 continue
             try:
                 args = json.loads(function.get("arguments", ""))

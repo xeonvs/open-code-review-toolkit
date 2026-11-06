@@ -2054,10 +2054,10 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         "Contact synthetic&#64;example.invalid.",
         "+1<span>202</span>5550142",
         "ghp_abcdefghij<span>klmnop</span>qrstuvwxyz123456",
-        "See [hidden](https://example.invalid/path).",
-        "See [hidden](&#x68;ttps://example.invalid/path).",
-        "See [hidden][destination].\n[destination]: https://example.invalid/path",
-        "See <https://example.invalid/path>.",
+        "See [hidden](https://example.invalid/path?token=synthetic-material).",
+        "See [hidden](&#x68;ttps://example.invalid/path?token=synthetic-material).",
+        "See [hidden][destination].\n[destination]: https://example.invalid/path?token=synthetic-material",
+        "See <https://example.invalid/path?token=synthetic-material>.",
         "Unicode control: &#x202e;hidden.",
     ):
         hostile_payload: dict[str, object] = {
@@ -2071,6 +2071,20 @@ def test_publication_projection_blocks_context_copy_secret_pii_and_laundering() 
         assert publication["state"] == "publication-filtered"
         assert blocked is True
         assert text not in json.dumps(projected)
+
+    for text in (
+        "See [docs](https://example.invalid/path).",
+        "See [docs](&#x68;ttps://example.invalid/path).",
+        "See [docs][destination].\n[destination]: https://example.invalid/path",
+        "See <https://example.invalid/path>.",
+    ):
+        projected, publication, blocked = review_runner._publication_projection(
+            {"status": "success", "comments": [{"content": text}]},
+            forbidden=forbidden,
+            allowed_tools=frozenset(),
+        )
+        assert projected["comments"]
+        assert publication["state"] == "passed" and not blocked
 
     work_bound_payload: dict[str, object] = {
         "status": "success",

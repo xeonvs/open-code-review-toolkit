@@ -152,3 +152,32 @@ def test_stream_capture_keeps_only_bounded_control_metadata():
                 "stream_options_present": False,
             }
         ]
+
+
+@pytest.mark.parametrize("arguments", ("{", "[]", '{"file_path":"elsewhere.xml"}'))
+def test_invalid_first_read_still_consumes_its_call_identity(arguments):
+    module = load_script()
+    observed = module.peer.context_read_observations(
+        [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"id": "same", "function": {"name": "file_read", "arguments": arguments}},
+                    {
+                        "id": "same",
+                        "function": {
+                            "name": "file_read",
+                            "arguments": '{"file_path":"app/Project.csproj"}',
+                        },
+                    },
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "same",
+                "content": "framework=net10.0; nullable=enable",
+            },
+        ],
+        {"app/Project.csproj": ("framework=net10.0", "nullable=enable")},
+    )
+    assert not observed

@@ -238,8 +238,12 @@ Run OCR through `ocr-ci review --result PATH --stderr PATH -- ...`. The wrapper 
 HTML-like syntax in optional `existing_code` or `suggestion_code` is admitted
 only when the exact code is proved against the immutable reviewed head and
 safe code rendering applies. Secret, PII, forbidden-value and other DLP
-checks still apply. Unproved code and ordinary prose keep the stricter HTML
-rule; a rejected optional field can be omitted while safe findings survive.
+checks still apply. Unproved code keeps the stricter literal-source rule;
+ordinary prose instead receives the shared bounded safe presentation: HTML and
+comments become visible inert text, safe Markdown links remain links and images
+become ordinary links. Original/hidden material is checked before projection and
+the prepared model is checked again. A rejected optional code field can be
+omitted while safe findings survive; harmless escaping is not a filtered review.
 
 OCR may add group labels, file membership, grouping-task records, round diagnostics, readable reasoning, and provider-native replay payloads to private session data. They remain outside the canonical finding/posting projection, receipt v13, DLP counts, toolkit telemetry, tool/token summary, and approval inputs. If they appear inside receipt v13, validation fails closed. Caller `--output`/`-o` is rejected before preview because the wrapper owns the result descriptor and posting handoff.
 

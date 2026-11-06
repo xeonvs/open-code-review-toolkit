@@ -34,6 +34,11 @@ from ocr_toolkit.context.dlp.numeric import (
     phone_markup_view,
 )
 from ocr_toolkit.context.dlp.presentation import canonical_whitespace, has_unsafe_controls
+from ocr_toolkit.context.dlp.projection import (
+    UnsafeDestination,
+    decoded_markup_material,
+    project_prose,
+)
 from ocr_toolkit.result_contract import FORBIDDEN_SOURCE_CLASSES
 
 MARKDOWN_DEST_RE = re.compile(
@@ -234,6 +239,17 @@ def _literal_contact_view(value: str, *, visible: bool, formatting: bool = True)
     return _source_normalize(normalized)
 
 
+def _markup_phone(value: str, *, literal: bool) -> bool:
+    markup = interpret_markdown(phone_markup_view(value, formatting=False))
+    # Visible formatting is interpreted by the parser. Hidden HTML material
+    # needs an independent sweep; stripping it or joining its digits would
+    # silently make an obfuscated contact look like an opaque identifier.
+    return (not literal and _contains_phone(_literal_normalize(markup.contacts))) or any(
+        _contains_phone(phone_markup_view(_literal_normalize(fragment)))
+        for fragment in markup.hidden
+    )
+
+
 _P = ParamSpec("_P")
 
 
@@ -249,7 +265,7 @@ def _bounded_check(function: Callable[_P, DLPResult]) -> Callable[_P, DLPResult]
 
 
 @_bounded_check
-def check_text(
+def _check_material(
     value: object,
     *,
     budgets: TextBudgets,
@@ -323,6 +339,19 @@ def check_text(
                 ("source", source, source_transform(decoded_semantic)),
             )
         )
+        for text in decoded_markup_material(normalized):
+            views.append(("decoded_markup", text, _semantic_secret_text(text)))
+            compatible_markup = bounded_nfkc(text)
+            if compatible_markup != text:
+                # Composed decoding/normalization carries no source delimiter
+                # proof. It remains an independent complete material view.
+                views.append(
+                    (
+                        "compatible_markup",
+                        compatible_markup,
+                        _semantic_secret_text(compatible_markup),
+                    )
+                )
     mermaid = _mermaid_decode(decoded)
     has_mermaid = mermaid != decoded
     if has_mermaid:
@@ -389,16 +418,21 @@ def check_text(
         if candidate in seen_pii:
             continue
         seen_pii.add(candidate)
-        if contains_email(candidate, markdown=not literal):
-            return DLPResult(False, None, "pii", f"email:{representation}")
-        if _contains_phone(candidate) or (
-            not literal
-            and _contains_phone(
-                _literal_normalize(
-                    interpret_markdown(phone_markup_view(candidate, formatting=False)).contacts
-                )
-            )
+        email_transform = (
+            bounded_nfkc
+            if representation == "compatible"
+            else _html_decode
+            if representation == "decoded"
+            else None
+        )
+        if contains_email(
+            candidate,
+            markdown=not literal and (candidate == normalized or email_transform is not None),
+            original=normalized if email_transform is not None else None,
+            transform=email_transform,
         ):
+            return DLPResult(False, None, "pii", f"email:{representation}")
+        if _contains_phone(candidate) or _markup_phone(candidate, literal=literal):
             return DLPResult(False, None, "pii", f"phone:{representation}")
     # Secret/email deobfuscation remains independent of literal rendering.
     # Strong contact signals also retain the stricter arbitrary-format sweep.
@@ -427,13 +461,24 @@ def check_text(
                     return DLPResult(False, None, "pii", "phone:literal_markup")
     matcher = forbidden_matcher or ForbiddenMatcher.compile(forbidden)
     matcher_reason, source_classes = matcher.match_details(normalized)
+    for name, candidate, _secret in views:
+        if name == "decoded_markup":
+            reason, classes = matcher.match_details(candidate)
+            matcher_reason = matcher_reason or reason
+            source_classes = tuple(sorted(set(source_classes) | set(classes)))
     if has_mermaid:
         mermaid_reason, mermaid_sources = matcher.match_details(mermaid)
         matcher_reason = matcher_reason or mermaid_reason
         source_classes = tuple(sorted(set(source_classes) | set(mermaid_sources)))
     if matcher_reason:
         return DLPResult(False, None, matcher_reason, "forbidden_matcher", source_classes)
-    if publication and not (allow_opaque_code and sink == TextSink.LITERAL_CODE):
+    if (
+        publication
+        and not (allow_opaque_code and sink == TextSink.LITERAL_CODE)
+        and has_unsafe_controls(decoded, display=True)
+    ):
+        return DLPResult(False, None, "laundering", "display_control")
+    if publication and sink == TextSink.LITERAL_CODE and not allow_opaque_code:
         laundering = (
             "markdown_destination"
             if MARKDOWN_DEST_RE.search(normalized)
@@ -451,3 +496,59 @@ def check_text(
         if laundering is not None:
             return DLPResult(False, None, "laundering", laundering)
     return DLPResult(True, normalized, "admitted")
+
+
+@_bounded_check
+def check_text(
+    value: object,
+    *,
+    budgets: TextBudgets,
+    publication: bool = False,
+    forbidden: tuple[str | ForbiddenValue, ...] = (),
+    forbidden_matcher: ForbiddenMatcher | None = None,
+    allow_horizontal_tabs: bool = False,
+    allow_opaque_code: bool = False,
+    code_context: CodeTextContext | None = None,
+    sink: TextSink = TextSink.PROSE,
+    enabled: bool | None = None,
+) -> DLPResult:
+    """Admit all material, prepare prose, and independently admit the prepared text."""
+
+    checked = _check_material(
+        value,
+        budgets=budgets,
+        publication=publication,
+        forbidden=forbidden,
+        forbidden_matcher=forbidden_matcher,
+        allow_horizontal_tabs=allow_horizontal_tabs,
+        allow_opaque_code=allow_opaque_code,
+        code_context=code_context,
+        sink=sink,
+        enabled=enabled,
+    )
+    if (
+        not checked.admitted
+        or checked.reason == "disabled"
+        or not publication
+        or sink != TextSink.PROSE
+    ):
+        return checked
+    assert checked.text is not None
+    try:
+        prepared = project_prose(checked.text, budgets)
+    except UnsafeDestination:
+        return DLPResult(False, None, "laundering", "markdown_destination")
+    if prepared != checked.text:
+        material = _check_material(
+            prepared,
+            budgets=budgets,
+            publication=True,
+            forbidden=forbidden,
+            forbidden_matcher=forbidden_matcher,
+            allow_horizontal_tabs=allow_horizontal_tabs,
+            sink=TextSink.PROSE,
+            enabled=enabled,
+        )
+        if not material.admitted:
+            return material
+    return DLPResult(True, prepared, checked.reason)

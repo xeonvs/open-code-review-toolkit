@@ -451,19 +451,15 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
     assert check_text("sha-a1234567890abcdef", budgets=TextBudgets(100, 200, 2)).admitted
     monkeypatch.setenv("SYNTHETIC_CONTEXT_SECRET", "not-a-real-token-value")
     assert check_text("not-a-real-token-value", budgets=TextBudgets(100, 200, 2)).reason == "secret"
-    assert (
-        check_text(
-            "[safe label](https://example.invalid)",
-            budgets=TextBudgets(100, 200, 2),
-            publication=True,
-        ).reason
-        == "laundering"
-    )
+    assert check_text(
+        "[safe label](https://example.invalid)",
+        budgets=TextBudgets(100, 200, 2),
+        publication=True,
+    ).admitted
     for hidden in (
         "<!-- synthetic&#64;example.invalid -->safe",
         '<span title="synthetic&#64;example.invalid">safe</span>',
         "&lt;!-- synthetic&#x40;example.invalid --&gt;safe",
-        "<code>safe</code>",
     ):
         assert (
             check_text(
@@ -476,6 +472,8 @@ def test_context_dlp_applies_multibyte_units_pii_secrets_and_publication_launder
     assert check_text(
         "x < y and y > z", budgets=TextBudgets(100, 200, 2), publication=True
     ).admitted
+    safe_html = check_text("<code>safe</code>", budgets=TextBudgets(200, 400, 3), publication=True)
+    assert safe_html.admitted and "<code>" not in safe_html.text
     assert (
         ForbiddenMatcher.compile(("<!-- hidden-only protected value -->",)).match_reason(
             "<!-- hidden-only protected value -->"
@@ -620,9 +618,24 @@ def test_federation_ingress_admits_technical_numbers_but_rejects_mixed_pii() -> 
 
 @pytest.mark.parametrize("value", ["List<Entry>", "(?P<entry>[a-z]+)", "<Widget enabled />"])
 def test_opaque_code_relaxes_only_literal_tag_syntax(value: str) -> None:
+    from ocr_toolkit.context.code_text import TextSink
+
     budgets = TextBudgets(2000, 8000, 30)
-    assert check_text(value, budgets=budgets, publication=True).detector == "html_tag"
-    assert check_text(value, budgets=budgets, publication=True, allow_opaque_code=True).admitted
+    assert check_text(value, budgets=budgets, publication=True).admitted
+    assert (
+        check_text(value, budgets=budgets, publication=True, sink=TextSink.LITERAL_CODE).detector
+        == "html_tag"
+    )
+    assert (
+        check_text(
+            value,
+            budgets=budgets,
+            publication=True,
+            allow_opaque_code=True,
+            sink=TextSink.LITERAL_CODE,
+        ).text
+        == value
+    )
 
 
 @pytest.mark.parametrize(
@@ -631,9 +644,9 @@ def test_opaque_code_relaxes_only_literal_tag_syntax(value: str) -> None:
         ("<Widget />\ncontact@example.invalid", "pii"),
         ("<Widget />\nCall +1 202 555 0142", "pii"),
         ("<Widget />\nlogin_password: 'synthetic-secret-value'", "secret"),
-        ("<Widget />\n<!-- hidden -->", "laundering"),
-        ("&lt;Widget /&gt;", "laundering"),
-        ("<Widget />\n[link](https://example.invalid)", "laundering"),
+        ("<Widget />\n<!-- hidden -->", "admitted"),
+        ("&lt;Widget /&gt;", "admitted"),
+        ("<Widget />\n[link](https://example.invalid)", "admitted"),
         ("<Widget />\n\u202eflow", "invalid_text"),
     ],
 )

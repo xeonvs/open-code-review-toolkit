@@ -11,7 +11,7 @@ uv run --no-sync ruff format --check .
 uv run --no-sync ruff check .
 uv run --no-sync mypy src/ocr_toolkit
 uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
-uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
+uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=88
 uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
@@ -182,6 +182,16 @@ Before a search or diagnostic call, identify the decision it will inform and sel
 For potentially large audit, export, build, and test output, preserve the complete result in an ignored private artifact and return a bounded summary with exit status, errors, truncation state, and the artifact location. Reduce known JSON schemas before sending them to the model; do not print a full report and then wrap or serialize that same output again. If a result is truncated, narrow the next query or inspect a relevant range of the preserved artifact instead of repeating the broad call with a larger output limit. Inventory tracked and non-ignored source files; keep ignored logs, caches, virtual environments, and generated dependency trees out of ordinary source discovery. Explicitly scoped incident diagnosis may inspect an ignored artifact.
 
 Reuse evidence only while its relevant inputs remain unchanged. Repeat a successful check after an affected code, dependency, environment, or contract change, a prior incomplete result, or a required release/publication boundary; state that reason. Full quality checks remain required for implementation/release scope, while documentation-only checks follow the scoped rule above. Avoid adding bookkeeping files, wrapper scripts, or prose-presence tests merely to enforce an agent habit that bounded semantic review can assess.
+
+Inventory open dependency PRs, consumed upstream changes and compatible updates
+at the start of a release; freeze that composition before expensive reviews.
+Apply focused checks to logical commits, then one full quality gate to the final
+runtime handoff. A normal acceptance cycle uses the aggregate Security scan
+followed by one own-tool review described below; another model review requires
+incomplete acceptance or a concrete uncovered boundary. Use native CI watch
+commands, retain their completion/exit evidence and avoid model turns for
+unchanged statuses. Recover from the active plan and necessary private artifacts,
+not duplicate command transcripts or a new orchestration layer.
 
 When auditing session efficiency, distinguish tool-call counts, output volume, cached input, and fresh input. Do not sum overlapping resumed histories or interpret cumulative token counters as subscription charges. Repeated calls require contextual review before being classified as unnecessary. Keep raw sessions and private identifiers out of public PRs and issues.
 

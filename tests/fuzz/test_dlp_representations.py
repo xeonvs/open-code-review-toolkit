@@ -330,7 +330,7 @@ def test_malformed_marked_sections_never_escape_publication_or_forbidden_checks(
 
     value = "<div>\n<![" + keyword + ("]>" if closed else "[") + "\n</div>"
     decision = check_text(value, budgets=BUDGETS, publication=True)
-    assert not decision.admitted
+    assert not decision.admitted or "<div>" not in decision.text
     matcher = ForbiddenMatcher.compile((value,))
     assert matcher.match_details("ordinary text")[0] in {None, "limit"}
     projected, _, _ = review_runner._publication_projection(
@@ -338,7 +338,7 @@ def test_malformed_marked_sections_never_escape_publication_or_forbidden_checks(
         forbidden=(),
         allowed_tools=frozenset(),
     )
-    assert projected["comments"] == []
+    assert not projected["comments"] or "<div>" not in projected["comments"][0]["content"]
 
 
 @given(
@@ -421,6 +421,26 @@ def test_encoded_absent_carrier_matches_the_canonical_raw_field(key, absent, enc
         check_text(encoded, budgets=BUDGETS, publication=True).admitted
         == check_text(raw, budgets=BUDGETS, publication=True).admitted
     )
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("***", "${REF}", "{{ config.value }}")),
+    ENCODING,
+    st.sampled_from(
+        (
+            '[{}, "material"][0] + "material"',
+            '"".join([{}, "material"])',
+            '"material".join([{}])',
+            'compose({}, "material")',
+        )
+    ),
+)
+def test_container_separator_cannot_hide_computed_credential_material(
+    key, absent, encoding, wrapper
+):
+    carrier = repr(encode(key + "=" + absent, encoding))
+    assert not check_text(wrapper.format(carrier), budgets=BUDGETS, publication=True).admitted
 
 
 @given(
@@ -520,3 +540,49 @@ def test_unicode_next_field_preserves_empty_value_and_independent_material(name,
         budgets=BUDGETS,
         publication=True,
     ).admitted
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("***", "${REF}", "{{ config.value }}")),
+    ENCODING,
+    st.one_of(
+        st.integers(min_value=1, max_value=9999),
+        st.sampled_from(("True", "false", "null", "None", "0xFF", "1e9")),
+    ),
+    st.sampled_from(
+        (
+            "subscript",
+            "argument",
+            "discarded-comment",
+            "prefix-argument",
+            "leading-operator",
+            "nested-scalar",
+        )
+    ),
+)
+def test_unquoted_operands_and_discarded_comments_cannot_supply_carrier_proof(
+    key, absent, encoding, number, shape
+):
+    carrier = repr(encode(key + "=" + absent, encoding))
+    if shape == "subscript":
+        value = f"[{carrier}, {number}][0] + str({number})"
+    elif shape == "argument":
+        value = f"compose({carrier}, {number})"
+    elif shape == "prefix-argument":
+        value = f"compose({number}, {carrier})"
+    elif shape == "leading-operator":
+        value = f"{number}\n\n + {carrier}"
+    elif shape == "nested-scalar":
+        value = f"compose({carrier}, str({number}))"
+    else:
+        value = f"0 # compose({carrier}, {number})"
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert not projected["comments"]
+    # Numeric data in a complete, uncomputed container remains independent.
+    assert check_text(f"[{carrier}, {number}]", budgets=BUDGETS, publication=True).admitted

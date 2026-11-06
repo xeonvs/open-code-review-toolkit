@@ -18,6 +18,17 @@ This document owns durable cross-cutting engineering invariants for Open Code Re
 
 ## Trust Boundary Invariants
 
+<!-- ew:invariant id="engineering.generalizable-corrections" -->
+### General-purpose corrections
+
+The toolkit accepts arbitrary repositories, languages and text formats. Correct
+the demonstrated grammar, material or boundary failure rather than recognizing
+one repository, path, extension, identifier or fixture spelling. Keep a genuinely
+ecosystem-specific capability explicit and scoped to its qualified evidence;
+unknown inputs must not inherit another language's semantics. Review a correction
+against structurally different inputs and inverse sensitive-material cases.
+Use minimal synthetic regressions for private findings, never copied private code.
+
 ### Model-selected arguments require application authorization
 
 Model-selected tool arguments must pass deterministic authorization and validation in application code before any resource access or mutation. A function name, prompt instruction, allowlist entry, or server-authored schema does not authorize a tenant, object, field, or operation.
@@ -45,6 +56,8 @@ Bind Git plumbing to the validated repository and immutable refs. Isolate object
 ### External format parsing
 
 Define semantic grammar, normalization, optional-field handling, and bounded degradation before implementing a parser. Equivalent key order, indentation, scalar or mapping forms, markers, URLs, digests, and status variants must not acquire accidental semantics from one canonical fixture spelling.
+
+Check the complete representation consumed across a boundary, including serialization and composition. Safe individual fields do not establish safety of their combined output or independence of referenced material. Preserve identity/provenance fields separately from presentation text.
 
 <!-- ew:invariant id="boundary.network-acquisition" -->
 ### Network acquisition

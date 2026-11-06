@@ -10,6 +10,7 @@ from bisect import bisect_right
 from collections.abc import Iterator
 from typing import Any
 
+from ocr_toolkit.common.literal_context import LiteralContext
 from ocr_toolkit.common.value_boundaries import complete_carrier as _complete_credential_carrier
 from ocr_toolkit.common.value_boundaries import complete_value
 
@@ -225,7 +226,9 @@ def redact_env_secret_values(text: str, *, values: tuple[str, ...] | None = None
     return redacted
 
 
-def _complete_credential_value(text: str, end: int, *, start: int | None = None) -> bool:
+def _complete_credential_value(
+    text: str, end: int, *, start: int | None = None, context: LiteralContext | None = None
+) -> bool:
     """Require a terminal value, not a prefix of concatenation or a call.
 
     One unambiguous matching outer quote may close its carrier. Arbitrary
@@ -246,7 +249,7 @@ def _complete_credential_value(text: str, end: int, *, start: int | None = None)
             text[end - 1] not in "\"'" and not any(c in prefix for c in (quote, "\\", "\r", "\n"))
         )
         if carrier and single and text[end - 1] != quote:
-            return _complete_credential_carrier(text, cursor + 1)
+            return _complete_credential_carrier(text, cursor + 1, start=opening, context=context)
     return complete_value(text, end)
 
 
@@ -255,12 +258,13 @@ def masked_credential_spans(text: str) -> tuple[tuple[int, int], ...]:
 
     if "***" not in text:
         return ()
+    context = LiteralContext(text)
     spans = {
         match.span("value")
         for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES)
         for match in pattern.finditer(text)
         if match["value"] == "***"
-        and _complete_credential_value(text, match.end(), start=match.start())
+        and _complete_credential_value(text, match.end(), start=match.start(), context=context)
     }
     # URI carriers have their own proven boundaries. A closing carrier quote
     # must not require granting the same authority to arbitrary quote runs.
@@ -294,13 +298,14 @@ def _credential_material(text: str) -> bool:
     if parts:
         parts.append(text[previous:])
         text = "".join(parts)
+    context = LiteralContext(text)
     safe_fields: set[tuple[int, int]] = set()
     for pattern, _replacement in (*_AUTH_RULES, *_ASSIGNMENT_RULES):
         if "suffix" not in pattern.groupindex:
             continue
         for match in pattern.finditer(text):
             if match["value"] not in {"", "***"} or not _complete_credential_value(
-                text, match.end(), start=match.start()
+                text, match.end(), start=match.start(), context=context
             ):
                 return True
             safe_fields.add(match.span())
@@ -313,7 +318,7 @@ def _credential_material(text: str) -> bool:
             if index >= 0 and match.end() <= ordered_fields[index][1]:
                 continue
             if match["value"] in {"", "***"} and _complete_credential_value(
-                text, match.end(), start=match.start()
+                text, match.end(), start=match.start(), context=context
             ):
                 continue
             return True
@@ -334,6 +339,7 @@ _SOURCE_BREAK = re.compile(r"[\s\"'<>]")
 def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, bool]]:
     """Walk complete sensitive values without granting authority to their tails."""
 
+    context = LiteralContext(text)
     cursor = 0
     while (query := _QUERY_KEY_RE.search(text, cursor)) is not None:
         cursor = query.end()
@@ -366,7 +372,9 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
                 or _URI_SCHEME.search(window, token_start) is not None
             )
             closing = text.find(carrier["quote"], start) if carrier is not None else -1
-            if closing == start and not _complete_credential_carrier(text, closing + 1):
+            if closing == start and not _complete_credential_carrier(
+                text, closing + 1, start=opening, context=context
+            ):
                 # An opening query-value quote cannot also prove the carrier's
                 # end. Ambiguous nested quoting retains ordinary checks.
                 closing = -1
@@ -380,7 +388,9 @@ def _material_queries(text: str) -> Iterator[tuple[re.Match[str], int, bool, boo
             closed = closing >= 0 and end == closing
             empty = start == end or _EMPTY_QUERY_VALUE_RE.fullmatch(text, start, end) is not None
             empty = empty and not ambiguous_carrier
-            if closed and not _complete_credential_carrier(text, end + 1):
+            if closed and not _complete_credential_carrier(
+                text, end + 1, start=opening, context=context
+            ):
                 empty = False
             if (
                 end < len(text)
@@ -484,6 +494,9 @@ def sanitize_ocr_value(value: Any) -> Any:
 def redact_url_userinfo_only(value: str) -> str:
     """Redact only URL userinfo, leaving path/query text unchanged."""
 
+    if "://" not in value or "@" not in value:
+        return value
+
     def replace(match: re.Match[str]) -> str:
         prefix, userinfo = match.group(1), match.group(2)
         if not _is_url_userinfo_candidate(userinfo):
@@ -491,7 +504,10 @@ def redact_url_userinfo_only(value: str) -> str:
         return f"{prefix}***@"
 
     return re.sub(
-        r"(?i)([a-z][a-z0-9+.-]*://)([^/?#@]+)@"
+        # Attempt once per scheme-character run, not at every letter in a long
+        # near match. A non-letter prefix stays byte-for-byte in the replacement,
+        # just as it stayed outside the old unanchored match.
+        r"(?i)(?<![a-z0-9+.-])([0-9+.-]*[a-z][a-z0-9+.-]*://)([^/?#@]+)@"
         r"(?=[^/?#\s@]+(?:[/?#]|[\s,;.!)]|$))",
         replace,
         value,
@@ -505,7 +521,10 @@ def _is_url_userinfo_candidate(userinfo: str) -> bool:
         char for char in userinfo if unicodedata.category(char) not in {"Cc", "Cf", "Zl", "Zp"}
     )
     decoded = urllib.parse.unquote(normalized)
-    if not decoded or any(char in decoded for char in "/?#@"):
+    # The URI grammar excludes literal delimiters from this capture. Encoded
+    # delimiters remain valid userinfo data and cannot prove absence of a
+    # credential, including for dotless/internal host names.
+    if not decoded:
         return False
     if any(char.isspace() for char in userinfo):
         return ":" in decoded
