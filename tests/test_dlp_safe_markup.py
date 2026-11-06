@@ -15,6 +15,7 @@ BUDGETS = TextBudgets(20_000, 80_000, 200)
     (
         "Read [documentation](https://example.invalid/guide).",
         "See [local](../guide.md#usage) and [section](#usage).",
+        "Read [guide](docs/My%20Guide.md).",
         "Use `List<Entry>` and `(?P<label>[a-z]+)`.",
         "<!-- generated section marker -->",
         "Stage one<br/>stage two",
@@ -38,6 +39,8 @@ def test_benign_markup_is_prepared_and_idempotent(value):
         "[guide](https://reader@example.invalid/guide)",
         "[guide](https://example.invalid/%0ahello)",
         "[guide](//example.invalid/guide)",
+        "[guide](%20//example.invalid/path)",
+        "[guide](%2520%252F%252Fexample.invalid/path)",
         "[guide](https://[broken/guide)",
         "[guide](java%73cript:hello)",
         "[guide](https://example.invalid/%FF)",
@@ -462,8 +465,8 @@ def test_explicit_publication_mode_owns_prepared_prose_authority():
     "payload", ("token=${SOURCE}", 'password="{{ config.value }}"', "api_key='${SOURCE}'")
 )
 def test_complete_reference_carrier_is_independent_of_encoding(payload):
-    raw = "record(" + repr(payload) + ")"
-    encoded = "record(" + repr("".join(f"&#{ord(c)};" for c in payload)) + ")"
+    raw = "(" + repr(payload) + ",)"
+    encoded = "(" + repr("".join(f"&#{ord(c)};" for c in payload)) + ",)"
     assert check_text(raw, budgets=BUDGETS, publication=True).admitted
     assert check_text(encoded, budgets=BUDGETS, publication=True).admitted
     for tail in (

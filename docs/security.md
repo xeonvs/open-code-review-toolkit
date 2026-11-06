@@ -231,6 +231,10 @@ a redactor changing formatting alone does not prove that text contains a secret.
 Literal source can preserve operators only when exact full-source proof establishes
 their computational role. A scalar parsing as an expression is insufficient;
 configuration, documents, logs and diagram labels receive no such authority.
+Quoted absent-value credential carriers require complete bounded literal data
+or named literal fields. Unknown calls, comparisons, references and literal
+syntaxes cannot prove absence from a partial quote inventory. This data grammar
+does not qualify the semantics of a programming language.
 Independent security views still inspect Markdown/HTML obfuscation, compatibility
 Unicode, configured secret values, credential literals, contacts and forbidden
 source text. Configured values are checked before whitespace/NFC normalization
@@ -239,7 +243,8 @@ as well as afterwards. An exact code match does not exempt sensitive material.
 Admitted publication prose has a separate safe presentation step. HTTP/HTTPS,
 relative and anchor Markdown links remain links after destination validation;
 unsafe schemes, user information, controls, malformed authorities and excessive
-decoding are rejected without network access. Images become ordinary links.
+decoding are rejected without network access. Leading whitespace cannot hide an
+encoded scheme-relative authority. Images become ordinary links.
 HTML/comments are visible literal text, including their attributes and embedded
 Markdown, rather than executable or silently discarded material. Prose code
 fences use a neutral text renderer; the optional typed diagram owns Mermaid.
@@ -258,7 +263,8 @@ Literal source and diagram labels retain separate source/sink contracts.
 Structured finding content and messages are checked as original keys/leaves and
 as the exact complete text consumed by report adapters. A bounded prepass covers
 quoting, Unicode escapes and container punctuation before that representation is
-allocated (32768 nodes, depth 64 and 16384-bit integers). Newly finalized active
+allocated or leaf admission/sanitization begins (32768 nodes, depth 64 and
+16384-bit integers). Newly finalized active
 prose is canonical text; harmless historical containers remain readable when
 their consumed representation is already canonical. Structured warnings retain
 their original type/path provenance. All original warning material is checked

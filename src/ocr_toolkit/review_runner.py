@@ -1595,11 +1595,33 @@ def _publication_projection(
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
+    sink_reasons: Counter[str] = Counter()
+    unsafe_rendered: set[tuple[object, ...]] = set()
+    unrenderable: dict[tuple[object, ...], str] = {}
+    # Bound complete slots before any per-leaf DLP or generic sanitization.
+    # Preserve indices so quarantine can omit just the original unsafe unit.
+    for path, value in prose_slots(payload):
+        try:
+            bounded_prose_text(value, budgets)
+        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+            reason = "invalid_text" if isinstance(exc, UnicodeError) else "limit"
+            sink_reasons[reason] += 1
+            unsafe_rendered.add(path)
+            unrenderable[path] = ""
+            if debug is not None:
+                debug.decision(
+                    path=path,
+                    action="reject-rendered-prose",
+                    reason=reason,
+                    detector="rendered_representation",
+                    value=None,
+                )
+    bounded_payload = prepared_copy(payload, unrenderable)
     opaque_fields: set[tuple[int, str]] = set()
     code_contexts: dict[tuple[int, str], CodeTextContext] = {}
     if code_proof is not None and isinstance(payload.get("comments"), list):
         for index, comment in enumerate(payload["comments"]):
-            if not isinstance(comment, dict):
+            if not isinstance(comment, dict) or ("comments", index, "content") in unrenderable:
                 continue
             proof = code_proof(comment)
             if proof.existing_verified:
@@ -1611,12 +1633,11 @@ def _publication_projection(
                 if proof.suggestion_context is not None:
                     code_contexts[index, "suggestion_code"] = proof.suggestion_context
     verified_opaque_fields = frozenset(opaque_fields)
-    sink_reasons: Counter[str] = Counter()
     source_units: dict[tuple[object, ...], set[str]] = {}
     source_counts: Counter[str] = Counter()
     prepared: dict[tuple[object, ...], str] = {}
     original_unsafe: set[tuple[object, ...]] = set()
-    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(payload):
+    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(bounded_payload):
         unit = (
             sink_path[:2] if sink_path and sink_path[0] in {"comments", "warnings"} else sink_path
         )
@@ -1645,13 +1666,13 @@ def _publication_projection(
             original_unsafe.add(sink_path)
     for sources in source_units.values():
         source_counts.update(sources)
-    sanitization_payload = payload
+    sanitization_payload = bounded_payload
     raw_tool_calls = payload.get("tool_calls")
     if failures.present and isinstance(raw_tool_calls, dict):
         # The details are a validated local/CI diagnostic channel, not an MR
         # publication sink or approval input. Remove them before generic DLP;
         # their dedicated console renderer applies redaction and tighter bounds.
-        sanitization_payload = dict(payload)
+        sanitization_payload = dict(bounded_payload)
         sanitization_payload["tool_calls"] = {
             key: value
             for key, value in raw_tool_calls.items()
@@ -1665,9 +1686,8 @@ def _publication_projection(
         source_counts=source_counts,
     )
     apply_prepared(sanitized, prepared)
-    unsafe_rendered: set[tuple[object, ...]] = set()
-    for path, value in prose_slots(prepared_copy(payload, prepared)):
-        if path in original_unsafe:
+    for path, value in prose_slots(prepared_copy(bounded_payload, prepared)):
+        if path in original_unsafe or path in unsafe_rendered:
             continue
         if path[0] == "warnings":
             originals = payload.get("warnings")
@@ -1750,7 +1770,7 @@ def _publication_projection(
         except OcrResultContractError:
             publication_changed = True
     if publication_changed:
-        publication_prepared = prepared_copy(payload, prepared)
+        publication_prepared = prepared_copy(bounded_payload, prepared)
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
             payload.get("comments"),
             budgets=budgets,

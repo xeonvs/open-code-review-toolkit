@@ -175,9 +175,9 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | WQ-01 | REQ-008, REQ-009 | Full plan/fidelity/state verified; signed plan 0287855 pushed; draft PR #299 and issues #297/#298 created | done |
 | WQ-02 | REQ-003 | Exact 33-update lock and uv/verified CodeQL pins; 47 focused tests, formatter/lint/types and updated dependency audit pass; semantic diff review complete | done |
 | WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
-| WQ-04 | REQ-004, REQ-005, REQ-007 | Core slice committed; aggregate-review corrections and composed-consumer/resource regressions implemented, pending final focused checks/self-review/commit | in_progress |
+| WQ-04 | REQ-004, REQ-005, REQ-007 | Consolidated slice and separate second-review corrections signed locally; 304 focused checks including 1000-example properties, independent coverage floors and semantic review pass | done |
 | WQ-05 | REQ-005, REQ-006, REQ-007 | Original public bytes/baseline and all 1611 exact annotations verified; private pairs/resources profiled; post-review acceptance replays and transition checks remain | in_progress |
-| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Aggregate review and single Security scan complete; own-tool diagram/findings, final corrections, installed/native and full gate remain | in_progress |
+| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Aggregate review, one Security scan and two model reviews with admitted diagrams complete; final corrections, installed/native and full gate remain | in_progress |
 | WQ-07 | REQ-003, REQ-009 | Final feature push with exact admitted diagram, protected CI, merge, development publication and #296 reconciliation | pending |
 | WQ-08 | REQ-010 | Signed Release v0.14.6 PR, checked plan archive/reset, stable publication, external readback and cleanup | pending |
 
@@ -275,88 +275,39 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
 
 ### Latest Validation Results
 
-- Signed plan 0287855 is the only pushed change; draft PR #299 remains open.
-  Dependencies (29bf0ce) and OCR qualification (e0a1074) are signed locally.
-  The consolidated DLP/correction slice remains local; no implementation has
-  been sent to the public branch.
-- The frozen lock contains exactly the 33 approved updates; dependency audit,
-  focused transport checks, formatting and types pass. uv/CodeQL pins agree.
-- Official Linux amd64 and Darwin arm64 OCR 1.13.6 contracts agree. C# Rules and
-  actual unchanged-project context reads, Starlark selection/Rules, explicit
-  false streaming, 116 optional/path consumers and 295 focused checks pass.
-  Historical evidence is unchanged. Local OCR is verified 1.13.6; the previous
-  installed binary is removed. Final hosted-tree qualification remains pending.
-- Safe prose, original code-delimiter positions and complete raw/encoded carrier
-  proof are implemented. Real finalization, receipt reload and local/GitLab
-  presentation are covered. The cross-cutting anti-ad-hoc invariant is in the
-  canonical principles; instruction and plan lifecycle checks pass.
-- All 1611 original public observations are individually annotated in authenticated
-  private state: 583 confirmed benign, 891 expected protection, 137 conservative
-  ambiguities with explicit missing proof. Baseline/candidate correspondence is
-  exact. The pre-Security final public run has 1490 rejections: 708 admissions,
-  six new conservative boundaries, no untriaged/lost-protection/changed-reason or
-  unexplained-admission records. The 117 old format-only protection and eight
-  conservative labels have explicit inert-presentation migrations.
-- Authorized private validation has been performed, including an actual C#
-  source population. Its inputs, measurements, profiling and outcomes remain in
-  private audit state. Post-correction acceptance replays remain pending.
-- Aggregate semantic review and the **single Security diff scan are complete**.
-  All 38 changed-source paths are covered. Six low-severity instances identify
-  image composition/serialization and reference-work amplification; the reserved
-  ancestor crash is a separately fixed correctness defect. No second aggregate
-  scan is planned. The existing repository threat model matches the inspected
-  boundaries; public contracts now describe complete consumed representations.
-- Focused corrections canonicalize complete active prose, preserve structured
-  warning provenance, close fragment delimiters, deduplicate bounded hidden
-  material/destination work and remove stale descendant updates. A real py-spy
-  trace found quadratic URI-prefix scanning; the bounded large-field regression
-  now completes in seconds. Inverse probes also reproduce and fix encoded
-  userinfo delimiter protection on internal hosts, without blocking URL paths.
-- The focused correction scope passes 444 tests and eight subtests; new prose
-  preparation measures 95% branch-aware coverage and pure warning projection
-  100%. Extended structural/URI/representation/network properties pass 170 tests
-  at up to 1000 examples with independent seed 146063. Ruff and mypy pass.
-  Further broad focused/installed checks and final gate remain pending.
-- The wider scope has 1795 passes and ten stale proof-test oracles that depended
-  on the removed prose HTML ban. All 20 real-worker proof cases now pass with
-  sensitive contact inverses, benign markup admission and exact LF/source facts.
-  A fresh projection measurement passes 110 checks and its independent 90%
-  floor; other affected owners pass their independent floors. Main remains the
-  original 881fd1d after a fresh fetch. OCR's installed hash matches, and native
-  account model discovery succeeds. Self-review will select GPT-6 Astra/high and
-  explicit changed boundary tests through a private operator Rules overlay.
-- Security scans: **1/1 completed**. Real own-tool reviews: **1/2**. The one final
-  full quality gate, accepted model diagram/findings, final feature delivery,
-  stable release and external closure have not been claimed.
-- First real GPT-6 Astra/high review completed all 83 selected files with no
-  native warnings, failed tools or failed auxiliary reads. One admitted diagram
-  used cross-group diffs/context before submission. All seven raw findings were
-  inspected, including two protected omissions. Reproductions cover unquoted
-  operands, parser-discarded carriers, composed decoding/NFKC, deleted prepared
-  ancestors, raw warning bounds and qualification call-ID ambiguity. Corrections
-  pass 189 focused checks and 40 explicitly selected 1000-example properties;
-  93 affected checks also pass on Python 3.15. Unpublished DLP commits are
-  consolidated to remove private validation outcomes from their history while
-  preserving the published plan commit.
-  A second own-tool run will cover the corrected, privacy-clean immutable range.
-- The post-correction public replay preserved all 708 existing benign admissions
-  and all annotated protection. Its new queue exposed an overbroad separator
-  rule for reference operands and unstable re-parsing of literal Markdown
-  delimiters. Both causes are corrected structurally, with closed-data scalar
-  and inert/idempotent delimiter regressions. The focused scope passes 321 tests
-  and eight subtests; final matched replay and final-range model review remain.
-- The next exact queue exposed non-local scalar attribution and loss of proved
-  absence during display transforms. Bounded record/ordinal roles and semantic
-  refinement now preserve the original completion proof and enclosing data
-  grammar; unknown computations remain blocked. A focused 293-test scope passes.
-  The next full paired replay is pending; prior intermediate runs are not final
-  acceptance evidence.
-- All six exact public regressions now admit through the real scanner/projection
-  owners. Final focused validation passes 295 checks and 41 properties at 1000
-  examples (seed 146070). Branch coverage is 98.96% for literal context, 98.13%
-  for credential semantics and 91.26% for prose projection. Formatting, lint and
-  types pass. Freeze this runtime for the second model review and final matched
-  replay; investigate or repeat resource measurements outside the agreed margin.
+- Draft PR #299 contains only the signed plan. The signed dependency refresh,
+  OCR qualification and consolidated DLP changes remain local.
+- All 33 approved dependency updates are frozen and audited. Official Linux
+  amd64 and Darwin arm64 OCR 1.13.6 contracts agree, including C# Rules/context,
+  Starlark and explicit streaming controls. Local OCR is verified 1.13.6.
+  Final hosted-tree qualification remains pending.
+- All 1611 original public observations have exact authenticated annotations:
+  583 confirmed benign, 891 expected protection and 137 conservative ambiguities
+  with concrete missing proof. Original immutable correspondence is preserved.
+  Final public replay and all 708 actual production handoffs pass: 26 new
+  conservative boundaries have exact annotations; no untriaged, unexplained
+  admission, changed reason or lost annotated protection remains.
+- Authorized private validation includes an actual C# source population. All
+  inputs, measurements and outcomes stay private; no source-language waiver is
+  introduced. Final corrected paired replays and transition review remain.
+- Aggregate self-review and the single Security diff scan are complete. Its
+  composition, amplification and prepared-path findings are fixed; the threat
+  model remains applicable. Security scans: **1/1 completed**, no repeat planned.
+- Both GPT-6 Astra/high own-tool reviews completed all 83 selected files without
+  budget warnings and produced admitted diagrams. All raw findings, including
+  DLP omissions, were inspected. Four auxiliary read failures in the second run
+  were followed by successful reads of the actual owners and complete email
+  module. No material context gap remains. Model reviews: **2/2 completed**.
+- Second-review corrections require complete closed-data proof for quoted
+  absent credential carriers, reject decoded leading-whitespace URL authorities,
+  bound complete prose slots before recursive DLP/sanitization, and strengthen
+  the malformed-markup preservation oracle. Unknown calls/comparisons remain
+  conservative across languages. The focused scope passes 304 checks, including
+  the 1000-example property profile. Lint and types pass; branch-aware coverage
+  is 96% for literal context, 98% for credentials and above 90% for projection.
+- Current checkout audit, final paired/resource acceptance, installed/native
+  handoffs, final full quality gate, feature delivery, release and external
+  reconciliation remain unfinished. No publication or closure is claimed.
 
 ### Risks And Recovery
 
@@ -378,16 +329,14 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 ### Resume Point
 
-Complete post-correction paired corpus/protection/resource acceptance, then the
-second own-tool review of the privacy-clean final range with ChatGPT high,
-aggregate budget zero, private debug and an actual admitted diagram. Inspect
-findings, omissions and auxiliary reads; fix any findings. Finish the current
-checkout scan, installed/native handoffs and the one final full quality gate.
-Finish WQ-06 through WQ-08, including hosted exact-tag qualification, final feature
-push/CI/merge, signed Release v0.14.6 PR with plan archival/reset, external release
-reconciliation and task-owned cleanup. Preserve the audit key/source-free proof;
-never copy private identities or source into public artifacts. Do not repeat the
-completed aggregate Security scan. No landing-chat handoff or closure PR.
+Second-review corrections are separately committed, preserving the accepted
+diagram's immutable source head. Complete final paired corpus/protection/resource replay,
+exact transition annotations, current-checkout audit and the one final full
+quality gate. Finish WQ-06 through WQ-08: hosted exact-tag qualification, final
+feature push/CI/merge, signed Release v0.14.6 PR with complete plan archival/reset,
+external publication reconciliation and task-owned cleanup. Preserve the audit
+key and necessary source-free evidence. Do not repeat the completed Security
+scan or either successful model review. No landing-chat handoff or closure PR.
 
 ### Plan Fidelity Check
 
@@ -426,16 +375,12 @@ private evidence. No additional repository closure PR follows publication.
 
 ### Handoff Notes
 
-The approved full scope is materialized, signed and pushed in draft PR #299.
-The signed dependency, controlled qualification and first DLP slices are local.
-All original public observations have exact annotations. The single aggregate
-Security scan is complete; its corrections are ready for a separate local
-commit after focused tests and self-review. Actual model acceptance, final
-paired replay, final quality gate and release delivery remain unfinished. Use
-the current queue and relevant private evidence rather than reconstructing
-conversation history. Earlier release acceptance is historical, not this
-cycle's. Security 1/1 completed; successful model reviews 1/2, corrections and
-privacy-clean final-range review pending.
+The full approved scope is in this plan and draft PR #299. Dependencies, OCR
+qualification and consolidated DLP implementation are signed locally. Security
+1/1 and model reviews 2/2 are complete; their findings are inspected. The latest
+focused corrections are separately signed locally. Use the current queue/resume point
+and private authenticated audit state. Final acceptance, feature/release delivery
+and independent external verification remain required.
 
 ## Recently Completed
 

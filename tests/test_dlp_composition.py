@@ -9,7 +9,7 @@ from ocr_toolkit import review_runner
 from ocr_toolkit.context.contracts import TextBudgets
 from ocr_toolkit.context.dlp import check_text
 from ocr_toolkit.context.dlp.markup import interpret_markdown
-from ocr_toolkit.ocr_result import TOOLKIT_RESULT_KEY, load_ocr_result
+from ocr_toolkit.ocr_result import TOOLKIT_RESULT_KEY, OcrResultMalformed, load_ocr_result
 from ocr_toolkit.posting.formatting import format_fallback_comment_chunks, format_inline_comment
 from ocr_toolkit.posting.suggestions import SuggestionDecision, SuggestionState
 from ocr_toolkit.providers.local import local_report_parts
@@ -280,6 +280,11 @@ def test_warning_path_provenance_survives_preparation():
         '["token=${SOURCE}", 1234][0] + str(1234)',
         '0 # compose("token=${SOURCE}", "literal-material")',
         '0 # compose("token=${SOURCE}", 1234)',
+        'String.prototype.concat.call("token=${SOURCE}", [`synthetic-material`])',
+        'compose("token=${SOURCE}", @"synthetic-material")',
+        'compose("token=${SOURCE}", synthetic-material)',
+        'compose("token=${SOURCE}")',
+        'assert record.items[0].value == "component/token=***"',
     ),
 )
 def test_unproved_unquoted_or_discarded_operands_cannot_complete_a_carrier(value):
@@ -360,8 +365,8 @@ def test_preparation_never_recreates_removed_destinations(payload):
         'contains("api_key=***", result.value())',
     ),
 )
-def test_unquoted_references_do_not_invent_literal_credential_material(value):
-    assert check_text(value, budgets=BUDGETS, publication=True).admitted
+def test_unknown_call_references_cannot_prove_absence_of_credential_material(value):
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
 def test_literal_markdown_delimiters_do_not_create_new_links_during_projection():
@@ -384,12 +389,11 @@ def test_unquoted_scalar_material_is_not_a_variable_reference(scalar):
 @pytest.mark.parametrize(
     "value",
     (
-        'assert record.items[0].value == "component/token=***"',
         'enabled: true\ncommand: "token=${SOURCE}"',
         'count: 12\ncommand: "token=${SOURCE}"',
     ),
 )
-def test_unrelated_records_and_closed_reference_ordinals_do_not_invent_material(value):
+def test_complete_named_data_fields_preserve_independent_absent_values(value):
     assert check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
@@ -417,3 +421,63 @@ def test_refining_absent_fields_preserves_neighboring_closed_data_grammar():
 def test_complete_absent_carrier_proof_survives_lossy_display_views(empty):
     value = "count: 12\ncommand: " + repr('token="' + empty + '"')
     assert check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize("slot", ("message", "content", "warning"))
+def test_receipt_bounds_complete_slots_before_leaf_admission(tmp_path, monkeypatch, slot):
+    from ocr_toolkit.context import dlp
+
+    oversized = ["safe"] * 200_000
+    payload = {"status": "success", "comments": [], TOOLKIT_RESULT_KEY: _receipt_v13()}
+    if slot == "content":
+        payload["comments"] = [{"path": "sample", "line": 1, "content": oversized}]
+    elif slot == "warning":
+        payload["warnings"] = [oversized]
+    else:
+        payload["message"] = oversized
+    calls = []
+    original = dlp.check_text
+
+    def observed(text, **kwargs):
+        calls.append(text)
+        return original(text, **kwargs)
+
+    monkeypatch.setattr(dlp, "check_text", observed)
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps(payload))
+    with pytest.raises(OcrResultMalformed, match="bounds"):
+        load_ocr_result(result)
+    assert not calls
+    result.write_text(json.dumps({"message": "safe", TOOLKIT_RESULT_KEY: _receipt_v13()}))
+    assert load_ocr_result(result)["message"] == "safe"
+    assert calls
+
+
+@pytest.mark.parametrize("slot", ("message", "content", "warning"))
+def test_producer_omits_oversize_slots_before_recursive_dlp(monkeypatch, slot):
+    oversized = ["safe"] * 200_000
+    safe = {"path": "sample", "line": 2, "content": "Keep this finding."}
+    payload = {"status": "success", "comments": [safe]}
+    if slot == "content":
+        payload["comments"] = [{"path": "sample", "line": 1, "content": oversized}, safe]
+    elif slot == "warning":
+        payload["warnings"] = [oversized, "Keep this warning."]
+    else:
+        payload["message"] = oversized
+    calls = []
+    original = review_runner._dlp_reasons
+
+    def observed(value, **kwargs):
+        assert value is not oversized
+        calls.append(None)
+        return original(value, **kwargs)
+
+    monkeypatch.setattr(review_runner, "_dlp_reasons", observed)
+    projected, publication, filtered = review_runner._publication_projection(
+        payload, forbidden=(), allowed_tools=frozenset()
+    )
+    assert filtered and publication["reason_counts"]["limit"] > 0
+    assert projected["comments"] == [safe]
+    if slot == "warning":
+        assert projected["warnings"] == ["Keep this warning."]
+    assert 0 < len(calls) < 20

@@ -63,12 +63,15 @@ def validate_destination(value: str) -> None:
             or any(c.isspace() and c != " " for c in candidate)
             or any(c in candidate for c in '\\<>"`')
             or candidate.startswith("//")
+            or candidate != candidate.lstrip()
         ):
             raise UnsafeDestination("unsafe URL characters")
         try:
             parsed = urlsplit(candidate)
             if parsed.scheme.lower() not in {"", "http", "https"}:
                 raise UnsafeDestination("unsafe URL scheme")
+            if parsed.netloc and not parsed.scheme:
+                raise UnsafeDestination("URL authority requires an allowed scheme")
             if parsed.username is not None or parsed.password is not None:
                 raise UnsafeDestination("URL user information")
             if parsed.scheme and (not parsed.hostname or not parsed.netloc):

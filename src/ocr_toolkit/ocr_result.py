@@ -336,7 +336,6 @@ def load_ocr_result(path: Path) -> Any:
     try:
         try:
             raw = _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
-            sanitized = sanitize_ocr_value(raw)
             metadata = raw.get(TOOLKIT_RESULT_KEY) if isinstance(raw, dict) else None
             if (
                 isinstance(metadata, dict)
@@ -369,6 +368,15 @@ def load_ocr_result(path: Path) -> Any:
                 enabled = not isinstance(dlp, dict) or dlp.get("enabled") is not False
                 if enabled:
                     prose_budgets = TextBudgets(2_000_000, 8_000_000, 100_000)
+                    # Bound complete consumer slots before leaf admission or
+                    # generic recursive sanitization traverses their contents.
+                    for _, value in prose_slots(raw):
+                        try:
+                            bounded_prose_text(value, prose_budgets)
+                        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+                            raise OcrResultMalformed(
+                                "OCR rendered prose exceeds its bounds"
+                            ) from exc
                     for prose_path, text in prose_values(raw, include_keys=True):
                         checked = check_text(
                             text,
@@ -402,7 +410,10 @@ def load_ocr_result(path: Path) -> Any:
                 # into a different branch condition. The publication owner
                 # revalidates the entire original diagram text and source proof,
                 # omitting the whole optional channel on admission failure.
+                sanitized = sanitize_ocr_value(raw)
                 sanitized[TOOLKIT_RESULT_KEY] = metadata
+            else:
+                sanitized = sanitize_ocr_value(raw)
             return sanitized
         except RecursionError as exc:
             raise OcrResultMalformed(str(exc)) from exc

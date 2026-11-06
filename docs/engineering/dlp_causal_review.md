@@ -2,10 +2,12 @@
 
 ## 0.14.6: safe presentation and exact material boundaries
 
-The authenticated public baseline contains 2192 rejected role observations over
-121583 units in 452 immutable files. The reviewed candidate retains 1490:
-708 former rejections are admitted, six conservative source-boundary rejections
-are added, and retained primary reasons do not change. These are observation
+The authenticated public corpus is the toolkit tree at immutable revision
+`72abb6039f82d0601d8207326c1ddff27caf7413`: 121583 units in 452 files.
+The published 0.14.5 baseline has 2192 rejected role observations. Final
+post-review replay retains 1510: 708 former rejections are admitted and 26
+conservative source-boundary rejections are added. No annotated protection is
+lost, and retained primary reasons do not change. These are observation
 counts, not a false-positive rate or a universal precision/recall claim.
 
 | Former primary detector | Admissions | Basis |
@@ -25,9 +27,10 @@ All 1611 originally unannotated observations have individual causal dispositions
 | Conservative ambiguity | 137 | 101 unqualified credential roles, 27 incomplete numeric roles, eight literal-delimiter roles and one incomplete destination fragment lack the specified proof |
 
 Every conservative entry retains its concrete missing evidence. Classification
-does not make that evidence available or suppress scanning. The six additional
-rejections concern neighboring literals in unqualified executable/source
-expressions: a separator alone cannot prove independent fields. A repository,
+does not make that evidence available or suppress scanning. The 26 additional
+rejections concern quoted absent/masked values inside unqualified calls and
+comparisons. They are not claims that 26 secrets were found: neither a separator
+nor a partial quote inventory proves independent complete data. A repository,
 test path, function name or language extension cannot waive that boundary.
 
 The old annotations included 117 expected-protection and eight conservative

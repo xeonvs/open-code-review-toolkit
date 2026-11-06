@@ -441,7 +441,9 @@ package level. They do not acquire sources, store snapshots or publish reports.
 with separate complete-query and diagnostic-replacement grammars;
 `common/value_boundaries.py` owns bounded lexical completion across whitespace,
 comments and container closers. It has no detector, parser or I/O dependency.
-the local `dlp_audit/` package owns acquisition, isolated execution and private
+`common/literal_context.py` supplies complete bounded closed-data proof, without
+executing source or inferring unknown language semantics. The local `dlp_audit/`
+package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result
 contract, not the detector. `dlp_audit/proof.py` supplies authenticated snapshot

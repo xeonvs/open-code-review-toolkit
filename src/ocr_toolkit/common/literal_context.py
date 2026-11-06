@@ -1,4 +1,4 @@
-"""Bounded literal-data proof, without executing or importing source code."""
+"""Bounded closed-data proof, without executing or qualifying source code."""
 
 from __future__ import annotations
 
@@ -11,16 +11,19 @@ _MAX_TOKENS = 32_768
 _MAX_DEPTH = 20
 _PUNCTUATION = re.compile(r"[^\w\s]|\d+", re.UNICODE)
 _DATA_SCALARS = frozenset({"true", "false", "null", "none"})
-_SCALAR = re.compile(r"(?<!\w)(?:\d|(?:" + "|".join(sorted(_DATA_SCALARS)) + r")\b)", re.IGNORECASE)
-_INDEX = re.compile(r"\[\s*[+-]?\d+\s*\]")
 _DATA_NODES = (
     ast.Expression,
+    ast.Module,
+    ast.Expr,
+    ast.Assign,
+    ast.AnnAssign,
     ast.Constant,
     ast.List,
     ast.Tuple,
     ast.Set,
     ast.Dict,
     ast.Load,
+    ast.Store,
     ast.UnaryOp,
     ast.UAdd,
     ast.USub,
@@ -28,12 +31,11 @@ _DATA_NODES = (
 
 
 class LiteralContext:
-    """Keep one local quote inventory and lazily prove a closed data container.
+    """Cache one bounded quote inventory and a complete data-grammar proof.
 
-    A comma in executable/unknown syntax does not establish independence of
-    neighboring literals. A closed literal-data expression does: calls,
-    subscripts, operators and interpolation cannot acquire that authority.
-    This is a data grammar, not a qualification of a source language.
+    Only literal values, containers and named literal fields qualify. Unknown
+    calls, references, operators or literal syntaxes never acquire authority
+    from the number of recognized strings. This is not a source-language proof.
     """
 
     def __init__(self, text: str) -> None:
@@ -41,9 +43,6 @@ class LiteralContext:
         self._quotes: dict[tuple[int, int], bool] | None = None
         self._data: bool | None = None
         self._valid = True
-        self._materials = 0
-        self._quote_records: dict[tuple[int, int], int] = {}
-        self._scalar_records: set[int] = set()
 
     def proves_carrier(self, start: int, end: int) -> bool:
         if self._quotes is None:
@@ -51,11 +50,6 @@ class LiteralContext:
         assert self._quotes is not None
         if not self._valid or (start, end) not in self._quotes:
             return False
-        if (
-            self._materials == int(self._quotes[start, end])
-            and self._quote_records[start, end] not in self._scalar_records
-        ):
-            return True
         if self._data is None:
             self._data = self._literal_data()
         return self._data
@@ -67,46 +61,9 @@ class LiteralContext:
             self._valid = False
             return
         cursor = 0
-        record = 0
-        depth = 0
-        pending_break = False
         while cursor < len(text):
             quote = text[cursor]
-            if pending_break and not quote.isspace():
-                if quote not in ",+-*/%|&^.":
-                    record += 1
-                pending_break = False
             if quote not in "\"'":
-                # A closed postfix ordinal selects a reference without
-                # resolving its value or contributing literal credential bits.
-                if (
-                    quote == "["
-                    and cursor
-                    and (text[cursor - 1].isalnum() or text[cursor - 1] in "_)]")
-                ):
-                    index = _INDEX.match(text, cursor)
-                    if index is not None:
-                        cursor = index.end()
-                        continue
-                if quote in "([{":
-                    depth += 1
-                elif quote in ")]}":
-                    depth = max(0, depth - 1)
-                if (quote.isdecimal() or quote in "tTfFnN") and (
-                    _SCALAR.match(text, cursor) is not None
-                ):
-                    self._scalar_records.add(record)
-                    if len(self._scalar_records) > _MAX_TOKENS:
-                        self._valid = False
-                        return
-                if quote == "\n" and depth == 0:
-                    previous = cursor - 1
-                    while previous >= 0 and text[previous] in " \t\r":
-                        previous -= 1
-                    if previous < 0 or text[previous] not in "\\,+-*/%|&^.":
-                        pending_break = True
-                elif quote == ";" and depth == 0:
-                    record += 1
                 cursor += 1
                 continue
             start = cursor
@@ -118,15 +75,11 @@ class LiteralContext:
                 return
             cursor += 1
             self._quotes[start, cursor] = text[start + 1 : cursor - 1] not in {"", "***"}
-            self._quote_records[start, cursor] = record
-            self._materials += self._quotes[start, cursor]
             if len(self._quotes) > _MAX_TOKENS:
                 self._valid = False
                 return
 
     def _literal_data(self) -> bool:
-        # Bound parser allocation before calling the stdlib parser, including
-        # punctuation inside interpolation-shaped strings that could expand ASTs.
         depth = 0
         quotes = iter(self._quotes or ())
         quoted = next(quotes, None)
@@ -137,9 +90,8 @@ class LiteralContext:
                 quoted = next(quotes, None)
             if quoted is not None and quoted[0] <= match.start() < quoted[1]:
                 continue
-            # Bound numeric conversion even when a host disables Python's
-            # process-wide decimal digit guard. Quoted data stays literal.
-            if len(match[0]) > 4096:
+            # No parser-discarded comments or unbounded numeric conversion.
+            if match[0] == "#" or len(match[0]) > 4096:
                 return False
             if match[0] in "([{":
                 depth += 1
@@ -147,30 +99,49 @@ class LiteralContext:
                     return False
             elif match[0] in ")]}":
                 depth -= 1
+                if depth < 0:
+                    return False
         try:
-            # A complete JSON value is also closed literal data. It cannot
-            # discard comments or contain calls/expressions. The same lexical
-            # allocation bounds above apply before either standard parser.
             json.loads(self.text)
             return True
         except (ValueError, RecursionError):
             pass
         try:
-            tree = ast.parse(self.text.strip(), mode="eval")
+            try:
+                tree = ast.parse(self.text.strip(), mode="eval")
+            except SyntaxError:
+                tree = ast.parse(self.text.strip(), mode="exec")
         except (SyntaxError, ValueError, RecursionError, UnicodeError):
             return False
+        targets: set[int] = set()
+        if isinstance(tree, ast.Module):
+            for statement in tree.body:
+                if isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(
+                        statement.targets[0], ast.Name
+                    ):
+                        return False
+                    targets.add(id(statement.targets[0]))
+                elif isinstance(statement, ast.AnnAssign):
+                    if statement.value is not None or not isinstance(statement.target, ast.Name):
+                        return False
+                    targets.add(id(statement.target))
+                elif not isinstance(statement, ast.Expr):
+                    return False
         strings = 0
         for count, node in enumerate(ast.walk(tree), 1):
             if count > _MAX_TOKENS:
                 return False
-            # Data scalars stay scalars under the independent case-folded
-            # material view. This permits no calls, operators or other names.
-            if isinstance(node, ast.Name) and node.id.casefold() in _DATA_SCALARS:
+            if isinstance(node, ast.Name):
+                if id(node) not in targets and node.id.casefold() not in _DATA_SCALARS:
+                    return False
                 continue
             if not isinstance(node, _DATA_NODES):
                 return False
+            if isinstance(node, ast.UnaryOp) and (
+                not isinstance(node.operand, ast.Constant)
+                or type(node.operand.value) not in {int, float, complex}
+            ):
+                return False
             strings += isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes))
-        # Each inventoried carrier must belong to the closed data expression.
-        # Comments are discarded by AST parsing; adjacent literals are merged.
-        # Neither can grant independence to an unrepresented quoted fragment.
         return strings == len(self._quotes or ())
