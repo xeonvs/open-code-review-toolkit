@@ -1,3 +1,44 @@
+## 0.14.6 - 2026-11-06
+
+### 🐛 Bug Fixes
+
+- Improve DLP admission and safe presentation without weakening contact or credential checks.
+
+  - Preserve safe Markdown links, render HTML and comments visibly as inert text, and replace images with ordinary links; hidden and decoded material is checked independently.
+  - Recognize repeated Markdown command spans by their original delimiter positions, while continuing to protect real email addresses inside code.
+  - Apply the same prepared prose to local and GitLab findings and revalidate it on receipt readback. Literal source and optional diagrams retain their separate contracts.
+  - Check complete structured finding text before presentation and keep warning provenance intact. Separately admitted findings cannot combine into remote images or leave code delimiters open across the report.
+  - Bound unique hidden reference material and validate each distinct destination once, preventing repeated references from multiplying work.
+  - Treat complete raw and encoded credential-reference carriers consistently, and reject absence claims when neighboring literals can participate in an unqualified computation.
+  - Enforce complete prose structure limits before recursive admission or sanitization, and reject encoded leading-whitespace URL authorities.
+
+  ([#297](https://github.com/xeonvs/open-code-review-toolkit/issues/297))
+- Preserve an explicit boolean `stream: false` when the qualified OCR API clients
+  send non-streaming requests to OpenAI Chat Completions, Responses or Anthropic
+  gateways. Native provider-owned mandatory streaming remains unchanged. ([#298](https://github.com/xeonvs/open-code-review-toolkit/issues/298))
+
+### 🛠 Maintenance
+
+- Refresh compatible runtime and development dependencies, including Hypothesis
+  6.170.14, Pydantic 2.14.3, AnyIO 4.16.0, Starlette 1.10.0, coverage 7.17.2 and
+  Ruff 0.17.4. Use uv 0.13.7 consistently for locked CI installation and dependency
+  audits, and update the SHA-pinned CodeQL Action to 4.39.3. Preserve the supported
+  Python range and hash-locked binary-only runtime installation. ([#296](https://github.com/xeonvs/open-code-review-toolkit/issues/296))
+- Target checksum-verified Open Code Review 1.13.6 after qualifying 1.13.6. ([#298](https://github.com/xeonvs/open-code-review-toolkit/issues/298))
+
+### 🧩 Rules
+
+- Extend the repository's self-review Rules to shared common helpers, preserving native system rules and explicit operator selection of relevant tests. ([#297](https://github.com/xeonvs/open-code-review-toolkit/issues/297))
+- Apply the newly qualified built-in C# review rules to `.cs` files, including
+  nullability, resource ownership, async and cancellation checks informed by the
+  project context. Qualify Starlark rules and selection for `.bzl`, `.bazel`, `.star`,
+  `BUILD` and `WORKSPACE`, including nested paths. ([#298](https://github.com/xeonvs/open-code-review-toolkit/issues/298))
+
+### Security
+
+- Protect credential-bearing URI userinfo with percent-encoded delimiters, including internal hostnames, and avoid quadratic scheme-prefix searches on long unrelated text. Preserve PII checks across composed URL decoding and Unicode normalization, and reject computed credential carriers whose neighboring operands lack closed-data proof. ([#297](https://github.com/xeonvs/open-code-review-toolkit/issues/297))
+
+
 ## 0.14.5 - 2026-11-04
 
 ### 🐛 Bug Fixes
