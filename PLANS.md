@@ -166,7 +166,8 @@ Workflow audit found no instruction-contract errors. Its archive orphan warning
 points at an existing historical navigation index; inspect the declared custom
 archive graph before deciding that any repair is needed. Lexical prompt warnings
 are not validated security findings. Earlier acceptance counters do not carry
-into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
+into this cycle. Its allowance is one aggregate Security scan and at most two
+actual own-tool reviews; current consumption is recorded below.
 
 ### Current Work Queue
 
@@ -177,8 +178,8 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
 | WQ-04 | REQ-004, REQ-005, REQ-007 | Consolidated slice and separate second-review corrections signed locally; 304 focused checks including 1000-example properties, independent coverage floors and semantic review pass | done |
 | WQ-05 | REQ-005, REQ-006, REQ-007 | Original public correspondence, all 1611 exact annotations, final matched production replay and resource investigation complete; authorized private evidence remains private | done |
-| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Local acceptance complete: corrected findings, final quality 4866 tests/357 subtests and all floors, 598 Python 3.15 checks; hosted final-tree qualification and CI artifact owner remain | in_progress |
-| WQ-07 | REQ-003, REQ-009 | Ready for final feature push with exact admitted diagram; protected CI, merge, development publication and #296 reconciliation remain | in_progress |
+| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Local acceptance complete: corrected findings, final quality 4866 tests/357 subtests and all floors, 598 Python 3.15 checks; hosted OCR qualification passes on 8beda2e; final protected CI/artifact verification remains | in_progress |
+| WQ-07 | REQ-003, REQ-009 | Feature implementation and exact diagram pushed to PR #299; hosted OCR passes; a CodeQL test-oracle false positive is corrected, final CI/merge/publication and #296 reconciliation remain | in_progress |
 | WQ-08 | REQ-010 | Signed Release v0.14.6 PR, checked plan archive/reset, stable publication, external readback and cleanup | pending |
 
 ### Locked Decisions
@@ -320,8 +321,16 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
   A separate current-source Python 3.15 run passes 598 affected checks. Earlier
   clean wheel/sdist installation and MCP/local/diagram smoke remain applicable;
   final protected Build artifacts owns the current distributions.
-- The pre-push frozen dependency audit is clean. Feature delivery, hosted
-  qualification, release and independent external reconciliation remain pending.
+- The pre-push frozen dependency audit and complete public tree/history scans
+  pass. PR #299 is ready and includes the exact accepted diagram. Hosted run
+  42159743276 passes the final-runtime OCR contract; its human disposition is
+  recorded in #298. Requalification's self-comparison is not promotion authority.
+- CodeQL alert #22 is statically not actionable: a fixed test fixture's URL
+  substring assertion is neither shipped nor an authorization control. Reported
+  merge-ref and local blobs agree. The test now checks full text preservation
+  and exact parsed destination equality; 78 focused checks pass. No runtime,
+  query suppression or scan policy changes. Final protected CI remains required.
+- Feature merge/publication, stable delivery and external reconciliation remain pending.
   Security/model reviews and full runtime checks are not repeated for docs.
 
 ### Risks And Recovery
@@ -346,8 +355,8 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 Local implementation, corrected review findings, paired replay, annotations,
 resource investigation, checkout audit and final quality gate are complete.
-Finish pre-push privacy/history gates, push the ready feature PR with its exact
-accepted diagram, run hosted exact-tag qualification, await protected CI, merge
+The feature PR and hosted qualification are verified. Push the stronger CodeQL
+test oracle after focused/staged checks, await final protected CI, merge
 and verify development TestPyPI publication. Finish WQ-07/WQ-08, including #296,
 the signed Release v0.14.6 PR with full plan archival/reset, external publication
 reconciliation and task-owned cleanup. Preserve the audit key/source-free proof.

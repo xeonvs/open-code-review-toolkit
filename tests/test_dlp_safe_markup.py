@@ -101,6 +101,10 @@ def test_projection_expansion_has_an_independent_budget():
 
 
 def test_finalization_prepares_prose_without_filtering_or_mutating_input():
+    from html import unescape
+
+    from ocr_toolkit.context.dlp.markup import interpret_markdown
+
     content = "Read [guide](https://example.invalid). <!-- marker -->"
     payload = {"status": "success", "comments": [{"path": "sample", "line": 1, "content": content}]}
     projected, state, filtered = review_runner._publication_projection(
@@ -108,8 +112,10 @@ def test_finalization_prepares_prose_without_filtering_or_mutating_input():
     )
     assert not filtered and state["state"] == "passed"
     assert payload["comments"][0]["content"] == content
-    assert "<!--" not in projected["comments"][0]["content"]
-    assert "https://example.invalid" in projected["comments"][0]["content"]
+    prepared = projected["comments"][0]["content"]
+    assert "<!--" not in prepared
+    assert unescape(prepared) == content
+    assert interpret_markdown(prepared).links == ("https://example.invalid",)
     again, state, filtered = review_runner._publication_projection(
         projected, forbidden=(), allowed_tools=frozenset()
     )
