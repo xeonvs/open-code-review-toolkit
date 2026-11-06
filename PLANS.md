@@ -176,7 +176,7 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | WQ-02 | REQ-003 | Exact 33-update lock and uv/verified CodeQL pins; 47 focused tests, formatter/lint/types and updated dependency audit pass; semantic diff review complete | done |
 | WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
 | WQ-04 | REQ-004, REQ-005, REQ-007 | Consolidated slice and separate second-review corrections signed locally; 304 focused checks including 1000-example properties, independent coverage floors and semantic review pass | done |
-| WQ-05 | REQ-005, REQ-006, REQ-007 | Original public bytes/baseline and all 1611 exact annotations verified; private pairs/resources profiled; post-review acceptance replays and transition checks remain | in_progress |
+| WQ-05 | REQ-005, REQ-006, REQ-007 | Original public correspondence, all 1611 exact annotations, final matched production replay and resource investigation complete; authorized private evidence remains private | done |
 | WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Aggregate review, one Security scan and two model reviews with admitted diagrams complete; final corrections, installed/native and full gate remain | in_progress |
 | WQ-07 | REQ-003, REQ-009 | Final feature push with exact admitted diagram, protected CI, merge, development publication and #296 reconciliation | pending |
 | WQ-08 | REQ-010 | Signed Release v0.14.6 PR, checked plan archive/reset, stable publication, external readback and cleanup | pending |
@@ -289,7 +289,7 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
   admission, changed reason or lost annotated protection remains.
 - Authorized private validation includes an actual C# source population. All
   inputs, measurements and outcomes stay private; no source-language waiver is
-  introduced. Final corrected paired replays and transition review remain.
+  introduced. Their final replay, transition and resource-review evidence is retained privately.
 - Aggregate self-review and the single Security diff scan are complete. Its
   composition, amplification and prepared-path findings are fixed; the threat
   model remains applicable. Security scans: **1/1 completed**, no repeat planned.
@@ -305,9 +305,22 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
   conservative across languages. The focused scope passes 304 checks, including
   the 1000-example property profile. Lint and types pass; branch-aware coverage
   is 96% for literal context, 98% for credentials and above 90% for projection.
-- Current checkout audit, final paired/resource acceptance, installed/native
-  handoffs, final full quality gate, feature delivery, release and external
-  reconciliation remain unfinished. No publication or closure is claimed.
+- Current tracked checkout audit completed: 551 files, 138983 units, no acquisition
+  errors or omissions. It is a distinct diagnostic population, not a precision
+  measurement or a replacement for the individually reviewed original corpus.
+- Repeated public measurement is 136.10 s versus 97.67 s for published 0.14.5;
+  RSS is 185286656 versus 176832512 bytes. The >15% time threshold triggered
+  repeat measurement and actual worker profiling. Credential interpretation,
+  normalization and bounded Markdown work dominate sampled cost; additional
+  complete-representation/presentation checks are retained. No speedup is claimed.
+- The full final-runtime suite passed 4890 tests and 357 subtests, with ten stale
+  test expectations: former blanket-link rejection, unknown-call carrier proof
+  and the expanded coverage inventory. These are corrected; 368 focused checks
+  pass and value-boundary coverage is now 100%. Runtime is unchanged. Native
+  controlled checks passed in that full attempt. A passing final quality run
+  remains required; unchanged native handoffs need not be executed again.
+- Feature delivery, release and external reconciliation remain unfinished.
+  Security/model reviews are not repeated for these test-only corrections.
 
 ### Risks And Recovery
 
@@ -330,9 +343,9 @@ copies, build/debug environments and policy-selected Actions data, never origina
 ### Resume Point
 
 Second-review corrections are separately committed, preserving the accepted
-diagram's immutable source head. Complete final paired corpus/protection/resource replay,
-exact transition annotations, current-checkout audit and the one final full
-quality gate. Finish WQ-06 through WQ-08: hosted exact-tag qualification, final
+diagram's immutable source head. Final paired replay, annotations, resource
+investigation and current-checkout audit are complete. Finish the passing final
+quality gate after test-oracle corrections; reuse unchanged native evidence. Finish WQ-06 through WQ-08: hosted exact-tag qualification, final
 feature push/CI/merge, signed Release v0.14.6 PR with complete plan archival/reset,
 external publication reconciliation and task-owned cleanup. Preserve the audit
 key and necessary source-free evidence. Do not repeat the completed Security

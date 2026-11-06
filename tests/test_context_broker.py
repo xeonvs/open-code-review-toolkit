@@ -145,8 +145,12 @@ def test_common_discussion_publish_text_gets_publication_specific_dlp() -> None:
         (
             Discussion(body="Safe publication text."),
             Discussion(
-                body="See [private destination](https://example.invalid/private).",
+                body="See [guide](https://example.invalid/guide).",
                 digest="c" * 64,
+            ),
+            Discussion(
+                body="See [guide](https://example.invalid/person%40example.invalid).",
+                digest="d" * 64,
             ),
         ),
         policy=policy,
@@ -154,8 +158,11 @@ def test_common_discussion_publish_text_gets_publication_specific_dlp() -> None:
         expiry=200,
     )
 
-    assert len(records) == 1
+    assert len(records) == 2
     assert records[0].projections["publish"]["text"] == "Safe publication text."
+    assert records[1].projections["publish"]["text"] == (
+        "See [guide](https://example.invalid/guide)."
+    )
 
 
 def test_common_remediation_projection_is_fixed_model_only_and_rechecks_every_text() -> None:

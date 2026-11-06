@@ -14,12 +14,12 @@ BUDGETS = TextBudgets(10_000, 40_000, 100)
 @pytest.mark.parametrize(
     "value",
     (
-        "assert obj.values == [\"login_password: ''\"]",
+        "values = [\"login_password: ''\"]",
         'items = {"password": ""}',
         '[{"Authorization": ""}]',
         '[{"Authorization": "***"}]',
-        'assert obj.values == ["token=***"]',
-        'self.assertIn("token=***", text)',
+        'values = ["token=***"]',
+        '("token=***",)',
     ),
 )
 def test_empty_or_masked_values_do_not_become_material_in_surrounding_syntax(value):
@@ -135,9 +135,9 @@ def test_contact_decoration_cannot_manufacture_a_bare_safe_identifier(value):
 @pytest.mark.parametrize(
     "value",
     (
-        'assert obj.values == ["token=***"]',
-        'self.assertIn("token=***", text)',
-        "assert obj.values == [\"login_password: ''\"]",
+        'values = ["token=***"]',
+        '("token=***",)',
+        "values = [\"login_password: ''\"]",
     ),
 )
 def test_empty_masks_survive_every_material_representation(value):
@@ -286,13 +286,27 @@ def test_compatibility_normalization_cannot_remove_original_credential_boundarie
     (
         'token="",',
         'OCR_LLM_TOKEN="",',
-        'assert x == "scheme:echo?token=***"',
+        'value = "scheme:echo?token=***"',
         "https://example.invalid?token=***&next=1",
     ),
 )
 def test_query_material_classifier_keeps_complete_masks_and_empty_values(value):
     assert not has_sensitive_material(value)
     assert check_text(value, budgets=BUDGETS, publication=True).admitted
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "assert obj.values == [\"login_password: ''\"]",
+        'assert obj.values == ["token=***"]',
+        'self.assertIn("token=***", text)',
+        'assert x == "scheme:echo?token=***"',
+    ),
+)
+def test_unknown_executable_context_cannot_qualify_a_masked_literal(value):
+    assert has_sensitive_material(value)
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
 @pytest.mark.parametrize(
