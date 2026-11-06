@@ -4,6 +4,18 @@ incident_schema_version: 1
 
 This is a diagnostic catalogue of recurring incident classes. Current requirements live with each linked canonical owner; routes make them reachable and guards identify the control. Entry fields and lifecycle follow the installed `engineering-workflow` instruction lifecycle.
 
+### INC-016 Broad acceptance preceded stable contract qualification
+
+- Symptom: Shared semantics changed repeatedly between full corpus/model runs; old consumers and documentation contracts failed late despite green focused producer tests.
+- Cause: unguarded_rule
+- Invariant: development.boundary-validation
+- Owner: docs/development.md#local-validation
+- Route: development-validation
+- Guard: manual_review:map changed producer-consumer handoffs and failure cleanup
+- Evidence: [0.14.6 implementation](../engineering/execution_history/plans/2026-11-06-toolkit-0-14-6-ocr-1-13-6-dlp-precision-and-efficient-delivery.md); `tests/test_quality_script.py` now observes executed local/CI coverage and fail-stop behavior, while `tests/test_operations_docs.py` validates archive identity independently of index wording. Existing general efficiency guidance was available; the missing control was a concrete stage transition, not another copy of that guidance.
+- Status: guarded
+- Retirement: Retire when the stage transition and behavioral guards remain established and this historical class no longer improves diagnosis.
+
 ### INC-001 Delivery closed at readiness
 
 - Symptom: A feature merge or development package was treated as delivery while stable users still received the old contract.

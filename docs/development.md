@@ -185,10 +185,8 @@ Reuse evidence only while its relevant inputs remain unchanged. Repeat a success
 
 Inventory open dependency PRs, consumed upstream changes and compatible updates
 at the start of a release; freeze that composition before expensive reviews.
-Apply focused checks to logical commits, then one full quality gate to the final
-runtime handoff. A normal acceptance cycle uses the aggregate Security scan
-followed by one own-tool review described below; another model review requires
-incomplete acceptance or a concrete uncovered boundary. Use native CI watch
+Use the [qualification stages](#qualification-stages) to select acceptance work.
+Use native CI watch
 commands, retain their completion/exit evidence and avoid model turns for
 unchanged statuses. Recover from the active plan and necessary private artifacts,
 not duplicate command transcripts or a new orchestration layer.
@@ -215,6 +213,42 @@ Use periodic polling only when no completion notification or persistent waiter e
 
 <!-- ew:invariant id="development.boundary-validation" -->
 ## Local validation
+
+### Qualification stages
+
+Before implementation, define the changed contract and its uncertainty boundary:
+what establishes a valid result, what remains unknown, and how invalid or partial
+input degrades. Map the changed producer, transformations/persisted handoffs and
+consumers, including older callers of a shared helper. Name the focused tests
+that exercise each changed edge and its failure behavior. Keep this small map in
+the active plan or existing tests; no separate tracking file is needed.
+
+Before a full corpus replay or model-backed acceptance, qualify that contract
+with a compact set of structurally different cases, inverse sensitive-material
+controls where relevant, and the real producer-consumer handoff. Include old
+regressions when changing shared semantics. For unknown syntax, test the unknown
+result rather than assuming another language's grammar applies. A broad run is
+appropriate earlier only when discovery or measurement is itself needed to choose
+the contract; state that question and retain the resulting baseline for reuse.
+
+If the compact qualification fails, inspect the failure class and revise the
+contract before another full replay. A new defect expands the compact matrix
+and affected consumer tests first. Record only the changed decision, affected
+evidence and next safe action in the existing plan. Stop equivalent iterations
+as required by the [evidence-driven completion invariant](engineering/project_principles.md#evidence-driven-completion);
+do not respond by adding more examples of the same spelling or repeating an
+unchanged successful check.
+
+Once the contract and consumer checks pass, run the required population/resource
+checks and the applicable aggregate Security and own-tool acceptance below. Run
+one full quality gate on the final runtime handoff. A subsequent change
+invalidates evidence only for its affected inputs; a concrete uncovered boundary
+or incomplete result justifies a repeated expensive check. Document-only and
+internal-test changes use the scoped validation rule above rather than inheriting
+runtime release acceptance. These transitions require evidence, not an extra
+status-maintenance loop or a fixed command/time budget.
+
+### Property and corpus checks
 
 Bounded property tests live in `tests/fuzz/`. The default `ocr-ci` Hypothesis
 profile runs 100 reproducible examples per property with no persistent database;
@@ -388,16 +422,10 @@ The maintained [test evidence matrix](engineering/test_evidence_matrix.md) recor
 
 Treat one confirmed boundary or parser defect as a risk class: inspect sibling implementations, make negative tests reach the intended rejection or degradation branch, and assert that contract rather than an unrelated earlier failure. Before implementing a new parser or trust boundary, record its grammar, normalization, degradation, budget units, inherited-process state, and adversarial fixtures in the active plan or focused tests.
 
-For a change crossing more than one execution owner, map the changed producer,
-each transformation or persisted handoff, and the final consumer before the
-first complete quality gate. Name the evidence carried across each edge and
-what happens after a partial, filtered, malformed, or failed result. Exercise
-the changed edge through its real owner with a mixed success/failure fixture;
-also check cleanup after external work, hostile wire types, and process-local
-inputs where they can change that edge. Review the observed consumer result and
-remaining private artifacts, not only each producer's unit result. Keep this
-small map in the active plan or focused test cases; do not create a standing
-checklist for unchanged branches.
+The qualification-stage handoff map also identifies cleanup after external
+work, hostile wire types and process-local inputs that can change an edge.
+Review the observed consumer result and remaining private artifacts, not only
+each producer's unit result.
 
 New runtime modules, classes, and functions need purpose-focused docstrings. Comments at non-obvious security, compatibility, ownership, and state-transition boundaries explain why the constraint exists rather than narrating the code. Do not add legacy namespace shims or historical integrations outside the public contract.
 

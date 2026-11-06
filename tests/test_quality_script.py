@@ -1,11 +1,14 @@
 """Contracts for the quiet quality-command and local secret-scan wrappers."""
 
 import os
+import shlex
 import shutil
 import subprocess
+from collections import Counter
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "quality.sh"
 PROJECT_ROOT = SCRIPT.parent.parent
@@ -22,10 +25,9 @@ def test_quality_script_uses_an_isolated_ignored_environment() -> None:
     assert 'uv venv --clear "$quality_environment"' in script
     assert "uv sync --locked --all-groups" in script
     assert "quality environment sync failed; last 80 lines follow" in script
-    assert script.count("uv run --no-sync") == 6
 
 
-def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
+def test_quality_script_enforces_combined_and_boundary_coverage(tmp_path: Path) -> None:
     """Use one branch-aware test run and one hosted coverage owner."""
 
     script = SCRIPT.read_text(encoding="utf-8")
@@ -40,16 +42,13 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
 
     assert script.count("pytest -q --cov=ocr_toolkit") == 1
     assert "--cov-fail-under=88" in script
-    assert script.count("coverage report --include=") == 8
     assert (
         "uv run --no-sync pytest --ignore=tests/test_installed_policy_e2e.py --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=88"
         in workflow
     )
     assert workflow.count("coverage: true") == 1
-    assert workflow.count("coverage: false") == 4
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && matrix.coverage }}" in workflow
     assert "if: ${{ needs.classify.outputs.docs_only != 'true' && !matrix.coverage }}" in workflow
-    assert workflow.count("uv run --no-sync pytest -q") == 2
     assert (
         "for audit_module in cli corpus scanner state limits worker_process report proof; do"
         in script
@@ -67,6 +66,61 @@ def test_quality_script_enforces_combined_and_boundary_coverage() -> None:
     ):
         assert f"for {modules}; do" in script
         assert f"for {modules}; do" in workflow
+
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    fake_uv = binary_dir / "uv"
+    fake_uv.write_text('#!/bin/sh\nprintf "%s\\n" "$*"\n', encoding="utf-8")
+    fake_uv.chmod(0o755)
+    environment = os.environ.copy()
+    environment["PATH"] = f"{binary_dir}:{environment['PATH']}"
+    environment["OCR_TOOLKIT_LOG_DIR"] = str(tmp_path / "logs")
+    environment["OCR_TOOLKIT_QUALITY_ENVIRONMENT"] = str(tmp_path / "venv")
+    subprocess.run(
+        [str(SCRIPT), "coverage"],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        check=True,
+        timeout=30,
+    )
+    local_commands = (tmp_path / "logs/coverage.log").read_text(encoding="utf-8")
+    steps = yaml.safe_load(workflow)["jobs"]["test-matrix"]["steps"]
+    coverage_steps = [s for s in steps if s.get("name") == "Test with boundary coverage gates"]
+    assert len(coverage_steps) == 1
+    hosted = subprocess.run(
+        ["sh", "-eu", "-c", coverage_steps[0]["run"]],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+
+    def coverage_policy(output: str, prefix: str) -> Counter[tuple[str, ...]]:
+        return Counter(
+            tuple(shlex.split(line.removeprefix(prefix)))
+            for line in output.splitlines()
+            if line.startswith(prefix + "coverage report ")
+        )
+
+    local_policy = coverage_policy(local_commands, "run --no-sync sh -c ")
+    hosted_policy = coverage_policy(hosted.stdout, "run --no-sync ")
+    assert local_policy and local_policy == hosted_policy
+    assert all(count == 1 for count in local_policy.values())
+    assert all("$" not in " ".join(command) for command in local_policy)
+    for command in coverage_commands:
+        assert tuple(shlex.split(command)) in local_policy
+    for group in ("audit_module", "source_module"):
+        members = script.split(f"for {group} in ", 1)[1].split("; do", 1)[0].split()
+        prefix = "dlp_audit/" if group == "audit_module" else ""
+        for module in members:
+            assert (
+                "coverage",
+                "report",
+                f"--include=src/ocr_toolkit/{prefix}{module}.py",
+                "--fail-under=90",
+            ) in local_policy
 
 
 def test_ci_quality_job_does_not_duplicate_the_package_gate() -> None:
@@ -125,14 +179,18 @@ def test_quality_script_truncates_multi_command_log_per_invocation(tmp_path: Pat
 
     output = log.read_text(encoding="utf-8")
     assert "stale invocation" not in output
-    assert output.count("fresh invocation: run --no-sync sh -c") == 43
+    commands = output.splitlines()
+    assert commands[0].startswith("fresh invocation: run --no-sync sh -c pytest -q")
+    assert any("coverage report --include=" in line for line in commands[1:])
+    assert all("coverage report --include=" in line for line in commands[1:])
 
 
 @pytest.mark.parametrize("failure_code", [2, 7, 130])
+@pytest.mark.parametrize("failure_stage", ["pytest -q", "coverage report"])
 def test_quality_script_preserves_failure_status_and_stops(
-    tmp_path: Path, failure_code: int
+    tmp_path: Path, failure_code: int, failure_stage: str
 ) -> None:
-    """A failed pytest preserves its status and prevents later coverage gates."""
+    """A failed test or coverage report stops the real wrapper with its status."""
 
     binary_dir = tmp_path / "bin"
     binary_dir.mkdir()
@@ -142,7 +200,7 @@ def test_quality_script_preserves_failure_status_and_stops(
         'if [ "$1" = sync ]; then exit 0; fi\n'
         'printf "invocation: %s\\n" "$*"\n'
         'case "$*" in\n'
-        f'  *"pytest -q"*) echo "synthetic pytest failure" >&2; exit {failure_code} ;;\n'
+        f'  *"{failure_stage}"*) echo "synthetic gate failure" >&2; exit {failure_code} ;;\n'
         "esac\n",
         encoding="utf-8",
     )
@@ -164,13 +222,19 @@ def test_quality_script_preserves_failure_status_and_stops(
     )
 
     assert completed.returncode == failure_code
-    assert "quality check failed: pytest -q" in completed.stderr
-    assert "synthetic pytest failure" in completed.stderr
+    assert f"quality check failed: {failure_stage}" in completed.stderr
+    assert "synthetic gate failure" in completed.stderr
     assert "passed" not in completed.stdout
     output = (log_dir / "coverage.log").read_text(encoding="utf-8")
-    assert "synthetic pytest failure" in output
-    assert output.count("invocation:") == 1
-    assert "coverage report" not in output
+    assert output.rstrip().endswith("synthetic gate failure")
+    invocations = [line for line in output.splitlines() if line.startswith("invocation:")]
+    if failure_stage == "pytest -q":
+        assert len(invocations) == 1
+        assert "coverage report" not in output
+    else:
+        assert len(invocations) == 2
+        assert "pytest -q" in invocations[0]
+        assert "coverage report" in invocations[-1]
 
 
 def test_gitleaks_wrapper_scans_the_complete_feature_history(tmp_path: Path) -> None:

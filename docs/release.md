@@ -64,6 +64,14 @@ Development builds never create tags or GitHub Releases and never publish to pro
 
 Prepare `release/vX.Y.Z` locally from synchronized `main`. Update `.release-version`, `.release-source-date-epoch`, package metadata, documentation, checksum-pinned examples and their `docs/configuration.md` default table, and the Towncrier changelog. Run `tests/test_environment_contract.py` with the focused release/documentation contracts before the release PR so the published example and documented pin agree. Reconcile the active plan and release history as described below. The pull request title must be exactly `Release vX.Y.Z`. Required CI, security, CodeQL, Dependency Review, and build checks must pass before squash merge. Because TestPyPI is public disclosure, the protected feature/release review includes the privacy and license gate before either publication path.
 
+The focused release set includes `tests/test_release_authorization.py`,
+`tests/test_release_receipt.py`, `tests/test_release_notes.py`,
+`tests/test_environment_contract.py` and `tests/test_operations_docs.py`.
+Run it after preparing the final markers, archive and indexes: those documents
+are inputs to the release contracts, not bookkeeping covered by an earlier run.
+Other changed release boundaries add their own tests; this set does not replace
+the final quality gate or protected CI.
+
 Squash-merging that exact repository-owned release PR is the only human publication gate. The **Release** workflow then:
 
 1. validates the branch, title, tracked metadata, reviewed head/base, exact required checks, squash-tree equivalence, merge parent, canonical version, and tracked build epoch;
@@ -99,7 +107,7 @@ Release CI owns independent SHA-256 comparison of TestPyPI, PyPI, the GitHub wor
 
 The immutable receipt carries the release PR, reviewed base/head/merge/tree, original workflow run and attempt, tracked issue set, distribution hashes, registry/provenance verification states, annotated-tag target, and supported-Python matrix. Independent external readback confirms facts that the receipt cannot assert about itself, especially Release asset equality and immutable state. Issue comments retain the receipt asset hash and are the durable post-merge closure surface.
 
-In the release PR, use the installed `engineering-workflow` plan lifecycle to archive the complete repository plan under `docs/engineering/execution_history/plans/` with external delivery pending. Classify unverified publication and readback as required post-close delivery outside the repository plan; do not mark those facts complete before the external receipt exists. Link the archived file from the stable-tag row in the [execution-history index](engineering/execution_history/README.md), and return `PLANS.md` to its template state. Before publication, label that row as a `stable-delivery handoff` and explicitly preserve the archived plan as a prepublication snapshot. The lifecycle transition updates the active-plan state and managed archive indexes atomically; review its result as ordinary release documentation. Earlier plans in `releases.md` remain historical and are not rewritten by the new lifecycle.
+In the release PR, use the installed `engineering-workflow` plan lifecycle to archive the complete repository plan under `docs/engineering/execution_history/plans/` with external delivery pending. Classify unverified publication and readback as required post-close delivery outside the repository plan; do not mark those facts complete before the external receipt exists. Link the archived file from the stable-tag row in the [execution-history index](engineering/execution_history/README.md), and return `PLANS.md` to its template state. Before publication, describe the repository handoff and explicitly preserve the archived plan as a prepublication snapshot. The archive's target release, classification, closed status and Post-Close Delivery section establish its lifecycle; free-form index wording is not a publication-state selector. The lifecycle transition updates the active-plan state and managed archive indexes atomically; review its result as ordinary release documentation. Earlier plans in `releases.md` remain historical and are not rewritten by the new lifecycle.
 
 After publication, independently verify the immutable release, workflow, tag, receipt, issue, milestone, branch and synchronized-main state. Keep those exact external facts in the immutable receipt and Actions-owned issue comments; the archived plan truthfully retains the pre-publication handoff as historical context. Do not revise older release sections opportunistically, publish another stable version, or mutate an existing release object. Use stable tags rather than calendar years as lookup keys.
 
