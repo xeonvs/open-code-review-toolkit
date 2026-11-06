@@ -119,5 +119,6 @@ def test_proven_code_cannot_mask_mixed_secret_or_unproven_prose() -> None:
             item, "src/example.txt", lambda _path: comment["existing_code"] + "\n"
         ),
     )
-    assert filtered and not projected["comments"]
-    assert publication["omitted"]["comments"] == 1
+    assert filtered and len(projected["comments"]) == 1
+    assert projected["comments"][0]["content"] == "Check List&lt;Entry&gt;."
+    assert publication["omitted"]["comments"] == 0

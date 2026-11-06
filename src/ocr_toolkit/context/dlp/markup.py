@@ -81,11 +81,44 @@ class _BlockState(BlockState):
         if parent is None:
             self.env["dlp_budget"] = _Budget()
 
+    def add_paragraph(self, text: str) -> None:
+        previous = self.last_token()
+        contiguous = (
+            previous is not None
+            and previous.get("dlp_start", -1) + len(previous.get("text", "")) == self.cursor
+        )
+        super().add_paragraph(text)
+        token = self.last_token()
+        if self.parent is None and self.src[self.cursor : self.cursor + len(text)] == text:
+            if previous is not token:
+                token["dlp_start"] = self.cursor
+            elif not contiguous:
+                token.pop("dlp_start", None)
+
+    def append_paragraph(self) -> int | None:
+        token = self.last_token()
+        contiguous = (
+            token is not None
+            and token.get("dlp_start", -1) + len(token.get("text", "")) == self.cursor
+        )
+        end = super().append_paragraph()
+        if token is not None and not contiguous:
+            token.pop("dlp_start", None)
+        return end
+
 
 class _InlineState(InlineState):
     def __init__(self, env: Any) -> None:
         super().__init__(env)
         self.tokens = _Tokens(self)
+
+    def copy(self) -> _InlineState:
+        # Native nested parsers can rewrite their source. Without an exact
+        # mapping they must not inherit their parent's delimiter authority.
+        state = super().copy()
+        assert isinstance(state, _InlineState)
+        state.env = {k: v for k, v in state.env.items() if k != "dlp_start"}
+        return state
 
     @cached_property
     def credential_masks(self) -> tuple[tuple[int, int], ...]:
@@ -96,6 +129,16 @@ class _InlineState(InlineState):
 
 class _BlockParser(BlockParser):
     state_cls = _BlockState
+
+    def parse_atx_heading(self, match: re.Match[str], state: BlockState) -> int:
+        end = super().parse_atx_heading(match, state)
+        token = state.last_token()
+        if state.parent is None and token is not None:
+            text = token["text"]
+            start = match.start("atx_2") + len(match["atx_2"]) - len(match["atx_2"].lstrip())
+            if state.src[start : start + len(text)] == text:
+                token["dlp_start"] = start
+        return end
 
 
 class _InlineParser(InlineParser):
@@ -142,8 +185,11 @@ class _InlineParser(InlineParser):
 
     def parse_codespan(self, match: re.Match[str], state: InlineState) -> int:
         end = super().parse_codespan(match, state)
-        if state.tokens and state.tokens[-1]["type"] == "codespan":
-            state.tokens[-1]["dlp_source"] = state.src[match.start() : end]
+        if state.tokens and state.tokens[-1]["type"] == "codespan" and "dlp_start" in state.env:
+            state.tokens[-1]["dlp_opening"] = (
+                state.env["dlp_start"] + match.start(),
+                len(match[0]),
+            )
         return end
 
 
@@ -156,7 +202,12 @@ class _Markdown(Markdown):
                 token["children"] = list(self._iter_render(token["children"], state))
             elif "text" in token:
                 env = dict(state.env, dlp_depth=token.pop("dlp_depth", 0) + 1)
-                token["children"] = self.inline(token.pop("text").strip(" \r\n\t\f"), env)
+                text = token.pop("text")
+                if "dlp_start" in token:
+                    env["dlp_start"] = (
+                        token.pop("dlp_start") + len(text) - len(text.lstrip(" \r\n\t\f"))
+                    )
+                token["children"] = self.inline(text.strip(" \r\n\t\f"), env)
             yield token
 
 
@@ -183,8 +234,10 @@ class _VisibleHTML(HTMLParser):
 @dataclass(frozen=True, slots=True)
 class MarkupText:
     visible: str
-    code_sources: tuple[tuple[str, str], ...]
     contacts: str
+    code_openings: tuple[tuple[int, int], ...] = ()
+    hidden: tuple[str, ...] = ()
+    links: tuple[str, ...] = ()
 
 
 _PARSER = _Markdown(
@@ -195,19 +248,31 @@ _PARSER = _Markdown(
 
 
 def interpret_markdown(value: str) -> MarkupText:
-    """Return visible material and exact native code-span lexemes, without HTML output."""
+    """Return bounded material views and original delimiter positions, without HTML output."""
 
     if not any(c in value for c in "<>&`*_~[]\\"):
-        return MarkupText(value, (), value)
+        return MarkupText(value, value)
     # Parser rules/compiled patterns are shared, but every parse creates fresh
     # state, references and budgets. The parser retains no document/cache text.
     tokens, state = _PARSER.parse(value)
     assert isinstance(tokens, list)
     pieces: list[str] = []
     contacts: list[str] = []
-    code: list[tuple[str, str]] = []
+    openings: list[tuple[int, int]] = []
+    hidden: dict[str, None] = {}
+    links: dict[str, None] = {}
     used = 0
+    hidden_used = 0
     maximum = 4 * len(value) + 4096
+    hidden_maximum = 4 * len(value.encode("utf-8")) + 4096
+
+    def hide(text: str) -> None:
+        nonlocal hidden_used
+        if text and text not in hidden:
+            hidden_used += len(text)
+            if hidden_used > hidden_maximum:
+                raise RepresentationLimit("hidden material expansion budget")
+            hidden[text] = None
 
     def add(text: str) -> None:
         nonlocal used
@@ -227,6 +292,11 @@ def interpret_markdown(value: str) -> MarkupText:
     def walk(items: list[dict[str, Any]]) -> None:
         for token in items:
             kind = token["type"]
+            if kind in {"link", "image"}:
+                attrs = token["attrs"]
+                links[attrs["url"]] = None
+                hide(attrs["url"])
+                hide(attrs.get("title", ""))
             formatted = kind in {"emphasis", "strong", "codespan"}
             if formatted:
                 boundary()
@@ -236,6 +306,7 @@ def interpret_markdown(value: str) -> MarkupText:
                 fragment = token.get("raw", "")
                 if len(fragment) > 65_536:
                     raise RepresentationLimit("HTML token budget")
+                hide(fragment)
                 html = _VisibleHTML(state.env["dlp_budget"])
                 try:
                     html.feed(fragment)
@@ -247,15 +318,25 @@ def interpret_markdown(value: str) -> MarkupText:
                 add("".join(html.parts) + html.rawdata)
             else:
                 add(token.get("raw", "\n" if kind in {"softbreak", "linebreak"} else ""))
-            if kind == "codespan":
-                code.append((token["dlp_source"], token["raw"]))
+            if kind == "codespan" and "dlp_opening" in token:
+                openings.append(token["dlp_opening"])
             if formatted:
                 boundary()
             if kind in {"paragraph", "block_code", "heading", "block_html"}:
                 add("\n")
 
     walk(tokens)
-    return MarkupText("".join(pieces), tuple(code), "".join(contacts))
+    for attrs in state.env["ref_links"].values():
+        links[attrs["url"]] = None
+        hide(attrs["url"])
+        hide(attrs.get("title", ""))
+    return MarkupText(
+        "".join(pieces),
+        "".join(contacts),
+        tuple(openings),
+        tuple(hidden),
+        tuple(links),
+    )
 
 
 def strip_format_markers(value: str) -> str:

@@ -9,7 +9,7 @@ mkdir -p .quality-logs
 UV_PROJECT_ENVIRONMENT=.quality-logs/dependency-audit-venv
 export UV_PROJECT_ENVIRONMENT
 
-UV_VERSION=0.13.4
+UV_VERSION=0.13.7
 installed_uv_version=$(uv --version 2>/dev/null || true)
 case "$installed_uv_version" in
   "uv $UV_VERSION"|"uv $UV_VERSION "*) use_uvx=0 ;;

@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from ocr_toolkit import preflight
 from tests.support import PROJECT_ROOT, patched_attr, patched_env
 
 SCRIPT = PROJECT_ROOT / "scripts" / "ocr_compat.py"
@@ -40,7 +41,7 @@ def load_script() -> ModuleType:
 def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, Any]:
     """Extend a frozen fixture with the live contract selected for one version."""
 
-    if module.core._version(version) < (1, 13, 5):
+    if module.core._version(version) < module.contracts.history.HISTORICAL_CUTOFF:
         return module.core.load_json(PROJECT_ROOT / f"compatibility/evidence/ocr-{version}.json")[
             "contracts"
         ]
@@ -58,14 +59,36 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
     contracts["language_rule_probe"].update(
         {
             "extensions": sorted(
-                Path(path).suffix for path in module.contracts._language_rules_for_version(version)
+                {
+                    Path(path).suffix
+                    for path in module.contracts._language_rules_for_version(version)
+                    if Path(path).suffix
+                }
             ),
             "selected": len(module.contracts._language_rules_for_version(version)),
             "default_excluded_paths": list(
                 module.contracts._default_excluded_paths_for_version(version)
             ),
+            "paths": sorted(module.contracts._language_rules_for_version(version)),
+            "excluded_paths": list(module.contracts._language_negative_paths_for_version(version)),
+            "rule_documents": ["csharp", "starlark"],
+            "default_rule_paths": list(module.settings.DEFAULT_RULE_CONTROL_PATHS),
         }
     )
+    contracts["stream_override_probe"] = {
+        "result": "passed",
+        "protocols": ["openai", "openai-responses", "anthropic"],
+        "explicit_false": "preserved",
+        "non_boolean": "omitted",
+        "unset": "omitted",
+        "provider_acceptance": "not-tested",
+    }
+    contracts["csharp_context_probe"] = {
+        "result": "passed",
+        "rules_in_main_request": True,
+        "context_paths": ["Directory.Build.props", "app/Project.csproj", "global.json"],
+        "execution": "read-only-native-tools",
+    }
     contracts["provider_directory_preview_probe"] = {
         "result": "passed",
         "tracked_provider_directory": ("reported"),
@@ -91,13 +114,16 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
 
 def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-    rules = module.contracts._language_rules_for_version("1.13.5")
+    rules = module.contracts._language_rules_for_version("1.13.6")
     assert rules["policies/authz.rego"] == "**/*.rego"
     assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
     assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
     assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
-    assert module.contracts._language_negative_paths_for_version("1.13.5") == ("rtl/include.svh",)
+    assert set(module.contracts._language_negative_paths_for_version("1.13.6")) == {
+        "rtl/include.svh",
+        "nested/BUILD.bak",
+    }
 
 
 def release(version: str, *, body: str = "fix: correct parser bug") -> dict[str, Any]:
@@ -139,8 +165,8 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
     module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
     assert manifest["schema_version"] == 2
-    assert manifest["recommended_version"] == "1.13.5"
-    assert manifest["monitoring_floor"] == "1.13.5"
+    assert manifest["recommended_version"] == preflight.RECOMMENDED_OCR_VERSION
+    assert manifest["monitoring_floor"] == preflight.RECOMMENDED_OCR_VERSION
     assert manifest["runtime_support"] == {
         "deprecated_lines": ["1.11"],
         "qualified_patches_only": True,
@@ -204,6 +230,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.3", "tested"),
         ("1.13.4", "tested"),
         ("1.13.5", "tested"),
+        ("1.13.6", "tested"),
     ]
 
     assert module.contracts.qualified_runtime_versions(manifest) == (
@@ -228,6 +255,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.3",
             "1.13.4",
             "1.13.5",
+            "1.13.6",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
@@ -237,20 +265,24 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    contracts = current_contracts(module, "1.13.5")
+    contracts = current_contracts(module, "1.13.6")
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
-        Path(path).suffix for path in module.contracts._language_rules_for_version("1.13.5")
+        {
+            Path(path).suffix
+            for path in module.contracts._language_rules_for_version("1.13.6")
+            if Path(path).suffix
+        }
     )
-    module.contracts._validate_current_contracts(contracts, "1.13.5")
+    module.contracts._validate_current_contracts(contracts, "1.13.6")
     extensions.reverse()
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(contracts, "1.13.5")
+        module.contracts._validate_current_contracts(contracts, "1.13.6")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.13.5", 40, "reported")],
+    [("1.13.6", 48, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -543,7 +575,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.5")),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.6")),
     ):
         result = module.cli.main(
             [
@@ -551,7 +583,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                "v1.13.5",
+                "v1.13.6",
                 "--comparison-version",
                 "1.12.13",
                 "--tested-baseline-version",
@@ -2059,7 +2091,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
             Path("/synthetic/probe"),
         )
 
-    assert result == module.contracts._numeric_contract_for_version("1.13.5")
+    assert result == module.contracts._numeric_contract_for_version("1.13.6")
     assert "stderr" not in json.dumps(result)
 
 
@@ -2832,7 +2864,7 @@ def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None
 
 def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    current = module.contracts._language_rules_for_version("1.13.5")
+    current = module.contracts._language_rules_for_version("1.13.6")
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",
         ".psm1": "**/*.{ps1,psm1,psd1}",
@@ -2856,16 +2888,16 @@ def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -
         assert {rule for path, rule in current.items() if Path(path).suffix == extension} == {
             pattern
         }
-        observed = current_contracts(module, "1.13.5")
+        observed = current_contracts(module, "1.13.6")
         observed["language_rule_probe"]["extensions"].remove(extension)
         with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-            module.contracts._validate_contracts_for_version("1.13.5", observed)
-    stale_language = current_contracts(module, "1.13.5")
+            module.contracts._validate_contracts_for_version("1.13.6", observed)
+    stale_language = current_contracts(module, "1.13.6")
     stale_language["language_rule_probe"] = current_contracts(module, "1.13.4")[
         "language_rule_probe"
     ]
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_contracts_for_version("1.13.5", stale_language)
+        module.contracts._validate_contracts_for_version("1.13.6", stale_language)
 
 
 @pytest.mark.parametrize("task_done", [True, False])
@@ -3045,5 +3077,5 @@ def test_qualification_rejects_malformed_capability_lists_with_closed_error(
 
 def test_live_qualification_boundary_accepts_all_current_candidates() -> None:
     module = load_script()
-    for version in ("1.13.5",):
+    for version in ("1.13.6",):
         module.contracts._require_live_qualification_version(version)

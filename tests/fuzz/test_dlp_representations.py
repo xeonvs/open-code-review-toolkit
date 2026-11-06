@@ -325,12 +325,17 @@ def test_quote_runs_cannot_prove_an_empty_prefix_is_the_whole_value(
 
 @given(st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1, max_size=20), st.booleans())
 def test_malformed_marked_sections_never_escape_publication_or_forbidden_checks(keyword, closed):
+    import mistune
+
     from ocr_toolkit import review_runner
     from ocr_toolkit.context.dlp import ForbiddenMatcher
 
     value = "<div>\n<![" + keyword + ("]>" if closed else "[") + "\n</div>"
     decision = check_text(value, budgets=BUDGETS, publication=True)
-    assert not decision.admitted
+    if decision.admitted:
+        assert html.unescape(decision.text).strip() == value
+        rendered = mistune.create_markdown(escape=False)(decision.text)
+        assert "<div>" not in rendered and "<![" not in rendered
     matcher = ForbiddenMatcher.compile((value,))
     assert matcher.match_details("ordinary text")[0] in {None, "limit"}
     projected, _, _ = review_runner._publication_projection(
@@ -338,7 +343,35 @@ def test_malformed_marked_sections_never_escape_publication_or_forbidden_checks(
         forbidden=(),
         allowed_tools=frozenset(),
     )
-    assert projected["comments"] == []
+    if projected["comments"]:
+        content = projected["comments"][0]["content"]
+        assert html.unescape(content).strip() == value
+        rendered = mistune.create_markdown(escape=False)(content)
+        assert "<div>" not in rendered and "<![" not in rendered
+
+
+@given(st.integers(1, 3), st.integers(1, 3))
+def test_encoded_leading_whitespace_cannot_hide_a_scheme_relative_authority(spaces, layers):
+    destination = " " * spaces + "//example.invalid/path"
+    from urllib.parse import quote
+
+    for _ in range(layers):
+        destination = quote(destination, safe="/.")
+    assert not check_text(f"[guide]({destination})", budgets=BUDGETS, publication=True).admitted
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("${SOURCE}", "***", "")),
+    st.sampled_from(("`material`", '@"material"', "material", "[material]")),
+    ENCODING,
+)
+def test_unknown_literal_syntax_cannot_prove_the_whole_carrier_absent(
+    key, absent, material, encoding
+):
+    carrier = repr(encode(key + "=" + absent, encoding))
+    value = f"compose({carrier}, {material})"
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
 
 
 @given(
@@ -374,7 +407,7 @@ def test_encoded_key_cannot_make_ambiguous_quote_runs_an_absent_carrier(encoding
     st.text(alphabet="abcdef_-/", min_size=1, max_size=40),
     st.sampled_from(("token", "password", "api_key")),
     st.sampled_from(('"', "'")),
-    st.sampled_from(("{}", "assert value == {}", "items = [{}]")),
+    st.sampled_from(("{}", "field: {}", "items = [{}]")),
     st.text(alphabet="abcdefghijLMNOPQ0123456789", min_size=1, max_size=30),
 )
 def test_unquoted_mask_keeps_its_whole_original_carrier(prefix, key, quote, wrapper, material):
@@ -421,6 +454,26 @@ def test_encoded_absent_carrier_matches_the_canonical_raw_field(key, absent, enc
         check_text(encoded, budgets=BUDGETS, publication=True).admitted
         == check_text(raw, budgets=BUDGETS, publication=True).admitted
     )
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("***", "${REF}", "{{ config.value }}")),
+    ENCODING,
+    st.sampled_from(
+        (
+            '[{}, "material"][0] + "material"',
+            '"".join([{}, "material"])',
+            '"material".join([{}])',
+            'compose({}, "material")',
+        )
+    ),
+)
+def test_container_separator_cannot_hide_computed_credential_material(
+    key, absent, encoding, wrapper
+):
+    carrier = repr(encode(key + "=" + absent, encoding))
+    assert not check_text(wrapper.format(carrier), budgets=BUDGETS, publication=True).admitted
 
 
 @given(
@@ -520,3 +573,49 @@ def test_unicode_next_field_preserves_empty_value_and_independent_material(name,
         budgets=BUDGETS,
         publication=True,
     ).admitted
+
+
+@given(
+    st.sampled_from(("token", "password", "api_key")),
+    st.sampled_from(("***", "${REF}", "{{ config.value }}")),
+    ENCODING,
+    st.one_of(
+        st.integers(min_value=1, max_value=9999),
+        st.sampled_from(("True", "false", "null", "None", "0xFF", "1e9")),
+    ),
+    st.sampled_from(
+        (
+            "subscript",
+            "argument",
+            "discarded-comment",
+            "prefix-argument",
+            "leading-operator",
+            "nested-scalar",
+        )
+    ),
+)
+def test_unquoted_operands_and_discarded_comments_cannot_supply_carrier_proof(
+    key, absent, encoding, number, shape
+):
+    carrier = repr(encode(key + "=" + absent, encoding))
+    if shape == "subscript":
+        value = f"[{carrier}, {number}][0] + str({number})"
+    elif shape == "argument":
+        value = f"compose({carrier}, {number})"
+    elif shape == "prefix-argument":
+        value = f"compose({number}, {carrier})"
+    elif shape == "leading-operator":
+        value = f"{number}\n\n + {carrier}"
+    elif shape == "nested-scalar":
+        value = f"compose({carrier}, str({number}))"
+    else:
+        value = f"0 # compose({carrier}, {number})"
+    assert not check_text(value, budgets=BUDGETS, publication=True).admitted
+    projected, _, _ = review_runner._publication_projection(
+        {"status": "success", "comments": [{"path": "sample", "line": 1, "content": value}]},
+        forbidden=(),
+        allowed_tools=frozenset(),
+    )
+    assert not projected["comments"]
+    # Numeric data in a complete, uncomputed container remains independent.
+    assert check_text(f"[{carrier}, {number}]", budgets=BUDGETS, publication=True).admitted

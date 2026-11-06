@@ -673,10 +673,10 @@ def test_projection_rejects_wrong_manifest_identity_or_reuse(tmp_path: Path) -> 
     qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
     manifest = payload["manifest"]
     assert isinstance(manifest, dict)
-    for version in ("v1.13.4", "v1.13.5"):
+    for version in ("v1.13.4", "v1.13.5", "v1.13.6"):
         manifest["execution"]["ocr_version"] = version
         qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)
-    for version in (None, [], "1.13.5", "v1.13.6", "v1.13.5 "):
+    for version in (None, [], "1.13.6", "v1.13.7", "v1.13.6 "):
         manifest["execution"]["ocr_version"] = version
         with pytest.raises(RepositoryEvidenceError, match="unsupported binary"):
             qualify_gitlink_manifest(projection, projection.ordinary_diff, payload)

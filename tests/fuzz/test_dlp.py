@@ -301,11 +301,9 @@ def test_rendered_technical_values_do_not_become_contacts(value: str, representa
     result = check_text(
         display_representation(value, representation), budgets=BUDGETS, publication=True
     )
-    if representation == "html":
-        # Raw HTML is forbidden independently of the technical value within it.
-        assert not result.admitted
-        return
     assert result.admitted, (value, representation, result.reason, result.detector)
+    if representation == "html":
+        assert "<span>" not in result.text
 
 
 @given(

@@ -211,12 +211,13 @@ def test_unsupported_input_is_accounted_and_cannot_pass(state, raw, monkeypatch)
 
 
 def test_real_worker_proof_projection_and_no_source_in_report(state) -> None:
-    text = '#include <stdint.h>\ntoken = "".join(parts)\namount = 17\n'
+    text = '#include <stdint.h>\ntoken = "".join(parts)\namount = 17\n# Contact: author@example.invalid\n'
     identity = captured(state, text)
     result = scanner.supervised(request(state, identity), 30)
-    assert result["units"] == 4
-    assert any(hit["unit"] == 1 and hit["role"] == "text" for hit in result["hits"])
+    assert result["units"] == 5
+    assert not any(hit["unit"] == 1 and hit["role"] == "text" for hit in result["hits"])
     assert not any(hit["unit"] == 1 and hit["role"] == "existing_code" for hit in result["hits"])
+    assert {hit["role"] for hit in result["hits"] if hit["unit"] == 4} == {"text", "existing_code"}
     assert text not in json.dumps(result)
     assert "parts" not in json.dumps(result)
 

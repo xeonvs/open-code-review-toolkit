@@ -56,7 +56,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         if: needs.classify.outputs.docs_only != 'true'
         with:
-          version: "0.13.4"
+          version: "0.13.7"
           enable-cache: true
           save-cache: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -95,7 +95,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         if: needs.classify.outputs.docs_only != 'true'
         with:
-          version: "0.13.4"
+          version: "0.13.7"
           enable-cache: true
           save-cache: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -122,7 +122,7 @@ jobs:
           for audit_module in cli corpus scanner state limits worker_process report proof; do
             uv run --no-sync coverage report --include=src/ocr_toolkit/dlp_audit/$audit_module.py --fail-under=90
           done
-          for source_module in native_capabilities common/redaction common/value_boundaries context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/datetimes context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation diagrams/sources evidence/text_metadata evidence/text_contracts evidence/text_excerpts evidence/source_reader evidence/opaque_code posting/source_suggestions reporting/diagram_layout; do
+          for source_module in native_capabilities common/redaction common/value_boundaries common/literal_context context/code_text evidence/source_syntax context/dlp/admission context/dlp/credentials context/dlp/decoding context/dlp/datetimes context/dlp/email context/dlp/markup context/dlp/numeric context/dlp/presentation context/dlp/projection context/dlp/result_prose diagrams/sources evidence/text_metadata evidence/text_contracts evidence/text_excerpts evidence/source_reader evidence/opaque_code posting/source_suggestions reporting/diagram_layout reporting/warnings; do
             uv run --no-sync coverage report --include=src/ocr_toolkit/$source_module.py --fail-under=90
           done
 
@@ -139,7 +139,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         if: needs.classify.outputs.docs_only != 'true'
         with:
-          version: "0.13.4"
+          version: "0.13.7"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         if: needs.classify.outputs.docs_only != 'true'
         with:

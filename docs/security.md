@@ -231,10 +231,55 @@ a redactor changing formatting alone does not prove that text contains a secret.
 Literal source can preserve operators only when exact full-source proof establishes
 their computational role. A scalar parsing as an expression is insufficient;
 configuration, documents, logs and diagram labels receive no such authority.
+Quoted absent-value credential carriers require complete bounded literal data
+or named literal fields. Unknown calls, comparisons, references and literal
+syntaxes cannot prove absence from a partial quote inventory. This data grammar
+does not qualify the semantics of a programming language.
 Independent security views still inspect Markdown/HTML obfuscation, compatibility
 Unicode, configured secret values, credential literals, contacts and forbidden
 source text. Configured values are checked before whitespace/NFC normalization
 as well as afterwards. An exact code match does not exempt sensitive material.
+
+Admitted publication prose has a separate safe presentation step. HTTP/HTTPS,
+relative and anchor Markdown links remain links after destination validation;
+unsafe schemes, user information, controls, malformed authorities and excessive
+decoding are rejected without network access. Leading whitespace cannot hide an
+encoded scheme-relative authority. Images become ordinary links.
+HTML/comments are visible literal text, including their attributes and embedded
+Markdown, rather than executable or silently discarded material. Prose code
+fences use a neutral text renderer; the optional typed diagram owns Mermaid.
+Valid code-span contents remain literal. Repeated mention commands use exact
+parser positions, never an occurrence-count heuristic; decoded or compatibility
+characters cannot invent original delimiter authority.
+
+Original, hidden, decoded and projected material receive independent checks.
+Projection is deterministic, idempotent and bounded during construction in
+characters, UTF-8 bytes, lines and parser work. Existing harmless markup is not
+rewritten solely for canonicalization. The finalizer passes this prepared model
+to both report adapters; current-receipt readback rejects unprepared or sensitive
+prose atomically. Safe formatting changes do not count as finding omissions.
+Literal source and diagram labels retain separate source/sink contracts.
+
+Structured finding content and messages are checked as original keys/leaves and
+as the exact complete text consumed by report adapters. A bounded prepass covers
+quoting, Unicode escapes and container punctuation before that representation is
+allocated or leaf admission/sanitization begins (32768 nodes, depth 64 and
+16384-bit integers). Newly finalized active
+prose is canonical text; harmless historical containers remain readable when
+their consumed representation is already canonical. Structured warnings retain
+their original type/path provenance. All original warning material is checked
+before legacy selection/truncation, the selected text receives its own material
+check, and the pure warning formatter escapes its presentation.
+
+Literal image markers and unmatched code delimiters in prose are inert across
+finding boundaries; parsed code contents retain their bytes. Repeated references
+share one bounded unique hidden-material view and one destination validation per
+distinct URL. A short reference cannot multiply scans of a long destination.
+
+Credential-bearing URI userinfo remains protected when its data contains encoded
+delimiters, including on internal hostnames. Ordinary path/query data does not
+acquire userinfo authority. Scheme near-matches are searched once per contiguous
+scheme-character run, avoiding repeated suffix scans on long unrelated text.
 
 Numeric interpretation recognizes a complete bounded calendar timestamp around
 the entire phone candidate, including its clock, optional fractional seconds
@@ -243,6 +288,26 @@ malformed tokens, and preserves explicit contact priority. Unicode decimal digit
 have the same calendar meaning as ASCII digits; no surrounding keyword, filename
 or source proof grants an exception. Other contacts, credentials and configured
 values in the original and derived material remain independently checked.
+
+Ordinary quoted credential-field carriers use the same absence rules in raw and
+encoded form. A closing quote or comma alone cannot prove that neighboring
+literals are independent. Unquoted references do not invent literal material;
+additional quoted material, numeric or standard data-scalar literals require
+independence through a closed JSON/literal-data grammar. Its scalar spelling
+remains stable under the independent case-folded material view. Calls, operators,
+subscripts and interpolation do not qualify, nor can quoted material discarded
+by a parser as a comment acquire the proof of a different value.
+Closed postfix ordinals select references rather than contributing new literal
+values. Independent records retain their completion boundaries; adjacent or
+continued expressions do not inherit that independence. Once absence and
+completion are proved on the original, semantic refinement preserves that proof
+without inventing a masked binding after lossy display normalization. It preserves
+enclosing data grammar; original material and every other protection still apply.
+This local proof is bounded to two million
+characters, 32768 punctuation/tokens and depth 20 before parser allocation. It
+also bounds an unquoted decimal run to 4096 digits before numeric conversion. It
+executes no source and grants no language-wide authority. Unknown syntax remains
+conservative, including otherwise harmless source expressions.
 
 For an exact immutable-source excerpt, bounded full-source Python syntax can
 identify non-value credential names in declarations and reference expressions,
@@ -282,13 +347,15 @@ repository. No permission-map waiver or configuration fallback supplies source
 authority. Unknown structures and quoted data retain ordinary checks.
 Known-secret values and contacts remain independently protected.
 
-Markdown interpretation uses a bounded Mistune token tree without renderers or
-plugins, plus bounded standard HTML events. Construction shares a 32768-token
+Material interpretation uses a bounded Mistune token tree without plugins,
+plus bounded standard HTML events. Safe prose projection reuses Mistune's
+Markdown renderer with inert HTML/image/fence handling and bounded output.
+Each parse shares a 32768-token
 budget and combined block/inline depth 20. Inline finalization reserves its
 construction work before allocating native emphasis nodes. Compatibility
 normalization and case folding check both characters and UTF-8 bytes against
 four times the input size plus 4096 before subsequent interpretation.
-Oversized HTML fragments, derived views, source-position searches and timed
+Oversized HTML fragments, derived views, position-mapping work and timed
 Unicode matches fail closed as `limit`. Source text and
 applicable normalized/decoded views are checked independently. A formatting
 boundary cannot silently join a contact into a bare identifier. Unproved

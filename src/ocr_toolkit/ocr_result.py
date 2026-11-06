@@ -336,7 +336,6 @@ def load_ocr_result(path: Path) -> Any:
     try:
         try:
             raw = _decode_result(_read_descriptor(descriptor, limit=max_result_bytes()))
-            sanitized = sanitize_ocr_value(raw)
             metadata = raw.get(TOOLKIT_RESULT_KEY) if isinstance(raw, dict) else None
             if (
                 isinstance(metadata, dict)
@@ -352,12 +351,69 @@ def load_ocr_result(path: Path) -> Any:
                 }
                 if scalar_metadata != sanitize_ocr_value(scalar_metadata):
                     raise OcrResultMalformed("OCR toolkit receipt changed during redaction")
+                # A current receipt claims a prepared publication model. Do
+                # not let a hostile reload substitute raw active markup or
+                # protected material, even if generic redaction could mask it.
+                from ocr_toolkit.context.contracts import TextBudgets
+                from ocr_toolkit.context.dlp import check_text
+                from ocr_toolkit.context.dlp.decoding import RepresentationLimit
+                from ocr_toolkit.context.dlp.result_prose import (
+                    bounded_prose_text,
+                    prose_slots,
+                    prose_values,
+                )
+                from ocr_toolkit.reporting.warnings import ocr_warning_text
+
+                dlp = metadata.get("dlp")
+                enabled = not isinstance(dlp, dict) or dlp.get("enabled") is not False
+                if enabled:
+                    prose_budgets = TextBudgets(2_000_000, 8_000_000, 100_000)
+                    # Bound complete consumer slots before leaf admission or
+                    # generic recursive sanitization traverses their contents.
+                    for _, value in prose_slots(raw):
+                        try:
+                            bounded_prose_text(value, prose_budgets)
+                        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+                            raise OcrResultMalformed(
+                                "OCR rendered prose exceeds its bounds"
+                            ) from exc
+                    for prose_path, text in prose_values(raw, include_keys=True):
+                        checked = check_text(
+                            text,
+                            publication=True,
+                            enabled=True,
+                            budgets=prose_budgets,
+                        )
+                        if not checked.admitted or (
+                            prose_path[0] != "warnings" and checked.text != text
+                        ):
+                            raise OcrResultMalformed("OCR publication prose is not prepared")
+                    for prose_path, value in prose_slots(raw):
+                        try:
+                            text = bounded_prose_text(value, prose_budgets)
+                            warning = prose_path[0] == "warnings"
+                            if warning:
+                                text = ocr_warning_text(value)
+                        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+                            raise OcrResultMalformed(
+                                "OCR rendered prose exceeds its bounds"
+                            ) from exc
+                        if not text:
+                            continue
+                        checked = check_text(
+                            text, publication=True, enabled=True, budgets=prose_budgets
+                        )
+                        if not checked.admitted or (not warning and checked.text != text):
+                            raise OcrResultMalformed("OCR publication prose is not prepared")
                 # Preserve the exact canonical optional candidate. Generic
                 # redaction could turn a legitimate empty/template credential
                 # into a different branch condition. The publication owner
                 # revalidates the entire original diagram text and source proof,
                 # omitting the whole optional channel on admission failure.
+                sanitized = sanitize_ocr_value(raw)
                 sanitized[TOOLKIT_RESULT_KEY] = metadata
+            else:
+                sanitized = sanitize_ocr_value(raw)
             return sanitized
         except RecursionError as exc:
             raise OcrResultMalformed(str(exc)) from exc

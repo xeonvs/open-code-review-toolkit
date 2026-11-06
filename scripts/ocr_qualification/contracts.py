@@ -40,7 +40,8 @@ def _validate_current_contracts(value: object, version: str) -> None:
         or not {"review_effort", "semantic_grouping"}.issubset(capabilities)
     ):
         core._fail("current qualification omitted required CLI capabilities")
-    extensions = sorted(Path(path).suffix for path in _language_rules_for_version(version))
+    language_paths = _language_rules_for_version(version)
+    extensions = sorted({Path(path).suffix for path in language_paths if Path(path).suffix})
     expected = {
         "numeric_cli_probe": _numeric_contract_for_version(version),
         "review_budget_probe": {
@@ -83,8 +84,12 @@ def _validate_current_contracts(value: object, version: str) -> None:
             "extensions": extensions,
             "result": "passed",
             "rule_source": "system_builtin",
-            "selected": len(extensions),
+            "selected": len(language_paths),
             "m_routing": "matlab_and_objective_c",
+            "paths": sorted(_language_rules_for_version(version)),
+            "excluded_paths": list(_language_negative_paths_for_version(version)),
+            "rule_documents": ["csharp", "starlark"],
+            "default_rule_paths": list(settings.DEFAULT_RULE_CONTROL_PATHS),
         },
         "completion_cap_probe": {
             "explicit": 4_096,
@@ -98,6 +103,20 @@ def _validate_current_contracts(value: object, version: str) -> None:
             "efforts": ["unset", "none", "high"],
             "responses_siblings_preserved": True,
             "provider_acceptance": "not-tested",
+        },
+        "stream_override_probe": {
+            "result": "passed",
+            "protocols": ["openai", "openai-responses", "anthropic"],
+            "explicit_false": "preserved",
+            "non_boolean": "omitted",
+            "unset": "omitted",
+            "provider_acceptance": "not-tested",
+        },
+        "csharp_context_probe": {
+            "result": "passed",
+            "rules_in_main_request": True,
+            "context_paths": ["Directory.Build.props", "app/Project.csproj", "global.json"],
+            "execution": "read-only-native-tools",
         },
         "comment_arguments_probe": {
             "result": "passed",
@@ -156,7 +175,7 @@ def _language_negative_paths_for_version(version: str) -> tuple[str, ...]:
     """Keep next-epoch languages observable as negative controls."""
 
     _require_live_qualification_version(version)
-    paths = ["rtl/include.svh"]
+    paths = ["rtl/include.svh", "nested/BUILD.bak"]
     return tuple(paths)
 
 

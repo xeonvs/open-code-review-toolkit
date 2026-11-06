@@ -31,6 +31,12 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
     capture_reasoning = False
     reasoning_requests: list[dict[str, object]] = []
     reasoning_overflow = False
+    capture_controls = False
+    control_requests: list[dict[str, object]] = []
+    control_overflow = False
+    context_reads: dict[str, tuple[str, ...]] = {}
+    observed_context_reads: set[str] = set()
+    observed_csharp_rules = False
 
     @staticmethod
     def _message_contents(messages: list[Any]) -> list[str]:
@@ -71,8 +77,10 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         allowed_paths = {"/v1/chat/completions"}
-        if type(self).capture_reasoning:
+        if type(self).capture_reasoning or type(self).capture_controls:
             allowed_paths.add("/v1/responses")
+        if type(self).capture_controls:
+            allowed_paths.add("/v1/messages")
         if self.path not in allowed_paths:
             self.send_error(404)
             return
@@ -87,6 +95,21 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             return
         if not isinstance(request, dict):
             self.send_error(400)
+            return
+        if type(self).capture_controls:
+            if len(type(self).control_requests) < 32:
+                stream = request.get("stream")
+                type(self).control_requests.append(
+                    {
+                        "path": self.path,
+                        "stream_present": "stream" in request,
+                        "stream_boolean": stream if type(stream) is bool else None,
+                        "stream_options_present": "stream_options" in request,
+                    }
+                )
+            else:
+                type(self).control_overflow = True
+            self.send_error(400, "Synthetic request capture; no model execution")
             return
         if type(self).capture_reasoning:
             reasoning = request.get("reasoning")
@@ -161,7 +184,28 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
             contents = type(self)._message_contents(messages)
             if any(settings.PRIOR_FINDING_RECHECK_MARKER in item for item in contents):
                 type(self).recheck_instruction_requests += 1
-            if type(self).main_mode in {"exhaust-tools", "exhaust-tools-incomplete"}:
+            if type(self).context_reads:
+                type(self).observed_csharp_rules |= any(
+                    "#### Nullability and Reference Types" in content for content in contents
+                )
+                type(self).observed_context_reads.update(
+                    context_read_observations(messages, type(self).context_reads)
+                )
+                remaining = sorted(
+                    type(self).context_reads.keys() - type(self).observed_context_reads
+                )
+                if remaining and type(self).request_count <= 16 and "file_read" in tool_names:
+                    function = {
+                        "name": "file_read",
+                        "arguments": json.dumps(
+                            {"file_path": remaining[0], "start_line": 1, "end_line": 20}
+                        ),
+                    }
+                else:
+                    function = {"name": "task_done", "arguments": "{}"}
+                call_id = f"context-{type(self).request_count}"
+                stage = "main"
+            elif type(self).main_mode in {"exhaust-tools", "exhaust-tools-incomplete"}:
                 if "file_read" in tool_names:
                     function = {
                         "name": "file_read",
@@ -271,6 +315,8 @@ def _stub_gateway(
     main_mode: str = "findings",
     comment_mode: str = "default",
     capture_reasoning: bool = False,
+    capture_controls: bool = False,
+    context_reads: dict[str, tuple[str, ...]] | None = None,
 ) -> Iterator[str]:
     """Serve deterministic responses with configurable real usage accounting."""
 
@@ -296,6 +342,12 @@ def _stub_gateway(
     _StubHandler.capture_reasoning = capture_reasoning
     _StubHandler.reasoning_requests = []
     _StubHandler.reasoning_overflow = False
+    _StubHandler.capture_controls = capture_controls
+    _StubHandler.control_requests = []
+    _StubHandler.control_overflow = False
+    _StubHandler.context_reads = dict(context_reads or {})
+    _StubHandler.observed_context_reads = set()
+    _StubHandler.observed_csharp_rules = False
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -305,6 +357,51 @@ def _stub_gateway(
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def context_read_observations(
+    messages: list[Any], expected: dict[str, tuple[str, ...]]
+) -> set[str]:
+    """Bind captured project values to their actual file_read call and path."""
+
+    calls: dict[str, str] = {}
+    seen: set[str] = set()
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        tools = message.get("tool_calls", [])
+        if not isinstance(tools, list):
+            continue
+        for call in tools:
+            if not isinstance(call, dict) or not isinstance(call.get("id"), str):
+                continue
+            identity = call["id"]
+            if identity in seen:
+                calls.pop(identity, None)
+                continue
+            seen.add(identity)
+            function = call.get("function")
+            if not isinstance(function, dict) or function.get("name") != "file_read":
+                continue
+            try:
+                args = json.loads(function.get("arguments", ""))
+            except (ValueError, TypeError, RecursionError):
+                continue
+            path = args.get("file_path") if isinstance(args, dict) else None
+            if isinstance(path, str) and path in expected:
+                calls[identity] = path
+    observed = set()
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") != "tool":
+            continue
+        identity = message.get("tool_call_id")
+        if not isinstance(identity, str) or identity not in calls:
+            continue
+        content = message.get("content")
+        path = calls[identity]
+        if isinstance(content, str) and all(marker in content for marker in expected[path]):
+            observed.add(path)
+    return observed
 
 
 def parse_grouping_inventory(messages: list[Any]) -> list[core.GroupingInventoryEntry]:

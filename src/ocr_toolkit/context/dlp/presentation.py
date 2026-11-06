@@ -7,9 +7,12 @@ import unicodedata
 from collections.abc import Iterator
 
 import emoji
+import regex
 
 _ASCII_CONTROLS = re.compile(r"[\x00-\x1f\x7f]")
 _ASCII_DISPLAY = {code: " " if chr(code).isspace() else None for code in (*range(32), 127)}
+_WHITESPACE = re.compile(r"\s")
+_DISPLAY_CANDIDATES = regex.compile(r"[\p{Cc}\p{Cf}\p{Cs}\ufe00-\ufe0f\U000e0100-\U000e01ef]")
 
 
 def canonical_whitespace(value: str) -> str:
@@ -17,7 +20,13 @@ def canonical_whitespace(value: str) -> str:
 
     if value.isascii():
         return value.translate(_ASCII_DISPLAY)
-    return "".join(" " if c.isspace() else "" if is_display_control(c) else c for c in value)
+    # Search in C rather than calling Python for every ordinary code point.
+    # The callback retains Python's Unicode-category authority if the regex
+    # dependency knows characters newer than this interpreter's tables.
+    return _DISPLAY_CANDIDATES.sub(
+        lambda match: "" if is_display_control(match[0]) else match[0],
+        _WHITESPACE.sub(" ", value),
+    )
 
 
 def is_display_control(character: str) -> bool:

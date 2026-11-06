@@ -11,7 +11,7 @@ uv run --no-sync ruff format --check .
 uv run --no-sync ruff check .
 uv run --no-sync mypy src/ocr_toolkit
 uv run --no-sync bandit -r src/ocr_toolkit --severity-level medium --confidence-level medium
-uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=85
+uv run --no-sync pytest --cov=ocr_toolkit --cov-report=term-missing --cov-fail-under=88
 uv run --no-sync python -m build
 uv run --no-sync twine check dist/*
 ```
@@ -62,6 +62,9 @@ For an authorized real local OCR review, follow the [local review preparation an
 asset acquisition, the deterministic peer, numeric/selection/comment probes,
 candidate orchestration, promotion and GitHub delivery. `settings.py` owns the
 shared qualification inputs; `core.py` owns bounded document/version primitives.
+`wire_controls.py` owns API request-control captures, `selection.py` owns language
+and unchanged-project-context probes, and `peer.py` binds their bounded synthetic
+exchanges, including exact tool-call identities for context-read evidence.
 Tests patch the actual owning modules rather than a compatibility re-export.
 These tools and their controlled peer are excluded from installed distributions.
 
@@ -137,14 +140,19 @@ Use exact-tag dispatch for one candidate. When several unseen releases must be
 qualified as one adjacent chain, set `through_tag` to the authorized upper bound;
 never use an unbounded discovery run for a release-scoped task. Manual dispatch remains available.
 
-Evidence through OCR 1.13.4 is now frozen. Its 1.13.0–1.13.4 contract lives in
+Evidence through OCR 1.13.5 is now frozen. Its 1.13.0–1.13.5 contract lives in
 the pure `ocr_qualification/frozen_113.py` readback owner, independently of live
-numeric defaults and language inventories. Fresh execution starts at 1.13.5.
+numeric defaults and language inventories. Fresh execution starts at 1.13.6.
 The live max-tools probe separately measures omitted and zero defaults, explicit
 50/75/100/125 overrides and 49 normalization, then checks the native manifest's
 effective limit against actual counted rounds. The same probe implementation
 runs for all new candidates. Current template/JSONC/Scala selection and Rules
-requirements belong to the live contract; old evidence is never regenerated.
+requirements, C#/Starlark Rules, unchanged C# context reads and explicit false
+streaming belong to the live contract; old evidence is never regenerated.
+Extensionless build paths are recorded separately from actual extension suffixes.
+Similar ordinary names retain default Rules instead of acquiring Starlark Rules.
+Metadata/help/status paths remain usable with stdlib Python; import installed
+toolkit dependencies only inside the executable probe that consumes them.
 
 Qualification uses one existing deterministic gateway and bounded observations.
 Do not copy OCR's implementation, add another configuration framework, or turn
@@ -174,6 +182,16 @@ Before a search or diagnostic call, identify the decision it will inform and sel
 For potentially large audit, export, build, and test output, preserve the complete result in an ignored private artifact and return a bounded summary with exit status, errors, truncation state, and the artifact location. Reduce known JSON schemas before sending them to the model; do not print a full report and then wrap or serialize that same output again. If a result is truncated, narrow the next query or inspect a relevant range of the preserved artifact instead of repeating the broad call with a larger output limit. Inventory tracked and non-ignored source files; keep ignored logs, caches, virtual environments, and generated dependency trees out of ordinary source discovery. Explicitly scoped incident diagnosis may inspect an ignored artifact.
 
 Reuse evidence only while its relevant inputs remain unchanged. Repeat a successful check after an affected code, dependency, environment, or contract change, a prior incomplete result, or a required release/publication boundary; state that reason. Full quality checks remain required for implementation/release scope, while documentation-only checks follow the scoped rule above. Avoid adding bookkeeping files, wrapper scripts, or prose-presence tests merely to enforce an agent habit that bounded semantic review can assess.
+
+Inventory open dependency PRs, consumed upstream changes and compatible updates
+at the start of a release; freeze that composition before expensive reviews.
+Apply focused checks to logical commits, then one full quality gate to the final
+runtime handoff. A normal acceptance cycle uses the aggregate Security scan
+followed by one own-tool review described below; another model review requires
+incomplete acceptance or a concrete uncovered boundary. Use native CI watch
+commands, retain their completion/exit evidence and avoid model turns for
+unchanged statuses. Recover from the active plan and necessary private artifacts,
+not duplicate command transcripts or a new orchestration layer.
 
 When auditing session efficiency, distinguish tool-call counts, output volume, cached input, and fresh input. Do not sum overlapping resumed histories or interpret cumulative token counters as subscription charges. Repeated calls require contextual review before being classified as unnecessary. Keep raw sessions and private identifiers out of public PRs and issues.
 
@@ -423,7 +441,9 @@ package level. They do not acquire sources, store snapshots or publish reports.
 with separate complete-query and diagnostic-replacement grammars;
 `common/value_boundaries.py` owns bounded lexical completion across whitespace,
 comments and container closers. It has no detector, parser or I/O dependency.
-the local `dlp_audit/` package owns acquisition, isolated execution and private
+`common/literal_context.py` supplies complete bounded closed-data proof, without
+executing source or inferring unknown language semantics. The local `dlp_audit/`
+package owns acquisition, isolated execution and private
 comparison. Its `report.py` summarizes source-free role/proof and whole-file
 observations without assigning causal verdicts. Reporting imports shared source-class enums from the pure result
 contract, not the detector. `dlp_audit/proof.py` supplies authenticated snapshot
@@ -498,4 +518,4 @@ Performance evidence must separate cold-start validation from steady-state reque
 <!-- ew:invariant id="development.prepush-dependency-audit" -->
 ## Dependency Audit Before Push
 
-Before every push, run `scripts/dependency-audit.sh`. This is the same `pip-audit` entry point as the pull request's `dependency-audit` security job: it synchronizes the committed lock with `uv sync --locked`, then audits the installed environment with `uv run --no-sync pip-audit`. It uses a dedicated ignored environment under `.quality-logs/`, preserving the caller's active environment, and runs with the CI-pinned uv 0.13.4 (using `uvx` when the installed `uv` differs). A stale lock, unavailable tool, vulnerability, or failed audit blocks the push; do not treat an incomplete scan as clean. The stable-release job separately audits its installed release environment with `--skip-editable`.
+Before every push, run `scripts/dependency-audit.sh`. This is the same `pip-audit` entry point as the pull request's `dependency-audit` security job: it synchronizes the committed lock with `uv sync --locked`, then audits the installed environment with `uv run --no-sync pip-audit`. It uses a dedicated ignored environment under `.quality-logs/`, preserving the caller's active environment, and runs with the CI-pinned uv 0.13.7 (using `uvx` when the installed `uv` differs). A stale lock, unavailable tool, vulnerability, or failed audit blocks the push; do not treat an incomplete scan as clean. The stable-release job separately audits its installed release environment with `--skip-editable`.

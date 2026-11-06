@@ -46,6 +46,14 @@ from ocr_toolkit.context.dlp import (
     dlp_mode,
     resolve_dlp_enabled,
 )
+from ocr_toolkit.context.dlp.decoding import RepresentationLimit
+from ocr_toolkit.context.dlp.result_prose import (
+    apply_prepared,
+    bounded_prose_text,
+    is_prose_path,
+    prepared_copy,
+    prose_slots,
+)
 from ocr_toolkit.context.policy import load_protected_policy
 from ocr_toolkit.context.store import (
     ContextRecord,
@@ -855,13 +863,14 @@ def _dlp_reasons(
     path: tuple[object, ...] = (),
     action: str = "detect-sink",
     source_classes: set[str] | None = None,
+    prepared: dict[tuple[object, ...], str] | None = None,
 ) -> Counter[str]:
     """Count closed DLP failures without retaining hostile strings or locations."""
 
     reasons: Counter[str] = Counter()
-    stack = [(value, path)]
+    stack = [(value, path, False)]
     while stack:
-        nested, nested_path = stack.pop()
+        nested, nested_path, is_key = stack.pop()
         if isinstance(nested, dict):
             for key, value in nested.items():
                 if isinstance(key, str) and key in PROVIDER_PRIVATE_RESULT_KEYS:
@@ -874,9 +883,11 @@ def _dlp_reasons(
                             detector="reserved_field",
                             value=key,
                         )
-                stack.extend(((key, (*nested_path, key)), (value, (*nested_path, key))))
+                stack.extend(
+                    ((key, (*nested_path, key), True), (value, (*nested_path, key), False))
+                )
         elif isinstance(nested, list):
-            stack.extend((item, (*nested_path, index)) for index, item in enumerate(nested))
+            stack.extend((item, (*nested_path, index), False) for index, item in enumerate(nested))
         elif isinstance(nested, str):
             checked = check_text(
                 nested,
@@ -887,19 +898,39 @@ def _dlp_reasons(
                 allow_opaque_code=allow_opaque_code,
                 code_context=code_context,
                 sink=sink,
+                enabled=True,
             )
-            if not checked.admitted:
-                reasons[checked.reason] += 1
+            unsafe_key = (
+                is_key
+                and is_prose_path(nested_path)
+                and nested_path[0] != "warnings"
+                and checked.text != nested
+            )
+            if not checked.admitted or unsafe_key:
+                rejection = checked.reason if not checked.admitted else "invalid_text"
+                reasons[rejection] += 1
                 if source_classes is not None:
                     source_classes.update(checked.source_classes)
                 if debug is not None:
                     debug.decision(
                         path=nested_path,
                         action=action,
-                        reason=checked.reason,
+                        reason=rejection,
                         detector=checked.detector,
                         value=nested,
                     )
+            elif (
+                prepared is not None
+                and not is_key
+                and checked.text != nested
+                and is_prose_path(nested_path)
+                and nested_path == path
+                and nested_path[0] != "warnings"
+            ):
+                # These are presentation values, never paths, code or native
+                # enum/identity fields. The caller applies them to its copy.
+                assert checked.text is not None
+                prepared[nested_path] = checked.text
     return reasons
 
 
@@ -1147,6 +1178,7 @@ def _sanitize_nonpublication_fields(
                         budgets=budgets,
                         publication=True,
                         forbidden_matcher=matcher,
+                        enabled=True,
                     )
                     if not checked_key.admitted:
                         reasons[checked_key.reason] += 1
@@ -1185,6 +1217,7 @@ def _sanitize_nonpublication_fields(
                     budgets=budgets,
                     publication=True,
                     forbidden_matcher=matcher,
+                    enabled=True,
                 )
                 if not checked.admitted:
                     reasons[checked.reason] += 1
@@ -1217,6 +1250,8 @@ def _safe_publication_comments(
     opaque_fields: frozenset[tuple[int, str]] = frozenset(),
     code_contexts: dict[tuple[int, str], CodeTextContext] | None = None,
     debug: DebugBundle | None = None,
+    prepared_comments: object = None,
+    unsafe_rendered: frozenset[tuple[object, ...]] = frozenset(),
 ) -> tuple[list[dict[str, object]], int, int]:
     """Retain safe finding fields and omit only findings with unsafe content."""
 
@@ -1232,7 +1267,7 @@ def _safe_publication_comments(
         for key, field_value in item.items():
             if not isinstance(key, str) or key not in QUARANTINE_COMMENT_FIELDS:
                 continue
-            if _dlp_reasons(
+            if ("comments", index, key) in unsafe_rendered or _dlp_reasons(
                 field_value,
                 budgets=budgets,
                 matcher=matcher,
@@ -1251,7 +1286,11 @@ def _safe_publication_comments(
                 omitted_fields += 1
                 content_unsafe = content_unsafe or key == "content"
                 continue
-            projected[key] = field_value
+            projected[key] = (
+                prepared_comments[index][key]
+                if isinstance(prepared_comments, list)
+                else field_value
+            )
         if projected and not content_unsafe:
             retained.append(projected)
         elif debug is not None:
@@ -1271,15 +1310,18 @@ def _safe_publication_warnings(
     budgets: TextBudgets,
     matcher: ForbiddenMatcher,
     debug: DebugBundle | None = None,
+    prepared_warnings: object = None,
+    unsafe_rendered: frozenset[tuple[object, ...]] = frozenset(),
 ) -> tuple[list[object], int]:
     """Retain DLP-safe warnings while dropping unsafe or malformed items atomically."""
 
     if not isinstance(value, list):
         return [], 0
     retained = [
-        item
+        prepared_warnings[index] if isinstance(prepared_warnings, list) else item
         for index, item in enumerate(value)
-        if not _dlp_reasons(
+        if ("warnings", index) not in unsafe_rendered
+        and not _dlp_reasons(
             item,
             budgets=budgets,
             matcher=matcher,
@@ -1553,11 +1595,33 @@ def _publication_projection(
 
     budgets = TextBudgets(max_chars=2_000_000, max_bytes=8_000_000, max_lines=100_000)
     matcher = ForbiddenMatcher.compile(forbidden)
+    sink_reasons: Counter[str] = Counter()
+    unsafe_rendered: set[tuple[object, ...]] = set()
+    unrenderable: dict[tuple[object, ...], str] = {}
+    # Bound complete slots before any per-leaf DLP or generic sanitization.
+    # Preserve indices so quarantine can omit just the original unsafe unit.
+    for path, value in prose_slots(payload):
+        try:
+            bounded_prose_text(value, budgets)
+        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+            reason = "invalid_text" if isinstance(exc, UnicodeError) else "limit"
+            sink_reasons[reason] += 1
+            unsafe_rendered.add(path)
+            unrenderable[path] = ""
+            if debug is not None:
+                debug.decision(
+                    path=path,
+                    action="reject-rendered-prose",
+                    reason=reason,
+                    detector="rendered_representation",
+                    value=None,
+                )
+    bounded_payload = prepared_copy(payload, unrenderable)
     opaque_fields: set[tuple[int, str]] = set()
     code_contexts: dict[tuple[int, str], CodeTextContext] = {}
     if code_proof is not None and isinstance(payload.get("comments"), list):
         for index, comment in enumerate(payload["comments"]):
-            if not isinstance(comment, dict):
+            if not isinstance(comment, dict) or ("comments", index, "content") in unrenderable:
                 continue
             proof = code_proof(comment)
             if proof.existing_verified:
@@ -1569,43 +1633,46 @@ def _publication_projection(
                 if proof.suggestion_context is not None:
                     code_contexts[index, "suggestion_code"] = proof.suggestion_context
     verified_opaque_fields = frozenset(opaque_fields)
-    sink_reasons: Counter[str] = Counter()
     source_units: dict[tuple[object, ...], set[str]] = {}
     source_counts: Counter[str] = Counter()
-    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(payload):
+    prepared: dict[tuple[object, ...], str] = {}
+    original_unsafe: set[tuple[object, ...]] = set()
+    for sink, allow_horizontal_tabs, sink_path in _publication_sinks(bounded_payload):
         unit = (
             sink_path[:2] if sink_path and sink_path[0] in {"comments", "warnings"} else sink_path
         )
         sources = source_units.setdefault(unit, set())
-        sink_reasons.update(
-            _dlp_reasons(
-                sink,
-                budgets=budgets,
-                matcher=matcher,
-                allow_horizontal_tabs=allow_horizontal_tabs,
-                allow_opaque_code=(
-                    len(sink_path) == 3
-                    and sink_path[0] == "comments"
-                    and (sink_path[1], sink_path[2]) in verified_opaque_fields
-                ),
-                code_context=code_contexts.get((sink_path[1], sink_path[2]))
-                if len(sink_path) == 3 and sink_path[0] == "comments"
-                else None,
-                sink=TextSink.LITERAL_CODE if allow_horizontal_tabs else TextSink.PROSE,
-                debug=debug,
-                path=sink_path,
-                source_classes=sources,
-            )
+        reasons = _dlp_reasons(
+            sink,
+            budgets=budgets,
+            matcher=matcher,
+            allow_horizontal_tabs=allow_horizontal_tabs,
+            allow_opaque_code=(
+                len(sink_path) == 3
+                and sink_path[0] == "comments"
+                and (sink_path[1], sink_path[2]) in verified_opaque_fields
+            ),
+            code_context=code_contexts.get((sink_path[1], sink_path[2]))
+            if len(sink_path) == 3 and sink_path[0] == "comments"
+            else None,
+            sink=TextSink.LITERAL_CODE if allow_horizontal_tabs else TextSink.PROSE,
+            debug=debug,
+            path=sink_path,
+            source_classes=sources,
+            prepared=prepared,
         )
+        sink_reasons.update(reasons)
+        if reasons:
+            original_unsafe.add(sink_path)
     for sources in source_units.values():
         source_counts.update(sources)
-    sanitization_payload = payload
+    sanitization_payload = bounded_payload
     raw_tool_calls = payload.get("tool_calls")
     if failures.present and isinstance(raw_tool_calls, dict):
         # The details are a validated local/CI diagnostic channel, not an MR
         # publication sink or approval input. Remove them before generic DLP;
         # their dedicated console renderer applies redaction and tighter bounds.
-        sanitization_payload = dict(payload)
+        sanitization_payload = dict(bounded_payload)
         sanitization_payload["tool_calls"] = {
             key: value
             for key, value in raw_tool_calls.items()
@@ -1618,6 +1685,63 @@ def _publication_projection(
         debug=debug,
         source_counts=source_counts,
     )
+    apply_prepared(sanitized, prepared)
+    for path, value in prose_slots(prepared_copy(bounded_payload, prepared)):
+        if path in original_unsafe or path in unsafe_rendered:
+            continue
+        if path[0] == "warnings":
+            originals = payload.get("warnings")
+            index = path[1]
+            assert isinstance(index, int)
+            if isinstance(originals, list) and _dlp_reasons(
+                originals[index], budgets=budgets, matcher=matcher, path=path
+            ):
+                continue
+        try:
+            text = bounded_prose_text(value, budgets)
+            if path[0] == "warnings":
+                text = ocr_warning_text(value)
+        except (RepresentationLimit, UnicodeError, ValueError) as exc:
+            reason = "invalid_text" if isinstance(exc, UnicodeError) else "limit"
+            sink_reasons[reason] += 1
+            unsafe_rendered.add(path)
+            if debug is not None:
+                debug.decision(
+                    path=path,
+                    action="reject-rendered-prose",
+                    reason=reason,
+                    detector="rendered_representation",
+                    value=None,
+                )
+            continue
+        if isinstance(value, str):
+            # Raw string warnings retain their metadata bytes; the receipt
+            # reader applies these same bounds before display normalization.
+            continue
+        if not text:
+            continue
+        checked = check_text(
+            text, budgets=budgets, publication=True, forbidden_matcher=matcher, enabled=True
+        )
+        if not checked.admitted:
+            sink_reasons[checked.reason] += 1
+            unsafe_rendered.add(path)
+            unit = path[:2] if path[0] in {"comments", "warnings"} else path
+            sources = source_units.setdefault(unit, set())
+            source_counts.update(set(checked.source_classes) - sources)
+            sources.update(checked.source_classes)
+            if debug is not None:
+                debug.decision(
+                    path=path,
+                    action="reject-rendered-prose",
+                    reason=checked.reason,
+                    detector=checked.detector,
+                    value=text,
+                )
+        elif path[0] != "warnings":
+            assert checked.text is not None
+            prepared[path] = checked.text
+            apply_prepared(sanitized, {path: checked.text})
     attribution = {
         "schema": "ocr.forbidden-sources/v1",
         "counts": {name: source_counts[name] for name in sorted(FORBIDDEN_SOURCE_CLASSES)},
@@ -1628,25 +1752,25 @@ def _publication_projection(
         )
     if not sink_reasons and not private_reasons and redacted_fields == 0:
         return (
-            sanitized if failures.present else payload,
+            sanitized if failures.present or prepared else payload,
             {"schema": "ocr.publication/v2", "state": "passed"},
             False,
         )
 
-    try:
-        original_projection = _canonical_result_projection(payload, failures=failures)
-    except OcrResultContractError:
-        original_projection = None
     outcome = parse_result_outcome(payload)
     publication_changed = bool(sink_reasons)
     if not publication_changed:
         try:
+            original_projection = _canonical_result_projection(
+                prepared_copy(payload, prepared) if prepared else payload, failures=failures
+            )
             publication_changed = original_projection != _canonical_result_projection(
                 sanitized, failures=failures
             )
         except OcrResultContractError:
             publication_changed = True
     if publication_changed:
+        publication_prepared = prepared_copy(bounded_payload, prepared)
         comments, omitted_comments, omitted_fields = _safe_publication_comments(
             payload.get("comments"),
             budgets=budgets,
@@ -1654,9 +1778,16 @@ def _publication_projection(
             opaque_fields=verified_opaque_fields,
             code_contexts=code_contexts,
             debug=debug,
+            prepared_comments=publication_prepared.get("comments"),
+            unsafe_rendered=frozenset(unsafe_rendered),
         )
         warnings, omitted_warnings = _safe_publication_warnings(
-            payload.get("warnings"), budgets=budgets, matcher=matcher, debug=debug
+            payload.get("warnings"),
+            budgets=budgets,
+            matcher=matcher,
+            debug=debug,
+            prepared_warnings=publication_prepared.get("warnings"),
+            unsafe_rendered=frozenset(unsafe_rendered),
         )
         projected: dict[str, object] = {
             "status": "budget_exceeded" if outcome.budget_exceeded else "completed_with_errors",
@@ -1974,6 +2105,7 @@ def _finalize_ocr_result(
                         effective_coverage,
                         review_range=admitted_range,
                         diagram=admitted_diagram,
+                        prepared_prose=dlp_enabled,
                     ),
                     reviewed_sha=identity.source_sha,
                 )

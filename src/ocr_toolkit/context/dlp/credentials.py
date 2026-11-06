@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 
+from ocr_toolkit.common.literal_context import LiteralContext
 from ocr_toolkit.common.redaction import SENSITIVE_NAMED_KEY_PATTERN
-from ocr_toolkit.common.value_boundaries import complete_field
+from ocr_toolkit.common.value_boundaries import complete_carrier, complete_field
 from ocr_toolkit.context.dlp.decoding import RepresentationLimit, _technical_decode, bounded_nfkc
 
 MAX_CREDENTIAL_FIELDS = 4096
@@ -26,10 +27,11 @@ _ABSENT_FIELD = re.compile(
     rf"[ \t]*[:=][ \t]*(?:{_REFERENCE}|\*\*\*|"
     rf"(?P<value_quote>['\"])(?:{_REFERENCE}|\*\*\*|)(?P=value_quote))[ \t]*"
 )
+_CARRIER_HINT = re.compile(SENSITIVE_NAMED_KEY_PATTERN, re.IGNORECASE)
 
 
-def _encoded_absent_carriers(value: str) -> tuple[tuple[int, int, str], ...]:
-    """Qualify original ordinary quoted carriers before decoding their payloads.
+def _absent_carriers(value: str) -> tuple[tuple[int, int, str], ...]:
+    """Qualify complete ordinary quoted field carriers in either representation.
 
     Decoding a quoted encoded field as a whole can manufacture a quote run by
     joining its value quotes to the outer carrier. No filename or language
@@ -38,9 +40,16 @@ def _encoded_absent_carriers(value: str) -> tuple[tuple[int, int, str], ...]:
     qualify. Surrounding source remains subject to ordinary continuation checks.
     """
 
-    if "#" not in value and "&" not in value:
+    if not any(quote in value for quote in "\"'") or (
+        "=" not in value and ":" not in value and not any(c in value for c in "#&")
+    ):
+        return ()
+    if _CARRIER_HINT.search(value) is None and (
+        _CARRIER_HINT.search(bounded_nfkc(_technical_decode(value))) is None
+    ):
         return ()
     spans = []
+    context = LiteralContext(value)
     cursor = 0
     while cursor < len(value):
         quote = value[cursor]
@@ -62,18 +71,20 @@ def _encoded_absent_carriers(value: str) -> tuple[tuple[int, int, str], ...]:
         if cursor < len(value) and value[cursor] == quote:
             continue
         payload = value[start:end]
-        if "#" not in payload and "&" not in payload:
-            continue
         decoded = bounded_nfkc(_technical_decode(payload))
         field = _ABSENT_FIELD.fullmatch(decoded)
-        if decoded != payload and field is not None:
+        if field is not None:
             if len(spans) >= MAX_CREDENTIAL_FIELDS:
                 raise RepresentationLimit("credential carrier budget")
             key = field["key"][1:-1] if field["key_quote"] else field["key"]
-            # Preserve the key and quoted-carrier association for subsequent
-            # generic checks. Only the proven absent value is canonicalized;
-            # source text, continuations and later decoding remain visible.
-            spans.append((start - 1, cursor, "'" + key + '="***"' + "'"))
+            # Removing a binding is safe only after the original complete
+            # carrier proves absence. Unproved contexts retain the binding.
+            replacement = (
+                quote + key + quote
+                if complete_carrier(value, cursor, start=start - 1, context=context)
+                else "'" + key + '="***"' + "'"
+            )
+            spans.append((start - 1, cursor, replacement))
     return tuple(spans)
 
 
@@ -100,10 +111,13 @@ def credential_reference_view(value: str) -> str:
     parts = []
     previous = 0
     references = credential_reference_spans(value)
-    carriers = _encoded_absent_carriers(value)
+    carriers = _absent_carriers(value)
     if len(references) + len(carriers) > MAX_CREDENTIAL_FIELDS:
         raise RepresentationLimit("credential semantic span budget")
-    spans = sorted((*((a, b, '"***"') for a, b in references), *carriers))
+    # A proved absent field stays an empty value. Preserve enclosing data
+    # grammar and its key; do not introduce a new masked carrier that would
+    # require reconstructing the proof after lossy display transformations.
+    spans = sorted((*((a, b, '""') for a, b in references), *carriers))
     for start, end, replacement in spans:
         if start < previous:
             continue

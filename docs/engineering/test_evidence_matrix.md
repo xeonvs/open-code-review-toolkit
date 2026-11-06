@@ -10,7 +10,22 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
-## v0.14.5 current source and parser evidence
+## v0.14.6 safe prose and carrier evidence
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Formatting cannot hide material | Original/hidden/decoded DLP views -> bounded Mistune projection -> independent recheck | Safe-markup regressions and structural properties cover destinations/titles, encoded contacts, HTML comments, images, repeated delimiters, Unicode and expansion bounds | No network access, source execution or model-based classification; harmless formatting alone does not filter a finding |
+| Prepared prose authority belongs to the runner | Actual result finalizer -> persisted receipt -> local/GitLab consumers | Filesystem finalization and readback tests reject hostile replacements, preserve filtered sibling indices and ignore a native `prepared_prose` claim | Receipt shapes remain unchanged; disabled/raw local output stays literal |
+| Carrier boundaries cannot borrow neighboring material | Shared credential completion -> publication filter and audit worker | Raw/encoded reference parity, computed containers, unknown literal syntaxes, prefix/suffix assembly and inverse material tests; a locally cached complete data proof has explicit allocation bounds | Unknown calls/comparisons remain conservative; the data grammar grants no language-wide source authority |
+| Parser positions remain exact | Bounded Markdown tokens -> original code-delimiter offsets -> transformed views | Repeated and wide delimiters, nested/malformed inputs and compositional mapping properties | Unproved mappings cannot waive email checks; a genuine code-span email stays protected |
+| Admission survives actual serialization/composition | Finalizer/projection -> current receipt reload -> real local report, GitLab inline and fallback chunks -> offline Markdown render | Structured container, cross-finding reference and delimiter properties remain image-free; complete-slot preflight rejects excessive structure before leaf DLP/sanitization and omits only the affected finding; reserved ancestors cannot break retained siblings | Offline renderer and controlled handoffs do not claim live provider pixel behavior; warning provenance remains structured and its presentation escaped |
+| Work remains proportional to bounded input | Real Markdown references and URI userinfo -> shared material and projection helpers | Forwarding work counters detect repeated long destinations; unique hidden material and URL validation remove amplification; a large-field regression and differential URI-prefix property cover the py-spy hotspot | Synthetic bounded stress and authenticated corpus profiles supplement line coverage; no universal CPU/RSS guarantee |
+
+The matched public population and individual causal verdicts are recorded in the
+[causal matrix](dlp_causal_review.md); private sources and replay details stay in
+private audit state. Focused checks do not replace final release acceptance.
+
+## v0.14.5 source and parser evidence
 
 | Invariant | Real boundary | Verification | Limit |
 | --- | --- | --- | --- |

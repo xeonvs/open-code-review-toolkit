@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import regex
 
-from ocr_toolkit.context.dlp.markup import RepresentationLimit, interpret_markdown
-
-MAX_SOURCE_SEARCH = 8_000_000
+from ocr_toolkit.context.dlp.markup import interpret_markdown
 
 _LOCAL = r"""(?:[a-z0-9.!#$%&'*+/=?^_`{|}~\p{L}\p{N}\p{M}-]{1,64}|"(?:[^"\\\r\n]|\\.){1,64}")"""
 _LABEL = r"[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?"
@@ -23,28 +23,42 @@ EMAIL_RE = regex.compile(
 )
 
 
-def contains_email(value: str, *, markdown: bool = False) -> bool:
+def contains_email(
+    value: str,
+    *,
+    markdown: bool = False,
+    original: str | None = None,
+    transform: Callable[[str], str] | None = None,
+) -> bool:
     if "@" not in value:
         return False
-    sources: set[tuple[str, str]] | None = None
-    search_cost = 0
+    openings: dict[int, int] | None = None
     for match in EMAIL_RE.finditer(value, timeout=0.05):
         local = match["local"]
         if markdown and local and not local.strip("`"):
-            if sources is None:
-                sources = set(interpret_markdown(value).code_sources)
-            lexeme = match[0] + local
-            search_cost += len(value)
-            if search_cost > MAX_SOURCE_SEARCH:
-                raise RepresentationLimit("code-span source search budget")
-            # The parser records the exact source lexeme. Only a unique exact
-            # occurrence can establish its original position; ambiguity stays
-            # protected. Code fences and escaped delimiters supply no waiver.
-            if (
-                (lexeme, match[0][len(local) :]) in sources
-                and value.find(lexeme) == match.start()
-                and value.rfind(lexeme) == match.start()
-            ):
+            if openings is None:
+                source = value if original is None else original
+                proven = interpret_markdown(source).code_openings
+                openings = {start + width: start for start, width in proven}
+                if original is not None and transform is not None:
+                    # Transform disjoint source slices once, never search for
+                    # a repeated lexeme. Backticks form normalization boundaries.
+                    # Equality verifies compositionality before adopting offsets.
+                    parts: list[str] = []
+                    mapped: dict[int, int] = {}
+                    cursor = position = 0
+                    for start, width in proven:
+                        part = transform(source[cursor:start])
+                        parts.append(part)
+                        position += len(part)
+                        mapped[position + width] = position
+                        cursor = start
+                    parts.append(transform(source[cursor:]))
+                    openings = mapped if "".join(parts) == value else {}
+            # Only the actual opening delimiter can masquerade as a local
+            # part. Repetition and the rest of the command do not change it.
+            opening = openings.get(match.start() + len(local))
+            if opening is not None and opening <= match.start():
                 continue
         return True
     return False

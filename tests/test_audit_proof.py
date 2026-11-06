@@ -33,22 +33,31 @@ def test_source_addresses_do_not_renumber_historical_diagnostic_units(source):
     "separator", ["\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
 )
 def test_actual_worker_preserves_unit_identity_but_uses_lf_source_addresses(state, separator):
-    identity = captured(state, f"intro{separator}continued\nList<Entry> value;\n")
+    identity = captured(
+        state,
+        f"intro{separator}continued\nList<Entry> value; person@example.invalid\nList<Node> other;\n",
+    )
     result = scanner.supervised(request(state, identity), 15)
     # Historical splitlines units remain stable; this is unit 3 but Git line 2.
     hits = [hit for hit in result["hits"] if hit["unit"] == 3]
-    assert hits and all(hit["role"] == "text" for hit in hits)
+    assert {hit["role"] for hit in hits} == {"text", "existing_code"}
     assert all(hit["proof"] and hit["source_proof"] == "verified" for hit in hits)
+    assert not any(hit["unit"] == 4 for hit in result["hits"])
 
 
 def test_actual_worker_qualifies_large_snapshot_excerpts_without_parsing_fragments(state):
-    identity = captured(state, ("// " + "plain " * 200 + "\n") * 240 + "List<Entry> value;\n")
+    identity = captured(
+        state,
+        ("// " + "plain " * 200 + "\n") * 240
+        + "List<Entry> value; person@example.invalid\nList<Node> other;\n",
+    )
     result = scanner.supervised(request(state, identity), 15)
     assert result["proof_schema"] == PROOF_SCHEMA
     line_hits = [hit for hit in result["hits"] if hit["unit"] == 241]
-    assert line_hits and all(hit["role"] == "text" for hit in line_hits)
+    assert {hit["role"] for hit in line_hits} == {"text", "existing_code"}
     assert all(hit["proof"] and hit["source_proof"] == "verified" for hit in line_hits)
     assert all(hit["syntax_proof"] == "source-limit" for hit in line_hits)
+    assert not any(hit["unit"] == 242 for hit in result["hits"])
 
 
 def test_in_memory_snapshot_proof_closes_invalid_sources_and_wrong_paths():

@@ -100,14 +100,10 @@ def local_report_parts(report: ReviewReport) -> Iterator[str]:
         header = f"### Finding {ordinal}: {inline_code(location, escape_controls=True)}"
         if tags:
             header += f" — {inline_code(tags)}"
-        yield (
-            "\n\n"
-            + header
-            + "\n\n"
-            + markdown_code_block(
-                "", clean_text(comment.get("content")) or "Open Code Review reported an issue here."
-            )
-        )
+        body = clean_text(comment.get("content")) or "Open Code Review reported an issue here."
+        if not report.prepared_prose:
+            body = markdown_code_block("", body)
+        yield "\n\n" + header + "\n\n" + body
         for field, label in (
             ("existing_code", "Existing code"),
             ("suggestion_code", "Suggested code"),
