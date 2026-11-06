@@ -61,11 +61,11 @@ evidence matrix, causal matrix and backlog where behavior or recorded state chan
 | REQ-001 | Qualified OCR 1.13.6, C# Rules and existing project-context reads | WQ-03, WQ-06 | in_progress |
 | REQ-002 | Starlark, streaming controls and existing consumed handoffs qualified | WQ-03, WQ-06 | in_progress |
 | REQ-003 | Dependabot #296 and frozen compatible dependency/tool refresh | WQ-02, WQ-07 | in_progress |
-| REQ-004 | Safe bounded markup publication across real consumers/readback | WQ-04, WQ-06 | pending |
-| REQ-005 | Exact code-span email correction and credential/protection review | WQ-04, WQ-05 | pending |
-| REQ-006 | Individual disposition of all 1611 public observations and final paired replays | WQ-05, WQ-06 | pending |
-| REQ-007 | Expanded inverse/property tests, meaningful coverage and resource evidence | WQ-04, WQ-05, WQ-06 | pending |
-| REQ-008 | Efficient agent cycle and synchronized canonical documentation | WQ-01, WQ-06 | in_progress |
+| REQ-004 | Safe bounded markup publication across real consumers/readback | WQ-04, WQ-06 | done |
+| REQ-005 | Exact code-span email correction and credential/protection review | WQ-04, WQ-05 | done |
+| REQ-006 | Individual disposition of all 1611 public observations and final paired replays | WQ-05, WQ-06 | done |
+| REQ-007 | Expanded inverse/property tests, meaningful coverage and resource evidence | WQ-04, WQ-05, WQ-06 | done |
+| REQ-008 | Efficient agent cycle and synchronized canonical documentation | WQ-01, WQ-06 | done |
 | REQ-009 | Signed reviewed delivery, one Security scan and admitted own-tool diagram | WQ-01, WQ-06, WQ-07 | pending |
 | REQ-010 | Stable 0.14.6, exact external reconciliation and private-safe cleanup | WQ-08 | pending |
 
@@ -177,8 +177,8 @@ into this cycle: aggregate Security scans 0/1, actual own-tool reviews 0/2.
 | WQ-03 | REQ-001, REQ-002 | Identical full Linux/Darwin 1.13.6 contracts, 116 distinct optional/path consumers, 295 focused tests/types, frozen readback and reviewed promotion verified; hosted final-tree check remains WQ-06 | done |
 | WQ-04 | REQ-004, REQ-005, REQ-007 | Consolidated slice and separate second-review corrections signed locally; 304 focused checks including 1000-example properties, independent coverage floors and semantic review pass | done |
 | WQ-05 | REQ-005, REQ-006, REQ-007 | Original public correspondence, all 1611 exact annotations, final matched production replay and resource investigation complete; authorized private evidence remains private | done |
-| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Aggregate review, one Security scan and two model reviews with admitted diagrams complete; final corrections, installed/native and full gate remain | in_progress |
-| WQ-07 | REQ-003, REQ-009 | Final feature push with exact admitted diagram, protected CI, merge, development publication and #296 reconciliation | pending |
+| WQ-06 | REQ-001, REQ-002, REQ-004, REQ-006, REQ-007, REQ-008, REQ-009 | Local acceptance complete: corrected findings, final quality 4866 tests/357 subtests and all floors, 598 Python 3.15 checks; hosted final-tree qualification and CI artifact owner remain | in_progress |
+| WQ-07 | REQ-003, REQ-009 | Ready for final feature push with exact admitted diagram; protected CI, merge, development publication and #296 reconciliation remain | in_progress |
 | WQ-08 | REQ-010 | Signed Release v0.14.6 PR, checked plan archive/reset, stable publication, external readback and cleanup | pending |
 
 ### Locked Decisions
@@ -313,14 +313,16 @@ acceptance/recovery artifacts. Do not duplicate rules across canonical owners.
   repeat measurement and actual worker profiling. Credential interpretation,
   normalization and bounded Markdown work dominate sampled cost; additional
   complete-representation/presentation checks are retained. No speedup is claimed.
-- The full final-runtime suite passed 4890 tests and 357 subtests, with ten stale
-  test expectations: former blanket-link rejection, unknown-call carrier proof
-  and the expanded coverage inventory. These are corrected; 368 focused checks
-  pass and value-boundary coverage is now 100%. Runtime is unchanged. Native
-  controlled checks passed in that full attempt. A passing final quality run
-  remains required; unchanged native handoffs need not be executed again.
-- Feature delivery, release and external reconciliation remain unfinished.
-  Security/model reviews are not repeated for these test-only corrections.
+- Final quality gate passes: 4866 tests, 357 subtests, 89.95% branch-aware
+  coverage against the 88% overall floor; all independent owner floors pass.
+  Value boundaries measure 100%. The 49 optional native cases passed in the
+  preceding full attempt on the same runtime; only stale test oracles changed.
+  A separate current-source Python 3.15 run passes 598 affected checks. Earlier
+  clean wheel/sdist installation and MCP/local/diagram smoke remain applicable;
+  final protected Build artifacts owns the current distributions.
+- The pre-push frozen dependency audit is clean. Feature delivery, hosted
+  qualification, release and independent external reconciliation remain pending.
+  Security/model reviews and full runtime checks are not repeated for docs.
 
 ### Risks And Recovery
 
@@ -342,14 +344,15 @@ copies, build/debug environments and policy-selected Actions data, never origina
 
 ### Resume Point
 
-Second-review corrections are separately committed, preserving the accepted
-diagram's immutable source head. Final paired replay, annotations, resource
-investigation and current-checkout audit are complete. Finish the passing final
-quality gate after test-oracle corrections; reuse unchanged native evidence. Finish WQ-06 through WQ-08: hosted exact-tag qualification, final
-feature push/CI/merge, signed Release v0.14.6 PR with complete plan archival/reset,
-external publication reconciliation and task-owned cleanup. Preserve the audit
-key and necessary source-free evidence. Do not repeat the completed Security
-scan or either successful model review. No landing-chat handoff or closure PR.
+Local implementation, corrected review findings, paired replay, annotations,
+resource investigation, checkout audit and final quality gate are complete.
+Finish pre-push privacy/history gates, push the ready feature PR with its exact
+accepted diagram, run hosted exact-tag qualification, await protected CI, merge
+and verify development TestPyPI publication. Finish WQ-07/WQ-08, including #296,
+the signed Release v0.14.6 PR with full plan archival/reset, external publication
+reconciliation and task-owned cleanup. Preserve the audit key/source-free proof.
+Do not repeat the completed Security/model scans. No landing-chat handoff or
+closure PR.
 
 ### Plan Fidelity Check
 
@@ -392,8 +395,8 @@ The full approved scope is in this plan and draft PR #299. Dependencies, OCR
 qualification and consolidated DLP implementation are signed locally. Security
 1/1 and model reviews 2/2 are complete; their findings are inspected. The latest
 focused corrections are separately signed locally. Use the current queue/resume point
-and private authenticated audit state. Final acceptance, feature/release delivery
-and independent external verification remain required.
+and private authenticated audit state. Local acceptance is complete; hosted
+qualification, feature/release delivery and external verification remain required.
 
 ## Recently Completed
 
