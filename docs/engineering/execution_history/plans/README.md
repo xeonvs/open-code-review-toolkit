@@ -12,4 +12,5 @@ Each new repository plan archived through the engineering-workflow lifecycle is 
 - [2026-10-30-toolkit-0-14-3-source-aware-dlp-and-private-corpus-audits.md](2026-10-30-toolkit-0-14-3-source-aware-dlp-and-private-corpus-audits.md)
 - [2026-10-31-toolkit-0-14-4-systematic-dlp-corrections-and-diagram-source-validation.md](2026-10-31-toolkit-0-14-4-systematic-dlp-corrections-and-diagram-source-validation.md)
 - [2026-11-04-toolkit-0-14-5-dlp-precision-ocr-qualification-and-maintenance-quality.md](2026-11-04-toolkit-0-14-5-dlp-precision-ocr-qualification-and-maintenance-quality.md)
+- [2026-11-06-toolkit-0-14-6-ocr-1-13-6-dlp-precision-and-efficient-delivery.md](2026-11-06-toolkit-0-14-6-ocr-1-13-6-dlp-precision-and-efficient-delivery.md)
 <!-- engineering-workflow:index:end -->

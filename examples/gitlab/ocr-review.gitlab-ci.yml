@@ -6,10 +6,10 @@ default:
   image: python:3.12-slim
 
 variables:
-  OCR_VERSION: "v1.13.5"
-  OCR_TOOLKIT_VERSION: "0.14.5"
+  OCR_VERSION: "v1.13.6"
+  OCR_TOOLKIT_VERSION: "0.14.6"
   OCR_TOOLKIT_CHECKSUMS_URL: "https://github.com/xeonvs/open-code-review-toolkit/releases/download/v${OCR_TOOLKIT_VERSION}/SHA256SUMS"
-  OCR_SHA256: "f9d918dd8b461719be975430e0f7396b4e642b465ffa490d651ace0d8c989171"
+  OCR_SHA256: "cb1330516431dea980c75497fa2bc46ad5fe5a4f3d35e947ab5af4a1742cae92"
   OCR_POST_MODE: "draft"
   OCR_STRICT_POSTING: "true"
   # Default-on receipt-bound approval; governed federation still applies receipt gates.
