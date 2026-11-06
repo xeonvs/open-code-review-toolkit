@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -160,7 +161,31 @@ def test_documentation_indexes_route_to_canonical_owners() -> None:
     assert "active plan" not in context_contracts
 
 
-def test_release_archive_reconciles_current_external_delivery_truth() -> None:
+def _assert_closed_release_plan(plan: str, version: str) -> None:
+    """Use explicit plan identity and lifecycle fields, never index prose as state."""
+
+    for field, expected in (
+        ("Status", "done"),
+        ("Release classification", "release-required"),
+        ("Target release", version),
+    ):
+        assert re.findall(rf"^{re.escape(field)}: (.+)$", plan, re.M) == [expected]
+    assert len(re.findall(r"^### Post-Close Delivery$", plan, re.M)) == 1
+    delivery = plan.split("### Post-Close Delivery\n", 1)[1].split("\n### ", 1)[0]
+    assert "outside the closed repository plan" in delivery
+
+
+@pytest.mark.parametrize(
+    "index_description",
+    [
+        None,
+        "Checked repository handoff prepared; external publication pending.",
+        "Repository work complete; external delivery remains separately owned.",
+    ],
+)
+def test_release_archive_reconciles_current_external_delivery_truth(
+    index_description: str | None,
+) -> None:
     """Keep legacy receipts and current repository closure distinct."""
 
     release_guide = (PROJECT_ROOT / "docs" / "release.md").read_text(encoding="utf-8")
@@ -210,6 +235,10 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
         assert "external reconciliation" in current_index_row
         assert "stable-delivery handoff" not in current_index_row
     else:
+        if index_description is not None:
+            cells = current_index_row.split("|")
+            cells[-2] = f" {index_description} "
+            current_index_row = "|".join(cells)
         plan_directory = PROJECT_ROOT / "docs/engineering/execution_history/plans"
         stable_archives = []
         for path in plan_directory.glob("*.md"):
@@ -220,19 +249,41 @@ def test_release_archive_reconciles_current_external_delivery_truth() -> None:
                 stable_archives.append((path, text))
         assert len(stable_archives) == 1
         archive_path, archived_plan = stable_archives[0]
-        assert "Status: done" in archived_plan
-        assert "### Post-Close Delivery" in archived_plan
-        assert "outside the closed repository plan" in archived_plan
+        _assert_closed_release_plan(archived_plan, release_version)
         assert f"plans/{archive_path.name}" in current_index_row
-        if "stable-delivery handoff" not in current_index_row:
-            assert "immutable GitHub Release published" in current_index_row
-            assert "archived plan remains a prepublication snapshot" in current_index_row
+        # The linked closed plan establishes a repository handoff. Neither its
+        # index description nor this offline check establishes publication.
         assert "external reconciliation verified" not in current_index_row
         active_plan = (PROJECT_ROOT / "PLANS.md").read_text(encoding="utf-8")
         active_match = re.search(r"^## Active Plan: Toolkit (\d+\.\d+\.\d+)\b", active_plan, re.M)
         if active_match:
             active_version_key = tuple(int(part) for part in active_match.group(1).split("."))
             assert active_version_key > release_version_key
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        ("Status: done", "Status: active"),
+        ("Status: done", "Status: done\nStatus: active"),
+        ("Release classification: release-required", "Release classification: no-release"),
+        ("Target release: 0.2.0", "Target release: 0.1.0"),
+        ("Target release: 0.2.0\n", ""),
+        ("### Post-Close Delivery", "### Other delivery"),
+        ("outside the closed repository plan", "all external delivery completed"),
+    ],
+)
+def test_release_archive_rejects_incomplete_or_conflicting_metadata(
+    original: str, replacement: str
+) -> None:
+    plan = (
+        "Status: done\nRelease classification: release-required\nTarget release: 0.2.0\n"
+        "### Post-Close Delivery\n"
+        "Publication and verification are outside the closed repository plan.\n"
+    )
+    _assert_closed_release_plan(plan, "0.2.0")
+    with pytest.raises(AssertionError):
+        _assert_closed_release_plan(plan.replace(original, replacement), "0.2.0")
 
 
 def test_review_signal_audit_keeps_group_data_outside_toolkit_authority() -> None:
