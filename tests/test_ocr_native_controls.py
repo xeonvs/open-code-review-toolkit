@@ -20,9 +20,9 @@ def test_native_concurrency_bounds_coverage_and_read_only_session_lookup(
     tmp_path: Path, qualified_native_ocr, concurrency: int | None
 ) -> None:
     binary, version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
-    if version != "1.13.7":
-        pytest.skip("global session inspection is qualified on OCR 1.13.7")
     module = load_script()
+    if module.core._version(version) < (1, 13, 7):
+        pytest.skip("global session inspection was introduced in OCR 1.13.7")
     from ocr_qualification import execution, peer
 
     env = execution._isolated_probe_environment(tmp_path / "home")

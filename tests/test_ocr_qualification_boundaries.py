@@ -10,6 +10,7 @@ from copy import deepcopy
 
 import pytest
 
+from ocr_toolkit.preflight import RECOMMENDED_OCR_VERSION
 from tests.support import PROJECT_ROOT
 from tests.test_ocr_compat import current_contracts, load_script
 
@@ -50,9 +51,9 @@ def test_1135_fresh_execution_is_refused_before_a_probe():
         module.contracts._require_live_qualification_version("1.13.5")
 
 
-def test_1136_live_selection_covers_csharp_and_nested_starlark():
+def test_current_live_selection_retains_csharp_and_nested_starlark():
     module = load_script()
-    rules = module.contracts._language_rules_for_version("1.13.6")
+    rules = module.contracts._language_rules_for_version(RECOMMENDED_OCR_VERSION)
     assert rules["app/src/Program.cs"] == "**/*.cs"
     for path in ("bazel/rules.bzl", "bazel/defs.bazel", "bazel/config.star"):
         assert rules[path] == "**/*.{bzl,bazel,star}"

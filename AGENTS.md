@@ -37,7 +37,7 @@ Use this file as the short repository map and route table for Open Code Review T
 
 Read the matching owners and run their applicable guards. The general repository route applies alongside a more specific route; a shared owner or unchanged-state guard needs only one current read or check.
 
-<!-- ew:route id="ocr-qualification" triggers="scripts/ocr_compat.py|scripts/ocr_compat_history.py|scripts/ocr_qualification/**|compatibility/**|.github/workflows/ocr-compatibility.yml|OCR qualification" owners="docs/compatibility.md|docs/development.md" guards="test:tests/test_ocr_compat.py|manual_review:compare frozen readback live probes immutable asset identity and promotion consumers" -->
+<!-- ew:route id="ocr-qualification" triggers="scripts/ocr_compat.py|scripts/ocr_compat_history.py|scripts/ocr_qualification/**|compatibility/**|.github/workflows/ocr-compatibility.yml|OCR qualification" owners="docs/compatibility.md|docs/development.md" guards="test:tests/test_ocr_compat.py|test:tests/test_ocr_qualification_boundaries.py|test:tests/test_native_capabilities.py|manual_review:compare frozen readback live probes immutable asset identity and promotion consumers" -->
 | `ocr-qualification` | OCR contracts, qualification and promotion | Compatibility policy and qualification maintenance | Contract tests and actual candidate boundary evidence |
 
 <!-- ew:route id="repository-change" triggers="**" owners="docs/engineering/project_principles.md|docs/development.md" guards="manual_review:inspect the scoped final diff and applicable repository checks" -->

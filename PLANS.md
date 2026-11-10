@@ -50,8 +50,8 @@ and native duration/token/cache metadata. Expand real-boundary and property test
 | REQ-006 | Bounded provider-neutral bootstrap, cross-group scope, modes/help and unchanged optional outcomes | WQ-04, WQ-06 | done |
 | REQ-007 | Advertised MCP schema evidence, bounded debug v3 and private native trace v2 metadata | WQ-05, WQ-06 | done |
 | REQ-008 | Explicit evidence-backed disposition of all seven performance proposals without invented speed claims | WQ-04, WQ-05, WQ-06 | done |
-| REQ-009 | Real SDK/wire/installed handoffs, inverse/property tests and branch-aware coverage | WQ-03, WQ-04, WQ-05, WQ-06 | in_progress |
-| REQ-010 | Aggregate review, one Security scan, actual own-tool review with admitted diagram and final gates | WQ-06 | in_progress |
+| REQ-009 | Real SDK/wire/installed handoffs, inverse/property tests and branch-aware coverage | WQ-03, WQ-04, WQ-05, WQ-06 | done |
+| REQ-010 | Aggregate review, one Security scan, actual own-tool review with admitted diagram and final gates | WQ-06 | done |
 | REQ-011 | Protected feature merge and development publication verified | WQ-07 | pending |
 | REQ-012 | Release metadata, authorization, notes/examples and checked archive prepared in release PR | WQ-08 | pending |
 | REQ-013 | Stable delivery, receipt-backed issue closure, site/main readback and cleanup | WQ-09 | pending |
@@ -133,8 +133,8 @@ Do not publish private traces, source snapshots, credentials or debug bundles.
 | WQ-03 | Implement closed parser diagnostics and collector v2 transitions with compact state/inverse/hostile-storage tests | REQ-004, REQ-005, REQ-009 | done |
 | WQ-04 | Simplify MCP schema, qualify provider wire, revise bounded bootstrap/status/help and actual retry handoff | REQ-004, REQ-006, REQ-008, REQ-009 | done |
 | WQ-05 | Capture advertised schema, preserve numeric native metrics in trace v2 and debug v3; qualify private lifecycle | REQ-007, REQ-008, REQ-009 | done |
-| WQ-06 | Final docs/issue disposition, properties/coverage, aggregate review, one Security scan, own-tool diagram and final quality/install gates | REQ-003, REQ-006 through REQ-010 | in_progress |
-| WQ-07 | Final feature push with accepted Mermaid, protected CI/merge and development publication readback | REQ-011 | pending |
+| WQ-06 | Final docs/issue disposition, properties/coverage, aggregate review, one Security scan, own-tool diagram and final quality/install gates | REQ-003, REQ-006 through REQ-010, REQ-014 | done |
+| WQ-07 | Final feature push with accepted Mermaid, protected CI/merge and development publication readback | REQ-011 | in_progress |
 | WQ-08 | Signed Release v0.14.7 PR, markers/epoch/authorization/changelog/pins and atomic plan archive/root cleanup | REQ-001, REQ-012 | pending |
 | WQ-09 | Stable receipts/install/provenance/tag/release/issue/site/main readback and task cleanup | REQ-013 | pending |
 
@@ -312,6 +312,19 @@ from Linux qualification have been removed. Corrections leave the admitted flow
 unchanged; focused native/property checks and semantic review qualify them without
 a second model run or another aggregate Security scan.
 
+Final runtime head 28afc57: full quality run passed static/security checks and
+5005 tests with 357 subtests; two stale qualification expectations failed. Only
+test/instruction corrections followed: exact capability fixtures now include the
+newly qualified patch and future negatives; live selection follows the current
+recommendation, while frozen fixtures retain exact versions. The boundary test
+module has a semantic name and is included in the focused qualification route.
+All 35 affected checks passed; coverage was appended to the full measurement.
+Every remaining canonical coverage floor then passed separately: 90.13% overall,
+95% diagnostics/lifecycle, 97% collector, 99% contracts, 98% MCP, 94% bootstrap/debug
+and 96% trace. No runtime changes followed that full measurement. Dependency,
+working-tree disclosure and unpublished-history scans passed; final push guards
+must cover the final documentation/test commit as well.
+
 ### Risks And Recovery
 
 - Permissive advertised structure must not widen server admission; test both.
@@ -330,11 +343,11 @@ a second model run or another aggregate Security scan.
 
 ### Resume Point
 
-WQ-06: commit the reviewed own-tool corrections, run the single full quality gate
-on the final runtime head and pre-push privacy/dependency guards. Then update PR
-#303 with exact admitted Mermaid and final validation before the feature push.
-Security and own-tool acceptance are complete; keep their reviewed identities
-explicit and do not repeat unchanged checks.
+WQ-07: commit final test/instruction/evidence reconciliation, run final push
+guards, update #303 with exact admitted Mermaid and validation, then push the
+completed feature and wait for protected CI. Merge only the checked head and
+verify development TestPyPI before preparing the release branch. Do not repeat
+the completed Security/model checks for these test/documentation corrections.
 
 ### Plan Fidelity Check
 
@@ -374,8 +387,8 @@ Current root owns plan and delivery state. Recover from this full plan, current
 Git state and necessary private evidence, not a duplicate execution transcript.
 Draft PR #303 contains only the signed plan. Local commits 996d2fb and dc1d55f
 contain complete qualification and runtime changes. Security/installed/own-tool
-acceptance is complete, with focused corrections awaiting commit. Final quality
-and all feature/development/stable delivery remain required.
+acceptance and final runtime gates are complete. Final test/documentation
+reconciliation awaits commit; feature/development/stable delivery remains required.
 
 ## Recently Completed
 
