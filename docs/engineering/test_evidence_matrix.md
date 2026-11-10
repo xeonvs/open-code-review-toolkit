@@ -10,6 +10,15 @@ This matrix records what the repository test suite proves and, equally important
 - **External qualification:** the actual external component is executed. This evidence is version-specific and is not replaced by a fake response.
 - **Static contract:** repository configuration, workflows, public examples, package contents, or documentation are inspected without claiming execution of the external service.
 
+## v0.14.7 recoverable optional output and private metrics
+
+| Invariant | Real boundary | Verification | Limit |
+| --- | --- | --- | --- |
+| Invalid output is repairable without weakening admission | Actual qualified OCR -> stdio MCP -> collector -> immutable-source/DLP admission -> report | Both variants consume closed invalid feedback before resubmission; state properties cover valid/invalid order, repeats, conflict and budgets, alongside hostile private-state reads | Eight attempts/128 KiB wire input; different valid candidates remain terminal conflict; received is collection only |
+| Advertised schema and wire evidence have distinct provenance | Production MCP factory -> native OpenAI, Responses and Anthropic adapters -> controlled HTTP peers | Actual API captures equal the finite structural schema; real SDK tests retain server-only semantic constraints | Capture deliberately ends with a synthetic HTTP error; no arbitrary gateway acceptance claim |
+| Debug diagnostics do not become result authority | Run-owned native session -> bounded private trace/debug bundle | Numeric present/absent/zero and invalid metadata properties; private schema snapshot hash/origin; changed/oversized/truncated sources and optional failures | Definition evidence is explicitly not provider wire; metrics do not establish billing, causality or model completeness |
+| Native refactoring preserves consumed behavior | Verified official Linux/Darwin OCR -> current contracts and native consumers | Clojure Rules/EDN context, exclusions, frozen predecessor readback, actual concurrency and session lookup controls, gitlink/federation handoffs | Deterministic peers supplement, rather than replace, the final real own-tool review |
+
 ## v0.14.6 safe prose and carrier evidence
 
 | Invariant | Real boundary | Verification | Limit |

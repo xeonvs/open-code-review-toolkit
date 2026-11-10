@@ -144,10 +144,10 @@ def execution(tmp_path: Path) -> DiagramExecution:
     )
 
 
-def finish(execution: DiagramExecution):
+def finish(execution: DiagramExecution, *, calls: int = 1):
     return execution.finish(
         review_range=REVIEW_RANGE,
-        calls=1,
+        calls=calls,
         failed_calls=0,
         read_source=lambda _path: ReferenceSourceInfo(3),
         forbidden_matcher=ForbiddenMatcher.compile(()),
@@ -405,3 +405,21 @@ def test_optional_cleanup_fault_does_not_hide_mandatory_cleanup(
 def test_warning_sink_failure_cannot_replace_an_optional_failure(monkeypatch) -> None:
     monkeypatch.setattr(lifecycle, "print", fail, raising=False)
     lifecycle.diagram_warning()
+
+
+@pytest.mark.parametrize("order", ("invalid", "invalid-valid", "valid-invalid"))
+def test_final_warning_reports_only_unrecovered_closed_validation(execution, capsys, order):
+    for action in order.split("-"):
+        execution.collector.submit(
+            flow_submission() if action == "valid" else {"state": "SYNTHETIC_REJECTED_SECRET"}
+        )
+    execution.capture()
+    result = finish(execution, calls=len(order.split("-")))
+    warning = capsys.readouterr().err
+    assert "SYNTHETIC_REJECTED_SECRET" not in warning
+    if order == "invalid":
+        assert result.state == "omitted-invalid"
+        assert "state at /state" in warning and "review continues" in warning
+    else:
+        assert result.state == "generated"
+        assert warning == ""

@@ -449,7 +449,7 @@ def main(root: Path, cli: Path) -> int:
         if debug:
             journal_text = (debug_directory / "journal.json").read_text()
             journal = json.loads(journal_text)
-            assert journal["schema_version"] == "ocr.toolkit-debug/v2"
+            assert journal["schema_version"] == "ocr.toolkit-debug/v3"
             assert journal["complete"] is True
             assert journal["phases"]["configuration"]["facts"]["llm_protocol"] == "openai"
             assert journal["phases"]["configuration"]["facts"]["language"] == "English (UK)"

@@ -77,6 +77,11 @@ scans, resumed sessions and competing repository/background inputs are unsupport
 The toolkit owns JSON output and agent audience; contradictory `--format` or
 `--audience` options fail before execution.
 
+Native options follow `--`. For example, `--concurrency 2` limits concurrent
+review groups; OCR defaults to eight. This bounds parallel groups and does not
+shorten a serial chain within one group. Inline group hunks already reach OCR;
+the model can read missing full-source, dependency and cross-group context.
+
 Only one review may use a checkout's private `.review-context/` artifacts at a
 time. The toolkit holds a private nonblocking lock for the entire review; a
 second run in that checkout fails without clearing the first run's artifacts.
@@ -298,6 +303,7 @@ diagnostics to a different directory.
 | `summary.md` | Admitted report or closed failure summary | 20,000,000 |
 | `bootstrap.md` | Exact toolkit background supplied to OCR | 65,536 |
 | `diagram.json` | Run collector state and private submitted candidate before cleanup | 20,000 |
+| `mcp-tools.json` | Toolkit diagram tool definition and schema hash; not provider wire capture | 16,384 |
 | `native-trace.jsonl` | Projected native task messages, model text/tool calls, tool responses and completion checkpoints | 20,000,000 |
 | `journal.json` | Actual phase observations and value-free DLP decisions | 1,000,000 |
 
@@ -310,8 +316,10 @@ session. Configuration observations name
 the selected protocol, language, review effort and logging flags; the model
 selection is represented by a SHA-256 fingerprint, not provider acceptance.
 
-Journal schema `ocr.toolkit-debug/v2` adds these artifacts. The trace uses
-`ocr.native-trace/v1` and reads only this run's isolated session HOME. Before
+Journal schema `ocr.toolkit-debug/v3` records these artifacts. The schema snapshot
+has origin `toolkit-mcp-definition` and `provider_wire_observed: false`: it records
+the definition used by the MCP factory, not a gateway's accepted request.
+The trace uses `ocr.native-trace/v2` and reads only this run's isolated session HOME. Before
 retaining records it checks the private file, session identity, immutable range,
 repository and record chain. It accepts one unambiguous native session, reads at
 most 32,000,000 source bytes, 10,000 records and 4,000,000 bytes per record, and
@@ -324,6 +332,13 @@ Use task type and group path to follow grouping, each fresh main-review round,
 cross-group reads and optional diagram submission. A native `ok: true` tool
 record may contain an error in its text response; inspect both. The trace does
 not include request tool schemas or prove that a model used all available context.
+Available native response/error/tool durations retain milliseconds; session
+duration retains seconds. Known prompt/completion/cache-read/cache-write token
+counts are preserved when reported, including zero. Missing fields remain absent.
+Invalid numeric metadata degrades capture without affecting review. Native
+timestamps have second precision; record-chain order is not request causality,
+and group keys are opaque. Do not sum parallel durations into wall time, count
+usage twice, or infer billing or cache savings from these reported values.
 Ordinary native session files and the isolated authentication link are still
 removed after capture. Keep only the requested private bundle until diagnosis
 finishes; never use its raw records as posting or approval input.

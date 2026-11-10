@@ -45,12 +45,12 @@ and native duration/token/cache metadata. Expand real-boundary and property test
 | REQ-001 | Complete plan fidelity, signed draft PR and sustained release objective | WQ-01, WQ-08 | in_progress |
 | REQ-002 | Exact official Linux/Darwin OCR 1.13.7 qualification and frozen 1.13.6 readback | WQ-02 | done |
 | REQ-003 | New language/Rules/exclusions, review-loop handoffs, native auth and session-show qualification | WQ-02, WQ-06 | done |
-| REQ-004 | Provider-friendly single-tool schema with strict canonical parser and safe actionable errors | WQ-03, WQ-04 | pending |
-| REQ-005 | Recoverable invalid submissions, deterministic candidate/conflict/budget state and hostile private storage | WQ-03 | pending |
-| REQ-006 | Bounded provider-neutral bootstrap, cross-group scope, modes/help and unchanged optional outcomes | WQ-04, WQ-06 | pending |
-| REQ-007 | Advertised MCP schema evidence, bounded debug v3 and private native trace v2 metadata | WQ-05, WQ-06 | pending |
-| REQ-008 | Explicit evidence-backed disposition of all seven performance proposals without invented speed claims | WQ-04, WQ-05, WQ-06 | pending |
-| REQ-009 | Real SDK/wire/installed handoffs, inverse/property tests and branch-aware coverage | WQ-03, WQ-04, WQ-05, WQ-06 | pending |
+| REQ-004 | Provider-friendly single-tool schema with strict canonical parser and safe actionable errors | WQ-03, WQ-04 | done |
+| REQ-005 | Recoverable invalid submissions, deterministic candidate/conflict/budget state and hostile private storage | WQ-03 | done |
+| REQ-006 | Bounded provider-neutral bootstrap, cross-group scope, modes/help and unchanged optional outcomes | WQ-04, WQ-06 | done |
+| REQ-007 | Advertised MCP schema evidence, bounded debug v3 and private native trace v2 metadata | WQ-05, WQ-06 | done |
+| REQ-008 | Explicit evidence-backed disposition of all seven performance proposals without invented speed claims | WQ-04, WQ-05, WQ-06 | done |
+| REQ-009 | Real SDK/wire/installed handoffs, inverse/property tests and branch-aware coverage | WQ-03, WQ-04, WQ-05, WQ-06 | in_progress |
 | REQ-010 | Aggregate review, one Security scan, actual own-tool review with admitted diagram and final gates | WQ-06 | pending |
 | REQ-011 | Protected feature merge and development publication verified | WQ-07 | pending |
 | REQ-012 | Release metadata, authorization, notes/examples and checked archive prepared in release PR | WQ-08 | pending |
@@ -124,10 +124,10 @@ Do not publish private traces, source snapshots, credentials or debug bundles.
 | --- | --- | --- | --- |
 | WQ-01 | Materialize/reconcile plan, enable active state, sign/scan/push plan and open draft PR | REQ-001 | done |
 | WQ-02 | Extend current qualification, freeze old readback, verify Linux/Darwin assets and optional handoffs; promote only after passing | REQ-002, REQ-003 | done |
-| WQ-03 | Implement closed parser diagnostics and collector v2 transitions with compact state/inverse/hostile-storage tests | REQ-004, REQ-005, REQ-009 | in_progress |
-| WQ-04 | Simplify MCP schema, qualify provider wire, revise bounded bootstrap/status/help and actual retry handoff | REQ-004, REQ-006, REQ-008, REQ-009 | in_progress |
-| WQ-05 | Capture advertised schema, preserve numeric native metrics in trace v2 and debug v3; qualify private lifecycle | REQ-007, REQ-008, REQ-009 | in_progress |
-| WQ-06 | Final docs/issue disposition, properties/coverage, aggregate review, one Security scan, own-tool diagram and final quality/install gates | REQ-003, REQ-006 through REQ-010 | pending |
+| WQ-03 | Implement closed parser diagnostics and collector v2 transitions with compact state/inverse/hostile-storage tests | REQ-004, REQ-005, REQ-009 | done |
+| WQ-04 | Simplify MCP schema, qualify provider wire, revise bounded bootstrap/status/help and actual retry handoff | REQ-004, REQ-006, REQ-008, REQ-009 | done |
+| WQ-05 | Capture advertised schema, preserve numeric native metrics in trace v2 and debug v3; qualify private lifecycle | REQ-007, REQ-008, REQ-009 | done |
+| WQ-06 | Final docs/issue disposition, properties/coverage, aggregate review, one Security scan, own-tool diagram and final quality/install gates | REQ-003, REQ-006 through REQ-010 | in_progress |
 | WQ-07 | Final feature push with accepted Mermaid, protected CI/merge and development publication readback | REQ-011 | pending |
 | WQ-08 | Signed Release v0.14.7 PR, markers/epoch/authorization/changelog/pins and atomic plan archive/root cleanup | REQ-001, REQ-012 | pending |
 | WQ-09 | Stable receipts/install/provenance/tag/release/issue/site/main readback and task cleanup | REQ-013 | pending |
@@ -265,6 +265,16 @@ eight and explicit one/two concurrency bounds, full selected coverage, outside-C
 session lookup, restriction, missing/invalid and ambiguous IDs passed with isolated
 synthetic sessions. Numeric trace properties retain absent-versus-zero semantics.
 
+Final focused native consumers: 37 passed, including actual factory-schema debug
+capture, grouped evidence, private trace and repaired output. Focused suites: 442
+passed; additional owner checks: 169 passed; extended 1000-example state/metric
+properties and optional regressions: 55 passed. Branch-aware owner measurements:
+diagnostics 95%, collector 97%, contracts 99%, MCP 98%, lifecycle 91%, bootstrap
+91%, debug 93% and trace 96%. Ruff and all runtime types passed. The obsolete
+peer assertion caused an interrupted early coverage attempt; the corrected run
+passed and its task-owned children were cleaned. Local OCR is replaced by the
+verified 1.13.7 binary. #302 now records A-G and every performance disposition.
+
 ### Risks And Recovery
 
 - Permissive advertised structure must not widen server admission; test both.
@@ -283,9 +293,10 @@ synthetic sessions. Numeric trace properties retain absent-versus-zero semantics
 
 ### Resume Point
 
-WQ-02 is complete and the exact verified release is promoted. WQ-03 through WQ-05:
-finish coverage, consumer documentation and aggregate validation. Keep subsequent
-implementation local until the final feature acceptance.
+WQ-06: commit the self-reviewed complete diagram/private-diagnostics slice, then
+perform aggregate review, one Security diff scan, actual ChatGPT own-tool review
+with admitted diagram, full quality and installed-artifact acceptance. Keep
+subsequent implementation local until the final feature acceptance.
 
 ### Plan Fidelity Check
 

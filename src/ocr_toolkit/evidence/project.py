@@ -150,6 +150,8 @@ def render_bootstrap(
     )
     external = [capability for capability in capabilities if not capability.builtin]
     navigation = [
+        "Use inline <review_files> hunks first; read files/dependencies or cross-group diffs "
+        "as needed.",
         "Select applicable summary kinds/components/delta_kinds: frameworks/runtimes, "
         "declared/locked dependency versions, templates, CI/images/infrastructure and "
         "policy/guidance. Use `action=list`, `action=get` by ID or literal search; "
@@ -185,14 +187,16 @@ def render_bootstrap(
     if diagram_available and store.base is not None and store.head is not None:
         required_suffix = (
             "\n## Requested change diagram\n\n"
-            "This output is requested even with no findings. Only the group containing the "
-            "case-sensitive lexically first non-deleted full path in <review_files> + "
-            "<other_changed_files> owns it (include dotfiles). The owner must inspect relevant "
-            "cross-group diffs with file_read_diff from the global inventory and summarize "
-            "the entire reviewed change. If summary.diagram_output.state=pending, "
-            f"call `{DIAGRAM_TOOL_NAME}` once before task_done with a typed change summary or "
-            "not-applicable, using base_sha/head_sha from refs above. Other groups and already "
-            "received output skip. Omit only if required context or the output tool is unavailable.\n"
+            "Even without findings, the group containing the case-sensitive lexically first "
+            "non-deleted full path in <review_files> + <other_changed_files> owns output "
+            "(include dotfiles). Read needed cross-group file_read_diff; cover the whole change. "
+            "If summary.diagram_output.state is pending/retryable-invalid, submit before task_done to "
+            f"`{DIAGRAM_TOOL_NAME}`: state=generated, base_sha/head_sha from refs above, diagram like "
+            '`{"kind":"flowchart","nodes":[{"id":"n","kind":"step","label":"Change",'
+            '"references":[{"path":"reviewed/file","start_line":1,"end_line":1}]}],"edges":[]}`. '
+            "Use verified head references. not-applicable omits diagram. "
+            "Retry invalid while allowed. Other groups/received output skip; "
+            "unavailable context/tool permits omission.\n"
         )
     required_prefix = MANDATORY_EVIDENCE_INSTRUCTION + _immutable_review_refs(store)
     if unprotected_target:

@@ -17,16 +17,21 @@ from ocr_toolkit.diagrams.contracts import (
     ReferenceSourceInfo,
     diagram_requested,
 )
+from ocr_toolkit.diagrams.diagnostics import parse_diagnostic
 from ocr_toolkit.diagrams.persistence import diagram_payload, parse_diagram_payload
 from ocr_toolkit.native_capabilities import supports_native_capability
 from ocr_toolkit.review_range import ReviewRange
 
 
-def diagram_warning() -> None:
+def diagram_warning(diagnostic: dict[str, object] | None = None) -> None:
     """Log a closed notice without rejected content or exception details."""
 
     try:
-        print("OCR diagram unavailable or invalid; review continues without it.", file=sys.stderr)
+        message = "OCR diagram unavailable or invalid; review continues without it."
+        if diagnostic is not None:
+            safe = parse_diagnostic(diagnostic)
+            message = f"OCR diagram omitted: {safe['code']} at {safe['path'] or '/'}; review continues without it."
+        print(message, file=sys.stderr)
     except Exception:
         pass
 
@@ -125,5 +130,8 @@ class DiagramExecution:
             )
         self.result = result
         if result.state in {"omitted-invalid", "not-generated", "unsupported"}:
-            diagram_warning()
+            if result.reason == "invalid" and self.snapshot is not None:
+                diagram_warning(self.snapshot.last_error)
+            else:
+                diagram_warning()
         return result
