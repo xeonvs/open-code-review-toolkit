@@ -1,3 +1,22 @@
+## 0.14.7 - 2026-11-10
+
+### 🚀 Features
+
+- Private local debug bundles now retain the toolkit MCP diagram definition and available native duration/token/cache metrics, with explicit provenance and incomplete-capture status. Definition snapshots do not claim provider acceptance, and missing metrics remain absent. ([#303](https://github.com/xeonvs/open-code-review-toolkit/issues/303))
+
+### 🐛 Bug Fixes
+
+- Optional diagrams now return safe canonical validation feedback and accept corrective submissions within the existing run budgets. A later invalid attempt preserves a valid candidate; conflicting valid candidates still omit the diagram. Provider-friendly schemas, a bounded bootstrap example and local-mode help make the output contract explicit without changing findings or review outcomes. ([#302](https://github.com/xeonvs/open-code-review-toolkit/issues/302))
+
+### 🛠 Maintenance
+
+- Advance recommended Open Code Review to checksum-verified 1.13.7, preserving qualified range, coverage, MCP, native authentication and request-control contracts. ([#304](https://github.com/xeonvs/open-code-review-toolkit/issues/304))
+
+### 🧩 Rules
+
+- Recommended OCR adds Clojure, ClojureScript, shared Clojure and EDN selection and built-in Rules, with qualified test and generated-output exclusions. ([#304](https://github.com/xeonvs/open-code-review-toolkit/issues/304))
+
+
 ## 0.14.6 - 2026-11-06
 
 ### 🐛 Bug Fixes
