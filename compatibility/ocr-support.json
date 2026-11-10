@@ -1,6 +1,6 @@
 {
-  "monitoring_floor": "1.13.6",
-  "recommended_version": "1.13.6",
+  "monitoring_floor": "1.13.7",
+  "recommended_version": "1.13.7",
   "releases": [
     {
       "assets": [
@@ -2936,6 +2936,59 @@
       "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.6",
       "status": "tested",
       "version": "1.13.6"
+    },
+    {
+      "assets": [
+        {
+          "name": "opencodereview-darwin-amd64",
+          "sha256": "fa7b63f25e7002aec38e6980b071d1b53e6681aeb9e144b7bfe84833de5e3de6",
+          "size": 58361600
+        },
+        {
+          "name": "opencodereview-darwin-arm64",
+          "sha256": "ce2eab495483f9b119992b48253a4e2f6969c27c3b02514350d9e7aa0083b4e8",
+          "size": 55366066
+        },
+        {
+          "name": "opencodereview-linux-amd64",
+          "sha256": "8c1ff786161b6dc0e8dcb06107f18bda8b6181b39ce573400add4a39f90cf19d",
+          "size": 56606882
+        },
+        {
+          "name": "opencodereview-linux-arm64",
+          "sha256": "f18be0e467aa23a5d9966b38fc0f89144b932970a2082800eacd4062b9257ffa",
+          "size": 53280930
+        },
+        {
+          "name": "opencodereview-windows-amd64.exe",
+          "sha256": "b637d002471056c57f50c947583188dbeafa043aeb5875ee16ab4355b1eb2d36",
+          "size": 58079232
+        },
+        {
+          "name": "opencodereview-windows-arm64.exe",
+          "sha256": "7c65e39825a169a4c6a4ddf1e163a0888843d5b338b72ed77e892095e6c8042d",
+          "size": 53999616
+        },
+        {
+          "name": "sha256sum.txt",
+          "sha256": "bca0acc284cb4e0904022235429b3d473b1e4c04e4f962cf67353e27539953d4",
+          "size": 572
+        }
+      ],
+      "capabilities": [
+        "llm_result_identity",
+        "per_run_model_override",
+        "per_run_provider_override",
+        "review_effort",
+        "semantic_grouping"
+      ],
+      "evidence": "compatibility/evidence/ocr-1.13.7.json",
+      "evidence_sha256": "c0a759cf2bebe294122685220940aed001500a073a6c7077ddde1449b753c50e",
+      "human_conclusion": "Reviewed adjacent upstream source and official Linux amd64/Darwin arm64 assets. Identical current probes preserve immutable ranges, manifests, rounds, budgets, partial coverage and explicit streaming controls. Clojure/ClojureScript/shared/EDN selection, Rules and native unchanged EDN reads pass; new test/generated exclusions are qualified. Real consumers preserve diagrams, gitlinks and evidence/federation MCP. Default eight and explicit one/two concurrency plus restricted/global/missing/ambiguous read-only session inspection pass. Review-loop extraction preserves toolkit execution; scan-only thresholds, telemetry, test isolation, npm installer and upstream Action/site changes require no toolkit adaptation. Native auth resolution, store/refresh ownership and request controls retain their prior contract. Configured-model acceptance remains a separate release gate.",
+      "published_at": "2026-11-10T06:00:15Z",
+      "release_url": "https://github.com/alibaba/open-code-review/releases/tag/v1.13.7",
+      "status": "tested",
+      "version": "1.13.7"
     }
   ],
   "runtime_support": {

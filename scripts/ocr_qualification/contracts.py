@@ -88,7 +88,7 @@ def _validate_current_contracts(value: object, version: str) -> None:
             "m_routing": "matlab_and_objective_c",
             "paths": sorted(_language_rules_for_version(version)),
             "excluded_paths": list(_language_negative_paths_for_version(version)),
-            "rule_documents": ["csharp", "starlark"],
+            "rule_documents": ["clojure", "csharp", "starlark"],
             "default_rule_paths": list(settings.DEFAULT_RULE_CONTROL_PATHS),
         },
         "completion_cap_probe": {
@@ -116,6 +116,12 @@ def _validate_current_contracts(value: object, version: str) -> None:
             "result": "passed",
             "rules_in_main_request": True,
             "context_paths": ["Directory.Build.props", "app/Project.csproj", "global.json"],
+            "execution": "read-only-native-tools",
+        },
+        "clojure_context_probe": {
+            "result": "passed",
+            "rules_in_main_request": True,
+            "context_paths": ["deps.edn"],
             "execution": "read-only-native-tools",
         },
         "comment_arguments_probe": {

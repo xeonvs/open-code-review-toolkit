@@ -71,7 +71,7 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
             ),
             "paths": sorted(module.contracts._language_rules_for_version(version)),
             "excluded_paths": list(module.contracts._language_negative_paths_for_version(version)),
-            "rule_documents": ["csharp", "starlark"],
+            "rule_documents": ["clojure", "csharp", "starlark"],
             "default_rule_paths": list(module.settings.DEFAULT_RULE_CONTROL_PATHS),
         }
     )
@@ -87,6 +87,12 @@ def current_contracts(module: ModuleType, version: str = "1.12.8") -> dict[str, 
         "result": "passed",
         "rules_in_main_request": True,
         "context_paths": ["Directory.Build.props", "app/Project.csproj", "global.json"],
+        "execution": "read-only-native-tools",
+    }
+    contracts["clojure_context_probe"] = {
+        "result": "passed",
+        "rules_in_main_request": True,
+        "context_paths": ["deps.edn"],
         "execution": "read-only-native-tools",
     }
     contracts["provider_directory_preview_probe"] = {
@@ -114,13 +120,13 @@ def test_live_contract_runner_uses_candidate_epoch_validation() -> None:
 
 def test_live_language_probe_paths_follow_candidate_epoch() -> None:
     module = load_script()
-    rules = module.contracts._language_rules_for_version("1.13.6")
+    rules = module.contracts._language_rules_for_version("1.13.7")
     assert rules["policies/authz.rego"] == "**/*.rego"
     assert rules["types/interface.pyi"] == "**/*.{py,pyi,ipynb}"
     assert rules["views/page.jinja2"] == "**/*.{jinja2,j2}"
     assert rules["src/Program.fs"] == "**/*.{fs,fsi,fsx}"
     assert rules["scripts/setup.ps1"] == "**/*.{ps1,psm1,psd1}"
-    assert set(module.contracts._language_negative_paths_for_version("1.13.6")) == {
+    assert set(module.contracts._language_negative_paths_for_version("1.13.7")) == {
         "rtl/include.svh",
         "nested/BUILD.bak",
     }
@@ -231,6 +237,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
         ("1.13.4", "tested"),
         ("1.13.5", "tested"),
         ("1.13.6", "tested"),
+        ("1.13.7", "tested"),
     ]
 
     assert module.contracts.qualified_runtime_versions(manifest) == (
@@ -256,6 +263,7 @@ def test_committed_manifest_is_valid_and_has_recommended_tested_baseline() -> No
             "1.13.4",
             "1.13.5",
             "1.13.6",
+            "1.13.7",
         ],
         [f"1.11.{patch}" for patch in range(10)],
     )
@@ -265,24 +273,24 @@ def test_language_probe_generation_and_validation_share_canonical_order() -> Non
     """Keep regenerated evidence byte-compatible with the manifest validator."""
 
     module = load_script()
-    contracts = current_contracts(module, "1.13.6")
+    contracts = current_contracts(module, "1.13.7")
     extensions = contracts["language_rule_probe"]["extensions"]
     assert extensions == sorted(
         {
             Path(path).suffix
-            for path in module.contracts._language_rules_for_version("1.13.6")
+            for path in module.contracts._language_rules_for_version("1.13.7")
             if Path(path).suffix
         }
     )
-    module.contracts._validate_current_contracts(contracts, "1.13.6")
+    module.contracts._validate_current_contracts(contracts, "1.13.7")
     extensions.reverse()
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_current_contracts(contracts, "1.13.6")
+        module.contracts._validate_current_contracts(contracts, "1.13.7")
 
 
 @pytest.mark.parametrize(
     ("version", "selected", "preview_state"),
-    [("1.13.6", 48, "reported")],
+    [("1.13.7", 52, "reported")],
 )
 def test_current_contract_selects_live_language_and_preview_epoch(
     version: str, selected: int, preview_state: str
@@ -575,7 +583,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
 
     with (
         patched_env(RUNNER_OS="Linux"),
-        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.6")),
+        patched_attr(module.assets, "_request_json", lambda _url: release("1.13.7")),
     ):
         result = module.cli.main(
             [
@@ -583,7 +591,7 @@ def test_qualify_cli_closes_malformed_comment_probe_as_contract_failure(
                 str(MANIFEST),
                 "qualify",
                 "--tag",
-                "v1.13.6",
+                "v1.13.7",
                 "--comparison-version",
                 "1.12.13",
                 "--tested-baseline-version",
@@ -2091,7 +2099,7 @@ def test_numeric_cli_probe_records_closed_boundaries_and_effective_values(
             Path("/synthetic/probe"),
         )
 
-    assert result == module.contracts._numeric_contract_for_version("1.13.6")
+    assert result == module.contracts._numeric_contract_for_version("1.13.7")
     assert "stderr" not in json.dumps(result)
 
 
@@ -2550,6 +2558,37 @@ def test_recent_historical_evidence_is_independent_of_live_inventory(
     module.contracts.validate_manifest(manifest, PROJECT_ROOT)
 
 
+def test_ocr_1136_readback_is_frozen_before_clojure_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_script()
+    path = PROJECT_ROOT / "compatibility/evidence/ocr-1.13.6.json"
+    before = path.read_bytes()
+    evidence = module.core.load_json(path)
+    monkeypatch.setattr(module.settings, "CURRENT_LANGUAGE_RULES", {"future.ext": "**/*.ext"})
+    module.contracts._validate_evidence_contracts("1.13.6", evidence)
+    evidence["contracts"]["csharp_context_probe"]["result"] = "missing"
+    with pytest.raises(module.core.CompatibilityError, match="historical qualification contract"):
+        module.contracts._validate_evidence_contracts("1.13.6", evidence)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("mutation", ("missing", "rules", "context"))
+def test_current_clojure_qualification_requires_main_rules_and_actual_context(
+    mutation: str,
+) -> None:
+    module = load_script()
+    evidence = module.core.load_json(PROJECT_ROOT / "compatibility/evidence/ocr-1.13.7.json")
+    if mutation == "missing":
+        del evidence["contracts"]["clojure_context_probe"]
+    elif mutation == "rules":
+        evidence["contracts"]["clojure_context_probe"]["rules_in_main_request"] = False
+    else:
+        evidence["contracts"]["clojure_context_probe"]["context_paths"] = []
+    with pytest.raises(module.core.CompatibilityError, match="clojure_context_probe"):
+        module.contracts._validate_evidence_contracts("1.13.7", evidence)
+
+
 def test_ocr_1117_uses_frozen_contract_independent_of_live_rego_inventory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2864,7 +2903,7 @@ def test_current_grace_contract_is_mandatory_and_versioned(version: str) -> None
 
 def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -> None:
     module = load_script()
-    current = module.contracts._language_rules_for_version("1.13.6")
+    current = module.contracts._language_rules_for_version("1.13.7")
     expected = {
         ".ps1": "**/*.{ps1,psm1,psd1}",
         ".psm1": "**/*.{ps1,psm1,psd1}",
@@ -2888,16 +2927,16 @@ def test_live_language_contract_retains_prior_rules_and_requires_new_formats() -
         assert {rule for path, rule in current.items() if Path(path).suffix == extension} == {
             pattern
         }
-        observed = current_contracts(module, "1.13.6")
+        observed = current_contracts(module, "1.13.7")
         observed["language_rule_probe"]["extensions"].remove(extension)
         with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-            module.contracts._validate_contracts_for_version("1.13.6", observed)
-    stale_language = current_contracts(module, "1.13.6")
+            module.contracts._validate_contracts_for_version("1.13.7", observed)
+    stale_language = current_contracts(module, "1.13.7")
     stale_language["language_rule_probe"] = current_contracts(module, "1.13.4")[
         "language_rule_probe"
     ]
     with pytest.raises(module.core.CompatibilityError, match="language_rule_probe"):
-        module.contracts._validate_contracts_for_version("1.13.6", stale_language)
+        module.contracts._validate_contracts_for_version("1.13.7", stale_language)
 
 
 @pytest.mark.parametrize("task_done", [True, False])
@@ -3077,5 +3116,5 @@ def test_qualification_rejects_malformed_capability_lists_with_closed_error(
 
 def test_live_qualification_boundary_accepts_all_current_candidates() -> None:
     module = load_script()
-    for version in ("1.13.6",):
+    for version in ("1.13.7",):
         module.contracts._require_live_qualification_version(version)

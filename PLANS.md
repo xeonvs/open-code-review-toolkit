@@ -43,8 +43,8 @@ and native duration/token/cache metadata. Expand real-boundary and property test
 | Requirement | Outcome | Queue | Status |
 | --- | --- | --- | --- |
 | REQ-001 | Complete plan fidelity, signed draft PR and sustained release objective | WQ-01, WQ-08 | in_progress |
-| REQ-002 | Exact official Linux/Darwin OCR 1.13.7 qualification and frozen 1.13.6 readback | WQ-02 | pending |
-| REQ-003 | New language/Rules/exclusions, review-loop handoffs, native auth and session-show qualification | WQ-02, WQ-06 | pending |
+| REQ-002 | Exact official Linux/Darwin OCR 1.13.7 qualification and frozen 1.13.6 readback | WQ-02 | done |
+| REQ-003 | New language/Rules/exclusions, review-loop handoffs, native auth and session-show qualification | WQ-02, WQ-06 | done |
 | REQ-004 | Provider-friendly single-tool schema with strict canonical parser and safe actionable errors | WQ-03, WQ-04 | pending |
 | REQ-005 | Recoverable invalid submissions, deterministic candidate/conflict/budget state and hostile private storage | WQ-03 | pending |
 | REQ-006 | Bounded provider-neutral bootstrap, cross-group scope, modes/help and unchanged optional outcomes | WQ-04, WQ-06 | pending |
@@ -122,11 +122,11 @@ Do not publish private traces, source snapshots, credentials or debug bundles.
 
 | Item | Work and exit evidence | Requirements | Status |
 | --- | --- | --- | --- |
-| WQ-01 | Materialize/reconcile plan, enable active state, sign/scan/push plan and open draft PR | REQ-001 | in_progress |
-| WQ-02 | Extend current qualification, freeze old readback, verify Linux/Darwin assets and optional handoffs; promote only after passing | REQ-002, REQ-003 | pending |
-| WQ-03 | Implement closed parser diagnostics and collector v2 transitions with compact state/inverse/hostile-storage tests | REQ-004, REQ-005, REQ-009 | pending |
-| WQ-04 | Simplify MCP schema, qualify provider wire, revise bounded bootstrap/status/help and actual retry handoff | REQ-004, REQ-006, REQ-008, REQ-009 | pending |
-| WQ-05 | Capture advertised schema, preserve numeric native metrics in trace v2 and debug v3; qualify private lifecycle | REQ-007, REQ-008, REQ-009 | pending |
+| WQ-01 | Materialize/reconcile plan, enable active state, sign/scan/push plan and open draft PR | REQ-001 | done |
+| WQ-02 | Extend current qualification, freeze old readback, verify Linux/Darwin assets and optional handoffs; promote only after passing | REQ-002, REQ-003 | done |
+| WQ-03 | Implement closed parser diagnostics and collector v2 transitions with compact state/inverse/hostile-storage tests | REQ-004, REQ-005, REQ-009 | in_progress |
+| WQ-04 | Simplify MCP schema, qualify provider wire, revise bounded bootstrap/status/help and actual retry handoff | REQ-004, REQ-006, REQ-008, REQ-009 | in_progress |
+| WQ-05 | Capture advertised schema, preserve numeric native metrics in trace v2 and debug v3; qualify private lifecycle | REQ-007, REQ-008, REQ-009 | in_progress |
 | WQ-06 | Final docs/issue disposition, properties/coverage, aggregate review, one Security scan, own-tool diagram and final quality/install gates | REQ-003, REQ-006 through REQ-010 | pending |
 | WQ-07 | Final feature push with accepted Mermaid, protected CI/merge and development publication readback | REQ-011 | pending |
 | WQ-08 | Signed Release v0.14.7 PR, markers/epoch/authorization/changelog/pins and atomic plan archive/root cleanup | REQ-001, REQ-012 | pending |
@@ -245,6 +245,26 @@ checks passed. Comparable controlled 1.13.6/1.13.7 probes confirmed inline hunks
 and native metadata availability. Correction/extended Linux/new production
 contracts remain unimplemented. Dependency audit passed for current dependencies.
 
+2026-11-10 implementation: signed plan commit 771d1e9 opened draft PR #303.
+Frozen 1.13.6 readback validates without rewriting evidence. Expanded Darwin
+suite passed with 52 language paths, Clojure Rules in main request and native
+EDN context reads; qualification tests: 237 passed. Linux uses official Python
+image under amd64 emulation, hash-locked runtime and no operator credentials.
+The first image had unsupported Git 2.39.5; its native warning correctly failed
+the diagnostic gate. Full Linux qualification then passed on Git 2.47.3 with
+official image digest 1cef1664561971647b94fedf437145415991d4feeda09c81df12acfad8829cde.
+No gate was weakened. Supplemental gitlink/federation checks passed; recommendation
+and preflight now admit 1.13.7. Frozen/current qualification regressions: 245 passed.
+
+Production diagram changes passed 60 focused collector/feedback checks and 47
+schema/SDK/optional-channel checks. Actual OCR-to-MCP-to-report repairs passed
+for both variants, following observed invalid feedback. Three actual API adapter
+captures preserve the advertised schema. Bootstrap/trace checks: 145 passed;
+the default 3000-character bootstrap retains protected navigation. Native default
+eight and explicit one/two concurrency bounds, full selected coverage, outside-CWD
+session lookup, restriction, missing/invalid and ambiguous IDs passed with isolated
+synthetic sessions. Numeric trace properties retain absent-versus-zero semantics.
+
 ### Risks And Recovery
 
 - Permissive advertised structure must not widen server admission; test both.
@@ -263,8 +283,9 @@ contracts remain unimplemented. Dependency audit passed for current dependencies
 
 ### Resume Point
 
-WQ-01: confirm plan fidelity, enable active plan state, create the codex/ branch,
-review/scan/sign the plan commit, complete push gates and open the draft PR.
+WQ-02 is complete and the exact verified release is promoted. WQ-03 through WQ-05:
+finish coverage, consumer documentation and aggregate validation. Keep subsequent
+implementation local until the final feature acceptance.
 
 ### Plan Fidelity Check
 
@@ -302,7 +323,8 @@ and cleanup. Do not create another repository closure PR or landing-page handoff
 
 Current root owns plan and delivery state. Recover from this full plan, current
 Git state and necessary private evidence, not a duplicate execution transcript.
-No implementation has begun; WQ-01 is the exact next action.
+Draft PR #303 contains only the signed plan. Current implementation is local;
+qualification is complete, while aggregate runtime/coverage/model acceptance remains.
 
 ## Recently Completed
 

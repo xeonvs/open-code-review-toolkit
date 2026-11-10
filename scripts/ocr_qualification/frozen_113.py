@@ -1,4 +1,4 @@
-"""Frozen OCR 1.13.0–1.13.5 readback; no live settings, I/O or execution."""
+"""Frozen OCR 1.13.0–1.13.6 readback; no live settings, I/O or execution."""
 
 from __future__ import annotations
 
@@ -308,11 +308,157 @@ PATCH_5 = {
 }
 
 
+# Exact published 1.13.6 differences; never read live settings or execute probes.
+PATCH_6 = {
+    "comment_thinking_probe": {
+        "additive_field_preserved": True,
+        "posting_exposes_thinking": False,
+        "result": "passed",
+    },
+    "csharp_context_probe": {
+        "context_paths": ["Directory.Build.props", "app/Project.csproj", "global.json"],
+        "execution": "read-only-native-tools",
+        "result": "passed",
+        "rules_in_main_request": True,
+    },
+    "language_rule_probe": {
+        "default_excluded_paths": [
+            "src/test/kotlin/scripts/Example.kts",
+            "test/parser.ml",
+            "src/test_helpers.py",
+            "src/WidgetTest.fs",
+            "node_modules/example/index.ts",
+            "dist/generated.js",
+        ],
+        "default_rule_paths": ["BUILDX", "nested/WORKSPACES"],
+        "excluded_extensions": [".svh"],
+        "excluded_paths": ["rtl/include.svh", "nested/BUILD.bak"],
+        "extensions": [
+            ".bazel",
+            ".bzl",
+            ".cjs",
+            ".cs",
+            ".cxx",
+            ".ejs",
+            ".erb",
+            ".fs",
+            ".fsi",
+            ".fsx",
+            ".glsl",
+            ".haml",
+            ".hlsl",
+            ".hxx",
+            ".j2",
+            ".jinja2",
+            ".jsonc",
+            ".kts",
+            ".liquid",
+            ".metal",
+            ".mjs",
+            ".ml",
+            ".mli",
+            ".mm",
+            ".njk",
+            ".nu",
+            ".ps1",
+            ".psd1",
+            ".psm1",
+            ".pug",
+            ".pyi",
+            ".re",
+            ".rego",
+            ".rei",
+            ".scala",
+            ".slim",
+            ".star",
+            ".sv",
+            ".tofu",
+            ".v",
+            ".vh",
+            ".vhd",
+            ".vhdl",
+            ".wgsl",
+        ],
+        "m_routing": "matlab_and_objective_c",
+        "paths": [
+            "BUILD",
+            "WORKSPACE",
+            "app/src/Program.cs",
+            "bazel/config.star",
+            "bazel/defs.bazel",
+            "bazel/rules.bzl",
+            "config/settings.jsonc",
+            "infra/main.tofu",
+            "native/header.hxx",
+            "native/object.mm",
+            "native/source.cxx",
+            "nested/BUILD",
+            "nested/WORKSPACE",
+            "policies/authz.rego",
+            "rtl/entity.vhd",
+            "rtl/entity.vhdl",
+            "rtl/include.vh",
+            "rtl/module.sv",
+            "rtl/module.v",
+            "scripts/check.fsx",
+            "scripts/module.psd1",
+            "scripts/module.psm1",
+            "scripts/setup.kts",
+            "scripts/setup.nu",
+            "scripts/setup.ps1",
+            "shaders/main.glsl",
+            "shaders/main.hlsl",
+            "shaders/main.metal",
+            "shaders/main.wgsl",
+            "src/Main.scala",
+            "src/Program.fs",
+            "src/Program.fsi",
+            "src/component.re",
+            "src/component.rei",
+            "src/module.cjs",
+            "src/module.mjs",
+            "src/parser.ml",
+            "src/parser.mli",
+            "types/interface.pyi",
+            "views/component.j2",
+            "views/page.ejs",
+            "views/page.erb",
+            "views/page.haml",
+            "views/page.jinja2",
+            "views/page.liquid",
+            "views/page.njk",
+            "views/page.pug",
+            "views/page.slim",
+        ],
+        "result": "passed",
+        "rule_documents": ["csharp", "starlark"],
+        "rule_source": "system_builtin",
+        "selected": 48,
+    },
+    "stream_override_probe": {
+        "explicit_false": "preserved",
+        "non_boolean": "omitted",
+        "protocols": ["openai", "openai-responses", "anthropic"],
+        "provider_acceptance": "not-tested",
+        "result": "passed",
+        "unset": "omitted",
+    },
+    "target_rule_selection_probe": {
+        "format": "json",
+        "from_to_unchanged": True,
+        "path": "synthetic-template.ocrfixture",
+        "result": "passed",
+        "source_exclusion": "unsupported_ext",
+        "target_selected": True,
+    },
+}
+
+
 def validate_contracts(
     version: tuple[int, int, int], value: Any, fail: Callable[[str], NoReturn]
 ) -> None:
     """Apply exactly the consumed pre-override contract without reinterpreting it."""
-    if not (1, 13, 0) <= version < (1, 13, 6):
+    if not (1, 13, 0) <= version < (1, 13, 7):
         fail("evidence does not belong to the frozen 1.13 epoch")
     if not isinstance(value, dict):
         fail("historical qualification contracts are missing")
@@ -328,8 +474,10 @@ def validate_contracts(
     ):
         fail("historical qualification omitted required CLI capabilities")
     expected = copy.deepcopy(EXPECTED)
-    if version == (1, 13, 5):
+    if version >= (1, 13, 5):
         expected.update(copy.deepcopy(PATCH_5))
+    if version == (1, 13, 6):
+        expected.update(copy.deepcopy(PATCH_6))
     if version < (1, 13, 2):
         expected["language_rule_probe"] = EARLY_LANGUAGE
     if version == (1, 13, 0):
