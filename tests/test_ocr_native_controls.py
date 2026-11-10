@@ -6,6 +6,7 @@ import http.server
 import json
 import subprocess
 import threading
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,7 @@ def test_native_concurrency_bounds_coverage_and_read_only_session_lookup(
     binary, version = qualified_native_ocr("OCR_GITLINK_QUALIFY_BINARY")
     if version != "1.13.7":
         pytest.skip("global session inspection is qualified on OCR 1.13.7")
-    load_script()
+    module = load_script()
     from ocr_qualification import execution, peer
 
     env = execution._isolated_probe_environment(tmp_path / "home")
@@ -38,21 +39,46 @@ def test_native_concurrency_bounds_coverage_and_read_only_session_lookup(
         peak = 0
         lock = threading.Lock()
         filled = threading.Event()
+        saturated = False
 
-        def do_POST(self) -> None:
-            with type(self).lock:
-                type(self).active += 1
-                type(self).peak = max(type(self).peak, type(self).active)
-                if type(self).active == bound:
-                    type(self).filled.set()
-            try:
-                # A tool-free grouping call may time out this wait. Main groups
-                # release it together and demonstrate actual parallel requests.
-                type(self).filled.wait(timeout=1)
-                super().do_POST()
-            finally:
+        def complete_pending(self) -> None:
+            if getattr(self, "pending", False):
                 with type(self).lock:
                     type(self).active -= 1
+                    self.pending = False
+
+        def send_response(self, code: int, message: str | None = None) -> None:
+            # Finish accounting before headers/body can release the native caller.
+            # A live handler after this boundary is no longer an outstanding request.
+            self.complete_pending()
+            super().send_response(code, message)
+
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= module.settings.MAX_HTTP_BYTES:
+                self.send_error(400)
+                return
+            raw = self.rfile.read(length)
+            request = json.loads(raw)
+            self.rfile = BytesIO(raw)
+            names = {tool.get("function", {}).get("name") for tool in request.get("tools", [])}
+            # Grouping/planning/filtering do not establish review-group saturation.
+            self.pending = {"file_read", "code_comment"} <= names
+            if self.pending:
+                with type(self).lock:
+                    type(self).active += 1
+                    type(self).peak = max(type(self).peak, type(self).active)
+                    if type(self).active >= bound:
+                        type(self).saturated = True
+                        type(self).filled.set()
+            try:
+                if self.pending and not type(self).filled.wait(timeout=30):
+                    # Release once on an inconclusive saturation probe; avoid
+                    # multiplying deadlines across every remaining request.
+                    type(self).filled.set()
+                super().do_POST()
+            finally:
+                self.complete_pending()
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Peer)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -94,7 +120,9 @@ def test_native_concurrency_bounds_coverage_and_read_only_session_lookup(
         worker.join(timeout=5)
         server.server_close()
     result = json.loads(raw)
-    assert Peer.peak == bound
+    assert Peer.peak <= bound, "native main requests exceeded the configured bound"
+    assert Peer.saturated, "controlled main requests did not saturate before the probe deadline"
+    assert Peer.active == 0
     manifest = result["manifest"]
     assert manifest["terminal_state"] == "complete"
     coverage = manifest["coverage"]

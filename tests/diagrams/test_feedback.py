@@ -10,7 +10,7 @@ from ocr_toolkit.diagrams.collector import MAX_COLLECTOR_BYTES, DiagramCollector
 from ocr_toolkit.diagrams.contracts import DiagramError, bounded_json, parse_submission
 from ocr_toolkit.diagrams.diagnostics import parse_diagnostic
 from ocr_toolkit.diagrams.mcp import call_diagram_tool, diagram_status
-from tests.diagrams.support import REVIEW_RANGE, flow_submission
+from tests.diagrams.support import REVIEW_RANGE, flow_submission, sequence_submission
 
 
 @pytest.fixture
@@ -100,6 +100,48 @@ def test_persisted_diagnostics_are_hostile(field, value):
 def test_incomplete_or_extra_diagnostic_shape_cannot_reach_feedback(value):
     with pytest.raises(DiagramError):
         parse_diagnostic(value)
+
+
+@pytest.mark.parametrize(
+    "case,pointer",
+    (
+        ("node-id", "/diagram/nodes"),
+        ("participant-id", "/diagram/participants"),
+        ("edges", "/diagram/edges"),
+        ("flow-source", "/diagram/edges/0/source"),
+        ("flow-target", "/diagram/edges/0/target"),
+        ("message-source", "/diagram/steps/0/source"),
+        ("message-target", "/diagram/steps/0/target"),
+        ("path", "/diagram/nodes/0/references/0/path"),
+        ("empty", "/diagram/steps"),
+        ("variant", "/diagram"),
+    ),
+)
+def test_semantic_validation_keeps_its_owning_collection_or_field(collector, case, pointer):
+    payload = (
+        sequence_submission()
+        if case.startswith(("participant", "message")) or case == "empty"
+        else flow_submission()
+    )
+    graph = payload["diagram"]
+    if case == "node-id":
+        graph["nodes"].append(deepcopy(graph["nodes"][0]))
+    elif case == "participant-id":
+        graph["participants"].append(deepcopy(graph["participants"][0]))
+    elif case == "edges":
+        graph["edges"].append(deepcopy(graph["edges"][0]))
+    elif case.startswith(("flow-", "message-")):
+        field = case.split("-")[1]
+        graph["edges" if case.startswith("flow-") else "steps"][0][field] = "missing"
+    elif case == "path":
+        graph["nodes"][0]["references"][0]["path"] = "../private"
+    elif case == "empty":
+        graph["steps"] = []
+    else:
+        payload["diagram"] = None
+    response = reply(collector, payload)
+    assert response["state"] == "invalid" and response["retryable"]
+    assert response["error"]["path"] == pointer
 
 
 def test_near_maximum_candidate_survives_a_later_validation_error(collector):

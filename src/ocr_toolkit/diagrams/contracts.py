@@ -197,7 +197,9 @@ def _references(value: object, *, required: bool = True) -> tuple[SourceReferenc
                 or "\\" in path
                 or any(part in {"", ".", ".."} for part in path.split("/"))
             ):
-                raise DiagramError("diagram source path is not normalized and relative")
+                raise DiagramError(
+                    "diagram source path is not normalized and relative", path="/path"
+                )
             start, end = raw["start_line"], raw["end_line"]
             if type(start) is not int or type(end) is not int or not 1 <= start <= end <= 1_000_000:
                 raise DiagramError("diagram source span is invalid")
@@ -217,7 +219,7 @@ def _unique_ids(values: tuple[FlowNode, ...] | tuple[Participant, ...]) -> set[s
 def _flowchart(value: dict[str, object]) -> Flowchart:
     raw = _object(value, {"kind", "nodes", "edges"})
     nodes = []
-    for item_index, item in enumerate(_array(raw["nodes"], 1, 12)):
+    for item_index, item in enumerate(_field(raw, "nodes", lambda v: _array(v, 1, 12))):
         with at_pointer(f"/nodes/{item_index}"):
             node = _object(item, {"id", "kind", "label", "references"})
             kind = node["kind"]
@@ -232,9 +234,10 @@ def _flowchart(value: dict[str, object]) -> Flowchart:
                 )
             )
     normalized_nodes = tuple(sorted(nodes, key=lambda node: node.identifier))
-    identifiers = _unique_ids(normalized_nodes)
+    with at_pointer("/nodes"):
+        identifiers = _unique_ids(normalized_nodes)
     edges = []
-    for item_index, item in enumerate(_array(raw["edges"], 0, 16)):
+    for item_index, item in enumerate(_field(raw, "edges", lambda v: _array(v, 0, 16))):
         with at_pointer(f"/edges/{item_index}"):
             edge = _object(item, {"source", "target", "condition", "references"})
             source, target = (
@@ -242,7 +245,10 @@ def _flowchart(value: dict[str, object]) -> Flowchart:
                 _field(edge, "target", _identifier),
             )
             if source not in identifiers or target not in identifiers:
-                raise DiagramError("diagram edge has an unknown endpoint")
+                raise DiagramError(
+                    "diagram edge has an unknown endpoint",
+                    path="/source" if source not in identifiers else "/target",
+                )
             condition = _field(edge, "condition", lambda v: _text(v, empty=True))
             edges.append(
                 FlowEdge(
@@ -253,7 +259,7 @@ def _flowchart(value: dict[str, object]) -> Flowchart:
                 )
             )
     if len(set(edges)) != len(edges):
-        raise DiagramError("diagram edges are duplicated")
+        raise DiagramError("diagram edges are duplicated", path="/edges")
     return Flowchart(
         normalized_nodes,
         tuple(
@@ -267,7 +273,7 @@ def _flowchart(value: dict[str, object]) -> Flowchart:
 def _sequence(value: dict[str, object]) -> SequenceDiagram:
     raw = _object(value, {"kind", "participants", "steps"})
     participants = []
-    for item_index, item in enumerate(_array(raw["participants"], 1, 8)):
+    for item_index, item in enumerate(_field(raw, "participants", lambda v: _array(v, 1, 8))):
         with at_pointer(f"/participants/{item_index}"):
             participant = _object(item, {"id", "label", "references"})
             participants.append(
@@ -280,7 +286,8 @@ def _sequence(value: dict[str, object]) -> SequenceDiagram:
     normalized_participants = tuple(
         sorted(participants, key=lambda participant: participant.identifier)
     )
-    identifiers = _unique_ids(normalized_participants)
+    with at_pointer("/participants"):
+        identifiers = _unique_ids(normalized_participants)
     messages, alternatives = 0, 0
 
     def parse_steps(value: object, depth: int) -> tuple[SequenceStep, ...]:
@@ -300,7 +307,10 @@ def _sequence(value: dict[str, object]) -> SequenceDiagram:
                     )
                     message_type = message["message_type"]
                     if source not in identifiers or target not in identifiers:
-                        raise DiagramError("diagram message has an unknown endpoint")
+                        raise DiagramError(
+                            "diagram message has an unknown endpoint",
+                            path="/source" if source not in identifiers else "/target",
+                        )
                     if message_type not in ("call", "return"):
                         raise DiagramError("diagram message type is invalid", path="/message_type")
                     messages += 1
@@ -323,7 +333,9 @@ def _sequence(value: dict[str, object]) -> SequenceDiagram:
                             "diagram exceeds its total alternative or nesting budget"
                         )
                     branches = []
-                    for item_index, branch_item in enumerate(_array(alternative["branches"], 2, 2)):
+                    for item_index, branch_item in enumerate(
+                        _field(alternative, "branches", lambda v: _array(v, 2, 2))
+                    ):
                         with at_pointer(f"/branches/{item_index}"):
                             branch = _object(branch_item, {"condition", "references", "steps"})
                             branches.append(
@@ -340,7 +352,7 @@ def _sequence(value: dict[str, object]) -> SequenceDiagram:
 
     steps = _field(raw, "steps", lambda v: parse_steps(v, 0))
     if not messages:
-        raise DiagramError("diagram sequence has no messages")
+        raise DiagramError("diagram sequence has no messages", path="/steps")
     return SequenceDiagram(normalized_participants, steps)
 
 
@@ -384,7 +396,7 @@ def parse_submission(value: object, *, expected_range: ReviewRange) -> DiagramSu
         return DiagramSubmission(review_range, None)
     diagram = raw["diagram"]
     if not isinstance(diagram, dict):
-        raise DiagramError("diagram variant must be an object")
+        raise DiagramError("diagram variant must be an object", path="/diagram")
     with at_pointer("/diagram"):
         if diagram.get("kind") == "flowchart":
             parsed: Diagram = _flowchart(diagram)

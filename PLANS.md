@@ -51,10 +51,11 @@ and native duration/token/cache metadata. Expand real-boundary and property test
 | REQ-007 | Advertised MCP schema evidence, bounded debug v3 and private native trace v2 metadata | WQ-05, WQ-06 | done |
 | REQ-008 | Explicit evidence-backed disposition of all seven performance proposals without invented speed claims | WQ-04, WQ-05, WQ-06 | done |
 | REQ-009 | Real SDK/wire/installed handoffs, inverse/property tests and branch-aware coverage | WQ-03, WQ-04, WQ-05, WQ-06 | in_progress |
-| REQ-010 | Aggregate review, one Security scan, actual own-tool review with admitted diagram and final gates | WQ-06 | pending |
+| REQ-010 | Aggregate review, one Security scan, actual own-tool review with admitted diagram and final gates | WQ-06 | in_progress |
 | REQ-011 | Protected feature merge and development publication verified | WQ-07 | pending |
 | REQ-012 | Release metadata, authorization, notes/examples and checked archive prepared in release PR | WQ-08 | pending |
 | REQ-013 | Stable delivery, receipt-backed issue closure, site/main readback and cleanup | WQ-09 | pending |
+| REQ-014 | General validation-oracle and measurement-boundary guidance in the existing canonical owner | WQ-06 | done |
 
 ### Explicit Non-Goals
 
@@ -103,6 +104,11 @@ Do not publish private traces, source snapshots, credentials or debug bundles.
   than duplicate toolkit mechanisms. Improve available private metadata now.
 - Keep findings primary, diagram optional, deterministic Mermaid rendering and
   the existing automatic flowchart orientation. Do not add textual graph listings.
+- For subsequent own-tool reviews, prefer gpt-6.1-sol with xhigh reasoning.
+  Preserve the already-running Astra high acceptance rather than restarting it.
+- Strengthen future validation generically: test all promised postconditions and
+  define observation units/events before measuring concurrent work. Extend the
+  existing development owner without case-specific agent rules or duplication.
 
 ### Completed Baseline State
 
@@ -275,6 +281,37 @@ peer assertion caused an interrupted early coverage attempt; the corrected run
 passed and its task-owned children were cleaned. Local OCR is replaced by the
 verified 1.13.7 binary. #302 now records A-G and every performance disposition.
 
+Aggregate semantic review completed on dc1d55f. One Codex Security diff scan
+covered 952bff2..dc1d55f with four independent Astra high reviewers and parent
+documentation/test reconciliation: zero candidates/findings, complete changed
+surface coverage. The canonical threat model remains applicable and documents
+closed feedback and private definition provenance. Scan usage accounting is
+partial and is not a billing measurement. Clean wheel/sdist installed acceptance:
+three tests passed, including real installed MCP/local-review and debug parity.
+
+Actual ChatGPT/Astra high own-tool review completed on the same immutable range,
+with max-tokens-budget=0, local diagram and private debug. An explicit operator
+overlay derived from base retains system Rules and includes meaningful changed
+tests: all 50 files, including 16 test files, completed. Two medium findings
+survived DLP unchanged; the ten-node TB Mermaid flowchart was admitted and its
+semantics inspected. Both findings are fixed: field/collection scopes now retain
+diagnostic provenance, and native request accounting ends before response
+delivery, separately checking saturation under a bounded probe deadline.
+Corrections passed 108 checks including 1000-example properties, plus three
+native controls; instruction-contract is valid. Generic postcondition/oracle and
+measurement-boundary guidance extends the existing development owner.
+
+The single failed guessed-path read was recovered in the same group by reading
+the actual contracts.py mode parser. The 2260-character background advisory is
+about a recommendation, not truncation/exhaustion; protected context is intact
+within the configured 3000-character bound. No budget/round/context exhaustion
+warning appeared. All 64 native responses retain duration/usage; reported session
+duration is 152.637 seconds and response usage totals agree with native review
+totals. No parallel-duration sum or billing inference is made. Source snapshots
+from Linux qualification have been removed. Corrections leave the admitted flow
+unchanged; focused native/property checks and semantic review qualify them without
+a second model run or another aggregate Security scan.
+
 ### Risks And Recovery
 
 - Permissive advertised structure must not widen server admission; test both.
@@ -293,10 +330,11 @@ verified 1.13.7 binary. #302 now records A-G and every performance disposition.
 
 ### Resume Point
 
-WQ-06: commit the self-reviewed complete diagram/private-diagnostics slice, then
-perform aggregate review, one Security diff scan, actual ChatGPT own-tool review
-with admitted diagram, full quality and installed-artifact acceptance. Keep
-subsequent implementation local until the final feature acceptance.
+WQ-06: commit the reviewed own-tool corrections, run the single full quality gate
+on the final runtime head and pre-push privacy/dependency guards. Then update PR
+#303 with exact admitted Mermaid and final validation before the feature push.
+Security and own-tool acceptance are complete; keep their reviewed identities
+explicit and do not repeat unchanged checks.
 
 ### Plan Fidelity Check
 
@@ -334,8 +372,10 @@ and cleanup. Do not create another repository closure PR or landing-page handoff
 
 Current root owns plan and delivery state. Recover from this full plan, current
 Git state and necessary private evidence, not a duplicate execution transcript.
-Draft PR #303 contains only the signed plan. Current implementation is local;
-qualification is complete, while aggregate runtime/coverage/model acceptance remains.
+Draft PR #303 contains only the signed plan. Local commits 996d2fb and dc1d55f
+contain complete qualification and runtime changes. Security/installed/own-tool
+acceptance is complete, with focused corrections awaiting commit. Final quality
+and all feature/development/stable delivery remain required.
 
 ## Recently Completed
 

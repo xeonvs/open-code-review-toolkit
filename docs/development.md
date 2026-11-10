@@ -223,6 +223,17 @@ consumers, including older callers of a shared helper. Name the focused tests
 that exercise each changed edge and its failure behavior. Keep this small map in
 the active plan or existing tests; no separate tracking file is needed.
 
+Make each claimed behavior falsifiable at its owning boundary. When content,
+identity, location, provenance or completeness is promised, assert that property
+rather than only a success/failure flag. Identify an incorrect result that the
+positive oracle could still accept, and add a focused counterexample.
+
+Before measuring bounded or concurrent work, define the counted unit and its
+start/end events. Distinguish work completion, consumer-visible delivery and
+cleanup instead of assuming their intervals coincide. Exercise valid reorderings,
+delays and cancellation through controlled peers. Timeouts bound an inconclusive
+probe; elapsed time alone does not prove a semantic outcome or the absence of work.
+
 Before a full corpus replay or model-backed acceptance, qualify that contract
 with a compact set of structurally different cases, inverse sensitive-material
 controls where relevant, and the real producer-consumer handoff. Include old
